@@ -15,12 +15,12 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
-#[cfg(feature = "rattler_repodata_gateway")]
 use rattler_repodata_gateway::{Gateway, SourceConfig};
-#[cfg(feature = "rattler_repodata_gateway")]
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
+
+const EXPERIMENTAL: &str = "experimental";
 
 pub fn default_channel_config() -> ChannelConfig {
     ChannelConfig::default_with_root_dir(
@@ -64,7 +64,7 @@ pub fn get_default_author() -> Option<(String, String)> {
 /// # Returns
 ///
 /// The pixi home directory
-pub fn home_path() -> Option<PathBuf> {
+pub fn pixi_home() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("PIXI_HOME") {
         Some(PathBuf::from(path))
     } else {
@@ -72,7 +72,8 @@ pub fn home_path() -> Option<PathBuf> {
     }
 }
 
-// TODO(tim): I think we should move this to another crate, dont know if global config is really correct
+// TODO(tim): I think we should move this to another crate, dont know if global
+// config is really correct
 /// Returns the default cache directory.
 /// Most important is the `PIXI_CACHE_DIR` environment variable.
 /// - If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
@@ -123,18 +124,86 @@ pub struct ConfigCliPrompt {
     #[arg(long)]
     change_ps1: Option<bool>,
 }
+impl From<ConfigCliPrompt> for Config {
+    fn from(cli: ConfigCliPrompt) -> Self {
+        Self {
+            change_ps1: cli.change_ps1,
+            ..Default::default()
+        }
+    }
+}
 
 impl ConfigCliPrompt {
-    pub fn merge_with_config(self, config: Config) -> Config {
+    pub fn merge_config(self, config: Config) -> Config {
         let mut config = config;
         config.change_ps1 = self.change_ps1.or(config.change_ps1);
         config
     }
 }
 
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RepodataConfig {
+    #[serde(flatten)]
+    default: RepodataChannelConfig,
+
+    #[serde(flatten)]
+    per_channel: HashMap<Url, RepodataChannelConfig>,
+}
+
+impl RepodataConfig {
+    pub fn is_empty(&self) -> bool {
+        self.default.is_empty() && self.per_channel.is_empty()
+    }
+
+    /// Merge the given RepodataConfig into the current one.
+    /// `other` is mutable to allow for moving the values out of it.
+    pub fn merge(&self, mut other: Self) -> Self {
+        let mut per_channel: HashMap<_, _> = self
+            .per_channel
+            .clone()
+            .into_iter()
+            .map(|(url, config)| {
+                let other_config = other.per_channel.remove(&url).unwrap_or_default();
+                (url, config.merge(other_config))
+            })
+            .collect();
+
+        per_channel.extend(other.per_channel);
+
+        Self {
+            default: self.default.merge(other.default),
+            per_channel,
+        }
+    }
+}
+
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ConfigCliActivation {
+    /// Do not use the environment activation cache. (default: true except in experimental mode)
+    #[arg(long)]
+    force_activate: bool,
+}
+
+impl ConfigCliActivation {
+    pub fn merge_config(self, config: Config) -> Config {
+        let mut config = config;
+        config.force_activate = Some(self.force_activate);
+        config
+    }
+}
+
+impl From<ConfigCliActivation> for Config {
+    fn from(cli: ConfigCliActivation) -> Self {
+        Self {
+            force_activate: Some(cli.force_activate),
+            ..Default::default()
+        }
+    }
+}
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct RepodataConfig {
+pub struct RepodataChannelConfig {
     /// Disable JLAP compression for repodata.
     #[serde(alias = "disable_jlap")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -147,6 +216,40 @@ pub struct RepodataConfig {
     #[serde(alias = "disable_zstd")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disable_zstd: Option<bool>,
+    /// Disable the use of sharded repodata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disable_sharded: Option<bool>,
+}
+
+impl RepodataChannelConfig {
+    pub fn is_empty(&self) -> bool {
+        self.disable_jlap.is_none()
+            && self.disable_bzip2.is_none()
+            && self.disable_zstd.is_none()
+            && self.disable_sharded.is_none()
+    }
+
+    pub fn merge(&self, other: Self) -> Self {
+        Self {
+            disable_jlap: self.disable_jlap.or(other.disable_jlap),
+            disable_zstd: self.disable_zstd.or(other.disable_zstd),
+            disable_bzip2: self.disable_bzip2.or(other.disable_bzip2),
+            disable_sharded: self.disable_sharded.or(other.disable_sharded),
+        }
+    }
+}
+
+impl From<RepodataChannelConfig> for SourceConfig {
+    fn from(value: RepodataChannelConfig) -> Self {
+        SourceConfig {
+            jlap_enabled: !value.disable_jlap.unwrap_or(false),
+            zstd_enabled: !value.disable_zstd.unwrap_or(false),
+            bz2_enabled: !value.disable_bzip2.unwrap_or(false),
+            // TODO: Change sharded repodata default to true, when enough testing has been done.
+            sharded_enabled: !value.disable_sharded.unwrap_or(true),
+            cache_action: Default::default(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, clap::ValueEnum)]
@@ -200,6 +303,33 @@ impl DetachedEnvironments {
 impl Default for DetachedEnvironments {
     fn default() -> Self {
         DetachedEnvironments::Boolean(false)
+    }
+}
+
+#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExperimentalConfig {
+    /// The option to opt into the environment activation cache feature.
+    /// This is an experimental feature and may be removed in the future or made default.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_environment_activation_cache: Option<bool>,
+}
+
+impl ExperimentalConfig {
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            use_environment_activation_cache: other
+                .use_environment_activation_cache
+                .or(self.use_environment_activation_cache),
+        }
+    }
+    pub fn use_environment_activation_cache(&self) -> bool {
+        self.use_environment_activation_cache.unwrap_or(false)
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.use_environment_activation_cache.is_none()
     }
 }
 
@@ -394,8 +524,8 @@ pub struct Config {
 
     /// Configuration for repodata fetching.
     #[serde(alias = "repodata_config")] // BREAK: remove to stop supporting snake_case alias
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub repodata_config: Option<RepodataConfig>,
+    #[serde(default, skip_serializing_if = "RepodataConfig::is_empty")]
+    pub repodata_config: RepodataConfig,
 
     /// Configuration for PyPI packages.
     #[serde(default)]
@@ -409,6 +539,16 @@ pub struct Config {
     /// it back to the .pixi folder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detached_environments: Option<DetachedEnvironments>,
+
+    /// The option to disable the environment activation cache
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub force_activate: Option<bool>,
+
+    /// Experimental features that can be enabled.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "ExperimentalConfig::is_default")]
+    pub experimental: ExperimentalConfig,
 }
 
 impl Default for Config {
@@ -421,10 +561,12 @@ impl Default for Config {
             mirrors: HashMap::new(),
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
-            repodata_config: None,
+            repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
             detached_environments: Some(DetachedEnvironments::default()),
             pinning_strategy: Default::default(),
+            force_activate: None,
+            experimental: Default::default(),
         }
     }
 }
@@ -444,30 +586,31 @@ impl From<ConfigCli> for Config {
     }
 }
 
-#[cfg(feature = "rattler_repodata_gateway")]
 impl From<Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: Config) -> Self {
         rattler_repodata_gateway::ChannelConfig::from(&config)
     }
 }
 
-#[cfg(feature = "rattler_repodata_gateway")]
 impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: &Config) -> Self {
-        let default_source_config = config
-            .repodata_config
-            .as_ref()
-            .map(|config| SourceConfig {
-                jlap_enabled: !config.disable_jlap.unwrap_or(false),
-                zstd_enabled: !config.disable_zstd.unwrap_or(false),
-                bz2_enabled: !config.disable_bzip2.unwrap_or(false),
-                cache_action: Default::default(),
+        let repodata_config = &config.repodata_config;
+        let default = repodata_config.default.clone().into();
+
+        let per_channel = repodata_config
+            .per_channel
+            .iter()
+            .map(|(url, config)| {
+                (
+                    url.clone(),
+                    config.merge(repodata_config.default.clone()).into(),
+                )
             })
-            .unwrap_or_default();
+            .collect();
 
         rattler_repodata_gateway::ChannelConfig {
-            default: default_source_config,
-            per_channel: Default::default(),
+            default,
+            per_channel,
         }
     }
 }
@@ -595,10 +738,13 @@ impl Config {
         let mut config = Self::load_system();
 
         for p in config_path_global() {
+            if !p.is_file() {
+                continue;
+            }
             match Self::from_path(&p) {
                 Ok(c) => config = config.merge_config(c),
-                Err(e) => tracing::debug!(
-                    "Failed to load global config: {} (error: {})",
+                Err(e) => tracing::warn!(
+                    "Failed to load global config '{}' with error: {}",
                     p.display(),
                     e
                 ),
@@ -656,10 +802,12 @@ impl Config {
             "repodata-config.disable-jlap",
             "repodata-config.disable-bzip2",
             "repodata-config.disable-zstd",
+            "repodata-config.disable-sharded",
             "pypi-config",
             "pypi-config.index-url",
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
+            "experimental.use-environment-activation-cache",
         ]
     }
 
@@ -684,10 +832,12 @@ impl Config {
             loaded_from: self.loaded_from,
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,
-            repodata_config: other.repodata_config.or(self.repodata_config),
+            repodata_config: other.repodata_config.merge(self.repodata_config),
             pypi_config: other.pypi_config.merge(self.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
+            force_activate: other.force_activate,
+            experimental: other.experimental.merge(self.experimental),
         }
     }
 
@@ -728,8 +878,8 @@ impl Config {
         &self.channel_config
     }
 
-    pub fn repodata_config(&self) -> Option<&RepodataConfig> {
-        self.repodata_config.as_ref()
+    pub fn repodata_config(&self) -> &RepodataConfig {
+        &self.repodata_config
     }
 
     pub fn pypi_config(&self) -> &PyPIConfig {
@@ -743,6 +893,14 @@ impl Config {
     /// Retrieve the value for the target_environments_directory field.
     pub fn detached_environments(&self) -> DetachedEnvironments {
         self.detached_environments.clone().unwrap_or_default()
+    }
+
+    pub fn force_activate(&self) -> bool {
+        self.force_activate.unwrap_or(false)
+    }
+
+    pub fn experimental_activation_cache_usage(&self) -> bool {
+        self.experimental.use_environment_activation_cache()
     }
 
     /// Modify this config with the given key and value
@@ -801,7 +959,8 @@ impl Config {
                     self.repodata_config = value
                         .map(|v| serde_json::de::from_str(&v))
                         .transpose()
-                        .into_diagnostic()?;
+                        .into_diagnostic()?
+                        .unwrap_or_default();
                     return Ok(());
                 } else if !key.starts_with("repodata-config.") {
                     return Err(err);
@@ -810,21 +969,19 @@ impl Config {
                 let subkey = key.strip_prefix("repodata-config.").unwrap();
                 match subkey {
                     "disable-jlap" => {
-                        self.repodata_config
-                            .get_or_insert(RepodataConfig::default())
-                            .disable_jlap =
+                        self.repodata_config.default.disable_jlap =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
                     "disable-bzip2" => {
-                        self.repodata_config
-                            .get_or_insert(RepodataConfig::default())
-                            .disable_bzip2 =
+                        self.repodata_config.default.disable_bzip2 =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
                     "disable-zstd" => {
-                        self.repodata_config
-                            .get_or_insert(RepodataConfig::default())
-                            .disable_zstd =
+                        self.repodata_config.default.disable_zstd =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "disable-sharded" => {
+                        self.repodata_config.default.disable_sharded =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
                     _ => return Err(err),
@@ -869,6 +1026,29 @@ impl Config {
                     _ => return Err(err),
                 }
             }
+            key if key.starts_with(EXPERIMENTAL) => {
+                if key == EXPERIMENTAL {
+                    if let Some(value) = value {
+                        self.experimental = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.experimental = ExperimentalConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with(format!("{EXPERIMENTAL}.").as_str()) {
+                    return Err(err);
+                }
+
+                let subkey = key
+                    .strip_prefix(format!("{EXPERIMENTAL}.").as_str())
+                    .unwrap();
+                match subkey {
+                    "use-environment-activation-cache" => {
+                        self.experimental.use_environment_activation_cache =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    _ => return Err(err),
+                }
+            }
             _ => return Err(err),
         }
 
@@ -893,7 +1073,6 @@ impl Config {
     }
 
     /// Constructs a [`Gateway`] using a [`ClientWithMiddleware`]
-    #[cfg(feature = "rattler_repodata_gateway")]
     pub fn gateway(&self, client: ClientWithMiddleware) -> Gateway {
         // Determine the cache directory and fall back to sane defaults otherwise.
         let cache_dir = get_cache_dir().unwrap_or_else(|e| {
@@ -924,15 +1103,9 @@ pub fn config_path_system() -> PathBuf {
 
 /// Returns the path(s) to the global pixi config file.
 pub fn config_path_global() -> Vec<PathBuf> {
-    let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
-        || dirs::home_dir().map(|d| d.join(".config")),
-        |p| Some(PathBuf::from(p)),
-    );
-
     vec![
-        xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
         dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
-        home_path().map(|d| d.join(consts::CONFIG_FILE)),
+        pixi_home().map(|d| d.join(consts::CONFIG_FILE)),
     ]
     .into_iter()
     .flatten()
@@ -1018,6 +1191,7 @@ UNUSED = "unused"
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
         );
+        assert!(!config.experimental.use_environment_activation_cache());
     }
 
     #[test]
@@ -1137,10 +1311,11 @@ UNUSED = "unused"
                 .get(&Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
             Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
         );
-        let repodata_config = config.repodata_config.unwrap();
-        assert_eq!(repodata_config.disable_jlap, Some(true));
-        assert_eq!(repodata_config.disable_bzip2, Some(true));
-        assert_eq!(repodata_config.disable_zstd, Some(true));
+        let repodata_config = config.repodata_config;
+        assert_eq!(repodata_config.default.disable_jlap, Some(true));
+        assert_eq!(repodata_config.default.disable_bzip2, Some(true));
+        assert_eq!(repodata_config.default.disable_zstd, Some(true));
+        assert_eq!(repodata_config.default.disable_sharded, None);
         // See if the toml parses in kebab-case
         let toml = r#"
             default-channels = ["conda-forge"]
@@ -1155,6 +1330,7 @@ UNUSED = "unused"
             disable-jlap = true
             disable-bzip2 = true
             disable-zstd = true
+            disable-sharded = true
         "#;
         Config::from_toml(toml).unwrap();
     }
@@ -1218,8 +1394,8 @@ UNUSED = "unused"
         config
             .set("repodata-config.disable-jlap", Some("true".to_string()))
             .unwrap();
-        let repodata_config = config.repodata_config().unwrap();
-        assert_eq!(repodata_config.disable_jlap, Some(true));
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_jlap, Some(true));
 
         config
             .set(
@@ -1332,5 +1508,52 @@ UNUSED = "unused"
             .collect::<Vec<_>>()
             .join("\n");
         insta::assert_snapshot!(results);
+    }
+
+    #[test]
+    fn test_repodata_config() {
+        let toml = r#"
+            [repodata-config]
+            disable-jlap = true
+            disable-bzip2 = true
+            disable-zstd = true
+            disable-sharded = true
+
+            [repodata-config."https://prefix.dev/conda-forge"]
+            disable-jlap = false
+            disable-bzip2 = false
+            disable-zstd = false
+            disable-sharded = false
+
+            [repodata-config."https://conda.anaconda.org/conda-forge"]
+            disable-jlap = false
+            disable-bzip2 = false
+            disable-zstd = false
+        "#;
+        let (config, _) = Config::from_toml(toml).unwrap();
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_jlap, Some(true));
+        assert_eq!(repodata_config.default.disable_bzip2, Some(true));
+        assert_eq!(repodata_config.default.disable_zstd, Some(true));
+        assert_eq!(repodata_config.default.disable_sharded, Some(true));
+
+        let per_channel = repodata_config.clone().per_channel;
+        assert_eq!(per_channel.len(), 2);
+
+        let prefix_config = per_channel
+            .get(&Url::from_str("https://prefix.dev/conda-forge").unwrap())
+            .unwrap();
+        assert_eq!(prefix_config.disable_jlap, Some(false));
+        assert_eq!(prefix_config.disable_bzip2, Some(false));
+        assert_eq!(prefix_config.disable_zstd, Some(false));
+        assert_eq!(prefix_config.disable_sharded, Some(false));
+
+        let anaconda_config = per_channel
+            .get(&Url::from_str("https://conda.anaconda.org/conda-forge").unwrap())
+            .unwrap();
+        assert_eq!(anaconda_config.disable_jlap, Some(false));
+        assert_eq!(anaconda_config.disable_bzip2, Some(false));
+        assert_eq!(anaconda_config.disable_zstd, Some(false));
+        assert_eq!(anaconda_config.disable_sharded, None);
     }
 }

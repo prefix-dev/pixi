@@ -1,4 +1,8 @@
+pub mod package_map;
 mod spanned;
+
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 pub use spanned::PixiSpanned;
 use url::Url;

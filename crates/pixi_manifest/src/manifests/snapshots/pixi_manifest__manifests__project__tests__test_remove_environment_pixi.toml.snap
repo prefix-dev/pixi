@@ -1,6 +1,0 @@
----
-source: crates/pixi_manifest/src/manifests/project.rs
-expression: source.to_string()
----
-[environments]
-bar = ["default"]

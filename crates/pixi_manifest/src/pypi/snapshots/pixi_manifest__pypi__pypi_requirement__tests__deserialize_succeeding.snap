@@ -9,6 +9,7 @@ expression: snapshot
   result:
     version: "==1.2.3"
     extras: []
+    index: ~
 - input: "*"
   result: "*"
 - input:

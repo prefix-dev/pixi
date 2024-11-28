@@ -18,6 +18,7 @@
 use std::{
     collections::HashMap,
     io::ErrorKind,
+    ops::Not,
     path::{Path, PathBuf},
     str::FromStr,
     sync::LazyLock,
@@ -65,6 +66,7 @@ const TRAMPOLINE_BIN: &[u8] = include_bytes!(
 );
 
 #[cfg(target_arch = "powerpc64")]
+#[cfg(target_endian = "little")]
 #[cfg(target_os = "linux")]
 const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-powerpc64le-unknown-linux-gnu.zst"
@@ -125,6 +127,17 @@ pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Res
     )
 }
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ConfigurationParseError {
+    #[error("Failed to read configuration file at {0}")]
+    #[diagnostic(code(configuration::read_error))]
+    ReadError(PathBuf, #[source] std::io::Error),
+
+    #[error("Failed to parse configuration file at {0}")]
+    #[diagnostic(code(configuration::parse_error))]
+    ParseError(PathBuf, #[source] serde_json::Error),
+}
+
 /// Configuration of the original executable.
 /// This is used by trampoline to set the environment variables
 /// prepened the path and execute the original executable.
@@ -150,49 +163,47 @@ impl Configuration {
 
     /// Read existing configuration of trampoline from the root path.
     pub async fn from_root_path(
-        root_path: PathBuf,
+        root_path: &Path,
         exposed_name: &ExposedName,
-    ) -> miette::Result<Self> {
-        let manifest_path = root_path
-            .join(TRAMPOLINE_CONFIGURATION)
-            .join(exposed_name.to_string() + ".json");
-        let manifest_str = tokio_fs::read_to_string(manifest_path)
+    ) -> Result<Self, ConfigurationParseError> {
+        let configuration_path = Self::path_from_trampoline(root_path, exposed_name);
+        let manifest_str = tokio_fs::read_to_string(&configuration_path)
             .await
-            .into_diagnostic()?;
-        serde_json::from_str(&manifest_str).into_diagnostic()
+            .map_err(|e| ConfigurationParseError::ReadError(configuration_path.clone(), e))?;
+        serde_json::from_str(&manifest_str)
+            .map_err(|e| ConfigurationParseError::ParseError(configuration_path.clone(), e))
     }
 
     /// Return the configuration file for the trampoline.
-    pub fn trampoline_configuration(trampoline: &Path) -> PathBuf {
-        let parent = trampoline.parent().expect("should have a parent");
-        parent
+    pub fn path_from_trampoline(root_path: &Path, exposed_name: &ExposedName) -> PathBuf {
+        root_path
             .join(PathBuf::from(TRAMPOLINE_CONFIGURATION))
-            .join(Trampoline::name(trampoline) + ".json")
+            .join(format!("{exposed_name}.json"))
     }
 }
 
 /// Represents an exposed global executable installed by pixi global.
 /// This can be either a trampoline or a old script.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GlobalBin {
+pub enum GlobalExecutable {
     Trampoline(Trampoline),
     Script(PathBuf),
 }
 
-impl GlobalBin {
+impl GlobalExecutable {
     /// Returns the path to the original executable.
     pub async fn executable(&self) -> miette::Result<PathBuf> {
         Ok(match self {
-            GlobalBin::Trampoline(trampoline) => trampoline.original_exe(),
-            GlobalBin::Script(script) => extract_executable_from_script(script).await?,
+            GlobalExecutable::Trampoline(trampoline) => trampoline.original_exe(),
+            GlobalExecutable::Script(script) => extract_executable_from_script(script).await?,
         })
     }
 
     /// Returns exposed name
     pub fn exposed_name(&self) -> ExposedName {
         match self {
-            GlobalBin::Trampoline(trampoline) => trampoline.exposed_name.clone(),
-            GlobalBin::Script(script) => {
+            GlobalExecutable::Trampoline(trampoline) => trampoline.exposed_name.clone(),
+            GlobalExecutable::Script(script) => {
                 ExposedName::from_str(&executable_from_path(script)).unwrap()
             }
         }
@@ -201,37 +212,29 @@ impl GlobalBin {
     /// Returns the path to the exposed binary.
     pub fn path(&self) -> PathBuf {
         match self {
-            GlobalBin::Trampoline(trampoline) => trampoline.path(),
-            GlobalBin::Script(script) => script.clone(),
+            GlobalExecutable::Trampoline(trampoline) => trampoline.path(),
+            GlobalExecutable::Script(script) => script.clone(),
         }
     }
 
     /// Returns if the exposed global binary is trampoline.
     pub fn is_trampoline(&self) -> bool {
-        matches!(self, GlobalBin::Trampoline(_))
-    }
-
-    /// Returns the inner trampoline.
-    pub fn trampoline(&self) -> Option<&Trampoline> {
-        match self {
-            GlobalBin::Trampoline(trampoline) => Some(trampoline),
-            _ => None,
-        }
+        matches!(self, GlobalExecutable::Trampoline(_))
     }
 
     /// Removes exposed global executable.
     /// In case it is a trampoline, it will also remove its manifest.
     pub async fn remove(&self) -> miette::Result<()> {
         match self {
-            GlobalBin::Trampoline(trampoline) => {
+            GlobalExecutable::Trampoline(trampoline) => {
                 let (trampoline_removed, manifest_removed) = tokio::join!(
                     tokio_fs::remove_file(trampoline.path()),
-                    tokio_fs::remove_file(trampoline.manifest_path())
+                    tokio_fs::remove_file(trampoline.configuration())
                 );
                 trampoline_removed.into_diagnostic()?;
                 manifest_removed.into_diagnostic()?;
             }
-            GlobalBin::Script(script) => {
+            GlobalExecutable::Script(script) => {
                 tokio_fs::remove_file(script).await.into_diagnostic()?;
             }
         }
@@ -267,8 +270,8 @@ impl Trampoline {
     }
 
     /// Tries to create a trampoline object from the already existing trampoline.
-    pub async fn try_from(trampoline_path: PathBuf) -> miette::Result<Self> {
-        let exposed_name = ExposedName::from_str(&executable_from_path(&trampoline_path))?;
+    pub async fn try_from(trampoline_path: &Path) -> miette::Result<Self> {
+        let exposed_name = ExposedName::from_str(&executable_from_path(trampoline_path))?;
         let parent_path = trampoline_path
             .parent()
             .ok_or_else(|| {
@@ -279,7 +282,7 @@ impl Trampoline {
             })?
             .to_path_buf();
 
-        let metadata = Configuration::from_root_path(parent_path.clone(), &exposed_name).await?;
+        let metadata = Configuration::from_root_path(&parent_path, &exposed_name).await?;
 
         Ok(Trampoline::new(exposed_name, parent_path, metadata))
     }
@@ -293,8 +296,8 @@ impl Trampoline {
         self.configuration.exe.clone()
     }
 
-    /// Returns the path to the trampoline manifest
-    pub fn manifest_path(&self) -> PathBuf {
+    /// Returns the path to the trampoline configuration
+    pub fn configuration(&self) -> PathBuf {
         self.root_path
             .join(TRAMPOLINE_CONFIGURATION)
             .join(self.exposed_name.to_string() + ".json")
@@ -309,22 +312,30 @@ impl Trampoline {
     }
 
     /// Returns the name of the trampoline
-    pub fn name(trampoline: &Path) -> String {
-        let trampoline_name = trampoline.file_name().expect("should have a file name");
+    pub fn name(trampoline: &Path) -> miette::Result<ExposedName> {
+        let trampoline_name = trampoline.file_name().ok_or_else(|| {
+            miette::miette!(
+                "trampoline needs to have a file name {}",
+                trampoline.display()
+            )
+        })?;
         // strip .exe from the file name
-        if cfg!(windows) {
+        let exposed_name = if cfg!(windows) {
             trampoline_name
                 .to_string_lossy()
                 .strip_suffix(".exe")
-                .expect("should have suffix")
+                .ok_or_else(|| miette::miette!("Trampoline doesn't have '.exe' suffix"))?
                 .to_string()
         } else {
             trampoline_name.to_string_lossy().to_string()
-        }
+        };
+
+        ExposedName::from_str(&exposed_name).into_diagnostic()
     }
 
     pub async fn save(&self) -> miette::Result<()> {
-        let (trampoline, manifest) = tokio::join!(self.write_trampoline(), self.write_manifest());
+        let (trampoline, manifest) =
+            tokio::join!(self.write_trampoline(), self.write_configuration());
         trampoline?;
         manifest?;
         Ok(())
@@ -342,7 +353,14 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
-        if !self.trampoline_path().exists() {
+        let trampoline_path = self.trampoline_path();
+
+        // We need to check that there's indeed a trampoline at the path
+        if trampoline_path.is_file().not()
+            || Trampoline::is_trampoline(&self.trampoline_path())
+                .await?
+                .not()
+        {
             tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
                 .await
                 .into_diagnostic()?;
@@ -358,11 +376,11 @@ impl Trampoline {
         // If creating a hard link doesn't succeed, try copying
         // Hard-linking might for example fail because the file-system enforces a maximum number of hard-links per file
         if !self.path().exists()
-            && tokio_fs::hard_link(self.trampoline_path(), self.path())
+            && tokio_fs::hard_link(&trampoline_path, self.path())
                 .await
                 .is_err()
         {
-            tokio_fs::copy(self.trampoline_path(), self.path())
+            tokio_fs::copy(&trampoline_path, self.path())
                 .await
                 .into_diagnostic()?;
         }
@@ -378,19 +396,19 @@ impl Trampoline {
         Ok(())
     }
 
-    /// Writes the manifest file of the trampoline
-    async fn write_manifest(&self) -> miette::Result<()> {
-        let manifest_string =
+    /// Writes the configuration file of the trampoline
+    async fn write_configuration(&self) -> miette::Result<()> {
+        let configuration_string =
             serde_json::to_string_pretty(&self.configuration).into_diagnostic()?;
         tokio_fs::create_dir_all(
-            Configuration::trampoline_configuration(&self.path())
+            self.configuration()
                 .parent()
                 .expect("should have a parent folder"),
         )
         .await
         .into_diagnostic()?;
 
-        tokio_fs::write(self.manifest_path(), manifest_string)
+        tokio_fs::write(self.configuration(), configuration_string)
             .await
             .into_diagnostic()?;
 
@@ -398,13 +416,19 @@ impl Trampoline {
     }
 
     /// Checks if executable is a saved trampoline
-    /// by reading only first 1048 bytes of the file
+    /// by comparing the file size and then by reading the first 1048 bytes of the file
     pub async fn is_trampoline(path: &Path) -> miette::Result<bool> {
         let mut bin_file = tokio_fs::File::open(path).await.into_diagnostic()?;
+        let metadata = bin_file.metadata().await.into_diagnostic()?;
+        let file_size = metadata.len();
 
-        let mut buf = [0; 1048];
-        match bin_file.read_exact(buf.as_mut()).await {
-            Ok(_) => Ok(buf == Trampoline::decompressed_trampoline()[..1048]),
+        if file_size != Trampoline::decompressed_trampoline().len() as u64 {
+            return Ok(false);
+        }
+
+        let mut buf = vec![0; file_size as usize];
+        match bin_file.read_exact(&mut buf).await {
+            Ok(_) => Ok(buf == Trampoline::decompressed_trampoline()),
             Err(err) => {
                 if err.kind() == ErrorKind::UnexpectedEof {
                     Ok(false)

@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_utils/src/conda_environment_file.rs
-expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\nparse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -55,21 +55,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/pytorch/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/pytorch/,
                         name: Some(
                             "pytorch",
                         ),
@@ -95,21 +81,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/pytorch/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/pytorch/,
                         name: Some(
                             "pytorch",
                         ),
@@ -135,21 +107,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -175,21 +133,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -215,21 +159,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -255,21 +185,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -295,21 +211,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -335,21 +237,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -375,21 +263,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -415,21 +289,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -455,21 +315,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -495,21 +341,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -535,21 +367,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -575,21 +393,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -615,21 +419,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -655,21 +445,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -695,21 +471,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -745,21 +507,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),
@@ -785,21 +533,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 channel: Some(
                     Channel {
                         platforms: None,
-                        base_url: Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "conda.anaconda.org",
-                                ),
-                            ),
-                            port: None,
-                            path: "/conda-forge/",
-                            query: None,
-                            fragment: None,
-                        },
+                        base_url: https://conda.anaconda.org/conda-forge/,
                         name: Some(
                             "conda-forge",
                         ),

@@ -1,4 +1,4 @@
-use super::trampoline::{GlobalBin, Trampoline};
+use super::trampoline::{GlobalExecutable, Trampoline};
 use super::{EnvironmentName, ExposedName, Mapping};
 use crate::prefix::Executable;
 
@@ -11,7 +11,7 @@ use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use pixi_config::home_path;
+use pixi_config::pixi_home;
 use pixi_manifest::PrioritizedChannel;
 use pixi_utils::executable_from_path;
 use rattler::install::{Transaction, TransactionOperation};
@@ -22,6 +22,7 @@ use rattler_conda_types::{
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::iter::Peekable;
+use std::ops::Not;
 use std::str::FromStr;
 use std::{
     io::Read,
@@ -44,7 +45,7 @@ impl BinDir {
 
     /// Create the binary executable directory from environment variables
     pub async fn from_env() -> miette::Result<Self> {
-        let bin_dir = home_path()
+        let bin_dir = pixi_home()
             .map(|path| path.join("bin"))
             .ok_or(miette::miette!(
                 "Couldn't determine global binary executable directory"
@@ -57,19 +58,18 @@ impl BinDir {
     ///
     /// This function reads the directory specified by `self.0` and try to collect all
     /// file paths into a vector. It returns a `miette::Result` containing the
-    /// vector of `GlobalBin`or an error if the directory can't be read.
-    pub(crate) async fn bins(&self) -> miette::Result<Vec<GlobalBin>> {
+    /// vector of `GlobalExecutable`or an error if the directory can't be read.
+    pub(crate) async fn executables(&self) -> miette::Result<Vec<GlobalExecutable>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
 
         while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
             let path = entry.path();
-            if path.is_file() && path.is_executable() && Trampoline::is_trampoline(&path).await? {
-                let trampoline = Trampoline::try_from(path).await?;
-                files.push(GlobalBin::Trampoline(trampoline));
-            } else if path.is_file() && path.is_executable() && !is_binary(&path)? {
+            if let Ok(trampoline) = Trampoline::try_from(&path).await {
+                files.push(GlobalExecutable::Trampoline(trampoline));
+            } else if path.is_file() && path.is_executable() && is_binary(&path)?.not() {
                 // If the file is not a binary, it's a script
-                files.push(GlobalBin::Script(path));
+                files.push(GlobalExecutable::Script(path));
             }
         }
 
@@ -113,7 +113,7 @@ impl EnvRoot {
 
     /// Create the environment root directory from environment variables
     pub(crate) async fn from_env() -> miette::Result<Self> {
-        let path = home_path()
+        let path = pixi_home()
             .map(|path| path.join("envs"))
             .ok_or_else(|| miette::miette!("Couldn't get home path"))?;
         tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
@@ -704,9 +704,9 @@ pub(crate) async fn get_expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
-) -> miette::Result<(Vec<GlobalBin>, IndexSet<ExposedName>)> {
+) -> miette::Result<(Vec<GlobalExecutable>, IndexSet<ExposedName>)> {
     // Get all paths to the binaries from trampolines or scripts in the bin directory.
-    let locally_exposed = bin_dir.bins().await?;
+    let locally_exposed = bin_dir.executables().await?;
     let executable_paths = futures::future::join_all(locally_exposed.iter().map(|global_bin| {
         let global_bin = global_bin.clone();
         let path = global_bin.path().clone();
@@ -975,70 +975,87 @@ mod tests {
             ExposedName::from_str("test").unwrap(),
             "test".to_string(),
         ));
+        exposed.insert(Mapping::new(
+            ExposedName::from_str("nested_test").unwrap(),
+            Path::new("other_dir")
+                .join("nested_test")
+                .to_str()
+                .unwrap()
+                .to_string(),
+        ));
         let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
-        assert_eq!(to_add.len(), 1);
+        assert_eq!(to_add.len(), 2);
 
         // Add a legacy script to the bin directory
-        // even if it's should be exposed and it's pointing to correct executable
+        // even if it should be exposed and it's pointing to correct executable
         // it is an old script
         // we need to remove it and replace with trampoline
-        let script_path = if cfg!(windows) {
-            bin_dir.path().join("test.bat")
-        } else {
-            bin_dir.path().join("test")
-        };
+        let script_names = ["test", "nested_test"];
 
         #[cfg(windows)]
         {
-            let script = format!(
-                r#"
+            for script_name in script_names {
+                let script_path = bin_dir.path().join(format!("{}.bat", script_name));
+                let script = format!(
+                    r#"
             @"{}" %*
             "#,
-                env_dir
-                    .path()
-                    .join("bin")
-                    .join("test.exe")
-                    .to_string_lossy()
-            );
-            tokio_fs::write(&script_path, script).await.unwrap();
+                    env_dir
+                        .path()
+                        .join("bin")
+                        .join(format!("{}.exe", script_name))
+                        .to_string_lossy()
+                );
+                tokio_fs::write(&script_path, script).await.unwrap();
+            }
         }
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
 
-            let script = format!(
-                r#"#!/bin/sh
+            for script_name in script_names {
+                let script_path = bin_dir.path().join(script_name);
+                let script = format!(
+                    r#"#!/bin/sh
             "{}" "$@"
             "#,
-                env_dir.path().join("bin").join("test").to_string_lossy()
-            );
-            tokio_fs::write(&script_path, script).await.unwrap();
-            // Set the file permissions to make it executable
-            let metadata = tokio_fs::metadata(&script_path).await.unwrap();
-            let mut permissions = metadata.permissions();
-            permissions.set_mode(0o755); // rwxr-xr-x
-            tokio_fs::set_permissions(&script_path, permissions)
-                .await
-                .unwrap();
+                    env_dir
+                        .path()
+                        .join("bin")
+                        .join(script_name)
+                        .to_string_lossy()
+                );
+                tokio_fs::write(&script_path, script).await.unwrap();
+                // Set the file permissions to make it executable
+                let metadata = tokio_fs::metadata(&script_path).await.unwrap();
+                let mut permissions = metadata.permissions();
+                permissions.set_mode(0o755); // rwxr-xr-x
+                tokio_fs::set_permissions(&script_path, permissions)
+                    .await
+                    .unwrap();
+            }
         };
 
-        let (mut to_remove, mut to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
-                .await
-                .unwrap();
-        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
-        assert!(to_add.pop().unwrap().to_string() == "test");
+        // Test to_remove and to_add to see if the legacy scripts are removed and trampolines are added
+        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+            .await
+            .unwrap();
+        assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
+        assert_eq!(to_remove.len(), 2);
+        assert_eq!(to_add.len(), 2);
 
         // Test to_remove when nothing should be exposed
-        let (mut to_remove, to_add) =
+        // it should remove all the legacy scripts and add nothing
+        let (to_remove, to_add) =
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
 
-        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
+        assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
+        assert_eq!(to_remove.len(), 2);
         assert!(to_add.is_empty());
     }
 
@@ -1100,8 +1117,9 @@ mod tests {
             get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
+        assert_eq!(to_remove.len(), 1);
 
-        assert!(to_remove.pop().unwrap().exposed_name().to_string() == "test");
+        assert_eq!(to_remove.pop().unwrap().exposed_name().to_string(), "test");
         assert!(to_add.is_empty());
     }
 }

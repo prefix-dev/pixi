@@ -11,9 +11,14 @@ use serde::{self, Deserialize, Deserializer};
 use serde_with::SerializeDisplay;
 use thiserror::Error;
 
-use crate::consts::DEFAULT_ENVIRONMENT_NAME;
-use crate::solve_group::SolveGroupIdx;
-use crate::utils::PixiSpanned;
+use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
+
+#[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
+#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
+pub struct ParseEnvironmentNameError {
+    /// The string that was attempted to be parsed.
+    pub attempted_parse: String,
+}
 
 /// The name of an environment. This is either a string or default for the
 /// default environment.
@@ -86,13 +91,6 @@ impl PartialEq<str> for EnvironmentName {
     }
 }
 
-#[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
-pub struct ParseEnvironmentNameError {
-    /// The string that was attempted to be parsed.
-    pub attempted_parse: String,
-}
-
 impl FromStr for EnvironmentName {
     type Err = ParseEnvironmentNameError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -149,36 +147,6 @@ pub struct Environment {
 
     /// Whether to include the default feature in that environment
     pub no_default_feature: bool,
-}
-
-/// Helper struct to deserialize the environment from TOML.
-/// The environment description can only hold these values.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub(super) struct TomlEnvironment {
-    #[serde(default)]
-    pub features: PixiSpanned<Vec<String>>,
-    pub solve_group: Option<String>,
-    #[serde(default)]
-    pub no_default_feature: bool,
-}
-
-pub(super) enum TomlEnvironmentMapOrSeq {
-    Map(TomlEnvironment),
-    Seq(Vec<String>),
-}
-
-impl<'de> Deserialize<'de> for TomlEnvironmentMapOrSeq {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .map(|map| map.deserialize().map(TomlEnvironmentMapOrSeq::Map))
-            .seq(|seq| seq.deserialize().map(TomlEnvironmentMapOrSeq::Seq))
-            .expecting("either a map or a sequence")
-            .deserialize(deserializer)
-    }
 }
 
 #[cfg(test)]

@@ -20,6 +20,7 @@ pixi_spec = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-untagged = { workspace = true }
+serde-value = { workspace = true }
 serde_with = { workspace = true }
 spdx = { workspace = true }
 strsim = { workspace = true }
@@ -47,5 +48,5 @@ fancy_display = { workspace = true }
 glob = "0.3.1"
 insta = { workspace = true, features = ["yaml"] }
 rstest = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["preserve_order"] }
 tempfile = { workspace = true }

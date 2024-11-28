@@ -4,7 +4,7 @@ import platform
 import subprocess
 import os
 
-PIXI_VERSION = "0.36.0"
+PIXI_VERSION = "0.38.0"
 
 
 class ExitCode(IntEnum):
@@ -37,17 +37,15 @@ def verify_cli_command(
     stderr_contains: str | list[str] | None = None,
     stderr_excludes: str | list[str] | None = None,
     env: dict[str, str] | None = None,
+    cwd: str | Path | None = None,
+    reset_env: bool = False,
 ) -> Output:
-    # Setup the environment type safe.
-    base_env = dict(os.environ)
-    if env is not None:
-        complete_env = base_env | env
-    else:
-        complete_env = base_env
-    # Avoid to have miette splitting up lines
-    complete_env = complete_env | {"NO_GRAPHICS": "1"}
+    base_env = {} if reset_env else dict(os.environ)
+    complete_env = base_env if env is None else base_env | env
+    # Set `NO_GRAPHICS` to avoid to have miette splitting up lines
+    complete_env |= {"NO_GRAPHICS": "1"}
 
-    process = subprocess.run(command, capture_output=True, text=True, env=complete_env)
+    process = subprocess.run(command, capture_output=True, text=True, env=complete_env, cwd=cwd)
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     output = Output(command, stdout, stderr, returncode)
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")

@@ -1,6 +1,5 @@
 use std::{
     borrow::{Borrow, Cow},
-    collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
 };
@@ -10,19 +9,16 @@ use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use rattler_solve::ChannelPriority;
-use serde::{de::Error, Deserialize, Deserializer};
-use serde_with::{serde_as, SerializeDisplay};
+use serde::{de::Error, Deserialize};
+use serde_with::SerializeDisplay;
 
 use crate::{
-    channel::{PrioritizedChannel, TomlPrioritizedChannelStrOrMap},
+    channel::PrioritizedChannel,
     consts,
-    parsed_manifest::deserialize_opt_package_map,
-    parsed_manifest::deserialize_package_map,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
-    task::{Task, TaskName},
     utils::PixiSpanned,
-    Activation, PyPiRequirement, SpecType, SystemRequirements, Target, TargetSelector,
+    PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
 };
 
 /// The name of a feature. This is either a string or default for the default
@@ -147,7 +143,7 @@ pub struct Feature {
     pub pypi_options: Option<PypiOptions>,
 
     /// Target specific configuration.
-    pub targets: Targets,
+    pub targets: Targets<WorkspaceTarget>,
 }
 
 impl Feature {
@@ -161,7 +157,7 @@ impl Feature {
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
 
-            targets: <Targets as Default>::default(),
+            targets: <Targets<WorkspaceTarget> as Default>::default(),
         }
     }
 
@@ -184,6 +180,48 @@ impl Feature {
         self.channels.get_or_insert_with(Default::default)
     }
 
+    /// Returns the run dependencies of the target for the given `platform`.
+    ///
+    /// If the platform is `None` no platform specific dependencies are
+    /// returned.
+    ///
+    /// This function returns `None` if there is not a single feature that has
+    /// any dependencies defined.
+    pub fn run_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+        self.dependencies(SpecType::Run, platform)
+    }
+
+    /// Returns the host dependencies of the target for the given `platform`.
+    ///
+    /// If the platform is `None` no platform specific dependencies are
+    /// returned.
+    ///
+    /// This function returns `None` if there is not a single feature that has
+    /// any dependencies defined.
+    pub fn host_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+        self.dependencies(SpecType::Host, platform)
+    }
+
+    /// Returns the run dependencies of the target for the given `platform`.
+    ///
+    /// If the platform is `None` no platform specific dependencies are
+    /// returned.
+    ///
+    /// This function returns `None` if there is not a single feature that has
+    /// any dependencies defined.
+    pub fn build_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+        self.dependencies(SpecType::Build, platform)
+    }
+
     /// Returns the dependencies of the feature for a given `spec_type` and
     /// `platform`.
     ///
@@ -193,17 +231,55 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target that has any
     /// of the requested dependencies.
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
     pub fn dependencies(
         &self,
-        spec_type: Option<SpecType>,
+        spec_type: SpecType,
         platform: Option<Platform>,
     ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because the extend function will overwrite existing keys.
+            // This is required because the extent function will overwrite existing keys.
             .rev()
             .filter_map(|t| t.dependencies(spec_type))
+            .filter(|deps| !deps.is_empty())
+            .fold(None, |acc, deps| match acc {
+                None => Some(Cow::Borrowed(deps)),
+                Some(mut acc) => {
+                    let deps_iter = deps.iter().map(|(name, spec)| (name.clone(), spec.clone()));
+                    acc.to_mut().extend(deps_iter);
+                    Some(acc)
+                }
+            })
+    }
+
+    /// Returns the combined dependencies of the feature and `platform`.
+    ///
+    /// The `build` dependencies overwrite the `host` dependencies which
+    /// overwrite the `run` dependencies.
+    ///
+    /// This function returns a [`Cow`]. If the dependencies are not combined or
+    /// overwritten by multiple targets than this function returns a
+    /// reference to the internal dependencies.
+    ///
+    /// Returns `None` if this feature does not define any target that has any
+    /// of the requested dependencies.
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
+    pub fn combined_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+        self.targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            // This is required because the extent function will overwrite existing keys.
+            .rev()
+            .filter_map(|t| t.combined_dependencies())
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(deps),
@@ -214,7 +290,6 @@ impl Feature {
                         ),
                         Cow::Owned(deps) => Either::Right(deps.into_iter()),
                     };
-
                     acc.to_mut().extend(deps_iter);
                     Some(acc)
                 }
@@ -270,12 +345,19 @@ impl Feature {
     ///
     /// Returns `None` if this feature does not define any target with an
     /// activation.
-    pub fn activation_env(&self, platform: Option<Platform>) -> Option<&IndexMap<String, String>> {
+    pub fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
         self.targets
             .resolve(platform)
             .filter_map(|t| t.activation.as_ref())
             .filter_map(|a| a.env.as_ref())
-            .next()
+            .fold(IndexMap::new(), |mut acc, x| {
+                for (k, v) in x {
+                    if !acc.contains_key(k) {
+                        acc.insert(k.clone(), v.clone());
+                    }
+                }
+                acc
+            })
     }
 
     /// Returns true if the feature contains any reference to a pypi
@@ -292,84 +374,6 @@ impl Feature {
     }
 }
 
-impl<'de> Deserialize<'de> for Feature {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[serde_as]
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-        struct FeatureInner {
-            #[serde(default)]
-            platforms: Option<PixiSpanned<IndexSet<Platform>>>,
-            #[serde(default)]
-            channels: Option<Vec<TomlPrioritizedChannelStrOrMap>>,
-            #[serde(default)]
-            channel_priority: Option<ChannelPriority>,
-            #[serde(default)]
-            system_requirements: SystemRequirements,
-            #[serde(default)]
-            target: IndexMap<PixiSpanned<TargetSelector>, Target>,
-
-            #[serde(default, deserialize_with = "deserialize_package_map")]
-            dependencies: IndexMap<PackageName, PixiSpec>,
-
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
-            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(default, deserialize_with = "deserialize_opt_package_map")]
-            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(default)]
-            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
-
-            /// Additional information to activate an environment.
-            #[serde(default)]
-            activation: Option<Activation>,
-
-            /// Target specific tasks to run in the environment
-            #[serde(default)]
-            tasks: HashMap<TaskName, Task>,
-
-            /// Additional options for PyPi dependencies.
-            #[serde(default)]
-            pypi_options: Option<PypiOptions>,
-        }
-
-        let inner = FeatureInner::deserialize(deserializer)?;
-        let mut dependencies = HashMap::from_iter([(SpecType::Run, inner.dependencies)]);
-        if let Some(host_deps) = inner.host_dependencies {
-            dependencies.insert(SpecType::Host, host_deps);
-        }
-        if let Some(build_deps) = inner.build_dependencies {
-            dependencies.insert(SpecType::Build, build_deps);
-        }
-
-        let default_target = Target {
-            dependencies,
-            pypi_dependencies: inner.pypi_dependencies,
-            activation: inner.activation,
-            tasks: inner.tasks,
-        };
-
-        Ok(Feature {
-            name: FeatureName::Default,
-            platforms: inner.platforms,
-            channels: inner.channels.map(|channels| {
-                channels
-                    .into_iter()
-                    .map(|channel| channel.into_prioritized_channel())
-                    .collect()
-            }),
-            channel_priority: inner.channel_priority,
-            system_requirements: inner.system_requirements,
-            pypi_options: inner.pypi_options,
-            targets: Targets::from_default_and_user_defined(default_target, inner.target),
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -377,7 +381,7 @@ mod tests {
     use assert_matches::assert_matches;
 
     use super::*;
-    use crate::manifests::manifest::Manifest;
+    use crate::Manifest;
 
     #[test]
     fn test_dependencies_borrowed() {
@@ -407,7 +411,7 @@ mod tests {
         assert_matches!(
             manifest
                 .default_feature()
-                .dependencies(Some(SpecType::Host), None)
+                .dependencies(SpecType::Host, None)
                 .unwrap(),
             Cow::Borrowed(_),
             "[host-dependencies] should be borrowed"
@@ -416,31 +420,34 @@ mod tests {
         assert_matches!(
             manifest
                 .default_feature()
-                .dependencies(Some(SpecType::Run), None)
+                .dependencies(SpecType::Run, None)
                 .unwrap(),
             Cow::Borrowed(_),
             "[dependencies] should be borrowed"
         );
 
         assert_matches!(
-            manifest.default_feature().dependencies(None, None).unwrap(),
+            manifest
+                .default_feature()
+                .combined_dependencies(None)
+                .unwrap(),
             Cow::Owned(_),
             "combined dependencies should be owned"
         );
 
         let bla_feature = manifest
-            .parsed
+            .workspace
             .features
             .get(&FeatureName::Named(String::from("bla")))
             .unwrap();
         assert_matches!(
-            bla_feature.dependencies(Some(SpecType::Run), None).unwrap(),
+            bla_feature.dependencies(SpecType::Run, None).unwrap(),
             Cow::Borrowed(_),
             "[feature.bla.dependencies] should be borrowed"
         );
 
         assert_matches!(
-            bla_feature.dependencies(None, None).unwrap(),
+            bla_feature.combined_dependencies(None).unwrap(),
             Cow::Borrowed(_),
             "[feature.bla] combined dependencies should also be borrowed"
         );
@@ -503,6 +510,6 @@ mod tests {
         // and should now be none, previously this was added
         // to the default feature
         assert!(manifest.default_feature().pypi_options().is_some());
-        assert!(manifest.parsed.project.pypi_options.is_some());
+        assert!(manifest.workspace.workspace.pypi_options.is_some());
     }
 }

@@ -1,19 +1,37 @@
 ---
 part: pixi
-title: Configuration
-description: Learn what you can do in the pixi.toml configuration.
+title: Manifest
+description: Learn what you can do in the pixi manifest.
 ---
 
-The `pixi.toml` is the pixi project configuration file, also known as the project manifest.
+The `pixi.toml` is the project manifest, also known as the pixi project configuration file.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check pixi on [crates.io](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
+For more technical documentation check pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
     For example, the `[project]` table becomes `[tool.pixi.project]`.
     There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../advanced/pyproject_toml.md) documentation for more information.
+
+## Manifest discovery
+
+The manifest can be found at the following locations depending on your operating system.
+
+
+| **Priority** | **Location**                                                           | **Comments**                                                                       |
+|--------------|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
+| 6            | `--manifest-path`                                                      | Command-line argument                                                              |
+| 5            | `pixi.toml`                                                            | In your current working directory.                                                 |
+| 4            | `pyproject.toml`                                                       | In your current working directory.                                                 |
+| 3            | `pixi.toml` or `pyproject.toml`                                        | Iterate through all parent directories. The first discovered manifest is used.     |
+| 1            | `$PIXI_PROJECT_MANIFEST`                                               | If `$PIXI_IN_SHELL` is set. This happens with `pixi shell` or `pixi run`.          |
+
+
+!!! note
+    If multiple locations exist, the manifest with the highest priority will be used.
+
 
 ## The `project` table
 
@@ -174,12 +192,13 @@ Options:
     Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities.
 
     We strongly recommend not to switch the default.
-- `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
-  Care should be taken when using this option.
-  Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
-  This can cause hard to debug ABI incompatibilities.
 
-  We strongly discourage using this option.
+- `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
+   Care should be taken when using this option.
+   Since package variants can come from _any_ channel when you use this mode, packages might not be compatible.
+   This can cause hard to debug ABI incompatibilities.
+
+   We strongly discourage using this option.
 
 ```toml
 channel-priority = "disabled"
@@ -467,6 +486,19 @@ py-rattler = "*"
 ruff = "~=1.0.0"
 pytest = {version = "*", extras = ["dev"]}
 ```
+
+##### `index`
+
+The index parameter allows you to specify the URL of a custom package index for the installation of a specific package.
+This feature is useful when you want to ensure that a package is retrieved from a particular source, rather than from the default index.
+
+For example, to use some other than the official Python Package Index (PyPI) at https://pypi.org/simple, you can use the `index` parameter:
+
+```toml
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
+```
+
+This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
 
 ##### `git`
 
@@ -761,11 +793,28 @@ test = {features = ["test"]}
 ```
 
 When an environment comprises several features (including the default feature):
+
 - The `activation` and `tasks` of the environment are the union of the `activation` and `tasks` of all its features.
 - The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
 - The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
 - The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
+
+## Preview features
+Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
+
+An example of a preview feature in the project manifest:
+
+```toml title="Example preview features in the project manifest"
+[project]
+name = "foo"
+channels = []
+platforms = []
+preview = ["new-resolve"]
+```
+
+Preview features in the documentation will be marked as such on the relevant pages.
+
 
 ## Global configuration
 

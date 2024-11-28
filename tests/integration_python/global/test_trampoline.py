@@ -2,6 +2,7 @@ import json
 import pathlib
 from pathlib import Path
 import platform
+import os
 
 from ..common import verify_cli_command, exec_extension, is_binary
 
@@ -158,3 +159,133 @@ def test_trampoline_dot_in_exe(pixi: Path, tmp_path: Path, trampoline_channel_1:
     exe_test = tmp_path / "bin" / exec_extension("exe.test")
     # The binary execute should succeed
     verify_cli_command([exe_test], stdout_contains="Success:")
+
+
+def test_trampoline_migrate_with_newer_trampoline(
+    pixi: Path, tmp_path: Path, trampoline_channel_1: str
+) -> None:
+    # this test will validate if new trampoline will migrate the older trampoline
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # create a dummy bin that will act as already installed package
+    dummy_trampoline = tmp_path / "bin" / exec_extension("dummy-trampoline")
+    dummy_trampoline.parent.mkdir(exist_ok=True)
+    dummy_trampoline.write_text("hello")
+
+    # now run install again, this time it should migrate the script to the new trampoline
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_channel_1,
+            "dummy-trampoline",
+        ],
+        env=env,
+    )
+
+    assert dummy_trampoline.is_file()
+    assert is_binary(dummy_trampoline)
+
+    dummy_trampoline_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
+
+    assert dummy_trampoline_json.is_file()
+    # run an update, it should say that everything is up to date
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "update",
+        ],
+        env=env,
+        stderr_contains="Environment dummy-trampoline was already up-to-date",
+        stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
+    )
+
+    # now change the trampoline binary , and verify that it will install the new one
+    dummy_trampoline.write_text("new content")
+
+    # run an update again it should remove the old trampoline and install the new one
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "update",
+        ],
+        env=env,
+        stderr_contains="Updated executable dummy-trampoline of environment dummy-trampoline",
+    )
+
+    # run an update again
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "update",
+        ],
+        env=env,
+        stderr_contains="Environment dummy-trampoline was already up-to-date",
+        stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
+    )
+
+
+def test_trampoline_extends_path(pixi: Path, tmp_path: Path, trampoline_path_channel: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_trampoline_path = tmp_path / "bin" / exec_extension("dummy-trampoline-path")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_path_channel,
+            "dummy-trampoline-path",
+        ],
+        env=env,
+    )
+
+    verify_cli_command(
+        [dummy_trampoline_path],
+        stdout_contains=["/test/path", os.environ["PATH"]],
+    )
+
+    os.environ["PATH"] = "/another/test/path" + os.pathsep + os.environ["PATH"]
+
+    verify_cli_command(
+        [dummy_trampoline_path],
+        stdout_contains=["/another/test/path", "/test/path"],
+    )
+
+
+def test_trampoline_removes_trampolines_not_in_manifest(
+    pixi: Path, tmp_path: Path, trampoline_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_trampoline_original = tmp_path / "bin" / exec_extension("dummy-trampoline")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_channel_1,
+            "dummy-trampoline",
+        ],
+        env=env,
+    )
+
+    dummy_trampoline_new = dummy_trampoline_original.rename(
+        dummy_trampoline_original.parent / exec_extension("dummy-trampoline-new")
+    )
+
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        env=env,
+    )
+    assert dummy_trampoline_original.is_file()
+    assert not dummy_trampoline_new.is_file()

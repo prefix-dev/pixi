@@ -45,8 +45,8 @@ Config {
         },
         root_dir: "/root/dir",
     },
-    repodata_config: Some(
-        RepodataConfig {
+    repodata_config: RepodataConfig {
+        default: RepodataChannelConfig {
             disable_jlap: Some(
                 true,
             ),
@@ -54,8 +54,10 @@ Config {
             disable_zstd: Some(
                 true,
             ),
+            disable_sharded: None,
         },
-    ),
+        per_channel: {},
+    },
     pypi_config: PyPIConfig {
         index_url: None,
         extra_index_urls: [],
@@ -66,4 +68,8 @@ Config {
             true,
         ),
     ),
+    force_activate: None,
+    experimental: ExperimentalConfig {
+        use_environment_activation_cache: None,
+    },
 }

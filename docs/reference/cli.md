@@ -53,13 +53,17 @@ pixi init --format pixi --scm gitlab
 ## `add`
 
 Adds dependencies to the [manifest file](project_configuration.md).
-It will only add if the package with its version constraint is able to work with rest of the dependencies in the project.
+It will only add dependencies compatible with the rest of the dependencies in the project.
 [More info](../features/multi_platform_configuration.md) on multi-platform configuration.
 
-If the project manifest is a `pyproject.toml`, adding a pypi dependency will add it to the native pyproject `project.dependencies` array, or to the native `project.optional-dependencies` table if a feature is specified:
+If the project manifest is a `pyproject.toml`, by default, adding a pypi dependency will add it to the native `project.dependencies` array, or to the native `dependency-groups` table if a feature is specified:
 
 - `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
-- `pixi add --pypi boto3 --feature aws` would add `boto3` to the `project.dependencies.aws` array
+- `pixi add --pypi boto3 --feature aws` would add `boto3` to the `dependency-groups.aws` array
+
+Note that if `--platform` or `--editable` are specified, the pypi dependency
+will be added to the `tool.pixi.pypi-dependencies` table instead as native
+arrays have no support for platform-specific or editable dependencies.
 
 These dependencies will be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or a named feature.
 
@@ -79,7 +83,7 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
-- `--editable`: Specifies an editable dependency, only use in combination with `--pypi`.
+- `--editable`: Specifies an editable dependency; only used in combination with `--pypi`.
 
 ```shell
 pixi add numpy # (1)!
@@ -201,7 +205,7 @@ The `upgrade` command checks if there are newer versions of the dependencies and
 
 ##### Options
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
-- `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided all features are upgraded.
+- `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided the default feature will be used.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
 - `--json`: Output the changes in json format.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the manifest, lock file, or environment.
@@ -215,6 +219,17 @@ pixi upgrade --feature lint python
 pixi upgrade --json
 pixi upgrade --dry-run
 ```
+
+!!! note
+    The `pixi upgrade` command will only update `version`s, except when you specify the exact package name (`pixi upgrade numpy`).
+
+    Then it will remove all fields, apart from:
+
+    - `build` field containing a wildcard `*`
+    - `channel`
+    - `file_name`
+    - `url`
+    - `subdir`.
 
 ## `run`
 
@@ -235,6 +250,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON `Windows`.
+- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking the lock file hash. [more info](../features/environment.md#environment-installation-metadata)
 
 ```shell
@@ -324,6 +340,7 @@ pixi exec --force-reinstall -s ipython -s py-rattler ipython
 Removes dependencies from the [manifest file](project_configuration.md).
 
 If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
+
 - the native pyproject `project.dependencies` array or the native `project.optional-dependencies` table (if a feature is specified)
 - pixi `pypi-dependencies` tables of the default or a named feature (if a feature is specified)
 
@@ -493,6 +510,8 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
+- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 
 ```shell
 pixi list
@@ -554,6 +573,8 @@ The package tree can also be inverted (`-i`), to see which packages require a sp
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
+- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 
 ```shell
 pixi tree
@@ -664,7 +685,11 @@ To exit the pixi shell, simply run `exit`.
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--no-install`: Don't install the environment, only activate the environment.
+- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
+- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
+- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
 
 ```shell
@@ -694,6 +719,7 @@ This command prints the activation script of an environment.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
   this option, `--shell` is ignored.
+- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
 
 ```shell
@@ -860,6 +886,7 @@ Use this command to manage the configuration.
 - `--system (-s)`: Specify management scope to system configuration.
 - `--global (-g)`: Specify management scope to global configuration.
 - `--local (-l)`: Specify management scope to local configuration.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
 
 Checkout the [pixi configuration](./pixi_configuration.md) for more information about the locations.
 
@@ -1324,7 +1351,7 @@ List the environments in the manifest file.
 pixi project environment list
 ```
 
-### `project export conda_environment`
+### `project export conda-environment`
 
 Exports a conda [`environment.yml` file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). The file can be used to create a conda environment using conda/mamba:
 
@@ -1347,7 +1374,7 @@ pixi project export conda-environment --environment lint
 pixi project export conda-environment --platform linux-64 environment.linux-64.yml
 ```
 
-### `project export conda_explicit_spec`
+### `project export conda-explicit-spec`
 
 Render a platform-specific conda [explicit specification file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#building-identical-conda-environments)
 for an environment. The file can be then used to create a conda environment using conda/mamba:
@@ -1369,8 +1396,8 @@ As the explicit specification file format does not support pypi-dependencies, us
 - `--ignore-pypi-errors`: PyPI dependencies are not supported in the conda explicit spec file. This flag allows creating the spec file even if PyPI dependencies are present.
 
 ```sh
-pixi project export conda_explicit_spec output
-pixi project export conda_explicit_spec -e default -e test -p linux-64 output
+pixi project export conda-explicit-spec output
+pixi project export conda-explicit-spec -e default -e test -p linux-64 output
 ```
 
 

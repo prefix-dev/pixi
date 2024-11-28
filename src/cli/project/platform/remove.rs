@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::lock_file::UpdateMode;
 use crate::{
-    environment::{update_prefix, LockFileUsage},
+    environment::{get_update_lock_file_and_prefix, LockFileUsage},
     Project,
 };
 use clap::Parser;
@@ -44,7 +44,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .manifest
         .remove_platforms(platforms.clone(), &feature_name)?;
 
-    update_prefix(
+    get_update_lock_file_and_prefix(
         &project.default_environment(),
         LockFileUsage::Update,
         args.no_install,

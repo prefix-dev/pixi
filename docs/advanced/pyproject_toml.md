@@ -155,6 +155,57 @@ In this example, three environments will be created by pixi:
 
 All environments will be solved together, as indicated by the common `solve-group`, and added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to your use case (e.g. if you do not need a particular environment).
 
+## Dependency groups
+
+If your python project includes dependency groups, pixi will automatically interpret them as [pixi features](../reference/project_configuration.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
+
+You can add them to pixi environments manually, or use `pixi init` to setup the project, which will create one environment per dependency group.
+
+For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
+
+```toml
+[project]
+name = "my_project"
+dependencies = ["package1"]
+
+[dependency-groups]
+test = ["pytest"]
+docs = ["sphinx"]
+dev = [{include-group = "test"}, {include-group = "docs"}]
+```
+
+Running `pixi init` in that project folder will transform the `pyproject.toml` file into:
+
+```toml
+[project]
+name = "my_project"
+dependencies = ["package1"]
+
+[dependency-groups]
+test = ["pytest"]
+docs = ["sphinx"]
+dev = [{include-group = "test"}, {include-group = "docs"}]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"] # if executed on linux
+
+[tool.pixi.environments]
+default = {features = [], solve-group = "default"}
+test = {features = ["test"], solve-group = "default"}
+docs = {features = ["docs"], solve-group = "default"}
+dev = {features = ["dev"], solve-group = "default"}
+```
+
+In this example, four environments will be created by pixi:
+
+- **default** with 'package1' as pypi dependency
+- **test** with 'package1' and 'pytest' as pypi dependencies
+- **docs** with 'package1', 'sphinx' as pypi dependencies
+- **dev** with 'package1', 'sphinx' and 'pytest' as pypi dependencies
+
+All environments will be solved together, as indicated by the common `solve-group`, and added to the lock file. You can edit the `[tool.pixi.environments]` section manually to adapt it to your use case (e.g. if you do not need a particular environment).
+
 ## Example
 
 As the `pyproject.toml` file supports the full pixi spec with `[tool.pixi]` prepended an example would look like this:

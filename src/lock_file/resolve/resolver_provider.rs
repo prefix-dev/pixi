@@ -8,7 +8,7 @@ use std::{
 
 use futures::{Future, FutureExt};
 use pixi_consts::consts;
-use rattler_conda_types::RepoDataRecord;
+use pixi_record::PixiRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_distribution_filename::SourceDistExtension;
 use uv_distribution_types::{
@@ -21,12 +21,12 @@ use uv_resolver::{
 };
 use uv_types::BuildContext;
 
-use crate::lock_file::{records_by_name::HasNameVersion, PypiPackageIdentifier};
+use crate::lock_file::PypiPackageIdentifier;
 
 pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,
     pub(super) conda_python_identifiers:
-        &'a HashMap<uv_normalize::PackageName, (RepoDataRecord, PypiPackageIdentifier)>,
+        &'a HashMap<uv_normalize::PackageName, (PixiRecord, PypiPackageIdentifier)>,
 
     /// Saves the number of requests by the uv solver per package
     pub(super) package_requests: Rc<RefCell<HashMap<uv_normalize::PackageName, u32>>>,
@@ -40,16 +40,16 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
     ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
         {
-            let version = repodata_record.version().to_string();
+            let version = repodata_record.package_record().version.to_string();
 
             tracing::debug!(
                 "overriding PyPI package version request {}=={}",
                 package_name,
                 version
             );
-            // If we encounter a package that was installed by conda we simply return a single
-            // available version in the form of a source distribution with the URL of the
-            // conda package.
+            // If we encounter a package that was installed by conda we simply return a
+            // single available version in the form of a source distribution
+            // with the URL of the conda package.
             //
             // Obviously this is not a valid source distribution but it eases debugging.
 
@@ -62,7 +62,15 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 requires_python: None,
                 size: None,
                 upload_time_utc_ms: None,
-                url: FileLocation::AbsoluteUrl(UrlString::from(repodata_record.url.clone())),
+                url: match repodata_record {
+                    PixiRecord::Binary(repodata_record) => {
+                        FileLocation::AbsoluteUrl(UrlString::from(repodata_record.url.clone()))
+                    }
+                    PixiRecord::Source(_source) => {
+                        // TODO(baszalmstra): Does this matter??
+                        FileLocation::RelativeUrl("foo".to_string(), "bar".to_string())
+                    }
+                },
                 yanked: None,
             };
 
@@ -84,7 +92,8 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
             );
 
-            // Record that we got a request for this package so we can track the number of requests
+            // Record that we got a request for this package so we can track the number of
+            // requests
             self.package_requests
                 .borrow_mut()
                 .entry(package_name.clone())

@@ -7,14 +7,14 @@ use crate::{
     prefix::Executable,
     prefix::Prefix,
 };
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_utils::executable_from_path;
+use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
 
@@ -34,23 +34,44 @@ use fs_err::tokio as tokio_fs;
 pub(crate) fn script_exec_mapping<'a>(
     exposed_name: &ExposedName,
     entry_point: &str,
-    mut executables: impl Iterator<Item = &'a Executable>,
+    executables: impl Iterator<Item = &'a Executable>,
     bin_dir: &BinDir,
     env_dir: &EnvDir,
 ) -> miette::Result<ScriptExecMapping> {
-    executables
-        .find(|executable| executable.name == entry_point)
-        .map(|executable| ScriptExecMapping {
+    let all_executables = executables.collect_vec();
+    let matching_executables = all_executables
+        .iter()
+        .filter(|executable| executable.name == entry_point)
+        .collect_vec();
+    let executable_count = matching_executables.len();
+
+    let target_executable_opt = if executable_count > 1 {
+        // keep only the first executable in a known binary folder
+        matching_executables.iter().find(|executable| {
+            if let Some(parent) = executable.path.parent() {
+                is_binary_folder(parent)
+            } else {
+                false
+            }
+        })
+    } else {
+        matching_executables.first()
+    };
+
+    match target_executable_opt {
+        Some(target_executable) => Ok(ScriptExecMapping {
             global_script_path: bin_dir.executable_trampoline_path(exposed_name),
-            original_executable: executable.path.clone(),
-        })
-        .ok_or_else(|| {
-            miette::miette!(
-                "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
-                env_dir.path().display(),
-                executables.map(|exec| exec.name.clone()).collect_vec()
-            )
-        })
+            original_executable: target_executable.path.clone(),
+        }),
+        _ => Err(miette::miette!(
+            "Couldn't find executable {entry_point} in {}, found these executables: {:?}",
+            env_dir.path().display(),
+            all_executables
+                .iter()
+                .map(|exec| exec.name.clone())
+                .collect_vec()
+        )),
+    }
 }
 
 /// Mapping from the global script location to an executable in a package
@@ -86,6 +107,7 @@ pub(crate) async fn create_executable_trampolines(
         original_executable,
     } in mapped_executables
     {
+        tracing::debug!("Create trampoline {}", global_script_path.display());
         let exe = prefix.root().join(original_executable);
         let path = prefix
             .root()
@@ -97,7 +119,14 @@ pub(crate) async fn create_executable_trampolines(
             })?);
         let metadata = Configuration::new(exe, path, Some(activation_variables.clone()));
 
-        let json_path = Configuration::trampoline_configuration(global_script_path);
+        let parent_dir = global_script_path.parent().ok_or_else(|| {
+            miette::miette!(
+                "{} needs to have a parent directory",
+                global_script_path.display()
+            )
+        })?;
+        let exposed_name = Trampoline::name(global_script_path)?;
+        let json_path = Configuration::path_from_trampoline(parent_dir, &exposed_name);
 
         // Check if an old bash script is present and remove it
         let mut changed = if global_script_path.exists()
@@ -148,53 +177,19 @@ pub(crate) async fn create_executable_trampolines(
             global_script_path_parent.to_path_buf(),
             metadata,
         );
+        trampoline.save().await?;
 
         match changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
-                trampoline.save().await?;
                 state_changes.insert_change(env_name, StateChange::AddedExposed(exposed_name));
             }
             AddedOrChanged::Changed | AddedOrChanged::Migrated => {
-                trampoline.save().await?;
                 state_changes.insert_change(env_name, StateChange::UpdatedExposed(exposed_name));
             }
         }
     }
     Ok(state_changes)
-}
-
-/// Warn user on dangerous package installations, interactive yes no prompt
-#[allow(unused)]
-pub(crate) fn prompt_user_to_continue(
-    packages: &IndexMap<PackageName, MatchSpec>,
-) -> miette::Result<bool> {
-    let dangerous_packages = HashMap::from([
-        ("pixi", "Installing `pixi` globally doesn't work as expected.\nUse `pixi self-update` to update pixi and `pixi self-update --version x.y.z` for a specific version."),
-        ("pip", "Installing `pip` with `pixi global` won't make pip-installed packages globally available.\nInstead, use a pixi project and add PyPI packages with `pixi add --pypi`, which is recommended. Alternatively, `pixi add pip` and use it within the project.")
-    ]);
-
-    // Check if any of the packages are dangerous, and prompt the user to ask if
-    // they want to continue, including the advice.
-    for (name, _spec) in packages {
-        if let Some(advice) = dangerous_packages.get(&name.as_normalized()) {
-            let prompt = format!(
-                "{}\nDo you want to continue?",
-                console::style(advice).yellow()
-            );
-            if !dialoguer::Confirm::new()
-                .with_prompt(prompt)
-                .default(false)
-                .show_default(true)
-                .interact()
-                .into_diagnostic()?
-            {
-                return Ok(false);
-            }
-        }
-    }
-
-    Ok(true)
 }
 
 /// Checks if the local environment matches the given specifications.
@@ -318,6 +313,8 @@ mod tests {
     use rattler_lock::LockFile;
     use rstest::{fixture, rstest};
 
+    use crate::global::EnvRoot;
+
     use super::*;
 
     #[fixture]
@@ -331,7 +328,7 @@ mod tests {
             .unwrap()
             .default_environment()
             .unwrap()
-            .conda_repodata_records_for_platform(Platform::Linux64)
+            .conda_repodata_records(Platform::Linux64)
             .unwrap()
             .unwrap()
     }
@@ -350,7 +347,7 @@ mod tests {
             .unwrap()
             .default_environment()
             .unwrap()
-            .conda_repodata_records_for_platform(Platform::Linux64)
+            .conda_repodata_records(Platform::Linux64)
             .unwrap()
             .unwrap()
     }
@@ -426,10 +423,55 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_script_exec_mapping() {
+        let exposed_executables = [
+            Executable::new("python".to_string(), PathBuf::from("nested/python")),
+            Executable::new("python".to_string(), PathBuf::from("bin/python")),
+        ];
+
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        let exposed_name = ExposedName::from_str("python").unwrap();
+        let actual = script_exec_mapping(
+            &exposed_name,
+            "python",
+            exposed_executables.iter(),
+            &bin_dir,
+            &env_dir,
+        )
+        .unwrap();
+        let expected = if cfg!(windows) {
+            ScriptExecMapping {
+                global_script_path: tmp_home_dir_path.join("bin\\python.exe"),
+                original_executable: PathBuf::from("bin/python"),
+            }
+        } else {
+            ScriptExecMapping {
+                global_script_path: tmp_home_dir_path.join("bin/python"),
+                original_executable: PathBuf::from("bin/python"),
+            }
+        };
+
+        assert_eq!(
+            actual.global_script_path, expected.global_script_path,
+            "testing global_script_path"
+        );
+        assert_eq!(
+            actual.original_executable, expected.original_executable,
+            "testing original_executable"
+        );
+    }
+
     #[cfg(windows)]
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
-        use crate::global::trampoline::GlobalBin;
+        use crate::global::trampoline::GlobalExecutable;
         use std::fs;
         use std::path::Path;
         let script_without_quote = r#"
@@ -441,7 +483,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script_without_quote).unwrap();
-        let script_global_bin = GlobalBin::Script(script_path);
+        let script_global_bin = GlobalExecutable::Script(script_path);
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
@@ -468,7 +510,7 @@ mod tests {
     async fn test_extract_executable_from_script_unix() {
         use std::{fs, path::Path};
 
-        use crate::global::trampoline::GlobalBin;
+        use crate::global::trampoline::GlobalExecutable;
 
         let script = r#"#!/bin/sh
 export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"
@@ -479,7 +521,7 @@ export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
         fs::write(&script_path, script).unwrap();
-        let script_global_bin = GlobalBin::Script(script_path);
+        let script_global_bin = GlobalExecutable::Script(script_path);
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,

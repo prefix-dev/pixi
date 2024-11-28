@@ -1,0 +1,19 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n\n        [build-dependencies]\n\n        [host-dependencies]\n\n        [target.win.host-dependencies]\n        \"#,)"
+---
+  × build-, host- and run-dependency sections are only valid for packages.
+    ╭─[pixi.toml:7:9]
+  6 │ 
+  7 │         [build-dependencies]
+    ·         ────────────────────
+  8 │ 
+  9 │         [host-dependencies]
+    ·         ───────────────────
+ 10 │ 
+ 11 │         [target.win.host-dependencies]
+    ·         ──────────────────────────────
+ 12 │         
+    ╰────
+  help: These sections are only valid when the manifest describes a package instead of a workspace.
+        Add a `[package]` section to the manifest to fix this error or remove the offending sections.

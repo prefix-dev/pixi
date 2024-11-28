@@ -95,7 +95,7 @@ async fn add_with_channel() {
     let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
         .default_environment()
-        .dependencies(Some(SpecType::Run), Some(Platform::current()))
+        .combined_dependencies(Some(Platform::current()))
         .into_specs();
 
     let (name, spec) = specs.next().unwrap();
@@ -159,17 +159,17 @@ async fn add_functionality_union() {
     // Should contain all added dependencies
     let dependencies = project
         .default_environment()
-        .dependencies(Some(SpecType::Run), Some(Platform::current()));
+        .dependencies(SpecType::Run, Some(Platform::current()));
     let (name, _) = dependencies.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("rattler").unwrap());
     let host_deps = project
         .default_environment()
-        .dependencies(Some(SpecType::Host), Some(Platform::current()));
+        .dependencies(SpecType::Host, Some(Platform::current()));
     let (name, _) = host_deps.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("libcomputer").unwrap());
     let build_deps = project
         .default_environment()
-        .dependencies(Some(SpecType::Build), Some(Platform::current()));
+        .dependencies(SpecType::Build, Some(Platform::current()));
     let (name, _) = build_deps.into_specs().next().unwrap();
     assert_eq!(name, PackageName::try_from("libidk").unwrap());
 
@@ -440,6 +440,7 @@ async fn add_pypi_extra_functionality() {
                     PyPiRequirement::Version {
                         version: VersionOrStar::from_str("==24.8.0").unwrap(),
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
+                        index: None
                     }
                 );
             }
@@ -469,9 +470,8 @@ async fn add_sdist_functionality() {
         .unwrap();
 }
 
-#[rstest::rstest]
 #[tokio::test]
-async fn add_unconstrainted_dependency() {
+async fn add_unconstrained_dependency() {
     // Create a channel with a single package
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("foobar", "1").finish());
@@ -492,7 +492,7 @@ async fn add_unconstrainted_dependency() {
     let foo_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .combined_dependencies(None)
         .unwrap_or_default()
         .get("foobar")
         .cloned()
@@ -505,7 +505,7 @@ async fn add_unconstrainted_dependency() {
         .manifest()
         .feature("unreferenced")
         .expect("feature 'unreferenced' is missing")
-        .dependencies(None, None)
+        .combined_dependencies(None)
         .unwrap_or_default()
         .get("bar")
         .cloned()
@@ -542,7 +542,7 @@ async fn pinning_dependency() {
     let python_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("python")
         .cloned()
@@ -557,7 +557,7 @@ async fn pinning_dependency() {
     let foobar_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("foobar")
         .cloned()
@@ -572,7 +572,7 @@ async fn pinning_dependency() {
     let python_spec = project
         .manifest()
         .default_feature()
-        .dependencies(None, None)
+        .dependencies(SpecType::Run, None)
         .unwrap_or_default()
         .get("python")
         .cloned()
@@ -580,4 +580,69 @@ async fn pinning_dependency() {
         .to_toml_value()
         .to_string();
     assert_eq!(python_spec, r#""==3.13""#);
+}
+
+#[tokio::test]
+async fn add_dependency_pinning_strategy() {
+    // Create a channel with two packages
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+    package_database.add_package(Package::build("python", "3.13").finish());
+
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add the `packages` to the project
+    pixi.add_multiple(vec!["foo", "python", "bar"])
+        .await
+        .unwrap();
+
+    let project = pixi.project().unwrap();
+
+    // Get the specs for the `foo` package
+    let foo_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(SpecType::Run, None)
+        .unwrap_or_default()
+        .get("foo")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    assert_eq!(foo_spec, r#"">=1,<2""#);
+
+    // Get the specs for the `python` package
+    let python_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(SpecType::Run, None)
+        .unwrap_or_default()
+        .get("python")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    // Testing to see if edge cases are handled correctly
+    // Python shouldn't be automatically pinned to a major version.
+    assert_eq!(python_spec, r#"">=3.13,<3.14""#);
+
+    // Get the specs for the `bar` package
+    let bar_spec = project
+        .manifest()
+        .default_feature()
+        .dependencies(SpecType::Run, None)
+        .unwrap_or_default()
+        .get("bar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+    // Testing to make sure bugfix did not regress
+    // Package should be automatically pinned to a major version
+    assert_eq!(bar_spec, r#"">=1,<2""#);
 }
