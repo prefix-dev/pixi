@@ -85,6 +85,9 @@ pub enum BuildError {
 
     #[error(transparent)]
     BuildCacheError(#[from] cache::BuildCacheError),
+
+    #[error(transparent)]
+    BuildFolderNotWritable(#[from] std::io::Error),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -116,16 +119,13 @@ impl BuildContext {
         channel_config: ChannelConfig,
         tool_context: Arc<ToolContext>,
     ) -> Result<Self, std::io::Error> {
-        let work_dir = dot_pixi_dir.join("build-v0");
-        fs::create_dir_all(&work_dir)?;
-
         Ok(Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
             build_cache: BuildCache::new(cache_dir.clone()),
             cache_dir,
-            work_dir,
+            work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
         })
     }
@@ -255,6 +255,8 @@ impl BuildContext {
                 return Ok(build.record);
             }
         }
+
+        fs::create_dir_all(&self.work_dir).map_err(|e| BuildError::BuildFolderNotWritable(e))?;
 
         let tool_context = ToolContext::builder()
             .with_gateway(gateway.clone())
