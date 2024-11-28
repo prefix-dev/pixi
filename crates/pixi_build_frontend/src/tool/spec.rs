@@ -26,15 +26,6 @@ pub struct IsolatedToolSpec {
 }
 
 impl IsolatedToolSpec {
-    /// Construct a new instance from a list of match specs.
-    pub fn from_specs(specs: impl IntoIterator<Item = MatchSpec>) -> Self {
-        Self {
-            specs: specs.into_iter().collect(),
-            command: String::new(),
-            channels: Vec::new(),
-        }
-    }
-
     /// Construct a new instance from a build section
     pub fn from_build_section(build_section: &BuildSystem) -> Self {
         Self {
@@ -75,8 +66,8 @@ impl From<SystemToolSpec> for ToolSpec {
 impl BackendOverride {
     pub fn into_spec(self) -> ToolSpec {
         match self {
-            BackendOverride::Spec(spec) => {
-                ToolSpec::Isolated(IsolatedToolSpec::from_specs(vec![spec]))
+            BackendOverride::Spec(_spec) => {
+                todo!("Add channels and implement the proper conversion")
             }
             BackendOverride::System(command) => ToolSpec::System(SystemToolSpec { command }),
             BackendOverride::Io(process) => ToolSpec::Io(process),
