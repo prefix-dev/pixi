@@ -77,14 +77,6 @@ impl ProtocolBuilder {
             return Err(DiscoveryError::NotFound(source_dir.to_path_buf()));
         }
 
-        // Try to discover as a rattler-build recipe first
-        // and it also should be a `pixi` project
-        if enabled_protocols.enable_rattler_build {
-            if let Some(protocol) = rattler_build_protocol::ProtocolBuilder::discover(source_dir)? {
-                return Ok(protocol.into());
-            }
-        }
-
         // Try to discover as a pixi project
         if enabled_protocols.enable_pixi {
             if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_dir)? {
@@ -92,9 +84,16 @@ impl ProtocolBuilder {
             }
         }
 
+        // Try to discover as a rattler-build recipe first
+        if enabled_protocols.enable_rattler_build {
+            if let Some(protocol) = rattler_build_protocol::ProtocolBuilder::discover(source_dir)? {
+                return Ok(protocol.into());
+            }
+        }
+
         // Try to discover as a conda build project
-        // Unwrap because error is Infallible
         if enabled_protocols.enable_conda_build {
+            // Unwrap as the error is infallible
             if let Some(protocol) = conda_protocol::ProtocolBuilder::discover(source_dir).unwrap() {
                 return Ok(protocol.into());
             }
