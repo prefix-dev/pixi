@@ -1,8 +1,5 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/prefix-dev/recipe-format/main/schema.json
-
 context:
   version: "23.0.0"
-
 
 package:
   name: boltons-with-extra
@@ -19,16 +16,9 @@ build:
 
 requirements:
   host:
-    # - if: linux
-    #   then:
     - python
     - pip
     - setuptools
-    # - numpy
-    # - ${{ stdlib('c') }}
-  run:
-    - pip
-    # - ${{ pin_compatible('numpy', min_pin='x.x', max_pin='x') }}
 
 about:
   license: BSD-3-Clause

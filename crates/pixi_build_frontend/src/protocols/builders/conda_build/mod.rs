@@ -8,7 +8,7 @@ use std::{
 
 use miette::Diagnostic;
 pub use protocol::Protocol;
-use rattler_conda_types::{ChannelConfig, MatchSpec, ParseStrictness::Strict};
+use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
 
 use crate::{
@@ -58,9 +58,11 @@ impl ProtocolBuilder {
 
     /// Constructs a new instance from a manifest.
     pub fn new(source_dir: &Path, recipe_dir: &Path) -> Self {
-        let backend_spec =
-            IsolatedToolSpec::from_specs(vec![MatchSpec::from_str("conda-build", Strict).unwrap()])
-                .into();
+        let backend_spec = ToolSpec::Isolated(IsolatedToolSpec {
+            specs: vec!["conda-build".parse().unwrap()],
+            command: "conda-build".to_string(),
+            channels: vec!["conda-forge".parse().unwrap()],
+        });
 
         Self {
             source_dir: source_dir.to_path_buf(),
