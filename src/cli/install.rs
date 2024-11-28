@@ -1,7 +1,7 @@
 use crate::cli::cli_config::ProjectConfig;
 use crate::environment::get_update_lock_file_and_prefix;
 use crate::lock_file::UpdateMode;
-use crate::Project;
+use crate::{Project, UpdateLockFileOptions};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -55,9 +55,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Update the prefix by installing all packages
         get_update_lock_file_and_prefix(
             &environment,
-            args.lock_file_usage.into(),
-            false,
             UpdateMode::Revalidate,
+            UpdateLockFileOptions {
+                lock_file_usage: args.lock_file_usage.into(),
+                no_install: false,
+                max_concurrent_solves: project.config().max_concurrent_solves(),
+            },
         )
         .await?;
 

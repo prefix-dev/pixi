@@ -1,7 +1,5 @@
 use std::{cmp::Ordering, collections::HashSet};
 
-use fancy_display::FancyDisplay;
-
 use crate::{
     cli::cli_config::ProjectConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
@@ -12,6 +10,7 @@ use crate::{
     Project,
 };
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;

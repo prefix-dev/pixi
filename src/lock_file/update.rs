@@ -109,7 +109,7 @@ pub struct UpdateLockFileOptions {
     /// The maximum number of concurrent solves that are allowed to run. If this
     /// value is None a heuristic is used based on the number of cores
     /// available from the system.
-    pub max_concurrent_solves: Option<usize>,
+    pub max_concurrent_solves: usize,
 }
 
 /// A struct that holds the lock-file and any potential derived data that was
@@ -636,11 +636,6 @@ impl<'p> UpdateContext<'p> {
     }
 }
 
-/// Returns the default number of concurrent solves.
-fn default_max_concurrent_solves() -> usize {
-    std::thread::available_parallelism().map_or(1, |n| n.get())
-}
-
 /// If the project has any source dependencies, like `git` or `path`
 /// dependencies. for pypi dependencies, we need to limit the solve to 1,
 /// because of uv internals
@@ -656,8 +651,8 @@ fn determine_pypi_solve_permits(project: &Project) -> usize {
             }
         }
     }
-
-    default_max_concurrent_solves()
+    // If no source dependencies are found, we can use the default concurrency
+    project.config().max_concurrent_solves()
 }
 
 /// Ensures that the lock-file is up-to-date with the project.
@@ -739,13 +734,8 @@ pub async fn update_lock_file(
         miette::bail!("lock-file not up-to-date with the project");
     }
 
-    let max_concurrent_solves = options
-        .max_concurrent_solves
-        .unwrap_or_else(default_max_concurrent_solves);
-
     // Construct an update context and perform the actual update.
     let lock_file_derived_data = UpdateContext::builder(project)
-        .with_max_concurrent_solves(max_concurrent_solves)
         .with_package_cache(package_cache)
         .with_no_install(options.no_install)
         .with_outdated_environments(outdated)
@@ -785,7 +775,7 @@ pub struct UpdateContextBuilder<'p> {
     /// The maximum number of concurrent solves that are allowed to run. If this
     /// value is `None` a heuristic is used based on the number of cores
     /// available from the system.
-    max_concurrent_solves: Option<usize>,
+    max_concurrent_solves: usize,
 
     /// The io concurrency semaphore to use when updating environments
     io_concurrency_limit: Option<IoConcurrencyLimit>,
@@ -832,14 +822,6 @@ impl<'p> UpdateContextBuilder<'p> {
     ) -> Self {
         Self {
             outdated_environments: Some(outdated_environments),
-            ..self
-        }
-    }
-
-    /// Sets the maximum number of solves that are allowed to run concurrently.
-    pub(crate) fn with_max_concurrent_solves(self, max_concurrent_solves: usize) -> Self {
-        Self {
-            max_concurrent_solves: Some(max_concurrent_solves),
             ..self
         }
     }
@@ -1027,10 +1009,6 @@ impl<'p> UpdateContextBuilder<'p> {
             })
             .collect();
 
-        let max_concurrent_solves = self
-            .max_concurrent_solves
-            .unwrap_or_else(default_max_concurrent_solves);
-
         let gateway = project.repodata_gateway().clone();
         let client = project.authenticated_client().clone();
 
@@ -1064,7 +1042,7 @@ impl<'p> UpdateContextBuilder<'p> {
             grouped_solved_pypi_records: HashMap::new(),
 
             package_cache,
-            conda_solve_semaphore: Arc::new(Semaphore::new(max_concurrent_solves)),
+            conda_solve_semaphore: Arc::new(Semaphore::new(self.max_concurrent_solves)),
             pypi_solve_semaphore: Arc::new(Semaphore::new(determine_pypi_solve_permits(project))),
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
             build_context,
@@ -1084,7 +1062,7 @@ impl<'p> UpdateContext<'p> {
             outdated_environments: None,
             no_install: true,
             package_cache: None,
-            max_concurrent_solves: None,
+            max_concurrent_solves: project.config().max_concurrent_solves(),
             io_concurrency_limit: None,
             glob_hash_cache: None,
         }
