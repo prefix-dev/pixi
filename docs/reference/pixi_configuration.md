@@ -66,7 +66,7 @@ The following reference describes all available configuration options.
 The default channels to select when running `pixi init` or `pixi global install`.
 This defaults to only conda-forge.
 ```toml title="config.toml"
-default-channels = ["conda-forge"]
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:default-channels"
 ```
 !!! note
     The `default-channels` are only used when initializing a new project. Once initialized the `channels` are used from the project manifest.
@@ -78,7 +78,7 @@ This applies to the `pixi shell` subcommand.
 You can override this from the CLI with `--change-ps1`.
 
 ```toml title="config.toml"
-change-ps1 = true
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:change-ps1"
 ```
 
 ### `tls-no-verify`
@@ -91,7 +91,7 @@ When set to true, the TLS certificates are not verified.
 You can override this from the CLI with `--tls-no-verify`.
 
 ```toml title="config.toml"
-tls-no-verify = false
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-no-verify"
 ```
 
 ### `authentication-override-file`
@@ -100,7 +100,7 @@ Usually, we try to use the keyring to load authentication data from, and only us
 file as a fallback. This option allows you to force the use of a JSON file.
 Read more in the authentication section.
 ```toml title="config.toml"
-authentication-override-file = "/path/to/your/override.json"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:authentication-override-file"
 ```
 
 ### `detached-environments`
@@ -123,20 +123,17 @@ This field can consist of two types of input.
 - A string value, which will be the absolute path to the directory where the environments will be stored.
 
 ```toml title="config.toml"
-detached-environments = true
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:detached-environments"
 ```
 or:
 ```toml title="config.toml"
-detached-environments = "/opt/pixi/envs"
+--8<-- "docs/source_files/pixi_config_tomls/detached_environments_path_config.toml:detached-environments-path"
 ```
 
 The environments will be stored in the [cache directory](../features/environment.md#caching) when this option is `true`.
 When you specify a custom path the environments will be stored in that directory.
 
 The resulting directory structure will look like this:
-```toml title="config.toml"
-detached-environments = "/opt/pixi/envs"
-```
 ```shell
 /opt/pixi/envs
 ├── pixi-6837172896226367631
@@ -159,46 +156,25 @@ The default is `semver` but you can set the following:
 - `latest-up`: Pinning to the latest version, `1.2.3` -> `>=1.2.3`.
 
 ```toml title="config.toml"
-pinning-strategy = "no-pin"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pinning-strategy"
 ```
 
 ### `mirrors`
 Configuration for conda channel-mirrors, more info [below](#mirror-configuration).
 
 ```toml title="config.toml"
-[mirrors]
-# redirect all requests for conda-forge to the prefix.dev mirror
-"https://conda.anaconda.org/conda-forge" = [
-    "https://prefix.dev/conda-forge"
-]
-
-# redirect all requests for bioconda to one of the three listed mirrors
-# Note: for repodata we try the first mirror first.
-"https://conda.anaconda.org/bioconda" = [
-    "https://conda.anaconda.org/bioconda",
-    # OCI registries are also supported
-    "oci://ghcr.io/channel-mirrors/bioconda",
-    "https://prefix.dev/bioconda",
-]
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:mirrors"
 ```
 
 ### `repodata-config`
 Configuration for repodata fetching.
 ```toml title="config.toml"
-[repodata-config]
-# disable fetching of jlap, bz2 or zstd repodata files.
-# This should only be used for specific old versions of artifactory and other non-compliant
-# servers.
-disable-jlap = true  # don't try to download repodata.jlap
-disable-bzip2 = true # don't try to download repodata.json.bz2
-disable-zstd = true  # don't try to download repodata.json.zst
-disable-sharded = true  # don't try to download sharded repodata
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:repodata-config"
 ```
 
 The above settings can be overridden on a per-channel basis by specifying a channel prefix in the configuration.
 ```toml title="config.toml"
-[repodata-config."https://prefix.dev"]
-disable-sharded = false
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:prefix-repodata-config"
 ```
 
 ### `pypi-config`
@@ -209,18 +185,23 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 - `keyring-provider`: Allows the use of the [keyring](https://pypi.org/project/keyring/) python package to store and retrieve credentials.
 
 ```toml title="config.toml"
-[pypi-config]
-# Main index url
-index-url = "https://pypi.org/simple"
-# list of additional urls
-extra-index-urls = ["https://pypi.org/simple2"]
-# can be "subprocess" or "disabled"
-keyring-provider = "subprocess"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pypi-config"
 ```
 
 !!! Note "`index-url` and `extra-index-urls` are *not* globals"
     Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml` file and are not globally interpreted when not present in the manifest.
     This is because we want to keep the manifest file as complete and reproducible as possible.
+
+### `concurrency`
+Configure multiple settings to limit or extend the concurrency of pixi.
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:concurrency"
+```
+Set them through the CLI with:
+```shell
+pixi config set concurrency.solves 1
+pixi config set concurrency.downloads 12
+```
 
 ## Experimental
 This allows the user to set specific experimental features that are not yet stable.
@@ -261,9 +242,7 @@ pixi run/shell/shell-hook --force-activate
 
 Set the configuration with:
 ```toml title="config.toml"
-[experimental]
-# Enable the use of the environment activation cache
-use-environment-activation-cache = true
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:experimental"
 ```
 
 !!! note "Why is this experimental?"
@@ -288,10 +267,7 @@ important to get this file from a trusted source.
 You can also specify mirrors for an entire "host", e.g.
 
 ```toml title="config.toml"
-[mirrors]
-"https://conda.anaconda.org" = [
-    "https://prefix.dev/"
-]
+--8<-- "docs/source_files/pixi_config_tomls/mirror_prefix_config.toml:mirrors"
 ```
 
 This will forward all request to channels on anaconda.org to prefix.dev.
@@ -304,10 +280,7 @@ the Github container registry (ghcr.io) that is maintained by the conda-forge
 team. You can use it like this:
 
 ```toml title="config.toml"
-[mirrors]
-"https://conda.anaconda.org/conda-forge" = [
-    "oci://ghcr.io/channel-mirrors/conda-forge"
-]
+--8<-- "docs/source_files/pixi_config_tomls/oci_config.toml:oci-mirrors"
 ```
 
 The GHCR mirror also contains `bioconda` packages. You can search the [available
