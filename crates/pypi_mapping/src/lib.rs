@@ -138,7 +138,7 @@ impl PurlSource {
 pub async fn amend_pypi_purls(
     client: ClientWithMiddleware,
     mapping_source: &MappingSource,
-    conda_packages: &mut [RepoDataRecord],
+    conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
     // Construct a client with a retry policy and local caching
@@ -168,7 +168,7 @@ pub async fn amend_pypi_purls(
             prefix_pypi_name_mapping::amend_pypi_purls(&client, conda_packages, reporter).await?;
         }
         MappingSource::Disabled => {
-            for record in conda_packages.iter_mut() {
+            for record in conda_packages {
                 if let Some(purl) = prefix_pypi_name_mapping::assume_conda_is_pypi(None, record) {
                     record
                         .package_record
@@ -185,7 +185,11 @@ pub async fn amend_pypi_purls(
 
 /// Returns `true` if the specified record refers to a conda-forge package.
 pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
-    Url::from_str(&record.channel).map_or(false, |u| is_conda_forge_url(&u))
+    record
+        .channel
+        .as_ref()
+        .and_then(|channel| Url::from_str(channel).ok())
+        .map_or(false, |u| is_conda_forge_url(&u))
 }
 
 /// Returns `true` if the specified url refers to a conda-forge channel.

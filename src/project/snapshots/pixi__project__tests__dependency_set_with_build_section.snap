@@ -1,0 +1,5 @@
+---
+source: src/project/mod.rs
+expression: "format_dependencies(project.default_environment().environment_dependencies(Some(Platform::Linux64)))"
+---
+foo = "==1.0"

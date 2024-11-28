@@ -28,12 +28,12 @@ packages:
   name: bar
   version: 0.1.0
   path: ./bar
-  sha256: 8f77543104fe37f9893e1669ff08c452562c0cfa05e925287d9f1c0f21737a50
+  sha256: 0398aa324f09d68612f7545e7a35ef8b6f660fc695cadcf31929825e987d01da
 - kind: pypi
   name: baz
   version: 0.1.0
   path: ./baz
-  sha256: 152f61c74691f968a30dbe3d6835356afea1e16d6eaeb71a2d1ba284e9b92d3a
+  sha256: bc8b1ca288df1e002daeb40a76f40829545ae7f40ed9186ec334dfa5a88414bf
   editable: true
 - kind: conda
   name: bzip2
@@ -67,7 +67,7 @@ packages:
   name: foo
   version: 0.1.0
   path: ./foo
-  sha256: 82242d45e33bf66048a9f4c19ee5e217c27ea0245cc7a1df22fa15ba75737beb
+  sha256: 52abd6609b8936ca84feba7f23519d94cd578acbda172c903df6927f012d310f
 - kind: conda
   name: libexpat
   version: 2.6.2

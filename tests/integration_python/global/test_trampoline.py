@@ -258,3 +258,34 @@ def test_trampoline_extends_path(pixi: Path, tmp_path: Path, trampoline_path_cha
         [dummy_trampoline_path],
         stdout_contains=["/another/test/path", "/test/path"],
     )
+
+
+def test_trampoline_removes_trampolines_not_in_manifest(
+    pixi: Path, tmp_path: Path, trampoline_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_trampoline_original = tmp_path / "bin" / exec_extension("dummy-trampoline")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_channel_1,
+            "dummy-trampoline",
+        ],
+        env=env,
+    )
+
+    dummy_trampoline_new = dummy_trampoline_original.rename(
+        dummy_trampoline_original.parent / exec_extension("dummy-trampoline-new")
+    )
+
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        env=env,
+    )
+    assert dummy_trampoline_original.is_file()
+    assert not dummy_trampoline_new.is_file()

@@ -1,51 +1,73 @@
 use std::collections::HashSet;
 
 use indexmap::IndexSet;
-use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
+};
 use rattler_solve::ChannelPriority;
 
-use crate::{HasManifestRef, PrioritizedChannel, SpecType};
+use crate::{
+    has_features_iter::HasFeaturesIter, pypi::pypi_options::PypiOptions, CondaDependencies,
+    HasManifestRef, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+};
 
-use crate::has_features_iter::HasFeaturesIter;
-use crate::{pypi::pypi_options::PypiOptions, SystemRequirements};
-use crate::{CondaDependencies, PyPiDependencies};
-
-/// ChannelPriorityCombination error, thrown when multiple channel priorities are set
+/// ChannelPriorityCombination error, thrown when multiple channel priorities
+/// are set
 #[derive(Debug, thiserror::Error)]
 #[error("Multiple channel priorities are not allowed in a single environment")]
 pub struct ChannelPriorityCombinationError;
 
-/// A trait that implement various methods for collections that combine attributes of Features
-/// It is implemented by Environment, GroupedEnvironment and SolveGroup.
-/// Remove some of the boilerplate of combining features and its derived data from multiple sources.
+/// A trait that implement various methods for collections that combine
+/// attributes of Features It is implemented by Environment, GroupedEnvironment
+/// and SolveGroup. Remove some of the boilerplate of combining features and its
+/// derived data from multiple sources.
 ///
-/// The name of the lifetime parameter is named `'source` that the borrow comes from the source of the data
-/// for most implementations this will be the pixi project.
+/// The name of the lifetime parameter is named `'source` that the borrow comes
+/// from the source of the data for most implementations this will be the pixi
+/// project.
 ///
-/// There is blanket implementation available for all types that implement [`HasManifestRef`] and [`HasFeaturesIter`]
+/// There is blanket implementation available for all types that implement
+/// [`HasManifestRef`] and [`HasFeaturesIter`]
 pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'source> {
     /// Returns the channels associated with this collection.
     ///
-    /// Users can specify custom channels on a per-feature basis. This method collects and
-    /// deduplicates all the channels from all the features in the order they are defined in the
-    /// manifest.
+    /// Users can specify custom channels on a per-feature basis. This method
+    /// collects and deduplicates all the channels from all the features in
+    /// the order they are defined in the manifest.
     ///
-    /// If a feature does not specify any channel the default channels from the project metadata are
-    /// used instead.
+    /// If a feature does not specify any channel the default channels from the
+    /// project metadata are used instead.
     fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
         // Collect all the channels from the features in one set,
         // deduplicate them and sort them on feature index, default feature comes last.
         let channels = self.features().flat_map(|feature| match &feature.channels {
             Some(channels) => channels,
-            None => &self.manifest().parsed.project.channels,
+            None => &self.manifest().workspace.workspace.channels,
         });
 
         PrioritizedChannel::sort_channels_by_priority(channels).collect()
     }
 
-    /// Returns the channel priority, error on multiple values, return None if no value is set.
+    /// Returns the channels associated with this collection.
     ///
-    /// When using multiple channel priorities over different features we should error as the user should decide what they want.
+    /// This function is similar to [`Self::channels]` but it resolves the
+    /// channel urls using the provided channel config.
+    fn channel_urls(
+        &self,
+        channel_config: &ChannelConfig,
+    ) -> Result<Vec<ChannelUrl>, ParseChannelError> {
+        self.channels()
+            .into_iter()
+            .cloned()
+            .map(|channel| channel.into_base_url(channel_config))
+            .collect()
+    }
+
+    /// Returns the channel priority, error on multiple values, return None if
+    /// no value is set.
+    ///
+    /// When using multiple channel priorities over different features we should
+    /// error as the user should decide what they want.
     fn channel_priority(&self) -> Result<Option<ChannelPriority>, ChannelPriorityCombinationError> {
         let mut channel_priority = None;
         for feature in self.features() {
@@ -61,18 +83,20 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
 
     /// Returns the platforms that this collection is compatible with.
     ///
-    /// Which platforms a collection support depends on which platforms the selected features of
-    /// the collection supports. The platforms that are supported by the collection is the
-    /// intersection of the platforms supported by its features.
+    /// Which platforms a collection support depends on which platforms the
+    /// selected features of the collection supports. The platforms that are
+    /// supported by the collection is the intersection of the platforms
+    /// supported by its features.
     ///
-    /// Features can specify which platforms they support through the `platforms` key. If a feature
-    /// does not specify any platforms the features defined by the project are used.
+    /// Features can specify which platforms they support through the
+    /// `platforms` key. If a feature does not specify any platforms the
+    /// features defined by the project are used.
     fn platforms(&self) -> HashSet<Platform> {
         self.features()
             .map(|feature| {
                 match &feature.platforms {
                     Some(platforms) => &platforms.value,
-                    None => &self.manifest().parsed.project.platforms.value,
+                    None => &self.manifest().workspace.workspace.platforms.value,
                 }
                 .iter()
                 .copied()
@@ -86,9 +110,10 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
 
     /// Returns the system requirements for this collection.
     ///
-    /// The system requirements of the collection are the union of the system requirements of all
-    /// the features in the collection. If multiple features specify a
-    /// requirement for the same system package, the highest is chosen.
+    /// The system requirements of the collection are the union of the system
+    /// requirements of all the features in the collection. If multiple
+    /// features specify a requirement for the same system package, the
+    /// highest is chosen.
     fn local_system_requirements(&self) -> SystemRequirements {
         self.features()
             .map(|feature| &feature.system_requirements)
@@ -98,16 +123,18 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
             })
     }
 
-    /// Returns true if any of the features has any reference to a pypi dependency.
+    /// Returns true if any of the features has any reference to a pypi
+    /// dependency.
     fn has_pypi_dependencies(&self) -> bool {
         self.features().any(|f| f.has_pypi_dependencies())
     }
 
     /// Returns the PyPi dependencies to install for this collection.
     ///
-    /// The dependencies of all features are combined. This means that if two features define a
-    /// requirement for the same package that both requirements are returned. The different
-    /// requirements per package are sorted in the same order as the features they came from.
+    /// The dependencies of all features are combined. This means that if two
+    /// features define a requirement for the same package that both
+    /// requirements are returned. The different requirements per package
+    /// are sorted in the same order as the features they came from.
     fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
         self.features()
             .filter_map(|f| f.pypi_dependencies(platform))
@@ -116,25 +143,43 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
 
     /// Returns the dependencies to install for this collection.
     ///
-    /// The dependencies of all features are combined. This means that if two features define a
-    /// requirement for the same package that both requirements are returned. The different
-    /// requirements per package are sorted in the same order as the features they came from.
-    fn dependencies(
-        &self,
-        kind: Option<SpecType>,
-        platform: Option<Platform>,
-    ) -> CondaDependencies {
+    /// The dependencies of all features are combined. This means that if two
+    /// features define a requirement for the same package that both
+    /// requirements are returned. The different requirements per package
+    /// are sorted in the same order as the features they came from.
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
+    fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> CondaDependencies {
         self.features()
             .filter_map(|f| f.dependencies(kind, platform))
             .into()
     }
 
+    /// Returns the combined dependencies to install for this collection.
+    ///
+    /// The `build` dependencies overwrite the `host` dependencies which
+    /// overwrite the `run` dependencies.
+    ///
+    /// The dependencies of all features are combined. This means that if two
+    /// features define a requirement for the same package that both
+    /// requirements are returned. The different requirements per package
+    /// are sorted in the same order as the features they came from.
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
+    fn combined_dependencies(&self, platform: Option<Platform>) -> CondaDependencies {
+        self.features()
+            .filter_map(|f| f.combined_dependencies(platform))
+            .into()
+    }
+
     /// Returns the pypi options for this collection.
     ///
-    /// The pypi options of all features are combined. They will be combined in the order
-    /// that they are defined in the manifest.
-    /// The index-url is a special case and can only be defined once. This should have been
-    /// verified beforehand.
+    /// The pypi options of all features are combined. They will be combined in
+    /// the order that they are defined in the manifest.
+    /// The index-url is a special case and can only be defined once. This
+    /// should have been verified beforehand.
     fn pypi_options(&self) -> PypiOptions {
         // Collect all the pypi-options from the features in one set,
         // deduplicate them and sort them on feature index, default feature comes last.
@@ -142,7 +187,7 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
             .features()
             .filter_map(|feature| {
                 if feature.pypi_options().is_none() {
-                    self.manifest().parsed.project.pypi_options.as_ref()
+                    self.manifest().workspace.workspace.pypi_options.as_ref()
                 } else {
                     feature.pypi_options()
                 }

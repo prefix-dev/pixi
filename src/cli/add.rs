@@ -12,9 +12,9 @@ use crate::{
 /// Adds dependencies to the project
 ///
 /// The dependencies should be defined as MatchSpec for conda package, or a PyPI
-/// requirement for the `--pypi` dependencies. If no specific version is provided,
-/// the latest version compatible with your project will be chosen automatically
-/// or a * will be used.
+/// requirement for the `--pypi` dependencies. If no specific version is
+/// provided, the latest version compatible with your project will be chosen
+/// automatically or a * will be used.
 ///
 /// Example usage:
 ///

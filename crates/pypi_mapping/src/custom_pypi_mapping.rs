@@ -64,14 +64,22 @@ pub fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping>
 pub async fn amend_pypi_purls(
     client: &ClientWithMiddleware,
     mapping_url: &CustomMapping,
-    conda_packages: &mut [RepoDataRecord],
+    conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
     reporter: Option<Arc<dyn Reporter>>,
 ) -> miette::Result<()> {
-    trim_conda_packages_channel_url_suffix(conda_packages);
-    let packages_for_prefix_mapping: Vec<RepoDataRecord> = conda_packages
+    let mut conda_packages = conda_packages.into_iter().collect::<Vec<_>>();
+
+    for package in conda_packages.iter_mut() {
+        package.channel = package
+            .channel
+            .as_ref()
+            .map(|c| c.trim_end_matches('/').to_string());
+    }
+    let packages_for_prefix_mapping: Vec<_> = conda_packages
         .iter()
-        .filter(|package| !mapping_url.mapping.contains_key(&package.channel))
-        .cloned()
+        .filter_map(|record| record.channel.as_ref().map(|channel| (channel, record)))
+        .filter(|(channel, _)| !mapping_url.mapping.contains_key(*channel))
+        .map(|(_, p)| (**p).clone())
         .collect();
 
     let custom_mapping = mapping_url.fetch_custom_mapping(client).await?;
@@ -80,7 +88,9 @@ pub async fn amend_pypi_purls(
     // to request from the prefix_mapping. This will avoid fetching unwanted
     // URLs, e.g. behind corporate firewalls
     if packages_for_prefix_mapping.is_empty() {
-        _amend_only_custom_pypi_purls(conda_packages, &custom_mapping)?;
+        for record in conda_packages {
+            amend_pypi_purls_for_record(record, &custom_mapping)?;
+        }
     } else {
         let prefix_mapping = prefix_pypi_name_mapping::conda_pypi_name_mapping(
             client,
@@ -91,8 +101,11 @@ pub async fn amend_pypi_purls(
         let compressed_mapping =
             prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
 
-        for record in conda_packages.iter_mut() {
-            if !mapping_url.mapping.contains_key(&record.channel) {
+        for record in conda_packages {
+            let Some(channel) = record.channel.as_ref() else {
+                continue;
+            };
+            if !mapping_url.mapping.contains_key(channel) {
                 prefix_pypi_name_mapping::amend_pypi_purls_for_record(
                     record,
                     &prefix_mapping,
@@ -130,7 +143,11 @@ fn amend_pypi_purls_for_record(
     let mut purls = Vec::new();
 
     // we verify if we have package channel and name in user provided mapping
-    if let Some(mapped_channel) = custom_mapping.get(&record.channel) {
+    if let Some(mapped_channel) = record
+        .channel
+        .as_ref()
+        .and_then(|channel| custom_mapping.get(channel))
+    {
         if let Some(mapped_name) = mapped_channel.get(record.package_record.name.as_normalized()) {
             // we have a pypi name for it so we record a purl
             if let Some(name) = mapped_name {
@@ -172,10 +189,4 @@ pub fn _amend_only_custom_pypi_purls(
         amend_pypi_purls_for_record(record, custom_mapping)?;
     }
     Ok(())
-}
-
-fn trim_conda_packages_channel_url_suffix(conda_packages: &mut [RepoDataRecord]) {
-    for package in conda_packages {
-        package.channel = package.channel.trim_end_matches('/').to_string();
-    }
 }
