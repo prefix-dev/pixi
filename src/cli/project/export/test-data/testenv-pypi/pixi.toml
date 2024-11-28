@@ -1,0 +1,25 @@
+[project]
+authors = []
+channels = ["conda-forge"]
+description = "test envs with pypi dependencies"
+name = "testenv-pypi"
+platforms = ["linux-64", "osx-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "*"
+
+[pypi-dependencies]
+rich = "~=13.7"
+
+# With https
+flask = { git = "https://github.com/pallets/flask" }
+requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
+
+# source dependency from file
+minimal-project = { path = "./minimal-project", editable = true }
+
+# direct url
+click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-8.1.7-py3-none-any.whl" }
