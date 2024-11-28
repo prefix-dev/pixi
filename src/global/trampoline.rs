@@ -324,7 +324,7 @@ impl Trampoline {
             trampoline_name
                 .to_string_lossy()
                 .strip_suffix(".exe")
-                .expect("should have suffix")
+                .ok_or_else(|| miette::miette!("Trampoline doesn't have '.exe' suffix"))?
                 .to_string()
         } else {
             trampoline_name.to_string_lossy().to_string()

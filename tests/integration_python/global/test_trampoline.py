@@ -280,7 +280,7 @@ def test_trampoline_removes_trampolines_not_in_manifest(
     )
 
     dummy_trampoline_new = dummy_trampoline_original.rename(
-        dummy_trampoline_original.parent / "dummy-trampoline-new"
+        dummy_trampoline_original.parent / exec_extension("dummy-trampoline-new")
     )
 
     verify_cli_command(
