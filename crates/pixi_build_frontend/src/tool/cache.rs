@@ -380,7 +380,7 @@ impl ToolCache {
         self.cache
             .insert(spec, PendingOrFetched::Fetched(tool.clone()));
 
-        // Send the records to all waiting tasks. We don't care if there are no
+        // Send the tool to all waiting tasks. We don't care if there are no
         // receivers, so we drop the error.
         let _ = sender.send(tool.clone());
 
