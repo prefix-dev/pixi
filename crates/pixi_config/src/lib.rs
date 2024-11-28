@@ -64,7 +64,7 @@ pub fn get_default_author() -> Option<(String, String)> {
 /// # Returns
 ///
 /// The pixi home directory
-pub fn home_path() -> Option<PathBuf> {
+pub fn pixi_home() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("PIXI_HOME") {
         Some(PathBuf::from(path))
     } else {
@@ -1112,15 +1112,9 @@ pub fn config_path_system() -> PathBuf {
 
 /// Returns the path(s) to the global pixi config file.
 pub fn config_path_global() -> Vec<PathBuf> {
-    let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map_or_else(
-        || dirs::home_dir().map(|d| d.join(".config")),
-        |p| Some(PathBuf::from(p)),
-    );
-
     vec![
-        xdg_config_home.map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
         dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
-        home_path().map(|d| d.join(consts::CONFIG_FILE)),
+        pixi_home().map(|d| d.join(consts::CONFIG_FILE)),
     ]
     .into_iter()
     .flatten()

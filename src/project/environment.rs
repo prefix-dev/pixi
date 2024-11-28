@@ -1,4 +1,3 @@
-use indexmap::IndexMap;
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -7,6 +6,7 @@ use std::{
     sync::Once,
 };
 
+use indexmap::IndexMap;
 use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
@@ -87,7 +87,7 @@ impl<'p> Environment<'p> {
             .solve_group
             .map(|solve_group_idx| SolveGroup {
                 project: self.project,
-                solve_group: &self.project.manifest.parsed.solve_groups[solve_group_idx],
+                solve_group: &self.project.manifest.workspace.solve_groups[solve_group_idx],
             })
     }
 
@@ -318,7 +318,7 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
         let manifest = self.manifest();
         let environment_features = self.environment.features.iter().map(|feature_name| {
             manifest
-                .parsed
+                .workspace
                 .features
                 .get(&FeatureName::Named(feature_name.clone()))
                 .expect("feature usage should have been validated upfront")
@@ -498,7 +498,7 @@ mod tests {
         let deps = manifest
             .environment("foobar")
             .unwrap()
-            .dependencies(None, None);
+            .combined_dependencies(None);
         assert_snapshot!(format_dependencies(deps));
     }
 

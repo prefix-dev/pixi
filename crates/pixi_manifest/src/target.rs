@@ -5,7 +5,6 @@ use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Deserializer};
-use serde_with::serde_as;
 
 use super::error::DependencyError;
 use crate::{
@@ -16,12 +15,16 @@ use crate::{
     DependencyOverwriteBehavior, PyPiRequirement, SpecType,
 };
 
-/// A target describes the dependencies, activations and task available to a
-/// specific feature, in a specific environment, and optionally for a specific
-/// platform.
+/// A workspace target describes the dependencies, activations and task
+/// available to a specific feature, in a specific environment, and optionally
+/// for a specific platform.
 #[derive(Default, Debug, Clone)]
-pub struct Target {
+pub struct WorkspaceTarget {
     /// Dependencies for this target.
+    ///
+    /// TODO: While the pixi-build feature is not stabilized yet, a workspace
+    /// can have host- and build dependencies. When pixi-build is stabilized, we
+    /// can simplify this part of the code.
     pub dependencies: HashMap<SpecType, IndexMap<PackageName, PixiSpec>>,
 
     /// Specific python dependencies
@@ -34,7 +37,14 @@ pub struct Target {
     pub tasks: HashMap<TaskName, Task>,
 }
 
-impl Target {
+/// A package target describes the dependencies for a specific platform.
+#[derive(Default, Debug, Clone)]
+pub struct PackageTarget {
+    /// Dependencies for this target.
+    pub dependencies: HashMap<SpecType, IndexMap<PackageName, PixiSpec>>,
+}
+
+impl WorkspaceTarget {
     /// Returns the run dependencies of the target
     pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Run)
@@ -50,26 +60,9 @@ impl Target {
         self.dependencies.get(&SpecType::Build)
     }
 
-    /// Returns the dependencies to use for the given `spec_type`. If `None` is
-    /// specified, the combined dependencies are returned.
-    ///
-    /// The `build` dependencies overwrite the `host` dependencies which
-    /// overwrite the `run` dependencies.
-    ///
-    /// This function returns `None` if no dependencies are specified for the
-    /// given `spec_type`.
-    ///
-    /// This function returns a `Cow` to avoid cloning the dependencies if they
-    /// can be returned directly from the underlying map.
-    pub fn dependencies(
-        &self,
-        spec_type: Option<SpecType>,
-    ) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
-        if let Some(spec_type) = spec_type {
-            self.dependencies.get(&spec_type).map(Cow::Borrowed)
-        } else {
-            self.combined_dependencies()
-        }
+    /// Returns the dependencies of a certain type.
+    pub fn dependencies(&self, spec_type: SpecType) -> Option<&IndexMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&spec_type)
     }
 
     /// Determines the combined set of dependencies.
@@ -82,7 +75,7 @@ impl Target {
     ///
     /// This function returns a `Cow` to avoid cloning the dependencies if they
     /// can be returned directly from the underlying map.
-    fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
+    pub fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
         let mut all_deps = None;
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
             let Some(specs) = self.dependencies.get(&spec_type) else {
@@ -113,7 +106,7 @@ impl Target {
     pub fn has_dependency(
         &self,
         dep_name: &PackageName,
-        spec_type: Option<SpecType>,
+        spec_type: SpecType,
         exact: Option<&PixiSpec>,
     ) -> bool {
         let current_dependency = self
@@ -164,7 +157,7 @@ impl Target {
         spec_type: SpecType,
         dependency_overwrite_behavior: DependencyOverwriteBehavior,
     ) -> Result<bool, DependencyError> {
-        if self.has_dependency(dep_name, Some(spec_type), None) {
+        if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
                 DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
                     return Ok(false)
@@ -269,6 +262,99 @@ impl Target {
     }
 }
 
+impl PackageTarget {
+    /// Returns the dependencies of a certain type.
+    pub fn dependencies(&self, spec_type: SpecType) -> Option<&IndexMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&spec_type)
+    }
+
+    /// Returns the run dependencies of the target
+    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&SpecType::Run)
+    }
+
+    /// Returns the host dependencies of the target
+    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&SpecType::Host)
+    }
+
+    /// Returns the build dependencies of the target
+    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&SpecType::Build)
+    }
+
+    /// Checks if this target contains a dependency
+    pub fn has_dependency(
+        &self,
+        dep_name: &PackageName,
+        spec_type: SpecType,
+        exact: Option<&PixiSpec>,
+    ) -> bool {
+        let current_dependency = self
+            .dependencies(spec_type)
+            .and_then(|deps| deps.get(dep_name).cloned());
+
+        match (current_dependency, exact) {
+            (Some(current_spec), Some(spec)) => current_spec == *spec,
+            (Some(_), None) => true,
+            (None, _) => false,
+        }
+    }
+
+    /// Removes a dependency from this target
+    ///
+    /// it will Err if the dependency is not found
+    pub fn remove_dependency(
+        &mut self,
+        dep_name: &PackageName,
+        spec_type: SpecType,
+    ) -> Result<(PackageName, PixiSpec), DependencyError> {
+        let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
+            return Err(DependencyError::NoSpecType(spec_type.name().into()));
+        };
+        dependencies
+            .shift_remove_entry(dep_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))
+    }
+
+    /// Adds a dependency to a target
+    ///
+    /// This will overwrite any existing dependency of the same name
+    pub fn add_dependency(&mut self, dep_name: &PackageName, spec: &PixiSpec, spec_type: SpecType) {
+        self.dependencies
+            .entry(spec_type)
+            .or_default()
+            .insert(dep_name.clone(), spec.clone());
+    }
+
+    /// Adds a dependency to a target
+    ///
+    /// This will return an error if the exact same dependency already exist
+    /// This will overwrite any existing dependency of the same name
+    pub fn try_add_dependency(
+        &mut self,
+        dep_name: &PackageName,
+        spec: &PixiSpec,
+        spec_type: SpecType,
+        dependency_overwrite_behavior: DependencyOverwriteBehavior,
+    ) -> Result<bool, DependencyError> {
+        if self.has_dependency(dep_name, spec_type, None) {
+            match dependency_overwrite_behavior {
+                DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
+                    return Ok(false)
+                }
+                DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
+                DependencyOverwriteBehavior::Error => {
+                    return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
+                }
+                _ => {}
+            }
+        }
+        self.add_dependency(dep_name, spec, spec_type);
+        Ok(true)
+    }
+}
+
 /// Represents a target selector. Currently we only support explicit platform
 /// selection.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -331,75 +417,25 @@ impl<'de> Deserialize<'de> for TargetSelector {
     }
 }
 
-impl<'de> Deserialize<'de> for Target {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[serde_as]
-        #[derive(Debug, Clone, Default, Deserialize)]
-        #[serde(rename_all = "kebab-case")]
-        #[serde(deny_unknown_fields)]
-        pub struct TomlTarget {
-            #[serde(default)]
-            dependencies: IndexMap<PackageName, PixiSpec>,
-
-            #[serde(default)]
-            host_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(default)]
-            build_dependencies: Option<IndexMap<PackageName, PixiSpec>>,
-
-            #[serde(default)]
-            pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
-
-            /// Additional information to activate an environment.
-            #[serde(default)]
-            activation: Option<Activation>,
-
-            /// Target specific tasks to run in the environment
-            #[serde(default)]
-            tasks: HashMap<TaskName, Task>,
-        }
-
-        let target = TomlTarget::deserialize(deserializer)?;
-
-        let mut dependencies = HashMap::from_iter([(SpecType::Run, target.dependencies)]);
-        if let Some(host_deps) = target.host_dependencies {
-            dependencies.insert(SpecType::Host, host_deps);
-        }
-        if let Some(build_deps) = target.build_dependencies {
-            dependencies.insert(SpecType::Build, build_deps);
-        }
-
-        Ok(Self {
-            dependencies,
-            pypi_dependencies: target.pypi_dependencies,
-            activation: target.activation,
-            tasks: target.tasks,
-        })
-    }
-}
-
 /// A collect of targets including a default target.
 #[derive(Debug, Clone, Default)]
-pub struct Targets {
-    default_target: Target,
+pub struct Targets<T> {
+    default_target: T,
 
     /// We use an [`IndexMap`] to preserve the order in which the items where
     /// defined in the manifest.
-    targets: IndexMap<TargetSelector, Target>,
+    targets: IndexMap<TargetSelector, T>,
 
     /// The source location of the target selector in the manifest.
     source_locs: HashMap<TargetSelector, std::ops::Range<usize>>,
 }
 
-impl Targets {
+impl<T> Targets<T> {
     /// Constructs a new [`Targets`] from a default target and additional user
     /// defined targets.
     pub fn from_default_and_user_defined(
-        default_target: Target,
-        user_defined_targets: IndexMap<PixiSpanned<TargetSelector>, Target>,
+        default_target: T,
+        user_defined_targets: IndexMap<PixiSpanned<TargetSelector>, T>,
     ) -> Self {
         let mut targets = IndexMap::with_capacity(user_defined_targets.len());
         let mut source_locs = HashMap::with_capacity(user_defined_targets.len());
@@ -418,12 +454,12 @@ impl Targets {
     }
 
     /// Returns the default target.
-    pub fn default(&self) -> &Target {
+    pub fn default(&self) -> &T {
         &self.default_target
     }
 
     /// Returns the default target
-    pub fn default_mut(&mut self) -> &mut Target {
+    pub fn default_mut(&mut self) -> &mut T {
         &mut self.default_target
     }
 
@@ -438,7 +474,7 @@ impl Targets {
     pub fn resolve(
         &self,
         platform: Option<Platform>,
-    ) -> impl DoubleEndedIterator<Item = &'_ Target> + '_ {
+    ) -> impl DoubleEndedIterator<Item = &'_ T> + '_ {
         if let Some(platform) = platform {
             Either::Left(self.resolve_for_platform(platform))
         } else {
@@ -458,7 +494,7 @@ impl Targets {
     fn resolve_for_platform(
         &self,
         platform: Platform,
-    ) -> impl DoubleEndedIterator<Item = &'_ Target> + '_ {
+    ) -> impl DoubleEndedIterator<Item = &'_ T> + '_ {
         std::iter::once(&self.default_target)
             .chain(self.targets.iter().filter_map(move |(selector, target)| {
                 if selector.matches(platform) {
@@ -472,13 +508,13 @@ impl Targets {
     }
 
     /// Returns the target for the given target selector.
-    pub fn for_target(&self, target: &TargetSelector) -> Option<&Target> {
+    pub fn for_target(&self, target: &TargetSelector) -> Option<&T> {
         self.targets.get(target)
     }
 
     /// Returns the target for the given target selector or the default target
     /// if the selector is `None`.
-    pub fn for_opt_target(&self, target: Option<&TargetSelector>) -> Option<&Target> {
+    pub fn for_opt_target(&self, target: Option<&TargetSelector>) -> Option<&T> {
         if let Some(sel) = target {
             self.targets.get(sel)
         } else {
@@ -488,7 +524,7 @@ impl Targets {
 
     /// Returns the target for the given target selector or the default target
     /// if no target is specified.
-    pub fn for_opt_target_mut(&mut self, target: Option<&TargetSelector>) -> Option<&mut Target> {
+    pub fn for_opt_target_mut(&mut self, target: Option<&TargetSelector>) -> Option<&mut T> {
         if let Some(sel) = target {
             self.targets.get_mut(sel)
         } else {
@@ -501,7 +537,7 @@ impl Targets {
     ///
     /// If a target is specified and it does not exist the default target is
     /// returned instead.
-    pub fn for_opt_target_or_default(&self, target: Option<&TargetSelector>) -> &Target {
+    pub fn for_opt_target_or_default(&self, target: Option<&TargetSelector>) -> &T {
         if let Some(sel) = target {
             self.targets.get(sel).unwrap_or(&self.default_target)
         } else {
@@ -513,10 +549,10 @@ impl Targets {
     /// or the default target if no target is specified.
     ///
     /// If a target is specified and it does not exist, it will be created.
-    pub fn for_opt_target_or_default_mut(
-        &mut self,
-        target: Option<&TargetSelector>,
-    ) -> &mut Target {
+    pub fn for_opt_target_or_default_mut(&mut self, target: Option<&TargetSelector>) -> &mut T
+    where
+        T: Default,
+    {
         if let Some(sel) = target {
             self.targets.entry(sel.clone()).or_default()
         } else {
@@ -525,18 +561,18 @@ impl Targets {
     }
 
     /// Returns the target for the given target selector.
-    pub fn target_entry(&mut self, selector: TargetSelector) -> Entry<'_, TargetSelector, Target> {
+    pub fn target_entry(&mut self, selector: TargetSelector) -> Entry<'_, TargetSelector, T> {
         self.targets.entry(selector)
     }
 
     /// Returns an iterator over all targets and selectors.
-    pub fn iter(&self) -> impl Iterator<Item = (&'_ Target, Option<&'_ TargetSelector>)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (&'_ T, Option<&'_ TargetSelector>)> + '_ {
         std::iter::once((&self.default_target, None))
             .chain(self.targets.iter().map(|(sel, target)| (target, Some(sel))))
     }
 
     /// Returns an iterator over all targets.
-    pub fn targets(&self) -> impl Iterator<Item = &'_ Target> + '_ {
+    pub fn targets(&self) -> impl Iterator<Item = &'_ T> + '_ {
         std::iter::once(&self.default_target).chain(self.targets.iter().map(|(_, target)| target))
     }
 
@@ -558,7 +594,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
 
-    use crate::manifests::manifest::Manifest;
+    use crate::Manifest;
 
     #[test]
     fn test_targets_overwrite_order() {
@@ -589,7 +625,7 @@ mod tests {
             .default_feature()
             .targets
             .default()
-            .dependencies(None)
+            .combined_dependencies()
             .unwrap_or_default()
             .iter()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap()))
