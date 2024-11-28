@@ -103,9 +103,7 @@ clang = ">=18.1.8,<19.0"
 compilers = ">=1.6.0"
 make = ">=4.3,<5"
 mold = ">=2.33.0,<3.0"
-[feature.build.target.linux-64.activation]
-scripts = ["scripts/activate.sh"]
-[feature.build.target.osx-arm64.activation]
+[feature.build.target.unix.activation]
 scripts = ["scripts/activate.sh"]
 [feature.build.target.win-64.activation]
 scripts = ["scripts/activate.bat"]

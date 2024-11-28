@@ -111,10 +111,8 @@ async fn test_purl_are_added_for_pypi() {
         .packages(Platform::current())
         .unwrap()
         .for_each(|dep| {
-            if dep.as_conda().unwrap().package_record().name
-                == PackageName::from_str("boltons").unwrap()
-            {
-                assert!(dep.as_conda().unwrap().package_record().purls.is_none());
+            if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
+                assert!(dep.as_conda().unwrap().record().purls.is_none());
             }
         });
 
@@ -134,13 +132,11 @@ async fn test_purl_are_added_for_pypi() {
         .packages(Platform::current())
         .unwrap()
         .for_each(|dep| {
-            if dep.as_conda().unwrap().package_record().name
-                == PackageName::from_str("boltons").unwrap()
-            {
-                assert!(
+            if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
+                assert_eq!(
                     dep.as_conda()
                         .unwrap()
-                        .package_record()
+                        .record()
                         .purls
                         .as_ref()
                         .unwrap()
@@ -148,8 +144,8 @@ async fn test_purl_are_added_for_pypi() {
                         .unwrap()
                         .qualifiers()
                         .get("source")
-                        .unwrap()
-                        == PurlSource::HashMapping.as_str()
+                        .unwrap(),
+                    PurlSource::HashMapping.as_str()
                 );
             }
         });
@@ -180,7 +176,7 @@ async fn test_purl_are_missing_for_non_conda_forge() {
         package_record: foo_bar_package.package_record,
         file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
-        channel: "dummy-channel".to_owned(),
+        channel: Some("dummy-channel".to_owned()),
     };
 
     let packages = vec![repo_data_record.clone()];
@@ -223,7 +219,7 @@ async fn test_purl_are_generated_using_custom_mapping() {
         package_record: foo_bar_package.package_record,
         file_name: "foo-bar-car".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let packages = vec![repo_data_record.clone()];
@@ -267,7 +263,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
         package_record: foo_bar_package.package_record,
         file_name: "pandoc".to_owned(),
         url: Url::parse("https://haskell.org/pandoc/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let packages = vec![repo_data_record.clone()];
@@ -316,14 +312,14 @@ async fn test_dont_record_not_present_package_as_purl() {
         package_record: foo_bar_package.package_record,
         file_name: "pixi-something-new-for-test".to_owned(),
         url: Url::parse("https://pypi.org/simple/something-new/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/osx-arm64/brotli-python-1.1.0-py311ha891d26_1.conda".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/osx-arm64/brotli-python-1.1.0-py311ha891d26_1.conda".to_owned()),
     };
 
     let mut boltons_repo_data_record = RepoDataRecord {
         package_record: boltons_package.package_record,
         file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let packages = vec![repo_data_record.clone(), boltons_repo_data_record.clone()];
@@ -411,14 +407,14 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
         package_record: foo_bar_package.package_record,
         file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let boltons_repo_data_record = RepoDataRecord {
         package_record: boltons_package.package_record,
         file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let mut packages = vec![repo_data_record, boltons_repo_data_record];
@@ -488,7 +484,7 @@ async fn test_custom_mapping_channel_with_suffix() {
         package_record: foo_bar_package.package_record,
         file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge".to_owned()),
     };
 
     let mut packages = vec![repo_data_record];
@@ -539,7 +535,7 @@ async fn test_repo_data_record_channel_with_suffix() {
         package_record: foo_bar_package.package_record,
         file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let mut packages = vec![repo_data_record];
@@ -590,7 +586,7 @@ async fn test_path_channel() {
         package_record: foo_bar_package.package_record,
         file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
-        channel: "file:///home/user/staged-recipes/build_artifacts".to_owned(),
+        channel: Some("file:///home/user/staged-recipes/build_artifacts".to_owned()),
     };
 
     let mut packages = vec![repo_data_record];
@@ -634,8 +630,8 @@ async fn test_file_url_as_mapping_location() {
     );
 
     let mapping_file_path_as_url = Url::from_file_path(
-        mapping_file, // .canonicalize()
-                      // .expect("should be canonicalized"),
+        mapping_file, /* .canonicalize()
+                       * .expect("should be canonicalized"), */
     )
     .unwrap();
 
@@ -664,7 +660,7 @@ async fn test_file_url_as_mapping_location() {
         package_record: foo_bar_package.package_record,
         file_name: "pixi-something-new".to_owned(),
         url: Url::parse("https://pypi.org/simple/pixi-something-new-new/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let mut packages = vec![repo_data_record];
@@ -721,7 +717,7 @@ async fn test_disabled_mapping() {
         package_record: boltons_package.package_record,
         file_name: "boltons".to_owned(),
         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
-        channel: "https://conda.anaconda.org/conda-forge/".to_owned(),
+        channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
     let mut packages = vec![boltons_repo_data_record];

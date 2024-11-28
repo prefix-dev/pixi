@@ -11,7 +11,7 @@ use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use pixi_config::home_path;
+use pixi_config::pixi_home;
 use pixi_manifest::PrioritizedChannel;
 use pixi_utils::executable_from_path;
 use rattler::install::{Transaction, TransactionOperation};
@@ -45,7 +45,7 @@ impl BinDir {
 
     /// Create the binary executable directory from environment variables
     pub async fn from_env() -> miette::Result<Self> {
-        let bin_dir = home_path()
+        let bin_dir = pixi_home()
             .map(|path| path.join("bin"))
             .ok_or(miette::miette!(
                 "Couldn't determine global binary executable directory"
@@ -113,7 +113,7 @@ impl EnvRoot {
 
     /// Create the environment root directory from environment variables
     pub(crate) async fn from_env() -> miette::Result<Self> {
-        let path = home_path()
+        let path = pixi_home()
             .map(|path| path.join("envs"))
             .ok_or_else(|| miette::miette!("Couldn't get home path"))?;
         tokio_fs::create_dir_all(&path).await.into_diagnostic()?;

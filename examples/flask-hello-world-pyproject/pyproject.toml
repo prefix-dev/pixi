@@ -13,9 +13,14 @@ requires = ["hatchling"]
 [tool.pixi.project]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+preview = ["pixi-build"]
 
 [tool.pixi.pypi-dependencies]
 flask-hello-world-pyproject = { path = ".", editable = true }
+
+[tool.pixi.dependencies]
+flask = "2.*"
+
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
@@ -29,3 +34,16 @@ test = "pytest -v tests/*"
 
 [dependency-groups]
 test = ["pytest>=8.3.3,<9"]
+
+[tool.pixi.host-dependencies]
+hatchling = "==1.26.3"
+
+[tool.pixi.package]
+
+[tool.pixi.build-system]
+build-backend = "pixi-build-python"
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+dependencies = ["pixi-build-python"]

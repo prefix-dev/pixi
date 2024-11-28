@@ -21,8 +21,8 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         console::style(console::Emoji("✔ ", "")).green(),
         project
             .manifest
-            .parsed
-            .project
+            .workspace
+            .workspace
             .description
             .as_ref()
             .unwrap()

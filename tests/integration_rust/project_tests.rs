@@ -86,7 +86,7 @@ async fn parse_project() {
     fn dependency_names(project: &Project, platform: Platform) -> Vec<String> {
         project
             .default_environment()
-            .dependencies(None, Some(platform))
+            .combined_dependencies(Some(platform))
             .iter()
             .map(|dep| dep.0.as_normalized().to_string())
             .collect()
