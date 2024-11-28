@@ -1,4 +1,8 @@
-use std::{fmt::Debug, hash::Hash, path::PathBuf};
+use std::{
+    fmt::Debug,
+    path::PathBuf,
+    sync::{Arc, Weak},
+};
 
 use dashmap::{DashMap, Entry};
 use miette::{miette, IntoDiagnostic, Result};
@@ -15,11 +19,12 @@ use rattler_shell::{
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use tokio::sync::broadcast;
 
 use super::IsolatedTool;
 use crate::{
     tool::{SystemTool, Tool, ToolSpec},
-    IsolatedToolSpec, SystemToolSpec,
+    IsolatedToolSpec,
 };
 
 pub struct ToolContextBuilder {
@@ -127,31 +132,28 @@ impl ToolContext {
     ) -> Result<Tool, ToolCacheError> {
         let spec = match spec {
             ToolSpec::Io(ipc) => return Ok(Tool::Io(ipc)),
-            ToolSpec::Isolated(isolated) => CacheableToolSpec::Isolated(isolated),
-            ToolSpec::System(system) => CacheableToolSpec::System(system),
+            ToolSpec::Isolated(isolated) => {
+                if isolated.specs.is_empty() {
+                    return Err(ToolCacheError::Install(miette!(
+                        "No build match specs provided for '{}' command.",
+                        isolated.command
+                    )));
+                }
+
+                isolated
+            }
+
+            // I think we cannot bypass caching SystemTool as it is a wrapper around a spec command
+            ToolSpec::System(system) => return Ok(Tool::System(SystemTool::new(system.command))),
         };
 
-        let cache_entry = match self.cache.cache.entry(spec.clone()) {
-            Entry::Occupied(entry) => return Ok(entry.get().clone().into()),
-            Entry::Vacant(entry) => entry,
-        };
+        let installed = self
+            .cache
+            .get_or_install_tool(spec, self, channel_config)
+            .await
+            .map_err(ToolCacheError::Install)?;
 
-        let tool: CachedTool = match spec {
-            CacheableToolSpec::Isolated(spec) => CachedTool::Isolated(if spec.specs.is_empty() {
-                return Err(ToolCacheError::Install(miette!(
-                    "No build match specs provided for '{}' command.",
-                    spec.command
-                )));
-            } else {
-                self.install(&spec, channel_config)
-                    .await
-                    .map_err(ToolCacheError::Install)?
-            }),
-            CacheableToolSpec::System(spec) => SystemTool::new(spec.command).into(),
-        };
-
-        cache_entry.insert(tool.clone());
-        Ok(tool.into())
+        Ok(installed.into())
     }
 
     /// Installed the tool in the isolated environment.
@@ -266,15 +268,24 @@ impl ToolContext {
     }
 }
 
-/// A [`ToolCache`] maintains a cache of environments for build tools.
+/// A record that is either pending or has been fetched.
+#[derive(Clone)]
+enum PendingOrFetched<T> {
+    Pending(Weak<broadcast::Sender<T>>),
+    Fetched(T),
+}
+
+/// A [`ToolCache`] maintains a cache of environments for isolated build tools.
 ///
 /// This is useful to ensure that if we need to build multiple packages that use
 /// the same tool, we can reuse their environments.
-/// (nichita): it can also be seen as a way to create tools itself
-#[derive(Default, Debug)]
+/// Implementation for request coalescing is inspired by:
+/// * https://github.com/conda/rattler/blob/main/crates/rattler_repodata_gateway/src/gateway/mod.rs#L180
+/// * https://github.com/prefix-dev/rip/blob/main/crates/rattler_installs_packages/src/wheel_builder/mod.rs#L39
+#[derive(Default)]
 pub struct ToolCache {
     /// The cache of tools.
-    pub cache: DashMap<CacheableToolSpec, CachedTool>,
+    cache: DashMap<IsolatedToolSpec, PendingOrFetched<Arc<IsolatedTool>>>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -287,48 +298,93 @@ pub enum ToolCacheError {
     CacheDir(miette::Report),
 }
 
-/// Describes the specification of the tool. This can be used to cache tool
-/// information.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub enum CacheableToolSpec {
-    Isolated(IsolatedToolSpec),
-    System(SystemToolSpec),
-}
-
-/// A tool that can be invoked.
-#[derive(Debug, Clone)]
-pub enum CachedTool {
-    Isolated(IsolatedTool),
-    System(SystemTool),
-}
-
-impl From<CachedTool> for Tool {
-    fn from(value: CachedTool) -> Self {
-        match value {
-            CachedTool::Isolated(tool) => Tool::Isolated(tool),
-            CachedTool::System(tool) => Tool::System(tool),
-        }
-    }
-}
-
-impl From<IsolatedTool> for CachedTool {
-    fn from(value: IsolatedTool) -> Self {
-        Self::Isolated(value)
-    }
-}
-
-impl From<SystemTool> for CachedTool {
-    fn from(value: SystemTool) -> Self {
-        Self::System(value)
-    }
-}
-
 impl ToolCache {
     /// Construct a new tool cache.
     pub fn new() -> Self {
         Self {
             cache: DashMap::default(),
         }
+    }
+
+    pub async fn get_or_install_tool(
+        &self,
+        spec: IsolatedToolSpec,
+        context: &ToolContext,
+        channel_config: &ChannelConfig,
+    ) -> miette::Result<Arc<IsolatedTool>> {
+        let sender = match self.cache.entry(spec.clone()) {
+            Entry::Vacant(entry) => {
+                // Construct a sender so other tasks can subscribe
+                let (sender, _) = broadcast::channel(1);
+                let sender = Arc::new(sender);
+
+                // modify the current entry to the pending entry.
+                // this is an atomic operation
+                // because who holds the entry holds mutable access.
+
+                entry.insert(PendingOrFetched::Pending(Arc::downgrade(&sender)));
+
+                sender
+            }
+            Entry::Occupied(mut entry) => {
+                let tool = entry.get();
+                match tool {
+                    PendingOrFetched::Pending(sender) => {
+                        let sender = sender.upgrade();
+                        if let Some(sender) = sender {
+                            // Create a receiver before we drop the entry. While we hold on to
+                            // the entry we have exclusive access to it, this means the task
+                            // currently fetching the subdir will not be able to store a value
+                            // until we drop the entry.
+                            // By creating the receiver here we ensure that we are subscribed
+                            // before the other tasks sends a value over the channel.
+                            let mut receiver = sender.subscribe();
+
+                            // Explicitly drop the entry, so we don't block any other tasks.
+                            drop(entry);
+
+                            return match receiver.recv().await {
+                                Ok(tool) => Ok(tool),
+                                Err(_) => miette::bail!(
+                                    "a coalesced tool {} request install failed",
+                                    spec.command
+                                ),
+                            };
+                        } else {
+                            // Construct a sender so other tasks can subscribe
+                            let (sender, _) = broadcast::channel(1);
+                            let sender = Arc::new(sender);
+
+                            // Modify the current entry to the pending entry, this is an atomic
+                            // operation because who holds the entry holds mutable access.
+                            entry.insert(PendingOrFetched::Pending(Arc::downgrade(&sender)));
+
+                            sender
+                        }
+                    }
+                    PendingOrFetched::Fetched(tool) => return Ok(tool.clone()),
+                }
+            }
+        };
+
+        // At this point we have exclusive write access to this specific entry. All
+        // other tasks will find a pending entry and will wait for the records
+        // to become available.
+        //
+        // Let's start by creating the subdir. If an error occurs we immediately return
+        // the error. This will drop the sender and all other waiting tasks will
+        // receive an error.
+        let tool = Arc::new(context.install(&spec, channel_config).await?);
+
+        // Store the fetched files in the entry.
+        self.cache
+            .insert(spec, PendingOrFetched::Fetched(tool.clone()));
+
+        // Send the records to all waiting tasks. We don't care if there are no
+        // receivers, so we drop the error.
+        let _ = sender.send(tool.clone());
+
+        Ok(tool)
     }
 }
 
@@ -340,7 +396,6 @@ mod tests {
     use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, ParseStrictness};
     use reqwest_middleware::ClientWithMiddleware;
 
-    // use super::ToolCache;
     use crate::{
         tool::{ToolContext, ToolSpec},
         IsolatedToolSpec,

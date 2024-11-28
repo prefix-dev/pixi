@@ -1,7 +1,7 @@
 mod cache;
 mod spec;
 
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 pub use cache::{ToolCacheError, ToolContext};
 pub use spec::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
@@ -11,14 +11,14 @@ use crate::InProcessBackend;
 /// A tool that can be invoked.
 #[derive(Debug)]
 pub enum Tool {
-    Isolated(IsolatedTool),
+    Isolated(Arc<IsolatedTool>),
     System(SystemTool),
     Io(InProcessBackend),
 }
 
 #[derive(Debug)]
 pub enum ExecutableTool {
-    Isolated(IsolatedTool),
+    Isolated(Arc<IsolatedTool>),
     System(SystemTool),
 }
 
@@ -40,6 +40,12 @@ impl SystemTool {
 impl From<SystemTool> for Tool {
     fn from(value: SystemTool) -> Self {
         Self::System(value)
+    }
+}
+
+impl From<Arc<IsolatedTool>> for Tool {
+    fn from(value: Arc<IsolatedTool>) -> Self {
+        Self::Isolated(value)
     }
 }
 
@@ -69,11 +75,11 @@ impl IsolatedTool {
     }
 }
 
-impl From<IsolatedTool> for Tool {
-    fn from(value: IsolatedTool) -> Self {
-        Self::Isolated(value)
-    }
-}
+// impl From<IsolatedTool> for Tool {
+//     fn from(value: IsolatedTool) -> Self {
+//         Self::Isolated(value)
+//     }
+// }
 
 impl Tool {
     pub fn as_executable(&self) -> Option<ExecutableTool> {
@@ -105,11 +111,13 @@ impl ExecutableTool {
     /// Construct a new tool that calls another executable.
     pub fn with_executable(&self, executable: impl Into<String>) -> Self {
         match self {
-            ExecutableTool::Isolated(tool) => ExecutableTool::Isolated(IsolatedTool::new(
-                executable,
-                tool.prefix.clone(),
-                tool.activation_scripts.clone(),
-            )),
+            ExecutableTool::Isolated(tool) => {
+                ExecutableTool::Isolated(Arc::new(IsolatedTool::new(
+                    executable,
+                    tool.prefix.clone(),
+                    tool.activation_scripts.clone(),
+                )))
+            }
             ExecutableTool::System(_) => ExecutableTool::System(SystemTool::new(executable)),
         }
     }
