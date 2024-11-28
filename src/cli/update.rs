@@ -158,7 +158,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let updated_lock_file = UpdateContext::builder(&project)
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
-        .with_max_concurrent_solves(project.config().max_concurrent_solves())
         .finish()
         .await?
         .update()

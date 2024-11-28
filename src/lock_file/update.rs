@@ -734,7 +734,6 @@ pub async fn update_lock_file(
 
     // Construct an update context and perform the actual update.
     let lock_file_derived_data = UpdateContext::builder(project)
-        .with_max_concurrent_solves(options.max_concurrent_solves)
         .with_package_cache(package_cache)
         .with_no_install(options.no_install)
         .with_outdated_environments(outdated)
