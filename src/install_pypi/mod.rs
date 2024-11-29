@@ -1,36 +1,24 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-    str::FromStr,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
 
 use conda_pypi_clobber::PypiCondaClobberRegistry;
-use conversions::convert_to_dist;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
-use pep440_rs::Version;
 use pixi_consts::consts;
 use pixi_manifest::SystemRequirements;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     isolated_names_to_packages, locked_indexes_to_index_locations, names_to_build_isolation,
-    to_uv_version,
 };
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
-use url::Url;
-use utils::{check_url_freshness, elapsed, strip_direct_scheme};
+use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use utils::elapsed;
 use uv_auth::store_credentials_from_url;
-use uv_cache::Cache;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
-use uv_distribution_types::{
-    CachedDist, DependencyMetadata, Dist, IndexLocations, InstalledDist, Name,
-};
+use uv_distribution_types::{DependencyMetadata, IndexLocations, Name};
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
