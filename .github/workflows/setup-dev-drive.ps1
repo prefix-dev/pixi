@@ -15,10 +15,11 @@ $Tmp = "$($Drive)/pixi-tmp"
 # Create the directory ahead of time in an attempt to avoid race-conditions
 New-Item $Tmp -ItemType Directory
 
-# TODO: Add TMP, TEMP and PIXI_HOME back
+# TODO: Add TMP and TEMP back
 Write-Output `
 	"DEV_DRIVE=$($Drive)" `
 	"RUSTUP_HOME=$($Drive)/.rustup" `
 	"CARGO_HOME=$($Drive)/.cargo" `
+	"PIXI_HOME=$($Drive)/.pixi" `
 	"PIXI_WORKSPACE=$($Drive)/pixi" `
 	>> $env:GITHUB_ENV
