@@ -15,6 +15,7 @@ $Tmp = "$($Drive)/pixi-tmp"
 # Create the directory ahead of time in an attempt to avoid race-conditions
 New-Item $Tmp -ItemType Directory
 
+# TODO: Add TMP, TEMP and PIXI_HOME back
 Write-Output `
 	"DEV_DRIVE=$($Drive)" `
 	"RUSTUP_HOME=$($Drive)/.rustup" `
