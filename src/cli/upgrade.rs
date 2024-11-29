@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::cli::cli_config::ProjectConfig;
+use crate::project::{MatchSpecs, PypiDeps};
 use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -65,19 +66,63 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     };
 
-    // TODO: Also support build and host
+    let (match_specs, pypi_deps) = parse_specs(feature, &args, &project)?;
+
+    let update_deps = project
+        .update_dependencies(
+            match_specs,
+            pypi_deps,
+            &args.prefix_update_config,
+            &args.specs.feature,
+            &[],
+            false,
+            args.dry_run,
+        )
+        .await?;
+
+    // Is there something to report?
+    if let Some(update_deps) = update_deps {
+        let diff = update_deps.lock_file_diff;
+        // Format as json?
+        if args.json {
+            let json_diff = LockFileJsonDiff::new(&project, diff);
+            let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
+            println!("{}", json);
+        } else {
+            diff.print()
+                .into_diagnostic()
+                .context("failed to print lock-file diff")?;
+        }
+    } else {
+        eprintln!(
+            "{}All packages are already up-to-date",
+            console::style(console::Emoji("✔ ", "")).green()
+        );
+    }
+
+    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Ok(())
+}
+
+/// Parses the specifications for dependencies from the given feature, arguments, and project.
+///
+/// This function processes the dependencies and PyPi dependencies specified in the feature,
+/// filters them based on the provided arguments, and returns the resulting match specifications
+/// and PyPi dependencies.
+fn parse_specs(
+    feature: &pixi_manifest::Feature,
+    args: &Args,
+    project: &Project,
+) -> miette::Result<(MatchSpecs, PypiDeps)> {
     let spec_type = SpecType::Run;
     let match_spec_iter = feature
         .dependencies(spec_type, None)
         .into_iter()
         .flat_map(|deps| deps.into_owned());
-
     let pypi_deps_iter = feature
         .pypi_dependencies(None)
         .into_iter()
         .flat_map(|deps| deps.into_owned());
-
-    // If the user specified a package name, check to see if it is even there.
     if let Some(package_names) = &args.specs.packages {
         let available_packages = match_spec_iter
             .clone()
@@ -93,7 +138,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ensure_package_exists(package, &available_packages)?
         }
     }
-
     let match_specs = match_spec_iter
         // Don't upgrade excluded packages
         .filter(|(name, _)| match &args.specs.exclude {
@@ -152,7 +196,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         })
         .collect();
-
     let pypi_deps = pypi_deps_iter
         // Don't upgrade excluded packages
         .filter(|(name, _)| match &args.specs.exclude {
@@ -194,47 +237,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|(name, req)| {
             let location = project.manifest.document.pypi_dependency_location(
                 &name,
-                None,
+                None, // TODO: add support for platforms
                 &args.specs.feature,
             );
             (name, (req, location))
         })
         .collect();
 
-    let update_deps = project
-        .update_dependencies(
-            match_specs,
-            pypi_deps,
-            &args.prefix_update_config,
-            &args.specs.feature,
-            &[],
-            false,
-            args.dry_run,
-        )
-        .await?;
-
-    // Is there something to report?
-    if let Some(update_deps) = update_deps {
-        let diff = update_deps.lock_file_diff;
-        // Format as json?
-        if args.json {
-            let json_diff = LockFileJsonDiff::new(&project, diff);
-            let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
-            println!("{}", json);
-        } else {
-            diff.print()
-                .into_diagnostic()
-                .context("failed to print lock-file diff")?;
-        }
-    } else {
-        eprintln!(
-            "{}All packages are already up-to-date",
-            console::style(console::Emoji("✔ ", "")).green()
-        );
-    }
-
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
-    Ok(())
+    Ok((match_specs, pypi_deps))
 }
 
 /// Ensures the existence of the specified package

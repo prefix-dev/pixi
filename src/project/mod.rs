@@ -154,6 +154,13 @@ impl Borrow<WorkspaceManifest> for Project {
     }
 }
 
+pub type PypiDeps = indexmap::IndexMap<
+    PyPiPackageName,
+    (Requirement, Option<pixi_manifest::PypiDependencyLocation>),
+>;
+
+pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
+
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifest(manifest: Manifest) -> Self {
@@ -660,8 +667,8 @@ impl Project {
     #[allow(clippy::too_many_arguments)]
     pub async fn update_dependencies(
         &mut self,
-        match_specs: IndexMap<PackageName, (MatchSpec, SpecType)>,
-        pypi_deps: IndexMap<PyPiPackageName, (Requirement, Option<PypiDependencyLocation>)>,
+        match_specs: MatchSpecs,
+        pypi_deps: PypiDeps,
         prefix_update_config: &PrefixUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
@@ -839,7 +846,7 @@ impl Project {
     fn unlock_packages(
         &self,
         lock_file: &LockFile,
-        conda_packages: HashSet<rattler_conda_types::PackageName>,
+        conda_packages: HashSet<PackageName>,
         pypi_packages: HashSet<pep508_rs::PackageName>,
         affected_environments: HashSet<(&str, Platform)>,
     ) -> LockFile {
