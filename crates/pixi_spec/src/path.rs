@@ -21,7 +21,7 @@ impl PathSpec {
         root_dir: &Path,
     ) -> Result<Option<NamelessMatchSpec>, SpecConversionError> {
         match self.into_source_or_binary() {
-            Either::Left(_source) => return Ok(None),
+            Either::Left(_source) => Ok(None),
             Either::Right(binary) => Ok(Some(binary.try_into_nameless_match_spec(root_dir)?)),
         }
     }

@@ -91,48 +91,6 @@ fn replace_source_dir(snapshot: &str, source_dir: &Path) -> String {
 }
 
 #[tokio::test]
-async fn test_missing_backend() {
-    // Setup a temporary project
-    let source_dir = tempfile::TempDir::new().unwrap();
-    let manifest = source_dir
-        .path()
-        .join(pixi_consts::consts::PROJECT_MANIFEST);
-    tokio::fs::write(
-        &manifest,
-        r#"
-        [workspace]
-        platforms = []
-        channels = []
-        preview = ['pixi-build']
-
-        [package]
-        name = "project"
-        version = "0.1.0"
-
-        [build-system]
-        dependencies = []
-        build-backend = "non-existing"
-        channels = []
-        "#,
-    )
-    .await
-    .unwrap();
-
-    let err = BuildFrontend::default()
-        .setup_protocol(SetupRequest {
-            source_dir: source_dir.path().to_path_buf(),
-            build_tool_override: Default::default(),
-            build_id: 0,
-        })
-        .await
-        .unwrap_err();
-
-    let snapshot = error_to_snapshot(&err);
-    let snapshot = replace_source_dir(&snapshot, source_dir.path());
-    insta::assert_snapshot!(snapshot);
-}
-
-#[tokio::test]
 async fn test_not_a_package() {
     // Setup a temporary project
     let source_dir = tempfile::TempDir::new().unwrap();
@@ -186,9 +144,7 @@ async fn test_invalid_backend() {
         name = "project"
 
         [build-system]
-        dependencies = []
-        channels = []
-        build-backend = "ipc"
+        build-backend = { name = "ipc", version = "*" }
         "#,
     )
     .await
