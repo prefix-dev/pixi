@@ -88,12 +88,6 @@ impl IsolatedTool {
     }
 }
 
-// impl From<IsolatedTool> for Tool {
-//     fn from(value: IsolatedTool) -> Self {
-//         Self::Isolated(value)
-//     }
-// }
-
 impl Tool {
     pub fn as_executable(&self) -> Option<ExecutableTool> {
         match self {

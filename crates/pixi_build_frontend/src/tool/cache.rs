@@ -77,7 +77,7 @@ impl ToolCache {
                         if let Some(sender) = sender {
                             // Create a receiver before we drop the entry. While we hold on to
                             // the entry we have exclusive access to it, this means the task
-                            // currently fetching the subdir will not be able to store a value
+                            // currently installing the tool will not be able to store a value
                             // until we drop the entry.
                             // By creating the receiver here we ensure that we are subscribed
                             // before the other tasks sends a value over the channel.
@@ -114,7 +114,7 @@ impl ToolCache {
         // other tasks will find a pending entry and will wait for the tool
         // to become available.
         //
-        // Let's start by creating the subdir. If an error occurs we immediately return
+        // Let's start by installing tool. If an error occurs we immediately return
         // the error. This will drop the sender and all other waiting tasks will
         // receive an error.
         let tool = Arc::new(context.install(&spec, channel_config).await?);
