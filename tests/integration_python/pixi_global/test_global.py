@@ -10,47 +10,54 @@ MANIFEST_VERSION = 1
 
 
 @pytest.mark.slow
-def test_sync_dependencies(pixi: Path, tmp_path: Path) -> None:
-    env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir()
-    manifest = manifests.joinpath("pixi-global.toml")
-    toml = """
-    [envs.test]
-    channels = ["conda-forge"]
-    dependencies = { python = "3.12" }
-    exposed = { "python-injected" = "python" }
-    """
-    parsed_toml = tomllib.loads(toml)
-    manifest.write_text(toml)
-    python_injected = tmp_path / "bin" / exec_extension("python-injected")
+def test_sync_dependencies(pixi: Path) -> None:
+    import tempfile
 
-    # Test basic commands
-    verify_cli_command([pixi, "global", "sync"], env=env)
-    verify_cli_command([python_injected, "--version"], env=env, stdout_contains="3.12")
-    verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
+    with tempfile.TemporaryDirectory() as tmp_str:
+        tmp_path = Path(tmp_str)
+        env = {"PIXI_HOME": str(tmp_path)}
+        manifests = tmp_path.joinpath("manifests")
+        manifests.mkdir()
+        manifest = manifests.joinpath("pixi-global.toml")
+        toml = """
+        [envs.test]
+        channels = ["conda-forge"]
+        dependencies = { python = "3.12" }
+        exposed = { "python-injected" = "python" }
+        """
+        parsed_toml = tomllib.loads(toml)
+        manifest.write_text(toml)
+        python_injected = tmp_path / "bin" / exec_extension("python-injected")
 
-    # Add numpy
-    parsed_toml["envs"]["test"]["dependencies"]["numpy"] = "*"
-    manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync"], env=env)
-    verify_cli_command([python_injected, "-c", "import numpy"], env=env)
+        # Test basic commands
+        verify_cli_command([pixi, "global", "sync"], env=env)
+        verify_cli_command([python_injected, "--version"], env=env, stdout_contains="3.12")
+        verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
 
-    # Remove numpy again
-    del parsed_toml["envs"]["test"]["dependencies"]["numpy"]
-    manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync", "-vv"], env=env)
-    verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
+        # Add numpy
+        parsed_toml["envs"]["test"]["dependencies"]["numpy"] = "*"
+        manifest.write_text(tomli_w.dumps(parsed_toml))
+        verify_cli_command([pixi, "global", "sync"], env=env)
+        verify_cli_command([python_injected, "-c", "import numpy"], env=env)
 
-    # Remove python
-    del parsed_toml["envs"]["test"]["dependencies"]["python"]
-    manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command(
-        [pixi, "global", "sync"],
-        ExitCode.FAILURE,
-        env=env,
-        stderr_contains=["Couldn't find executable", "Failed to add executables for environment"],
-    )
+        # Remove numpy again
+        del parsed_toml["envs"]["test"]["dependencies"]["numpy"]
+        manifest.write_text(tomli_w.dumps(parsed_toml))
+        verify_cli_command([pixi, "global", "sync", "-vv"], env=env)
+        verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
+
+        # Remove python
+        del parsed_toml["envs"]["test"]["dependencies"]["python"]
+        manifest.write_text(tomli_w.dumps(parsed_toml))
+        verify_cli_command(
+            [pixi, "global", "sync"],
+            ExitCode.FAILURE,
+            env=env,
+            stderr_contains=[
+                "Couldn't find executable",
+                "Failed to add executables for environment",
+            ],
+        )
 
 
 @pytest.mark.slow

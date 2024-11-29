@@ -17,10 +17,10 @@ New-Item $Tmp -ItemType Directory
 
 Write-Output `
 	"DEV_DRIVE=$($Drive)" `
-	"TMP=$($Tmp)" `
-	"TEMP=$($Tmp)" `
+	# "TMP=$($Tmp)" `
+	# "TEMP=$($Tmp)" `
 	"RUSTUP_HOME=$($Drive)/.rustup" `
 	"CARGO_HOME=$($Drive)/.cargo" `
-	"PIXI_HOME=$($Drive)/.pixi" `
+	# "PIXI_HOME=$($Drive)/.pixi" `
 	"PIXI_WORKSPACE=$($Drive)/pixi" `
 	>> $env:GITHUB_ENV
