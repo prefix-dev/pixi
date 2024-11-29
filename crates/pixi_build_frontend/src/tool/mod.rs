@@ -1,12 +1,15 @@
 mod cache;
+mod installer;
 mod spec;
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-pub use cache::{ToolCacheError, ToolContext};
+pub use cache::ToolCacheError;
 pub use spec::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 
 use crate::InProcessBackend;
+
+pub use installer::ToolContext;
 
 /// A tool that can be invoked.
 #[derive(Debug)]
@@ -14,6 +17,16 @@ pub enum Tool {
     Isolated(Arc<IsolatedTool>),
     System(SystemTool),
     Io(InProcessBackend),
+}
+
+impl Tool {
+    pub fn as_isolated(&self) -> Option<Arc<IsolatedTool>> {
+        match self {
+            Tool::Isolated(tool) => Some(tool.clone()),
+            Tool::System(_) => None,
+            Tool::Io(_) => None,
+        }
+    }
 }
 
 #[derive(Debug)]
