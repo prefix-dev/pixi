@@ -56,7 +56,7 @@ impl ManifestSource {
         }
     }
 
-    fn mut_manifest(&mut self) -> &mut TomlDocument {
+    fn manifest_mut(&mut self) -> &mut TomlDocument {
         match self {
             ManifestSource::PyProjectToml(document) => document,
             ManifestSource::PixiToml(document) => document,
@@ -87,7 +87,7 @@ impl ManifestSource {
             .with_feature_name(Some(feature_name))
             .with_table(table);
 
-        self.mut_manifest()
+        self.manifest_mut()
             .get_or_insert_mut_toml_array(table_name.to_string().as_str(), array_name)
     }
 
@@ -113,7 +113,7 @@ impl ManifestSource {
         let remove_requirement =
             |source: &mut ManifestSource, table, array_name| -> Result<(), TomlError> {
                 let array = source
-                    .mut_manifest()
+                    .manifest_mut()
                     .get_mut_toml_array(table, array_name)?;
                 if let Some(array) = array {
                     array.retain(|x| {
@@ -127,7 +127,7 @@ impl ManifestSource {
                     });
                     if array.is_empty() {
                         source
-                            .mut_manifest()
+                            .manifest_mut()
                             .get_or_insert_nested_table(table)?
                             .remove(array_name);
                     }
@@ -155,7 +155,7 @@ impl ManifestSource {
             .with_platform(platform.as_ref())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-        self.mut_manifest()
+        self.manifest_mut()
             .get_or_insert_nested_table(table_name.to_string().as_str())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
@@ -178,7 +178,7 @@ impl ManifestSource {
             .with_platform(platform.as_ref())
             .with_table(Some(spec_type.name()));
 
-        self.mut_manifest()
+        self.manifest_mut()
             .get_or_insert_nested_table(table_name.to_string().as_str())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
@@ -204,7 +204,7 @@ impl ManifestSource {
             .with_feature_name(Some(feature_name))
             .with_table(Some(spec_type.name()));
 
-        self.mut_manifest()
+        self.manifest_mut()
             .get_or_insert_nested_table(dependency_table.to_string().as_str())
             .map(|t| t.insert(name.as_normalized(), Item::Value(spec.to_toml_value())))?;
 
@@ -259,7 +259,7 @@ impl ManifestSource {
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            self.mut_manifest()
+            self.manifest_mut()
                 .get_or_insert_nested_table(dependency_table.to_string().as_str())?
                 .insert(
                     requirement.name.as_ref(),
@@ -275,7 +275,7 @@ impl ManifestSource {
         let add_requirement =
             |source: &mut ManifestSource, table, array| -> Result<(), TomlError> {
                 source
-                    .mut_manifest()
+                    .manifest_mut()
                     .get_or_insert_mut_toml_array(table, array)?
                     .push(requirement.to_string());
                 Ok(())
@@ -383,7 +383,7 @@ impl ManifestSource {
             .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
-        self.mut_manifest()
+        self.manifest_mut()
             .get_or_insert_nested_table(task_table.to_string().as_str())?
             .remove(name);
 
@@ -405,7 +405,7 @@ impl ManifestSource {
             .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
-        self.mut_manifest()
+        self.manifest_mut()
             .get_or_insert_nested_table(task_table.to_string().as_str())?
             .insert(name, task.into());
 
@@ -445,7 +445,7 @@ impl ManifestSource {
             .with_table(Some("environments"));
 
         // Get the environment table
-        self.mut_manifest()
+        self.manifest_mut()
             .get_or_insert_nested_table(env_table.to_string().as_str())?
             .insert(&name.into(), item);
 
@@ -461,7 +461,7 @@ impl ManifestSource {
             .with_table(Some("environments"));
 
         Ok(self
-            .mut_manifest()
+            .manifest_mut()
             .get_or_insert_nested_table(env_table.to_string().as_str())?
             .remove(name)
             .is_some())
