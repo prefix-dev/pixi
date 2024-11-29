@@ -1,6 +1,6 @@
 # The configuration of pixi itself
 
-Apart from the [project specific configuration](../reference/project_configuration.md) pixi supports configuration options which are not required for the project to work but are local to the machine.
+Apart from the [project specific configuration](../reference/pixi_manifest.md) pixi supports configuration options which are not required for the project to work but are local to the machine.
 The configuration is loaded in the following order:
 
 
