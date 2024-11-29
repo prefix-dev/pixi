@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_config/src/lib.rs
 expression: debug
+snapshot_kind: text
 ---
 Config {
     default_channels: [
@@ -72,5 +73,9 @@ Config {
     force_activate: None,
     experimental: ExperimentalConfig {
         use_environment_activation_cache: None,
+    },
+    concurrency: ConcurrencyConfig {
+        solves: 1,
+        downloads: 50,
     },
 }

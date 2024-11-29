@@ -67,31 +67,37 @@ fn elapsed(duration: Duration) -> String {
     }
 }
 
+#[derive(Debug)]
+enum InstallReason {
+    ReinstallCached,
+    ReinstallStaleLocal,
+    ReinstallMissing,
+    InstallStaleLocal,
+    InstallMissing,
+    InstallCached,
+}
+
 /// Derived from uv [`uv_installer::Plan`]
 #[derive(Debug)]
 struct PixiInstallPlan {
     /// The distributions that are not already installed in the current
     /// environment, but are available in the local cache.
-    pub local: Vec<CachedDist>,
+    pub local: Vec<(CachedDist, InstallReason)>,
 
     /// The distributions that are not already installed in the current
     /// environment, and are not available in the local cache.
     /// this is where we differ from UV because we want already have the URL we
     /// want to download
-    pub remote: Vec<Dist>,
+    pub remote: Vec<(Dist, InstallReason)>,
 
     /// Any distributions that are already installed in the current environment,
     /// but will be re-installed (including upgraded) to satisfy the
     /// requirements.
-    pub reinstalls: Vec<InstalledDist>,
+    pub reinstalls: Vec<(InstalledDist, NeedReinstall)>,
 
     /// Any distributions that are already installed in the current environment,
     /// and are _not_ necessary to satisfy the requirements.
     pub extraneous: Vec<InstalledDist>,
-
-    /// Keep track of any packages that have been re-installed because of
-    /// installer mismatch we can warn the user later that this has happened
-    pub installer_mismatch: Vec<String>,
 }
 
 /// Converts our locked data to a file
@@ -287,13 +293,6 @@ fn convert_to_dist(
     Ok(dist)
 }
 
-enum ValidateInstall {
-    /// Keep this package
-    Keep,
-    /// Reinstall this package
-    Reinstall,
-}
-
 /// Check freshness of a locked url against an installed dist
 fn check_url_freshness(locked_url: &Url, installed_dist: &InstalledDist) -> miette::Result<bool> {
     if let Ok(archive) = locked_url.to_file_path() {
@@ -315,24 +314,138 @@ fn check_url_freshness(locked_url: &Url, installed_dist: &InstalledDist) -> miet
     }
 }
 
+/// Represents the different reasons why a package needs to be reinstalled
+#[derive(Debug)]
+pub(crate) enum NeedReinstall {
+    /// The package is not installed
+    VersionMismatch {
+        installed_version: uv_pep440::Version,
+        locked_version: Version,
+    },
+    /// The `direct_url.json` file is missing
+    MissingDirectUrl,
+    /// The source directory is newer than the cache, requires a rebuild
+    SourceDirectoryNewerThanCache,
+    /// Url file parse error
+    UnableToParseFileUrl { url: String },
+    /// The editable status of the installed wheel changed with regards to the locked version
+    EditableStatusChanged { is_now_editable: bool },
+    /// Somehow unable to parse the installed dist url
+    UnableToParseInstalledDistUrl { url: String },
+    /// Archive is newer than the cache
+    ArchiveDistNewerThanCache,
+    /// The git archive is still path, could be caused by an old source install
+    GitArchiveIsPath,
+    /// The git commit hash is different from the locked version
+    GitCommitsMismatch {
+        installed_commit: String,
+        locked_commit: String,
+    },
+    /// Unable to parse the installed git url
+    UnableToParseGitUrl { url: String },
+    /// Unable to get the installed dist metadata, something is definitely broken
+    UnableToGetInstalledDistMetadata,
+    /// The requires-python is different than the installed version
+    RequiredPythonChanged {
+        installed_python_version: uv_pep440::VersionSpecifiers,
+        locked_python_version: uv_pep440::Version,
+    },
+    /// Re-installing because of an installer mismatch, but we are managing the package
+    InstallerMismatch { previous_installer: String },
+}
+
+impl std::fmt::Display for NeedReinstall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NeedReinstall::VersionMismatch {
+                installed_version,
+                locked_version,
+            } => write!(
+                f,
+                "Installed version {} does not match locked version {}",
+                installed_version, locked_version
+            ),
+            NeedReinstall::MissingDirectUrl => write!(f, "Missing direct_url.json"),
+            NeedReinstall::SourceDirectoryNewerThanCache => {
+                write!(f, "Source directory is newer than the cache")
+            }
+            NeedReinstall::UnableToParseFileUrl { url } => {
+                write!(f, "Unable to parse file url: {}", url)
+            }
+            NeedReinstall::EditableStatusChanged { is_now_editable } => {
+                write!(
+                    f,
+                    "Editable status changed, editable status is: {}",
+                    is_now_editable
+                )
+            }
+            NeedReinstall::UnableToParseInstalledDistUrl { url } => {
+                write!(f, "Unable to parse installed dist url: {}", url)
+            }
+            NeedReinstall::ArchiveDistNewerThanCache => {
+                write!(f, "Archive dist is newer than the cache")
+            }
+            NeedReinstall::GitArchiveIsPath => write!(f, "Git archive is a path"),
+            NeedReinstall::GitCommitsMismatch {
+                installed_commit,
+                locked_commit,
+            } => write!(
+                f,
+                "Git commits mismatch, installed commit: {}, locked commit: {}",
+                installed_commit, locked_commit
+            ),
+            NeedReinstall::UnableToParseGitUrl { url } => {
+                write!(f, "Unable to parse git url: {}", url)
+            }
+            NeedReinstall::UnableToGetInstalledDistMetadata => {
+                write!(f, "Unable to get installed dist metadata")
+            }
+            NeedReinstall::RequiredPythonChanged {
+                installed_python_version,
+                locked_python_version,
+            } => {
+                write!(
+                    f,
+                    "Installed requires-python {} does not contain locked python version {}",
+                    installed_python_version, locked_python_version
+                )
+            }
+            NeedReinstall::InstallerMismatch { previous_installer } => {
+                write!(
+                    f,
+                    "Installer mismatch, previous installer: {}",
+                    previous_installer
+                )
+            }
+        }
+    }
+}
+
+enum ValidateCurrentInstall {
+    /// Keep this package
+    Keep,
+    /// Reinstall this package
+    Reinstall(NeedReinstall),
+}
+
 /// Check if a package needs to be reinstalled
 fn need_reinstall(
     installed: &InstalledDist,
     locked: &PypiPackageData,
     python_version: &Version,
-) -> miette::Result<ValidateInstall> {
+) -> miette::Result<ValidateCurrentInstall> {
     // Check if the installed version is the same as the required version
     match installed {
         InstalledDist::Registry(reg) => {
             let specifier = to_uv_version(&locked.version).into_diagnostic()?;
 
             if reg.version != specifier {
-                tracing::debug!(
-                    "Installed version {} does not match locked version {}",
-                    reg.version,
-                    specifier
-                );
-                return Ok(ValidateInstall::Reinstall);
+                return Ok(ValidateCurrentInstall::Reinstall(
+                    NeedReinstall::VersionMismatch {
+                        installed_version: reg.version.clone(),
+                        locked_version: locked.version.clone(),
+                    },
+                ));
             }
         }
 
@@ -341,19 +454,14 @@ fn need_reinstall(
             let direct_url_json = match InstalledDist::direct_url(&direct_url.path) {
                 Ok(Some(direct_url)) => direct_url,
                 Ok(None) => {
-                    tracing::warn!(
-                        "could not find direct_url.json in {}",
-                        direct_url.path.display()
-                    );
-                    return Ok(ValidateInstall::Reinstall);
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::MissingDirectUrl,
+                    ));
                 }
-                Err(err) => {
-                    tracing::warn!(
-                        "could not read direct_url.json in {}: {}",
-                        direct_url.path.display(),
-                        err
-                    );
-                    return Ok(ValidateInstall::Reinstall);
+                Err(_) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::MissingDirectUrl,
+                    ));
                 }
             };
 
@@ -367,18 +475,25 @@ fn need_reinstall(
                             if Some(&url) == locked.location.as_url() {
                                 // Check cache freshness
                                 if !check_url_freshness(&url, installed)? {
-                                    return Ok(ValidateInstall::Reinstall);
+                                    return Ok(ValidateCurrentInstall::Reinstall(
+                                        NeedReinstall::SourceDirectoryNewerThanCache,
+                                    ));
                                 }
                             }
                         }
                         Err(_) => {
-                            tracing::warn!("could not parse file url: {}", url);
-                            return Ok(ValidateInstall::Reinstall);
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::UnableToParseFileUrl { url },
+                            ));
                         }
                     }
                     // If editable status changed also re-install
                     if dir_info.editable.unwrap_or_default() != locked.editable {
-                        return Ok(ValidateInstall::Reinstall);
+                        return Ok(ValidateCurrentInstall::Reinstall(
+                            NeedReinstall::EditableStatusChanged {
+                                is_now_editable: dir_info.editable.unwrap_or_default(),
+                            },
+                        ));
                     }
                 }
                 uv_pypi_types::DirectUrl::ArchiveUrl {
@@ -392,7 +507,11 @@ fn need_reinstall(
                         // Remove `direct+` scheme if it is there so we can compare the required to
                         // the installed url
                         UrlOrPath::Url(url) => strip_direct_scheme(url),
-                        UrlOrPath::Path(_path) => return Ok(ValidateInstall::Reinstall),
+                        UrlOrPath::Path(_path) => {
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::GitArchiveIsPath,
+                            ))
+                        }
                     };
 
                     // Try to parse both urls
@@ -402,17 +521,17 @@ fn need_reinstall(
                     let installed_url = if let Ok(installed_url) = installed_url {
                         installed_url
                     } else {
-                        tracing::warn!(
-                            "could not parse installed url: {}",
-                            installed_url.unwrap_err()
-                        );
-                        return Ok(ValidateInstall::Reinstall);
+                        return Ok(ValidateCurrentInstall::Reinstall(
+                            NeedReinstall::UnableToParseInstalledDistUrl { url },
+                        ));
                     };
 
                     if locked_url.as_ref() == &installed_url {
                         // Check cache freshness
                         if !check_url_freshness(&locked_url, installed)? {
-                            return Ok(ValidateInstall::Reinstall);
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::ArchiveDistNewerThanCache,
+                            ));
                         }
                     }
                 }
@@ -426,7 +545,9 @@ fn need_reinstall(
                         UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
                         UrlOrPath::Path(_path) => {
                             // Previously
-                            return Ok(ValidateInstall::Reinstall);
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::GitArchiveIsPath,
+                            ));
                         }
                     };
                     match git_url {
@@ -437,41 +558,74 @@ fn need_reinstall(
                                 // Use the uv git url to get the sha
                                 || vcs_info.commit_id != git.url.precise().map(|p| p.to_string())
                             {
-                                return Ok(ValidateInstall::Reinstall);
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::GitCommitsMismatch {
+                                        installed_commit: vcs_info.commit_id.unwrap_or_default(),
+                                        locked_commit: git
+                                            .url
+                                            .precise()
+                                            .map(|p| p.to_string())
+                                            .unwrap_or_default(),
+                                    },
+                                ));
                             }
                         }
-                        Err(err) => {
-                            tracing::error!("could not parse git url: {}", err);
-                            return Ok(ValidateInstall::Reinstall);
+                        Err(_) => {
+                            return Ok(ValidateCurrentInstall::Reinstall(
+                                NeedReinstall::UnableToParseGitUrl {
+                                    url: url.to_string(),
+                                },
+                            ));
                         }
                     }
                 }
             }
         }
         // Figure out what to do with these
-        InstalledDist::EggInfoFile(_) => {}
-        InstalledDist::EggInfoDirectory(_) => {}
-        InstalledDist::LegacyEditable(_) => {}
+        InstalledDist::EggInfoFile(installed_egg) => {
+            tracing::warn!(
+                "egg-info files are not supported yet, skipping: {}",
+                installed_egg.name
+            );
+        }
+        InstalledDist::EggInfoDirectory(installed_egg_dir) => {
+            tracing::warn!(
+                "egg-info directories are not supported yet, skipping: {}",
+                installed_egg_dir.name
+            );
+        }
+        InstalledDist::LegacyEditable(egg_link) => {
+            tracing::warn!(
+                ".egg-link pointers are not supported yet, skipping: {}",
+                egg_link.name
+            );
+        }
     };
 
     // Do some extra checks if the version is the same
     let metadata = if let Ok(metadata) = installed.metadata() {
         metadata
     } else {
-        tracing::warn!("could not get metadata for {}", installed.name());
         // Can't be sure lets reinstall
-        return Ok(ValidateInstall::Reinstall);
+        return Ok(ValidateCurrentInstall::Reinstall(
+            NeedReinstall::UnableToGetInstalledDistMetadata,
+        ));
     };
 
     if let Some(requires_python) = metadata.requires_python {
         // If the installed package requires a different python version
         let uv_version = to_uv_version(python_version).into_diagnostic()?;
         if !requires_python.contains(&uv_version) {
-            return Ok(ValidateInstall::Reinstall);
+            return Ok(ValidateCurrentInstall::Reinstall(
+                NeedReinstall::RequiredPythonChanged {
+                    installed_python_version: requires_python,
+                    locked_python_version: uv_version,
+                },
+            ));
         }
     }
 
-    Ok(ValidateInstall::Keep)
+    Ok(ValidateCurrentInstall::Keep)
 }
 
 /// Figure out what we can link from the cache locally
@@ -495,14 +649,9 @@ fn whats_the_plan<'a>(
     // i.e. need to be removed before being installed
     let mut reinstalls = vec![];
 
-    let mut installer_mismatch = vec![];
-
-    // Used to verify if there are any additional .dist-info installed
-    // that should be removed
-    let required_map_copy = required_pkgs.clone();
-
-    let mut removed_keys: HashSet<uv_normalize::PackageName> =
-        required_pkgs.keys().cloned().collect();
+    // Will contain the packages that have been previously installed
+    // and a decision has been made what to do with them
+    let mut prev_installed_packages = HashSet::new();
 
     // Walk over all installed packages and check if they are required
     for dist in site_packages.iter() {
@@ -514,74 +663,94 @@ fn whats_the_plan<'a>(
             // Empty string if no installer or any other error
             .map_or(String::new(), |f| f.unwrap_or_default());
 
-        if required_map_copy.contains_key(dist.name()) && installer != consts::PIXI_UV_INSTALLER {
-            // We are managing the package but something else has installed a version
-            // let's re-install to make sure that we have the **correct** version
-            reinstalls.push(dist.clone());
-            installer_mismatch.push(dist.name().to_string());
-        }
-
-        if let Some(pkg) = pkg {
-            // TODO: previously we removed the name from required_pkgs
-            // now we are checking it here
-            if removed_keys.contains(dist.name()) {
-                removed_keys.remove(dist.name());
-            } else {
-                continue;
-            }
-
-            if installer == consts::PIXI_UV_INSTALLER {
-                // Check if we need to reinstall
-                match need_reinstall(dist, pkg, python_version)? {
-                    ValidateInstall::Keep => {
-                        // We are done here
-                        continue;
-                    }
-                    ValidateInstall::Reinstall => {
-                        reinstalls.push(dist.clone());
+        match pkg {
+            Some(pkg) => {
+                // Add to the list of previously installed packages
+                prev_installed_packages.insert(dist.name());
+                // Check if we need this package installed but it is not currently installed by us
+                if installer != consts::PIXI_UV_INSTALLER {
+                    // We are managing the package but something else has installed a version
+                    // let's re-install to make sure that we have the **correct** version
+                    reinstalls.push((
+                        dist.clone(),
+                        NeedReinstall::InstallerMismatch {
+                            previous_installer: installer.clone(),
+                        },
+                    ));
+                } else {
+                    // Check if we need to reinstall
+                    match need_reinstall(dist, pkg, python_version)? {
+                        ValidateCurrentInstall::Keep => {
+                            // No need to reinstall
+                            // Remove from the required map
+                            continue;
+                        }
+                        ValidateCurrentInstall::Reinstall(reason) => {
+                            reinstalls.push((dist.clone(), reason));
+                        }
                     }
                 }
+
+                // Okay so we need to re-install the package
+                // let's see if we need the remote or local version
+
+                // First, check if we need to revalidate the package
+                // then we should get it from the remote
+                if uv_cache.must_revalidate(dist.name()) {
+                    remote.push((
+                        convert_to_dist(pkg, lock_file_dir).into_diagnostic()?,
+                        InstallReason::ReinstallStaleLocal,
+                    ));
+                    continue;
+                }
+                let uv_version = to_uv_version(&pkg.version).into_diagnostic()?;
+                // If it is not stale its either in the registry cache or not
+                let wheel = registry_index
+                    .get(dist.name())
+                    .find(|entry| entry.dist.filename.version == uv_version);
+
+                // If we have it in the cache we can use that
+                if let Some(cached) = wheel {
+                    let entire_cloned = cached.clone();
+                    local.push((
+                        CachedDist::Registry(entire_cloned.dist.clone()),
+                        InstallReason::ReinstallCached,
+                    ));
+                // If we don't have it in the cache we need to download it
+                } else {
+                    remote.push((
+                        convert_to_dist(pkg, lock_file_dir).into_diagnostic()?,
+                        InstallReason::ReinstallMissing,
+                    ));
+                }
             }
-
-            // Okay so we need to re-install the package
-            // let's see if we need the remote or local version
-
-            // Check if we need to revalidate the package
-            // then we should get it from the remote
-            if uv_cache.must_revalidate(dist.name()) {
-                remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
+            // Second case we are not managing the package
+            None if installer != consts::PIXI_UV_INSTALLER => {
+                // Ignore packages that we are not managed by us
                 continue;
             }
-
-            let uv_version = to_uv_version(&pkg.version).into_diagnostic()?;
-
-            // Have we cached the wheel?
-            let wheel = registry_index
-                .get(dist.name())
-                .find(|entry| entry.dist.filename.version == uv_version);
-
-            if let Some(cached) = wheel {
-                let entire_cloned = cached.clone();
-                local.push(CachedDist::Registry(entire_cloned.dist.clone()));
-            } else {
-                remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
+            // Third case we *are* managing the package but it is no longer required
+            None => {
+                // Add to the extraneous list
+                // as we do manage it but have no need for it
+                extraneous.push(dist.clone());
             }
-        } else if installer != consts::PIXI_UV_INSTALLER {
-            // Ignore packages that we are not managed by us
-            continue;
-        } else {
-            // Add to the extraneous list
-            // as we do manage it but have no need for it
-            extraneous.push(dist.clone());
         }
     }
 
     // Now we need to check if we have any packages left in the required_map
-    for (name, pkg) in required_pkgs.iter() {
+    for (name, pkg) in required_pkgs
+        .iter()
+        // Only check the packages that have not been previously installed
+        .filter(|(name, _)| !prev_installed_packages.contains(name))
+    {
         // Check if we need to revalidate
         // In that case we need to download from the registry
         if uv_cache.must_revalidate(name) {
-            remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
+            remote.push((
+                convert_to_dist(pkg, lock_file_dir).into_diagnostic()?,
+                InstallReason::InstallStaleLocal,
+            ));
             continue;
         }
 
@@ -594,10 +763,16 @@ fn whats_the_plan<'a>(
             .cloned();
         if let Some(cached) = wheel {
             // Sure we have it in the cache, lets use that
-            local.push(CachedDist::Registry(cached.dist));
+            local.push((
+                CachedDist::Registry(cached.dist),
+                InstallReason::InstallCached,
+            ));
         } else {
             // We need to download from the registry or any url
-            remote.push(convert_to_dist(pkg, lock_file_dir).into_diagnostic()?);
+            remote.push((
+                convert_to_dist(pkg, lock_file_dir).into_diagnostic()?,
+                InstallReason::InstallMissing,
+            ));
         }
     }
 
@@ -606,7 +781,6 @@ fn whats_the_plan<'a>(
         remote,
         reinstalls,
         extraneous,
-        installer_mismatch,
     })
 }
 
@@ -670,14 +844,20 @@ pub async fn update_python_distributions(
     let in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
+    // Setup the interpreter from the conda prefix
     let python_location = prefix.root().join(python_interpreter_path);
     let interpreter = Interpreter::query(&python_location, &uv_context.cache).into_diagnostic()?;
+    tracing::debug!(
+        "installing with python interpreter: {} from {}",
+        interpreter.key(),
+        interpreter.sys_prefix().display()
+    );
 
-    tracing::debug!("using Python Interpreter: {:?}", interpreter);
-    // Create a custom venv
+    // Create a Python environment
     let venv = PythonEnvironment::from_interpreter(interpreter);
     let non_isolated_packages =
         isolated_names_to_packages(non_isolated_packages.as_deref()).into_diagnostic()?;
+    // Determine if we need to build any packages in isolation
     let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &venv);
 
     let git_resolver = GitResolver::default();
@@ -707,6 +887,7 @@ pub async fn update_python_distributions(
         uv_context.source_strategy,
         uv_context.concurrency,
     )
+    // ! Important this passes any CONDA activation to the uv build process
     .with_build_extra_env_vars(environment_variables.iter());
 
     let _lock = venv
@@ -731,6 +912,8 @@ pub async fn update_python_distributions(
         &index_locations,
         &HashStrategy::None,
     );
+
+    // Create a map of the required packages
     let required_map: std::collections::HashMap<uv_normalize::PackageName, &PypiPackageData> =
         python_packages
             .iter()
@@ -741,7 +924,6 @@ pub async fn update_python_distributions(
             })
             .collect();
 
-    tracing::debug!("Figuring out what to install/reinstall/remove");
     // Partition into those that should be linked from the cache (`local`), those
     // that need to be downloaded (`remote`), and those that should be removed
     // (`extraneous`).
@@ -750,7 +932,6 @@ pub async fn update_python_distributions(
         remote,
         reinstalls,
         extraneous,
-        mut installer_mismatch,
     } = whats_the_plan(
         &mut site_packages,
         registry_index,
@@ -774,52 +955,89 @@ pub async fn update_python_distributions(
 
     let pypi_conda_clobber = PypiCondaClobberRegistry::with_conda_packages(&installed_packages);
 
+    // Show totals
+    let total_to_install = local.len() + remote.len();
+    let total_required = required_map.len();
+    tracing::info!(
+        "{} of {} required packages are considered are installed and up-to-date",
+        total_required - total_to_install,
+        total_required
+    );
     // Nothing to do.
     if remote.is_empty() && local.is_empty() && reinstalls.is_empty() && extraneous.is_empty() {
-        let s = if python_packages.len() == 1 { "" } else { "s" };
         tracing::info!(
             "{}",
-            format!(
-                "Nothing to do - Audited {} in {}",
-                format!(
-                    "{num_requirements} distribution{s}",
-                    num_requirements = python_packages.len()
-                ),
-                elapsed(start.elapsed())
-            )
+            format!("Nothing to do - finished in {}", elapsed(start.elapsed()))
         );
         return Ok(());
     }
 
-    // Some info logging
-    // List all package names that are going to be installed, re-installed and
-    // removed
-    tracing::info!(
-        "resolved install plan: local={}, remote={}, reinstalls={}, extraneous={}",
-        local.len(),
-        remote.len(),
-        reinstalls.len(),
-        extraneous.len()
-    );
-    let to_install = local
-        .iter()
-        .map(|d| d.name().to_string())
-        .chain(remote.iter().map(|d| d.name().to_string()))
-        .collect::<Vec<String>>();
+    // Installation and re-installation have needed a lot of debugging in the past
+    // That's why we do a bit more extensive logging here
+    // This is a bit verbose but it is very helpful when debugging
+    // Not enable `-vv` to get the full debug output for reinstallation
+    let mut install_cached = vec![];
+    let mut install_stale = vec![];
+    let mut install_missing = vec![];
 
-    let reinstall = reinstalls
-        .iter()
-        .map(|d| d.name().to_string())
-        .collect::<Vec<String>>();
+    // Filter out the re-installs, mostly these are less interesting than the actual re-install reasons
+    // do show the installs
+    for (dist, reason) in local.iter() {
+        match reason {
+            InstallReason::InstallStaleLocal => install_stale.push(dist.name().to_string()),
+            InstallReason::InstallMissing => install_missing.push(dist.name().to_string()),
+            InstallReason::InstallCached => install_cached.push(dist.name().to_string()),
+            _ => {}
+        }
+    }
+    for (dist, reason) in remote.iter() {
+        match reason {
+            InstallReason::InstallStaleLocal => install_stale.push(dist.name().to_string()),
+            InstallReason::InstallMissing => install_missing.push(dist.name().to_string()),
+            InstallReason::InstallCached => install_cached.push(dist.name().to_string()),
+            _ => {}
+        }
+    }
 
-    let remove = extraneous
-        .iter()
-        .map(|d| d.name().to_string())
-        .collect::<Vec<String>>();
+    if !install_missing.is_empty() {
+        tracing::info!(
+            "*installing* from remote because no version is cached: {}",
+            install_missing.iter().join(", ")
+        );
+    }
+    if !install_stale.is_empty() {
+        tracing::info!(
+            "*installing* from remote because local version is stale: {}",
+            install_stale.iter().join(", ")
+        );
+    }
+    if !install_cached.is_empty() {
+        tracing::info!(
+            "*installing* cached version because cache is up-to-date: {}",
+            install_cached.iter().join(", ")
+        );
+    }
 
-    tracing::info!("Install: {to_install:?}");
-    tracing::info!("Re-install: {reinstall:?}");
-    tracing::info!("Remove: {remove:?}");
+    if !reinstalls.is_empty() {
+        tracing::info!(
+            "*re-installing* following packages: {}",
+            reinstalls.iter().map(|(d, _)| d.name()).join(", ")
+        );
+        // List all re-install reasons
+        for (dist, reason) in &reinstalls {
+            // Only log the re-install reason if it is not an installer mismatch
+            if !matches!(reason, NeedReinstall::InstallerMismatch { .. }) {
+                tracing::debug!("re-installing {} because: {}", dist.name(), reason);
+            }
+        }
+    }
+    if !extraneous.is_empty() {
+        // List all packages that will be removed
+        tracing::info!(
+            "*removing* following packages: {}",
+            extraneous.iter().map(|d| d.name()).join(", ")
+        );
+    }
 
     // Download, build, and unzip any missing distributions.
     let wheels = if remote.is_empty() {
@@ -830,7 +1048,7 @@ pub async fn update_python_distributions(
         let options = UvReporterOptions::new()
             .with_length(remote.len() as u64)
             .with_capacity(remote.len() + 30)
-            .with_starting_tasks(remote.iter().map(|d| format!("{}", d.name())))
+            .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
         let distribution_database = DistributionDatabase::new(
@@ -856,7 +1074,10 @@ pub async fn update_python_distributions(
         .with_reporter(UvReporter::new(options));
 
         let wheels = preparer
-            .prepare(remote.clone(), &uv_context.in_flight)
+            .prepare(
+                remote.iter().map(|(d, _)| d.clone()).collect(),
+                &uv_context.in_flight,
+            )
             .await
             .into_diagnostic()
             .context("Failed to prepare distributions")?;
@@ -878,7 +1099,7 @@ pub async fn update_python_distributions(
     if !extraneous.is_empty() || !reinstalls.is_empty() {
         let start = std::time::Instant::now();
 
-        for dist_info in extraneous.iter().chain(reinstalls.iter()) {
+        for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
             let summary = match uv_installer::uninstall(dist_info).await {
                 Ok(sum) => sum,
                 // Get error types from uv_installer
@@ -932,7 +1153,21 @@ pub async fn update_python_distributions(
     }
 
     // Install the resolved distributions.
-    let wheels = wheels.into_iter().chain(local).collect::<Vec<_>>();
+    let local_iter = local.iter().map(|(d, _)| d.clone());
+    let wheels = wheels.into_iter().chain(local_iter).collect::<Vec<_>>();
+
+    // Figure what wheels needed to be re-installed because of an installer mismatch
+    // we want to handle these somewhat differently and warn the user about them
+    let mut installer_mismatch = reinstalls
+        .iter()
+        .filter_map(|(d, reason)| {
+            if matches!(reason, NeedReinstall::InstallerMismatch { .. }) {
+                Some(d.name().to_string())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
 
     // Verify if pypi wheels will override existing conda packages
     // and warn if they are
@@ -958,7 +1193,7 @@ pub async fn update_python_distributions(
             .map(|name| name.to_string())
             .join(", ");
         // BREAK(0.20.1): change this into a warning in a future release
-        tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: \n\t{packages}")
+        tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: {packages}")
     }
 
     let options = UvReporterOptions::new()

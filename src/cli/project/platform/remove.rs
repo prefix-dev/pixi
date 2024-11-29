@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::lock_file::UpdateMode;
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    Project,
+    Project, UpdateLockFileOptions,
 };
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -46,9 +46,12 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
 
     get_update_lock_file_and_prefix(
         &project.default_environment(),
-        LockFileUsage::Update,
-        args.no_install,
         UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install: args.no_install,
+            max_concurrent_solves: project.config().max_concurrent_solves(),
+        },
     )
     .await?;
     project.save()?;

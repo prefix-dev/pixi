@@ -520,7 +520,12 @@ impl Project {
         // Determine virtual packages of the current platform
         let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
             .into_diagnostic()
-            .context("failed to determine virtual packages")?
+            .wrap_err_with(|| {
+                miette::miette!(
+                    "Failed to determine virtual packages for environment {}",
+                    env_name.fancy_display()
+                )
+            })?
             .iter()
             .cloned()
             .map(GenericVirtualPackage::from)
@@ -540,7 +545,12 @@ impl Project {
                 },
             )
             .into_diagnostic()
-            .context("failed to solve environment")
+            .wrap_err_with(|| {
+                miette::miette!(
+                    "Failed to determine virtual packages for environment {}",
+                    cloned_env_name.fancy_display()
+                )
+            })
         })
         .await
         .into_diagnostic()??;
@@ -899,28 +909,8 @@ impl Project {
         Ok(state_changes)
     }
 
-    // Syncs the manifest with the local environments
-    // Returns true if the global installation had to be updated
-    pub(crate) async fn sync(&self) -> Result<StateChanges, miette::Error> {
-        let mut state_changes = StateChanges::default();
-
-        // Prune environments that are not listed
-        state_changes |= self.prune_old_environments().await?;
-
-        // Remove broken files
-        if let Err(err) = self.remove_broken_files().await {
-            tracing::warn!("Couldn't remove broken files: {err}")
-        }
-
-        for env_name in self.environments().keys() {
-            state_changes |= self.sync_environment(env_name, None).await?;
-        }
-
-        Ok(state_changes)
-    }
-
     /// Syncs the parsed environment with the installation.
-    /// Returns true if the environment had to be updated.
+    /// Returns the state_changes if it succeeded, or an error if it didn't.
     pub(crate) async fn sync_environment(
         &self,
         env_name: &EnvironmentName,
@@ -969,12 +959,12 @@ impl Project {
                 match Configuration::from_root_path(root_path, &exposed_name).await {
                     Ok(_) => (),
                     Err(ConfigurationParseError::ReadError(config_path, err)) => {
-                        tracing::warn!("Couldn't read {}: {err}", config_path.display());
+                        tracing::warn!("Couldn't read {}\n{err:?}", config_path.display());
                         tracing::warn!("Removing the trampoline at {}", path.display());
                         tokio_fs::remove_file(path).await.into_diagnostic()?;
                     }
                     Err(ConfigurationParseError::ParseError(config_path, err)) => {
-                        tracing::warn!("Couldn't parse {}: {err}", config_path.display());
+                        tracing::warn!("Couldn't parse {}\n{err:?}", config_path.display());
                         tracing::warn!(
                             "Removing the trampoline at {} and configuration at {}",
                             path.display(),
@@ -1058,6 +1048,7 @@ impl Repodata for Project {
             Self::repodata_gateway_init(
                 self.authenticated_client().clone(),
                 self.config().clone().into(),
+                self.config().max_concurrent_downloads(),
             )
         })
     }

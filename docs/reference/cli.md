@@ -84,6 +84,8 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
 - `--editable`: Specifies an editable dependency; only used in combination with `--pypi`.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi add numpy # (1)!
@@ -154,6 +156,8 @@ E.g. `pixi run`, `pixi shell`, `pixi shell-hook`, `pixi add`, `pixi remove` to n
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided the default environment will be used.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi install
@@ -180,6 +184,8 @@ It will only update the lock file if the dependencies in the [manifest file](pro
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
 - `--json`: Output the changes in json format.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi update numpy
@@ -209,6 +215,8 @@ The `upgrade` command checks if there are newer versions of the dependencies and
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
 - `--json`: Output the changes in json format.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the manifest, lock file, or environment.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi upgrade
@@ -252,6 +260,8 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON `Windows`.
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking the lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi run python
@@ -318,9 +328,11 @@ Temporary environments are cached. If the same command is run again, the same en
 1. `<COMMAND>`: The command to run.
 
 #### Options:
-* `--spec <SPECS> (-s)`: Matchspecs of packages to install. If this is not provided, the package is guessed from the command.
-* `--channel <CHANNELS> (-c)`: The channel to install the packages from. If not specified the default channel is used.
-* `--force-reinstall` If specified a new environment is always created even if one already exists.
+- `--spec <SPECS> (-s)`: Matchspecs of packages to install. If this is not provided, the package is guessed from the command.
+- `--channel <CHANNELS> (-c)`: The channel to install the packages from. If not specified the default channel is used.
+- `--force-reinstall` If specified a new environment is always created even if one already exists.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi exec python
@@ -691,6 +703,8 @@ To exit the pixi shell, simply run `exit`.
 - `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi shell
@@ -721,6 +735,8 @@ This command prints the activation script of an environment.
   this option, `--shell` is ignored.
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi shell-hook
