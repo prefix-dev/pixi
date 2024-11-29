@@ -1367,6 +1367,7 @@ UNUSED = "unused"
             config.pypi_config().allow_insecure_host,
             vec!["https://localhost:1234", "*",]
         );
+    }
 
     fn test_default_config() {
         let config = Config::default();
