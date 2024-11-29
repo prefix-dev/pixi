@@ -128,7 +128,7 @@ impl TomlDocument {
     /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
     ///
     /// If the array is not found, it is inserted into the document.
-    pub fn get_or_insert_mut_toml_array<'a>(
+    pub fn get_or_insert_toml_array_mut<'a>(
         &'a mut self,
         table_name: &str,
         array_name: &str,

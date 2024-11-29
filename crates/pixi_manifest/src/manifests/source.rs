@@ -88,7 +88,7 @@ impl ManifestSource {
             .with_table(table);
 
         self.manifest_mut()
-            .get_or_insert_mut_toml_array(table_name.to_string().as_str(), array_name)
+            .get_or_insert_toml_array_mut(table_name.to_string().as_str(), array_name)
     }
 
     fn as_table_mut(&mut self) -> &mut Table {
@@ -276,7 +276,7 @@ impl ManifestSource {
             |source: &mut ManifestSource, table, array| -> Result<(), TomlError> {
                 source
                     .manifest_mut()
-                    .get_or_insert_mut_toml_array(table, array)?
+                    .get_or_insert_toml_array_mut(table, array)?
                     .push(requirement.to_string());
                 Ok(())
             };
