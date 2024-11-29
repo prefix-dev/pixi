@@ -402,7 +402,7 @@ fn need_reinstall(
 
     if let Some(requires_python) = metadata.requires_python {
         // If the installed package requires a different python version
-        if !requires_python.contains(&python_version) {
+        if !requires_python.contains(python_version) {
             return Ok(ValidateCurrentInstall::Reinstall(
                 NeedReinstall::RequiredPythonChanged {
                     installed_python_version: requires_python,
@@ -451,11 +451,7 @@ impl<'a> CachedDistProvider<'a> for RegistryWheelIndex<'a> {
         let index = self
             .get(name)
             .find(|entry| entry.dist.filename.version == version);
-        if let Some(index) = index {
-            Some(index.dist.clone())
-        } else {
-            None
-        }
+        index.map(|index| index.dist.clone())
     }
 }
 
