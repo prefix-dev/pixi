@@ -1,0 +1,88 @@
+name: MacOS Codesigning
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  codesign:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up temporary keychain
+      id: keychain
+      run: |
+        # Generate random password
+        KEYCHAIN_PASSWORD=$(uuidgen)
+        KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+
+        echo "Creating keychain at $KEYCHAIN_PATH"
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+        echo "Configuring keychain timeout"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+
+        echo "Unlocking keychain"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+        echo "Setting as default keychain"
+        security default-keychain -s "$KEYCHAIN_PATH"
+
+        echo "keychain_path=$KEYCHAIN_PATH" >> $GITHUB_OUTPUT
+        echo "keychain_password=$KEYCHAIN_PASSWORD" >> $GITHUB_OUTPUT
+
+    - name: Import certificate
+      env:
+        CERTIFICATE_BASE64: ${{ secrets.CODESIGN_CERTIFICATE }}
+        CERTIFICATE_PASSWORD: ${{ secrets.CODESIGN_CERTIFICATE_PASSWORD }}
+        KEYCHAIN_PATH: ${{ steps.keychain.outputs.keychain_path }}
+        KEYCHAIN_PASSWORD: ${{ steps.keychain.outputs.keychain_password }}
+      run: |
+        echo "Decoding certificate"
+        CERTIFICATE_PATH="$RUNNER_TEMP/cert.p12"
+        echo "$CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
+
+        echo "Importing certificate to keychain"
+        security import "$CERTIFICATE_PATH" \
+          -k "$KEYCHAIN_PATH" \
+          -P "$CERTIFICATE_PASSWORD" \
+          -t cert \
+          -f pkcs12 \
+          -A \
+          -T /usr/bin/codesign \
+          -T /usr/bin/security \
+          -T /usr/bin/productsign
+
+        echo "Configuring certificate for signing"
+        security set-key-partition-list \
+          -S "apple-tool:,apple:,codesign:" \
+          -k "$KEYCHAIN_PASSWORD" \
+          "$KEYCHAIN_PATH"
+
+        rm "$CERTIFICATE_PATH"
+
+    - name: Sign binary
+      env:
+        CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+        KEYCHAIN_PATH: ${{ steps.keychain.outputs.keychain_path }}
+      run: |
+        # Replace this path with your actual binary path
+        BINARY_PATH="/bin/bash"
+
+        echo "Signing binary at $BINARY_PATH"
+        codesign --sign "$CODESIGN_IDENTITY" \
+          --keychain "$KEYCHAIN_PATH" \
+          --verbose \
+          --force \
+          "$BINARY_PATH"
+
+        echo "Verifying signature"
+        codesign -v "$BINARY_PATH"
+
+    - name: Cleanup keychain
+      if: always()
+      run: |
+        security delete-keychain "${{ steps.keychain.outputs.keychain_path }}"
