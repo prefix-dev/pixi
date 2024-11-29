@@ -191,6 +191,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )),
             _ => None,
         })
+        .map(|(name, req)| {
+            let location = project.manifest.document.pypi_dependency_location(
+                &name,
+                None,
+                &args.specs.feature,
+            );
+            (name, (req, location))
+        })
         .collect();
 
     let update_deps = project
@@ -201,7 +209,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &args.specs.feature,
             &[],
             false,
-            &None,
             args.dry_run,
         )
         .await?;

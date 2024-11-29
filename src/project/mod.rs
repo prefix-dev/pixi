@@ -661,12 +661,11 @@ impl Project {
     pub async fn update_dependencies(
         &mut self,
         match_specs: IndexMap<PackageName, (MatchSpec, SpecType)>,
-        pypi_deps: IndexMap<PyPiPackageName, Requirement>,
+        pypi_deps: IndexMap<PyPiPackageName, (Requirement, Option<PypiDependencyLocation>)>,
         prefix_update_config: &PrefixUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
-        location: &Option<PypiDependencyLocation>,
         dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
@@ -691,18 +690,18 @@ impl Project {
             }
         }
 
-        for (name, spec) in pypi_deps {
+        for (name, (spec, location)) in pypi_deps {
             let added = self.manifest.add_pep508_dependency(
                 &spec,
                 platforms,
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
-                location,
+                &location,
             )?;
             if added {
                 if spec.version_or_url.is_none() {
-                    pypi_specs_to_add_constraints_for.insert(name.clone(), spec);
+                    pypi_specs_to_add_constraints_for.insert(name.clone(), (spec, location));
                 }
                 pypi_packages.insert(name.as_normalized().clone());
             }
@@ -793,7 +792,6 @@ impl Project {
                 feature_name,
                 platforms,
                 editable,
-                location,
             )?;
             implicit_constraints.extend(pypi_constraints);
         }
@@ -931,16 +929,17 @@ impl Project {
 
     /// Update the pypi specs of newly added packages based on the contents of
     /// the updated lock-file.
-    #[allow(clippy::too_many_arguments)]
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
-        pypi_specs_to_add_constraints_for: IndexMap<PyPiPackageName, Requirement>,
+        pypi_specs_to_add_constraints_for: IndexMap<
+            PyPiPackageName,
+            (Requirement, Option<PypiDependencyLocation>),
+        >,
         affect_environment_and_platforms: Vec<(String, Platform)>,
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
-        location: &Option<PypiDependencyLocation>,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -962,7 +961,7 @@ impl Project {
         let pinning_strategy = self.config().pinning_strategy.unwrap_or_default();
 
         // Determine the versions of the packages in the lock-file
-        for (name, req) in pypi_specs_to_add_constraints_for {
+        for (name, (req, location)) in pypi_specs_to_add_constraints_for {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records
                     .iter()
@@ -991,7 +990,7 @@ impl Project {
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
-                    location,
+                    &location,
                 )?;
             }
         }

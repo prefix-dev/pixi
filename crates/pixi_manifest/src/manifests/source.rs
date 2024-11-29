@@ -294,12 +294,31 @@ impl ManifestSource {
         Ok(())
     }
 
+    /// Determines the location of a PyPi dependency within the manifest.
+    ///
+    /// This method checks various sections of the manifest to locate the specified
+    /// PyPi dependency. It searches in the following order:
+    /// 1. `pypi-dependencies` table in the manifest.
+    /// 2. `project.dependencies` array in the manifest.
+    /// 3. `project.optional-dependencies` array in the manifest.
+    /// 4. `dependency-groups` array in the manifest.
+    ///
+    /// # Arguments
+    ///
+    /// * `dep` - The name of the PyPi package to locate.
+    /// * `platform` - An optional platform specification.
+    /// * `feature_name` - The name of the feature to which the dependency belongs.
+    ///
+    /// # Returns
+    ///
+    /// An `Option` containing the `PypiDependencyLocation` if the dependency is found,
+    /// or `None` if it is not found in any of the checked sections.
     pub fn pypi_dependency_location(
         &self,
-        dep: &PyPiPackageName,
+        package_name: &PyPiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-    ) -> PypiDependencyLocation {
+    ) -> Option<PypiDependencyLocation> {
         // For both 'pyproject.toml' and 'pixi.toml' manifest,
         // try and to get `pypi-dependency`
         let table_name = TableName::new()
@@ -314,10 +333,10 @@ impl ManifestSource {
             .ok();
 
         if pypi_dependency_table
-            .and_then(|table| table.get(dep.as_source()))
+            .and_then(|table| table.get(package_name.as_source()))
             .is_some()
         {
-            return PypiDependencyLocation::PixiPypiDependencies;
+            return Some(PypiDependencyLocation::PixiPypiDependencies);
         }
 
         if self
@@ -325,7 +344,7 @@ impl ManifestSource {
             .get_toml_array("project", "dependencies")
             .is_ok()
         {
-            return PypiDependencyLocation::Dependencies;
+            return Some(PypiDependencyLocation::Dependencies);
         }
         let name = feature_name.to_string();
 
@@ -334,7 +353,7 @@ impl ManifestSource {
             .get_toml_array("project.optional-dependencies", &name)
             .is_ok()
         {
-            return PypiDependencyLocation::OptionalDependencies;
+            return Some(PypiDependencyLocation::OptionalDependencies);
         }
 
         if self
@@ -342,10 +361,10 @@ impl ManifestSource {
             .get_toml_array("dependency-groups", &name)
             .is_ok()
         {
-            return PypiDependencyLocation::DependencyGroups;
+            return Some(PypiDependencyLocation::DependencyGroups);
         }
 
-        todo!()
+        None
     }
 
     /// Removes a task from the TOML manifest
