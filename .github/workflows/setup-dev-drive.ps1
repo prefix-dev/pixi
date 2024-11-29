@@ -19,6 +19,7 @@ Write-Output `
 	"DEV_DRIVE=$($Drive)" `
 	"TMP=$($Tmp)" `
 	"TEMP=$($Tmp)" `
+	"RATTLER_CACHE_DIR=$($Drive)/rattler-cache" `
 	"RUSTUP_HOME=$($Drive)/.rustup" `
 	"CARGO_HOME=$($Drive)/.cargo" `
 	"PIXI_HOME=$($Drive)/.pixi" `
