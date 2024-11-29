@@ -35,6 +35,9 @@ pub enum InstallReason {
     InstallMissing,
 }
 
+/// This trait can be used to generalize over the different reason why a specific installation source was chosen
+/// So we can differentiate between re-installing and installing a package, this is all a bit verbose
+/// but can be quite useful for debugging and logging
 trait OperationToReason {
     /// This package is available in the local cache
     fn cached(&self) -> InstallReason;
@@ -596,7 +599,7 @@ impl InstallPlanner {
                         &mut local,
                         &mut remote,
                         &mut dist_cache,
-                        Install,
+                        Reinstall,
                     )?;
                 }
                 // Second case we are not managing the package
@@ -626,7 +629,7 @@ impl InstallPlanner {
                 &mut local,
                 &mut remote,
                 &mut dist_cache,
-                Reinstall,
+                Install,
             )?;
         }
 
