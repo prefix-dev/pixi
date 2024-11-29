@@ -15,7 +15,6 @@ use crate::{
 };
 
 const DEFAULT_BUILD_TOOL: &str = "pixi-build-rattler-build";
-const DEFAULT_CHANNEL: &str = "https://prefix.dev/pixi-build-backends";
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum FinishError {
