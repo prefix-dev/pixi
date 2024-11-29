@@ -1369,6 +1369,7 @@ UNUSED = "unused"
         );
     }
 
+    #[test]
     fn test_default_config() {
         let config = Config::default();
         // This depends on the system so it's hard to test.
