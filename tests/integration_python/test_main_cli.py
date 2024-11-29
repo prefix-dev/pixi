@@ -14,10 +14,10 @@ def test_pixi(pixi: Path) -> None:
 
 
 @pytest.mark.slow
-def test_project_commands(pixi: Path, tmp_path: Path) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+def test_project_commands(pixi: Path, wrapped_tmp: Path) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_path], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", wrapped_tmp], ExitCode.SUCCESS)
 
     # Channel commands
     verify_cli_command(
@@ -28,7 +28,7 @@ def test_project_commands(pixi: Path, tmp_path: Path) -> None:
             manifest_path,
             "channel",
             "add",
-            "bioconda",
+            "https://prefix.dev/bioconda",
         ],
         ExitCode.SUCCESS,
     )
@@ -45,7 +45,7 @@ def test_project_commands(pixi: Path, tmp_path: Path) -> None:
             manifest_path,
             "channel",
             "remove",
-            "bioconda",
+            "https://prefix.dev/bioconda",
         ],
         ExitCode.SUCCESS,
     )
@@ -168,9 +168,9 @@ def test_project_commands(pixi: Path, tmp_path: Path) -> None:
     )
 
 
-def test_broken_config(pixi: Path, tmp_path: Path) -> None:
-    env = {"PIXI_HOME": str(tmp_path)}
-    config = tmp_path.joinpath("config.toml")
+def test_broken_config(pixi: Path, wrapped_tmp: Path) -> None:
+    env = {"PIXI_HOME": str(wrapped_tmp)}
+    config = wrapped_tmp.joinpath("config.toml")
     toml = """
     [repodata-config."https://prefix.dev/"]
     disable-sharded = false
@@ -192,23 +192,18 @@ def test_broken_config(pixi: Path, tmp_path: Path) -> None:
 @pytest.mark.slow
 def test_search(pixi: Path) -> None:
     verify_cli_command(
-        [pixi, "search", "rattler-build", "-c", "conda-forge"],
-        ExitCode.SUCCESS,
-        stdout_contains="rattler-build",
-    )
-    verify_cli_command(
-        [pixi, "search", "rattler-build", "-c", "https://fast.prefix.dev/conda-forge"],
+        [pixi, "search", "rattler-build", "-c", "https://prefix.dev/conda-forge"],
         ExitCode.SUCCESS,
         stdout_contains="rattler-build",
     )
 
 
 @pytest.mark.slow
-def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
-    manifest_path = tmp_path / "pixi.toml"
-    conda_forge = "https://fast.prefix.dev/conda-forge"
+def test_simple_project_setup(pixi: Path, wrapped_tmp: Path) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
+    conda_forge = "https://prefix.dev/conda-forge"
     # Create a new project
-    verify_cli_command([pixi, "init", "-c", conda_forge, tmp_path], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", "-c", conda_forge, wrapped_tmp], ExitCode.SUCCESS)
 
     # Add package
     verify_cli_command(
@@ -308,21 +303,21 @@ def test_simple_project_setup(pixi: Path, tmp_path: Path) -> None:
 
 
 @pytest.mark.slow
-def test_pixi_init_pyproject(pixi: Path, tmp_path: Path) -> None:
-    manifest_path = tmp_path / "pyproject.toml"
+def test_pixi_init_pyproject(pixi: Path, wrapped_tmp: Path) -> None:
+    manifest_path = wrapped_tmp / "pyproject.toml"
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_path, "--format", "pyproject"], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", wrapped_tmp, "--format", "pyproject"], ExitCode.SUCCESS)
     # Verify that install works
     verify_cli_command([pixi, "install", "--manifest-path", manifest_path], ExitCode.SUCCESS)
 
 
 def test_upgrade_package_does_not_exist(
-    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
+    pixi: Path, wrapped_tmp: Path, multiple_versions_channel_1: str
 ) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+    manifest_path = wrapped_tmp / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, wrapped_tmp])
 
     # Add package
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package"])
@@ -346,12 +341,12 @@ def test_upgrade_package_does_not_exist(
 
 
 def test_upgrade_conda_package(
-    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
+    pixi: Path, wrapped_tmp: Path, multiple_versions_channel_1: str
 ) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+    manifest_path = wrapped_tmp / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, wrapped_tmp])
 
     # Add package pinned to version 0.1.0
     verify_cli_command(
@@ -382,11 +377,11 @@ def test_upgrade_conda_package(
     assert "build-number" not in package
 
 
-def test_upgrade_exclude(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+def test_upgrade_exclude(pixi: Path, wrapped_tmp: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, wrapped_tmp])
 
     # Add package pinned to version 0.1.0
     verify_cli_command(
@@ -408,11 +403,13 @@ def test_upgrade_exclude(pixi: Path, tmp_path: Path, multiple_versions_channel_1
     assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
 
 
-def test_upgrade_json_output(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+def test_upgrade_json_output(
+    pixi: Path, wrapped_tmp: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, wrapped_tmp])
 
     # Add package pinned to version 0.1.0
     verify_cli_command(
@@ -432,11 +429,11 @@ def test_upgrade_json_output(pixi: Path, tmp_path: Path, multiple_versions_chann
     assert data["environment"]["default"]
 
 
-def test_upgrade_dryrun(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
-    manifest_path = tmp_path / "pixi.toml"
-    lock_file_path = tmp_path / "pixi.lock"
+def test_upgrade_dryrun(pixi: Path, wrapped_tmp: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
+    lock_file_path = wrapped_tmp / "pixi.lock"
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, wrapped_tmp])
 
     # Add package pinned to version 0.1.0
     verify_cli_command(
@@ -446,7 +443,7 @@ def test_upgrade_dryrun(pixi: Path, tmp_path: Path, multiple_versions_channel_1:
     manifest_content = manifest_path.read_text()
     lock_file_content = lock_file_path.read_text()
     # Rename .pixi folder, no remove to avoid remove logic.
-    os.renames(tmp_path / ".pixi", tmp_path / ".pixi_backup")
+    os.renames(wrapped_tmp / ".pixi", wrapped_tmp / ".pixi_backup")
 
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
@@ -460,15 +457,15 @@ def test_upgrade_dryrun(pixi: Path, tmp_path: Path, multiple_versions_channel_1:
     # Verify the manifest, lock file and .pixi folder are not modified
     assert manifest_path.read_text() == manifest_content
     assert lock_file_path.read_text() == lock_file_content
-    assert not os.path.exists(tmp_path / ".pixi")
+    assert not os.path.exists(wrapped_tmp / ".pixi")
 
 
 @pytest.mark.slow
-def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+def test_upgrade_pypi_package(pixi: Path, wrapped_tmp: Path) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_path])
+    verify_cli_command([pixi, "init", wrapped_tmp])
 
     # Add python
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "python=3.13"])
@@ -500,11 +497,21 @@ def test_upgrade_pypi_package(pixi: Path, tmp_path: Path) -> None:
 
 
 @pytest.mark.slow
-def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_path: Path) -> None:
-    manifest_path = tmp_path / "pyproject.toml"
+def test_upgrade_pypi_and_conda_package(pixi: Path, wrapped_tmp: Path) -> None:
+    manifest_path = wrapped_tmp / "pyproject.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--format", "pyproject", tmp_path])
+    verify_cli_command(
+        [
+            pixi,
+            "init",
+            "--format",
+            "pyproject",
+            wrapped_tmp,
+            "--channel",
+            "https://prefix.dev/conda-forge",
+        ]
+    )
 
     # Add pinned numpy as conda and pypi dependency
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "numpy==1.*"])
@@ -528,11 +535,11 @@ def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_path: Path) -> None:
     assert numpy_conda != "1.*"
 
 
-def test_upgrade_keep_info(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+def test_upgrade_keep_info(pixi: Path, wrapped_tmp: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, wrapped_tmp])
 
     # Add package pinned to version 0.1.0
     verify_cli_command(
@@ -575,11 +582,13 @@ def test_upgrade_keep_info(pixi: Path, tmp_path: Path, multiple_versions_channel
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
 
 
-def test_upgrade_remove_info(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+def test_upgrade_remove_info(
+    pixi: Path, wrapped_tmp: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, wrapped_tmp])
 
     # Add package pinned to version 0.1.0
     verify_cli_command(
@@ -609,11 +618,11 @@ def test_upgrade_remove_info(pixi: Path, tmp_path: Path, multiple_versions_chann
     assert "build" not in parsed_manifest["dependencies"]["package3"]
 
 
-def test_concurrency_flags(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
-    manifest_path = tmp_path / "pixi.toml"
+def test_concurrency_flags(pixi: Path, wrapped_tmp: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = wrapped_tmp / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, wrapped_tmp])
 
     # Add package pinned to version 0.1.0
     verify_cli_command(

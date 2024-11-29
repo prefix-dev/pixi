@@ -10,7 +10,7 @@ import sys
 
 
 @pytest.mark.flaky(reruns=5, reruns_delay=1, condition=sys.platform.startswith("win32"))
-def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.Path) -> None:
+def test_wheel(pixi: str, package: Package, testrun_uid: str, wrapped_tmp: pathlib.Path) -> None:
     """
     Create a temporary directory and install the wheel in it.
     The `testrun_uid` is a unique identifier for the test run
@@ -19,8 +19,8 @@ def test_wheel(pixi: str, package: Package, testrun_uid: str, tmp_path: pathlib.
     start = time.perf_counter()
     try:
         # Path to the manifest file
-        manifest_path = tmp_path / "pixi.toml"
-        run([pixi, "init"], cwd=tmp_path)
+        manifest_path = wrapped_tmp / "pixi.toml"
+        run([pixi, "init"], cwd=wrapped_tmp)
 
         # Check if we need to add system-requirements
         # There is no CLI for it currently so we need to manually edit the file
