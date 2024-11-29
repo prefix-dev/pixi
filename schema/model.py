@@ -242,7 +242,9 @@ class BuildSystem(StrictBaseModel):
     channels: list[Channel] = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
     )
-    additional_dependencies: Dependencies = Field(None, description="Additional dependencies to install alongside the build backend")
+    additional_dependencies: Dependencies = Field(
+        None, description="Additional dependencies to install alongside the build backend"
+    )
 
 
 class BuildBackend(MatchspecTable):
@@ -608,7 +610,9 @@ class BaseManifest(StrictBaseModel):
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
-    run_dependencies: Dependencies = Field(None,description="The run-dependencies for the [package]")
+    run_dependencies: Dependencies = Field(
+        None, description="The run-dependencies for the [package]"
+    )
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
     )
