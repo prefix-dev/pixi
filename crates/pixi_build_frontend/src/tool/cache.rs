@@ -133,11 +133,7 @@ impl ToolCache {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::HashMap,
-        path::PathBuf,
-        sync::{atomic::AtomicU16, Arc},
-    };
+    use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
     use pixi_config::Config;
     use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, ParseStrictness};
@@ -145,7 +141,10 @@ mod tests {
     use tokio::sync::{Barrier, Mutex};
 
     use crate::{
-        tool::{installer::ToolContext, IsolatedTool, Tool, ToolInstaller, ToolSpec},
+        tool::{
+            installer::{ToolContext, ToolInstaller},
+            IsolatedTool, ToolSpec,
+        },
         IsolatedToolSpec,
     };
 
@@ -235,7 +234,6 @@ mod tests {
 
         for _ in 0..num_tasks {
             let barrier = barrier.clone();
-            // let tool_installer = tool_installer.clone();
 
             let tool_context = tool_context.clone();
 
