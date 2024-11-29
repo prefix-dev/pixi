@@ -245,11 +245,10 @@ mod tests {
             let handle = tokio::spawn(async move {
                 barrier.wait().await;
 
-                let tool = tool_context
+                tool_context
                     .cache
                     .get_or_install_tool(tool_spec, &tool_installer, &channel_config)
-                    .await;
-                tool
+                    .await
             });
 
             handles.push(handle);
@@ -342,11 +341,10 @@ mod tests {
             let handle = tokio::spawn(async move {
                 barrier.wait().await;
 
-                let tool = tool_context
+                tool_context
                     .cache
                     .get_or_install_tool(tool_spec, &tool_installer, &channel_config)
-                    .await;
-                tool
+                    .await
             });
 
             handles.push(handle);
