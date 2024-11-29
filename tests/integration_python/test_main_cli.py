@@ -650,3 +650,23 @@ def test_upgrade_remove_info(pixi: Path, tmp_path: Path, multiple_versions_chann
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
     # Remove build
     assert "build" not in parsed_manifest["dependencies"]["package3"]
+
+
+def test_concurrency_flags(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
+    manifest_path = tmp_path / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_path])
+
+    # Add package pinned to version 0.1.0
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--concurrent-solves=12",
+            "--concurrent-downloads=2",
+            "--manifest-path",
+            manifest_path,
+            "package3",
+        ]
+    )

@@ -84,6 +84,9 @@ pub enum BuildError {
 
     #[error(transparent)]
     BuildCacheError(#[from] cache::BuildCacheError),
+
+    #[error(transparent)]
+    BuildFolderNotWritable(#[from] std::io::Error),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -114,8 +117,8 @@ impl BuildContext {
         dot_pixi_dir: PathBuf,
         channel_config: ChannelConfig,
         tool_context: Arc<ToolContext>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, std::io::Error> {
+        Ok(Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
@@ -123,7 +126,7 @@ impl BuildContext {
             cache_dir,
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
-        }
+        })
     }
 
     /// Sets the input hash cache to use for caching input hashes.

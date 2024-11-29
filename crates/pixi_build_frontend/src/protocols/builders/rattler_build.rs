@@ -7,7 +7,7 @@ use miette::Diagnostic;
 use pixi_manifest::Manifest;
 
 // pub use protocol::Protocol;
-use rattler_conda_types::ChannelConfig;
+use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl};
 use thiserror::Error;
 
 use super::pixi::{self, ProtocolBuildError as PixiProtocolBuildError};
@@ -146,10 +146,16 @@ impl ProtocolBuilder {
             self.backend_spec
                 .ok_or(FinishError::NoBuildSection(manifest_path.clone()))?
         } else {
-            ToolSpec::Isolated(
-                IsolatedToolSpec::from_specs([DEFAULT_BUILD_TOOL.parse().unwrap()])
-                    .with_command(DEFAULT_BUILD_TOOL),
-            )
+            ToolSpec::Isolated(IsolatedToolSpec {
+                command: DEFAULT_BUILD_TOOL.to_string(),
+                specs: vec![DEFAULT_BUILD_TOOL.parse().unwrap()],
+                channels: vec![
+                    NamedChannelOrUrl::Name("conda-forge".to_string()),
+                    NamedChannelOrUrl::Url(
+                        "https://prefix.dev/pixi-build-backends".parse().unwrap(),
+                    ),
+                ],
+            })
         };
 
         let tool = tool
