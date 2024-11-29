@@ -148,18 +148,14 @@ pub async fn create_exec_prefix(
     // Get the repodata for the specs
     let repodata = await_in_progress("fetching repodata for environment", |_| async {
         gateway
-            .query(
-                channels,
-                [args.platform, Platform::NoArch],
-                specs.clone(),
-            )
+            .query(channels, [args.platform, Platform::NoArch], specs.clone())
             .recursive(true)
             .execute()
             .await
             .into_diagnostic()
     })
-        .await
-        .context("failed to get repodata")?;
+    .await
+    .context("failed to get repodata")?;
 
     // Determine virtual packages of the current platform
     let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
@@ -185,8 +181,8 @@ pub async fn create_exec_prefix(
             ..SolverTask::from_iter(&repodata)
         })
     })
-        .into_diagnostic()
-        .context("failed to solve environment")?;
+    .into_diagnostic()
+    .context("failed to solve environment")?;
 
     // Install the environment
     Installer::new()

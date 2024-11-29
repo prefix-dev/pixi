@@ -585,7 +585,6 @@ pub struct Config {
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    #[serde(alias = "channel_config")] // BREAK: remove to stop supporting snake_case alias
     channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.

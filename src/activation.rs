@@ -640,7 +640,8 @@ mod tests {
         //
         // We change the hash by modifying the lock-file. This should invalidate the cache and thus
         // result in the activation script being run again.
-        let mock_lock = &format!(r#"
+        let mock_lock = &format!(
+            r#"
 version: 6
 environments:
   default:
@@ -656,7 +657,9 @@ packages:
   license: BSD
   size: 3566
   timestamp: 1562343890778
-"#, platform=Platform::current());
+"#,
+            platform = Platform::current()
+        );
         let lock_file = LockFile::from_str(mock_lock).unwrap();
         let env = run_activation(
             &default_env,

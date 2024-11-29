@@ -15,7 +15,7 @@ async fn test_flat_links_based_index_returns_path() {
         [project]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
 
         [dependencies]
         python = "~=3.12.0"
@@ -55,7 +55,7 @@ async fn test_file_based_index_returns_path() {
         [project]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
 
         [dependencies]
         python = "~=3.12.0"
@@ -97,7 +97,7 @@ async fn test_index_strategy() {
         [project]
         name = "pypi-extra-index-url"
         platforms = ["{platform}"]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
 
         [dependencies]
         python = "~=3.12.0"
@@ -178,7 +178,7 @@ async fn test_pinning_index() {
         [project]
         name = "pypi-pinning-index"
         platforms = ["{platform}"]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
 
         [dependencies]
         python = "~=3.12.0"
@@ -221,7 +221,7 @@ async fn pin_torch() {
         [project]
         name = "pypi-pinning-index"
         platforms = [{platforms}]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
 
         [dependencies]
         python = "~=3.12.0"

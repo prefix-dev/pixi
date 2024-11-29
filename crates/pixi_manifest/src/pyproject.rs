@@ -552,7 +552,7 @@ mod tests {
         dependencies = ["flask==2.*"]
 
         [tool.pixi.project]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
         platforms = ["linux-64"]
 
         [tool.pixi.tasks]

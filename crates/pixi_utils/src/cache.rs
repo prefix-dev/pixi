@@ -13,12 +13,17 @@ pub struct EnvironmentHash {
 
 impl EnvironmentHash {
     /// Creates a new environment hash.
-    pub fn new(command: String, specs: Vec<MatchSpec>, channels: Vec<String>, platform: Platform) -> Self {
+    pub fn new(
+        command: String,
+        specs: Vec<MatchSpec>,
+        channels: Vec<String>,
+        platform: Platform,
+    ) -> Self {
         Self {
             command,
             specs,
             channels,
-            platform
+            platform,
         }
     }
 
