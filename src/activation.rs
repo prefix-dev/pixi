@@ -636,50 +636,27 @@ mod tests {
         .unwrap();
         assert_eq!(env.get("TEST").unwrap(), "ACTIVATION456");
 
-        // Verify that the cache is not used when the hash is different
-        let mock_lock = r#"
-version: 5
+        // Verify that the cache is not used when the hash is different.
+        //
+        // We change the hash by modifying the lock-file. This should invalidate the cache and thus
+        // result in the activation script being run again.
+        let mock_lock = &format!(r#"
+version: 6
 environments:
   default:
     channels:
-    - url: https://fast.prefix.dev/conda-forge/
+    - url: https://prefix.dev/conda-forge/
     packages:
-      linux-64:
-      - conda: https://conda.anaconda.org/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
-      osx-64:
-      - conda: https://conda.anaconda.org/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
-      osx-arm64:
-      - conda: https://conda.anaconda.org/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
-      win-64:
-      - conda: https://conda.anaconda.org/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
+      {platform}:
+      - conda: https://prefix.dev/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
 packages:
-- kind: conda
-  name: _r-mutex
-  version: 1.0.1
-  build: anacondar_1
-  build_number: 1
-  subdir: noarch
-  noarch: generic
-  url: https://conda.anaconda.org/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
+- conda: https://prefix.dev/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
   sha256: e58f9eeb416b92b550e824bcb1b9fb1958dee69abfe3089dfd1a9173e3a0528a
   md5: 19f9db5f4f1b7f5ef5f6d67207f25f38
   license: BSD
   size: 3566
   timestamp: 1562343890778
-- kind: conda
-  name: _r-mutex
-  version: 1.0.1
-  build: anacondar_1
-  build_number: 1
-  subdir: noarch
-  noarch: generic
-  url: https://conda.anaconda.org/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
-  sha256: e58f9eeb416b92b550e824bcb1b9fb1958dee69abfe3089dfd1a9173e3a0528a
-  md5: 19f9db5f4f1b7f5ef5f6d67207f25f38
-  license: BSD
-  size: 3566
-  timestamp: 1562343890778
-"#;
+"#, platform=Platform::current());
         let lock_file = LockFile::from_str(mock_lock).unwrap();
         let env = run_activation(
             &default_env,

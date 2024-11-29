@@ -388,7 +388,6 @@ impl<'p> LockFileDerivedData<'p> {
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
         let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
-        let gateway = environment.project().repodata_gateway().clone();
         let python_status = environment::update_prefix_conda(
             &prefix,
             self.package_cache.clone(),
@@ -414,7 +413,6 @@ impl<'p> LockFileDerivedData<'p> {
             "",
             self.io_concurrency_limit.clone().into(),
             self.build_context.clone(),
-            gateway,
         )
         .await?;
 
@@ -2233,12 +2231,9 @@ async fn spawn_create_prefix_task(
 
     let build_virtual_packages = group.virtual_packages(Platform::current());
 
-    let gateway = group.project().repodata_gateway();
-
     // Spawn a background task to update the prefix
     let (python_status, duration) = tokio::spawn({
         let prefix = prefix.clone();
-        let gateway = gateway.clone();
         let group_name = group_name.clone();
         async move {
             let start = Instant::now();
@@ -2264,7 +2259,6 @@ async fn spawn_create_prefix_task(
                 "  ",
                 io_concurrency_limit.into(),
                 build_context,
-                gateway.clone(),
             )
             .await?;
             let end = Instant::now();

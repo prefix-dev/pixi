@@ -151,10 +151,10 @@ impl ConfigCliPrompt {
 #[serde(rename_all = "kebab-case")]
 pub struct RepodataConfig {
     #[serde(flatten)]
-    default: RepodataChannelConfig,
+    pub default: RepodataChannelConfig,
 
     #[serde(flatten)]
-    per_channel: HashMap<Url, RepodataChannelConfig>,
+    pub per_channel: HashMap<Url, RepodataChannelConfig>,
 }
 
 impl RepodataConfig {
@@ -696,6 +696,23 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
 }
 
 impl Config {
+    /// Constructs a new config that is optimized to be used in tests.
+    ///
+    /// This instance is optimized to provide the fastest experience for tests.
+    pub fn for_tests() -> Self {
+        let mut config = Config::default();
+        // Use prefix.dev as the default channel alias
+        config.channel_config.channel_alias = Url::parse("https://prefix.dev").unwrap();
+
+        // Use conda-forge as the default channel
+        config.default_channels = vec![NamedChannelOrUrl::Name("conda-forge".into())];
+
+        // Enable sharded repodata by default.
+        config.repodata_config.default.disable_sharded = Some(false);
+
+        config
+    }
+
     /// Parse the given toml string and return a Config instance.
     ///
     /// # Returns

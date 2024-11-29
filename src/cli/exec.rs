@@ -18,7 +18,7 @@ use super::cli_config::ChannelsConfig;
 use crate::prefix::Prefix;
 
 /// Run a command in a temporary environment.
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
     /// The executable to run.
@@ -32,6 +32,10 @@ pub struct Args {
 
     #[clap(flatten)]
     channels: ChannelsConfig,
+
+    /// The platform to create the environment for.
+    #[clap(long, short, default_value_t = Platform::current())]
+    pub platform: Platform,
 
     /// If specified a new environment is always created even if one already
     /// exists.
@@ -88,7 +92,7 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
-    let environment_hash = EnvironmentHash::new(command.clone(), specs, channels);
+    let environment_hash = EnvironmentHash::new(command.clone(), specs, channels, args.platform);
 
     let prefix = Prefix::new(
         cache_dir
@@ -146,7 +150,7 @@ pub async fn create_exec_prefix(
         gateway
             .query(
                 channels,
-                [Platform::current(), Platform::NoArch],
+                [args.platform, Platform::NoArch],
                 specs.clone(),
             )
             .recursive(true)
@@ -154,8 +158,8 @@ pub async fn create_exec_prefix(
             .await
             .into_diagnostic()
     })
-    .await
-    .context("failed to get repodata")?;
+        .await
+        .context("failed to get repodata")?;
 
     // Determine virtual packages of the current platform
     let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
@@ -181,11 +185,12 @@ pub async fn create_exec_prefix(
             ..SolverTask::from_iter(&repodata)
         })
     })
-    .into_diagnostic()
-    .context("failed to solve environment")?;
+        .into_diagnostic()
+        .context("failed to solve environment")?;
 
     // Install the environment
     Installer::new()
+        .with_target_platform(args.platform)
         .with_download_client(client.clone())
         .with_reporter(
             IndicatifReporter::builder()
