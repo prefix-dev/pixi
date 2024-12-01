@@ -158,6 +158,22 @@ impl Task {
             Task::Alias(_) => false,
         }
     }
+
+    /// Returns the inputs of the task.
+    pub fn inputs(&self) -> Option<&[String]> {
+        match self {
+            Task::Execute(exe) => exe.inputs.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Returns the outputs of the task.
+    pub fn outputs(&self) -> Option<&[String]> {
+        match self {
+            Task::Execute(exe) => exe.outputs.as_deref(),
+            _ => None,
+        }
+    }
 }
 
 /// A command script executes a single command from the environment

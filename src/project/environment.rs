@@ -228,6 +228,26 @@ impl<'p> Environment<'p> {
         }
     }
 
+    /// Returns a map of all the features and their tasks for this environment.
+    ///
+    /// Resolves for the best platform target.
+    pub(crate) fn feature_tasks(
+        &self,
+    ) -> HashMap<&'p FeatureName, HashMap<&'p TaskName, &'p Task>> {
+        self.features()
+            .map(|feature| {
+                (
+                    &feature.name,
+                    feature
+                        .targets
+                        .resolve(Some(self.best_platform()))
+                        .flat_map(|target| target.tasks.iter())
+                        .collect::<HashMap<_, _>>(),
+                )
+            })
+            .collect()
+    }
+
     /// Returns the system requirements for this environment.
     ///
     /// The system requirements of the environment are the union of the system
