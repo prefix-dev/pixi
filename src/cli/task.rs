@@ -375,7 +375,6 @@ pub fn execute(args: Args) -> miette::Result<()> {
             );
         }
         Operation::List(args) => {
-
             if args.json {
                 print_tasks_json(&project);
                 return Ok(());
@@ -474,8 +473,6 @@ fn build_env_feature_task_map(project: &Project) -> Vec<EnvTasks> {
         })
         .collect()
 }
-
-
 
 #[derive(Serialize, Debug)]
 struct EnvTasks {
