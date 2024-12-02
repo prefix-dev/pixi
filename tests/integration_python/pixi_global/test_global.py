@@ -1710,7 +1710,7 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
         env=env,
         stderr_contains=[
-            "Removed package dummy-a  in environment my-env.",
+            "Removed package dummy-a in environment my-env.",
             "Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n",
         ],
     )
@@ -1735,7 +1735,7 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         [pixi, "global", "remove", "--environment", "my-env", "dummy-a", "dummy-b"],
         env=env,
         stderr_contains=[
-            "Removed packages in environment my-env.\n    - dummy-a \n    - dummy-b",
+            "Removed packages in environment my-env.\n    - dummy-a\n    - dummy-b",
             "Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n   - dummy-b",
         ],
     )

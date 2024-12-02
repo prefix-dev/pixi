@@ -1,7 +1,6 @@
 mod cache;
 mod reporters;
 
-use fs_err as fs;
 use std::{
     ffi::OsStr,
     hash::{Hash, Hasher},
@@ -31,9 +30,7 @@ use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_digest::Sha256;
-use rattler_repodata_gateway::Gateway;
 pub use reporters::{BuildMetadataReporter, BuildReporter};
-use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -151,7 +148,6 @@ impl BuildContext {
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
-        fs::create_dir_all(&self.work_dir).map_err(BuildError::BuildFolderNotWritable)?;
         let source = self.fetch_source(source_spec).await?;
         let records = self
             .extract_records(
@@ -181,11 +177,7 @@ impl BuildContext {
         build_virtual_packages: Vec<GenericVirtualPackage>,
         build_reporter: Arc<dyn BuildReporter>,
         build_id: usize,
-        authenticated_client: ClientWithMiddleware,
-        gateway: Gateway,
     ) -> Result<RepoDataRecord, BuildError> {
-        fs::create_dir_all(&self.work_dir).map_err(BuildError::BuildFolderNotWritable)?;
-
         let source_checkout = SourceCheckout {
             path: self.fetch_pinned_source(&source_spec.source).await?,
             pinned: source_spec.source.clone(),
@@ -259,16 +251,11 @@ impl BuildContext {
             }
         }
 
-        let tool_context = ToolContext::builder()
-            .with_gateway(gateway.clone())
-            .with_client(authenticated_client.clone())
-            .build();
-
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
             .with_cache_dir(self.cache_dir.clone())
-            .with_tool_context(tool_context.into())
+            .with_tool_context(self.tool_context.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source_checkout.path.clone(),
                 build_tool_override: Default::default(),

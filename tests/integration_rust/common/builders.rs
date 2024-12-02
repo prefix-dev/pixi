@@ -57,7 +57,7 @@ pub struct InitBuilder {
 }
 
 impl InitBuilder {
-    /// Disable using `https://fast.prefix.dev` as the default channel.
+    /// Disable using `https://prefix.dev` as the default channel.
     pub fn no_fast_prefix_overwrite(self, no_fast_prefix: bool) -> Self {
         Self {
             no_fast_prefix,
@@ -98,7 +98,7 @@ impl IntoFuture for InitBuilder {
             channels: if !self.no_fast_prefix {
                 self.args.channels.or_else(|| {
                     Some(vec![NamedChannelOrUrl::from_str(
-                        "https://fast.prefix.dev/conda-forge",
+                        "https://prefix.dev/conda-forge",
                     )
                     .unwrap()])
                 })
@@ -331,7 +331,6 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
-    pub manifest_path: Option<PathBuf>,
     pub args: project::channel::AddRemoveArgs,
 }
 
@@ -361,7 +360,6 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         project::channel::execute(project::channel::Args {
-            manifest_path: self.manifest_path,
             command: project::channel::Command::Add(self.args),
         })
         .boxed_local()
@@ -394,7 +392,6 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         project::channel::execute(project::channel::Args {
-            manifest_path: self.manifest_path,
             command: project::channel::Command::Remove(self.args),
         })
         .boxed_local()

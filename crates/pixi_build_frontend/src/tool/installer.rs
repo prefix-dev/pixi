@@ -37,6 +37,7 @@ pub struct ToolContextBuilder {
     client: ClientWithMiddleware,
     cache_dir: PathBuf,
     cache: ToolCache,
+    platform: Platform,
 }
 
 impl Default for ToolContextBuilder {
@@ -53,7 +54,16 @@ impl ToolContextBuilder {
             client: ClientWithMiddleware::default(),
             cache_dir: pixi_config::get_cache_dir().expect("we should have a cache dir"),
             cache: ToolCache::default(),
+            platform: Platform::current(),
         }
+    }
+
+    /// Set the platform to install tools for. This is usually the current
+    /// platform but could also be a compatible platform. For instance if the
+    /// current platform is win-arm64, the compatible platform could be win-64.
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.platform = platform;
+        self
     }
 
     /// Set the gateway for the tool context.
@@ -92,6 +102,7 @@ impl ToolContextBuilder {
             cache_dir: self.cache_dir,
             client: self.client,
             cache: self.cache,
+            platform: self.platform,
             gateway,
         }
     }
@@ -100,7 +111,6 @@ impl ToolContextBuilder {
 /// The tool context,
 /// containing client, channels and gateway configuration
 /// that will be used to resolve and install tools.
-#[derive(Default)]
 pub struct ToolContext {
     // Authentication client to use for fetching repodata.
     pub client: ClientWithMiddleware,
@@ -110,6 +120,16 @@ pub struct ToolContext {
     pub gateway: Gateway,
     // The cache to use for the tools.
     pub cache: ToolCache,
+    /// The platform to install tools for. This is usually the current platform
+    /// but could also be a compatible platform. For instance if the current
+    /// platform is win-arm64, the compatible platform could be win-64.
+    pub platform: Platform,
+}
+
+impl Default for ToolContext {
+    fn default() -> Self {
+        Self::builder().build()
+    }
 }
 
 impl Debug for ToolContext {
@@ -117,6 +137,7 @@ impl Debug for ToolContext {
         f.debug_struct("ToolContext")
             .field("client", &self.client)
             .field("cache_dir", &self.cache_dir)
+            .field("platform", &self.platform)
             .finish()
     }
 }
@@ -181,7 +202,7 @@ impl ToolInstaller for ToolContext {
             .gateway
             .query(
                 channels.clone(),
-                [Platform::current(), Platform::NoArch],
+                [self.platform, Platform::NoArch],
                 spec.specs.clone(),
             )
             .recursive(true)
@@ -209,6 +230,7 @@ impl ToolInstaller for ToolContext {
             spec.command.clone(),
             spec.specs.clone(),
             channels.iter().map(|c| c.base_url.to_string()).collect(),
+            self.platform,
         );
 
         let cached_dir = self
@@ -248,6 +270,7 @@ impl ToolInstaller for ToolContext {
 
         // Install the environment
         Installer::new()
+            .with_target_platform(self.platform)
             .with_download_client(self.client.clone())
             .with_package_cache(PackageCache::new(
                 self.cache_dir
@@ -259,7 +282,7 @@ impl ToolInstaller for ToolContext {
 
         // Get the activation scripts
         let activator =
-            Activator::from_path(&cached_dir, ShellEnum::default(), Platform::current()).unwrap();
+            Activator::from_path(&cached_dir, ShellEnum::default(), self.platform).unwrap();
 
         let activation_scripts = activator
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)

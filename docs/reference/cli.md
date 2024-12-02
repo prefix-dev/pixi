@@ -52,7 +52,7 @@ pixi init --format pixi --scm gitlab
 
 ## `add`
 
-Adds dependencies to the [manifest file](project_configuration.md).
+Adds dependencies to the [manifest file](pixi_manifest.md).
 It will only add dependencies compatible with the rest of the dependencies in the project.
 [More info](../features/multi_platform_configuration.md) on multi-platform configuration.
 
@@ -73,17 +73,19 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--host`: Specifies a host dependency, important for building a package.
 - `--build`: Specifies a build dependency, important for building a package.
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
   Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
-  See [configuration](project_configuration.md) for details.
+  See [configuration](pixi_manifest.md) for details.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
 - `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
 - `--editable`: Specifies an editable dependency; only used in combination with `--pypi`.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi add numpy # (1)!
@@ -139,8 +141,8 @@ pixi add --pypi "project@file:///absolute/path/to/project" --editable # (17)!
 
 ## `install`
 
-Installs an environment based on the [manifest file](project_configuration.md).
-If there is no `pixi.lock` file or it is not up-to-date with the [manifest file](project_configuration.md), it will (re-)generate the lock file.
+Installs an environment based on the [manifest file](pixi_manifest.md).
+If there is no `pixi.lock` file or it is not up-to-date with the [manifest file](pixi_manifest.md), it will (re-)generate the lock file.
 
 `pixi install` only installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag.
 If you don't provide an environment, the `default` environment will be installed.
@@ -150,10 +152,12 @@ As all commands interacting with the environment will first run the `install` co
 E.g. `pixi run`, `pixi shell`, `pixi shell-hook`, `pixi add`, `pixi remove` to name a few.
 
 ##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided the default environment will be used.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi install
@@ -167,19 +171,21 @@ pixi install -e lint
 ## `update`
 
 The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
-It will only update the lock file if the dependencies in the [manifest file](project_configuration.md) are still compatible with the new versions.
+It will only update the lock file if the dependencies in the [manifest file](pixi_manifest.md) are still compatible with the new versions.
 
 ##### Arguments
 
 1. `[PACKAGES]...` The packages to update, space separated. If no packages are provided, all packages will be updated.
 
 ##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided all the environments are updated.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependencies should be updated.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
 - `--json`: Output the changes in json format.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi update numpy
@@ -195,7 +201,7 @@ pixi update --no-install boto3
 
 ## `upgrade`
 
-The `upgrade` command checks if there are newer versions of the dependencies and upgrades them in the [manifest file](project_configuration.md).
+The `upgrade` command checks if there are newer versions of the dependencies and upgrades them in the [manifest file](pixi_manifest.md).
 `update` updates dependencies in the lock file while still fulfilling the version requirements set in the manifest.
 `upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
 
@@ -204,11 +210,13 @@ The `upgrade` command checks if there are newer versions of the dependencies and
 1. `[PACKAGES]...` The packages to upgrade, space separated. If no packages are provided, all packages will be upgraded.
 
 ##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided the default feature will be used.
 - `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
 - `--json`: Output the changes in json format.
 - `--dry-run (-n)`: Only show the changes that would be made, without actually updating the manifest, lock file, or environment.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi upgrade
@@ -235,7 +243,7 @@ pixi upgrade --dry-run
 
 The `run` commands first checks if the environment is ready to use.
 When you didn't run `pixi install` the run command will do that for you.
-The custom tasks defined in the [manifest file](project_configuration.md) are also available through the run command.
+The custom tasks defined in the [manifest file](pixi_manifest.md) are also available through the run command.
 
 You cannot run `pixi run source setup.bash` as `source` is not available in the `deno_task_shell` commandos and not an executable.
 
@@ -245,13 +253,15 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON `Windows`.
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking the lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi run python
@@ -318,9 +328,11 @@ Temporary environments are cached. If the same command is run again, the same en
 1. `<COMMAND>`: The command to run.
 
 #### Options:
-* `--spec <SPECS> (-s)`: Matchspecs of packages to install. If this is not provided, the package is guessed from the command.
-* `--channel <CHANNELS> (-c)`: The channel to install the packages from. If not specified the default channel is used.
-* `--force-reinstall` If specified a new environment is always created even if one already exists.
+- `--spec <SPECS> (-s)`: Matchspecs of packages to install. If this is not provided, the package is guessed from the command.
+- `--channel <CHANNELS> (-c)`: The channel to install the packages from. If not specified the default channel is used.
+- `--force-reinstall` If specified a new environment is always created even if one already exists.
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi exec python
@@ -337,7 +349,7 @@ pixi exec --force-reinstall -s ipython -s py-rattler ipython
 
 ## `remove`
 
-Removes dependencies from the [manifest file](project_configuration.md).
+Removes dependencies from the [manifest file](pixi_manifest.md).
 
 If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
 
@@ -350,7 +362,7 @@ If the project manifest is a `pyproject.toml`, removing a pypi dependency with t
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--host`: Specifies a host dependency, important for building a package.
 - `--build`: Specifies a build dependency, important for building a package.
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
@@ -379,11 +391,11 @@ If you want to make a shorthand for a specific command you can add a task for it
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 
 ### `task add`
 
-Add a task to the [manifest file](project_configuration.md), use `--depends-on` to add tasks you want to run before this task, e.g. build before an execute task.
+Add a task to the [manifest file](pixi_manifest.md), use `--depends-on` to add tasks you want to run before this task, e.g. build before an execute task.
 
 ##### Arguments
 
@@ -411,7 +423,7 @@ pixi task add train python train.py --feature cuda
 pixi task add publish-pypi "hatch publish --yes --repo main" --feature build --env HATCH_CONFIG=config/hatch.toml --description "Publish the package to pypi"
 ```
 
-This adds the following to the [manifest file](project_configuration.md):
+This adds the following to the [manifest file](pixi_manifest.md):
 
 ```toml
 [tasks]
@@ -439,7 +451,7 @@ pixi run test --test test1
 
 ### `task remove`
 
-Remove the task from the [manifest file](project_configuration.md)
+Remove the task from the [manifest file](pixi_manifest.md)
 
 ##### Arguments
 
@@ -504,11 +516,11 @@ List project's packages. Highlighted packages are explicit dependencies.
 - `--json`: Whether to output in json format.
 - `--json-pretty`: Whether to output in pretty json format
 - `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
-- `--explicit (-x)`: Only list the packages that are explicitly added to the [manifest file](project_configuration.md).
-- `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--explicit (-x)`: Only list the packages that are explicitly added to the [manifest file](pixi_manifest.md).
+- `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
@@ -526,7 +538,7 @@ pixi list --locked
 pixi list --no-install
 ```
 
-Output will look like this, where `python` will be green as it is the package that was explicitly added to the [manifest file](project_configuration.md):
+Output will look like this, where `python` will be green as it is the package that was explicitly added to the [manifest file](pixi_manifest.md):
 
 ```shell
 ➜ pixi list
@@ -568,10 +580,10 @@ The package tree can also be inverted (`-i`), to see which packages require a sp
 
 - `--invert (-i)`: Invert the dependency tree, that is given a `REGEX` pattern that matches some packages, show all the packages that depend on those.
 - `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
-- `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
@@ -587,7 +599,7 @@ pixi tree --platform win-64
 !!! warning
     Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
-Output will look like this, where direct packages in the [manifest file](project_configuration.md) will be green.
+Output will look like this, where direct packages in the [manifest file](pixi_manifest.md) will be green.
 Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
 
 Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.
@@ -682,15 +694,17 @@ To exit the pixi shell, simply run `exit`.
 ##### Options
 
 - `--change-ps1 <true or false>`: When set to false, the `(pixi)` prefix in the shell prompt is removed (default: `true`). The default behavior can be [configured globally](pixi_configuration.md#change-ps1).
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: Don't install the environment, only activate the environment.
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi shell
@@ -713,14 +727,16 @@ This command prints the activation script of an environment.
 
 - `--shell <SHELL> (-s)`: The shell for which the activation script should be printed. Defaults to the current shell.
   Currently supported variants: [`bash`, `zsh`, `xonsh`, `cmd`, `powershell`, `fish`, `nushell`]
-- `--manifest-path`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](project_configuration.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](project_configuration.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--manifest-path`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
+- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
   this option, `--shell` is ignored.
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
+- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 
 ```shell
 pixi shell-hook
@@ -751,7 +767,7 @@ Search a package, output will list the latest version of the package.
 
 ###### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--limit <LIMIT> (-l)`: optionally limit the number of search results
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to search for. (default: current platform)
@@ -784,7 +800,7 @@ More information [here](../advanced/explain_info_command.md).
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--extended`: extend the information with more slow queries to the system, like directory sizes.
 - `--json`: Get a machine-readable version of the information as output.
 
@@ -799,7 +815,7 @@ Defaults to cleaning the environments and task cache.
 Use the `cache` subcommand to clean the cache
 
 ##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--environment <ENVIRONMENT> (-e)`: The environment to clean, if none are provided all environments will be removed.
 
 ```shell
@@ -886,7 +902,7 @@ Use this command to manage the configuration.
 - `--system (-s)`: Specify management scope to system configuration.
 - `--global (-g)`: Specify management scope to global configuration.
 - `--local (-l)`: Specify management scope to local configuration.
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 
 Checkout the [pixi configuration](./pixi_configuration.md) for more information about the locations.
 
@@ -1222,7 +1238,7 @@ This subcommand allows you to modify the project configuration through the comma
 
 ##### Options
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](project_configuration.md), by default it searches for one in the parent directories.
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 
 ### `project channel add`
 

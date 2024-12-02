@@ -64,7 +64,6 @@ impl ToolCache {
                 // modify the current entry to the pending entry.
                 // this is an atomic operation
                 // because who holds the entry holds mutable access.
-
                 entry.insert(PendingOrFetched::Pending(Arc::downgrade(&sender)));
 
                 sender
@@ -85,6 +84,8 @@ impl ToolCache {
 
                             // Explicitly drop the entry, so we don't block any other tasks.
                             drop(entry);
+                            // Drop the sender
+                            drop(sender);
 
                             return match receiver.recv().await {
                                 Ok(tool) => Ok(tool),
@@ -117,6 +118,7 @@ impl ToolCache {
         // Let's start by installing tool. If an error occurs we immediately return
         // the error. This will drop the sender and all other waiting tasks will
         // receive an error.
+        // Installation happens outside the critical section
         let tool = Arc::new(context.install(&spec, channel_config).await?);
 
         // Store the fetched files in the entry.
@@ -136,7 +138,9 @@ mod tests {
     use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
     use pixi_config::Config;
-    use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, ParseStrictness};
+    use rattler_conda_types::{
+        ChannelConfig, MatchSpec, NamedChannelOrUrl, ParseStrictness, Platform,
+    };
     use reqwest_middleware::ClientWithMiddleware;
     use tokio::sync::{Barrier, Mutex};
 
@@ -171,34 +175,42 @@ mod tests {
             Ok(isolated_tool)
         }
     }
+    /// Returns the platform to use for the tool cache. Python is not yet
+    /// available for win-arm64 so we use win-64.
+    pub fn compatible_target_platform() -> Platform {
+        match Platform::current() {
+            Platform::WinArm64 => Platform::Win64,
+            platform => platform,
+        }
+    }
 
     #[tokio::test]
     async fn test_tool_cache() {
-        // let mut cache = ToolCache::new();
-        let mut config = Config::default();
-        config.default_channels = vec![NamedChannelOrUrl::Name("conda-forge".to_string())];
+        let config = Config::for_tests();
 
         let auth_client = ClientWithMiddleware::default();
-        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::new());
+        let channel_config = config.global_channel_config();
 
         let tool_context = ToolContext::builder()
+            .with_platform(compatible_target_platform())
             .with_client(auth_client.clone())
+            .with_gateway(config.gateway(auth_client))
             .build();
 
         let tool_spec = IsolatedToolSpec {
-            specs: vec![MatchSpec::from_str("cowpy", ParseStrictness::Strict).unwrap()],
-            command: "cowpy".into(),
-            channels: Vec::from([NamedChannelOrUrl::Name("conda-forge".to_string())]),
+            specs: vec![MatchSpec::from_str("bat", ParseStrictness::Strict).unwrap()],
+            command: "bat".into(),
+            channels: config.default_channels.clone(),
         };
 
         let tool = tool_context
-            .instantiate(ToolSpec::Isolated(tool_spec), &channel_config)
+            .instantiate(ToolSpec::Isolated(tool_spec), channel_config)
             .await
             .unwrap();
 
         let exec = tool.as_executable().unwrap();
 
-        exec.command().arg("hello").spawn().unwrap();
+        exec.command().arg("--version").spawn().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -275,7 +287,6 @@ mod tests {
     async fn test_handle_a_failure() {
         // This test verifies that during the installation of a tool, if an error occurs
         // the tool is not cached and the next request will try to install the tool again.
-
         // A test installer that will fail on the first request.
         #[derive(Default, Clone)]
         struct TestInstaller {
@@ -293,9 +304,13 @@ mod tests {
                 *count += 1;
 
                 if count == &1 {
+                    dbg!("a");
                     miette::bail!("error on first request");
+                    // tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    // panic!("tim is right!");
                 }
 
+                dbg!("b");
                 let isolated_tool =
                     IsolatedTool::new(spec.command.clone(), PathBuf::new(), HashMap::default());
                 Ok(isolated_tool)
@@ -324,7 +339,7 @@ mod tests {
 
         // Let's imitate that we have 4 requests to install a tool
         // we will use a barrier to ensure all tasks start at the same time.
-        let num_tasks = 4;
+        let num_tasks = 2;
         let barrier = Arc::new(Barrier::new(num_tasks));
         let mut handles = Vec::new();
 

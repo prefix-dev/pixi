@@ -278,24 +278,26 @@ impl InstallChange {
         matches!(self, InstallChange::Removed)
     }
 
-    pub fn version_fancy_display(&self) -> StyledObject<String> {
+    pub fn version_fancy_display(&self) -> Option<StyledObject<String>> {
         let version_style = console::Style::new().blue();
         let default_style = console::Style::new();
 
         match self {
-            InstallChange::Installed(version) => version_style.apply_to(version.to_string()),
-            InstallChange::Upgraded(old, new) => default_style.apply_to(format!(
+            InstallChange::Installed(version) => Some(version_style.apply_to(version.to_string())),
+            InstallChange::Upgraded(old, new) => Some(default_style.apply_to(format!(
                 "{} -> {}",
                 version_style.apply_to(old.to_string()),
                 version_style.apply_to(new.to_string())
-            )),
-            InstallChange::TransitiveUpgraded(old, new) => default_style.apply_to(format!(
+            ))),
+            InstallChange::TransitiveUpgraded(old, new) => Some(default_style.apply_to(format!(
                 "{} -> {}",
                 version_style.apply_to(old.to_string()),
                 version_style.apply_to(new.to_string())
-            )),
-            InstallChange::Reinstalled(version) => version_style.apply_to(version.to_string()),
-            InstallChange::Removed => version_style.apply_to("".to_string()),
+            ))),
+            InstallChange::Reinstalled(version) => {
+                Some(version_style.apply_to(version.to_string()))
+            }
+            InstallChange::Removed => None,
         }
     }
 }
@@ -624,28 +626,23 @@ impl StateChanges {
             .is_some();
 
         let message = if was_removed { "Removed" } else { "Updated" };
+        let check_mark = console::style(console::Emoji("✔ ", "")).green();
+        let env_fancy = env_name.fancy_display();
 
         // Output messages based on the type of changes
         if top_level_changes.is_empty() && !transitive_changes.is_empty() {
-            eprintln!(
-                "{}Updated environment {}.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                env_name.fancy_display()
-            );
+            eprintln!("{check_mark}Updated environment {env_fancy}.",);
         } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
-            eprintln!(
-                "{}Environment {} was already up-to-date.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                env_name.fancy_display()
-            );
+            eprintln!("{check_mark}Environment {env_fancy} was already up-to-date.");
         } else if top_level_changes.len() == 1 {
-            eprintln!(
-                "{}{} package {} {} in environment {}.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                message,
-                console::style(top_level_changes[0].0.as_normalized()).green(),
-                top_level_changes[0].1.version_fancy_display(),
-                env_name.fancy_display()
+            let changes = console::style(top_level_changes[0].0.as_normalized()).green();
+            let version_string = top_level_changes[0]
+                .1
+                .version_fancy_display()
+                .map(|version| format!("={version}"))
+                .unwrap_or_default();
+
+            eprintln!(                "{check_mark}{message} package {changes}{version_string} in environment {env_fancy}."
             );
         } else if top_level_changes.len() > 1 {
             eprintln!(
@@ -655,11 +652,12 @@ impl StateChanges {
                 env_name.fancy_display()
             );
             for (package, install_change) in top_level_changes {
-                eprintln!(
-                    "    - {} {}",
-                    console::style(package.as_normalized()).green(),
-                    install_change.version_fancy_display()
-                );
+                let package_fancy = console::style(package.as_normalized()).green();
+                let change_fancy = install_change
+                    .version_fancy_display()
+                    .map(|version| format!(" {version}"))
+                    .unwrap_or_default();
+                eprintln!("    - {package_fancy}{change_fancy}");
             }
         }
     }

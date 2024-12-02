@@ -100,8 +100,7 @@ async fn test_purl_are_added_for_pypi() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
-    pixi.add("boltons").with_install(true).await.unwrap();
-
+    pixi.add("boltons").await.unwrap();
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl

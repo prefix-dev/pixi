@@ -44,6 +44,11 @@ use crate::common::builders::{
     ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 
+const DEFAULT_PROJECT_CONFIG: &str = r#"
+[repodata-config."https://prefix.dev"]
+disable-sharded = false
+"#;
+
 /// To control the pixi process
 pub struct PixiControl {
     /// The path to the project working file
@@ -209,6 +214,12 @@ impl PixiControl {
     /// Create a new PixiControl instance
     pub fn new() -> miette::Result<PixiControl> {
         let tempdir = tempfile::tempdir().into_diagnostic()?;
+
+        // Add default project config
+        let pixi_path = tempdir.path().join(".pixi");
+        std::fs::create_dir_all(&pixi_path).unwrap();
+        std::fs::write(pixi_path.join("config.toml"), DEFAULT_PROJECT_CONFIG).unwrap();
+
         // Hide the progress bars for the tests
         // Otherwise the override the test output
         hide_progress_bars();
@@ -373,10 +384,18 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
-            manifest_path: Some(self.manifest_path()),
             args: project::channel::AddRemoveArgs {
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 channel: vec![],
-                no_install: true,
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    lock_file_usage: LockFileUsageArgs::default(),
+                    config: Default::default(),
+                    revalidate: false,
+                },
                 feature: None,
                 priority: None,
                 prepend: false,
@@ -389,8 +408,17 @@ impl PixiControl {
         ProjectChannelRemoveBuilder {
             manifest_path: Some(self.manifest_path()),
             args: project::channel::AddRemoveArgs {
+                project_config: ProjectConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
                 channel: vec![],
-                no_install: true,
+                prefix_update_config: PrefixUpdateConfig {
+                    no_lockfile_update: false,
+                    no_install: true,
+                    lock_file_usage: LockFileUsageArgs::default(),
+                    config: Default::default(),
+                    revalidate: false,
+                },
                 feature: None,
                 priority: None,
                 prepend: false,

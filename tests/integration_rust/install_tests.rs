@@ -7,7 +7,7 @@ use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
-use pixi::Project;
+use pixi::{Project, UpdateLockFileOptions};
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
@@ -18,7 +18,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-
 use tempfile::TempDir;
 use uv_python::PythonEnvironment;
 
@@ -307,7 +306,7 @@ async fn pypi_reinstall_python() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
-    pixi.add("python==3.11").with_install(true).await.unwrap();
+    pixi.add("python==3.11").await.unwrap();
 
     // Add flask from pypi
     pixi.add("flask")
@@ -573,9 +572,12 @@ async fn test_old_lock_install() {
     .unwrap();
     pixi::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
-        LockFileUsage::Update,
-        false,
         UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install: false,
+            ..Default::default()
+        },
     )
     .await
     .unwrap();

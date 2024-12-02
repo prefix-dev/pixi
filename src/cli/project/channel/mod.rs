@@ -2,27 +2,24 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::Project;
+use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_manifest::{FeatureName, PrioritizedChannel};
 use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl};
-use std::path::PathBuf;
 
 /// Commands to manage project channels.
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 pub struct Args {
-    /// The path to `pixi.toml` or `pyproject.toml`
-    #[clap(long, global = true)]
-    pub manifest_path: Option<PathBuf>,
-
     /// The subcommand to execute
     #[clap(subcommand)]
     pub command: Command,
 }
 
-#[derive(Parser, Debug, Default)]
+#[derive(Parser, Debug, Default, Clone)]
 pub struct AddRemoveArgs {
+    #[clap(flatten)]
+    pub project_config: ProjectConfig,
     /// The channel name or URL
     #[clap(required = true, num_args=1..)]
     pub channel: Vec<NamedChannelOrUrl>,
@@ -31,14 +28,12 @@ pub struct AddRemoveArgs {
     #[clap(long, num_args = 1)]
     pub priority: Option<i32>,
 
-    /// Add the channel(s) to the beginning of the channels list, making them highest priority
+    /// Add the channel(s) to the beginning of the channels list, making them the highest priority
     #[clap(long)]
     pub prepend: bool,
 
-    /// Don't update the environment, only modify the manifest and the
-    /// lock-file.
-    #[clap(long)]
-    pub no_install: bool,
+    #[clap(flatten)]
+    pub prefix_update_config: PrefixUpdateConfig,
 
     /// The name of the feature to modify.
     #[clap(long, short)]
@@ -91,7 +86,7 @@ impl AddRemoveArgs {
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 pub enum Command {
     /// Adds a channel to the project file and updates the lockfile.
     #[clap(visible_alias = "a")]
@@ -105,11 +100,9 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.manifest_path.as_deref())?;
-
     match args.command {
-        Command::Add(args) => add::execute(project, args).await,
-        Command::List(args) => list::execute(project, args),
-        Command::Remove(args) => remove::execute(project, args).await,
+        Command::Add(add_args) => add::execute(add_args).await,
+        Command::List(args) => list::execute(args),
+        Command::Remove(remove_args) => remove::execute(remove_args).await,
     }
 }

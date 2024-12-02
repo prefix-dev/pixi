@@ -1,13 +1,14 @@
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
+use crate::common::{package_database::PackageDatabase, PixiControl};
 use insta::assert_debug_snapshot;
 use pixi::Project;
+use pixi_config::Config;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tempfile::TempDir;
 use url::Url;
-
-use crate::common::{package_database::PackageDatabase, PixiControl};
 
 #[tokio::test]
 async fn add_remove_channel() {
@@ -109,6 +110,41 @@ async fn parse_valid_schema_projects() {
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
             let pixi_toml = std::fs::read_to_string(&path).unwrap();
             let _project = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml).unwrap();
+        }
+    }
+}
+
+#[test]
+fn parse_valid_docs_manifests() {
+    // Test all files in the docs/source_files/pixi_tomls directory
+    let schema_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/source_files/pixi_tomls");
+    for entry in std::fs::read_dir(schema_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
+            let pixi_toml = std::fs::read_to_string(&path).unwrap();
+            let _project = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml).unwrap();
+        }
+    }
+}
+
+#[test]
+fn parse_valid_docs_configs() {
+    // Test all files in the docs/source_files/pixi_config_tomls directory
+    let schema_dir =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/source_files/pixi_config_tomls");
+    for entry in std::fs::read_dir(schema_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
+            let toml = std::fs::read_to_string(&path).unwrap();
+            let (_config, unused_keys) = Config::from_toml(&toml).unwrap();
+            assert_eq!(
+                unused_keys,
+                BTreeSet::<String>::new(),
+                "{}",
+                format_args!("Unused keys in {:?}", path)
+            );
         }
     }
 }
