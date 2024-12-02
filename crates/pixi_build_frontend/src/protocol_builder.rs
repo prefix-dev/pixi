@@ -72,14 +72,14 @@ impl ProtocolBuilder {
         source_path: &Path,
         enabled_protocols: &EnabledProtocols,
     ) -> Result<Self, DiscoveryError> {
-        if source_path.is_file() {
-            return Err(DiscoveryError::NotADirectory);
-        } else if !source_path.is_dir() {
+        if !source_path.exists() {
             return Err(DiscoveryError::NotFound(source_path.to_path_buf()));
         }
 
+        let source_file_name = source_path.file_name().and_then(OsStr::to_str);
+
         // If the user explicitly asked for a recipe.yaml file
-        if source_path.file_name().and_then(OsStr::to_str) == Some("recipe.yaml") {
+        if matches!(source_file_name, Some("recipe.yaml" | "recipe.yml")) {
             let source_dir = source_path
                 .parent()
                 .expect("the recipe must live somewhere");
