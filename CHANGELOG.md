@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - We now have a new `concurrency` configuration in the `pixi.toml` file.
 This allows you to set the number of concurrent solves or downloads that can be run at the same time.
 - We changed the way pixi searches for a pixi manifest. Where it was previously first considering the activated `pixi shell`, it will now search first in the current directory and its parent directories. [more info](https://github.com/prefix-dev/pixi/pull/2564)
-- We fixed the installation of pypi dependencies, now it only re-installs when it needs to.
+- The lockfile format is changed to make it slightly smaller and support source dependencies.
 
 #### Added
 
