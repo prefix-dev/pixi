@@ -171,7 +171,8 @@ impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
 
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
-    let use_colors = use_color_output(&args);
+    set_console_colors(&args);
+    let use_colors = console::colors_enabled_stderr();
 
     // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
@@ -181,20 +182,6 @@ pub async fn execute() -> miette::Result<()> {
                 .build(),
         )
     }))?;
-
-    // Honor FORCE_COLOR and NO_COLOR environment variables.
-    // Those take precedence over the CLI flag and PIXI_COLOR
-    let use_colors = match env::var("FORCE_COLOR") {
-        Ok(_) => true,
-        Err(_) => match env::var("NO_COLOR") {
-            Ok(_) => false,
-            Err(_) => use_colors,
-        },
-    };
-
-    // Enable disable colors for the colors crate
-    console::set_colors_enabled(use_colors);
-    console::set_colors_enabled_stderr(use_colors);
 
     // Hide all progress bars if the user requested it.
     if args.no_progress() {
@@ -312,16 +299,26 @@ pub enum ColorOutput {
     Auto,
 }
 
-/// Returns true if the output is considered to be a terminal.
-fn is_terminal() -> bool {
-    std::io::stderr().is_terminal()
-}
+fn set_console_colors(args: &Args) {
+    // Honor FORCE_COLOR and NO_COLOR environment variables.
+    // Those take precedence over the CLI flag and PIXI_COLOR
+    let color = match env::var("FORCE_COLOR") {
+        Ok(_) => &ColorOutput::Always,
+        Err(_) => match env::var("NO_COLOR") {
+            Ok(_) => &ColorOutput::Never,
+            Err(_) => &args.color,
+        },
+    };
 
-/// Returns true if the log outputs should be colored or not.
-fn use_color_output(args: &Args) -> bool {
-    match args.color {
-        ColorOutput::Always => true,
-        ColorOutput::Never => false,
-        ColorOutput::Auto => std::env::var_os("NO_COLOR").is_none() && is_terminal(),
-    }
+    match color {
+        ColorOutput::Always => {
+            console::set_colors_enabled(true);
+            console::set_colors_enabled_stderr(true);
+        }
+        ColorOutput::Never => {
+            console::set_colors_enabled(false);
+            console::set_colors_enabled_stderr(false);
+        }
+        ColorOutput::Auto => {} // Let `console` detect if colors should be enabled
+    };
 }
