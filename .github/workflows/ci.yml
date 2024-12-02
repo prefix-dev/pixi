@@ -378,9 +378,6 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi install -v
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-
       - name: Run integration tests
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi run --locked test-integration-ci
