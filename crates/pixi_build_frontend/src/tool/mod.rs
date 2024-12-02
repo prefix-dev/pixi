@@ -2,7 +2,7 @@ mod cache;
 mod installer;
 mod spec;
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf};
 
 pub use cache::ToolCacheError;
 pub use spec::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
@@ -14,13 +14,13 @@ pub use installer::ToolContext;
 /// A tool that can be invoked.
 #[derive(Debug)]
 pub enum Tool {
-    Isolated(Arc<IsolatedTool>),
+    Isolated(IsolatedTool),
     System(SystemTool),
     Io(InProcessBackend),
 }
 
 impl Tool {
-    pub fn as_isolated(&self) -> Option<Arc<IsolatedTool>> {
+    pub fn as_isolated(&self) -> Option<IsolatedTool> {
         match self {
             Tool::Isolated(tool) => Some(tool.clone()),
             Tool::System(_) => None,
@@ -31,7 +31,7 @@ impl Tool {
 
 #[derive(Debug)]
 pub enum ExecutableTool {
-    Isolated(Arc<IsolatedTool>),
+    Isolated(IsolatedTool),
     System(SystemTool),
 }
 
@@ -56,8 +56,8 @@ impl From<SystemTool> for Tool {
     }
 }
 
-impl From<Arc<IsolatedTool>> for Tool {
-    fn from(value: Arc<IsolatedTool>) -> Self {
+impl From<IsolatedTool> for Tool {
+    fn from(value: IsolatedTool) -> Self {
         Self::Isolated(value)
     }
 }
@@ -118,13 +118,11 @@ impl ExecutableTool {
     /// Construct a new tool that calls another executable.
     pub fn with_executable(&self, executable: impl Into<String>) -> Self {
         match self {
-            ExecutableTool::Isolated(tool) => {
-                ExecutableTool::Isolated(Arc::new(IsolatedTool::new(
-                    executable,
-                    tool.prefix.clone(),
-                    tool.activation_scripts.clone(),
-                )))
-            }
+            ExecutableTool::Isolated(tool) => ExecutableTool::Isolated(IsolatedTool::new(
+                executable,
+                tool.prefix.clone(),
+                tool.activation_scripts.clone(),
+            )),
             ExecutableTool::System(_) => ExecutableTool::System(SystemTool::new(executable)),
         }
     }
