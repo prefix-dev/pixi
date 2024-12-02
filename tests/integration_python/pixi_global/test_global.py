@@ -18,7 +18,7 @@ def test_sync_dependencies(pixi: Path, wrapped_tmp: Path) -> None:
     toml = """
     [envs.test]
     channels = ["https://prefix.dev/conda-forge"]
-    dependencies = { python = "3.12" }
+    dependencies = { python = "3.13.0" }
     exposed = { "python-injected" = "python" }
     """
     parsed_toml = tomllib.loads(toml)
@@ -27,23 +27,27 @@ def test_sync_dependencies(pixi: Path, wrapped_tmp: Path) -> None:
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], env=env)
-    verify_cli_command([python_injected, "--version"], env=env, stdout_contains="3.12")
+    verify_cli_command([python_injected, "--version"], env=env, stdout_contains="3.13.0")
     verify_cli_command(
-        [python_injected, "-c", "import numpy as np; np.array()"], ExitCode.FAILURE, env=env
+        [python_injected, "-c", "import numpy; print(numpy.__version__)"], ExitCode.FAILURE, env=env
     )
 
     # Add numpy
-    parsed_toml["envs"]["test"]["dependencies"]["numpy"] = "*"
+    parsed_toml["envs"]["test"]["dependencies"]["numpy"] = "2.1.3"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
-    verify_cli_command([python_injected, "-c", "import numpy as np; np.array()"], env=env)
+    verify_cli_command(
+        [python_injected, "-c", "import numpy; print(numpy.__version__)"],
+        env=env,
+        stdout_contains="2.1.3",
+    )
 
     # Remove numpy again
     del parsed_toml["envs"]["test"]["dependencies"]["numpy"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
     verify_cli_command(
-        [python_injected, "-c", "import numpy as np; np.array()"], ExitCode.FAILURE, env=env
+        [python_injected, "-c", "import numpy; print(numpy.__version__)"], ExitCode.FAILURE, env=env
     )
 
     # Remove python
