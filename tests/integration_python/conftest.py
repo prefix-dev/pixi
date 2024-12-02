@@ -19,7 +19,7 @@ def pixi(request: pytest.FixtureRequest) -> Path:
 
 
 @pytest.fixture
-def wrapped_tmp(tmp_path: Path) -> Path:
+def tmp_pixi_workspace(tmp_path: Path) -> Path:
     pixi_config = """
 [repodata-config."https://prefix.dev/"]
 disable-sharded = false

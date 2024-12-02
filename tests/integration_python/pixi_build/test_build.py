@@ -23,14 +23,14 @@ def examples_dir() -> Path:
     return (Path(__file__).parent / "../../../examples").resolve()
 
 
-def test_build_conda_package(pixi: Path, wrapped_tmp: Path) -> None:
+def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     This one tries to build the example flask hello world project
     """
     pyproject = examples_dir() / "flask-hello-world-pyproject"
-    shutil.copytree(pyproject, wrapped_tmp / "pyproject")
+    shutil.copytree(pyproject, tmp_pixi_workspace / "pyproject")
 
-    manifest_path = wrapped_tmp / "pyproject" / "pyproject.toml"
+    manifest_path = tmp_pixi_workspace / "pyproject" / "pyproject.toml"
     # Add a boltons package to it
     verify_cli_command(
         [
@@ -53,12 +53,14 @@ def test_build_conda_package(pixi: Path, wrapped_tmp: Path) -> None:
     assert package_to_be_built.exists()
 
 
-def test_build_using_rattler_build_backend(pixi: Path, wrapped_tmp: Path) -> None:
+def test_build_using_rattler_build_backend(pixi: Path, tmp_pixi_workspace: Path) -> None:
     test_data = get_data_dir("rattler-build-backend")
-    shutil.copytree(test_data / "pixi", wrapped_tmp / "pixi")
-    shutil.copyfile(test_data / "recipes/smokey/recipe.yaml", wrapped_tmp / "pixi/recipe.yaml")
+    shutil.copytree(test_data / "pixi", tmp_pixi_workspace / "pixi")
+    shutil.copyfile(
+        test_data / "recipes/smokey/recipe.yaml", tmp_pixi_workspace / "pixi/recipe.yaml"
+    )
 
-    manifest_path = wrapped_tmp / "pixi" / "pixi.toml"
+    manifest_path = tmp_pixi_workspace / "pixi" / "pixi.toml"
 
     # Running pixi build should build the recipe.yaml
     verify_cli_command(
@@ -72,11 +74,11 @@ def test_build_using_rattler_build_backend(pixi: Path, wrapped_tmp: Path) -> Non
     assert package_to_be_built.exists()
 
 
-def test_smokey(pixi: Path, wrapped_tmp: Path) -> None:
+def test_smokey(pixi: Path, tmp_pixi_workspace: Path) -> None:
     test_data = get_data_dir("rattler-build-backend")
-    # copy the whole smokey project to the wrapped_tmp
-    shutil.copytree(test_data, wrapped_tmp / "test_data")
-    manifest_path = wrapped_tmp / "test_data" / "smokey" / "pixi.toml"
+    # copy the whole smokey project to the tmp_pixi_workspace
+    shutil.copytree(test_data, tmp_pixi_workspace / "test_data")
+    manifest_path = tmp_pixi_workspace / "test_data" / "smokey" / "pixi.toml"
     verify_cli_command(
         [
             pixi,
