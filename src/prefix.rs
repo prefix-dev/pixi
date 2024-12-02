@@ -83,7 +83,7 @@ impl Prefix {
                     }
                 }
             }
-
+            tracing::warn!("Parsing '{}'", path.display());
             // Spawn loading on another thread
             let future = tokio::task::spawn_blocking(move || {
                 PrefixRecord::from_path(&path)

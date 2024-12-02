@@ -180,6 +180,7 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 
 /// Finds the package record from the `conda-meta` directory.
 pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
+    tracing::warn!("Loading package records from {}", conda_meta.display());
     let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
     let mut records = Vec::new();
 
@@ -197,6 +198,43 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
 
     if records.is_empty() {
         miette::bail!("No package records found in {}", conda_meta.display());
+    }
+
+    Ok(records)
+}
+
+pub struct PackageIdentifier {
+    pub name: PackageName,
+    pub version: Version,
+    #[allow(dead_code)]
+    pub build_string: String,
+}
+
+// Find all JSON files and extract ArchiveIdentifiers from the filename
+pub(crate) fn find_linked_packages(
+    conda_meta: &Path,
+) -> Result<Vec<PackageIdentifier>, std::io::Error> {
+    let mut read_dir = fs::read_dir(conda_meta)?;
+    let mut records = Vec::new();
+
+    while let Some(entry) = read_dir.next() {
+        let entry = entry?;
+        // Check if the entry is a file and has a .json extension
+        if matches!(entry.file_type(), Ok(file_type) if file_type.is_file()) {
+            let file_name = entry.file_name();
+
+            if let Some(without_ext) = file_name.to_str().and_then(|s| s.strip_suffix(".json")) {
+                if let Some((build_string, version, name)) =
+                    without_ext.rsplitn(3, '-').next_tuple()
+                {
+                    records.push(PackageIdentifier {
+                        name: PackageName::from_str(name).unwrap(),
+                        version: Version::from_str(version).unwrap(),
+                        build_string: build_string.to_owned(),
+                    });
+                }
+            }
+        }
     }
 
     Ok(records)
