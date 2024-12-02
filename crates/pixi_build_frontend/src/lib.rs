@@ -27,14 +27,26 @@ pub use protocol_builder::EnabledProtocols;
 
 #[derive(Debug)]
 pub enum BackendOverride {
-    /// Overrwide the backend with a specific tool.
+    /// Override the backend with a specific tool.
     Spec(MatchSpec, Option<Vec<NamedChannelOrUrl>>),
 
-    /// Overwrite the backend with a specific tool.
+    /// Overwrite the backend with a executable path.
     System(String),
 
-    /// Use the given IO for the backend.
+    /// Override with a specific IPC channel.
     Io(InProcessBackend),
+}
+
+impl BackendOverride {
+    pub fn from_env() -> Option<Self> {
+        match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE") {
+            Ok(spec) => {
+                tracing::warn!("Overriding build backend with: {}", spec);
+                Some(Self::System(spec))
+            }
+            Err(_) => None,
+        }
+    }
 }
 
 impl From<InProcessBackend> for BackendOverride {
