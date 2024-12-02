@@ -471,7 +471,7 @@ mod tests {
 
         # The name of the environment is `python3-10`
         [envs.python3-10]
-        channels = ["https://fast.prefix.dev/conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
         # It will expose python3.10
         [envs.python3-10.dependencies]
         python = "3.10.*"

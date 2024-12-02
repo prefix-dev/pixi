@@ -206,7 +206,7 @@ pub(crate) fn parse_wheel_file(wheel_text: &str) -> miette::Result<LibKind> {
 
 #[cfg(test)]
 mod test {
-    use crate::install_wheel::LibKind;
+    use super::LibKind;
     use std::io::Cursor;
 
     use super::{parse_key_value_file, parse_wheel_file, read_record_file};

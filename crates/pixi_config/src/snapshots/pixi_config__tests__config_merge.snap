@@ -63,6 +63,7 @@ Config {
         index_url: None,
         extra_index_urls: [],
         keyring_provider: None,
+        allow_insecure_host: [],
     },
     detached_environments: Some(
         Boolean(

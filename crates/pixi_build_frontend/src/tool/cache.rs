@@ -27,6 +27,7 @@ pub struct ToolContextBuilder {
     client: ClientWithMiddleware,
     cache_dir: PathBuf,
     cache: ToolCache,
+    platform: Platform,
 }
 
 impl Default for ToolContextBuilder {
@@ -43,7 +44,16 @@ impl ToolContextBuilder {
             client: ClientWithMiddleware::default(),
             cache_dir: pixi_config::get_cache_dir().expect("we should have a cache dir"),
             cache: ToolCache::default(),
+            platform: Platform::current(),
         }
+    }
+
+    /// Set the platform to install tools for. This is usually the current
+    /// platform but could also be a compatible platform. For instance if the
+    /// current platform is win-arm64, the compatible platform could be win-64.
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.platform = platform;
+        self
     }
 
     /// Set the gateway for the tool context.
@@ -82,6 +92,7 @@ impl ToolContextBuilder {
             cache_dir: self.cache_dir,
             client: self.client,
             cache: self.cache,
+            platform: self.platform,
             gateway,
         }
     }
@@ -90,16 +101,25 @@ impl ToolContextBuilder {
 /// The tool context,
 /// containing client, channels and gateway configuration
 /// that will be used to resolve and install tools.
-#[derive(Default)]
 pub struct ToolContext {
-    // Authentication client to use for fetching repodata.
+    /// Authentication client to use for fetching repodata.
     pub client: ClientWithMiddleware,
-    // The cache directory to use for the tools.
+    /// The cache directory to use for the tools.
     pub cache_dir: PathBuf,
-    // The gateway to use for fetching repodata.
+    /// The gateway to use for fetching repodata.
     pub gateway: Gateway,
-    // The cache to use for the tools.
+    /// The cache to use for the tools.
     pub cache: ToolCache,
+    /// The platform to install tools for. This is usually the current platform
+    /// but could also be a compatible platform. For instance if the current
+    /// platform is win-arm64, the compatible platform could be win-64.
+    pub platform: Platform,
+}
+
+impl Default for ToolContext {
+    fn default() -> Self {
+        Self::builder().build()
+    }
 }
 
 impl Debug for ToolContext {
@@ -172,7 +192,7 @@ impl ToolContext {
             .gateway
             .query(
                 channels.clone(),
-                [Platform::current(), Platform::NoArch],
+                [self.platform, Platform::NoArch],
                 spec.specs.clone(),
             )
             .recursive(true)
@@ -200,6 +220,7 @@ impl ToolContext {
             spec.command.clone(),
             spec.specs.clone(),
             channels.iter().map(|c| c.base_url.to_string()).collect(),
+            self.platform,
         );
 
         let cached_dir = self
@@ -239,6 +260,7 @@ impl ToolContext {
 
         // Install the environment
         Installer::new()
+            .with_target_platform(self.platform)
             .with_download_client(self.client.clone())
             .with_package_cache(PackageCache::new(
                 self.cache_dir
@@ -250,7 +272,7 @@ impl ToolContext {
 
         // Get the activation scripts
         let activator =
-            Activator::from_path(&cached_dir, ShellEnum::default(), Platform::current()).unwrap();
+            Activator::from_path(&cached_dir, ShellEnum::default(), self.platform).unwrap();
 
         let activation_scripts = activator
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
@@ -334,10 +356,8 @@ impl ToolCache {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use pixi_config::Config;
-    use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, ParseStrictness};
+    use rattler_conda_types::{MatchSpec, ParseStrictness, Platform};
     use reqwest_middleware::ClientWithMiddleware;
 
     // use super::ToolCache;
@@ -346,32 +366,41 @@ mod tests {
         IsolatedToolSpec,
     };
 
+    /// Returns the platform to use for the tool cache. Python is not yet
+    /// available for win-arm64 so we use win-64.
+    pub fn compatible_target_platform() -> Platform {
+        match Platform::current() {
+            Platform::WinArm64 => Platform::Win64,
+            platform => platform,
+        }
+    }
+
     #[tokio::test]
     async fn test_tool_cache() {
-        // let mut cache = ToolCache::new();
-        let mut config = Config::default();
-        config.default_channels = vec![NamedChannelOrUrl::Name("conda-forge".to_string())];
+        let config = Config::for_tests();
 
         let auth_client = ClientWithMiddleware::default();
-        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::new());
+        let channel_config = config.global_channel_config();
 
         let tool_context = ToolContext::builder()
+            .with_platform(compatible_target_platform())
             .with_client(auth_client.clone())
+            .with_gateway(config.gateway(auth_client))
             .build();
 
         let tool_spec = IsolatedToolSpec {
-            specs: vec![MatchSpec::from_str("cowpy", ParseStrictness::Strict).unwrap()],
-            command: "cowpy".into(),
-            channels: Vec::from([NamedChannelOrUrl::Name("conda-forge".to_string())]),
+            specs: vec![MatchSpec::from_str("bat", ParseStrictness::Strict).unwrap()],
+            command: "bat".into(),
+            channels: config.default_channels.clone(),
         };
 
         let tool = tool_context
-            .instantiate(ToolSpec::Isolated(tool_spec), &channel_config)
+            .instantiate(ToolSpec::Isolated(tool_spec), channel_config)
             .await
             .unwrap();
 
         let exec = tool.as_executable().unwrap();
 
-        exec.command().arg("hello").spawn().unwrap();
+        exec.command().arg("--version").spawn().unwrap();
     }
 }

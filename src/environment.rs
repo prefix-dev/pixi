@@ -29,7 +29,6 @@ use rattler_conda_types::{
 };
 use rattler_lock::LockedPackageRef;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -745,12 +744,11 @@ pub async fn update_prefix_conda(
     pixi_records: Vec<PixiRecord>,
     virtual_packages: Vec<GenericVirtualPackage>,
     channels: Vec<ChannelUrl>,
-    platform: Platform,
+    host_platform: Platform,
     progress_bar_message: &str,
     progress_bar_prefix: &str,
     io_concurrency_limit: Arc<Semaphore>,
     build_context: BuildContext,
-    gateway: Gateway,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
@@ -779,20 +777,16 @@ pub async fn update_prefix_conda(
             let build_context = &build_context;
             let channels = &channels;
             let virtual_packages = &virtual_packages;
-            let client = authenticated_client.clone();
-            let gateway = gateway.clone();
             async move {
                 build_context
                     .build_source_record(
                         &record,
                         channels,
-                        platform,
+                        host_platform,
                         virtual_packages.clone(),
                         virtual_packages.clone(),
                         progress_reporter.clone(),
                         build_id,
-                        client,
-                        gateway,
                     )
                     .await
             }
@@ -812,7 +806,7 @@ pub async fn update_prefix_conda(
                 .with_io_concurrency_semaphore(io_concurrency_limit)
                 .with_execute_link_scripts(false)
                 .with_installed_packages(installed_packages)
-                .with_target_platform(platform)
+                .with_target_platform(host_platform)
                 .with_package_cache(package_cache)
                 .with_reporter(
                     IndicatifReporter::builder()
