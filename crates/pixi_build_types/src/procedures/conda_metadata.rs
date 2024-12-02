@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use url::Url;
 
 use crate::{ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages};
@@ -26,6 +26,9 @@ pub struct CondaMetadataParams {
 
     /// The channel configuration to use to resolve dependencies.
     pub channel_configuration: ChannelConfiguration,
+
+    /// The variants that we want to build
+    pub variant_configuration: Option<HashMap<String, Vec<String>>>,
 
     /// A directory that can be used by the backend to store files for
     /// subsequent requests. This directory is unique for each separate source

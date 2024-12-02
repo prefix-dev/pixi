@@ -267,6 +267,7 @@ impl PyProjectManifest {
                 homepage: None,
                 repository: None,
                 documentation: None,
+                build_variants: None,
             })?;
 
         // Add python as dependency based on the `project.requires_python` property
