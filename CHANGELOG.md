@@ -5,6 +5,57 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.39.0] - 2024-12-02
+#### ✨ Highlights
+
+- We now have a new `concurrency` configuration in the `pixi.toml` file.
+This allows you to set the number of concurrent solves or downloads that can be run at the same time.
+- We changed the way pixi searches for a pixi project, where it was previously the `pixi shell` first, now it will be the current directory first. [more info](https://github.com/prefix-dev/pixi/pull/2564)
+- We fixed the installation of pypi dependencies, now it only re-installs when it needs to.
+
+#### Added
+
+- Add `concurrency` configuration by @ruben-arts in [#2569](https://github.com/prefix-dev/pixi/pull/2569)
+
+#### Changed
+
+- Add `XDG_CONFIG_HOME`/`.config` to search of pixi global manifest path by @hoxbro in [#2547](https://github.com/prefix-dev/pixi/pull/2547)
+- Let `pixi global sync` collect errors rather than returning early by @Hofer-Julian in [#2586](https://github.com/prefix-dev/pixi/pull/2586)
+- Allow configuring pypi insecure host by @zen-xu in [#2521](https://github.com/prefix-dev/pixi/pull/2521)
+- Reorder manifest discovery logic by @Hofer-Julian in [#2564](https://github.com/prefix-dev/pixi/pull/2564)
+
+#### Documentation
+
+- Improve pixi manifest by @Hofer-Julian in [#2596](https://github.com/prefix-dev/pixi/pull/2596)
+
+#### Fixed
+
+- `pixi global list` failing for empty environments by @Hofer-Julian in [#2571](https://github.com/prefix-dev/pixi/pull/2571)
+- Macos activation cargo vars by @ruben-arts in [#2578](https://github.com/prefix-dev/pixi/pull/2578)
+- Trampoline without corresponding json breaking by @Hofer-Julian in [#2576](https://github.com/prefix-dev/pixi/pull/2576)
+- Ensure pinning strategy is not affected by non-semver packages by @seowalex in [#2580](https://github.com/prefix-dev/pixi/pull/2580)
+- Pypi installs happening every time by @tdejager in [#2587](https://github.com/prefix-dev/pixi/pull/2587)
+- `pixi global` report formatting by @Hofer-Julian in [#2595](https://github.com/prefix-dev/pixi/pull/2595)
+- Improve test speed and support win-arm64 by @baszalmstra in [#2597](https://github.com/prefix-dev/pixi/pull/2597)
+- Update Task::Alias to return command description by @jjjermiah in [#2607](https://github.com/prefix-dev/pixi/pull/2607)
+
+#### Refactor
+
+- Split install pypi into module and files by @tdejager in [#2590](https://github.com/prefix-dev/pixi/pull/2590)
+- PyPI installation traits + deduplication by @tdejager in [#2599](https://github.com/prefix-dev/pixi/pull/2599)
+
+#### Pixi build
+We've merged in the main `pixi build` feature branch. This is a big change but shouldn't have affected any of the current functionality.
+If you notice any issues, please let us know.
+
+It can be turned on by `preview = "pixi-build"` in your `pixi.toml` file. It's under heavy development so expect breaking changes in that feature for now.
+
+- Preview of `pixi build` and workspaces by @tdejager in [#2250](https://github.com/prefix-dev/pixi/pull/2250)
+- Build recipe yaml directly by @wolfv in [#2568](https://github.com/prefix-dev/pixi/pull/2568)
+
+#### New Contributors
+* @seowalex made their first contribution in [#2580](https://github.com/prefix-dev/pixi/pull/2580)
+
 ### [0.38.0] - 2024-11-26
 #### ✨ Highlights
 
