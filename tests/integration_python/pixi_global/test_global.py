@@ -28,21 +28,23 @@ def test_sync_dependencies(pixi: Path, wrapped_tmp: Path) -> None:
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], env=env)
     verify_cli_command([python_injected, "--version"], env=env, stdout_contains="3.12")
-    verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
+    verify_cli_command(
+        [python_injected, "-c", "import numpy as np; np.array()"], ExitCode.FAILURE, env=env
+    )
 
     # Add numpy
     parsed_toml["envs"]["test"]["dependencies"]["numpy"] = "*"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
-    verify_cli_command([python_injected, "-c", "import numpy"], env=env)
+    verify_cli_command([python_injected, "-c", "import numpy as np; np.array()"], env=env)
 
     # Remove numpy again
     del parsed_toml["envs"]["test"]["dependencies"]["numpy"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync", "-vv"], env=env)
-    verify_cli_command([python_injected, "-c", "import numpy"], ExitCode.FAILURE, env=env)
-
-    assert False
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    verify_cli_command(
+        [python_injected, "-c", "import numpy as np; np.array()"], ExitCode.FAILURE, env=env
+    )
 
     # Remove python
     del parsed_toml["envs"]["test"]["dependencies"]["python"]
