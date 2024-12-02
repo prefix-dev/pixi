@@ -399,7 +399,7 @@ jobs:
         run: |
           Copy-Item -Path "${{ github.workspace }}/ribasim" -Destination "${{ env.PIXI_WORKSPACE }}/ribasim" -Recurse
           pixi install
-        working-directory: env.PIXI_WORKSPACE/ribasim
+        working-directory: ${{ env.PIXI_WORKSPACE }}/ribasim
 
       - name: "Checkout quantco/polarify"
         uses: actions/checkout@v4
@@ -410,7 +410,7 @@ jobs:
         run: |
           Copy-Item -Path "${{ github.workspace }}/polarify" -Destination "${{ env.PIXI_WORKSPACE }}/polarify" -Recurse
           pixi install
-        working-directory: polarify
+        working-directory: ${{ env.PIXI_WORKSPACE }}/polarify
 
   test-integration-macos-aarch64:
     timeout-minutes: 30
