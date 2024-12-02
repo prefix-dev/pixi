@@ -195,9 +195,6 @@ impl ManifestSource {
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
-        // let dependency_table =
-        //     self.get_or_insert_toml_table(platform, feature_name, spec_type.name())?;
-
         let dependency_table = TableName::new()
             .with_prefix(self.table_prefix())
             .with_platform(platform.as_ref())
@@ -208,8 +205,6 @@ impl ManifestSource {
             .get_or_insert_nested_table(dependency_table.to_string().as_str())
             .map(|t| t.insert(name.as_normalized(), Item::Value(spec.to_toml_value())))?;
 
-        // dependency_table.insert(name.as_normalized(),
-        // Item::Value(spec.to_toml_value()));
         Ok(())
     }
 
@@ -280,7 +275,9 @@ impl ManifestSource {
                     .push(requirement.to_string());
                 Ok(())
             };
-        if feature_name.is_default() {
+        if feature_name.is_default()
+            || matches!(location, Some(PypiDependencyLocation::Dependencies))
+        {
             add_requirement(self, "project", "dependencies")?
         } else if matches!(location, Some(PypiDependencyLocation::OptionalDependencies)) {
             add_requirement(
