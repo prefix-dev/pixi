@@ -3,6 +3,7 @@ mod jsonrpc;
 pub mod protocol;
 mod protocols;
 
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 
 pub(crate) use protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
@@ -25,28 +26,13 @@ pub use crate::protocol::Protocol;
 
 pub use protocol_builder::EnabledProtocols;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BackendOverride {
     /// Overrwide the backend with a specific tool.
     Spec(MatchSpec),
 
     /// Overwrite the backend with a specific tool.
     System(String),
-
-    /// Use the given IO for the backend.
-    Io(InProcessBackend),
-}
-
-impl From<InProcessBackend> for BackendOverride {
-    fn from(value: InProcessBackend) -> Self {
-        Self::Io(value)
-    }
-}
-
-impl From<InProcessBackend> for Option<BackendOverride> {
-    fn from(value: InProcessBackend) -> Self {
-        Some(value.into())
-    }
 }
 
 /// A backend communication protocol that can run in the same process.
@@ -67,7 +53,7 @@ pub struct SetupRequest {
     pub source_dir: PathBuf,
 
     /// Overrides for the build tool.
-    pub build_tool_override: Option<BackendOverride>,
+    pub build_tool_override: HashMap<String, BackendOverride>,
 
     /// Identifier for the rest of the requests
     /// This is used to identify the requests that belong to the same build.

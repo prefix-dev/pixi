@@ -70,7 +70,6 @@ impl BackendOverride {
                 todo!("Add channels and implement the proper conversion")
             }
             BackendOverride::System(command) => ToolSpec::System(SystemToolSpec { command }),
-            BackendOverride::Io(process) => ToolSpec::Io(process),
         }
     }
 }

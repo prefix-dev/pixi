@@ -111,9 +111,9 @@ impl BuildFrontend {
             protocol.name(),
             request.source_dir.display()
         );
-
+        let tool_override = request.build_tool_override.get(protocol.name());
         protocol
-            .with_backend_override(request.build_tool_override)
+            .with_backend_override(tool_override.cloned())
             .finish(self.tool_context.clone(), request.build_id)
             .await
     }

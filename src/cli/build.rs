@@ -1,15 +1,15 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
-use clap::{ArgAction, Parser};
+use clap::Parser;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{CondaBuildReporter, SetupRequest};
+use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
 };
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, ParseMatchSpecError, Platform};
 
 use crate::{
     cli::cli_config::ProjectConfig,
@@ -18,9 +18,53 @@ use crate::{
     Project,
 };
 
+#[derive(Parser, Debug, Default, Clone)]
+pub struct BuildBackendOverrides {
+    #[arg(long = "override-build-backend", value_parser = parse_backend_override)]
+    overrides: Vec<(String, BackendOverride)>,
+}
+
+impl BuildBackendOverrides {
+    pub fn into_hashmap(self) -> HashMap<String, BackendOverride> {
+        self.overrides.into_iter().collect()
+    }
+}
+
+fn parse_backend_override(s: &str) -> Result<(String, BackendOverride), String> {
+    let parts: Vec<&str> = s.split('=').collect();
+    if parts.len() != 2 {
+        if parts[0].starts_with('/') {
+            let path = PathBuf::from(parts[0]);
+            if let Some(file_name) = path.file_name() {
+                return Ok((
+                    file_name.to_string_lossy().to_string(),
+                    BackendOverride::System(parts[0].into()),
+                ));
+            } else {
+                return Err("path did not have a file name".to_string());
+            }
+        } else {
+            return Err("invalid format".to_string());
+        }
+    }
+
+    let backend_name = parts[0].to_string();
+    if parts[1].starts_with('/') {
+        return Ok((backend_name, BackendOverride::System(parts[1].into())));
+    } else {
+        let match_spec = parts[1]
+            .parse()
+            .map_err(|e: ParseMatchSpecError| e.to_string())?;
+        return Ok((backend_name, BackendOverride::Spec(match_spec)));
+    }
+}
+
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
+    #[command(flatten)]
+    backend_overrides: BuildBackendOverrides,
+
     #[clap(flatten)]
     pub project_config: ProjectConfig,
 
@@ -34,10 +78,6 @@ pub struct Args {
     /// The output directory to place the build artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
-
-    /// Use system backend installed tool
-    #[arg(long, action = ArgAction::SetTrue)]
-    pub with_system: bool,
 }
 
 struct ProgressReporter {
@@ -84,6 +124,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.config_cli);
 
+    println!(
+        "Build system override: {:?}",
+        args.backend_overrides.clone().into_hashmap()
+    );
+
     // TODO: Implement logic to take the source code from a VCS instead of from a
     // local channel so that that information is also encoded in the manifest.
 
@@ -100,7 +145,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_tool_context(Arc::new(tool_context))
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_override: None,
+            build_tool_override: args.backend_overrides.into_hashmap(),
             build_id: 0,
         })
         .await
@@ -119,6 +164,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 pixi_dir.display()
             )
         })?;
+
     let work_dir = tempfile::Builder::new()
         .prefix("pixi-build-")
         .tempdir_in(project.pixi_dir())

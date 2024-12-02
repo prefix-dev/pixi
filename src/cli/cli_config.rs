@@ -22,6 +22,10 @@ pub struct ProjectConfig {
     /// The path to `pixi.toml` or `pyproject.toml`
     #[arg(long, global = true)]
     pub manifest_path: Option<PathBuf>,
+    // /// Build system override - you can point to an executable with the same
+    // /// name as a given build system to override it.
+    // #[arg(long, hide = true, global = true)]
+    // pub build_system_override: Vec<PathBuf>,
 }
 
 /// Channel configuration
@@ -104,6 +108,7 @@ pub struct PrefixUpdateConfig {
     #[arg(long)]
     pub revalidate: bool,
 }
+
 impl PrefixUpdateConfig {
     pub fn lock_file_usage(&self) -> LockFileUsage {
         if self.lock_file_usage.locked {
