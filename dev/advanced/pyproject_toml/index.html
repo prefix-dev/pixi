@@ -14,7 +14,7 @@
         <link rel="prev" href="../production_deployment/">
       
       
-        <link rel="next" href="../../reference/project_configuration/">
+        <link rel="next" href="../../reference/pixi_manifest/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -1326,7 +1326,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/project_configuration/" class="md-nav__link">
+      <a href="../../reference/pixi_manifest/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1719,7 +1719,7 @@ Pixi understands that field and automatically adds the dependencies to the proje
 <p>This would result in the conda dependencies being installed and the pypi dependencies being ignored.
 As pixi takes the conda dependencies over the pypi dependencies.</p>
 <h2 id="optional-dependencies">Optional dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">#</a></h2>
-<p>If your python project includes groups of optional dependencies, pixi will automatically interpret them as <a href="../../reference/project_configuration/#the-feature-table">pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
+<p>If your python project includes groups of optional dependencies, pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
 <p>You can add them to pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.</p>
 <p>For instance, imagine you have a project folder with a <code>pyproject.toml</code> file similar to:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project]</span>
@@ -1756,7 +1756,7 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
 </ul>
 <p>All environments will be solved together, as indicated by the common <code>solve-group</code>, and added to the lock file. You can edit the <code>[tool.pixi.environments]</code> section manually to adapt it to your use case (e.g. if you do not need a particular environment).</p>
 <h2 id="dependency-groups">Dependency groups<a class="headerlink" href="#dependency-groups" title="Permanent link">#</a></h2>
-<p>If your python project includes dependency groups, pixi will automatically interpret them as <a href="../../reference/project_configuration/#the-feature-table">pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
+<p>If your python project includes dependency groups, pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
 <p>You can add them to pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per dependency group.</p>
 <p>For instance, imagine you have a project folder with a <code>pyproject.toml</code> file similar to:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[project]</span>
@@ -1940,7 +1940,7 @@ The advantages of <code>hatchling</code> over <code>setuptools</code> are outlin
           
             
             <a
-              href="../../reference/project_configuration/"
+              href="../../reference/pixi_manifest/"
               class="md-footer__link md-footer__link--next"
               aria-label="Next: Pixi Manifest"
             >
