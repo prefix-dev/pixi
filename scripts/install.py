@@ -3,12 +3,8 @@ from pathlib import Path
 import shutil
 import platform
 import os
-import logging
-import sys
 
-DEFAULT_DESTINATION_DIR = Path.home().joinpath(".pixi", "bin")
-
-logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
+DEFAULT_DESTINATION_DIR = Path(os.getenv("PIXI_HOME", Path.home() / ".pixi")) / "bin"
 
 
 def executable_extension(name: str) -> str:
@@ -20,14 +16,14 @@ def executable_extension(name: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=f"Build pixi and copy the executable to {DEFAULT_DESTINATION_DIR} or a custom destination"
+        description=f"Build pixi and copy the executable to {DEFAULT_DESTINATION_DIR} or a custom destination specified by --dest"
     )
     parser.add_argument("name", type=str, help="Name of the executable (e.g. pixid)")
     parser.add_argument(
         "--dest",
         type=Path,
         default=DEFAULT_DESTINATION_DIR,
-        help=f"Destination directory for the executable, default: {DEFAULT_DESTINATION_DIR} (e.g $PIXI_HOME/bin)",
+        help=f"Destination directory for the executable, default: {DEFAULT_DESTINATION_DIR}",
     )
 
     args = parser.parse_args()
@@ -37,14 +33,9 @@ def main() -> None:
     )
     destination_path = args.dest.joinpath(executable_extension(args.name))
 
-    try:
-        logging.info(f"Copying the executable to {destination_path}")
-        destination_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(built_executable_path, destination_path)
-        logging.info("Done!")
-    except Exception as e:
-        logging.error(f"Failed to copy the executable: {e}")
-        sys.exit(1)
+    print(f"Copying the executable to {destination_path}")
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(built_executable_path, destination_path)
 
 
 if __name__ == "__main__":
