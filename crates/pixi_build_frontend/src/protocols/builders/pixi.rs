@@ -9,6 +9,8 @@ use pixi_consts::consts;
 use pixi_manifest::{Manifest, PackageManifest, PrioritizedChannel, WorkspaceManifest};
 // pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec};
+use serde::de::IntoDeserializer;
+use serde::Deserialize;
 use thiserror::Error;
 use which::Error;
 
@@ -199,6 +201,14 @@ impl ProtocolBuilder {
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.manifest_path,
+            self.package_manifest
+                .build_system
+                .build_backend
+                .additional_args
+                .map_or(serde_json::Value::Null, |value| {
+                    let deserializer = value.into_deserializer();
+                    serde_json::Value::deserialize(deserializer).unwrap_or(serde_json::Value::Null)
+                }),
             build_id,
             self.cache_dir,
             tool,

@@ -44,6 +44,8 @@ pub enum TomlError {
     MissingField(Cow<'static, str>, Option<Range<usize>>),
     #[error("{0}")]
     Generic(Cow<'static, str>, Option<Range<usize>>),
+    #[error("{0}")]
+    GenericLabels(Cow<'static, str>, Vec<LabeledSpan>),
     #[error(transparent)]
     FeatureNotEnabled(#[from] FeatureNotEnabled),
     #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
@@ -114,6 +116,7 @@ impl Diagnostic for TomlError {
             TomlError::Generic(_, span) | TomlError::MissingField(_, span) => {
                 span.clone().map(SourceSpan::from)
             }
+            TomlError::GenericLabels(_, spans) => return Some(Box::new(spans.clone().into_iter())),
             TomlError::FeatureNotEnabled(err) => return err.labels(),
             TomlError::InvalidNonPackageDependencies(err) => return err.labels(),
             _ => None,

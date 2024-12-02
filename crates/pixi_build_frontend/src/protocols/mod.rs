@@ -145,6 +145,7 @@ impl JsonRPCBuildProtocol {
     async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        configuration: serde_json::Value,
         build_id: usize,
         cache_dir: Option<PathBuf>,
         tool: Tool,
@@ -179,6 +180,7 @@ impl JsonRPCBuildProtocol {
                     backend_identifier,
                     source_dir,
                     manifest_path,
+                    configuration,
                     build_id,
                     cache_dir,
                     tx,
@@ -192,6 +194,7 @@ impl JsonRPCBuildProtocol {
                     "<IPC>".to_string(),
                     source_dir,
                     manifest_path,
+                    configuration,
                     build_id,
                     cache_dir,
                     Sender::from(ipc.rpc_out),
@@ -210,6 +213,7 @@ impl JsonRPCBuildProtocol {
         source_dir: PathBuf,
         // In case of rattler-build it's recipe.yaml
         manifest_path: PathBuf,
+        configuration: serde_json::Value,
         build_id: usize,
         cache_dir: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
@@ -229,6 +233,7 @@ impl JsonRPCBuildProtocol {
                     manifest_path: manifest_path.clone(),
                     capabilities: FrontendCapabilities {},
                     cache_directory: cache_dir,
+                    configuration,
                 }),
             )
             .await
