@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use miette::IntoDiagnostic;
@@ -10,7 +10,7 @@ use rattler_lock::{PypiPackageData, UrlOrPath};
 use url::Url;
 use uv_cache::Cache;
 use uv_distribution::RegistryWheelIndex;
-use uv_distribution_types::{CachedDist, Dist, InstalledDist, Name};
+use uv_distribution_types::{CachedDist, CachedRegistryDist, Dist, InstalledDist, Name};
 use uv_installer::SitePackages;
 use uv_pypi_types::ParsedGitUrl;
 
@@ -21,12 +21,62 @@ use super::{
 
 #[derive(Debug)]
 pub enum InstallReason {
+    /// Reinstall a package from the local cache, will link from the cache
     ReinstallCached,
+    /// Reinstall a package that we have determined to be stale, will be taken from the registry
     ReinstallStaleLocal,
+    /// Reinstall a package that is missing from the local cache, but is available in the registry
     ReinstallMissing,
-    InstallStaleLocal,
-    InstallMissing,
+    /// Install a package from the local cache, will link from the cache
     InstallCached,
+    /// Install a package that we have determined to be stale, will be taken from the registry
+    InstallStaleLocal,
+    /// Install a package that is missing from the local cache, but is available in the registry
+    InstallMissing,
+}
+
+/// This trait can be used to generalize over the different reason why a specific installation source was chosen
+/// So we can differentiate between re-installing and installing a package, this is all a bit verbose
+/// but can be quite useful for debugging and logging
+trait OperationToReason {
+    /// This package is available in the local cache
+    fn cached(&self) -> InstallReason;
+    /// This package is determined to be stale
+    fn stale(&self) -> InstallReason;
+    /// This package is missing from the local cache
+    fn missing(&self) -> InstallReason;
+}
+
+/// Use this struct to get the correct install reason
+struct Install;
+impl OperationToReason for Install {
+    fn cached(&self) -> InstallReason {
+        InstallReason::InstallCached
+    }
+
+    fn stale(&self) -> InstallReason {
+        InstallReason::InstallStaleLocal
+    }
+
+    fn missing(&self) -> InstallReason {
+        InstallReason::InstallMissing
+    }
+}
+
+/// Use this struct to get the correct reinstall reason
+struct Reinstall;
+impl OperationToReason for Reinstall {
+    fn cached(&self) -> InstallReason {
+        InstallReason::ReinstallCached
+    }
+
+    fn stale(&self) -> InstallReason {
+        InstallReason::ReinstallStaleLocal
+    }
+
+    fn missing(&self) -> InstallReason {
+        InstallReason::ReinstallMissing
+    }
 }
 
 /// Derived from uv [`uv_installer::Plan`]
@@ -170,7 +220,7 @@ enum ValidateCurrentInstall {
 fn need_reinstall(
     installed: &InstalledDist,
     locked: &PypiPackageData,
-    python_version: &pep440_rs::Version,
+    python_version: &uv_pep440::Version,
 ) -> miette::Result<ValidateCurrentInstall> {
     // Check if the installed version is the same as the required version
     match installed {
@@ -352,12 +402,11 @@ fn need_reinstall(
 
     if let Some(requires_python) = metadata.requires_python {
         // If the installed package requires a different python version
-        let uv_version = to_uv_version(python_version).into_diagnostic()?;
-        if !requires_python.contains(&uv_version) {
+        if !requires_python.contains(python_version) {
             return Ok(ValidateCurrentInstall::Reinstall(
                 NeedReinstall::RequiredPythonChanged {
                     installed_python_version: requires_python,
-                    locked_python_version: uv_version,
+                    locked_python_version: python_version.clone(),
                 },
             ));
         }
@@ -366,158 +415,225 @@ fn need_reinstall(
     Ok(ValidateCurrentInstall::Keep)
 }
 
-/// Figure out what we can link from the cache locally
-/// and what we need to download from the registry.
-/// Also determine what we need to remove.
-pub fn whats_the_plan<'a>(
-    site_packages: &'a mut SitePackages,
-    mut registry_index: RegistryWheelIndex<'a>,
-    required_pkgs: &'a HashMap<uv_normalize::PackageName, &'a PypiPackageData>,
-    uv_cache: &Cache,
-    python_version: &pep440_rs::Version,
-    lock_file_dir: &Path,
-) -> miette::Result<PixiInstallPlan> {
-    // Packages to be removed
-    let mut extraneous = vec![];
-    // Packages to be installed directly from the cache
-    let mut local = vec![];
-    // Try to install from the registry or direct url or w/e
-    let mut remote = vec![];
-    // Packages that need to be reinstalled
-    // i.e. need to be removed before being installed
-    let mut reinstalls = vec![];
+// Below we define a couple of traits so that we can make the creaton of the install plan
+// somewhat more abstract
 
-    // Will contain the packages that have been previously installed
-    // and a decision has been made what to do with them
-    let mut prev_installed_packages = HashSet::new();
+/// Provide an iterator over the installed distributions
+/// This trait can also be used to mock the installed distributions for testing purposes
+pub trait InstalledDistProvider<'a> {
+    /// Provide an iterator over the installed distributions
+    fn iter(&'a self) -> impl Iterator<Item = &'a InstalledDist>;
+}
 
-    // Walk over all installed packages and check if they are required
-    for dist in site_packages.iter() {
-        // Check if we require the package to be installed
-        let pkg = required_pkgs.get(dist.name());
-        // Get the installer name
-        let installer = dist
-            .installer()
-            // Empty string if no installer or any other error
-            .map_or(String::new(), |f| f.unwrap_or_default());
+impl<'a> InstalledDistProvider<'a> for SitePackages {
+    fn iter(&'a self) -> impl Iterator<Item = &'a InstalledDist> {
+        self.iter()
+    }
+}
 
-        match pkg {
-            Some(pkg) => {
-                // Add to the list of previously installed packages
-                prev_installed_packages.insert(dist.name());
-                // Check if we need this package installed but it is not currently installed by us
-                if installer != consts::PIXI_UV_INSTALLER {
-                    // We are managing the package but something else has installed a version
-                    // let's re-install to make sure that we have the **correct** version
-                    reinstalls.push((
-                        dist.clone(),
-                        NeedReinstall::InstallerMismatch {
-                            previous_installer: installer.clone(),
-                        },
-                    ));
-                } else {
-                    // Check if we need to reinstall
-                    match need_reinstall(dist, pkg, python_version)? {
-                        ValidateCurrentInstall::Keep => {
-                            // No need to reinstall
-                            // Remove from the required map
-                            continue;
-                        }
-                        ValidateCurrentInstall::Reinstall(reason) => {
-                            reinstalls.push((dist.clone(), reason));
+/// Provides a way to get the potentially cached distribution, if it exists
+/// This trait can also be used to mock the cache for testing purposes
+pub trait CachedDistProvider<'a> {
+    /// Get the cached distribution for a package name and version
+    fn get_cached_dist(
+        &mut self,
+        name: &'a uv_normalize::PackageName,
+        version: uv_pep440::Version,
+    ) -> Option<CachedRegistryDist>;
+}
+
+impl<'a> CachedDistProvider<'a> for RegistryWheelIndex<'a> {
+    fn get_cached_dist(
+        &mut self,
+        name: &'a uv_normalize::PackageName,
+        version: uv_pep440::Version,
+    ) -> Option<CachedRegistryDist> {
+        let index = self
+            .get(name)
+            .find(|entry| entry.dist.filename.version == version);
+        index.map(|index| index.dist.clone())
+    }
+}
+
+/// Struct that handles the planning of the installation
+/// of the PyPI packages into an existing conda environment with specific
+/// locked data
+///
+/// When executing the [`InstallPlanner::plan`] method, we will figure out what
+/// we can link from the cache locally and what we need to download from the registry.
+/// As well as determine what we need to remove, which we call extraneous packages.
+///
+/// This is all inspired by the structs and methods in the uv crate, specifically the `uv_installer` module.
+/// But all of it is heavily modified as we need to use our locked data for comparison, and also ignore some things
+/// that uv would usually act on.
+pub struct InstallPlanner {
+    uv_cache: Cache,
+    python_version: uv_pep440::Version,
+    lock_file_dir: PathBuf,
+}
+
+impl InstallPlanner {
+    pub fn new(
+        uv_cache: Cache,
+        python_version: &uv_pep440::Version,
+        lock_file_dir: impl AsRef<Path>,
+    ) -> Self {
+        Self {
+            uv_cache,
+            python_version: python_version.clone(),
+            lock_file_dir: lock_file_dir.as_ref().to_path_buf(),
+        }
+    }
+
+    /// Decide if we need to get the distribution from the local cache or the registry
+    /// this method will add the distribution to the local or remote vector,
+    /// depending on whether the version is stale, available locally or not
+    fn decide_installation_source<'a, Op: OperationToReason>(
+        &self,
+        name: &'a uv_normalize::PackageName,
+        required_pkg: &PypiPackageData,
+        local: &mut Vec<(CachedDist, InstallReason)>,
+        remote: &mut Vec<(Dist, InstallReason)>,
+        dist_cache: &mut impl CachedDistProvider<'a>,
+        op_to_reason: Op,
+    ) -> miette::Result<()> {
+        // Okay so we need to re-install the package
+        // let's see if we need the remote or local version
+
+        // First, check if we need to revalidate the package
+        // then we should get it from the remote
+        if self.uv_cache.must_revalidate(name) {
+            remote.push((
+                convert_to_dist(required_pkg, &self.lock_file_dir).into_diagnostic()?,
+                op_to_reason.stale(),
+            ));
+            return Ok(());
+        }
+        let uv_version = to_uv_version(&required_pkg.version).into_diagnostic()?;
+        // If it is not stale its either in the registry cache or not
+        let cached = dist_cache.get_cached_dist(name, uv_version);
+        // If we have it in the cache we can use that
+        if let Some(distribution) = cached {
+            local.push((CachedDist::Registry(distribution), op_to_reason.cached()));
+        // If we don't have it in the cache we need to download it
+        } else {
+            remote.push((
+                convert_to_dist(required_pkg, &self.lock_file_dir).into_diagnostic()?,
+                op_to_reason.missing(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Figure out what we can link from the cache locally
+    /// and what we need to download from the registry.
+    /// Also determine what we need to remove.
+    ///
+    /// All the 'a lifetimes are to to make sure that the names provided to the CachedDistProvider
+    /// are valid for the lifetime of the CachedDistProvider and what is passed to the method
+    pub fn plan<'a, Installed: InstalledDistProvider<'a>, Cached: CachedDistProvider<'a> + 'a>(
+        &self,
+        site_packages: &'a Installed,
+        mut dist_cache: Cached,
+        required_pkgs: &'a HashMap<uv_normalize::PackageName, &PypiPackageData>,
+    ) -> miette::Result<PixiInstallPlan> {
+        // Packages to be removed
+        let mut extraneous = vec![];
+        // Packages to be installed directly from the cache
+        let mut local = vec![];
+        // Try to install from the registry or direct url or w/e
+        let mut remote = vec![];
+        // Packages that need to be reinstalled
+        // i.e. need to be removed before being installed
+        let mut reinstalls = vec![];
+
+        // Will contain the packages that have been previously installed
+        // and a decision has been made what to do with them
+        let mut prev_installed_packages = HashSet::new();
+
+        // Walk over all installed packages and check if they are required
+        for dist in site_packages.iter() {
+            // Check if we require the package to be installed
+            let pkg = required_pkgs.get(dist.name());
+            // Get the installer name
+            let installer = dist
+                .installer()
+                // Empty string if no installer or any other error
+                .map_or(String::new(), |f| f.unwrap_or_default());
+
+            match pkg {
+                Some(required_pkg) => {
+                    // Add to the list of previously installed packages
+                    prev_installed_packages.insert(dist.name());
+                    // Check if we need this package installed but it is not currently installed by us
+                    if installer != consts::PIXI_UV_INSTALLER {
+                        // We are managing the package but something else has installed a version
+                        // let's re-install to make sure that we have the **correct** version
+                        reinstalls.push((
+                            dist.clone(),
+                            NeedReinstall::InstallerMismatch {
+                                previous_installer: installer.clone(),
+                            },
+                        ));
+                    } else {
+                        // Check if we need to reinstall
+                        match need_reinstall(dist, required_pkg, &self.python_version)? {
+                            ValidateCurrentInstall::Keep => {
+                                // No need to reinstall
+                                continue;
+                            }
+                            ValidateCurrentInstall::Reinstall(reason) => {
+                                reinstalls.push((dist.clone(), reason));
+                            }
                         }
                     }
+                    // Okay so we need to re-install the package
+                    // let's see if we need the remote or local version
+                    self.decide_installation_source(
+                        dist.name(),
+                        required_pkg,
+                        &mut local,
+                        &mut remote,
+                        &mut dist_cache,
+                        Reinstall,
+                    )?;
                 }
-
-                // Okay so we need to re-install the package
-                // let's see if we need the remote or local version
-
-                // First, check if we need to revalidate the package
-                // then we should get it from the remote
-                if uv_cache.must_revalidate(dist.name()) {
-                    remote.push((
-                        convert_to_dist(pkg, lock_file_dir).into_diagnostic()?,
-                        InstallReason::ReinstallStaleLocal,
-                    ));
+                // Second case we are not managing the package
+                None if installer != consts::PIXI_UV_INSTALLER => {
+                    // Ignore packages that we are not managed by us
                     continue;
                 }
-                let uv_version = to_uv_version(&pkg.version).into_diagnostic()?;
-                // If it is not stale its either in the registry cache or not
-                let wheel = registry_index
-                    .get(dist.name())
-                    .find(|entry| entry.dist.filename.version == uv_version);
-
-                // If we have it in the cache we can use that
-                if let Some(cached) = wheel {
-                    let entire_cloned = cached.clone();
-                    local.push((
-                        CachedDist::Registry(entire_cloned.dist.clone()),
-                        InstallReason::ReinstallCached,
-                    ));
-                // If we don't have it in the cache we need to download it
-                } else {
-                    remote.push((
-                        convert_to_dist(pkg, lock_file_dir).into_diagnostic()?,
-                        InstallReason::ReinstallMissing,
-                    ));
+                // Third case we *are* managing the package but it is no longer required
+                None => {
+                    // Add to the extraneous list
+                    // as we do manage it but have no need for it
+                    extraneous.push(dist.clone());
                 }
             }
-            // Second case we are not managing the package
-            None if installer != consts::PIXI_UV_INSTALLER => {
-                // Ignore packages that we are not managed by us
-                continue;
-            }
-            // Third case we *are* managing the package but it is no longer required
-            None => {
-                // Add to the extraneous list
-                // as we do manage it but have no need for it
-                extraneous.push(dist.clone());
-            }
         }
+
+        // Now we need to check if we have any packages left in the required_map
+        for (name, pkg) in required_pkgs
+            .iter()
+            // Only check the packages that have not been previously installed
+            .filter(|(name, _)| !prev_installed_packages.contains(name))
+        {
+            // Decide if we need to get the distribution from the local cache or the registry
+            self.decide_installation_source(
+                name,
+                pkg,
+                &mut local,
+                &mut remote,
+                &mut dist_cache,
+                Install,
+            )?;
+        }
+
+        Ok(PixiInstallPlan {
+            local,
+            remote,
+            reinstalls,
+            extraneous,
+        })
     }
-
-    // Now we need to check if we have any packages left in the required_map
-    for (name, pkg) in required_pkgs
-        .iter()
-        // Only check the packages that have not been previously installed
-        .filter(|(name, _)| !prev_installed_packages.contains(name))
-    {
-        // Check if we need to revalidate
-        // In that case we need to download from the registry
-        if uv_cache.must_revalidate(name) {
-            remote.push((
-                convert_to_dist(pkg, lock_file_dir).into_diagnostic()?,
-                InstallReason::InstallStaleLocal,
-            ));
-            continue;
-        }
-
-        let uv_version = to_uv_version(&pkg.version).into_diagnostic()?;
-
-        // Do we have in the registry cache?
-        let wheel = registry_index
-            .get(name)
-            .find(|entry| entry.dist.filename.version == uv_version)
-            .cloned();
-        if let Some(cached) = wheel {
-            // Sure we have it in the cache, lets use that
-            local.push((
-                CachedDist::Registry(cached.dist),
-                InstallReason::InstallCached,
-            ));
-        } else {
-            // We need to download from the registry or any url
-            remote.push((
-                convert_to_dist(pkg, lock_file_dir).into_diagnostic()?,
-                InstallReason::InstallMissing,
-            ));
-        }
-    }
-
-    Ok(PixiInstallPlan {
-        local,
-        remote,
-        reinstalls,
-        extraneous,
-    })
 }

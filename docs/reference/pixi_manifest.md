@@ -17,7 +17,7 @@ For more technical documentation check pixi on [docs.rs](https://docs.rs/pixi/la
 
 ## Manifest discovery
 
-The manifest can be found at the following locations depending on your operating system.
+The manifest can be found at the following locations.
 
 
 | **Priority** | **Location**                                                           | **Comments**                                                                       |

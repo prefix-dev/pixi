@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use itertools::Itertools;
@@ -32,7 +32,7 @@ use crate::{
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 
-use plan::{whats_the_plan, InstallReason, NeedReinstall, PixiInstallPlan};
+use plan::{InstallPlanner, InstallReason, NeedReinstall, PixiInstallPlan};
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -79,6 +79,7 @@ pub async fn update_python_distributions(
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
             .client(uv_context.client.clone())
+            .allow_insecure_host(uv_context.allow_insecure_host.clone())
             .index_urls(index_locations.index_urls())
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
@@ -154,7 +155,7 @@ pub async fn update_python_distributions(
         .with_context(|| "error locking installation directory")?;
 
     // Find out what packages are already installed
-    let mut site_packages =
+    let site_packages =
         SitePackages::from_environment(&venv).expect("could not create site-packages");
 
     tracing::debug!(
@@ -189,15 +190,12 @@ pub async fn update_python_distributions(
         remote,
         reinstalls,
         extraneous,
-    } = whats_the_plan(
-        &mut site_packages,
-        registry_index,
-        &required_map,
-        &uv_context.cache,
-        &pep440_rs::Version::from_str(&venv.interpreter().python_version().to_string())
-            .expect("should be the same"),
+    } = InstallPlanner::new(
+        uv_context.cache.clone(),
+        venv.interpreter().python_version(),
         lock_file_dir,
-    )?;
+    )
+    .plan(&site_packages, registry_index, &required_map)?;
 
     // Determine the currently installed conda packages.
     let installed_packages = prefix

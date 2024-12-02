@@ -151,10 +151,10 @@ impl ConfigCliPrompt {
 #[serde(rename_all = "kebab-case")]
 pub struct RepodataConfig {
     #[serde(flatten)]
-    default: RepodataChannelConfig,
+    pub default: RepodataChannelConfig,
 
     #[serde(flatten)]
-    per_channel: HashMap<Url, RepodataChannelConfig>,
+    pub per_channel: HashMap<Url, RepodataChannelConfig>,
 }
 
 impl RepodataConfig {
@@ -280,6 +280,10 @@ pub struct PyPIConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyring_provider: Option<KeyringProvider>,
+    /// Allow insecure connections to a host
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub allow_insecure_host: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -412,6 +416,11 @@ impl PyPIConfig {
             index_url: other.index_url.or(self.index_url),
             extra_index_urls,
             keyring_provider: other.keyring_provider.or(self.keyring_provider),
+            allow_insecure_host: self
+                .allow_insecure_host
+                .into_iter()
+                .chain(other.allow_insecure_host)
+                .collect(),
         }
     }
 
@@ -585,7 +594,6 @@ pub struct Config {
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    #[serde(alias = "channel_config")] // BREAK: remove to stop supporting snake_case alias
     channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
@@ -696,6 +704,23 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
 }
 
 impl Config {
+    /// Constructs a new config that is optimized to be used in tests.
+    ///
+    /// This instance is optimized to provide the fastest experience for tests.
+    pub fn for_tests() -> Self {
+        let mut config = Config::default();
+        // Use prefix.dev as the default channel alias
+        config.channel_config.channel_alias = Url::parse("https://prefix.dev").unwrap();
+
+        // Use conda-forge as the default channel
+        config.default_channels = vec![NamedChannelOrUrl::Name("conda-forge".into())];
+
+        // Enable sharded repodata by default.
+        config.repodata_config.default.disable_sharded = Some(false);
+
+        config
+    }
+
     /// Parse the given toml string and return a Config instance.
     ///
     /// # Returns
@@ -1341,6 +1366,22 @@ UNUSED = "unused"
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
+        );
+    }
+
+    #[test]
+    fn test_pypi_config_allow_insecure_host() {
+        let toml = r#"
+            [pypi-config]
+            index-url = "https://pypi.org/simple"
+            extra-index-urls = ["https://pypi.org/simple2"]
+            keyring-provider = "subprocess"
+            allow-insecure-host = ["https://localhost:1234", "*"]
+        "#;
+        let (config, _) = Config::from_toml(toml).unwrap();
+        assert_eq!(
+            config.pypi_config().allow_insecure_host,
+            vec!["https://localhost:1234", "*",]
         );
     }
 

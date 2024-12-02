@@ -18,7 +18,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-
 use tempfile::TempDir;
 use uv_python::PythonEnvironment;
 
@@ -307,7 +306,7 @@ async fn pypi_reinstall_python() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
-    pixi.add("python==3.11").with_install(true).await.unwrap();
+    pixi.add("python==3.11").await.unwrap();
 
     // Add flask from pypi
     pixi.add("flask")
