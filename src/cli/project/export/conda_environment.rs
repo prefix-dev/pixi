@@ -1,10 +1,12 @@
 use std::path::PathBuf;
 
 use crate::cli::cli_config::ProjectConfig;
+use crate::{project::Environment, Project};
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
+use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
 use pixi_manifest::{
     pypi::{PyPiPackageName, VersionOrStar},
     FeaturesExt, PyPiRequirement,
@@ -13,9 +15,6 @@ use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
 };
-use rattler_lock::FindLinksUrlOrPath;
-
-use crate::{project::Environment, Project};
 
 #[derive(Debug, Parser)]
 pub struct Args {

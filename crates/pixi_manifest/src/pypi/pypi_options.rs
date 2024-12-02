@@ -1,24 +1,30 @@
-use crate::consts;
+use std::{fmt::Display, hash::Hash, path::PathBuf};
+
 use indexmap::IndexSet;
-use rattler_lock::{FindLinksUrlOrPath, PypiIndexes};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{fmt::Display, hash::Hash, iter};
 use thiserror::Error;
 use url::Url;
 
 // taken from: https://docs.astral.sh/uv/reference/settings/#index-strategy
 /// The strategy to use when resolving against multiple index URLs.
-/// By default, uv will stop at the first index on which a given package is available, and limit resolutions to those present on that first index (first-match). This prevents "dependency confusion" attacks, whereby an attack can upload a malicious package under the same name to a secondary.
+/// By default, uv will stop at the first index on which a given package is
+/// available, and limit resolutions to those present on that first index
+/// (first-match). This prevents "dependency confusion" attacks, whereby an
+/// attack can upload a malicious package under the same name to a secondary.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum IndexStrategy {
     #[default]
-    /// Only use results from the first index that returns a match for a given package name
+    /// Only use results from the first index that returns a match for a given
+    /// package name
     FirstIndex,
-    /// Search for every package name across all indexes, exhausting the versions from the first index before moving on to the next
+    /// Search for every package name across all indexes, exhausting the
+    /// versions from the first index before moving on to the next
     UnsafeFirstMatch,
-    /// Search for every package name across all indexes, preferring the "best" version found. If a package version is in multiple indexes, only look at the entry for the first index
+    /// Search for every package name across all indexes, preferring the "best"
+    /// version found. If a package version is in multiple indexes, only look at
+    /// the entry for the first index
     UnsafeBestMatch,
 }
 
@@ -31,6 +37,16 @@ impl Display for IndexStrategy {
         };
         write!(f, "{}", s)
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum FindLinksUrlOrPath {
+    /// Can be a path to a directory or a file containing the flat index
+    Path(PathBuf),
+
+    /// Can be a URL to a flat index
+    Url(Url),
 }
 
 /// Specific options for a PyPI registries
@@ -104,8 +120,10 @@ impl PypiOptions {
 
     /// Merges two `PypiOptions` together, according to the following rules
     /// - There can only be one primary index
-    /// - Extra indexes are merged and deduplicated, in the order they are provided
-    /// - Flat indexes are merged and deduplicated, in the order they are provided
+    /// - Extra indexes are merged and deduplicated, in the order they are
+    ///   provided
+    /// - Flat indexes are merged and deduplicated, in the order they are
+    ///   provided
     pub fn union(&self, other: &PypiOptions) -> Result<PypiOptions, PypiOptionsMergeError> {
         let index = if let Some(other_index) = other.index_url.clone() {
             // Allow only one index
@@ -184,23 +202,50 @@ impl PypiOptions {
     }
 }
 
+#[cfg(feature = "rattler_lock")]
 impl From<PypiOptions> for rattler_lock::PypiIndexes {
     fn from(value: PypiOptions) -> Self {
         let primary_index = value
             .index_url
-            .unwrap_or(consts::DEFAULT_PYPI_INDEX_URL.clone());
+            .unwrap_or(pixi_consts::consts::DEFAULT_PYPI_INDEX_URL.clone());
         Self {
-            indexes: iter::once(primary_index)
+            indexes: std::iter::once(primary_index)
                 .chain(value.extra_index_urls.into_iter().flatten())
                 .collect(),
-            find_links: value.find_links.into_iter().flatten().collect(),
+            find_links: value
+                .find_links
+                .into_iter()
+                .flatten()
+                .map(Into::into)
+                .collect(),
         }
     }
 }
 
+#[cfg(feature = "rattler_lock")]
+impl From<FindLinksUrlOrPath> for rattler_lock::FindLinksUrlOrPath {
+    fn from(value: FindLinksUrlOrPath) -> Self {
+        match value {
+            FindLinksUrlOrPath::Path(path) => rattler_lock::FindLinksUrlOrPath::Path(path),
+            FindLinksUrlOrPath::Url(url) => rattler_lock::FindLinksUrlOrPath::Url(url),
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<rattler_lock::FindLinksUrlOrPath> for FindLinksUrlOrPath {
+    fn from(value: rattler_lock::FindLinksUrlOrPath) -> Self {
+        match value {
+            rattler_lock::FindLinksUrlOrPath::Path(path) => FindLinksUrlOrPath::Path(path),
+            rattler_lock::FindLinksUrlOrPath::Url(url) => FindLinksUrlOrPath::Url(url),
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
 impl From<&PypiOptions> for rattler_lock::PypiIndexes {
     fn from(value: &PypiOptions) -> Self {
-        PypiIndexes::from(value.clone())
+        rattler_lock::PypiIndexes::from(value.clone())
     }
 }
 
@@ -218,11 +263,11 @@ pub enum PypiOptionsMergeError {
 
 #[cfg(test)]
 mod tests {
-    use crate::pypi::pypi_options::IndexStrategy;
+    use super::*;
+    use url::Url;
 
     use super::PypiOptions;
-    use rattler_lock::FindLinksUrlOrPath;
-    use url::Url;
+    use crate::pypi::pypi_options::IndexStrategy;
 
     #[test]
     fn test_deserialize_pypi_options() {
