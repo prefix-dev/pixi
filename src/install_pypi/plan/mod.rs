@@ -19,6 +19,7 @@ use super::{
     utils::{check_url_freshness, strip_direct_scheme},
 };
 
+#[cfg(test)]
 mod tests;
 
 #[derive(Debug)]
@@ -299,8 +300,7 @@ fn need_reinstall(
                                         path
                                     } else {
                                         // Relative paths will be relative to the lock file directory
-                                        let abs_path = lock_file_dir.join(path);
-                                        abs_path
+                                        lock_file_dir.join(path)
                                     };
                                     // Okay, now convert to a file path, if we cant do that we need to re-install
                                     match Url::from_file_path(path.clone()) {
