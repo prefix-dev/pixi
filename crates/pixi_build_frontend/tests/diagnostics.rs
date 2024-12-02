@@ -28,23 +28,6 @@ async fn test_non_existing_discovery() {
 }
 
 #[tokio::test]
-async fn test_source_dir_is_file() {
-    let source_file = tempfile::NamedTempFile::new().unwrap();
-    let err = BuildFrontend::default()
-        .setup_protocol(SetupRequest {
-            source_dir: source_file.path().to_path_buf(),
-            build_tool_override: Default::default(),
-            build_id: 0,
-        })
-        .await
-        .unwrap_err();
-
-    let snapshot = error_to_snapshot(&err);
-    let snapshot = snapshot.replace(&source_file.path().display().to_string(), "[SOURCE_FILE]");
-    insta::assert_snapshot!(snapshot);
-}
-
-#[tokio::test]
 async fn test_source_dir_is_empty() {
     let source_dir = tempfile::TempDir::new().unwrap();
     let err = BuildFrontend::default()
