@@ -140,6 +140,9 @@ pub enum ConversionError {
 
     #[error(transparent)]
     InvalidVersion(#[from] VersionError),
+
+    #[error(transparent)]
+    TrustedHostError(#[from] uv_configuration::TrustedHostError),
 }
 
 pub fn to_requirements<'req>(
@@ -263,4 +266,11 @@ pub fn to_version_specifiers(
         pep440_rs::VersionSpecifiers::from_str(&version_specifier.to_string())
             .map_err(VersionSpecifiersError::PepVersionError)?,
     )
+}
+
+/// Converts trusted_host `string` to `uv_configuration::TrustedHost`
+pub fn to_uv_trusted_host(
+    trusted_host: &str,
+) -> Result<uv_configuration::TrustedHost, ConversionError> {
+    Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
 }

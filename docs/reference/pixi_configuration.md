@@ -185,6 +185,7 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 - `index-url`: The default index URL to use for PyPI packages. This will be added to a manifest file on a `pixi init`.
 - `extra-index-urls`: A list of additional URLs to use for PyPI packages. This will be added to a manifest file on a `pixi init`.
 - `keyring-provider`: Allows the use of the [keyring](https://pypi.org/project/keyring/) python package to store and retrieve credentials.
+- `allow-insecure-host`: Allow insecure connections to host.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pypi-config"
