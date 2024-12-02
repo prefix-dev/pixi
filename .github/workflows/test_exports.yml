@@ -26,7 +26,7 @@ jobs:
       - name: checkout repo
         uses: actions/checkout@v4
       - name: setup micromamba
-        uses: mamba-org/setup-micromamba@v2.0.1
+        uses: mamba-org/setup-micromamba@v2.0.2
       - name: Download binary from build
         uses: actions/download-artifact@v4
         with:
