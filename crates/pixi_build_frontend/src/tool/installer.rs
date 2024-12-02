@@ -180,13 +180,7 @@ impl ToolContext {
             .map_err(ToolCacheError::Install)?;
 
         // Return the installed tool as a non arc instance
-        let tool = IsolatedTool::new(
-            installed.command.clone(),
-            installed.prefix.clone(),
-            installed.activation_scripts.clone(),
-        );
-
-        Ok(tool.into())
+        Ok(installed.as_ref().clone().into())
     }
 }
 

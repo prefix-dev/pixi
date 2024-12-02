@@ -20,9 +20,9 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub fn as_isolated(&self) -> Option<IsolatedTool> {
+    pub fn as_isolated(&self) -> Option<&IsolatedTool> {
         match self {
-            Tool::Isolated(tool) => Some(tool.clone()),
+            Tool::Isolated(tool) => Some(tool),
             Tool::System(_) => None,
             Tool::Io(_) => None,
         }
