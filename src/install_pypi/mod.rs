@@ -294,7 +294,7 @@ pub async fn update_python_distributions(
     }
 
     // Download, build, and unzip any missing distributions.
-    let wheels = if remote.is_empty() {
+    let remote_dists = if remote.is_empty() {
         Vec::new()
     } else {
         let start = std::time::Instant::now();
@@ -327,7 +327,7 @@ pub async fn update_python_distributions(
         )
         .with_reporter(UvReporter::new(options));
 
-        let wheels = preparer
+        let remote_dists = preparer
             .prepare(
                 remote.iter().map(|(d, _)| d.clone()).collect(),
                 &uv_context.in_flight,
@@ -336,17 +336,17 @@ pub async fn update_python_distributions(
             .into_diagnostic()
             .context("Failed to prepare distributions")?;
 
-        let s = if wheels.len() == 1 { "" } else { "s" };
+        let s = if remote_dists.len() == 1 { "" } else { "s" };
         tracing::info!(
             "{}",
             format!(
                 "Prepared {} in {}",
-                format!("{} package{}", wheels.len(), s),
+                format!("{} package{}", remote_dists.len(), s),
                 elapsed(start.elapsed())
             )
         );
 
-        wheels
+        remote_dists
     };
 
     // Remove any unnecessary packages.
@@ -407,8 +407,12 @@ pub async fn update_python_distributions(
     }
 
     // Install the resolved distributions.
-    let local_iter = local.iter().map(|(d, _)| d.clone());
-    let wheels = wheels.into_iter().chain(local_iter).collect::<Vec<_>>();
+    // At this point we have all the wheels we need to install available to link locally
+    let local_dists = local.iter().map(|(d, _)| d.clone());
+    let all_dists = remote_dists
+        .into_iter()
+        .chain(local_dists)
+        .collect::<Vec<_>>();
 
     // Figure what wheels needed to be re-installed because of an installer mismatch
     // we want to handle these somewhat differently and warn the user about them
@@ -426,7 +430,7 @@ pub async fn update_python_distributions(
     // Verify if pypi wheels will override existing conda packages
     // and warn if they are
     if let Ok(Some(clobber_packages)) =
-        pypi_conda_clobber.clobber_on_installation(wheels.clone(), &venv)
+        pypi_conda_clobber.clobber_on_installation(all_dists.clone(), &venv)
     {
         let packages_names = clobber_packages.iter().join(", ");
 
@@ -451,27 +455,27 @@ pub async fn update_python_distributions(
     }
 
     let options = UvReporterOptions::new()
-        .with_length(wheels.len() as u64)
-        .with_capacity(wheels.len() + 30)
-        .with_starting_tasks(wheels.iter().map(|d| format!("{}", d.name())))
+        .with_length(all_dists.len() as u64)
+        .with_capacity(all_dists.len() + 30)
+        .with_starting_tasks(all_dists.iter().map(|d| format!("{}", d.name())))
         .with_top_level_message("Installing distributions");
 
-    if !wheels.is_empty() {
+    if !all_dists.is_empty() {
         let start = std::time::Instant::now();
         uv_installer::Installer::new(&venv)
             .with_link_mode(LinkMode::default())
             .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new(options))
-            .install(wheels.clone())
+            .install(all_dists.clone())
             .await
             .unwrap();
 
-        let s = if wheels.len() == 1 { "" } else { "s" };
+        let s = if all_dists.len() == 1 { "" } else { "s" };
         tracing::info!(
             "{}",
             format!(
                 "Installed {} in {}",
-                format!("{} package{}", wheels.len(), s),
+                format!("{} package{}", all_dists.len(), s),
                 elapsed(start.elapsed())
             )
         );
