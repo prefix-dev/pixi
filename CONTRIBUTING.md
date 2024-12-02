@@ -69,7 +69,7 @@ positional arguments:
 
 options:
   -h, --help            show this help message and exit
-  --dest DEST           Destination directory for the executable, default: ~/.pixi/bin (e.g $PIXI_HOME/bin)
+  --dest DEST           Destination directory for the executable, default: $PIXI_HOME/bin (or ~/.pixi/bin if $PIXI_HOME isn't set)
 ```
 
 ## Get your code ready for a PR
