@@ -4,9 +4,9 @@ use rattler_conda_types::PrefixRecord;
 use uv_distribution_types::CachedDist;
 use uv_python::PythonEnvironment;
 
-use crate::install_wheel::get_wheel_info;
-
 use ahash::{AHashMap, AHashSet};
+
+use super::install_wheel::get_wheel_info;
 
 #[derive(Default, Debug)]
 pub(crate) struct PypiCondaClobberRegistry {
