@@ -534,17 +534,17 @@ def test_upgrade_dependency_location(pixi: Path, tmp_path: Path) -> None:
     # Making sure pixi places the upgraded package in the correct location
     manifest_path = tmp_path / "pyproject.toml"
     pyproject = """
-    [project]
-    dependencies = []
-    name = "test-upgrade"
-    requires-python = ">= 3.11"
+[project]
+dependencies = []
+name = "test-upgrade"
+requires-python = ">= 3.11"
 
-    [tool.pixi.project]
-    channels = ["conda-forge"]
-    platforms = ["linux-64"]
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
 
-    [tool.pixi.pypi-dependencies]
-    polars = "==0.*"
+[tool.pixi.pypi-dependencies]
+polars = "==0.*"
     """
 
     manifest_path.write_text(pyproject)
