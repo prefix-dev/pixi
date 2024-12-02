@@ -421,8 +421,6 @@ fn test_install_required_installer_mismatch() {
         .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
-    // We should install a single package
-    // from the remote because we do not cache
     assert_matches::assert_matches!(
         install_plan.reinstalls[0].1,
         NeedReinstall::InstallerMismatch { ref previous_installer } if previous_installer == "i-am-not-pixi"
@@ -471,8 +469,6 @@ fn test_install_required_python_mismatch() {
         .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
-    // We should install a single package
-    // from the remote because we do not cache
     assert_matches::assert_matches!(
         install_plan.reinstalls[0].1,
         NeedReinstall::RequiredPythonChanged {
