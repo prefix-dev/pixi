@@ -195,6 +195,22 @@ fn parse_specs(
                 None
             }
         })
+        // Only upgrade in pyproject.toml if it is explicitly mentioned in `tool.pixi.dependencies.python`
+        .filter(|(name, _)| {
+            if name.as_normalized() == "python" {
+                if let pixi_manifest::ManifestSource::PyProjectToml(document) =
+                    project.manifest.document.clone()
+                {
+                    if document
+                        .get_nested_table("[tool.pixi.dependencies.python]")
+                        .is_err()
+                    {
+                        return false;
+                    }
+                }
+            }
+            true
+        })
         .collect();
     let pypi_deps = pypi_deps_iter
         // Don't upgrade excluded packages

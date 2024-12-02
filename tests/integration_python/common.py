@@ -7,6 +7,16 @@ import os
 PIXI_VERSION = "0.38.0"
 
 
+ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
+
+EMPTY_BOILERPLATE_PROJECT = f"""
+[project]
+name = "test"
+channels = []
+platforms = {ALL_PLATFORMS}
+"""
+
+
 class ExitCode(IntEnum):
     SUCCESS = 0
     FAILURE = 1
