@@ -538,7 +538,13 @@ def test_upgrade_dependency_location_pixi(pixi: Path, tmp_path: Path) -> None:
 [project]
 name = "test-upgrade"
 dependencies = ["numpy==1.*"]
-requires-python = ">3.10"
+requires-python = "==3.13"
+
+[project.optional-dependencies]
+cli = ["rich==12"]
+
+[dependency-groups]
+test = ["pytest==6"]
 
 [tool.pixi.project]
 channels = ["conda-forge"]
@@ -546,6 +552,9 @@ platforms = {ALL_PLATFORMS}
 
 [tool.pixi.pypi-dependencies]
 polars = "==0.*"
+
+[tool.pixi.environments]
+test = ["test"]
     """
 
     manifest_path.write_text(pyproject)
@@ -558,24 +567,23 @@ polars = "==0.*"
     parsed_manifest = tomllib.loads(manifest_path.read_text())
 
     # Check that `requrires-python` is the same
-    assert parsed_manifest["project"]["requires-python"] == ">3.10"
+    assert parsed_manifest["project"]["requires-python"] == "==3.13"
 
     # Check that `tool.pixi.dependencies.python` isn't added
     assert "python" not in parsed_manifest.get("tool", {}).get("pixi", {}).get("dependencies", {})
 
-    # Check that the pypi-dependencies are upgraded
-    polars_pypi = parsed_manifest["tool"]["pixi"]["pypi-dependencies"]["polars"]
-    assert polars_pypi != "==0.*"
-
     # Check that project.dependencies are upgraded
-    numpy_pypi = parsed_manifest["project"]["dependencies"][0]
-    assert numpy_pypi != "==1.*"
+    project_dependencies = parsed_manifest["project"]["dependencies"]
+    numpy_pypi = project_dependencies[0]
+    assert "numpy" in numpy_pypi
+    assert "==1.*" not in numpy_pypi
+    assert "polars" not in project_dependencies
 
-    # Check that the polars doesn't exist in the project dependencies
-    assert "polars" not in parsed_manifest["project"]["dependencies"]
-
-    # Check that numpy doesn't exist in the pypi-dependencies
-    assert "numpy" not in parsed_manifest["tool"]["pixi"]["pypi-dependencies"]
+    # Check that the pypi-dependencies are upgraded
+    pypi_dependencies = parsed_manifest["tool"]["pixi"]["pypi-dependencies"]
+    polars_pypi = pypi_dependencies["polars"]
+    assert polars_pypi != "==0.*"
+    assert "numpy" not in pypi_dependencies
 
 
 def test_upgrade_keep_info(pixi: Path, tmp_path: Path, multiple_versions_channel_1: str) -> None:
