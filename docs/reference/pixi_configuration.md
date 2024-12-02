@@ -188,15 +188,6 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 - `allow-insecure-host`: Allow insecure connections to host.
 
 ```toml title="config.toml"
-[pypi-config]
-# Main index url
-index-url = "https://pypi.org/simple"
-# list of additional urls
-extra-index-urls = ["https://pypi.org/simple2"]
-# can be "subprocess" or "disabled"
-keyring-provider = "subprocess"
-# allow insecure connections to host
-allow-insecure-host = ["localhost:8080"]
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pypi-config"
 ```
 
