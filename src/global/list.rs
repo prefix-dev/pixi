@@ -6,7 +6,7 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use pixi_consts::consts;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, PackageRecord, PrefixRecord, Version};
+use rattler_conda_types::{PackageName, PackageRecord, Version};
 use serde::Serialize;
 use std::io::Write;
 
@@ -14,7 +14,11 @@ use miette::{miette, IntoDiagnostic};
 
 use crate::global::common::find_package_records;
 
-use super::{project::ParsedEnvironment, EnvChanges, EnvState, EnvironmentName, Mapping, Project};
+use super::{
+    common::{find_linked_packages, PackageIdentifier},
+    project::ParsedEnvironment,
+    EnvChanges, EnvState, EnvironmentName, Mapping, Project,
+};
 
 /// Sorting strategy for the package table
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
@@ -147,7 +151,10 @@ pub async fn list_environment(
         .environments()
         .get(environment_name)
         .ok_or_else(|| miette!("Environment {} not found", environment_name.fancy_display()))?;
-
+    println!(
+        "Listing packages in the {} environment",
+        environment_name.fancy_display()
+    );
     let records = find_package_records(
         &project
             .env_root
@@ -214,6 +221,7 @@ pub async fn list_global_environments(
     envs_changes: Option<&EnvChanges>,
     regex: Option<String>,
 ) -> miette::Result<()> {
+    tracing::warn!("Foobar");
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
 
@@ -244,7 +252,7 @@ pub async fn list_global_environments(
     for (idx, (env_name, env)) in project_envs.iter().enumerate() {
         let env_dir = project.env_root.path().join(env_name.as_str());
         let conda_meta = env_dir.join(consts::CONDA_META_DIR);
-        let records = find_package_records(&conda_meta).await?;
+        let package_ids = find_linked_packages(&conda_meta).into_diagnostic()?;
 
         let last = (idx + 1) == len;
 
@@ -273,15 +281,15 @@ pub async fn list_global_environments(
             .iter()
             .any(|(pkg_name, _spec)| pkg_name.as_normalized() != env_name.as_str())
         {
-            if let Some(env_package) = records.iter().find(|rec| {
-                rec.repodata_record.package_record.name.as_normalized() == env_name.as_str()
-            }) {
+            if let Some(package) = package_ids
+                .iter()
+                .find(|pid| pid.name.as_normalized() == env_name.as_str())
+            {
                 // output the environment name and version
                 message.push_str(&format!(
                     " {}: {} {}",
                     env_name.fancy_display(),
-                    console::style(env_package.repodata_record.package_record.version.clone())
-                        .blue(),
+                    console::style(package.version.clone()).blue(),
                     state
                 ));
             } else {
@@ -295,9 +303,9 @@ pub async fn list_global_environments(
         if let Some(dep_message) = format_dependencies(
             env_name.as_str(),
             &env.dependencies,
-            &records,
+            &package_ids,
             last,
-            !env.exposed.is_empty(),
+            !env.exposed().is_empty(),
         ) {
             message.push_str(&dep_message);
         }
@@ -340,7 +348,7 @@ fn display_dependency(name: &PackageName, version: Option<Version>) -> String {
 fn format_dependencies(
     env_name: &str,
     dependencies: &IndexMap<PackageName, PixiSpec>,
-    records: &[PrefixRecord],
+    records: &[PackageIdentifier],
     last: bool,
     more: bool,
 ) -> Option<String> {
@@ -353,11 +361,8 @@ fn format_dependencies(
             .map(|(name, _spec)| {
                 let version = records
                     .iter()
-                    .find(|rec| {
-                        rec.repodata_record.package_record.name.as_normalized()
-                            == name.as_normalized()
-                    })
-                    .map(|rec| rec.repodata_record.package_record.version.version().clone());
+                    .find(|pid| pid.name.as_normalized() == name.as_normalized())
+                    .map(|pid| pid.version.clone());
                 display_dependency(name, version)
             })
             .join(", ");

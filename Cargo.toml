@@ -325,6 +325,7 @@ inherits = "release"
 lto = "fat"
 opt-level = 3
 strip = "symbols"
+debug = false
 
 [profile.ci]
 codegen-units = 16
@@ -333,6 +334,8 @@ lto = false
 opt-level = 3
 strip = false
 
+[profile.release]
+debug = true
 
 [dev-dependencies]
 async-trait = { workspace = true }
