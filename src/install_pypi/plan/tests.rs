@@ -42,14 +42,14 @@ impl InstalledDistBuilder {
         name: S,
         version: S,
         install_path: PathBuf,
-        file_path: PathBuf,
+        source_path: PathBuf,
         editable: bool,
     ) -> (InstalledDist, DirectUrl) {
         let name =
             uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
-        let directory_url = Url::from_file_path(&file_path).unwrap();
+        let directory_url = Url::from_file_path(&source_path).unwrap();
         let direct_url = DirectUrl::LocalDirectory {
             url: directory_url.to_string(),
             dir_info: uv_pypi_types::DirInfo {
@@ -171,13 +171,18 @@ impl MockedSitePackages {
         mut self,
         name: S,
         version: S,
-        path: PathBuf,
+        source_path: PathBuf,
         editable: bool,
         opts: InstalledDistOptions,
     ) -> Self {
         let dist_info = self.create_file_backing(name.as_ref(), version.as_ref(), opts);
-        let (installed_dist, direct_url) =
-            InstalledDistBuilder::directory(name, version, dist_info.clone(), path, editable);
+        let (installed_dist, direct_url) = InstalledDistBuilder::directory(
+            name,
+            version,
+            dist_info.clone(),
+            source_path,
+            editable,
+        );
         self.create_direct_url(&dist_info, direct_url);
         self.installed_dist.push(installed_dist);
         self
@@ -510,10 +515,11 @@ fn test_installed_one_none_required() {
 /// it should be re-installed
 #[test]
 fn test_installed_local_required_registry() {
+    let (temp_dir, _) = fake_pyproject_toml(None);
     let site_packages = MockedSitePackages::new().add_directory(
         "aiofiles",
         "0.6.0",
-        PathBuf::from_str("/tmp/fake").unwrap(),
+        temp_dir.path().to_path_buf(),
         false,
         InstalledDistOptions::default(),
     );
