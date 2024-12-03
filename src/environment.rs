@@ -53,7 +53,7 @@ use xxhash_rust::xxh3::Xxh3;
 /// not present.
 pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file = environment_dir
-        .join("conda-meta")
+        .join(consts::CONDA_META_DIR)
         .join(consts::PREFIX_FILE_NAME);
 
     tracing::info!(
@@ -131,7 +131,7 @@ fn write_file<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Resul
 /// Give it the environment path to place it.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file_path = environment_dir
-        .join("conda-meta")
+        .join(consts::CONDA_META_DIR)
         .join(consts::PREFIX_FILE_NAME);
 
     let parent_dir = prefix_file_path.parent().ok_or_else(|| {
@@ -163,7 +163,7 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
 /// Create the conda-meta/history.
 /// This file is needed for `conda run -p .pixi/envs/<env>` to work.
 fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
-    let history_file = environment_dir.join("conda-meta").join("history");
+    let history_file = environment_dir.join(consts::CONDA_META_DIR).join("history");
 
     tracing::info!("Verify history file exists: {}", history_file.display());
 
@@ -309,7 +309,7 @@ pub(crate) fn read_environment_file(
 ///     4. It verifies that the prefix contains a `.gitignore` file.
 pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+    verify_prefix_location_unchanged(project.environments_dir().as_path()).await?;
 
     // TODO: remove on a 1.0 release
     // Check for old `env` folder as we moved to `envs` in 0.13.0
