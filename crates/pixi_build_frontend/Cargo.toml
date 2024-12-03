@@ -51,3 +51,8 @@ rstest = { workspace = true }
 tempfile = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true, features = ["io"] }
+tokio = { workspace = true, features = [
+  "process",
+  "io-std",
+  "rt-multi-thread",
+] }
