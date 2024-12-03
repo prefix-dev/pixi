@@ -285,6 +285,7 @@ pub async fn resolve_pypi(
     let registry_client = Arc::new(
         RegistryClientBuilder::new(context.cache.clone())
             .client(context.client.clone())
+            .allow_insecure_host(context.allow_insecure_host.clone())
             .index_urls(index_locations.index_urls())
             .index_strategy(index_strategy)
             .markers(&marker_environment)
