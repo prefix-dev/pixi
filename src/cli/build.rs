@@ -174,7 +174,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Move the built packages to the output directory.
     let output_dir = args.output_dir;
     for package in result.packages {
-        std::fs::create_dir_all(&output_dir)
+        fs_err::create_dir_all(&output_dir)
             .into_diagnostic()
             .with_context(|| {
                 format!(

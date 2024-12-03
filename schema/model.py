@@ -648,6 +648,9 @@ class BaseManifest(StrictBaseModel):
     build_system: BuildSystem | None = Field(
         None, description="The build-system used to build the package."
     )
+    build_backend: dict[NonEmptyStr, Any] | None = Field(
+        None, description="Configuration for the build backend."
+    )
 
 
 #########################

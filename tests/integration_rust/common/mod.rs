@@ -217,8 +217,8 @@ impl PixiControl {
 
         // Add default project config
         let pixi_path = tempdir.path().join(".pixi");
-        std::fs::create_dir_all(&pixi_path).unwrap();
-        std::fs::write(pixi_path.join("config.toml"), DEFAULT_PROJECT_CONFIG).unwrap();
+        fs_err::create_dir_all(&pixi_path).unwrap();
+        fs_err::write(pixi_path.join("config.toml"), DEFAULT_PROJECT_CONFIG).unwrap();
 
         // Hide the progress bars for the tests
         // Otherwise the override the test output
@@ -229,7 +229,7 @@ impl PixiControl {
     /// Creates a new PixiControl instance from an existing manifest
     pub fn from_manifest(manifest: &str) -> miette::Result<PixiControl> {
         let pixi = Self::new()?;
-        std::fs::write(pixi.manifest_path(), manifest)
+        fs_err::write(pixi.manifest_path(), manifest)
             .into_diagnostic()
             .context("failed to write pixi.toml")?;
         Ok(pixi)
@@ -237,7 +237,7 @@ impl PixiControl {
 
     /// Updates the complete manifest
     pub fn update_manifest(&self, manifest: &str) -> miette::Result<()> {
-        std::fs::write(self.manifest_path(), manifest)
+        fs_err::write(self.manifest_path(), manifest)
             .into_diagnostic()
             .context("failed to write pixi.toml")?;
         Ok(())
@@ -278,7 +278,7 @@ impl PixiControl {
 
     /// Get the manifest contents
     pub fn manifest_contents(&self) -> miette::Result<String> {
-        std::fs::read_to_string(self.manifest_path())
+        fs_err::read_to_string(self.manifest_path())
             .into_diagnostic()
             .context("failed to read manifest")
     }

@@ -29,6 +29,11 @@
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
     },
+    "build-backend": {
+      "title": "Build-Backend",
+      "description": "Configuration for the build backend.",
+      "type": "object"
+    },
     "build-dependencies": {
       "title": "Build-Dependencies",
       "description": "The build `conda` dependencies, used in the build process",

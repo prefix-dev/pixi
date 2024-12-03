@@ -39,7 +39,7 @@ impl BinDir {
     #[cfg(test)]
     pub fn new(root: PathBuf) -> miette::Result<Self> {
         let path = root.join("bin");
-        std::fs::create_dir_all(&path).into_diagnostic()?;
+        fs_err::create_dir_all(&path).into_diagnostic()?;
         Ok(Self(path))
     }
 
@@ -107,7 +107,7 @@ impl EnvRoot {
     #[cfg(test)]
     pub fn new(root: PathBuf) -> miette::Result<Self> {
         let path = root.join("envs");
-        std::fs::create_dir_all(&path).into_diagnostic()?;
+        fs_err::create_dir_all(&path).into_diagnostic()?;
         Ok(Self(path))
     }
 
