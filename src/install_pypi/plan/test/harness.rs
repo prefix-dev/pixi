@@ -201,11 +201,11 @@ impl MockedSitePackages {
         // Create the dist-info directory
         let dist_info = format!("{}-{}.dist-info", name, version);
         let dist_info = self.fake_site_packages.path().join(dist_info);
-        std::fs::create_dir_all(&dist_info).expect("should create dist-info");
+        fs_err::create_dir_all(&dist_info).expect("should create dist-info");
 
         // Write the INSTALLER file
         let installer = opts.installer();
-        std::fs::write(dist_info.join("INSTALLER"), installer).expect("could not write INSTALLER");
+        fs_err::write(dist_info.join("INSTALLER"), installer).expect("could not write INSTALLER");
 
         // Write the METADATA file
         let raw_metadata = "Name: {name}\nVersion: {version}\nSummary: A test package";
@@ -239,7 +239,7 @@ impl MockedSitePackages {
     fn create_direct_url(&self, dist_info: &Path, direct_url: DirectUrl) {
         let json = serde_json::to_string(&direct_url).expect("should serialize");
         let direct_url = dist_info.join("direct_url.json");
-        std::fs::write(&direct_url, json).expect("should write direct url");
+        fs_err::write(&direct_url, json).expect("should write direct url");
     }
 
     /// Add a registry installed dist to the site packages
