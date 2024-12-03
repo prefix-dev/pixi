@@ -25,9 +25,9 @@ def examples_dir() -> Path:
 
 def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
-    This one tries to build the example flask hello world project
+    This one tries to build the rich example project
     """
-    pyproject = examples_dir() / "flask-hello-world-pyproject"
+    pyproject = examples_dir() / "rich_example"
     shutil.copytree(pyproject, tmp_pixi_workspace / "pyproject")
 
     manifest_path = tmp_pixi_workspace / "pyproject" / "pyproject.toml"
