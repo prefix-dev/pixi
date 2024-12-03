@@ -6,8 +6,8 @@ use url::Url;
 
 mod harness;
 
-/// When no site-packages exist and we have requested an uncached package
-/// we expect an install from the remote
+/// When no site-packages exist, and we have requested an uncached package
+/// we expect an installation from the remote
 #[test]
 fn test_no_installed_require_one() {
     // No installed packages
@@ -111,7 +111,7 @@ fn test_install_required_installer_mismatch() {
     assert_eq!(install_plan.remote.len(), 1);
 }
 
-/// When having a package with a different INSTALLER and we do not require it, we should leave it alone
+/// When having a package with a different INSTALLER, and we do not require it, we should leave it alone
 /// and not reinstall it
 #[test]
 fn test_installed_one_other_installer() {
@@ -208,7 +208,7 @@ fn test_installed_local_required_registry() {
 }
 
 /// When requiring a local package and that same local package is installed, we should not reinstall it
-/// except if the pyproject.toml file, or some other source files we wont check here is newer than the cache
+/// except if the pyproject.toml file, or some other source files we won't check here is newer than the cache
 #[test]
 fn test_installed_local_required_local() {
     let ten_minutes_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 10);
