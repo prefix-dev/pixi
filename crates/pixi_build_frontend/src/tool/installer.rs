@@ -157,7 +157,6 @@ impl ToolContext {
         channel_config: &ChannelConfig,
     ) -> Result<Tool, ToolCacheError> {
         let spec = match spec {
-            ToolSpec::Io(ipc) => return Ok(Tool::Io(ipc)),
             ToolSpec::Isolated(isolated) => {
                 if isolated.specs.is_empty() {
                     return Err(ToolCacheError::Install(miette!(

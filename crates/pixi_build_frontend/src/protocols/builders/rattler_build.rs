@@ -39,7 +39,7 @@ pub enum ProtocolBuildError {
     FailedToBuildPixi(#[from] PixiProtocolBuildError),
 }
 
-/// A builder for constructing a [`protocol::Protocol`] instance.
+/// A builder for constructing a [`crate::protocol::Protocol`] instance.
 #[derive(Debug)]
 pub struct ProtocolBuilder {
     /// The directory that contains the source files.

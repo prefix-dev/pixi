@@ -6,6 +6,7 @@ use jsonrpsee::types::Request;
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest};
 use pixi_build_types::procedures::initialize::InitializeParams;
+use pixi_manifest::toml::{ExternalWorkspaceProperties, TomlManifest};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, BufReader};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::{
@@ -124,24 +125,20 @@ async fn test_invalid_backend() {
     let manifest = source_dir
         .path()
         .join(pixi_consts::consts::PROJECT_MANIFEST);
-    tokio::fs::write(
-        &manifest,
-        r#"
-        [workspace]
-        platforms = []
-        channels = []
-        preview = ['pixi-build']
 
-        [package]
-        version = "0.1.0"
-        name = "project"
+    let toml = r#"
+    [workspace]
+    platforms = []
+    channels = []
+    preview = ['pixi-build']
 
-        [build-system]
-        build-backend = { name = "ipc", version = "*" }
-        "#,
-    )
-    .await
-    .unwrap();
+    [package]
+    version = "0.1.0"
+    name = "project"
+
+    [build-system]
+    build-backend = { name = "ipc", version = "*" }
+    "#;
 
     let (frontend_tx, backend_rx) = pipe();
     let (backend_tx, frontend_rx) = pipe();
@@ -155,14 +152,19 @@ async fn test_invalid_backend() {
     drop(backend_rx);
     drop(backend_tx);
 
-    let err = BuildFrontend::default()
-        .setup_protocol(SetupRequest {
-            source_dir: source_dir.path().to_path_buf(),
-            build_tool_override: ipc.into(),
-            build_id: 0,
-        })
-        .await
-        .unwrap_err();
+    let (workspace, package) = TomlManifest::from_toml_str(toml)
+        .unwrap()
+        .into_manifests(ExternalWorkspaceProperties::default())
+        .unwrap();
+    let err = pixi_build_frontend::pixi_protocol::ProtocolBuilder::new(
+        source_dir.path().to_path_buf(),
+        manifest.to_path_buf(),
+        workspace,
+        package.unwrap(),
+    )
+    .finish_with_ipc(ipc, 0)
+    .await
+    .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
     let snapshot = replace_source_dir(&snapshot, source_dir.path());
@@ -171,32 +173,27 @@ async fn test_invalid_backend() {
 
 #[tokio::test]
 async fn test_backend_configuration() {
-    // Setup a temporary project
+    let toml = r#"
+    [workspace]
+    platforms = []
+    channels = []
+    preview = ['pixi-build']
+
+    [package]
+    version = "0.1.0"
+    name = "project"
+
+    [build-system]
+    build-backend = { name = "ipc", version = "*" }
+
+    [build-backend.ipc]
+    hello = "world"
+    "#;
+
     let source_dir = tempfile::TempDir::new().unwrap();
     let manifest = source_dir
         .path()
         .join(pixi_consts::consts::PROJECT_MANIFEST);
-    tokio::fs::write(
-        &manifest,
-        r#"
-        [workspace]
-        platforms = []
-        channels = []
-        preview = ['pixi-build']
-
-        [package]
-        version = "0.1.0"
-        name = "project"
-
-        [build-system]
-        build-backend = { name = "ipc", version = "*" }
-
-        [build-backend.ipc]
-        hello = "world"
-        "#,
-    )
-    .await
-    .unwrap();
 
     let (frontend_tx, backend_rx) = pipe();
     let (backend_tx, frontend_rx) = pipe();
@@ -206,14 +203,19 @@ async fn test_backend_configuration() {
     };
 
     let protocol_setup = tokio::spawn(async move {
-        let _ = BuildFrontend::default()
-            .setup_protocol(SetupRequest {
-                source_dir: source_dir.path().to_path_buf(),
-                build_tool_override: ipc.into(),
-                build_id: 0,
-            })
-            .await
-            .expect_err("the test never sends a response to the initialize request");
+        let (workspace, package) = TomlManifest::from_toml_str(toml)
+            .unwrap()
+            .into_manifests(ExternalWorkspaceProperties::default())
+            .unwrap();
+        pixi_build_frontend::pixi_protocol::ProtocolBuilder::new(
+            source_dir.path().to_path_buf(),
+            manifest.to_path_buf(),
+            workspace,
+            package.unwrap(),
+        )
+        .finish_with_ipc(ipc, 0)
+        .await
+        .expect_err("the test never sends a response to the initialize request");
     });
 
     let read_initialize_message = async move {
