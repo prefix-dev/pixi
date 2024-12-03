@@ -7,7 +7,6 @@ use std::{
 use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_manifest::{Manifest, PackageManifest, PrioritizedChannel, WorkspaceManifest};
-// pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use thiserror::Error;
 use which::Error;
@@ -206,9 +205,8 @@ impl ProtocolBuilder {
         .await?)
     }
 
-    /// Finish the construction of the protocol with the given tool and return
-    /// the protocol object. Note: prefer using `finish` instead of this
-    /// method.
+    /// Finish the construction of the protocol with the given
+    /// [`InProcessBackend`] representing the build backend.
     pub async fn finish_with_ipc(
         self,
         ipc: InProcessBackend,
