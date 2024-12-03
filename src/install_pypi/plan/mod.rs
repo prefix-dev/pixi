@@ -20,7 +20,7 @@ use super::{
 };
 
 #[cfg(test)]
-mod tests;
+mod test;
 
 #[derive(Debug)]
 pub enum InstallReason {
@@ -387,6 +387,13 @@ fn need_reinstall(
                                 NeedReinstall::ArchiveDistNewerThanCache,
                             ));
                         }
+                    } else {
+                        return Ok(ValidateCurrentInstall::Reinstall(
+                            NeedReinstall::UrlMismatch {
+                                installed_url: installed_url.to_string(),
+                                locked_url: locked.location.as_url().map(|u| u.to_string()),
+                            },
+                        ));
                     }
                 }
                 uv_pypi_types::DirectUrl::VcsUrl {
