@@ -5,8 +5,8 @@ import tempfile
 import os
 
 
-def test_run_in_shell_environment(pixi: Path, tmp_path: Path) -> None:
-    manifest = tmp_path.joinpath("pixi.toml")
+def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
     [tasks]
@@ -54,8 +54,8 @@ def test_run_in_shell_project(pixi: Path) -> None:
     # We don't want a `pixi.toml` in our parent directory
     # so let's use tempfile here
     with tempfile.TemporaryDirectory() as tmp_str:
-        tmp_path = Path(tmp_str)
-        manifest_1_dir = tmp_path.joinpath("manifest_1")
+        tmp_pixi_workspace = Path(tmp_str)
+        manifest_1_dir = tmp_pixi_workspace.joinpath("manifest_1")
         manifest_1_dir.mkdir()
         manifest_1 = manifest_1_dir.joinpath("pixi.toml")
         toml = f"""
@@ -65,7 +65,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
         """
         manifest_1.write_text(toml)
 
-        manifest_2_dir = tmp_path.joinpath("manifest_2")
+        manifest_2_dir = tmp_pixi_workspace.joinpath("manifest_2")
         manifest_2_dir.mkdir()
         manifest_2 = manifest_2_dir.joinpath("pixi.toml")
         toml = f"""
@@ -88,7 +88,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
             [pixi, "run", "task"],
             stdout_contains="manifest_2",
             env=extended_env,
-            cwd=tmp_path,
+            cwd=tmp_pixi_workspace,
             reset_env=True,
         )
 
@@ -114,8 +114,10 @@ def test_run_in_shell_project(pixi: Path) -> None:
         )
 
 
-def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    manifest = tmp_path.joinpath("pixi.toml")
+def test_using_prefix_validation(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
     [project]
     name = "test"
@@ -133,12 +135,14 @@ def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: st
     )
 
     # Validate creation of the pixi file with the hash
-    pixi_file = default_env_path(tmp_path).joinpath("conda-meta").joinpath("pixi")
+    pixi_file = default_env_path(tmp_pixi_workspace).joinpath("conda-meta").joinpath("pixi")
     assert pixi_file.exists()
     assert "environment_lock_file_hash" in pixi_file.read_text()
 
     # Break environment on purpose
-    dummy_a_meta_files = default_env_path(tmp_path).joinpath("conda-meta").glob("dummy-a*.json")
+    dummy_a_meta_files = (
+        default_env_path(tmp_pixi_workspace).joinpath("conda-meta").glob("dummy-a*.json")
+    )
 
     for file in dummy_a_meta_files:
         path = Path(file)
@@ -166,8 +170,8 @@ def test_using_prefix_validation(pixi: Path, tmp_path: Path, dummy_channel_1: st
         assert Path(file).exists()
 
 
-def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    manifest = tmp_path.joinpath("pixi.toml")
+def test_prefix_revalidation(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
     [project]
     name = "test"
@@ -185,12 +189,14 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
     )
 
     # Validate creation of the pixi file with the hash
-    pixi_file = default_env_path(tmp_path).joinpath("conda-meta").joinpath("pixi")
+    pixi_file = default_env_path(tmp_pixi_workspace).joinpath("conda-meta").joinpath("pixi")
     assert pixi_file.exists()
     assert "environment_lock_file_hash" in pixi_file.read_text()
 
     # Break environment on purpose
-    dummy_a_meta_files = default_env_path(tmp_path).joinpath("conda-meta").glob("dummy-a*.json")
+    dummy_a_meta_files = (
+        default_env_path(tmp_pixi_workspace).joinpath("conda-meta").glob("dummy-a*.json")
+    )
 
     for file in dummy_a_meta_files:
         path = Path(file)
@@ -208,8 +214,8 @@ def test_prefix_revalidation(pixi: Path, tmp_path: Path, dummy_channel_1: str) -
         assert Path(file).exists()
 
 
-def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
-    manifest = tmp_path.joinpath("pixi.toml")
+def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
     [activation.env]
@@ -226,7 +232,7 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
     )
 
     # Validate that without experimental it does not use the cache
-    assert not tmp_path.joinpath(".pixi/activation-env-v0").exists()
+    assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
 
     # Enable the experimental cache config
     verify_cli_command(
@@ -249,7 +255,9 @@ def test_run_with_activation(pixi: Path, tmp_path: Path) -> None:
     )
 
     # Modify the environment variable in cache
-    cache_path = tmp_path.joinpath(".pixi", "activation-env-v0", "activation_default.json")
+    cache_path = tmp_pixi_workspace.joinpath(
+        ".pixi", "activation-env-v0", "activation_default.json"
+    )
     data = json.loads(cache_path.read_text())
     data["environment_variables"]["TEST_ENV_VAR_FOR_ACTIVATION_TEST"] = "test456"
     cache_path.write_text(json.dumps(data, indent=4))

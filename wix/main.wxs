@@ -222,7 +222,7 @@
           the following `WixUILicenseRTF` tag and changing the `Value`
           attribute.
         -->
-        <WixVariable Id='WixUILicenseRtf' Value='install\windows\resources\license.rtf'/>
+        <WixVariable Id='WixUILicenseRtf' Value='wix\resources\license.rtf'/>
 
 
         <!--
@@ -233,7 +233,7 @@
 
           The banner BMP dimensions are 493 x 58 pixels.
         -->
-        <WixVariable Id='WixUIBannerBmp' Value='install\windows\resources\Banner.bmp'/>
+        <WixVariable Id='WixUIBannerBmp' Value='wix\resources\Banner.bmp'/>
 
 
         <!--
@@ -244,7 +244,7 @@
 
           The dialog BMP dimensions are 493 x 312 pixels.
         -->
-        <WixVariable Id='WixUIDialogBmp' Value='install\windows\resources\Dialog.bmp'/>
+        <WixVariable Id='WixUIDialogBmp' Value='wix\resources\Dialog.bmp'/>
 
     </Product>
 
