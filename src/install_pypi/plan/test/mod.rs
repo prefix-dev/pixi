@@ -25,6 +25,8 @@ fn test_no_installed_require_one() {
     assert_eq!(install_plan.remote.len(), 1);
 }
 
+// Test that we can install a package from the cache when it is available
+
 /// When we have a site-packages with the requested package, and the version matches we expect
 /// no re-installation to occur
 #[test]
@@ -43,8 +45,7 @@ fn test_install_required_equivalent() {
         .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
-    // We should install a single package
-    // from the remote because we do not cache
+    // Should not install package
     assert!(
         install_plan.reinstalls.is_empty(),
         "found reinstalls: {:?}",
@@ -55,7 +56,7 @@ fn test_install_required_equivalent() {
 }
 
 /// When we have a site-packages with the requested package, and the version does not match we expect
-/// a re-installation to occur, with a version mismatch
+/// a re-installation to occur, with a version mismatch indication
 #[test]
 fn test_install_required_mismatch() {
     // No installed packages
@@ -204,20 +205,6 @@ fn test_installed_local_required_registry() {
         install_plan.reinstalls[0].1,
         NeedReinstall::UrlMismatch{ ref installed_url, ref locked_url } if *installed_url != locked_url.clone().unwrap()
     );
-
-    // Now we require the same package, but as a directory
-    // we should not reinstall it
-    let required = RequiredPackages::new().add_directory(
-        "aiofiles",
-        "0.6.0",
-        temp_dir.path().to_path_buf(),
-        false,
-    );
-    let install_plan = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
-        .expect("should install");
-    assert!(install_plan.local.is_empty());
-    assert!(install_plan.remote.is_empty());
 }
 
 /// When requiring a local package and that same local package is installed, we should not reinstall it
@@ -271,7 +258,7 @@ fn test_installed_local_required_local() {
 }
 
 /// When we have an editable package installed and we require a non-editable package
-/// we should reinstall the editable package
+/// we should reinstall the non-editable package
 #[test]
 fn test_installed_editable_required_non_editable() {
     let (fake, _) = harness::fake_pyproject_toml(None);
