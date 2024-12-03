@@ -32,7 +32,7 @@ use tokio::{
 };
 
 use crate::{
-    jsonrpc::{stdio_transport, Receiver, RpcParams, Sender},
+    jsonrpc::{stdio_transport, RpcParams},
     tool::Tool,
     CondaBuildReporter, CondaMetadataReporter,
 };
@@ -149,63 +149,46 @@ impl JsonRPCBuildProtocol {
         cache_dir: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
-        match tool.try_into_executable() {
-            Ok(tool) => {
-                // Spawn the tool and capture stdin/stdout.
-                let mut process = tokio::process::Command::from(tool.command())
-                    .stdout(std::process::Stdio::piped())
-                    .stdin(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::piped())
-                    .spawn()?;
+        // Spawn the tool and capture stdin/stdout.
+        let mut process = tokio::process::Command::from(tool.command())
+            .stdout(std::process::Stdio::piped())
+            .stdin(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?;
 
-                let backend_identifier = tool.executable().clone();
+        let backend_identifier = tool.executable().clone();
 
-                // Acquire the stdin/stdout handles.
-                let stdin = process
-                    .stdin
-                    .take()
-                    .expect("since we piped stdin we expect a valid value here");
-                let stdout = process
-                    .stdout
-                    .expect("since we piped stdout we expect a valid value here");
-                let stderr = process
-                    .stderr
-                    .map(|stderr| BufReader::new(stderr).lines())
-                    .expect("since we piped stderr we expect a valid value here");
+        // Acquire the stdin/stdout handles.
+        let stdin = process
+            .stdin
+            .take()
+            .expect("since we piped stdin we expect a valid value here");
+        let stdout = process
+            .stdout
+            .expect("since we piped stdout we expect a valid value here");
+        let stderr = process
+            .stderr
+            .map(|stderr| BufReader::new(stderr).lines())
+            .expect("since we piped stderr we expect a valid value here");
 
-                // Construct a JSON-RPC client to communicate with the backend process.
-                let (tx, rx) = stdio_transport(stdin, stdout);
-                Self::setup_with_transport(
-                    backend_identifier,
-                    source_dir,
-                    manifest_path,
-                    build_id,
-                    cache_dir,
-                    tx,
-                    rx,
-                    Some(stderr),
-                )
-                .await
-            }
-            Err(ipc) => {
-                Self::setup_with_transport(
-                    "<IPC>".to_string(),
-                    source_dir,
-                    manifest_path,
-                    build_id,
-                    cache_dir,
-                    Sender::from(ipc.rpc_out),
-                    Receiver::from(ipc.rpc_in),
-                    None,
-                )
-                .await
-            }
-        }
+        // Construct a JSON-RPC client to communicate with the backend process.
+        let (tx, rx) = stdio_transport(stdin, stdout);
+        Self::setup_with_transport(
+            backend_identifier,
+            source_dir,
+            manifest_path,
+            build_id,
+            cache_dir,
+            tx,
+            rx,
+            Some(stderr),
+        )
+        .await
     }
 
     /// Setup a new protocol instance with a given transport.
     #[allow(clippy::too_many_arguments)]
-    async fn setup_with_transport(
+    pub(crate) async fn setup_with_transport(
         backend_identifier: String,
         source_dir: PathBuf,
         // In case of rattler-build it's recipe.yaml
