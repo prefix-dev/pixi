@@ -377,3 +377,33 @@ fn test_installed_git_require_registry() {
         install_plan.reinstalls
     );
 }
+
+/// When the git commit differs we should reinstall
+#[test]
+fn test_installed_git_require_git_commit_mismatch() {
+    let installed = "9d4f36d87dae9a968fb527e2cb87e8a507b0beb3";
+    let git_url = Url::parse(format!("git+https://github.com/pypa/pip.git@{installed}").as_str())
+        .expect("could not parse git url");
+
+    let site_packages = MockedSitePackages::new().add_git(
+        "pip",
+        "1.0.0",
+        git_url.clone(),
+        InstalledDistOptions::default(),
+    );
+    let locked = "cf20850e5e42ba9a71748fdf04193c7857cf5f61";
+    let git_url_2 = Url::parse(format!("git+https://github.com/pypa/pip.git@{locked}").as_str())
+        .expect("could not parse git url");
+    let required = RequiredPackages::new().add_git("pip", "1.0.0", git_url_2);
+
+    let plan = harness::install_planner();
+    let install_plan = plan
+        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .expect("should install");
+
+    assert_matches!(
+        install_plan.reinstalls[0].1,
+        NeedReinstall::GitCommitsMismatch { ref installed_commit, ref locked_commit }
+        if installed == installed_commit && locked == locked_commit
+    );
+}

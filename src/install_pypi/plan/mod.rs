@@ -401,9 +401,13 @@ fn need_reinstall(
                     vcs_info,
                     subdirectory: _,
                 } => {
+                    // Check if the installed git url is the same as the locked git url
+                    // if this fails, it should be an error, because then installed url is not a git url
                     let installed_git_url =
                         ParsedGitUrl::try_from(Url::parse(url.as_str()).into_diagnostic()?)
                             .into_diagnostic()?;
+                    // Try to parse the locked git url, this can be any url, so this may fail
+                    // in practice it always seems to succeed, even with a non-git url
                     let locked_git_url = match &locked.location {
                         UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
                         UrlOrPath::Path(_path) => {
@@ -415,9 +419,10 @@ fn need_reinstall(
                     };
                     match locked_git_url {
                         Ok(locked_git_url) => {
-                            // Check the repository base url
+                            // Check the repository base url with the locked url
                             if locked_git_url.url.repository() != installed_git_url.url.repository()
                             {
+                                // This happens when this is not a git url
                                 return Ok(ValidateCurrentInstall::Reinstall(
                                     NeedReinstall::UrlMismatch {
                                         installed_url: installed_git_url.url.to_string(),
@@ -428,6 +433,7 @@ fn need_reinstall(
                             if vcs_info.commit_id
                                 != locked_git_url.url.precise().map(|p| p.to_string())
                             {
+                                // The commit id is different, we need to reinstall
                                 return Ok(ValidateCurrentInstall::Reinstall(
                                     NeedReinstall::GitCommitsMismatch {
                                         installed_commit: vcs_info.commit_id.unwrap_or_default(),
