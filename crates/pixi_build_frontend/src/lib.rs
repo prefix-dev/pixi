@@ -14,7 +14,7 @@ mod tool;
 use std::path::PathBuf;
 
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
-use rattler_conda_types::MatchSpec;
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl};
 pub use reporters::{CondaBuildReporter, CondaMetadataReporter};
 pub use reporters::{NoopCondaBuildReporter, NoopCondaMetadataReporter};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -28,7 +28,7 @@ pub use protocol_builder::EnabledProtocols;
 #[derive(Debug)]
 pub enum BackendOverride {
     /// Overrwide the backend with a specific tool.
-    Spec(MatchSpec),
+    Spec(MatchSpec, Option<Vec<NamedChannelOrUrl>>),
 
     /// Overwrite the backend with a specific tool.
     System(String),

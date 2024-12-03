@@ -12,10 +12,11 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
         environment::TomlEnvironmentList, ExternalPackageProperties, ExternalWorkspaceProperties,
-        PackageError, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace, WorkspaceError,
+        PackageError, TomlBuildSystem, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
+        WorkspaceError,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, BuildSystem, Environment, EnvironmentName, Environments, Feature, FeatureName,
+    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
     KnownPreviewFeature, PyPiRequirement, SolveGroups, SystemRequirements, TargetSelector, Targets,
     Task, TaskName, TomlError, WorkspaceManifest,
 };
@@ -82,7 +83,7 @@ pub struct TomlManifest {
 
     /// The build section
     #[serde(default)]
-    pub build_system: Option<PixiSpanned<BuildSystem>>,
+    pub build_system: Option<PixiSpanned<TomlBuildSystem>>,
 
     /// The URI for the manifest schema which is unused by pixi
     #[serde(rename = "$schema")]
@@ -342,7 +343,7 @@ impl TomlManifest {
 
             Some(PackageManifest {
                 package,
-                build_system,
+                build_system: build_system.into_build_system()?,
                 targets: Targets::from_default_and_user_defined(
                     default_package_target.unwrap_or_default(),
                     package_targets,
@@ -404,9 +405,7 @@ mod test {
         platforms = []
 
         [build-system]
-        dependencies = ["python-build-backend > 12"]
-        build-backend = "python-build-backend"
-        channels = []
+        build-backend = { name = "foobar", version = "*" }
         "#,
         ));
     }
@@ -422,9 +421,7 @@ mod test {
         preview = ["pixi-build"]
 
         [build-system]
-        dependencies = ["python-build-backend > 12"]
-        build-backend = "python-build-backend"
-        channels = []
+        build-backend = { name = "foobar", version = "*" }
         "#,
         ));
     }
@@ -456,9 +453,7 @@ mod test {
         [package]
 
         [build-system]
-        dependencies = ["python-build-backend > 12"]
-        build-backend = "python-build-backend"
-        channels = []
+        build-backend = { name = "foobar", version = "*" }
         "#,
         ));
     }
@@ -489,9 +484,7 @@ mod test {
         version = "0.1.0"
 
         [build-system]
-        dependencies = ["python-build-backend > 12"]
-        build-backend = "python-build-backend"
-        channels = []
+        build-backend = { name = "foobar", version = "*" }
         "#,
         )
         .unwrap();

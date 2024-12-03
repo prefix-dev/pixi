@@ -1,11 +1,13 @@
 use std::sync::Arc;
 
+use crate::BinarySpec;
 use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError,
     StringMatcher, VersionSpec,
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
+
 /// A specification for a package in a conda channel.
 ///
 /// This type maps closely to [`rattler_conda_types::NamelessMatchSpec`] but
@@ -68,5 +70,11 @@ impl DetailedSpec {
             sha256: self.sha256,
             url: None,
         })
+    }
+}
+
+impl From<DetailedSpec> for BinarySpec {
+    fn from(value: DetailedSpec) -> Self {
+        Self::DetailedVersion(value)
     }
 }
