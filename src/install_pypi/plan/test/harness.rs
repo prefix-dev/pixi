@@ -9,6 +9,7 @@ use std::str::FromStr;
 use tempfile::TempDir;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
+use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::{InstalledDirectUrlDist, InstalledDist, InstalledRegistryDist};
 use uv_pypi_types::DirectUrl::VcsUrl;
 use uv_pypi_types::{ArchiveInfo, DirectUrl, VcsInfo, VcsKind};
@@ -371,6 +372,27 @@ impl<'a> CachedDistProvider<'a> for NoCache {
         _version: uv_pep440::Version,
     ) -> Option<uv_distribution_types::CachedRegistryDist> {
         None
+    }
+}
+
+/// Implementor of the [`CachedDistProvider`] that assumes to have cached everything
+pub struct AllCached;
+impl<'a> CachedDistProvider<'a> for AllCached {
+    fn get_cached_dist(
+        &mut self,
+        name: &'a uv_normalize::PackageName,
+        version: uv_pep440::Version,
+    ) -> Option<uv_distribution_types::CachedRegistryDist> {
+        let wheel_filename =
+            WheelFilename::from_str(format!("{}-{}-py3-none-any.whl", name, version).as_str())
+                .unwrap();
+        let dist = uv_distribution_types::CachedRegistryDist {
+            filename: wheel_filename,
+            path: Default::default(),
+            hashes: vec![],
+            cache_info: Default::default(),
+        };
+        Some(dist)
     }
 }
 

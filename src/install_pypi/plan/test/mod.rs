@@ -1,5 +1,5 @@
 use self::harness::{InstalledDistOptions, MockedSitePackages, NoCache, RequiredPackages};
-use crate::install_pypi::plan::test::harness::TEST_PYTHON_VERSION;
+use crate::install_pypi::plan::test::harness::{AllCached, TEST_PYTHON_VERSION};
 use crate::install_pypi::NeedReinstall;
 use assert_matches::assert_matches;
 use url::Url;
@@ -25,7 +25,24 @@ fn test_no_installed_require_one() {
     assert_eq!(install_plan.remote.len(), 1);
 }
 
-// Test that we can install a package from the cache when it is available
+/// Test that we can install a package from the cache when it is available
+#[test]
+fn test_no_installed_require_one_cached() {
+    // No installed packages
+    let site_packages = MockedSitePackages::new();
+    // Requires following package
+    let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
+
+    let plan = harness::install_planner();
+    let install_plan = plan
+        .plan(&site_packages, AllCached, &required.to_borrowed())
+        .expect("should install");
+
+    // We should install a single package
+    // from the remote because we do not cache
+    assert!(install_plan.remote.is_empty());
+    assert_eq!(install_plan.local.len(), 1);
+}
 
 /// When we have a site-packages with the requested package, and the version matches we expect
 /// no re-installation to occur
@@ -83,6 +100,36 @@ fn test_install_required_mismatch() {
     assert!(install_plan.local.is_empty());
     // Not cached we get it from the remote
     assert_eq!(install_plan.remote.len(), 1);
+}
+
+/// When we have a site-packages with the requested package, and the version does not match we expect
+/// a re-installation to occur, with a version mismatch indication
+#[test]
+fn test_install_required_mismatch_cached() {
+    // No installed packages
+    let site_packages = MockedSitePackages::new().add_registry(
+        "aiofiles",
+        "0.6.0",
+        InstalledDistOptions::default(),
+    );
+    // Requires following package
+    let required = RequiredPackages::new().add_registry("aiofiles", "0.7.0");
+
+    let plan = harness::install_planner();
+    let install_plan = plan
+        .plan(&site_packages, AllCached, &required.to_borrowed())
+        .expect("should install");
+
+    // We should install a single package
+    // from the remote because we do not cache
+    assert_matches!(
+        install_plan.reinstalls[0].1,
+        NeedReinstall::VersionMismatch { ref installed_version, ref locked_version }
+        if installed_version.to_string() == "0.6.0" && locked_version.to_string() == "0.7.0"
+    );
+    assert!(install_plan.remote.is_empty());
+    // Not cached we get it from the remote
+    assert_eq!(install_plan.local.len(), 1);
 }
 
 /// When requiring a package that has a different INSTALLER but we *do require* it
