@@ -28,8 +28,8 @@ clap_complete_nushell = "4.5.2"
 concat-idents = "1.1.5"
 console = "0.15.8"
 crossbeam-channel = "0.5.12"
-ctrlc = "3.4"
 csv = "1.3.0"
+ctrlc = "3.4"
 dashmap = "6.1.0"
 deno_task_shell = "0.16.0"
 dialoguer = "0.11.0"
@@ -207,8 +207,8 @@ clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
 crossbeam-channel = { workspace = true }
-ctrlc = { workspace = true }
 csv = { workspace = true }
+ctrlc = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
 dirs = { workspace = true }
