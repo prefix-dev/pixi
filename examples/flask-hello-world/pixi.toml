@@ -16,9 +16,8 @@ name = "flask-hello-world"
 version = "0.1.0"
 
 [build-system]
-build-backend = "pixi-build-python"
+build-backend = { name = "pixi-build-python", version = "*" }
 channels = [
   "https://fast.prefix.dev/pixi-build-backends",
   "https://fast.prefix.dev/conda-forge",
 ]
-dependencies = ["pixi-build-python"]

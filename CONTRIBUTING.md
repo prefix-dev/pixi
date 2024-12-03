@@ -55,6 +55,23 @@ pixi run test-all-fast
 pixi run install # only works on unix systems as on windows you can't overwrite the binary while it's running
 ```
 
+### Installing the target binaries to a custom location
+
+Use the pixi task `install-as` which invokes a python script to build the project and copy the executable to a custom location.
+```shell
+$ pixi run install-as
+usage: install.py [-h] [--dest DEST] name
+
+Build pixi and copy the executable to ~/.pixi/bin or a custom destination
+
+positional arguments:
+  name                  Name of the executable (e.g. pixid)
+
+options:
+  -h, --help            show this help message and exit
+  --dest DEST           Destination directory for the executable, default: $PIXI_HOME/bin (or ~/.pixi/bin if $PIXI_HOME isn't set)
+```
+
 ## Get your code ready for a PR
 We use [`pre-commit`](https://pre-commit.com/) to run all the formatters and linters that we use.
 If you have `pre-commit` installed on your system you can run `pre-commit install` to run the tools before you commit or push.

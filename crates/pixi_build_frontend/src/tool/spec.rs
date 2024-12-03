@@ -1,4 +1,3 @@
-use pixi_manifest::BuildSystem;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl};
 
 use crate::{BackendOverride, InProcessBackend};
@@ -26,12 +25,15 @@ pub struct IsolatedToolSpec {
 }
 
 impl IsolatedToolSpec {
-    /// Construct a new instance from a build section
-    pub fn from_build_section(build_section: &BuildSystem) -> Self {
+    /// Construct a new instance from a list of match specs.
+    pub fn from_specs(
+        specs: impl IntoIterator<Item = MatchSpec>,
+        channels: impl IntoIterator<Item = NamedChannelOrUrl>,
+    ) -> Self {
         Self {
-            specs: build_section.dependencies.clone(),
-            command: build_section.build_backend.clone(),
-            channels: build_section.channels.clone(),
+            specs: specs.into_iter().collect(),
+            command: String::new(),
+            channels: channels.into_iter().collect(),
         }
     }
 
@@ -66,9 +68,9 @@ impl From<SystemToolSpec> for ToolSpec {
 impl BackendOverride {
     pub fn into_spec(self) -> ToolSpec {
         match self {
-            BackendOverride::Spec(_spec) => {
-                todo!("Add channels and implement the proper conversion")
-            }
+            BackendOverride::Spec(spec, channels) => ToolSpec::Isolated(
+                IsolatedToolSpec::from_specs(vec![spec], channels.into_iter().flatten()),
+            ),
             BackendOverride::System(command) => ToolSpec::System(SystemToolSpec { command }),
             BackendOverride::Io(process) => ToolSpec::Io(process),
         }

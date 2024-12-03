@@ -10,15 +10,11 @@ use std::{
 
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
-use futures::{
-    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
-};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
-use itertools::Itertools;
-use miette::Report;
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
-
+use itertools::{Either, Itertools};
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
 use pixi_config::get_cache_dir;
 use pixi_consts::consts;
@@ -37,7 +33,6 @@ use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmen
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
 use reqwest_middleware::ClientWithMiddleware;
-
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
@@ -388,7 +383,6 @@ impl<'p> LockFileDerivedData<'p> {
         // Update the prefix with conda packages.
         let has_existing_packages = !installed_packages.is_empty();
         let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
-        let gateway = environment.project().repodata_gateway().clone();
         let python_status = environment::update_prefix_conda(
             &prefix,
             self.package_cache.clone(),
@@ -414,7 +408,6 @@ impl<'p> LockFileDerivedData<'p> {
             "",
             self.io_concurrency_limit.clone().into(),
             self.build_context.clone(),
-            gateway,
         )
         .await?;
 
@@ -1729,11 +1722,17 @@ async fn spawn_solve_conda_environment_task(
             // Convert the dependencies into match specs and source dependencies
             let (source_specs, match_specs): (Vec<_>, Vec<_>) = dependencies
                 .into_specs()
-                .partition_map(|(name, constraint)| {
-                    constraint
-                        .into_named_source_or_binary(name, &channel_config)
-                        .expect("failed to convert dependency into match spec")
-                });
+                .partition_map(
+                    |(name, constraint)| match constraint.into_source_or_binary() {
+                        Either::Left(source) => Either::Left((name, source)),
+                        Either::Right(binary) => {
+                            let spec = binary
+                                .try_into_nameless_match_spec(&channel_config)
+                                .expect("failed to convert channel from spec");
+                            Either::Right(MatchSpec::from_nameless(spec, Some(name)))
+                        }
+                    },
+                );
 
             // Collect metadata from all source packages
             let channel_urls = channels
@@ -2233,12 +2232,9 @@ async fn spawn_create_prefix_task(
 
     let build_virtual_packages = group.virtual_packages(Platform::current());
 
-    let gateway = group.project().repodata_gateway();
-
     // Spawn a background task to update the prefix
     let (python_status, duration) = tokio::spawn({
         let prefix = prefix.clone();
-        let gateway = gateway.clone();
         let group_name = group_name.clone();
         async move {
             let start = Instant::now();
@@ -2264,7 +2260,6 @@ async fn spawn_create_prefix_task(
                 "  ",
                 io_concurrency_limit.into(),
                 build_context,
-                gateway.clone(),
             )
             .await?;
             let end = Instant::now();

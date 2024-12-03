@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsStr,
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -68,33 +69,50 @@ impl From<rattler_build_protocol::ProtocolBuilder> for ProtocolBuilder {
 impl ProtocolBuilder {
     /// Discovers the protocol for the given source directory.
     pub fn discover(
-        source_dir: &Path,
+        source_path: &Path,
         enabled_protocols: &EnabledProtocols,
     ) -> Result<Self, DiscoveryError> {
-        if source_dir.is_file() {
-            return Err(DiscoveryError::NotADirectory);
-        } else if !source_dir.is_dir() {
-            return Err(DiscoveryError::NotFound(source_dir.to_path_buf()));
+        if !source_path.exists() {
+            return Err(DiscoveryError::NotFound(source_path.to_path_buf()));
         }
 
-        // Try to discover as a rattler-build recipe first
+        let source_file_name = source_path.file_name().and_then(OsStr::to_str);
+
+        // If the user explicitly asked for a recipe.yaml file
+        if matches!(source_file_name, Some("recipe.yaml" | "recipe.yml")) {
+            let source_dir = source_path
+                .parent()
+                .expect("the recipe must live somewhere");
+            return if enabled_protocols.enable_rattler_build {
+                Ok(rattler_build_protocol::ProtocolBuilder::new(
+                    source_dir.to_path_buf(),
+                    source_dir.to_path_buf(),
+                )
+                .into())
+            } else {
+                Err(DiscoveryError::UnsupportedFormat)
+            };
+        }
+
+        // Try to discover as a pixi project
+        if enabled_protocols.enable_pixi {
+            if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_path)? {
+                return Ok(protocol.into());
+            }
+        }
+
+        // Try to discover as a rattler-build recipe
         if enabled_protocols.enable_rattler_build {
-            if let Some(protocol) = rattler_build_protocol::ProtocolBuilder::discover(source_dir)? {
+            if let Some(protocol) = rattler_build_protocol::ProtocolBuilder::discover(source_path)?
+            {
                 return Ok(protocol.into());
             }
         }
 
         // Try to discover as a conda build project
         if enabled_protocols.enable_conda_build {
-            // Unwrap as the error is infallible
-            if let Some(protocol) = conda_protocol::ProtocolBuilder::discover(source_dir).unwrap() {
-                return Ok(protocol.into());
-            }
-        }
-
-        // Try to discover as a pixi project
-        if enabled_protocols.enable_pixi {
-            if let Some(protocol) = pixi_protocol::ProtocolBuilder::discover(source_dir)? {
+            if let Some(protocol) = conda_protocol::ProtocolBuilder::discover(source_path).unwrap()
+            {
                 return Ok(protocol.into());
             }
         }
