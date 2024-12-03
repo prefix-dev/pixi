@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
-from .common import verify_cli_command, ExitCode, PIXI_VERSION
+
+from .common import verify_cli_command, ExitCode, PIXI_VERSION, ALL_PLATFORMS
 import tomllib
 import json
 import pytest
@@ -539,6 +540,63 @@ def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_pixi_workspace: Path) ->
     assert "1.*" not in numpy_pypi
     numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
     assert numpy_conda != "1.*"
+
+
+@pytest.mark.slow
+def test_upgrade_dependency_location_pixi(pixi: Path, tmp_path: Path) -> None:
+    # Test based on https://github.com/prefix-dev/pixi/issues/2470
+    # Making sure pixi places the upgraded package in the correct location
+    manifest_path = tmp_path / "pyproject.toml"
+    pyproject = f"""
+[project]
+name = "test-upgrade"
+dependencies = ["numpy==1.*"]
+requires-python = "==3.13"
+
+[project.optional-dependencies]
+cli = ["rich==12"]
+
+[dependency-groups]
+test = ["pytest==6"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = {ALL_PLATFORMS}
+
+[tool.pixi.pypi-dependencies]
+polars = "==0.*"
+
+[tool.pixi.environments]
+test = ["test"]
+    """
+
+    manifest_path.write_text(pyproject)
+
+    # Upgrade numpy, both conda and pypi should be upgraded
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path],
+        stderr_contains=["polars"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+
+    # Check that `requrires-python` is the same
+    assert parsed_manifest["project"]["requires-python"] == "==3.13"
+
+    # Check that `tool.pixi.dependencies.python` isn't added
+    assert "python" not in parsed_manifest.get("tool", {}).get("pixi", {}).get("dependencies", {})
+
+    # Check that project.dependencies are upgraded
+    project_dependencies = parsed_manifest["project"]["dependencies"]
+    numpy_pypi = project_dependencies[0]
+    assert "numpy" in numpy_pypi
+    assert "==1.*" not in numpy_pypi
+    assert "polars" not in project_dependencies
+
+    # Check that the pypi-dependencies are upgraded
+    pypi_dependencies = parsed_manifest["tool"]["pixi"]["pypi-dependencies"]
+    polars_pypi = pypi_dependencies["polars"]
+    assert polars_pypi != "==0.*"
+    assert "numpy" not in pypi_dependencies
 
 
 def test_upgrade_keep_info(
