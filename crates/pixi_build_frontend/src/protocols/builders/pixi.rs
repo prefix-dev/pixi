@@ -207,6 +207,8 @@ impl ProtocolBuilder {
         .await?)
     }
 
+    /// Finish the construction of the protocol with the given tool and return the protocol object.
+    /// Note: prefer using `finish` instead of this method.
     pub async fn finish_with_tool(
         self,
         tool: Tool,
