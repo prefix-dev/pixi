@@ -28,9 +28,12 @@ def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
     This one tries to build the rich example project
     """
     pyproject = examples_dir() / "rich_example"
-    shutil.copytree(pyproject, tmp_pixi_workspace / "pyproject")
+    target_dir = tmp_pixi_workspace / "pyproject"
+    shutil.copytree(pyproject, target_dir)
+    shutil.rmtree(target_dir.joinpath(".pixi"), ignore_errors=True)
 
-    manifest_path = tmp_pixi_workspace / "pyproject" / "pyproject.toml"
+    manifest_path = target_dir / "pyproject.toml"
+
     # Add a boltons package to it
     verify_cli_command(
         [
