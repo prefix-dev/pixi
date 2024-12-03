@@ -1,15 +1,38 @@
 use std::{
+    ffi::OsStr,
     fmt::Debug,
-    path::PathBuf,
+    hash::Hash,
+    path::{Path, PathBuf},
     sync::{Arc, Weak},
 };
 
 use dashmap::{DashMap, Entry};
-use rattler_conda_types::ChannelConfig;
+use miette::{miette, Context, IntoDiagnostic, Result};
+use pixi_consts::consts::{CACHED_BUILD_ENVS_DIR, CONDA_REPODATA_CACHE_DIR};
+use pixi_progress::wrap_in_progress;
+use pixi_utils::{EnvironmentHash, PrefixGuard};
+use rattler::{install::Installer, package_cache::PackageCache};
+use rattler_conda_types::{
+    Channel, ChannelConfig, GenericVirtualPackage, Matches, Platform, PrefixRecord,
+};
+use rattler_repodata_gateway::Gateway;
+use rattler_shell::{
+    activation::{ActivationVariables, Activator},
+    shell::ShellEnum,
+};
+use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use reqwest_middleware::ClientWithMiddleware;
+
+use fs_err::tokio as tokio_fs;
 use tokio::sync::broadcast;
+use tracing::span::Record;
 
 use super::{installer::ToolInstaller, IsolatedTool};
-use crate::IsolatedToolSpec;
+use crate::{
+    tool::{SystemTool, Tool, ToolSpec},
+    IsolatedToolSpec, SystemToolSpec,
+};
 
 /// A entity that is either pending or has been fetched.
 #[derive(Clone)]
@@ -18,7 +41,7 @@ enum PendingOrFetched<T> {
     Fetched(T),
 }
 
-/// A [`ToolCache`] maintains a cache of environments for isolated build tools.
+/// A [`ToolCache`] maintains a cache of environments for build tools.
 ///
 /// This is useful to ensure that if we need to build multiple packages that use
 /// the same tool, we can reuse their environments.
@@ -29,6 +52,48 @@ enum PendingOrFetched<T> {
 pub struct ToolCache {
     /// The cache of tools.
     cache: DashMap<IsolatedToolSpec, PendingOrFetched<Arc<IsolatedTool>>>,
+}
+/// Finds the `PrefixRecord`s from `conda-meta` directory which starts with `Matchspec` names.
+pub(crate) async fn find_spec_records(
+    conda_meta: &Path,
+    name_to_match: Vec<String>,
+) -> miette::Result<Option<Vec<PrefixRecord>>> {
+    let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
+    let mut records = Vec::new();
+
+    // Set to keep track of which names have matching files
+    let mut matched_names = std::collections::HashSet::new();
+
+    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+        let path = entry.path();
+
+        // Check if the entry is a file and has a .json extension
+        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
+            if let Some(file_name) = path.file_name().and_then(OsStr::to_str) {
+                // Check if the file name starts with any of the names in name_to_match
+                for name in &name_to_match {
+                    if file_name.starts_with(name) {
+                        matched_names.insert(name.clone());
+
+                        let prefix_record = PrefixRecord::from_path(&path)
+                            .into_diagnostic()
+                            .wrap_err_with(|| {
+                                format!("Couldn't parse JSON from {}", path.display())
+                            })?;
+
+                        records.push(prefix_record);
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if all names in name_to_match were matched
+    if matched_names.len() == name_to_match.len() {
+        return Ok(Some(records));
+    }
+
+    Ok(None)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -53,6 +118,7 @@ impl ToolCache {
         &self,
         spec: IsolatedToolSpec,
         context: &impl ToolInstaller,
+        cache_dir: &Path,
         channel_config: &ChannelConfig,
     ) -> miette::Result<Arc<IsolatedTool>> {
         let sender = match self.cache.entry(spec.clone()) {
@@ -115,11 +181,19 @@ impl ToolCache {
         // other tasks will find a pending entry and will wait for the tool
         // to become available.
         //
-        // Let's start by installing tool. If an error occurs we immediately return
-        // the error. This will drop the sender and all other waiting tasks will
-        // receive an error.
-        // Installation happens outside the critical section
-        let tool = Arc::new(context.install(&spec, channel_config).await?);
+
+        // Let's start by finding already existing matchspec
+        let tool = match self.get_file_system_cached(&spec, cache_dir).await? {
+            // Let's start by installing tool. If an error occurs we immediately return
+            // the error. This will drop the sender and all other waiting tasks will
+            // receive an error.
+            // Installation happens outside the critical section
+            None => context.install(&spec, channel_config).await?,
+
+            Some(tool) => tool,
+        };
+
+        let tool = Arc::new(tool);
 
         // Store the fetched files in the entry.
         self.cache
@@ -130,6 +204,94 @@ impl ToolCache {
         let _ = sender.send(tool.clone());
 
         Ok(tool)
+    }
+
+    /// Try to find already existing environment with the same tool spec
+    /// in the cache directory.
+    pub async fn get_file_system_cached(
+        &self,
+        spec: &IsolatedToolSpec,
+        cache_dir: &Path,
+    ) -> miette::Result<Option<IsolatedTool>> {
+        // check if any spec does not have name
+        if spec.specs.iter().any(|spec| spec.name.is_none()) {
+            return Ok(None);
+        }
+
+        if !cache_dir.exists() {
+            return Ok(None);
+        }
+
+        // verify if we have a similar environment that match our matchspec
+        // we need to load all prefix record from all folders in the cache
+        // load all package records
+        let mut entries = tokio_fs::read_dir(&cache_dir).await.into_diagnostic()?;
+        let mut directories = Vec::new();
+
+        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if path.is_dir() {
+                directories.push(path);
+            }
+        }
+
+        let spec_names: Vec<_> = spec
+            .specs
+            .iter()
+            .map(|spec| {
+                spec.name
+                    .clone()
+                    .expect("we already check it before")
+                    .as_normalized()
+                    .to_string()
+            })
+            .collect();
+
+        // let's find existing package records
+        let mut records_of_records = Vec::new();
+        for dir in directories.iter() {
+            let records = find_spec_records(&dir.join("conda-meta"), spec_names.clone()).await?;
+
+            if let Some(records) = records {
+                records_of_records.push((dir, records));
+            }
+        }
+
+        // Check whether all specs in the manifest are present in the installed
+        // environment
+        for records in records_of_records.iter() {
+            let specs_in_manifest_are_present = spec.specs.iter().all(|spec| {
+                records
+                    .1
+                    .iter()
+                    .any(|record| spec.matches(&record.repodata_record.package_record))
+            });
+
+            if specs_in_manifest_are_present {
+                // Get the activation scripts
+                let activator =
+                    Activator::from_path(records.0, ShellEnum::default(), Platform::current())
+                        .unwrap();
+
+                let activation_scripts = activator
+                    .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
+                    .unwrap();
+
+                let cached_tool = IsolatedTool::new(
+                    spec.command.clone(),
+                    records.0.to_path_buf(),
+                    activation_scripts,
+                );
+                tracing::debug!(
+                    "reusing existing environment in {} for {:?}",
+                    records.0.display(),
+                    spec.specs
+                );
+                return Ok(Some(cached_tool));
+            }
+        }
+        tracing::debug!("not found any existing environment for {:?}", spec.specs);
+        Ok(None)
     }
 }
 
@@ -259,7 +421,12 @@ mod tests {
 
                 tool_context
                     .cache
-                    .get_or_install_tool(tool_spec, &tool_installer, &channel_config)
+                    .get_or_install_tool(
+                        tool_spec,
+                        &tool_installer,
+                        &tool_context.cache_dir,
+                        &channel_config,
+                    )
                     .await
             });
 
@@ -358,7 +525,12 @@ mod tests {
 
                 tool_context
                     .cache
-                    .get_or_install_tool(tool_spec, &tool_installer, &channel_config)
+                    .get_or_install_tool(
+                        tool_spec,
+                        &tool_installer,
+                        &tool_context.cache_dir,
+                        &channel_config,
+                    )
                     .await
             });
 

@@ -52,7 +52,9 @@ impl ToolContextBuilder {
         Self {
             gateway: None,
             client: ClientWithMiddleware::default(),
-            cache_dir: pixi_config::get_cache_dir().expect("we should have a cache dir"),
+            cache_dir: pixi_config::get_cache_dir()
+                .expect("we should have a cache dir")
+                .join(CACHED_BUILD_ENVS_DIR),
             cache: ToolCache::default(),
             platform: Platform::current(),
         }
@@ -175,7 +177,7 @@ impl ToolContext {
 
         let installed = self
             .cache
-            .get_or_install_tool(spec, self, channel_config)
+            .get_or_install_tool(spec, self, &self.cache_dir, channel_config)
             .await
             .map_err(ToolCacheError::Install)?;
 

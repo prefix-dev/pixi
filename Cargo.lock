@@ -3582,6 +3582,7 @@ name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "fs-err 2.11.0",
  "futures",
  "insta",
  "itertools 0.13.0",
