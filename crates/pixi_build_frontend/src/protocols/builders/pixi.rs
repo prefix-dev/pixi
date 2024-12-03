@@ -13,12 +13,11 @@ use thiserror::Error;
 use which::Error;
 
 use crate::{
+    jsonrpc::{Receiver, Sender},
     protocols::{InitializeError, JsonRPCBuildProtocol},
-    tool::Tool,
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
-    BackendOverride, ToolContext,
+    BackendOverride, InProcessBackend, ToolContext,
 };
-
 // use super::{InitializeError, JsonRPCBuildProtocol};
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
@@ -207,19 +206,23 @@ impl ProtocolBuilder {
         .await?)
     }
 
-    /// Finish the construction of the protocol with the given tool and return the protocol object.
-    /// Note: prefer using `finish` instead of this method.
-    pub async fn finish_with_tool(
+    /// Finish the construction of the protocol with the given tool and return
+    /// the protocol object. Note: prefer using `finish` instead of this
+    /// method.
+    pub async fn finish_with_ipc(
         self,
-        tool: Tool,
+        ipc: InProcessBackend,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
-        Ok(JsonRPCBuildProtocol::setup(
+        Ok(JsonRPCBuildProtocol::setup_with_transport(
+            "<IPC>".to_string(),
             self.source_dir,
             self.manifest_path,
             build_id,
             self.cache_dir,
-            tool,
+            Sender::from(ipc.rpc_out),
+            Receiver::from(ipc.rpc_in),
+            None,
         )
         .await?)
     }

@@ -146,7 +146,6 @@ impl ToolContext {
         channel_config: &ChannelConfig,
     ) -> Result<Tool, ToolCacheError> {
         let spec = match spec {
-            ToolSpec::Io(ipc) => return Ok(Tool::Io(ipc)),
             ToolSpec::Isolated(isolated) => CacheableToolSpec::Isolated(isolated),
             ToolSpec::System(system) => CacheableToolSpec::System(system),
         };
@@ -399,8 +398,6 @@ mod tests {
             .await
             .unwrap();
 
-        let exec = tool.as_executable().unwrap();
-
-        exec.command().arg("--version").spawn().unwrap();
+        tool.command().arg("--version").spawn().unwrap();
     }
 }

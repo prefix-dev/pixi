@@ -6,18 +6,9 @@ use std::{collections::HashMap, path::PathBuf};
 pub use cache::{ToolCacheError, ToolContext};
 pub use spec::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 
-use crate::InProcessBackend;
-
 /// A tool that can be invoked.
 #[derive(Debug)]
 pub enum Tool {
-    Isolated(IsolatedTool),
-    System(SystemTool),
-    Io(InProcessBackend),
-}
-
-#[derive(Debug)]
-pub enum ExecutableTool {
     Isolated(IsolatedTool),
     System(SystemTool),
 }
@@ -76,54 +67,36 @@ impl From<IsolatedTool> for Tool {
 }
 
 impl Tool {
-    pub fn as_executable(&self) -> Option<ExecutableTool> {
-        match self {
-            Tool::Isolated(tool) => Some(ExecutableTool::Isolated(tool.clone())),
-            Tool::System(tool) => Some(ExecutableTool::System(tool.clone())),
-            Tool::Io(_) => None,
-        }
-    }
-
-    pub fn try_into_executable(self) -> Result<ExecutableTool, InProcessBackend> {
-        match self {
-            Tool::Isolated(tool) => Ok(ExecutableTool::Isolated(tool)),
-            Tool::System(tool) => Ok(ExecutableTool::System(tool)),
-            Tool::Io(ipc) => Err(ipc),
-        }
-    }
-}
-
-impl ExecutableTool {
     /// Returns the full path to the executable to invoke.
     pub fn executable(&self) -> &String {
         match self {
-            ExecutableTool::Isolated(tool) => &tool.command,
-            ExecutableTool::System(tool) => &tool.command,
+            Tool::Isolated(tool) => &tool.command,
+            Tool::System(tool) => &tool.command,
         }
     }
 
     /// Construct a new tool that calls another executable.
     pub fn with_executable(&self, executable: impl Into<String>) -> Self {
         match self {
-            ExecutableTool::Isolated(tool) => ExecutableTool::Isolated(IsolatedTool::new(
+            Tool::Isolated(tool) => Tool::Isolated(IsolatedTool::new(
                 executable,
                 tool.prefix.clone(),
                 tool.activation_scripts.clone(),
             )),
-            ExecutableTool::System(_) => ExecutableTool::System(SystemTool::new(executable)),
+            Tool::System(_) => Tool::System(SystemTool::new(executable)),
         }
     }
 
     /// Construct a new command that enables invocation of the tool.
     pub fn command(&self) -> std::process::Command {
         match self {
-            ExecutableTool::Isolated(tool) => {
+            Tool::Isolated(tool) => {
                 let mut cmd = std::process::Command::new(&tool.command);
                 cmd.envs(tool.activation_scripts.clone());
 
                 cmd
             }
-            ExecutableTool::System(tool) => std::process::Command::new(&tool.command),
+            Tool::System(tool) => std::process::Command::new(&tool.command),
         }
     }
 }

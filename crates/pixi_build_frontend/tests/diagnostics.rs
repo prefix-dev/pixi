@@ -155,10 +155,7 @@ async fn test_invalid_backend() {
     )
     .unwrap();
 
-    let err = protocol
-        .finish_with_tool(pixi_build_frontend::tool::Tool::Io(ipc), 0)
-        .await
-        .unwrap_err();
+    let err = protocol.finish_with_ipc(ipc, 0).await.unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
     let snapshot = replace_source_dir(&snapshot, source_dir.path());

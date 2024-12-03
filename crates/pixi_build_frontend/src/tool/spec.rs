@@ -1,6 +1,6 @@
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl};
 
-use crate::{BackendOverride, InProcessBackend};
+use crate::BackendOverride;
 
 /// Describes the specification of the tool. This can be used to cache tool
 /// information.
@@ -8,7 +8,6 @@ use crate::{BackendOverride, InProcessBackend};
 pub enum ToolSpec {
     Isolated(IsolatedToolSpec),
     System(SystemToolSpec),
-    Io(InProcessBackend),
 }
 
 /// A build tool that can be installed through a conda package.
