@@ -320,6 +320,6 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
 
     # Verify that the detached environment is used
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "echo \$CONDA_PREFIX"],
+        [pixi, "run", "--manifest-path", manifest, "echo $CONDA_PREFIX"],
         stdout_contains=f"{detached_envs_tmp}",
     )
