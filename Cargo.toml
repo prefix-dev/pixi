@@ -349,12 +349,6 @@ tokio = { workspace = true, features = ["rt"] }
 [patch.crates-io]
 reqwest-middleware = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
 reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
-# For pyproject-toml
-# pyproject-toml = { git = "https://github.com/tdejager/pyproject-toml-rs", branch = "feat/bump-508-440" }
-# If you change this also change the versions in the the patch section for uv
-# pep440_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
-# pep508_rs = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
-# deno_task_shell = { path = "../deno_task_shell" }
 
 file_url = { git = "https://github.com/conda/rattler", branch = "main" }
 rattler = { git = "https://github.com/conda/rattler", branch = "main" }
@@ -368,39 +362,46 @@ rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
 rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
 rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
 
-#file_url = { path = "../rattler/crates/file_url" }
-#rattler = { path = "../rattler/crates/rattler" }
-#rattler_cache = { path = "../rattler/crates/rattler_cache" }
-#rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-#rattler_digest = { path = "../rattler/crates/rattler_digest" }
-#rattler_lock = { path = "../rattler/crates/rattler_lock" }
-#rattler_networking = { path = "../rattler/crates/rattler_networking" }
-#rattler_package_streaming = { path = "../rattler/crates/rattler_package_streaming" }
-#rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-#rattler_shell = { path = "../rattler/crates/rattler_shell" }
-#rattler_solve = { path = "../rattler/crates/rattler_solve" }
-#rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
+# Config for 'dist'
+[workspace.metadata.dist]
+# The preferred dist version to use in CI (Cargo.toml SemVer syntax)
+cargo-dist-version = "0.25.1"
+# CI backends to support
+ci = "github"
+# The installers to generate for each app
+installers = ["msi"]
+# The archive format to use for windows builds (defaults .zip)
+windows-archive = ".zip"
+# The archive format to use for non-windows builds (defaults .tar.xz)
+unix-archive = ".tar.gz"
+# Target platforms to build apps for (Rust target-triple syntax)
+targets = [
+  "aarch64-apple-darwin",
+  "aarch64-unknown-linux-musl",
+  "aarch64-pc-windows-msvc",
+  "x86_64-apple-darwin",
+  "x86_64-unknown-linux-musl",
+  "x86_64-pc-windows-msvc",
+]
+# Whether CI should trigger releases with dispatches instead of tag pushes
+dispatch-releases = true
+# Which phase dist should use to create the GitHub release
+github-release = "announce"
+# Whether to auto-include files like READMEs, LICENSEs, and CHANGELOGs (default true)
+auto-includes = false
+# Which actions to run on pull requests
+pr-run-mode = "upload"
+# Skip checking whether the specified configuration files are up to date
+allow-dirty = ["msi"]
+# Whether to sign macOS executables
+macos-sign = true
 
-# Change these lines if you want a patched version of uv
-# [patch.'https://github.com/astral-sh/uv']
-# uv-cache = { path = "../uv/crates/uv-cache" }
-# uv-pep508 = { path = "../uv/crates/uv-pep508" }
-# uv-pep440 = { path = "../uv/crates/uv-pep440" }
-# uv-cache-info = { path = "../uv/crates/uv-cache-info" }
-# uv-client = { path = "../uv/crates/uv-client" }
-# uv-configuration = { path = "../uv/crates/uv-configuration" }
-# uv-git = { path = "../uv/crates/uv-git" }
-# uv-dispatch = { path = "../uv/crates/uv-dispatch" }
-# uv-distribution = { path = "../uv/crates/uv-distribution" }
-# uv-installer = { path = "../uv/crates/uv-installer" }
-# uv-normalize = { path = "../uv/crates/uv-normalize" }
-# uv-resolver = { path = "../uv/crates/uv-resolver" }
-# uv-types = { path = "../uv/crates/uv-types" }
-# uv-distribution-filename = { path = "../uv/crates/uv-distribution-filename" }
-# uv-distribution-types = { path = "../uv/crates/uv-distribution-types" }
-# uv-install-wheel = { path = "../uv/crates/uv-install-wheel" }
-# uv-platform-tags = { path = "../uv/crates/uv-platform-tags" }
-# uv-pypi-types = { path = "../uv/crates/uv-pypi-types" }
-# uv-requirements = { path = "../uv/crates/uv-requirements" }
-# uv-requirements-txt = { path = "../uv/crates/uv-requirements-txt" }
-# uv-python = { path = "../uv/crates/uv-python" }
+[workspace.metadata.dist.dependencies.apt]
+gcc-aarch64-linux-gnu = { version = '*', targets = [
+  "aarch64-unknown-linux-gnu",
+  "aarch64-unknown-linux-musl",
+] }
+
+# Package config for `dist`
+[package.metadata.dist]
+features = ["self_update"]

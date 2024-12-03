@@ -3772,7 +3772,6 @@ dependencies = [
  "serde-untagged",
  "serde_json",
  "serde_with",
- "serde_yaml",
  "thiserror",
  "toml_edit",
  "typed-path",

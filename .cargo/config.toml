@@ -1,9 +1,20 @@
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld"
 
+# Statically link the C runtime so the executable does not depend on the MSVC runtime DLLs.
+[target.'cfg(all(target_env = "msvc", target_os = "windows"))']
+rustflags = ["-C", "target-feature=+crt-static"]
+
 [target.'cfg(all(windows, debug_assertions))']
 rustflags = [
   # increase the stack size to prevent overflowing the stack in debug
   "-C",
   "link-arg=/STACK:8000000",
 ]
+
+# Required for `dist` to work with linux arm targets: https://github.com/axodotdev/cargo-dist/issues/74#issuecomment-2053680080
+[env]
+CC_aarch64_unknown_linux_musl = "aarch64-linux-gnu-gcc"
+
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-gnu-gcc"
