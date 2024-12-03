@@ -35,7 +35,7 @@ pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasManifestRef;
 use itertools::Itertools;
-pub use manifests::{Manifest, ManifestKind, PackageManifest, WorkspaceManifest};
+pub use manifests::{Manifest, ManifestKind, ManifestSource, PackageManifest, WorkspaceManifest};
 use miette::Diagnostic;
 pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 pub use pypi::pypi_requirement::PyPiRequirement;
@@ -76,11 +76,13 @@ pub enum DependencyOverwriteBehavior {
 }
 
 pub enum PypiDependencyLocation {
-    // The [pypi-dependencies] or [tool.pixi.pypi-dependencies] table
-    Pixi,
-    // The [project.optional-dependencies] table in a 'pyproject.toml' manifest
+    /// [pypi-dependencies] in pixi.toml or [tool.pixi.pypi-dependencies] in pyproject.toml
+    PixiPypiDependencies,
+    /// [project.dependencies] in pyproject.toml
+    Dependencies,
+    /// [project.optional-dependencies] table in pyproject.toml
     OptionalDependencies,
-    // The [dependency-groups] table in a 'pyproject.toml' manifest
+    /// [dependency-groups] in pyproject.toml
     DependencyGroups,
 }
 

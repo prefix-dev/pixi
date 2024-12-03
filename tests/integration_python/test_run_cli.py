@@ -1,17 +1,8 @@
 import json
 from pathlib import Path
-from .common import verify_cli_command, ExitCode, default_env_path
+from .common import EMPTY_BOILERPLATE_PROJECT, verify_cli_command, ExitCode, default_env_path
 import tempfile
 import os
-
-ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
-
-EMPTY_BOILERPLATE_PROJECT = f"""
-[project]
-name = "test"
-channels = []
-platforms = {ALL_PLATFORMS}
-"""
 
 
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
