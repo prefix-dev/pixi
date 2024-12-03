@@ -7,8 +7,7 @@ use rattler_conda_types::ChannelConfig;
 use crate::{
     protocol,
     protocol_builder::{EnabledProtocols, ProtocolBuilder},
-    tool::ToolContext,
-    Protocol, SetupRequest,
+    Protocol, SetupRequest, ToolContext,
 };
 
 /// The frontend for building packages.
