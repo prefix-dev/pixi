@@ -72,7 +72,6 @@ impl BackendOverride {
                 IsolatedToolSpec::from_specs(vec![spec], channels.into_iter().flatten()),
             ),
             BackendOverride::System(command) => ToolSpec::System(SystemToolSpec { command }),
-            BackendOverride::Io(process) => ToolSpec::Io(process),
         }
     }
 }

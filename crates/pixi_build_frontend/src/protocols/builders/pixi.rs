@@ -14,6 +14,7 @@ use which::Error;
 
 use crate::{
     protocols::{InitializeError, JsonRPCBuildProtocol},
+    tool::Tool,
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
     BackendOverride, ToolContext,
 };
@@ -74,7 +75,7 @@ impl Display for FinishError {
 
 impl ProtocolBuilder {
     /// Constructs a new instance from a manifest.
-    pub(crate) fn new(
+    pub fn new(
         source_dir: PathBuf,
         manifest_path: PathBuf,
         workspace_manifest: WorkspaceManifest,
@@ -196,6 +197,21 @@ impl ProtocolBuilder {
             .await
             .map_err(FinishError::Tool)?;
 
+        Ok(JsonRPCBuildProtocol::setup(
+            self.source_dir,
+            self.manifest_path,
+            build_id,
+            self.cache_dir,
+            tool,
+        )
+        .await?)
+    }
+
+    pub async fn finish_with_tool(
+        self,
+        tool: Tool,
+        build_id: usize,
+    ) -> Result<JsonRPCBuildProtocol, FinishError> {
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.manifest_path,
