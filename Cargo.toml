@@ -388,7 +388,7 @@ github-release = "announce"
 # Whether to auto-include files like READMEs, LICENSEs, and CHANGELOGs (default true)
 auto-includes = false
 # Which actions to run on pull requests
-pr-run-mode = "upload"
+pr-run-mode = "skip"
 # Skip checking whether the specified configuration files are up to date
 allow-dirty = ["msi"]
 # Whether to sign macOS executables
