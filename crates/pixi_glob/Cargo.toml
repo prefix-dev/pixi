@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 dashmap = { workspace = true }
+fs-err = { workspace = true }
 itertools = { workspace = true }
 memchr = { workspace = true }
 rattler_digest = { workspace = true }

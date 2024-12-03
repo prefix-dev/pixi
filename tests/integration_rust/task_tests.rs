@@ -5,7 +5,6 @@ use pixi::task::TaskName;
 use pixi_manifest::task::CmdArgs;
 use pixi_manifest::{FeatureName, Task};
 use rattler_conda_types::Platform;
-use std::fs;
 use std::path::PathBuf;
 
 #[tokio::test]
@@ -174,7 +173,7 @@ async fn test_cwd() {
     pixi.init().without_channels().await.unwrap();
 
     // Create test dir
-    fs::create_dir(pixi.project_path().join("test")).unwrap();
+    fs_err::create_dir(pixi.project_path().join("test")).unwrap();
 
     pixi.tasks()
         .add("pwd-test".into(), None, FeatureName::Default)

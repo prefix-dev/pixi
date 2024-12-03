@@ -104,11 +104,11 @@ async fn parse_project() {
 async fn parse_valid_schema_projects() {
     // Test all files in the schema/examples/valid directory
     let schema_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema/examples/valid");
-    for entry in std::fs::read_dir(schema_dir).unwrap() {
+    for entry in fs_err::read_dir(schema_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
-            let pixi_toml = std::fs::read_to_string(&path).unwrap();
+            let pixi_toml = fs_err::read_to_string(&path).unwrap();
             let _project = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml).unwrap();
         }
     }
@@ -118,11 +118,11 @@ async fn parse_valid_schema_projects() {
 fn parse_valid_docs_manifests() {
     // Test all files in the docs/source_files/pixi_tomls directory
     let schema_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/source_files/pixi_tomls");
-    for entry in std::fs::read_dir(schema_dir).unwrap() {
+    for entry in fs_err::read_dir(schema_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
-            let pixi_toml = std::fs::read_to_string(&path).unwrap();
+            let pixi_toml = fs_err::read_to_string(&path).unwrap();
             let _project = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml).unwrap();
         }
     }
@@ -133,11 +133,11 @@ fn parse_valid_docs_configs() {
     // Test all files in the docs/source_files/pixi_config_tomls directory
     let schema_dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/source_files/pixi_config_tomls");
-    for entry in std::fs::read_dir(schema_dir).unwrap() {
+    for entry in fs_err::read_dir(schema_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
-            let toml = std::fs::read_to_string(&path).unwrap();
+            let toml = fs_err::read_to_string(&path).unwrap();
             let (_config, unused_keys) = Config::from_toml(&toml).unwrap();
             assert_eq!(
                 unused_keys,

@@ -3582,6 +3582,7 @@ name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "fs-err 2.11.0",
  "futures",
  "insta",
  "itertools 0.13.0",
@@ -3634,6 +3635,7 @@ dependencies = [
  "clap",
  "console",
  "dirs",
+ "fs-err 2.11.0",
  "insta",
  "itertools 0.13.0",
  "miette 7.2.0",
@@ -3673,6 +3675,7 @@ name = "pixi_glob"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "fs-err 2.11.0",
  "insta",
  "itertools 0.13.0",
  "memchr",
@@ -3692,6 +3695,7 @@ dependencies = [
  "console",
  "dunce",
  "fancy_display",
+ "fs-err 2.11.0",
  "glob",
  "indexmap 2.6.0",
  "insta",
@@ -3780,6 +3784,7 @@ name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
  "fd-lock",
+ "fs-err 2.11.0",
  "indicatif",
  "insta",
  "itertools 0.13.0",
@@ -4024,6 +4029,7 @@ name = "pypi_mapping"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
+ "fs-err 2.11.0",
  "futures",
  "http-cache-reqwest",
  "itertools 0.13.0",

@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 dashmap = { workspace = true }
+fs-err = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }

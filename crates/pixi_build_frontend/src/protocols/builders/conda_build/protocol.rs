@@ -253,7 +253,7 @@ mod test {
     #[case::pinject("conda-render/pinject.txt")]
     #[case::microarch("conda-render/microarch-level.txt")]
     fn test_extract_rendered_recipe(#[case] path: &str) {
-        let rendered_recipe = std::fs::read_to_string(
+        let rendered_recipe = fs_err::read_to_string(
             Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("test-data")
                 .join(path),
