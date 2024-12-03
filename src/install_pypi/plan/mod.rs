@@ -401,8 +401,10 @@ fn need_reinstall(
                     vcs_info,
                     subdirectory: _,
                 } => {
-                    let url = Url::parse(&url).into_diagnostic()?;
-                    let git_url = match &locked.location {
+                    let installed_git_url =
+                        ParsedGitUrl::try_from(Url::parse(url.as_str()).into_diagnostic()?)
+                            .into_diagnostic()?;
+                    let locked_git_url = match &locked.location {
                         UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
                         UrlOrPath::Path(_path) => {
                             // Previously
@@ -411,18 +413,25 @@ fn need_reinstall(
                             ));
                         }
                     };
-                    match git_url {
-                        Ok(git) => {
+                    match locked_git_url {
+                        Ok(locked_git_url) => {
                             // Check the repository base url
-                            if git.url.repository() != &url
-                                // Check the sha from the direct_url.json and the required sha
-                                // Use the uv git url to get the sha
-                                || vcs_info.commit_id != git.url.precise().map(|p| p.to_string())
+                            if locked_git_url.url.repository() != installed_git_url.url.repository()
+                            {
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::UrlMismatch {
+                                        installed_url: installed_git_url.url.to_string(),
+                                        locked_url: Some(locked_git_url.url.to_string()),
+                                    },
+                                ));
+                            }
+                            if vcs_info.commit_id
+                                != locked_git_url.url.precise().map(|p| p.to_string())
                             {
                                 return Ok(ValidateCurrentInstall::Reinstall(
                                     NeedReinstall::GitCommitsMismatch {
                                         installed_commit: vcs_info.commit_id.unwrap_or_default(),
-                                        locked_commit: git
+                                        locked_commit: locked_git_url
                                             .url
                                             .precise()
                                             .map(|p| p.to_string())
@@ -434,7 +443,11 @@ fn need_reinstall(
                         Err(_) => {
                             return Ok(ValidateCurrentInstall::Reinstall(
                                 NeedReinstall::UnableToParseGitUrl {
-                                    url: url.to_string(),
+                                    url: locked
+                                        .location
+                                        .as_url()
+                                        .map(|u| u.to_string())
+                                        .unwrap_or_default(),
                                 },
                             ));
                         }

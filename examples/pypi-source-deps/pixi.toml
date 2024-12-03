@@ -22,7 +22,7 @@ rich = "~=13.7"
 # flask = { git = "ssh://git@github.com/pallets/flask" }
 
 # With https
-flask = { git = "https://github.com/pallets/flask" }
+flask = { git = "https://github.com/pallets/flask", branch = "stable" }
 requests = { git = "https://github.com/psf/requests.git", rev = "0106ace" }
 # TODO: will support later -> or use branch = '' or tag = '' to specify a branch or tag
 

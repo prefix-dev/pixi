@@ -1,5 +1,6 @@
 use crate::install_pypi::plan::{CachedDistProvider, InstallPlanner, InstalledDistProvider};
 use pixi_consts::consts;
+use pixi_manifest::pypi::pypi_requirement::ParsedGitUrl;
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use std::collections::HashMap;
 use std::io::Write;
@@ -107,12 +108,15 @@ impl InstalledDistBuilder {
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
+        // Parse git url and extract git commit, use this as the commit_id
+        let parsed_git_url = ParsedGitUrl::try_from(url.clone()).expect("should parse git url");
+
         let direct_url = VcsUrl {
             url: url.to_string(),
             subdirectory: None,
             vcs_info: VcsInfo {
                 vcs: VcsKind::Git,
-                commit_id: None,
+                commit_id: parsed_git_url.rev.map(|r| r.to_string()),
                 requested_revision: None,
             },
         };
@@ -201,7 +205,6 @@ impl MockedSitePackages {
             let requires_python = format!("\nRequires-Python: {}", requires_python);
             minimal_metadata.push_str(&requires_python);
         }
-        println!("metadata: {}", minimal_metadata);
         std::fs::write(dist_info.join("METADATA"), minimal_metadata)
             .expect("could not write METADATA");
         dist_info
@@ -410,6 +413,14 @@ impl RequiredPackages {
         let package_name =
             uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
         let data = PyPIPackageDataBuilder::direct_url(name, version, url);
+        self.required.insert(package_name, data);
+        self
+    }
+
+    pub fn add_git<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
+        let package_name =
+            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
+        let data = PyPIPackageDataBuilder::git(name, version, url);
         self.required.insert(package_name, data);
         self
     }

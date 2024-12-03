@@ -45,14 +45,13 @@ fn test_install_required_equivalent() {
 
     // We should install a single package
     // from the remote because we do not cache
-    assert_eq!(
-        install_plan.reinstalls.len(),
-        0,
+    assert!(
+        install_plan.reinstalls.is_empty(),
         "found reinstalls: {:?}",
         install_plan.reinstalls
     );
-    assert_eq!(install_plan.local.len(), 0);
-    assert_eq!(install_plan.remote.len(), 0);
+    assert!(install_plan.local.is_empty());
+    assert!(install_plan.remote.is_empty());
 }
 
 /// When we have a site-packages with the requested package, and the version does not match we expect
@@ -80,7 +79,7 @@ fn test_install_required_mismatch() {
         NeedReinstall::VersionMismatch { ref installed_version, ref locked_version }
         if installed_version.to_string() == "0.6.0" && locked_version.to_string() == "0.7.0"
     );
-    assert_eq!(install_plan.local.len(), 0);
+    assert!(install_plan.local.is_empty());
     // Not cached we get it from the remote
     assert_eq!(install_plan.remote.len(), 1);
 }
@@ -106,7 +105,7 @@ fn test_install_required_installer_mismatch() {
         install_plan.reinstalls[0].1,
         NeedReinstall::InstallerMismatch { ref previous_installer } if previous_installer == "i-am-not-pixi"
     );
-    assert_eq!(install_plan.local.len(), 0);
+    assert!(install_plan.local.is_empty());
     // Not cached we get it from the remote
     assert_eq!(install_plan.remote.len(), 1);
 }
@@ -129,8 +128,8 @@ fn test_installed_one_other_installer() {
         .expect("should install");
 
     // We should not do anything
-    assert_eq!(install_plan.local.len(), 0);
-    assert_eq!(install_plan.remote.len(), 0);
+    assert!(install_plan.local.is_empty());
+    assert!(install_plan.remote.is_empty());
 }
 
 /// When requiring a package that has a different required python then we have installed we want to reinstall
@@ -158,7 +157,7 @@ fn test_install_required_python_mismatch() {
         } if installed_python_require.to_string() == "<3.12"
         && locked_python_version.to_string() == TEST_PYTHON_VERSION
     );
-    assert_eq!(install_plan.local.len(), 0);
+    assert!(install_plan.local.is_empty());
     // Not cached we get it from the remote
     assert_eq!(install_plan.remote.len(), 1);
 }
@@ -217,8 +216,8 @@ fn test_installed_local_required_registry() {
     let install_plan = plan
         .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
-    assert_eq!(install_plan.local.len(), 0);
-    assert_eq!(install_plan.remote.len(), 0);
+    assert!(install_plan.local.is_empty());
+    assert!(install_plan.remote.is_empty());
 }
 
 /// When requiring a local package and that same local package is installed, we should not reinstall it
@@ -255,8 +254,8 @@ fn test_installed_local_required_local() {
         "found reinstall: {:?}",
         install_plan.reinstalls
     );
-    assert_eq!(install_plan.remote.len(), 0);
-    assert_eq!(install_plan.local.len(), 0);
+    assert!(install_plan.remote.is_empty());
+    assert!(install_plan.local.is_empty());
 
     // Let's update the pyproject.toml mtime, then we do expect a re-installation
     pyproject_toml
@@ -338,4 +337,43 @@ fn test_installed_archive_require_registry() {
         .expect("should install");
     assert!(install_plan.local.is_empty());
     assert!(install_plan.remote.is_empty());
+}
+
+/// When having a git installed, and we require the same version from the registry
+/// we should reinstall, otherwise we should not
+/// note that we are using full git commits here, because it seems from my (Tim)
+/// testing that these are the ones used in the lock file
+#[test]
+fn test_installed_git_require_registry() {
+    let git_url =
+        Url::parse("git+https://github.com/pypa/pip.git@9d4f36d87dae9a968fb527e2cb87e8a507b0beb3")
+            .expect("could not parse git url");
+
+    let site_packages = MockedSitePackages::new().add_git(
+        "pip",
+        "1.0.0",
+        git_url.clone(),
+        InstalledDistOptions::default(),
+    );
+    let required = RequiredPackages::new().add_registry("pip", "1.0.0");
+
+    let plan = harness::install_planner();
+    let install_plan = plan
+        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .expect("should install");
+    assert_matches!(
+        install_plan.reinstalls[0].1,
+        NeedReinstall::UrlMismatch { .. }
+    );
+
+    // Okay now we require the same git package, it should not reinstall
+    let required = RequiredPackages::new().add_git("pip", "1.0.0", git_url.clone());
+    let install_plan = plan
+        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .expect("should install");
+    assert!(
+        install_plan.reinstalls.is_empty(),
+        "found reinstalls: {:?}",
+        install_plan.reinstalls
+    );
 }
