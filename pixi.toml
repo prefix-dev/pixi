@@ -30,8 +30,8 @@ run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec
 test = { depends-on = ["test-all-fast"] }
 test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
 test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
-test-fast = "cargo nextest run --workspace"
-test-slow = """cargo nextest run --workspace --retries 2 --features slow_integration_tests
+test-fast = "cargo nextest run --workspace --all-targets"
+test-slow = """cargo nextest run --workspace --all-targets --retries 2 --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
 
@@ -50,7 +50,7 @@ test-common-wheels = { cmd = "pytest --numprocesses=auto tests/wheel_tests/", de
   "build-release",
 ] }
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }
-test-integration-ci = "pytest --durations=10 --verbose --timeout=300 tests/integration_python"
+test-integration-ci = "pytest --numprocesses=auto --durations=10 --verbose --timeout=300 tests/integration_python"
 test-integration-fast = { cmd = "pytest -m 'not slow' --pixi-build=debug --numprocesses=auto --durations=10 --timeout=300 tests/integration_python", depends-on = [
   "build-debug",
 ] }
@@ -64,6 +64,11 @@ test-specific-test = { cmd = "pytest", depends-on = ["build-release"] }
 # Update one test channel by passing on value of `mappings.toml`
 # e.g. "multiple_versions_channel_1"
 update-test-channel = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
+
+[feature.pytest.target.osx.tasks]
+# Running integration tests in parallel sometimes fails for macOS
+test-integration-ci = "pytest --durations=10 --verbose --timeout=300 tests/integration_python"
+
 
 [feature.dev.dependencies]
 # Needed for the citation

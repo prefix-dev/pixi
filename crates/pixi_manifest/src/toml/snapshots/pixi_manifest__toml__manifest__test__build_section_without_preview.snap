@@ -1,14 +1,12 @@
 ---
 source: crates/pixi_manifest/src/toml/manifest.rs
-expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [build-system]\n        dependencies = [\"python-build-backend > 12\"]\n        build-backend = \"python-build-backend\"\n        channels = []\n        \"#,)"
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [build-system]\n        build-backend = { name = \"foobar\", version = \"*\" }\n        \"#,)"
 ---
   × [build-system] section is only allowed when the `pixi-build` feature is enabled
-    ╭─[pixi.toml:7:9]
-  6 │     
-  7 │ ╭─▶         [build-system]
-  8 │ │           dependencies = ["python-build-backend > 12"]
-  9 │ │           build-backend = "python-build-backend"
- 10 │ ╰─▶         channels = []
- 11 │             
-    ╰────
+   ╭─[pixi.toml:7:9]
+ 6 │     
+ 7 │ ╭─▶         [build-system]
+ 8 │ ╰─▶         build-backend = { name = "foobar", version = "*" }
+ 9 │             
+   ╰────
   help: Add `preview = ["pixi-build"]` under [workspace] to enable the preview feature
