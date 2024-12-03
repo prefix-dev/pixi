@@ -119,6 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 pixi_dir.display()
             )
         })?;
+
     let work_dir = tempfile::Builder::new()
         .prefix("pixi-build-")
         .tempdir_in(project.pixi_dir())
@@ -165,6 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 },
                 outputs: None,
                 work_directory: work_dir.path().to_path_buf(),
+                variant_configuration: Some(Default::default()),
             },
             progress.clone(),
         )

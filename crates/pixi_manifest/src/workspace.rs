@@ -60,4 +60,7 @@ pub struct Workspace {
 
     /// Preview features
     pub preview: Preview,
+
+    /// Build variants
+    pub build_variants: Option<HashMap<String, Vec<String>>>,
 }
