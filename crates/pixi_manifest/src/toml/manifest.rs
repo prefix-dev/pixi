@@ -1,8 +1,12 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap, fmt::Formatter};
 
 use indexmap::IndexMap;
 use itertools::chain;
-use serde::Deserialize;
+use miette::LabeledSpan;
+use serde::{
+    de::{MapAccess, Visitor},
+    Deserialize, Deserializer,
+};
 use serde_with::serde_as;
 
 use crate::{
@@ -85,6 +89,11 @@ pub struct TomlManifest {
     #[serde(default)]
     pub build_system: Option<PixiSpanned<TomlBuildSystem>>,
 
+    /// The build backend is unused by pixi and is only used by build backend
+    /// instead.
+    #[serde(default)]
+    pub build_backend: Option<TomlBuildBackendConfig>,
+
     /// The URI for the manifest schema which is unused by pixi
     #[serde(rename = "$schema")]
     pub _schema: Option<String>,
@@ -92,6 +101,48 @@ pub struct TomlManifest {
     /// The tool configuration which is unused by pixi
     #[serde(default, skip_serializing, rename = "tool")]
     pub _tool: serde::de::IgnoredAny,
+}
+
+#[derive(Debug)]
+pub struct TomlBuildBackendConfig {
+    name: PixiSpanned<String>,
+    additional_args: serde_value::Value,
+}
+
+impl<'de> Deserialize<'de> for TomlBuildBackendConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct TomlBuildBackendConfigVisitor;
+        impl<'de> Visitor<'de> for TomlBuildBackendConfigVisitor {
+            type Value = TomlBuildBackendConfig;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                write!(formatter, "expecting a map")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let result = TomlBuildBackendConfig {
+                    name: map
+                        .next_key()?
+                        .ok_or_else(|| serde::de::Error::missing_field("name"))?,
+                    additional_args: map.next_value()?,
+                };
+
+                let key: Option<Cow<'de, str>> = map.next_key()?;
+                if let Some(key) = key {
+                    return Err(serde::de::Error::unknown_field(key.as_ref(), &[]));
+                }
+                Ok(result)
+            }
+        }
+
+        deserializer.deserialize_map(TomlBuildBackendConfigVisitor)
+    }
 }
 
 impl TomlManifest {
@@ -314,7 +365,7 @@ impl TomlManifest {
 
             let PixiSpanned {
                 value: build_system,
-                span: _build_system_span,
+                span: build_system_span,
             } = self
                 .build_system
                 .ok_or_else(|| TomlError::MissingField("[build-system]".into(), None))?;
@@ -341,9 +392,52 @@ impl TomlManifest {
                     }
                 })?;
 
+            let backend_configuration = if let Some(map) = self.build_backend {
+                let PixiSpanned {
+                    value: name,
+                    span: name_span,
+                } = map.name;
+                let expected_build_backend_name =
+                    build_system.build_backend.value.name.value.as_source();
+                if name != build_system.build_backend.value.name.value.as_source() {
+                    let backend_name_span = build_system
+                        .build_backend
+                        .value
+                        .name
+                        .span
+                        .or(build_system.build_backend.span)
+                        .or(build_system_span);
+
+                    return Err(TomlError::GenericLabels(
+                        format!(
+                            "The build backend name `{name}` does not match the name defined in the build system `{expected_build_backend_name}`",
+                        )
+                        .into(),
+                        [
+                            name_span.map(|span| LabeledSpan::new_primary_with_span(Some(format!("this should be {expected_build_backend_name}")), span)),
+                            backend_name_span.map(|span| {
+                                LabeledSpan::new_with_span(
+                                    Some(String::from("the backend name is defined here")),
+                                    span,
+                                )
+                            }),
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .collect(),
+                    ));
+                }
+                Some(map.additional_args)
+            } else {
+                None
+            };
+
+            let mut build_system = build_system.into_build_system()?;
+            build_system.build_backend.additional_args = backend_configuration;
+
             Some(PackageManifest {
                 package,
-                build_system: build_system.into_build_system()?,
+                build_system,
                 targets: Targets::from_default_and_user_defined(
                     default_package_target.unwrap_or_default(),
                     package_targets,
@@ -372,7 +466,12 @@ impl TomlManifest {
                         build_system_span,
                     ))
                 };
-            }
+            } else if let Some(map) = self.build_backend {
+                return Err(TomlError::Generic(
+                    "Cannot use [build-backend] without [build-system]".into(),
+                    map.name.span,
+                ));
+            };
 
             None
         };
@@ -577,6 +676,78 @@ mod test {
         [host-dependencies]
 
         [target.win.host-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_invalid_build_backend_sections() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = []
+        platforms = []
+
+        [build-backend]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_invalid_named_build_backend_sections() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = []
+        platforms = []
+
+        [build-backend.backend]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_invalid_incorrectly_named_build_backend_sections() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [package]
+        name = "foobar"
+        version = "0.1.0"
+
+        [build-system]
+        build-backend = { name = "foobar", version = "*" }
+
+        [build-backend.backend]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_multiple_backend_config() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [package]
+        name = "foobar"
+        version = "0.1.0"
+
+        [build-system]
+        build-backend = { name = "foobar", version = "*" }
+
+        [build-backend.foobar]
+
+        [build-backend.foobar2]
         "#,
         ));
     }
