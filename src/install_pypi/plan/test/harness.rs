@@ -140,6 +140,7 @@ impl InstalledDistBuilder {
 pub struct InstalledDistOptions {
     installer: Option<String>,
     requires_python: Option<uv_pep440::VersionSpecifiers>,
+    metadata_mtime: Option<std::time::SystemTime>,
 }
 
 impl InstalledDistOptions {
@@ -154,6 +155,11 @@ impl InstalledDistOptions {
         self
     }
 
+    pub fn with_metadata_mtime(mut self, metadata_mtime: std::time::SystemTime) -> Self {
+        self.metadata_mtime = Some(metadata_mtime);
+        self
+    }
+
     pub fn installer(&self) -> &str {
         self.installer
             .as_deref()
@@ -162,6 +168,10 @@ impl InstalledDistOptions {
 
     pub fn requires_python(&self) -> Option<&uv_pep440::VersionSpecifiers> {
         self.requires_python.as_ref()
+    }
+
+    pub fn metadata_mtime(&self) -> Option<std::time::SystemTime> {
+        self.metadata_mtime
     }
 }
 
@@ -206,13 +216,20 @@ impl MockedSitePackages {
             let requires_python = format!("\nRequires-Python: {}", requires_python);
             minimal_metadata.push_str(&requires_python);
         }
-        std::fs::write(dist_info.join("METADATA"), minimal_metadata)
-            .expect("could not write METADATA");
-        // Set the modification time to the current time
-        std::fs::File::open(dist_info.join("METADATA"))
-            .expect("should open METADATA")
-            .set_modified(std::time::SystemTime::now())
-            .expect("should set modified time");
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(&dist_info.join("METADATA"))
+            .unwrap();
+        file.write_all(minimal_metadata.as_bytes())
+            .expect("should write metadata");
+
+        if let Some(metadata_mtime) = opts.metadata_mtime() {
+            file.set_modified(metadata_mtime)
+                .expect("should set modified time");
+            file.sync_all().expect("should sync file");
+        }
 
         dist_info
     }

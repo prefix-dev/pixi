@@ -259,7 +259,7 @@ fn test_installed_local_required_registry() {
 #[test]
 fn test_installed_local_required_local() {
     let ten_minutes_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 10);
-    let (fake, pyproject_toml) = harness::fake_pyproject_toml(Some(ten_minutes_ago));
+    let (fake, _) = harness::fake_pyproject_toml(Some(ten_minutes_ago));
     let site_packages = MockedSitePackages::new().add_directory(
         "aiofiles",
         "0.6.0",
@@ -290,11 +290,40 @@ fn test_installed_local_required_local() {
     );
     assert!(install_plan.remote.is_empty());
     assert!(install_plan.local.is_empty());
-
-    // Let's update the pyproject.toml mtime, then we do expect a re-installation
-    pyproject_toml
+}
+/// When requiring a local package and that same local package is installed, we should not reinstall it
+/// except if the pyproject.toml file, or some other source files we won't check here is newer than the cache
+#[test]
+fn test_local_source_newer_than_local_metadata() {
+    let (fake, pyproject) = harness::fake_pyproject_toml(None);
+    let site_packages = MockedSitePackages::new().add_directory(
+        "aiofiles",
+        "0.6.0",
+        fake.path().to_path_buf(),
+        false,
+        // Set the metadata mtime to 1 day ago
+        InstalledDistOptions::default().with_metadata_mtime(
+            std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 60 * 24),
+        ),
+    );
+    // Requires following package
+    let required = RequiredPackages::new().add_directory(
+        "aiofiles",
+        "0.6.0",
+        fake.path().to_path_buf(),
+        false,
+    );
+    /// Set the pyproject.toml file to be newer than the installed metadata
+    /// We need to do this otherwise the test seems to fail even though the file should be newer
+    /// anyway
+    pyproject
         .set_modified(std::time::SystemTime::now())
         .unwrap();
+    pyproject.sync_all().unwrap();
+
+    // pyproject.toml file is older than the cache, all else is the same
+    // so we do not expect a re-installation
+    let plan = harness::install_planner();
     let install_plan = plan
         .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
