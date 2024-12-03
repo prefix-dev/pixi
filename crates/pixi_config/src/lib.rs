@@ -81,25 +81,17 @@ pub fn pixi_home() -> Option<PathBuf> {
 ///   [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
     std::env::var("PIXI_CACHE_DIR")
+        .ok()
         .map(PathBuf::from)
-        .or_else(|_| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from))
-        .or_else(|_| {
-            let xdg_cache_pixi_dir = std::env::var_os("XDG_CACHE_HOME")
-                .map_or_else(
-                    || dirs::home_dir().map(|d| d.join(".cache")),
-                    |p| Some(PathBuf::from(p)),
-                )
-                .map(|d| d.join("pixi"));
+        .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
+        .or_else(|| {
+            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join("pixi"));
 
             // Only use the xdg cache pixi directory when it exists
-            xdg_cache_pixi_dir
-                .and_then(|d| d.exists().then_some(d))
-                .ok_or_else(|| miette::miette!("could not determine xdg cache directory"))
+            pixi_cache_dir.and_then(|d| d.exists().then_some(d))
         })
-        .or_else(|_| {
-            rattler::default_cache_dir()
-                .map_err(|_| miette::miette!("could not determine default cache directory"))
-        })
+        .or_else(|| rattler::default_cache_dir().ok())
+        .ok_or_else(|| miette::miette!("could not determine default cache directory"))
 }
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
