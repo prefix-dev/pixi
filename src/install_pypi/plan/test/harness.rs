@@ -209,7 +209,7 @@ impl MockedSitePackages {
         std::fs::write(dist_info.join("METADATA"), minimal_metadata)
             .expect("could not write METADATA");
         // Set the modification time to the current time
-        std::fs::File::open(&dist_info.join("METADATA"))
+        std::fs::File::open(dist_info.join("METADATA"))
             .expect("should open METADATA")
             .set_modified(std::time::SystemTime::now())
             .expect("should set modified time");
