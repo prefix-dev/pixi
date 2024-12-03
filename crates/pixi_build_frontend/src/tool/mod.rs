@@ -1,12 +1,15 @@
 mod cache;
+mod installer;
 mod spec;
 
 use std::{collections::HashMap, path::PathBuf};
 
-pub use cache::{ToolCacheError, ToolContext};
+pub use cache::ToolCacheError;
 pub use spec::{IsolatedToolSpec, SystemToolSpec, ToolSpec};
 
 use crate::InProcessBackend;
+
+pub use installer::ToolContext;
 
 /// A tool that can be invoked.
 #[derive(Debug)]
@@ -14,6 +17,16 @@ pub enum Tool {
     Isolated(IsolatedTool),
     System(SystemTool),
     Io(InProcessBackend),
+}
+
+impl Tool {
+    pub fn as_isolated(&self) -> Option<&IsolatedTool> {
+        match self {
+            Tool::Isolated(tool) => Some(tool),
+            Tool::System(_) => None,
+            Tool::Io(_) => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -43,6 +56,12 @@ impl From<SystemTool> for Tool {
     }
 }
 
+impl From<IsolatedTool> for Tool {
+    fn from(value: IsolatedTool) -> Self {
+        Self::Isolated(value)
+    }
+}
+
 /// A tool that is installed in its own isolated environment.
 #[derive(Debug, Clone)]
 pub struct IsolatedTool {
@@ -66,12 +85,6 @@ impl IsolatedTool {
             prefix: prefix.into(),
             activation_scripts: activation,
         }
-    }
-}
-
-impl From<IsolatedTool> for Tool {
-    fn from(value: IsolatedTool) -> Self {
-        Self::Isolated(value)
     }
 }
 
