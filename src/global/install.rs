@@ -472,7 +472,6 @@ mod tests {
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
         use crate::global::trampoline::GlobalExecutable;
-        use fs_err;
         use std::path::Path;
         let script_without_quote = r#"
 @SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
@@ -482,7 +481,7 @@ mod tests {
         let script_path = Path::new("hyperfine.bat");
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script_without_quote).unwrap();
+        fs_err::write(&script_path, script_without_quote).unwrap();
         let script_global_bin = GlobalExecutable::Script(script_path);
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
@@ -497,7 +496,7 @@ mod tests {
 "#;
         let script_path = Path::new("pydoc.bat");
         let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script_with_quote).unwrap();
+        fs_err::write(&script_path, script_with_quote).unwrap();
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
