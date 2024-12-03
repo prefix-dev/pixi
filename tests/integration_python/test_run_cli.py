@@ -279,10 +279,13 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    manifest = tmp_path.joinpath("pixi.toml")
+    tmp_project = tmp_path.joinpath("pixi-project")
+    tmp_project.mkdir()
+    detached_envs_tmp = tmp_path.joinpath("pixi-detached-envs")
+    manifest = tmp_project.joinpath("pixi.toml")
 
     # Create a dummy project
-    verify_cli_command([pixi, "init", tmp_path, "--channel", dummy_channel_1])
+    verify_cli_command([pixi, "init", tmp_project, "--channel", dummy_channel_1])
     verify_cli_command([pixi, "add", "dummy-a", "--no-install", "--manifest-path", manifest])
 
     # Set detached environments
@@ -295,7 +298,7 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
             manifest,
             "--local",
             "detached-environments",
-            "/tmp/pixi-detached-envs",
+            str(detached_envs_tmp),
         ],
     )
 
@@ -303,16 +306,20 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
     verify_cli_command([pixi, "install", "--manifest-path", manifest])
 
     # Validate the detached environment
-    detached_envs = Path("/tmp/pixi-detached-envs")
-    assert detached_envs.exists()
-    detached_envs_folder = next(
-        (folder for folder in detached_envs.iterdir() if folder.is_dir()), "no_folder"
-    )
+    assert detached_envs_tmp.exists()
+
+    detached_envs_folder = None
+    for folder in detached_envs_tmp.iterdir():
+        if folder.is_dir():
+            detached_envs_folder = folder
+            break
+    assert detached_envs_folder is not None, "Couldn't find detached environment folder"
+
     # Validate the conda-meta folder exists
     assert Path(detached_envs_folder).joinpath("envs", "default", "conda-meta").exists()
 
     # Verify that the detached environment is used
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "env"],
-        stdout_contains="CONDA_PREFIX=/tmp/pixi-detached-envs",
+        [pixi, "run", "--manifest-path", manifest, "echo \$CONDA_PREFIX"],
+        stdout_contains=f"{detached_envs_tmp}",
     )
