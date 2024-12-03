@@ -35,15 +35,44 @@ test = "pytest -v tests/*"
 [dependency-groups]
 test = ["pytest>=8.3.3,<9"]
 
-[tool.pixi.host-dependencies]
-hatchling = "==1.26.3"
+#
+# Adding this section to the pyproject.toml file will enable the Pixi build
+# system. With the following configuration the package can be build directly
+# into a conda package.
+#
 
+# This section marks the project as a pixi package.
+#
+# Normally a number of fields would be set here, like the name, version, etc.
+# However, since all these fields are already defined in the [project] section
+# at the top of this file they are not required.
 [tool.pixi.package]
 
+
+# The build-system section defines the build system that will be used to turn
+# the source code of this package into a conda package. Similarly to the above
+# [build-system] section this section instructs pixi which build backend to
+# use. The build-backend is an executable that is installed and invoked by
+# pixi with the sole purpose to build the package.
 [tool.pixi.build-system]
-build-backend = "pixi-build-python"
+# The name of the build backend to use. This name refers both to the name of
+# the package that provides the build backend and the name of the executable
+# inside the package that is invoked.
+#
+# The `build-backend` key also functions as a dependency declaration. At least
+# a version specifier must be added.
+build-backend = { name = "pixi-build-python", version = "*" }
+
+# These are the conda channels that are used to resolve the dependencies of the
+# build backend package.
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
-dependencies = ["pixi-build-python"]
+
+# To be able to install this pyproject we need to install the dependencies of
+# the python build-system defined above. Note that different from the
+# pyproject build-system this refers to a conda package instead of a pypi
+# package.
+[tool.pixi.host-dependencies]
+hatchling = "==1.26.3"

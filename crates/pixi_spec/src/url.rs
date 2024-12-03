@@ -1,3 +1,4 @@
+use crate::BinarySpec;
 use itertools::Either;
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
@@ -56,14 +57,13 @@ impl UrlSpec {
     }
 
     /// Converts this instance into a [`UrlSourceSpec`] if the URL points to a
-    /// source package. Or to a [`NamelessMatchSpec`] otherwise.
-    pub fn into_source_or_binary(self) -> Either<UrlSourceSpec, NamelessMatchSpec> {
+    /// source package. Or to a [`UrlBinarySpec`] otherwise.
+    pub fn into_source_or_binary(self) -> Either<UrlSourceSpec, UrlBinarySpec> {
         if self.is_binary() {
-            Either::Right(NamelessMatchSpec {
-                url: Some(self.url),
+            Either::Right(UrlBinarySpec {
+                url: self.url,
                 md5: self.md5,
                 sha256: self.sha256,
-                ..NamelessMatchSpec::default()
             })
         } else {
             Either::Left(UrlSourceSpec {
@@ -100,5 +100,45 @@ impl From<UrlSourceSpec> for UrlSpec {
             md5: value.md5,
             sha256: value.sha256,
         }
+    }
+}
+
+/// A specification of a source archive from a URL.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct UrlBinarySpec {
+    /// The URL of the package
+    pub url: Url,
+
+    /// The md5 hash of the archive
+    pub md5: Option<Md5Hash>,
+
+    /// The sha256 hash of the archive
+    pub sha256: Option<Sha256Hash>,
+}
+
+impl From<UrlBinarySpec> for UrlSpec {
+    fn from(value: UrlBinarySpec) -> Self {
+        Self {
+            url: value.url,
+            md5: value.md5,
+            sha256: value.sha256,
+        }
+    }
+}
+
+impl From<UrlBinarySpec> for NamelessMatchSpec {
+    fn from(value: UrlBinarySpec) -> Self {
+        NamelessMatchSpec {
+            url: Some(value.url),
+            md5: value.md5,
+            sha256: value.sha256,
+            ..NamelessMatchSpec::default()
+        }
+    }
+}
+
+impl From<UrlBinarySpec> for BinarySpec {
+    fn from(value: UrlBinarySpec) -> Self {
+        Self::Url(value)
     }
 }
