@@ -41,7 +41,7 @@ impl BackendOverride {
     pub fn from_env() -> Option<Self> {
         match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE") {
             Ok(spec) => {
-                tracing::warn!("Overriding build backend with: {}", spec);
+                tracing::warn!("overriding build backend with: {}", spec);
                 Some(Self::System(spec))
             }
             Err(_) => None,

@@ -492,7 +492,6 @@ impl BuildContext {
                 ));
             }
         }
-        tracing::warn!("extracting metadata for {}", source.pinned);
 
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()

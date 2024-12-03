@@ -112,10 +112,6 @@ impl BuildFrontend {
             request.source_dir.display()
         );
 
-        if let Some(tool_override) = &request.build_tool_override {
-            tracing::info!("overriding the backend with {:?}", tool_override);
-        }
-
         protocol
             .with_backend_override(request.build_tool_override)
             .finish(self.tool_context.clone(), request.build_id)
