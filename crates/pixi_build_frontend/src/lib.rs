@@ -5,11 +5,11 @@ mod protocols;
 
 use std::fmt::{Debug, Formatter};
 
-pub(crate) use protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
+pub use protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
 
 mod protocol_builder;
 mod reporters;
-mod tool;
+pub mod tool;
 
 use std::path::PathBuf;
 
@@ -32,9 +32,6 @@ pub enum BackendOverride {
 
     /// Overwrite the backend with a executable path.
     System(String),
-
-    /// Override with a specific IPC channel.
-    Io(InProcessBackend),
 }
 
 impl BackendOverride {
@@ -46,18 +43,6 @@ impl BackendOverride {
             }
             Err(_) => None,
         }
-    }
-}
-
-impl From<InProcessBackend> for BackendOverride {
-    fn from(value: InProcessBackend) -> Self {
-        Self::Io(value)
-    }
-}
-
-impl From<InProcessBackend> for Option<BackendOverride> {
-    fn from(value: InProcessBackend) -> Self {
-        Some(value.into())
     }
 }
 

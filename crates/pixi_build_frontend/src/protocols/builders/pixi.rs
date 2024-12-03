@@ -7,17 +7,16 @@ use std::{
 use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_manifest::{Manifest, PackageManifest, PrioritizedChannel, WorkspaceManifest};
-// pub use protocol::Protocol;
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use thiserror::Error;
 use which::Error;
 
 use crate::{
+    jsonrpc::{Receiver, Sender},
     protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
-    BackendOverride, ToolContext,
+    BackendOverride, InProcessBackend, ToolContext,
 };
-
 // use super::{InitializeError, JsonRPCBuildProtocol};
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
@@ -74,7 +73,7 @@ impl Display for FinishError {
 
 impl ProtocolBuilder {
     /// Constructs a new instance from a manifest.
-    pub(crate) fn new(
+    pub fn new(
         source_dir: PathBuf,
         manifest_path: PathBuf,
         workspace_manifest: WorkspaceManifest,
@@ -202,6 +201,26 @@ impl ProtocolBuilder {
             build_id,
             self.cache_dir,
             tool,
+        )
+        .await?)
+    }
+
+    /// Finish the construction of the protocol with the given
+    /// [`InProcessBackend`] representing the build backend.
+    pub async fn finish_with_ipc(
+        self,
+        ipc: InProcessBackend,
+        build_id: usize,
+    ) -> Result<JsonRPCBuildProtocol, FinishError> {
+        Ok(JsonRPCBuildProtocol::setup_with_transport(
+            "<IPC>".to_string(),
+            self.source_dir,
+            self.manifest_path,
+            build_id,
+            self.cache_dir,
+            Sender::from(ipc.rpc_out),
+            Receiver::from(ipc.rpc_in),
+            None,
         )
         .await?)
     }

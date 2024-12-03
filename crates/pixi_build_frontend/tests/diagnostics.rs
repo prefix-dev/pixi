@@ -2,6 +2,7 @@ use std::path::Path;
 
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest};
+use pixi_manifest::toml::{ExternalWorkspaceProperties, TomlManifest};
 
 fn error_to_snapshot(diag: &impl Diagnostic) -> String {
     let mut report_str = String::new();
@@ -114,24 +115,22 @@ async fn test_invalid_backend() {
     let manifest = source_dir
         .path()
         .join(pixi_consts::consts::PROJECT_MANIFEST);
-    tokio::fs::write(
-        &manifest,
-        r#"
-        [workspace]
-        platforms = []
-        channels = []
-        preview = ['pixi-build']
 
-        [package]
-        version = "0.1.0"
-        name = "project"
+    let toml = r#"
+    [workspace]
+    platforms = []
+    channels = []
+    preview = ['pixi-build']
 
-        [build-system]
-        build-backend = { name = "ipc", version = "*" }
-        "#,
-    )
-    .await
-    .unwrap();
+    [package]
+    version = "0.1.0"
+    name = "project"
+
+    [build-system]
+    build-backend = { name = "ipc", version = "*" }
+    "#;
+
+    tokio::fs::write(&manifest, toml).await.unwrap();
 
     let (in_tx, in_rx) = tokio::io::duplex(1024);
     let (out_tx, _out_rx) = tokio::io::duplex(1024);
@@ -144,14 +143,19 @@ async fn test_invalid_backend() {
     // connection.
     drop(in_tx);
 
-    let err = BuildFrontend::default()
-        .setup_protocol(SetupRequest {
-            source_dir: source_dir.path().to_path_buf(),
-            build_tool_override: ipc.into(),
-            build_id: 0,
-        })
-        .await
-        .unwrap_err();
+    let (workspace, package) = TomlManifest::from_toml_str(toml)
+        .unwrap()
+        .into_manifests(ExternalWorkspaceProperties::default())
+        .unwrap();
+    let protocol = pixi_build_frontend::pixi_protocol::ProtocolBuilder::new(
+        source_dir.path().to_path_buf(),
+        manifest.to_path_buf(),
+        workspace,
+        package.unwrap(),
+    )
+    .unwrap();
+
+    let err = protocol.finish_with_ipc(ipc, 0).await.unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
     let snapshot = replace_source_dir(&snapshot, source_dir.path());
