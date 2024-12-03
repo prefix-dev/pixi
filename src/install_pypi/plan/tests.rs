@@ -308,7 +308,9 @@ fn install_planner() -> InstallPlanner {
 
 /// Create a fake pyproject.toml file in a temp dir
 /// return the temp dir
-fn fake_pyproject_toml() -> (TempDir, std::fs::File) {
+fn fake_pyproject_toml(
+    modification_time: Option<std::time::SystemTime>,
+) -> (TempDir, std::fs::File) {
     let temp_dir = tempfile::tempdir().unwrap();
     let pyproject_toml = temp_dir.path().join("pyproject.toml");
     let mut pyproject_toml = std::fs::File::create(pyproject_toml).unwrap();
@@ -322,6 +324,10 @@ fn fake_pyproject_toml() -> (TempDir, std::fs::File) {
             .as_bytes(),
         )
         .unwrap();
+    // Set the modification time if it is provided
+    if let Some(modification_time) = modification_time {
+        pyproject_toml.set_modified(modification_time).unwrap();
+    }
     (temp_dir, pyproject_toml)
 }
 
@@ -529,7 +535,8 @@ fn test_installed_local_required_registry() {
 /// except if the pyproject.toml file, or some other source files we wont check here is newer than the cache
 #[test]
 fn test_installed_local_required_local() {
-    let (fake, pyproject_toml) = fake_pyproject_toml();
+    let ten_minutes_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 10);
+    let (fake, pyproject_toml) = fake_pyproject_toml(Some(ten_minutes_ago));
     let site_packages = MockedSitePackages::new().add_directory(
         "aiofiles",
         "0.6.0",
@@ -578,7 +585,7 @@ fn test_installed_local_required_local() {
 /// we should reinstall the editable package
 #[test]
 fn test_installed_editable_required_non_editable() {
-    let (fake, _) = fake_pyproject_toml();
+    let (fake, _) = fake_pyproject_toml(None);
     let site_packages = MockedSitePackages::new().add_directory(
         "aiofiles",
         "0.6.0",
