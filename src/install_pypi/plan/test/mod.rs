@@ -313,9 +313,9 @@ fn test_local_source_newer_than_local_metadata() {
         fake.path().to_path_buf(),
         false,
     );
-    /// Set the pyproject.toml file to be newer than the installed metadata
-    /// We need to do this otherwise the test seems to fail even though the file should be newer
-    /// anyway
+    // Set the pyproject.toml file to be newer than the installed metadata
+    // We need to do this otherwise the test seems to fail even though the file should be newer
+    // anyway
     pyproject
         .set_modified(std::time::SystemTime::now())
         .unwrap();

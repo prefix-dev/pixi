@@ -220,7 +220,8 @@ impl MockedSitePackages {
             .write(true)
             .read(true)
             .create(true)
-            .open(&dist_info.join("METADATA"))
+            .truncate(true)
+            .open(dist_info.join("METADATA"))
             .unwrap();
         file.write_all(minimal_metadata.as_bytes())
             .expect("should write metadata");
