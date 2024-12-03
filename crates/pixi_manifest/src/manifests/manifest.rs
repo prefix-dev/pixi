@@ -84,7 +84,7 @@ impl Manifest {
     /// Create a new manifest from a path
     pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
         let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
-        let contents = std::fs::read_to_string(path.as_ref()).into_diagnostic()?;
+        let contents = fs_err::read_to_string(path.as_ref()).into_diagnostic()?;
         Self::from_str(manifest_path.as_ref(), contents)
     }
 
@@ -162,7 +162,7 @@ impl Manifest {
     /// Save the manifest to the file and update the contents
     pub fn save(&mut self) -> miette::Result<()> {
         let contents = self.document.to_string();
-        std::fs::write(&self.path, &contents).into_diagnostic()?;
+        fs_err::write(&self.path, &contents).into_diagnostic()?;
         self.contents = Some(contents);
         Ok(())
     }
@@ -801,7 +801,7 @@ mod tests {
         // Test the toml from a path
         let dir = tempdir().unwrap();
         let path = dir.path().join("pixi.toml");
-        std::fs::write(&path, PROJECT_BOILERPLATE).unwrap();
+        fs_err::write(&path, PROJECT_BOILERPLATE).unwrap();
         // From &PathBuf
         let _manifest = Manifest::from_path(&path).unwrap();
         // From &Path
@@ -2321,7 +2321,7 @@ bar = "*"
         for entry in glob(location).unwrap() {
             match entry {
                 Ok(path) => {
-                    let contents = std::fs::read_to_string(path).unwrap();
+                    let contents = fs_err::read_to_string(path).unwrap();
                     let _manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
                 }
                 Err(e) => println!("{:?}", e),

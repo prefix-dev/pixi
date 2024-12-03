@@ -61,7 +61,7 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
         prefix_file.display()
     );
 
-    match std::fs::read_to_string(prefix_file.clone()) {
+    match fs_err::read_to_string(prefix_file.clone()) {
         // Not found is fine as it can be new or backwards compatible.
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
         // Scream the error if we don't know it.
@@ -240,11 +240,11 @@ pub(crate) fn write_environment_file(
         .parent()
         .expect("There should already be a conda-meta folder");
 
-    match std::fs::create_dir_all(parent).into_diagnostic() {
+    match fs_err::create_dir_all(parent).into_diagnostic() {
         Ok(_) => {
             // Using json as it's easier to machine read it.
             let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
-            match std::fs::write(&path, contents).into_diagnostic() {
+            match fs_err::write(&path, contents).into_diagnostic() {
                 Ok(_) => {
                     tracing::debug!("Wrote environment file to: {:?}", path);
                 }
@@ -270,7 +270,7 @@ pub(crate) fn read_environment_file(
 ) -> miette::Result<Option<EnvironmentFile>> {
     let path = environment_file_path(environment_dir);
 
-    let contents = match std::fs::read_to_string(&path) {
+    let contents = match fs_err::read_to_string(&path) {
         Ok(contents) => contents,
         Err(e) if e.kind() == ErrorKind::NotFound => {
             tracing::debug!("Environment file not yet found at: {:?}", path);
@@ -282,7 +282,7 @@ pub(crate) fn read_environment_file(
                 path,
                 e
             );
-            let _ = std::fs::remove_file(&path);
+            let _ = fs_err::remove_file(&path);
             return Err(e).into_diagnostic();
         }
     };
@@ -294,7 +294,7 @@ pub(crate) fn read_environment_file(
                 path,
                 e
             );
-            let _ = std::fs::remove_file(&path);
+            let _ = fs_err::remove_file(&path);
             return Ok(None);
         }
     };
@@ -526,7 +526,7 @@ pub async fn update_prefix_pypi(
 async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
     // Check if the old interpreter is outdated
     let mut installed = vec![];
-    for entry in std::fs::read_dir(site_packages).into_diagnostic()? {
+    for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
         let entry = entry.into_diagnostic()?;
         if entry.file_type().into_diagnostic()?.is_dir() {
             let path = entry.path();

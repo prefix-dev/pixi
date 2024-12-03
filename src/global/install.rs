@@ -472,7 +472,7 @@ mod tests {
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
         use crate::global::trampoline::GlobalExecutable;
-        use std::fs;
+        use fs_err;
         use std::path::Path;
         let script_without_quote = r#"
 @SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"

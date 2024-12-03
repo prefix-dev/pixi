@@ -25,6 +25,7 @@ rustls-tls = [
 
 [dependencies]
 fd-lock = { workspace = true }
+fs-err = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }

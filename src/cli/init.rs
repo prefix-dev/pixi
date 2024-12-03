@@ -585,7 +585,7 @@ mod tests {
         let template = "Test Template";
 
         fn read_file_content(path: &Path) -> String {
-            let mut file = std::fs::File::open(path).unwrap();
+            let mut file = fs_err::File::open(path).unwrap();
             let mut content = String::new();
             file.read_to_string(&mut content).unwrap();
             content
