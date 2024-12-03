@@ -304,13 +304,9 @@ mod tests {
                 *count += 1;
 
                 if count == &1 {
-                    dbg!("a");
                     miette::bail!("error on first request");
-                    // tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                    // panic!("tim is right!");
                 }
 
-                dbg!("b");
                 let isolated_tool =
                     IsolatedTool::new(spec.command.clone(), PathBuf::new(), HashMap::default());
                 Ok(isolated_tool)
