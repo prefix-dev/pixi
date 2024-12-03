@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-import pytest
 
 from .common import verify_cli_command, ExitCode, default_env_path
 import tempfile
@@ -287,6 +286,7 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="test123",
     )
 
+
 def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     manifest = tmp_path.joinpath("pixi.toml")
 
@@ -314,9 +314,11 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
     # Validate the detached environment
     detached_envs = Path("/tmp/pixi-detached-envs")
     assert detached_envs.exists()
-    detached_envs_folder = next((folder for folder in detached_envs.iterdir() if folder.is_dir()), None)
+    detached_envs_folder = next(
+        (folder for folder in detached_envs.iterdir() if folder.is_dir()), "no_folder"
+    )
     # Validate the conda-meta folder exists
-    assert detached_envs_folder.joinpath("envs", "default", "conda-meta").exists()
+    assert Path(detached_envs_folder).joinpath("envs", "default", "conda-meta").exists()
 
     # Verify that the detached environment is used
     verify_cli_command(

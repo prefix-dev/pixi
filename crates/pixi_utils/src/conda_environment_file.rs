@@ -131,8 +131,6 @@ impl CondaEnvFile {
             channels = config.default_channels();
         }
 
-        dbg!(&channels);
-
         Ok((conda_deps, pip_deps, channels))
     }
 }
