@@ -598,7 +598,7 @@ test = ["test"]
     assert polars_pypi != "==0.*"
     assert "numpy" not in pypi_dependencies
 
-    
+
 def test_upgrade_keep_info(
     pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
 ) -> None:
