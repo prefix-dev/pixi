@@ -315,9 +315,8 @@ fn test_local_source_newer_than_local_metadata() {
     );
     // Set the pyproject.toml file to be newer than the installed metadata
     // We need to do this otherwise the test seems to fail even though the file should be newer
-    // anyway
     pyproject
-        .set_modified(std::time::SystemTime::now())
+        .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60 * 60 * 24))
         .unwrap();
     pyproject.sync_all().unwrap();
 
