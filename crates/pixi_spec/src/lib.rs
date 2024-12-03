@@ -19,13 +19,13 @@ use std::{path::PathBuf, str::FromStr};
 pub use detailed::DetailedSpec;
 pub use git::{GitReference, GitSpec};
 use itertools::Either;
-pub use path::{PathSourceSpec, PathSpec};
+pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName, ParseChannelError,
-    VersionSpec,
+    ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
+pub use serde::TomlSpec;
 use thiserror::Error;
-pub use url::{UrlSourceSpec, UrlSpec};
+pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec
 /// type.
@@ -256,38 +256,22 @@ impl PixiSpec {
     }
 
     /// Converts this instance in a source or binary spec.
-    pub fn into_source_or_binary(
-        self,
-        channel_config: &ChannelConfig,
-    ) -> Result<Either<SourceSpec, NamelessMatchSpec>, SpecConversionError> {
+    pub fn into_source_or_binary(self) -> Either<SourceSpec, BinarySpec> {
         match self {
-            PixiSpec::Version(version) => Ok(Either::Right(NamelessMatchSpec {
-                version: Some(version),
-                ..NamelessMatchSpec::default()
-            })),
-            PixiSpec::DetailedVersion(detailed) => Ok(Either::Right(
-                detailed.try_into_nameless_match_spec(channel_config)?,
-            )),
-            PixiSpec::Url(url) => Ok(url.into_source_or_binary().map_left(SourceSpec::Url)),
-            PixiSpec::Git(git) => Ok(Either::Left(SourceSpec::Git(git))),
-            PixiSpec::Path(path) => Ok(path
-                .into_source_or_binary(&channel_config.root_dir)?
-                .map_left(SourceSpec::Path)),
-        }
-    }
-
-    /// Converts this instance into a named source or binary spec.
-    pub fn into_named_source_or_binary(
-        self,
-        package_name: PackageName,
-        channel_config: &ChannelConfig,
-    ) -> Result<Either<(PackageName, SourceSpec), MatchSpec>, SpecConversionError> {
-        Ok(match self.into_source_or_binary(channel_config)? {
-            Either::Left(source) => Either::Left((package_name, source)),
-            Either::Right(spec) => {
-                Either::Right(MatchSpec::from_nameless(spec, Some(package_name)))
+            PixiSpec::Version(version) => Either::Right(BinarySpec::Version(version)),
+            PixiSpec::DetailedVersion(detailed) => {
+                Either::Right(BinarySpec::DetailedVersion(detailed))
             }
-        })
+            PixiSpec::Url(url) => url
+                .into_source_or_binary()
+                .map_left(SourceSpec::Url)
+                .map_right(BinarySpec::Url),
+            PixiSpec::Git(git) => Either::Left(SourceSpec::Git(git)),
+            PixiSpec::Path(path) => path
+                .into_source_or_binary()
+                .map_left(SourceSpec::Path)
+                .map_right(BinarySpec::Path),
+        }
     }
 
     /// Converts this instance into a source spec if this instance represents a
@@ -398,6 +382,72 @@ impl From<PixiSpec> for toml_edit::Value {
     fn from(value: PixiSpec) -> Self {
         ::serde::Serialize::serialize(&value, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
+    }
+}
+
+/// A specification for a source package.
+///
+/// This type only represents binary packages. Use [`PixiSpec`] to represent
+/// both binary and source packages.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub enum BinarySpec {
+    /// The spec is represented solely by a version string. The package should
+    /// be retrieved from a channel.
+    ///
+    /// This is similar to the `DetailedVersion` variant but with a simplified
+    /// version spec.
+    Version(VersionSpec),
+
+    /// The spec is represented by a detailed version spec. The package should
+    /// be retrieved from a channel.
+    DetailedVersion(DetailedSpec),
+
+    /// The spec is represented as an archive that can be downloaded from the
+    /// specified URL. The package should be retrieved from the URL and can
+    /// only represent an archive.
+    Url(UrlBinarySpec),
+
+    /// The spec is represented as a local path. The package should be retrieved
+    /// from the local filesystem. The package can only be a binary package.
+    Path(PathBinarySpec),
+}
+
+impl BinarySpec {
+    /// Convert this instance into a binary spec.
+    ///
+    /// A binary spec always refers to a binary package.
+    pub fn try_into_nameless_match_spec(
+        self,
+        channel_config: &ChannelConfig,
+    ) -> Result<NamelessMatchSpec, SpecConversionError> {
+        match self {
+            BinarySpec::Version(version) => Ok(NamelessMatchSpec {
+                version: Some(version),
+                ..NamelessMatchSpec::default()
+            }),
+            BinarySpec::DetailedVersion(spec) => spec
+                .try_into_nameless_match_spec(channel_config)
+                .map_err(Into::into),
+            BinarySpec::Url(url) => Ok(url.into()),
+            BinarySpec::Path(path) => path.try_into_nameless_match_spec(&channel_config.root_dir),
+        }
+    }
+}
+
+impl From<BinarySpec> for PixiSpec {
+    fn from(value: BinarySpec) -> Self {
+        match value {
+            BinarySpec::Version(version) => Self::Version(version),
+            BinarySpec::DetailedVersion(detailed) => Self::DetailedVersion(detailed),
+            BinarySpec::Url(url) => Self::Url(url.into()),
+            BinarySpec::Path(path) => Self::Path(path.into()),
+        }
+    }
+}
+
+impl From<VersionSpec> for BinarySpec {
+    fn from(value: VersionSpec) -> Self {
+        Self::Version(value)
     }
 }
 

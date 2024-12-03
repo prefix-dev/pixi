@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
 use pixi_manifest::pypi::{
     pypi_options::{IndexStrategy, PypiOptions},
     GitRev,
@@ -56,13 +57,9 @@ pub fn pypi_options_to_index_locations(
         flat_indexes
             .into_iter()
             .map(|url| match url {
-                rattler_lock::FindLinksUrlOrPath::Path(relative) => {
-                    VerbatimUrl::from_path(&relative, base_path)
-                        .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative))
-                }
-                rattler_lock::FindLinksUrlOrPath::Url(url) => {
-                    Ok(VerbatimUrl::from_url(url.clone()))
-                }
+                FindLinksUrlOrPath::Path(relative) => VerbatimUrl::from_path(&relative, base_path)
+                    .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative)),
+                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone())),
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
