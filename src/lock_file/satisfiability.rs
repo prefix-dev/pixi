@@ -867,48 +867,44 @@ pub(crate) async fn verify_package_platform_satisfiability(
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
-            Dependency::Input(name, spec, source) => {
-                match spec.into_source_or_binary(&channel_config) {
-                    Ok(Either::Left(source_spec)) => {
-                        expected_conda_source_dependencies.insert(name.clone());
-                        find_matching_source_package(
-                            locked_pixi_records,
-                            name,
-                            source_spec,
-                            source,
-                        )?
-                    }
-                    Ok(Either::Right(spec)) => {
-                        match find_matching_package(
-                            locked_pixi_records,
-                            &virtual_packages,
-                            MatchSpec::from_nameless(spec, Some(name)),
-                            source,
-                        )? {
-                            Some(pkg) => pkg,
-                            None => continue,
+            Dependency::Input(name, spec, source) => match spec.into_source_or_binary() {
+                Either::Left(source_spec) => {
+                    expected_conda_source_dependencies.insert(name.clone());
+                    find_matching_source_package(locked_pixi_records, name, source_spec, source)?
+                }
+                Either::Right(binary_spec) => {
+                    let spec = match binary_spec.try_into_nameless_match_spec(&channel_config) {
+                        Err(e) => {
+                            let parse_channel_err: ParseMatchSpecError = match e {
+                                SpecConversionError::NonAbsoluteRootDir(p) => {
+                                    ParseChannelError::NonAbsoluteRootDir(p).into()
+                                }
+                                SpecConversionError::NotUtf8RootDir(p) => {
+                                    ParseChannelError::NotUtf8RootDir(p).into()
+                                }
+                                SpecConversionError::InvalidPath(p) => {
+                                    ParseChannelError::InvalidPath(p).into()
+                                }
+                                SpecConversionError::InvalidChannel(p) => p.into(),
+                            };
+                            return Err(Box::new(PlatformUnsat::FailedToParseMatchSpec(
+                                name.as_source().to_string(),
+                                parse_channel_err,
+                            )));
                         }
-                    }
-                    Err(e) => {
-                        let parse_channel_err: ParseMatchSpecError = match e {
-                            SpecConversionError::NonAbsoluteRootDir(p) => {
-                                ParseChannelError::NonAbsoluteRootDir(p).into()
-                            }
-                            SpecConversionError::NotUtf8RootDir(p) => {
-                                ParseChannelError::NotUtf8RootDir(p).into()
-                            }
-                            SpecConversionError::InvalidPath(p) => {
-                                ParseChannelError::InvalidPath(p).into()
-                            }
-                            SpecConversionError::InvalidChannel(p) => p.into(),
-                        };
-                        return Err(Box::new(PlatformUnsat::FailedToParseMatchSpec(
-                            name.as_source().to_string(),
-                            parse_channel_err,
-                        )));
+                        Ok(spec) => spec,
+                    };
+                    match find_matching_package(
+                        locked_pixi_records,
+                        &virtual_packages,
+                        MatchSpec::from_nameless(spec, Some(name)),
+                        source,
+                    )? {
+                        Some(pkg) => pkg,
+                        None => continue,
                     }
                 }
-            }
+            },
             Dependency::Conda(spec, source) => {
                 match find_matching_package(locked_pixi_records, &virtual_packages, spec, source)? {
                     Some(pkg) => pkg,
@@ -1406,17 +1402,17 @@ impl Display for EditablePackagesMismatch {
 
 #[cfg(test)]
 mod tests {
-    use insta::Settings;
-    use miette::{IntoDiagnostic, NarratableReportHandler};
-    use pep440_rs::Version;
-    use rattler_lock::LockFile;
-    use rstest::rstest;
-
     use std::{
         ffi::OsStr,
         path::{Component, PathBuf},
         str::FromStr,
     };
+
+    use insta::Settings;
+    use miette::{IntoDiagnostic, NarratableReportHandler};
+    use pep440_rs::Version;
+    use rattler_lock::LockFile;
+    use rstest::rstest;
 
     use super::*;
     use crate::Project;

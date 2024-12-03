@@ -4,7 +4,7 @@ use itertools::Either;
 use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
-use crate::SpecConversionError;
+use crate::{BinarySpec, SpecConversionError};
 
 /// A specification of a package from a git repository.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -20,45 +20,10 @@ impl PathSpec {
         self,
         root_dir: &Path,
     ) -> Result<Option<NamelessMatchSpec>, SpecConversionError> {
-        if !self.is_binary() {
-            // Not a binary package
-            return Ok(None);
+        match self.into_source_or_binary() {
+            Either::Left(_source) => Ok(None),
+            Either::Right(binary) => Ok(Some(binary.try_into_nameless_match_spec(root_dir)?)),
         }
-
-        // Convert the path to an absolute path based on the root_dir
-        let path = if self.path.is_absolute() {
-            self.path
-        } else if let Ok(user_path) = self.path.strip_prefix("~/") {
-            let home_dir = dirs::home_dir()
-                .ok_or_else(|| SpecConversionError::InvalidPath(self.path.to_string()))?;
-            let Some(home_dir_str) = home_dir.to_str() else {
-                return Err(SpecConversionError::NotUtf8RootDir(home_dir));
-            };
-            Utf8TypedPathBuf::from(home_dir_str)
-                .join(user_path)
-                .normalize()
-        } else {
-            let Some(root_dir_str) = root_dir.to_str() else {
-                return Err(SpecConversionError::NotUtf8RootDir(root_dir.to_path_buf()));
-            };
-            let native_root_dir = Utf8NativePathBuf::from(root_dir_str);
-            if !native_root_dir.is_absolute() {
-                return Err(SpecConversionError::NonAbsoluteRootDir(
-                    root_dir.to_path_buf(),
-                ));
-            }
-
-            native_root_dir.to_typed_path().join(self.path).normalize()
-        };
-
-        // Convert the absolute url to a file:// url
-        let local_file_url =
-            file_url::file_path_to_url(path.to_path()).expect("failed to convert path to file url");
-
-        Ok(Some(NamelessMatchSpec {
-            url: Some(local_file_url),
-            ..NamelessMatchSpec::default()
-        }))
     }
 
     /// Resolves the path relative to `root_dir`. If the path is absolute,
@@ -91,18 +56,11 @@ impl PathSpec {
 
     /// Converts this instance into a [`PathSourceSpec`] if the path points to a
     /// source package. Or to a [`NamelessMatchSpec`] otherwise.
-    pub fn into_source_or_binary(
-        self,
-        root_dir: &Path,
-    ) -> Result<Either<PathSourceSpec, NamelessMatchSpec>, SpecConversionError> {
-        match self.try_into_source_path() {
-            Ok(spec) => Ok(Either::Left(spec)),
-            Err(spec) => {
-                let nameless_match_spec = spec
-                    .try_into_nameless_match_spec(root_dir)?
-                    .expect("if the path is not a source package, it should be a binary package");
-                Ok(Either::Right(nameless_match_spec))
-            }
+    pub fn into_source_or_binary(self) -> Either<PathSourceSpec, PathBinarySpec> {
+        if self.is_binary() {
+            Either::Right(PathBinarySpec { path: self.path })
+        } else {
+            Either::Left(PathSourceSpec { path: self.path })
         }
     }
 }
@@ -129,6 +87,78 @@ impl PathSourceSpec {
     /// directory is undefined.
     pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
         resolve_path(Path::new(self.path.as_str()), root_dir)
+    }
+}
+
+/// Path to a source package. Different from [`PathSpec`] in that this type only
+/// refers to source packages.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct PathBinarySpec {
+    /// The path to the package. Either a directory or an archive.
+    pub path: Utf8TypedPathBuf,
+}
+
+impl From<PathBinarySpec> for PathSpec {
+    fn from(value: PathBinarySpec) -> Self {
+        Self { path: value.path }
+    }
+}
+
+impl From<PathBinarySpec> for BinarySpec {
+    fn from(value: PathBinarySpec) -> Self {
+        Self::Path(value)
+    }
+}
+
+impl PathBinarySpec {
+    /// Resolves the path relative to `root_dir`. If the path is absolute,
+    /// it is returned verbatim.
+    ///
+    /// May return an error if the path is prefixed with `~` and the home
+    /// directory is undefined.
+    pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
+        resolve_path(Path::new(self.path.as_str()), root_dir)
+    }
+
+    /// Converts this instance into a [`NamelessMatchSpec`]
+    pub fn try_into_nameless_match_spec(
+        self,
+        root_dir: &Path,
+    ) -> Result<NamelessMatchSpec, SpecConversionError> {
+        // Convert the path to an absolute path based on the root_dir
+        let path = if self.path.is_absolute() {
+            self.path
+        } else if let Ok(user_path) = self.path.strip_prefix("~/") {
+            let home_dir = dirs::home_dir()
+                .ok_or_else(|| SpecConversionError::InvalidPath(self.path.to_string()))?;
+            let Some(home_dir_str) = home_dir.to_str() else {
+                return Err(SpecConversionError::NotUtf8RootDir(home_dir));
+            };
+            Utf8TypedPathBuf::from(home_dir_str)
+                .join(user_path)
+                .normalize()
+        } else {
+            let Some(root_dir_str) = root_dir.to_str() else {
+                return Err(SpecConversionError::NotUtf8RootDir(root_dir.to_path_buf()));
+            };
+            let native_root_dir = Utf8NativePathBuf::from(root_dir_str);
+            if !native_root_dir.is_absolute() {
+                return Err(SpecConversionError::NonAbsoluteRootDir(
+                    root_dir.to_path_buf(),
+                ));
+            }
+
+            native_root_dir.to_typed_path().join(self.path).normalize()
+        };
+
+        // Convert the absolute url to a file:// url
+        let local_file_url =
+            file_url::file_path_to_url(path.to_path()).expect("failed to convert path to file url");
+
+        Ok(NamelessMatchSpec {
+            url: Some(local_file_url),
+            ..NamelessMatchSpec::default()
+        })
     }
 }
 

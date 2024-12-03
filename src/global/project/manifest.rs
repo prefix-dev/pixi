@@ -147,6 +147,7 @@ impl Manifest {
                 miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
             })?
             .dependencies
+            .specs
             .insert(name.clone(), spec.clone());
 
         // Update self.document
@@ -184,6 +185,7 @@ impl Manifest {
                 miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
             })?
             .dependencies
+            .specs
             .swap_remove(&name)
             .ok_or(miette::miette!(
                 "Dependency {} not found in {}",
@@ -853,6 +855,7 @@ mod tests {
             .get(&env_name)
             .unwrap()
             .dependencies
+            .specs
             .get(&version_match_spec.clone().name.unwrap())
             .unwrap()
             .clone();
@@ -924,6 +927,7 @@ mod tests {
             .get(&env_name)
             .unwrap()
             .dependencies
+            .specs
             .get(&name)
             .unwrap()
             .clone();
@@ -1038,6 +1042,7 @@ dependencies = { "python" = "*", pytest = "*"}
             .get(&env_name)
             .unwrap()
             .dependencies
+            .specs
             .get(&match_spec.name.unwrap());
         assert!(actual_value.is_none());
 

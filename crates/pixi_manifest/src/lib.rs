@@ -35,7 +35,7 @@ pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasManifestRef;
 use itertools::Itertools;
-pub use manifests::{Manifest, ManifestKind, ManifestSource, WorkspaceManifest};
+pub use manifests::{Manifest, ManifestKind, ManifestSource, PackageManifest, WorkspaceManifest};
 use miette::Diagnostic;
 pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 pub use pypi::pypi_requirement::PyPiRequirement;

@@ -1,50 +1,39 @@
 //! Defines the build section for the pixi manifest.
-use rattler_conda_types::Channel;
-use rattler_conda_types::ChannelConfig;
-use rattler_conda_types::ChannelUrl;
-use rattler_conda_types::MatchSpec;
+
+use indexmap::IndexMap;
+use pixi_spec::BinarySpec;
 use rattler_conda_types::NamedChannelOrUrl;
-use rattler_conda_types::ParseChannelError;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::DisplayFromStr;
+
+use crate::{toml::TomlBuildSystem, TomlError};
 
 /// A build section in the pixi manifest.
 /// that defines what backend is used to build the project.
-#[serde_as]
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug, Clone)]
 pub struct BuildSystem {
-    /// The dependencies for the build tools which will be installed in the build environment.
-    /// These need to be conda packages
-    #[serde_as(as = "Vec<DisplayFromStr>")]
-    pub dependencies: Vec<MatchSpec>,
+    /// Information about the build backend
+    pub build_backend: BuildBackend,
 
-    /// The command to start the build backend
-    pub build_backend: String,
+    /// Additional dependencies that should be installed alongside the backend.
+    pub additional_dependencies: IndexMap<rattler_conda_types::PackageName, BinarySpec>,
 
-    /// The channels to use for fetching build tools
-    pub channels: Vec<NamedChannelOrUrl>,
+    /// The channels to use for fetching build tools. If this is `None` the
+    /// channels from the containing workspace should be used.
+    pub channels: Option<Vec<NamedChannelOrUrl>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildBackend {
+    /// The name of the build backend to install
+    pub name: rattler_conda_types::PackageName,
+
+    /// The spec for the backend
+    pub spec: BinarySpec,
 }
 
 impl BuildSystem {
-    /// Returns the channels as URLs
-    pub fn channels_url(
-        &self,
-        config: &ChannelConfig,
-    ) -> Result<Vec<ChannelUrl>, ParseChannelError> {
-        self.channels
-            .iter()
-            .map(|c| c.clone().into_base_url(config))
-            .collect()
-    }
-
-    /// Returns the channels as `Channel`s
-    pub fn channels(&self, config: &ChannelConfig) -> Result<Vec<Channel>, ParseChannelError> {
-        self.channels
-            .iter()
-            .map(|c| c.clone().into_channel(config))
-            .collect()
+    /// Parses the specified string as a toml representation of a build system.
+    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
+        TomlBuildSystem::from_toml_str(source).and_then(TomlBuildSystem::into_build_system)
     }
 }
 
@@ -55,16 +44,10 @@ mod tests {
     #[test]
     fn deserialize_build() {
         let toml = r#"
-            channels = ["conda-forge"]
-            dependencies = ["pixi-build-python > 12"]
-            build-backend = "pixi-build-python"
+            build-backend = { name = "pixi-build-python", version = "12.*" }
             "#;
 
-        let build: BuildSystem = toml_edit::de::from_str(toml).unwrap();
-        assert_eq!(build.dependencies.len(), 1);
-        assert_eq!(
-            build.dependencies[0].to_string(),
-            "pixi-build-python >12".to_string()
-        );
+        let build = BuildSystem::from_toml_str(toml).unwrap();
+        assert_eq!(build.build_backend.name.as_source(), "pixi-build-python");
     }
 }

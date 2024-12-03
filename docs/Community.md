@@ -56,7 +56,6 @@ When you want to show your users and contributors that they can use pixi in your
 - [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm): Conda shim for PyCharm that proxies pixi
 - [pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown): Generate markdown summaries from pixi update
 - [jiaxiyang/cpp_project_guideline](https://github.com/jiaxiyang/cpp_project_guideline): Guide the way beginners make their c++ projects.
-- [karelze/tclf](https://github.com/KarelZe/tclf): A python library for trade classification⚡
 - [hex-inc/vegafusion](https://github.com/hex-inc/vegafusion): Serverside scaling of Vega and Altair visualizations in Rust, Python, WASM, and Java
 - [pablovela5620/arxiv-researcher](https://github.com/pablovela5620/arxiv-researcher): Summarize PDF's and Arixv papers with Langchain and Nougat 🦉
 - [HaoZeke/xtsci-dist](https://github.com/HaoZeke/xtsci-dist): Incremental `scipy` port using `xtensor`
