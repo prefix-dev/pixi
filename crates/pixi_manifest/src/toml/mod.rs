@@ -1,3 +1,4 @@
+mod build_system;
 mod channel;
 mod document;
 mod environment;
@@ -7,6 +8,7 @@ mod package;
 mod target;
 mod workspace;
 
+pub use build_system::TomlBuildSystem;
 pub use channel::TomlPrioritizedChannel;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};

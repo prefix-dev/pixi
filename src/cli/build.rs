@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use clap::{ArgAction, Parser};
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{CondaBuildReporter, SetupRequest};
+use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
 };
@@ -100,7 +100,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_tool_context(Arc::new(tool_context))
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_override: None,
+            build_tool_override: BackendOverride::from_env(),
             build_id: 0,
         })
         .await

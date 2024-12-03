@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/build_system.rs
+expression: "expect_parse_failure(r#\"\n            build-backend = { name = \"foobar\", version = \"*\", foo = \"bar\" }\n        \"#)"
+---
+  × unknown field `foo`
+   ╭─[pixi.toml:2:29]
+ 1 │ 
+ 2 │             build-backend = { name = "foobar", version = "*", foo = "bar" }
+   ·                             ───────────────────────────────────────────────
+ 3 │         
+   ╰────

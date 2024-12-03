@@ -218,7 +218,7 @@ pub async fn list_global_environments(
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
 
     project_envs.retain(|env_name, parsed_environment| {
-        if parsed_environment.dependencies.is_empty() {
+        if parsed_environment.dependencies.specs.is_empty() {
             tracing::warn!(
                 "Environment {} doesn't contain dependencies. Skipping.",
                 env_name.fancy_display()
@@ -294,7 +294,7 @@ pub async fn list_global_environments(
         // Write dependencies
         if let Some(dep_message) = format_dependencies(
             env_name.as_str(),
-            &env.dependencies,
+            &env.dependencies.specs,
             &records,
             last,
             !env.exposed.is_empty(),

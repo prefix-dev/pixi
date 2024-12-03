@@ -14,7 +14,7 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_frontend::{SetupRequest, ToolContext};
+use pixi_build_frontend::{BackendOverride, SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -258,7 +258,7 @@ impl BuildContext {
             .with_tool_context(self.tool_context.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source_checkout.path.clone(),
-                build_tool_override: Default::default(),
+                build_tool_override: BackendOverride::from_env(),
                 build_id,
             })
             .await
@@ -499,7 +499,7 @@ impl BuildContext {
             .with_tool_context(self.tool_context.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
-                build_tool_override: Default::default(),
+                build_tool_override: BackendOverride::from_env(),
                 build_id,
             })
             .await
