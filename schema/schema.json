@@ -1538,6 +1538,17 @@
             "John Doe <j.doe@prefix.dev>"
           ]
         },
+        "build-variants": {
+          "title": "Build-Variants",
+          "description": "The build variants of the project",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
           "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",

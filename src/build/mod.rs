@@ -292,7 +292,6 @@ impl BuildContext {
             .await
             .map_err(BuildError::BuildFrontendSetup)?;
 
-        tracing::info!("Sending variant configuration: {:?}", self.variant_config);
         // Extract the conda metadata for the package.
         let build_result = protocol
             .conda_build(
