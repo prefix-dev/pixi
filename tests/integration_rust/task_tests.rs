@@ -173,7 +173,7 @@ async fn test_cwd() {
     pixi.init().without_channels().await.unwrap();
 
     // Create test dir
-    std::fs::create_dir(pixi.project_path().join("test")).unwrap();
+    fs_err::create_dir(pixi.project_path().join("test")).unwrap();
 
     pixi.tasks()
         .add("pwd-test".into(), None, FeatureName::Default)

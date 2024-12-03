@@ -3635,6 +3635,7 @@ dependencies = [
  "clap",
  "console",
  "dirs",
+ "fs-err 2.11.0",
  "insta",
  "itertools 0.13.0",
  "miette 7.2.0",

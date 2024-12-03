@@ -187,7 +187,7 @@ fn parse_channels(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, io::Write, path::Path, str::FromStr};
+    use std::{io::Write, path::Path, str::FromStr};
 
     use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
 
@@ -271,7 +271,7 @@ mod tests {
             .join("tests")
             .join("environment_yamls");
 
-        let entries = match fs::read_dir(test_files_path) {
+        let entries = match fs_err::read_dir(test_files_path) {
             Ok(entries) => entries,
             Err(e) => panic!("Failed to read directory: {}", e),
         };

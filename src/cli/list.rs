@@ -96,7 +96,7 @@ where
     let mut result = 0;
 
     if path.as_ref().is_dir() {
-        for entry in std::fs::read_dir(&path)? {
+        for entry in fs_err::read_dir(path.as_ref())? {
             let _path = entry?.path();
             if _path.is_file() {
                 result += _path.metadata()?.len();

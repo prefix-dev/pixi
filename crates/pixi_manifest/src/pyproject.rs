@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use indexmap::IndexMap;
 use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
@@ -58,7 +58,7 @@ impl PyProjectManifest {
 
     /// Parses a `pyproject.toml` file into a PyProjectManifest
     pub fn from_path(path: &PathBuf) -> Result<Self, Report> {
-        let source = fs::read_to_string(path)
+        let source = fs_err::read_to_string(path)
             .into_diagnostic()
             .wrap_err_with(|| format!("Failed to read file: {:?}", path))?;
         Self::from_toml_str(&source).into_diagnostic()

@@ -3,6 +3,7 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
 };
 use crate::common::{LockFileExt, PixiControl};
+use fs_err::tokio as tokio_fs;
 use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
@@ -13,7 +14,7 @@ use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use rattler_conda_types::Platform;
 use std::{
-    fs::{create_dir_all, File},
+    fs::File,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
@@ -159,10 +160,10 @@ async fn install_locked_with_config() {
     let mut config = Config::default();
     let target_dir = pixi.project_path().join("target");
     config.detached_environments = Some(DetachedEnvironments::Path(target_dir.clone()));
-    create_dir_all(target_dir.clone()).unwrap();
+    fs_err::create_dir_all(target_dir.clone()).unwrap();
 
     let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
-    create_dir_all(config_path.parent().unwrap()).unwrap();
+    fs_err::create_dir_all(config_path.parent().unwrap()).unwrap();
 
     let mut file = File::create(config_path).unwrap();
     file.write_all(toml_edit::ser::to_string(&config).unwrap().as_bytes())
@@ -726,7 +727,7 @@ async fn test_ensure_gitignore_file_creation() {
         gitignore_path.exists(),
         ".pixi/.gitignore file was not created"
     );
-    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
         contents, "*\n",
         ".pixi/.gitignore file does not contain the expected content"
@@ -737,7 +738,7 @@ async fn test_ensure_gitignore_file_creation() {
         .await
         .unwrap();
     pixi.install().await.unwrap();
-    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
         contents, "*\nsome_file\n",
         ".pixi/.gitignore file does not contain the expected content"
@@ -754,7 +755,7 @@ async fn test_ensure_gitignore_file_creation() {
         gitignore_path.exists(),
         ".pixi/.gitignore file was not recreated"
     );
-    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
         contents, "*\n",
         ".pixi/.gitignore file does not contain the expected content"

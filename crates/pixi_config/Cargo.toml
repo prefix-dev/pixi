@@ -13,6 +13,7 @@ version = "0.1.0"
 clap = { workspace = true, features = ["std", "derive", "env"] }
 console = { workspace = true }
 dirs = { workspace = true }
+fs-err = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pixi_consts = { workspace = true }

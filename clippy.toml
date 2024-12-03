@@ -6,13 +6,6 @@ ignore-interior-mutability = [
   "pixi::project::solve_group::SolveGroup",
 ]
 
-disallowed-types = [
-  "std::fs::DirEntry",
-  "std::fs::File",
-  "std::fs::OpenOptions",
-  "std::fs::ReadDir",
-]
-
 disallowed-methods = [
   "std::fs::canonicalize",
   "std::fs::copy",

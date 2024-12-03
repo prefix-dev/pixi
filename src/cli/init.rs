@@ -199,7 +199,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Fail silently if the directory already exists or cannot be created.
-    fs::create_dir_all(&dir).ok();
+    fs_err::create_dir_all(&dir).ok();
 
     let default_name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project"));
     let version = "0.1.0";
@@ -484,7 +484,7 @@ fn render_project(
 
 /// Save the rendered template to a file, and print a message to the user.
 fn save_manifest_file(path: &Path, content: String) -> miette::Result<()> {
-    fs::write(path, content).into_diagnostic()?;
+    fs_err::write(path, content).into_diagnostic()?;
     eprintln!(
         "{}Created {}",
         console::style(console::Emoji("✔ ", "")).green(),
@@ -510,7 +510,7 @@ fn get_name_from_dir(path: &Path) -> miette::Result<String> {
 // When the specific template is not in the file or the file does not exist.
 // Make the file and append the template to the file.
 fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
-    let file = fs::read_to_string(path).unwrap_or_default();
+    let file = fs_err::read_to_string(path).unwrap_or_default();
 
     if !file.contains(template) {
         fs::OpenOptions::new()

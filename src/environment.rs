@@ -146,7 +146,7 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
 
         // Read existing contents to determine if an update is necessary
         if prefix_file_path.exists() {
-            let existing_contents = fs::read_to_string(&prefix_file_path).into_diagnostic()?;
+            let existing_contents = fs_err::read_to_string(&prefix_file_path).into_diagnostic()?;
             if existing_contents == contents {
                 tracing::info!("No update needed for the prefix file.");
                 return Ok(());

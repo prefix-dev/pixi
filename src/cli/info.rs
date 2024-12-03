@@ -1,4 +1,4 @@
-use std::{fmt::Display, fs, path::PathBuf};
+use std::{fmt::Display, path::PathBuf};
 
 use chrono::{DateTime, Local};
 use clap::Parser;
@@ -316,24 +316,26 @@ impl Display for Info {
 
 /// Returns the size of a directory
 fn dir_size(path: impl Into<PathBuf>) -> miette::Result<String> {
-    fn dir_size(mut dir: fs::ReadDir) -> miette::Result<u64> {
+    fn dir_size(mut dir: fs_err::ReadDir) -> miette::Result<u64> {
         dir.try_fold(0, |acc, file| {
             let file = file.into_diagnostic()?;
             let size = match file.metadata().into_diagnostic()? {
-                data if data.is_dir() => dir_size(fs::read_dir(file.path()).into_diagnostic()?)?,
+                data if data.is_dir() => {
+                    dir_size(fs_err::read_dir(file.path()).into_diagnostic()?)?
+                }
                 data => data.len(),
             };
             Ok(acc + size)
         })
     }
 
-    let size = dir_size(fs::read_dir(path.into()).into_diagnostic()?)?;
+    let size = dir_size(fs_err::read_dir(path.into()).into_diagnostic()?)?;
     Ok(format!("{} MiB", size / 1024 / 1024))
 }
 
 /// Returns last update time of file, formatted: DD-MM-YYYY H:M:S
 fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
-    let time = fs::metadata(path.into())
+    let time = fs_err::metadata(path.into())
         .into_diagnostic()?
         .modified()
         .into_diagnostic()?;
