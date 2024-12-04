@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
-    fs,
     hash::{Hash, Hasher},
     sync::Once,
 };
@@ -133,8 +132,8 @@ impl<'p> Environment<'p> {
                         "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
                     );
                     // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs::create_dir_all(warn_folder).and_then(|_| {
-                        std::fs::File::create(emulation_warn)
+                    fs_err::create_dir_all(warn_folder).and_then(|_| {
+                        fs_err::File::create(emulation_warn)
                     }).ok();
                 }
             });
@@ -152,8 +151,8 @@ impl<'p> Environment<'p> {
                         "win-arm64 is not supported by the pixi.toml, falling back to win-64 (emulation)"
                     );
                     // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs::create_dir_all(warn_folder).and_then(|_| {
-                        std::fs::File::create(emulation_warn)
+                    fs_err::create_dir_all(warn_folder).and_then(|_| {
+                        fs_err::File::create(emulation_warn)
                     }).ok();
                 }
             });

@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 dashmap = { workspace = true }
+fs-err = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }
@@ -43,7 +44,9 @@ which = { workspace = true }
 
 pixi_build_types = { path = "../pixi_build_types" }
 
+
 [dev-dependencies]
+bytes = { workspace = true }
 insta = { workspace = true, features = ["yaml", "filters"] }
 rstest = { workspace = true }
 tempfile = { workspace = true }
@@ -52,3 +55,5 @@ tokio = { workspace = true, features = [
   "io-std",
   "rt-multi-thread",
 ] }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true, features = ["io"] }

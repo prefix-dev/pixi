@@ -27,6 +27,9 @@ channels = [
   "https://prefix.dev/conda-forge",
 ]
 
+[build-backend.pixi-build-python]
+noarch = false
+
 [dependencies]
 detailed = { version = ">=1.2.3" }
 detailed-full = { version = ">=1.2.3", build = "py34_0", channel = "pytorch", subdir = "linux-64", md5 = "6f5902ac237024bdd0c176cb93063dc4", sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447" }

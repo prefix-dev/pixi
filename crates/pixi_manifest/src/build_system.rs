@@ -28,6 +28,10 @@ pub struct BuildBackend {
 
     /// The spec for the backend
     pub spec: BinarySpec,
+
+    /// Additional arguments to pass to the build backend. In the manifest these are read from the
+    /// `[build-backend]` section.
+    pub additional_args: Option<serde_value::Value>,
 }
 
 impl BuildSystem {

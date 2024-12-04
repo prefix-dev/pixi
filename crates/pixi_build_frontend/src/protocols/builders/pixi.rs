@@ -8,6 +8,7 @@ use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_manifest::{Manifest, PackageManifest, PrioritizedChannel, WorkspaceManifest};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
+use serde::{de::IntoDeserializer, Deserialize};
 use thiserror::Error;
 use which::Error;
 
@@ -78,8 +79,8 @@ impl ProtocolBuilder {
         manifest_path: PathBuf,
         workspace_manifest: WorkspaceManifest,
         package_manifest: PackageManifest,
-    ) -> Result<Self, ProtocolBuildError> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             source_dir,
             manifest_path,
             workspace_manifest,
@@ -87,7 +88,7 @@ impl ProtocolBuilder {
             override_backend_spec: None,
             channel_config: None,
             cache_dir: None,
-        })
+        }
     }
 
     /// Sets an optional backend override.
@@ -128,7 +129,7 @@ impl ProtocolBuilder {
                         manifest_path,
                         manifest.workspace,
                         package_manifest,
-                    )?;
+                    );
                     return Ok(Some(builder));
                 }
                 Err(e) => {
@@ -195,9 +196,20 @@ impl ProtocolBuilder {
             .await
             .map_err(FinishError::Tool)?;
 
+        let configuration = self
+            .package_manifest
+            .build_system
+            .build_backend
+            .additional_args
+            .map_or(serde_json::Value::Null, |value| {
+                let deserializer = value.into_deserializer();
+                serde_json::Value::deserialize(deserializer).unwrap_or(serde_json::Value::Null)
+            });
+
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.manifest_path,
+            configuration,
             build_id,
             self.cache_dir,
             tool,
@@ -212,10 +224,21 @@ impl ProtocolBuilder {
         ipc: InProcessBackend,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
+        let configuration = self
+            .package_manifest
+            .build_system
+            .build_backend
+            .additional_args
+            .map_or(serde_json::Value::Null, |value| {
+                let deserializer = value.into_deserializer();
+                serde_json::Value::deserialize(deserializer).unwrap_or(serde_json::Value::Null)
+            });
+
         Ok(JsonRPCBuildProtocol::setup_with_transport(
             "<IPC>".to_string(),
             self.source_dir,
             self.manifest_path,
+            configuration,
             build_id,
             self.cache_dir,
             Sender::from(ipc.rpc_out),

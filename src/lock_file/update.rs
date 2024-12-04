@@ -16,7 +16,6 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
-use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
@@ -680,13 +679,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(
-                get_cache_dir()?,
-                project.pixi_dir(),
-                project.channel_config(),
-                Arc::new(ToolContext::default()),
-            )
-            .into_diagnostic()?,
+            build_context: BuildContext::from_project(project)?,
             glob_hash_cache,
         });
     }
@@ -710,13 +703,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(
-                get_cache_dir()?,
-                project.pixi_dir(),
-                project.channel_config(),
-                Arc::new(ToolContext::default()),
-            )
-            .into_diagnostic()?,
+            build_context: BuildContext::from_project(project)?,
             glob_hash_cache,
         });
     }
@@ -1011,13 +998,8 @@ impl<'p> UpdateContextBuilder<'p> {
             .with_client(client)
             .build();
 
-        let build_context = BuildContext::new(
-            pixi_config::get_cache_dir()?,
-            project.pixi_dir(),
-            project.channel_config(),
-            tool_context.into(),
-        )
-        .into_diagnostic()?;
+        let build_context =
+            BuildContext::from_project(project)?.with_tool_context(Arc::new(tool_context));
 
         Ok(UpdateContext {
             project,
