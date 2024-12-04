@@ -63,11 +63,17 @@ impl ManifestSource {
         }
     }
 
-    fn manifest(&self) -> &TomlDocument {
+    /// Returns the inner TOML document
+    pub fn manifest(&self) -> &TomlDocument {
         match self {
             ManifestSource::PyProjectToml(document) => document,
             ManifestSource::PixiToml(document) => document,
         }
+    }
+
+    /// Returns `true` if the manifest is a 'pyproject.toml' manifest.
+    pub fn is_pyproject_toml(&self) -> bool {
+        matches!(self, ManifestSource::PyProjectToml(_))
     }
 
     /// Returns a mutable reference to the specified array either in project or
