@@ -5,7 +5,7 @@ use typed_path::Utf8TypedPath;
 use url::Url;
 
 use crate::common::{LockFileExt, PixiControl};
-use std::fs::{create_dir_all, File};
+use std::fs::File;
 
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
@@ -274,7 +274,7 @@ async fn test_allow_insecure_host() {
     );
 
     let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
-    create_dir_all(config_path.parent().unwrap()).unwrap();
+    fs_err::create_dir_all(config_path.parent().unwrap()).unwrap();
     let mut file = File::create(config_path).unwrap();
     file.write_all(
         r#"
