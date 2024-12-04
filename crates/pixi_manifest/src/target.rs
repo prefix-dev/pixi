@@ -237,16 +237,16 @@ impl WorkspaceTarget {
     ) -> Result<bool, DependencyError> {
         if self.has_pypi_dependency(requirement, false) {
             match dependency_overwrite_behavior {
-                DependencyOverwriteBehavior::OverwriteIfExplicit
-                    if requirement.version_or_url.is_none() =>
-                {
-                    return Ok(false)
+                DependencyOverwriteBehavior::OverwriteIfExplicit => {
+                    if requirement.version_or_url.is_none() {
+                        return Ok(false);
+                    }
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(requirement.name.to_string()));
                 }
-                _ => {}
+                DependencyOverwriteBehavior::Overwrite => {}
             }
         }
 

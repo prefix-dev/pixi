@@ -109,7 +109,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         DependencyType::PypiDependency => {
             let match_specs = IndexMap::default();
-            let pypi_deps = dependency_config.pypi_deps(&project)?;
+            let pypi_deps = dependency_config
+                .pypi_deps(&project)?
+                .into_iter()
+                .map(|(name, req)| (name, (req, None)))
+                .collect();
             (match_specs, pypi_deps)
         }
     };
@@ -124,7 +128,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &args.dependency_config.feature,
             &args.dependency_config.platforms,
             args.editable,
-            &None,
             dry_run,
         )
         .await?;

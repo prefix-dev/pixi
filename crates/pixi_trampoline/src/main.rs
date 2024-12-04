@@ -1,9 +1,9 @@
+use fs_err::File;
 use miette::{Context, IntoDiagnostic};
 use pixi_utils::executable_from_path;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
-use std::fs::File;
 use std::ops::Not;
 #[cfg(target_family = "unix")]
 use std::os::unix::process::CommandExt;

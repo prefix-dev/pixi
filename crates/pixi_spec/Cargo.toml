@@ -26,4 +26,3 @@ url = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
-serde_yaml = { workspace = true }

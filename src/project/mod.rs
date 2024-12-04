@@ -154,6 +154,13 @@ impl Borrow<WorkspaceManifest> for Project {
     }
 }
 
+pub type PypiDeps = indexmap::IndexMap<
+    PyPiPackageName,
+    (Requirement, Option<pixi_manifest::PypiDependencyLocation>),
+>;
+
+pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
+
 impl Project {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifest(manifest: Manifest) -> Self {
@@ -660,13 +667,12 @@ impl Project {
     #[allow(clippy::too_many_arguments)]
     pub async fn update_dependencies(
         &mut self,
-        match_specs: IndexMap<PackageName, (MatchSpec, SpecType)>,
-        pypi_deps: IndexMap<PyPiPackageName, Requirement>,
+        match_specs: MatchSpecs,
+        pypi_deps: PypiDeps,
         prefix_update_config: &PrefixUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
-        location: &Option<PypiDependencyLocation>,
         dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
@@ -691,18 +697,18 @@ impl Project {
             }
         }
 
-        for (name, spec) in pypi_deps {
+        for (name, (spec, location)) in pypi_deps {
             let added = self.manifest.add_pep508_dependency(
                 &spec,
                 platforms,
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
-                location,
+                &location,
             )?;
             if added {
                 if spec.version_or_url.is_none() {
-                    pypi_specs_to_add_constraints_for.insert(name.clone(), spec);
+                    pypi_specs_to_add_constraints_for.insert(name.clone(), (spec, location));
                 }
                 pypi_packages.insert(name.as_normalized().clone());
             }
@@ -793,7 +799,6 @@ impl Project {
                 feature_name,
                 platforms,
                 editable,
-                location,
             )?;
             implicit_constraints.extend(pypi_constraints);
         }
@@ -841,7 +846,7 @@ impl Project {
     fn unlock_packages(
         &self,
         lock_file: &LockFile,
-        conda_packages: HashSet<rattler_conda_types::PackageName>,
+        conda_packages: HashSet<PackageName>,
         pypi_packages: HashSet<pep508_rs::PackageName>,
         affected_environments: HashSet<(&str, Platform)>,
     ) -> LockFile {
@@ -931,16 +936,17 @@ impl Project {
 
     /// Update the pypi specs of newly added packages based on the contents of
     /// the updated lock-file.
-    #[allow(clippy::too_many_arguments)]
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
-        pypi_specs_to_add_constraints_for: IndexMap<PyPiPackageName, Requirement>,
+        pypi_specs_to_add_constraints_for: IndexMap<
+            PyPiPackageName,
+            (Requirement, Option<PypiDependencyLocation>),
+        >,
         affect_environment_and_platforms: Vec<(String, Platform)>,
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
-        location: &Option<PypiDependencyLocation>,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -962,7 +968,7 @@ impl Project {
         let pinning_strategy = self.config().pinning_strategy.unwrap_or_default();
 
         // Determine the versions of the packages in the lock-file
-        for (name, req) in pypi_specs_to_add_constraints_for {
+        for (name, (req, location)) in pypi_specs_to_add_constraints_for {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records
                     .iter()
@@ -991,7 +997,7 @@ impl Project {
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
-                    location,
+                    &location,
                 )?;
             }
         }
@@ -1037,7 +1043,7 @@ pub(crate) fn find_project_manifest(current_dir: PathBuf) -> Option<PathBuf> {
             match *manifest {
                 consts::PROJECT_MANIFEST => return Some(path),
                 consts::PYPROJECT_MANIFEST => {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(content) = fs_err::read_to_string(&path) {
                         if content.contains("[tool.pixi") {
                             return Some(path);
                         }
@@ -1517,13 +1523,13 @@ mod tests {
         writeln!(file, "[project]").unwrap();
 
         // Pixi child manifest is pyproject.toml with pixi tool
-        std::fs::create_dir_all(&pixi_child_dir).unwrap();
+        fs_err::create_dir_all(&pixi_child_dir).unwrap();
         let mut file = File::create(&manifest_path_pixi_child).unwrap();
         writeln!(file, "[project]").unwrap();
         writeln!(file, "[tool.pixi.project]").unwrap();
 
         // Non pixi child manifest is pyproject.toml without pixi tool
-        std::fs::create_dir_all(&non_pixi_child_dir).unwrap();
+        fs_err::create_dir_all(&non_pixi_child_dir).unwrap();
         let mut file = File::create(&manifest_path_non_pixi_child).unwrap();
         writeln!(file, "[project]").unwrap();
 

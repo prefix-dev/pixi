@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use fancy_display::FancyDisplay;
-use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
@@ -41,7 +40,7 @@ impl Manifest {
     /// Creates a new manifest from a path
     pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
         let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
-        let contents = fs::read_to_string(path.as_ref()).into_diagnostic()?;
+        let contents = fs_err::read_to_string(path.as_ref()).into_diagnostic()?;
         Self::from_str(manifest_path.as_ref(), contents)
     }
 
@@ -92,7 +91,7 @@ impl Manifest {
         // Update self.document
         let channels_array = self
             .document
-            .get_or_insert_toml_array(&format!("envs.{env_name}"), "channels")?;
+            .get_or_insert_toml_array_mut(&format!("envs.{env_name}"), "channels")?;
         for channel in channels {
             channels_array.push(channel.as_str());
         }

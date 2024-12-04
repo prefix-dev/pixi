@@ -5,11 +5,11 @@ mod protocols;
 
 use std::fmt::{Debug, Formatter};
 
-pub(crate) use protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
+pub use protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
 
 mod protocol_builder;
 mod reporters;
-mod tool;
+pub mod tool;
 
 use std::path::PathBuf;
 
@@ -27,25 +27,22 @@ pub use protocol_builder::EnabledProtocols;
 
 #[derive(Debug)]
 pub enum BackendOverride {
-    /// Overrwide the backend with a specific tool.
+    /// Override the backend with a specific tool.
     Spec(MatchSpec, Option<Vec<NamedChannelOrUrl>>),
 
-    /// Overwrite the backend with a specific tool.
+    /// Overwrite the backend with a executable path.
     System(String),
-
-    /// Use the given IO for the backend.
-    Io(InProcessBackend),
 }
 
-impl From<InProcessBackend> for BackendOverride {
-    fn from(value: InProcessBackend) -> Self {
-        Self::Io(value)
-    }
-}
-
-impl From<InProcessBackend> for Option<BackendOverride> {
-    fn from(value: InProcessBackend) -> Self {
-        Some(value.into())
+impl BackendOverride {
+    pub fn from_env() -> Option<Self> {
+        match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE") {
+            Ok(spec) => {
+                tracing::warn!("overriding build backend with: {}", spec);
+                Some(Self::System(spec))
+            }
+            Err(_) => None,
+        }
     }
 }
 
