@@ -83,3 +83,71 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     metadata = json.loads(conda_meta.read_text())
 
     assert metadata["name"] == "smokey"
+
+
+def test_second_install_shouldnt_rebuild(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("simple-pyproject")
+    target_dir = tmp_pixi_workspace.joinpath("simple-pyproject")
+    shutil.copytree(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pyproject.toml")
+
+    # Verify that the project is properly installed
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "get-version",
+        ],
+        stdout_contains="The version of simple-pyproject is 1.0.0",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+        stdout_contains="Nothing to do",
+    )
+
+
+def test_source_change_trigger_rebuild(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("simple-pyproject")
+
+    target_dir = tmp_pixi_workspace.joinpath("simple-pyproject")
+    shutil.copytree(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pyproject.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "get-version",
+        ],
+        stdout_contains="The version of simple-pyproject is 1.0.0",
+    )
+
+    # Bump version from 1.0.0 to 2.0.0
+    init_file = target_dir.joinpath("src", "simple_pyproject", "__init__.py")
+    init_file.write_text(init_file.read_text().replace("1.0.0", "2.0.0"))
+
+    # Since we modified the source this should trigger a rebuild and therefore report 2.0.0
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "get-version",
+        ],
+        stdout_contains="The version of simple-pyproject is 2.0.0",
+    )
