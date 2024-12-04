@@ -85,7 +85,7 @@ impl CondaEnvFile {
     }
 
     pub fn from_path(path: &Path) -> miette::Result<Self> {
-        let file = std::fs::File::open(path).into_diagnostic()?;
+        let file = fs_err::File::open(path).into_diagnostic()?;
         let reader = std::io::BufReader::new(file);
 
         let lines = reader
@@ -130,8 +130,6 @@ impl CondaEnvFile {
         if channels.is_empty() {
             channels = config.default_channels();
         }
-
-        dbg!(&channels);
 
         Ok((conda_deps, pip_deps, channels))
     }
@@ -189,7 +187,7 @@ fn parse_channels(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, io::Write, path::Path, str::FromStr};
+    use std::{io::Write, path::Path, str::FromStr};
 
     use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
 
@@ -273,7 +271,7 @@ mod tests {
             .join("tests")
             .join("environment_yamls");
 
-        let entries = match fs::read_dir(test_files_path) {
+        let entries = match fs_err::read_dir(test_files_path) {
             Ok(entries) => entries,
             Err(e) => panic!("Failed to read directory: {}", e),
         };
@@ -319,7 +317,7 @@ mod tests {
 
         let f = tempfile::NamedTempFile::new().unwrap();
         let path = f.path();
-        let mut file = std::fs::File::create(path).unwrap();
+        let mut file = fs_err::File::create(path).unwrap();
         file.write_all(example_conda_env_file.as_bytes()).unwrap();
 
         let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();

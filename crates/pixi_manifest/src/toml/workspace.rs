@@ -45,6 +45,8 @@ pub struct TomlWorkspace {
 
     #[serde(default)]
     pub preview: Preview,
+
+    pub build_variants: Option<HashMap<String, Vec<String>>>,
 }
 
 /// Defines some of the properties that might be defined in other parts of the
@@ -63,6 +65,7 @@ pub struct ExternalWorkspaceProperties {
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
+    pub build_variants: Option<HashMap<String, Vec<String>>>,
 }
 
 #[derive(Debug, Error)]
@@ -96,6 +99,7 @@ impl TomlWorkspace {
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
             preview: self.preview,
+            build_variants: self.build_variants.or(external.build_variants),
         })
     }
 }

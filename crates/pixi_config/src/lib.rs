@@ -11,7 +11,6 @@ use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use std::{
     collections::{BTreeSet as Set, HashMap},
-    fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
@@ -81,25 +80,17 @@ pub fn pixi_home() -> Option<PathBuf> {
 ///   [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
     std::env::var("PIXI_CACHE_DIR")
+        .ok()
         .map(PathBuf::from)
-        .or_else(|_| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from))
-        .or_else(|_| {
-            let xdg_cache_pixi_dir = std::env::var_os("XDG_CACHE_HOME")
-                .map_or_else(
-                    || dirs::home_dir().map(|d| d.join(".cache")),
-                    |p| Some(PathBuf::from(p)),
-                )
-                .map(|d| d.join("pixi"));
+        .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
+        .or_else(|| {
+            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join("pixi"));
 
             // Only use the xdg cache pixi directory when it exists
-            xdg_cache_pixi_dir
-                .and_then(|d| d.exists().then_some(d))
-                .ok_or_else(|| miette::miette!("could not determine xdg cache directory"))
+            pixi_cache_dir.and_then(|d| d.exists().then_some(d))
         })
-        .or_else(|_| {
-            rattler::default_cache_dir()
-                .map_err(|_| miette::miette!("could not determine default cache directory"))
-        })
+        .or_else(|| rattler::default_cache_dir().ok())
+        .ok_or_else(|| miette::miette!("could not determine default cache directory"))
 }
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
@@ -280,6 +271,10 @@ pub struct PyPIConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub keyring_provider: Option<KeyringProvider>,
+    /// Allow insecure connections to a host
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub allow_insecure_host: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -412,6 +407,11 @@ impl PyPIConfig {
             index_url: other.index_url.or(self.index_url),
             extra_index_urls,
             keyring_provider: other.keyring_provider.or(self.keyring_provider),
+            allow_insecure_host: self
+                .allow_insecure_host
+                .into_iter()
+                .chain(other.allow_insecure_host)
+                .collect(),
         }
     }
 
@@ -746,7 +746,7 @@ impl Config {
     /// I/O errors or parsing errors
     pub fn from_path(path: &Path) -> miette::Result<Config> {
         tracing::debug!("Loading config from {}", path.display());
-        let s = fs::read_to_string(path)
+        let s = fs_err::read_to_string(path)
             .into_diagnostic()
             .wrap_err(format!("failed to read config from '{}'", path.display()))?;
 
@@ -1200,13 +1200,13 @@ impl Config {
         tracing::debug!("Saving config to: {}", to.display());
 
         let parent = to.parent().expect("config path should have a parent");
-        fs::create_dir_all(parent)
+        fs_err::create_dir_all(parent)
             .into_diagnostic()
             .wrap_err(format!(
                 "failed to create directories in '{}'",
                 parent.display()
             ))?;
-        fs::write(to, contents)
+        fs_err::write(to, contents)
             .into_diagnostic()
             .wrap_err(format!("failed to write config to '{}'", to.display()))
     }
@@ -1357,6 +1357,22 @@ UNUSED = "unused"
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
+        );
+    }
+
+    #[test]
+    fn test_pypi_config_allow_insecure_host() {
+        let toml = r#"
+            [pypi-config]
+            index-url = "https://pypi.org/simple"
+            extra-index-urls = ["https://pypi.org/simple2"]
+            keyring-provider = "subprocess"
+            allow-insecure-host = ["https://localhost:1234", "*"]
+        "#;
+        let (config, _) = Config::from_toml(toml).unwrap();
+        assert_eq!(
+            config.pypi_config().allow_insecure_host,
+            vec!["https://localhost:1234", "*",]
         );
     }
 

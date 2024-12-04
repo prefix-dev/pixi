@@ -53,7 +53,7 @@ use xxhash_rust::xxh3::Xxh3;
 /// not present.
 pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file = environment_dir
-        .join("conda-meta")
+        .join(consts::CONDA_META_DIR)
         .join(consts::PREFIX_FILE_NAME);
 
     tracing::info!(
@@ -61,7 +61,7 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
         prefix_file.display()
     );
 
-    match std::fs::read_to_string(prefix_file.clone()) {
+    match fs_err::read_to_string(prefix_file.clone()) {
         // Not found is fine as it can be new or backwards compatible.
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(()),
         // Scream the error if we don't know it.
@@ -131,7 +131,7 @@ fn write_file<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> io::Resul
 /// Give it the environment path to place it.
 fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
     let prefix_file_path = environment_dir
-        .join("conda-meta")
+        .join(consts::CONDA_META_DIR)
         .join(consts::PREFIX_FILE_NAME);
 
     let parent_dir = prefix_file_path.parent().ok_or_else(|| {
@@ -146,7 +146,7 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
 
         // Read existing contents to determine if an update is necessary
         if prefix_file_path.exists() {
-            let existing_contents = fs::read_to_string(&prefix_file_path).into_diagnostic()?;
+            let existing_contents = fs_err::read_to_string(&prefix_file_path).into_diagnostic()?;
             if existing_contents == contents {
                 tracing::info!("No update needed for the prefix file.");
                 return Ok(());
@@ -163,7 +163,7 @@ fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()> {
 /// Create the conda-meta/history.
 /// This file is needed for `conda run -p .pixi/envs/<env>` to work.
 fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
-    let history_file = environment_dir.join("conda-meta").join("history");
+    let history_file = environment_dir.join(consts::CONDA_META_DIR).join("history");
 
     tracing::info!("Verify history file exists: {}", history_file.display());
 
@@ -240,11 +240,11 @@ pub(crate) fn write_environment_file(
         .parent()
         .expect("There should already be a conda-meta folder");
 
-    match std::fs::create_dir_all(parent).into_diagnostic() {
+    match fs_err::create_dir_all(parent).into_diagnostic() {
         Ok(_) => {
             // Using json as it's easier to machine read it.
             let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
-            match std::fs::write(&path, contents).into_diagnostic() {
+            match fs_err::write(&path, contents).into_diagnostic() {
                 Ok(_) => {
                     tracing::debug!("Wrote environment file to: {:?}", path);
                 }
@@ -270,7 +270,7 @@ pub(crate) fn read_environment_file(
 ) -> miette::Result<Option<EnvironmentFile>> {
     let path = environment_file_path(environment_dir);
 
-    let contents = match std::fs::read_to_string(&path) {
+    let contents = match fs_err::read_to_string(&path) {
         Ok(contents) => contents,
         Err(e) if e.kind() == ErrorKind::NotFound => {
             tracing::debug!("Environment file not yet found at: {:?}", path);
@@ -282,7 +282,7 @@ pub(crate) fn read_environment_file(
                 path,
                 e
             );
-            let _ = std::fs::remove_file(&path);
+            let _ = fs_err::remove_file(&path);
             return Err(e).into_diagnostic();
         }
     };
@@ -294,7 +294,7 @@ pub(crate) fn read_environment_file(
                 path,
                 e
             );
-            let _ = std::fs::remove_file(&path);
+            let _ = fs_err::remove_file(&path);
             return Ok(None);
         }
     };
@@ -309,7 +309,7 @@ pub(crate) fn read_environment_file(
 ///     4. It verifies that the prefix contains a `.gitignore` file.
 pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+    verify_prefix_location_unchanged(project.environments_dir().as_path()).await?;
 
     // TODO: remove on a 1.0 release
     // Check for old `env` folder as we moved to `envs` in 0.13.0
@@ -526,7 +526,7 @@ pub async fn update_prefix_pypi(
 async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
     // Check if the old interpreter is outdated
     let mut installed = vec![];
-    for entry in std::fs::read_dir(site_packages).into_diagnostic()? {
+    for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
         let entry = entry.into_diagnostic()?;
         if entry.file_type().into_diagnostic()?.is_dir() {
             let path = entry.path();

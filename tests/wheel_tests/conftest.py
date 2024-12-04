@@ -2,6 +2,7 @@ from typing import Any
 from helpers import setup_stdout_stderr_logging
 from generate_summaries import terminal_summary, markdown_summary
 import pytest
+from pathlib import Path
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -26,3 +27,13 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     same information as the terminal summary.
     """
     markdown_summary()
+
+
+@pytest.fixture
+def tmp_pixi_workspace(tmp_path: Path) -> Path:
+    pixi_config = """
+[repodata-config."https://prefix.dev/"]
+disable-sharded = false
+"""
+    tmp_path.joinpath("config.toml").write_text(pixi_config)
+    return tmp_path

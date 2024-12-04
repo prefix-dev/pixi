@@ -120,7 +120,6 @@ pub fn convert_to_dist(
                 filename_decoded.as_ref(),
                 pkg.requires_python.clone(),
             )?;
-
             // Recreate the filename from the extracted last component
             // If this errors this is not a valid wheel filename
             // and we should consider it a sdist

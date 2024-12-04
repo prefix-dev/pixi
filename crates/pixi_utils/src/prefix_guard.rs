@@ -81,7 +81,7 @@ impl PrefixGuard {
         let guard_path = prefix.join(GUARD_PATH);
 
         // Ensure that the directory exists
-        std::fs::create_dir_all(guard_path.parent().unwrap())?;
+        fs_err::create_dir_all(guard_path.parent().unwrap())?;
 
         // Open the file
         Ok(Self {

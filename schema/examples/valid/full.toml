@@ -20,12 +20,15 @@ version = "0.1.0"
 [package]
 
 [build-system]
-build-backend = "pixi-build-python"
+additional-dependencies = { git = "*" }
+build-backend = { name = "pixi-build-python", version = "*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
-dependencies = ["pixi-build-python"]
+
+[build-backend.pixi-build-python]
+noarch = false
 
 [dependencies]
 detailed = { version = ">=1.2.3" }

@@ -4,7 +4,17 @@ import platform
 import subprocess
 import os
 
-PIXI_VERSION = "0.38.0"
+PIXI_VERSION = "0.39.0"
+
+
+ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
+
+EMPTY_BOILERPLATE_PROJECT = f"""
+[project]
+name = "test"
+channels = []
+platforms = {ALL_PLATFORMS}
+"""
 
 
 class ExitCode(IntEnum):
@@ -49,10 +59,9 @@ def verify_cli_command(
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     output = Output(command, stdout, stderr, returncode)
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
-    if expected_exit_code is not None:
-        assert (
-            returncode == expected_exit_code
-        ), f"Return code was {returncode}, expected {expected_exit_code}, stderr: {stderr}"
+    assert (
+        returncode == expected_exit_code
+    ), f"Return code was {returncode}, expected {expected_exit_code}, stderr: {stderr}"
 
     if stdout_contains:
         if isinstance(stdout_contains, str):

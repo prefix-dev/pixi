@@ -56,7 +56,7 @@ impl Prefix {
         let concurrency_limit = concurrency_limit.unwrap_or(100);
         let mut meta_futures = FuturesUnordered::<JoinHandle<miette::Result<PrefixRecord>>>::new();
         let mut result = Vec::new();
-        for entry in std::fs::read_dir(self.root.join("conda-meta"))
+        for entry in fs_err::read_dir(self.root.join("conda-meta"))
             .into_iter()
             .flatten()
         {

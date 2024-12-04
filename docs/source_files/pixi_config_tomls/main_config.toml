@@ -46,6 +46,8 @@ index-url = "https://pypi.org/simple"
 extra-index-urls = ["https://pypi.org/simple2"]
 # can be "subprocess" or "disabled"
 keyring-provider = "subprocess"
+# allow insecure connections to host
+allow-insecure-host = ["localhost:8080"]
 #  --8<-- [end:pypi-config]
 
 #  --8<-- [start:concurrency]

@@ -10,17 +10,12 @@ use std::{
 
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
-use futures::{
-    future::Either, stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt,
-};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
-use itertools::Itertools;
-use miette::Report;
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, WrapErr};
-
+use itertools::{Either, Itertools};
+use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
-use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
@@ -37,7 +32,6 @@ use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmen
 use rattler_repodata_gateway::{Gateway, RepoData};
 use rattler_solve::ChannelPriority;
 use reqwest_middleware::ClientWithMiddleware;
-
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
@@ -685,13 +679,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(
-                get_cache_dir()?,
-                project.pixi_dir(),
-                project.channel_config(),
-                Arc::new(ToolContext::default()),
-            )
-            .into_diagnostic()?,
+            build_context: BuildContext::from_project(project)?,
             glob_hash_cache,
         });
     }
@@ -715,13 +703,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(
-                get_cache_dir()?,
-                project.pixi_dir(),
-                project.channel_config(),
-                Arc::new(ToolContext::default()),
-            )
-            .into_diagnostic()?,
+            build_context: BuildContext::from_project(project)?,
             glob_hash_cache,
         });
     }
@@ -1016,13 +998,8 @@ impl<'p> UpdateContextBuilder<'p> {
             .with_client(client)
             .build();
 
-        let build_context = BuildContext::new(
-            pixi_config::get_cache_dir()?,
-            project.pixi_dir(),
-            project.channel_config(),
-            tool_context.into(),
-        )
-        .into_diagnostic()?;
+        let build_context =
+            BuildContext::from_project(project)?.with_tool_context(Arc::new(tool_context));
 
         Ok(UpdateContext {
             project,
@@ -1727,11 +1704,17 @@ async fn spawn_solve_conda_environment_task(
             // Convert the dependencies into match specs and source dependencies
             let (source_specs, match_specs): (Vec<_>, Vec<_>) = dependencies
                 .into_specs()
-                .partition_map(|(name, constraint)| {
-                    constraint
-                        .into_named_source_or_binary(name, &channel_config)
-                        .expect("failed to convert dependency into match spec")
-                });
+                .partition_map(
+                    |(name, constraint)| match constraint.into_source_or_binary() {
+                        Either::Left(source) => Either::Left((name, source)),
+                        Either::Right(binary) => {
+                            let spec = binary
+                                .try_into_nameless_match_spec(&channel_config)
+                                .expect("failed to convert channel from spec");
+                            Either::Right(MatchSpec::from_nameless(spec, Some(name)))
+                        }
+                    },
+                );
 
             // Collect metadata from all source packages
             let channel_urls = channels

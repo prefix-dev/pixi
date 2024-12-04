@@ -140,7 +140,7 @@ impl Task {
             Task::Plain(_) => None,
             Task::Custom(_) => None,
             Task::Execute(exe) => exe.description.as_deref(),
-            Task::Alias(_) => None,
+            Task::Alias(cmd) => cmd.description.as_deref(),
         }
     }
 
