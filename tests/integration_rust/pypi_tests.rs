@@ -1,10 +1,11 @@
-use std::path::Path;
+use std::{io::Write, path::Path};
 
 use rattler_conda_types::Platform;
 use typed_path::Utf8TypedPath;
 use url::Url;
 
 use crate::common::{LockFileExt, PixiControl};
+use std::fs::{create_dir_all, File};
 
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
@@ -243,4 +244,46 @@ async fn pin_torch() {
         .unwrap()
         .path()
         .contains("/whl/cu124"));
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_allow_insecure_host() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-extra-index-url"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        sh = "*"
+
+        [pypi-options]
+        extra-index-urls = ["https://expired.badssl.com/"]"#,
+        platform = Platform::current(),
+    ))
+    .unwrap();
+    // will occur ssl error
+    assert!(
+        pixi.update_lock_file().await.is_err(),
+        "should occur ssl error"
+    );
+
+    let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
+    create_dir_all(config_path.parent().unwrap()).unwrap();
+    let mut file = File::create(config_path).unwrap();
+    file.write_all(
+        r#"
+        detached-environments = false
+
+        [pypi-config]
+        allow-insecure-host = ["expired.badssl.com"]"#
+            .as_bytes(),
+    )
+    .unwrap();
+    pixi.update_lock_file().await.unwrap();
 }
