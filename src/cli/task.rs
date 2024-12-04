@@ -544,7 +544,7 @@ impl From<&Task> for TaskInfo {
             description: task.description().map(|desc| desc.to_string()),
             depends_on: task.depends_on().to_vec(),
             cwd: task.working_directory().map(PathBuf::from),
-            env: task.env().map(|env| env.clone()),
+            env: task.env().cloned(),
             clean_env: task.clean_env(),
             inputs: task
                 .inputs()
