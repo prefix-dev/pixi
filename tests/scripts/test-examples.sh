@@ -1,3 +1,4 @@
+#!/bin/bash
 # Run from the root of the project using `bash tests/test_examples.sh`
 set -e
 echo "Running test_examples.sh"
@@ -17,5 +18,5 @@ echo "Running the solve-groups example:"
 pixi run -v --manifest-path examples/solve-groups/pixi.toml -e min-py38 test
 pixi run -v --manifest-path examples/solve-groups/pixi.toml -e max-py310 test
 
-echo "Running the flask-hello-world-pyproject example:"
-pixi run -v --manifest-path examples/flask-hello-world-pyproject/pyproject.toml test
+echo "Running the rich example:"
+pixi run -v --manifest-path examples/rich_example/pyproject.toml test

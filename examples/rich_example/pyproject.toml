@@ -50,6 +50,7 @@ channels = [
 
 
 [tool.pixi.tasks]
+test = "rich_example"
 
 [tool.pixi.dependencies]
 rich = ">=13.9.4,<14"
