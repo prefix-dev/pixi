@@ -6,28 +6,11 @@ import json
 from ..common import verify_cli_command
 
 
-def get_data_dir(backend: str | None = None) -> Path:
-    """
-    Returns the path to the test-data directory next to the tests
-    """
-    if backend is None:
-        return Path(__file__).parent / "test-data"
-    else:
-        return Path(__file__).parent / "test-data" / backend
-
-
-def examples_dir() -> Path:
-    """
-    Returns the path to the examples directory in the root of the repository
-    """
-    return (Path(__file__).parent / "../../../examples").resolve()
-
-
-def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_build_conda_package(pixi: Path, examples_dir: Path, tmp_pixi_workspace: Path) -> None:
     """
     This one tries to build the rich example project
     """
-    pyproject = examples_dir() / "rich_example"
+    pyproject = examples_dir / "rich_example"
     target_dir = tmp_pixi_workspace / "pyproject"
     shutil.copytree(pyproject, target_dir)
     shutil.rmtree(target_dir.joinpath(".pixi"), ignore_errors=True)
@@ -56,8 +39,10 @@ def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert package_to_be_built.exists()
 
 
-def test_build_using_rattler_build_backend(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    test_data = get_data_dir("rattler-build-backend")
+def test_build_using_rattler_build_backend(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
     shutil.copytree(test_data / "pixi", tmp_pixi_workspace / "pixi")
     shutil.copyfile(
         test_data / "recipes/smokey/recipe.yaml", tmp_pixi_workspace / "pixi/recipe.yaml"
@@ -77,8 +62,8 @@ def test_build_using_rattler_build_backend(pixi: Path, tmp_pixi_workspace: Path)
     assert package_to_be_built.exists()
 
 
-def test_smokey(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    test_data = get_data_dir("rattler-build-backend")
+def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
     # copy the whole smokey project to the tmp_pixi_workspace
     shutil.copytree(test_data, tmp_pixi_workspace / "test_data")
     manifest_path = tmp_pixi_workspace / "test_data" / "smokey" / "pixi.toml"
