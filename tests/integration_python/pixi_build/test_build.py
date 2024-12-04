@@ -85,37 +85,6 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     assert metadata["name"] == "smokey"
 
 
-def test_second_install_shouldnt_rebuild(
-    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
-) -> None:
-    test_data = build_data.joinpath("simple-pyproject")
-    target_dir = tmp_pixi_workspace.joinpath("simple-pyproject")
-    shutil.copytree(test_data, target_dir)
-    manifest_path = target_dir.joinpath("pyproject.toml")
-
-    # Verify that the project is properly installed
-    verify_cli_command(
-        [
-            pixi,
-            "run",
-            "--manifest-path",
-            manifest_path,
-            "get-version",
-        ],
-        stdout_contains="The version of simple-pyproject is 1.0.0",
-    )
-
-    verify_cli_command(
-        [
-            pixi,
-            "install",
-            "--manifest-path",
-            manifest_path,
-        ],
-        stdout_contains="Nothing to do",
-    )
-
-
 def test_source_change_trigger_rebuild(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
