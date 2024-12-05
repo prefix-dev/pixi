@@ -90,6 +90,9 @@ def test_source_change_trigger_rebuild(
 ) -> None:
     test_data = build_data.joinpath("simple-pyproject")
 
+    # TODO: Setting the cache dir shouldn't be necessary!
+    env = {"PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache"))}
+
     target_dir = tmp_pixi_workspace.joinpath("simple-pyproject")
     shutil.copytree(test_data, target_dir)
     manifest_path = target_dir.joinpath("pyproject.toml")
@@ -103,6 +106,7 @@ def test_source_change_trigger_rebuild(
             "get-version",
         ],
         stdout_contains="The version of simple-pyproject is 1.0.0",
+        env=env,
     )
 
     # Bump version from 1.0.0 to 2.0.0
@@ -119,4 +123,5 @@ def test_source_change_trigger_rebuild(
             "get-version",
         ],
         stdout_contains="The version of simple-pyproject is 2.0.0",
+        env=env,
     )
