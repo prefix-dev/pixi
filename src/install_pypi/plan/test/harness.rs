@@ -190,6 +190,11 @@ impl MockedSitePackages {
         }
     }
 
+    #[allow(dead_code)]
+    pub fn base_dir(&self) -> &Path {
+        self.fake_site_packages.path()
+    }
+
     /// Create INSTALLER and METADATA files for the installed dist
     /// these are checked for the installer and requires python
     fn create_file_backing(
@@ -516,6 +521,7 @@ pub fn fake_pyproject_toml(
     // Set the modification time if it is provided
     if let Some(modification_time) = modification_time {
         pyproject_toml.set_modified(modification_time).unwrap();
+        pyproject_toml.sync_all().unwrap();
     }
     (temp_dir, pyproject_toml)
 }
