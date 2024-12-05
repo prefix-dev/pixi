@@ -326,6 +326,14 @@ fn disambiguate_task_interactive<'p>(
         ..ColorfulTheme::default()
     };
 
+    // Ignore CTRL+C in the dialoguer prompt so that it shows the cursor again.
+    ctrlc::set_handler(move || {
+        dialoguer_reset_cursor_hack();
+        // Exit the process, this potentially leaves the running program in an unexpected way.
+        // But not exiting make ctrl-c not work at all.
+        std::process::exit(0);
+    }).ok()?;
+
     dialoguer::Select::with_theme(&theme)
         .with_prompt(format!(
             "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
@@ -342,4 +350,16 @@ fn disambiguate_task_interactive<'p>(
         .interact_opt()
         .map_or(None, identity)
         .map(|idx| problem.environments[idx].clone())
+}
+
+/// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or other exceptions:
+/// https://github.com/console-rs/dialoguer/issues/188.
+///
+/// `dialoguer`, as a library, doesn't want to mess with signal handlers,
+/// but we, as an application, are free to mess with signal handlers if we feel like it, since we
+/// own the process.
+/// This function was taken from https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119
+fn dialoguer_reset_cursor_hack() {
+    let term = console::Term::stdout();
+    let _ = term.show_cursor();
 }
