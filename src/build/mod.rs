@@ -26,6 +26,7 @@ use pixi_build_types::{
 use pixi_config::get_cache_dir;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
+use pixi_manifest::Targets;
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{
@@ -54,7 +55,7 @@ pub struct BuildContext {
     cache_dir: PathBuf,
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
-    variant_config: Option<HashMap<String, Vec<String>>>,
+    variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -117,7 +118,7 @@ impl BuildContext {
         cache_dir: PathBuf,
         dot_pixi_dir: PathBuf,
         channel_config: ChannelConfig,
-        variant_config: Option<HashMap<String, Vec<String>>>,
+        variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
         tool_context: Arc<ToolContext>,
     ) -> Result<Self, std::io::Error> {
         Ok(Self {
@@ -133,16 +134,18 @@ impl BuildContext {
     }
 
     pub fn from_project(project: &crate::project::Project) -> miette::Result<Self> {
+        let variant = project
+            .manifest()
+            .workspace
+            .workspace
+            .build_variants
+            .clone();
+
         Self::new(
             get_cache_dir()?,
             project.pixi_dir(),
             project.channel_config(),
-            project
-                .manifest()
-                .workspace
-                .workspace
-                .build_variants
-                .clone(),
+            variant,
             Arc::new(ToolContext::default()),
         )
         .into_diagnostic()
@@ -161,6 +164,22 @@ impl BuildContext {
             glob_hash_cache,
             ..self
         }
+    }
+
+    fn resolve_variant(&self, platform: Platform) -> HashMap<String, Vec<String>> {
+        let mut result = HashMap::new();
+        for item in self.variant_config.resolve(Some(platform)) {
+            if let Some(variants) = item {
+                result.extend(variants.clone());
+            }
+        }
+        tracing::info!(
+            "resolved variant configuration for {}: {:?}",
+            platform,
+            result
+        );
+
+        result
     }
 
     /// Extracts the metadata for a package from the given source specification.
@@ -319,7 +338,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
-                    variant_configuration: self.variant_config.clone(),
+                    variant_configuration: Some(self.resolve_variant(host_platform)),
                 },
                 build_reporter.as_conda_build_reporter(),
             )
@@ -558,7 +577,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
-                    variant_configuration: self.variant_config.clone(),
+                    variant_configuration: Some(self.resolve_variant(host_platform)),
                 },
                 metadata_reporter.as_conda_metadata_reporter().clone(),
             )
