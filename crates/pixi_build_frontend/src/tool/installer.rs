@@ -246,10 +246,7 @@ impl ToolInstaller for ToolContext {
             self.platform,
         );
 
-        let cached_dir = self
-            .cache_dir
-            .join(CACHED_BUILD_ENVS_DIR)
-            .join(cache.name());
+        let cached_dir = self.cache_dir.join(cache.name());
 
         let mut prefix_guard = PrefixGuard::new(&cached_dir).into_diagnostic()?;
 
