@@ -5,9 +5,9 @@ pub mod channel;
 pub mod description;
 pub mod environment;
 pub mod export;
+pub mod name;
 pub mod platform;
 pub mod version;
-pub mod name;
 
 #[derive(Debug, Parser)]
 pub enum Command {
