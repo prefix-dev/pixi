@@ -187,11 +187,21 @@ impl<'p> LockFileDerivedData<'p> {
         if update_mode == UpdateMode::QuickValidate {
             if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
                 if environment_file.environment_lock_file_hash == hash {
-                    tracing::info!(
-                        "Environment '{}' is up-to-date with lock file hash",
-                        environment.name().fancy_display()
-                    );
-                    return Ok(Prefix::new(environment.dir()));
+                    let contains_source_packages = self.lock_file.environments().any(|(_, env)| {
+                        env.conda_packages(Platform::current())
+                            .map_or(false, |mut packages| {
+                                packages.any(|package| package.as_source().is_some())
+                            })
+                    });
+                    if contains_source_packages {
+                        tracing::debug!("Lock file contains source packages: ignore lock file hash and update the prefix");
+                    } else {
+                        tracing::info!(
+                            "Environment '{}' is up-to-date with lock file hash",
+                            environment.name().fancy_display()
+                        );
+                        return Ok(Prefix::new(environment.dir()));
+                    }
                 }
             } else {
                 tracing::debug!(
