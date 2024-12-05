@@ -21,6 +21,7 @@ use crate::{
     task::task_graph::{TaskGraph, TaskId},
     Project,
 };
+use fs_err::tokio as tokio_fs;
 use pixi_consts::consts;
 
 use crate::activation::CurrentEnvVarBehavior;
@@ -252,7 +253,7 @@ impl<'p> ExecutableTask<'p> {
         let cache_name = self.cache_name();
         let cache_file = self.project().task_cache_folder().join(cache_name);
         if cache_file.exists() {
-            let cache = tokio::fs::read_to_string(&cache_file).await?;
+            let cache = tokio_fs::read_to_string(&cache_file).await?;
             let cache: TaskCache = serde_json::from_str(&cache)?;
             let hash = TaskHash::from_task(self, lock_file).await;
             if let Ok(Some(hash)) = hash {

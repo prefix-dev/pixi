@@ -96,10 +96,8 @@ impl<'t> GlobSet<'t> {
 #[cfg(test)]
 mod tests {
     use super::GlobSet;
-    use std::{
-        fs::{create_dir, File},
-        path::PathBuf,
-    };
+    use fs_err::File;
+    use std::path::PathBuf;
     use tempfile::tempdir;
 
     #[test]
@@ -111,7 +109,7 @@ mod tests {
         File::create(root_path.join("include1.txt")).unwrap();
         File::create(root_path.join("include2.log")).unwrap();
         File::create(root_path.join("exclude.txt")).unwrap();
-        create_dir(root_path.join("subdir")).unwrap();
+        fs_err::create_dir(root_path.join("subdir")).unwrap();
         File::create(root_path.join("subdir/include_subdir.txt")).unwrap();
 
         // Test globs: include all .txt but exclude exclude.txt

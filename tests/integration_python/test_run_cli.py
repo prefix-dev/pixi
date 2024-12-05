@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
+
 from .common import EMPTY_BOILERPLATE_PROJECT, verify_cli_command, ExitCode, default_env_path
+
 import tempfile
 import os
 
@@ -273,4 +275,51 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "--force-activate", "task", "-vvv"],
         stdout_contains="test123",
+    )
+
+
+def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    tmp_project = tmp_path.joinpath("pixi-project")
+    tmp_project.mkdir()
+    detached_envs_tmp = tmp_path.joinpath("pixi-detached-envs")
+    manifest = tmp_project.joinpath("pixi.toml")
+
+    # Create a dummy project
+    verify_cli_command([pixi, "init", tmp_project, "--channel", dummy_channel_1])
+    verify_cli_command([pixi, "add", "dummy-a", "--no-install", "--manifest-path", manifest])
+
+    # Set detached environments
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest,
+            "--local",
+            "detached-environments",
+            str(detached_envs_tmp),
+        ],
+    )
+
+    # Run the installation
+    verify_cli_command([pixi, "install", "--manifest-path", manifest])
+
+    # Validate the detached environment
+    assert detached_envs_tmp.exists()
+
+    detached_envs_folder = None
+    for folder in detached_envs_tmp.iterdir():
+        if folder.is_dir():
+            detached_envs_folder = folder
+            break
+    assert detached_envs_folder is not None, "Couldn't find detached environment folder"
+
+    # Validate the conda-meta folder exists
+    assert Path(detached_envs_folder).joinpath("envs", "default", "conda-meta").exists()
+
+    # Verify that the detached environment is used
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "echo $CONDA_PREFIX"],
+        stdout_contains=f"{detached_envs_tmp}",
     )

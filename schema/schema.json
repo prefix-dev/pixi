@@ -29,6 +29,11 @@
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
     },
+    "build-backend": {
+      "title": "Build-Backend",
+      "description": "Configuration for the build backend.",
+      "type": "object"
+    },
     "build-dependencies": {
       "title": "Build-Dependencies",
       "description": "The build `conda` dependencies, used in the build process",
@@ -1537,6 +1542,17 @@
           "examples": [
             "John Doe <j.doe@prefix.dev>"
           ]
+        },
+        "build-variants": {
+          "title": "Build-Variants",
+          "description": "The build variants of the project",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",

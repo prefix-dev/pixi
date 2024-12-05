@@ -19,6 +19,9 @@ use super::{
     utils::{check_url_freshness, strip_direct_scheme},
 };
 
+#[cfg(test)]
+mod test;
+
 #[derive(Debug)]
 pub enum InstallReason {
     /// Reinstall a package from the local cache, will link from the cache
@@ -116,8 +119,13 @@ pub(crate) enum NeedReinstall {
     SourceDirectoryNewerThanCache,
     /// Url file parse error
     UnableToParseFileUrl { url: String },
+    /// Unable to convert locked directory to a url
+    UnableToConvertLockedPath { path: String },
     /// The editable status of the installed wheel changed with regards to the locked version
-    EditableStatusChanged { is_now_editable: bool },
+    EditableStatusChanged {
+        locked_editable: bool,
+        installed_editable: bool,
+    },
     /// Somehow unable to parse the installed dist url
     UnableToParseInstalledDistUrl { url: String },
     /// Archive is newer than the cache
@@ -132,14 +140,19 @@ pub(crate) enum NeedReinstall {
     /// Unable to parse the installed git url
     UnableToParseGitUrl { url: String },
     /// Unable to get the installed dist metadata, something is definitely broken
-    UnableToGetInstalledDistMetadata,
+    UnableToGetInstalledDistMetadata { cause: String },
     /// The requires-python is different than the installed version
     RequiredPythonChanged {
-        installed_python_version: uv_pep440::VersionSpecifiers,
+        installed_python_require: uv_pep440::VersionSpecifiers,
         locked_python_version: uv_pep440::Version,
     },
     /// Re-installing because of an installer mismatch, but we are managing the package
     InstallerMismatch { previous_installer: String },
+    /// The installed url does not match the locked url
+    UrlMismatch {
+        installed_url: String,
+        locked_url: Option<String>,
+    },
 }
 
 impl std::fmt::Display for NeedReinstall {
@@ -160,11 +173,14 @@ impl std::fmt::Display for NeedReinstall {
             NeedReinstall::UnableToParseFileUrl { url } => {
                 write!(f, "Unable to parse file url: {}", url)
             }
-            NeedReinstall::EditableStatusChanged { is_now_editable } => {
+            NeedReinstall::EditableStatusChanged {
+                locked_editable,
+                installed_editable,
+            } => {
                 write!(
                     f,
-                    "Editable status changed, editable status is: {}",
-                    is_now_editable
+                    "Editable status changed, editable status is: {} installed editable is: {}",
+                    locked_editable, installed_editable
                 )
             }
             NeedReinstall::UnableToParseInstalledDistUrl { url } => {
@@ -185,11 +201,11 @@ impl std::fmt::Display for NeedReinstall {
             NeedReinstall::UnableToParseGitUrl { url } => {
                 write!(f, "Unable to parse git url: {}", url)
             }
-            NeedReinstall::UnableToGetInstalledDistMetadata => {
-                write!(f, "Unable to get installed dist metadata")
+            NeedReinstall::UnableToGetInstalledDistMetadata { cause } => {
+                write!(f, "Unable to get installed dist metadata: {}", cause)
             }
             NeedReinstall::RequiredPythonChanged {
-                installed_python_version,
+                installed_python_require: installed_python_version,
                 locked_python_version,
             } => {
                 write!(
@@ -204,6 +220,18 @@ impl std::fmt::Display for NeedReinstall {
                     "Installer mismatch, previous installer: {}",
                     previous_installer
                 )
+            }
+            NeedReinstall::UrlMismatch {
+                installed_url,
+                locked_url,
+            } => write!(
+                f,
+                "Installed url {} does not match locked url {}",
+                installed_url,
+                locked_url.clone().unwrap_or_else(|| "None".to_string())
+            ),
+            NeedReinstall::UnableToConvertLockedPath { path } => {
+                write!(f, "Unable to convert locked path to url: {}", path)
             }
         }
     }
@@ -221,6 +249,7 @@ fn need_reinstall(
     installed: &InstalledDist,
     locked: &PypiPackageData,
     python_version: &uv_pep440::Version,
+    lock_file_dir: &Path,
 ) -> miette::Result<ValidateCurrentInstall> {
     // Check if the installed version is the same as the required version
     match installed {
@@ -259,14 +288,50 @@ fn need_reinstall(
                     let result = Url::parse(&url);
                     match result {
                         Ok(url) => {
+                            // Convert the locked location, which can be a path or a url, to a url
+                            let locked_url = match &locked.location {
+                                // Fine if it is already a url
+                                UrlOrPath::Url(url) => url.clone(),
+                                // Do some path mangling if it is actually a path to get it into a url
+                                UrlOrPath::Path(path) => {
+                                    let path = PathBuf::from(path.as_str());
+                                    // Because the path we are comparing to is absolute we need to convert
+                                    let path = if path.is_absolute() {
+                                        path
+                                    } else {
+                                        // Relative paths will be relative to the lock file directory
+                                        lock_file_dir.join(path)
+                                    };
+                                    // Okay, now convert to a file path, if we cant do that we need to re-install
+                                    match Url::from_file_path(path.clone()) {
+                                        Ok(url) => url,
+                                        Err(_) => {
+                                            return Ok(ValidateCurrentInstall::Reinstall(
+                                                NeedReinstall::UnableToConvertLockedPath {
+                                                    path: path.display().to_string(),
+                                                },
+                                            ));
+                                        }
+                                    }
+                                }
+                            };
+
                             // Check if the urls are different
-                            if Some(&url) == locked.location.as_url() {
-                                // Check cache freshness
+                            if url == locked_url {
+                                // Okay so these are the same, but we need to check if the cache is newer
+                                // than the source directory
                                 if !check_url_freshness(&url, installed)? {
                                     return Ok(ValidateCurrentInstall::Reinstall(
                                         NeedReinstall::SourceDirectoryNewerThanCache,
                                     ));
                                 }
+                            } else {
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::UrlMismatch {
+                                        installed_url: url.to_string(),
+                                        locked_url: locked.location.as_url().map(|u| u.to_string()),
+                                    },
+                                ));
                             }
                         }
                         Err(_) => {
@@ -279,7 +344,8 @@ fn need_reinstall(
                     if dir_info.editable.unwrap_or_default() != locked.editable {
                         return Ok(ValidateCurrentInstall::Reinstall(
                             NeedReinstall::EditableStatusChanged {
-                                is_now_editable: dir_info.editable.unwrap_or_default(),
+                                locked_editable: locked.editable,
+                                installed_editable: dir_info.editable.unwrap_or_default(),
                             },
                         ));
                     }
@@ -321,6 +387,13 @@ fn need_reinstall(
                                 NeedReinstall::ArchiveDistNewerThanCache,
                             ));
                         }
+                    } else {
+                        return Ok(ValidateCurrentInstall::Reinstall(
+                            NeedReinstall::UrlMismatch {
+                                installed_url: installed_url.to_string(),
+                                locked_url: locked.location.as_url().map(|u| u.to_string()),
+                            },
+                        ));
                     }
                 }
                 uv_pypi_types::DirectUrl::VcsUrl {
@@ -328,8 +401,14 @@ fn need_reinstall(
                     vcs_info,
                     subdirectory: _,
                 } => {
-                    let url = Url::parse(&url).into_diagnostic()?;
-                    let git_url = match &locked.location {
+                    // Check if the installed git url is the same as the locked git url
+                    // if this fails, it should be an error, because then installed url is not a git url
+                    let installed_git_url =
+                        ParsedGitUrl::try_from(Url::parse(url.as_str()).into_diagnostic()?)
+                            .into_diagnostic()?;
+                    // Try to parse the locked git url, this can be any url, so this may fail
+                    // in practice it always seems to succeed, even with a non-git url
+                    let locked_git_url = match &locked.location {
                         UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
                         UrlOrPath::Path(_path) => {
                             // Previously
@@ -338,18 +417,27 @@ fn need_reinstall(
                             ));
                         }
                     };
-                    match git_url {
-                        Ok(git) => {
-                            // Check the repository base url
-                            if git.url.repository() != &url
-                                // Check the sha from the direct_url.json and the required sha
-                                // Use the uv git url to get the sha
-                                || vcs_info.commit_id != git.url.precise().map(|p| p.to_string())
+                    match locked_git_url {
+                        Ok(locked_git_url) => {
+                            // Check the repository base url with the locked url
+                            if locked_git_url.url.repository() != installed_git_url.url.repository()
                             {
+                                // This happens when this is not a git url
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::UrlMismatch {
+                                        installed_url: installed_git_url.url.to_string(),
+                                        locked_url: Some(locked_git_url.url.to_string()),
+                                    },
+                                ));
+                            }
+                            if vcs_info.commit_id
+                                != locked_git_url.url.precise().map(|p| p.to_string())
+                            {
+                                // The commit id is different, we need to reinstall
                                 return Ok(ValidateCurrentInstall::Reinstall(
                                     NeedReinstall::GitCommitsMismatch {
                                         installed_commit: vcs_info.commit_id.unwrap_or_default(),
-                                        locked_commit: git
+                                        locked_commit: locked_git_url
                                             .url
                                             .precise()
                                             .map(|p| p.to_string())
@@ -361,7 +449,11 @@ fn need_reinstall(
                         Err(_) => {
                             return Ok(ValidateCurrentInstall::Reinstall(
                                 NeedReinstall::UnableToParseGitUrl {
-                                    url: url.to_string(),
+                                    url: locked
+                                        .location
+                                        .as_url()
+                                        .map(|u| u.to_string())
+                                        .unwrap_or_default(),
                                 },
                             ));
                         }
@@ -391,13 +483,16 @@ fn need_reinstall(
     };
 
     // Do some extra checks if the version is the same
-    let metadata = if let Ok(metadata) = installed.metadata() {
-        metadata
-    } else {
-        // Can't be sure lets reinstall
-        return Ok(ValidateCurrentInstall::Reinstall(
-            NeedReinstall::UnableToGetInstalledDistMetadata,
-        ));
+    let metadata = match installed.metadata() {
+        Ok(metadata) => metadata,
+        Err(err) => {
+            // Can't be sure lets reinstall
+            return Ok(ValidateCurrentInstall::Reinstall(
+                NeedReinstall::UnableToGetInstalledDistMetadata {
+                    cause: err.to_string(),
+                },
+            ));
+        }
     };
 
     if let Some(requires_python) = metadata.requires_python {
@@ -405,7 +500,7 @@ fn need_reinstall(
         if !requires_python.contains(python_version) {
             return Ok(ValidateCurrentInstall::Reinstall(
                 NeedReinstall::RequiredPythonChanged {
-                    installed_python_version: requires_python,
+                    installed_python_require: requires_python,
                     locked_python_version: python_version.clone(),
                 },
             ));
@@ -577,7 +672,12 @@ impl InstallPlanner {
                         ));
                     } else {
                         // Check if we need to reinstall
-                        match need_reinstall(dist, required_pkg, &self.python_version)? {
+                        match need_reinstall(
+                            dist,
+                            required_pkg,
+                            &self.python_version,
+                            &self.lock_file_dir,
+                        )? {
                             ValidateCurrentInstall::Keep => {
                                 // No need to reinstall
                                 continue;

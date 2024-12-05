@@ -2303,6 +2303,7 @@ dependencies = [
  "clap",
  "console",
  "dirs",
+ "fs-err 2.11.0",
  "itertools 0.13.0",
  "miette",
  "pixi_consts",
@@ -2333,6 +2334,7 @@ name = "pixi_trampoline"
 version = "0.1.0"
 dependencies = [
  "ctrlc",
+ "fs-err 3.0.0",
  "miette",
  "pixi_utils",
  "serde",
@@ -2344,6 +2346,7 @@ name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
  "fd-lock",
+ "fs-err 2.11.0",
  "indicatif",
  "itertools 0.13.0",
  "miette",

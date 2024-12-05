@@ -39,7 +39,7 @@ pub enum ProtocolBuildError {
     FailedToBuildPixi(#[from] PixiProtocolBuildError),
 }
 
-/// A builder for constructing a [`protocol::Protocol`] instance.
+/// A builder for constructing a [`crate::protocol::Protocol`] instance.
 #[derive(Debug)]
 pub struct ProtocolBuilder {
     /// The directory that contains the source files.
@@ -142,6 +142,7 @@ impl ProtocolBuilder {
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.recipe_dir.join("recipe.yaml"),
+            serde_json::Value::Null,
             build_id,
             self.cache_dir,
             tool,
