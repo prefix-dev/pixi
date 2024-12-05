@@ -314,12 +314,23 @@ fn test_local_source_newer_than_local_metadata() {
         fake.path().to_path_buf(),
         false,
     );
+
     // Set the pyproject.toml file to be newer than the installed metadata
     // We need to do this otherwise the test seems to fail even though the file should be newer
     pyproject
         .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60 * 60 * 24))
         .unwrap();
     pyproject.sync_all().unwrap();
+    let installed_dist = site_packages.get_installed_dist("aiofiles").unwrap();
+    let required_dist = required.get_required_dist("aiofiles").unwrap();
+    let location = required_dist
+        .location
+        .as_path()
+        .map(|p| p.to_string())
+        .map(Url::from_directory_path)
+        .unwrap()
+        .unwrap();
+    assert!(!check_url_freshness(&location, &installed_dist).unwrap());
 
     // We expect a reinstall, because the pyproject.toml file is newer than the cache
     let plan = harness::install_planner();
