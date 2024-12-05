@@ -35,10 +35,6 @@ jobs:
             target: aarch64-unknown-linux-musl
             os: ubuntu-latest
 
-          - name: "Linux-powerpc64le"
-            target: powerpc64le-unknown-linux-gnu
-            os: ubuntu-latest
-
           - name: "macOS-x86"
             target: x86_64-apple-darwin
             os: macos-13
