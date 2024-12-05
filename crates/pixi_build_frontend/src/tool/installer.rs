@@ -150,6 +150,16 @@ impl ToolContext {
         ToolContextBuilder::new()
     }
 
+    /// Create a new tool context builder to be used for tests
+    ///
+    /// The main difference is that it uses a tmp cache directory
+    /// instead of rattler one
+    #[cfg(test)]
+    pub fn for_tests() -> ToolContextBuilder {
+        let cache_dir = tempfile::tempdir().unwrap().into_path();
+        ToolContextBuilder::new().with_cache_dir(cache_dir)
+    }
+
     /// Instantiate a tool from a specification.
     ///
     /// If the tool is not already cached, it will be created, installed and cached.
