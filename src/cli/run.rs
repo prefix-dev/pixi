@@ -332,7 +332,8 @@ fn disambiguate_task_interactive<'p>(
         // Exit the process, this potentially leaves the running program in an unexpected way.
         // But not exiting make ctrl-c not work at all.
         std::process::exit(0);
-    }).ok()?;
+    })
+    .ok()?;
 
     dialoguer::Select::with_theme(&theme)
         .with_prompt(format!(
