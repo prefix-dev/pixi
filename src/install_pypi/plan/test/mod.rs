@@ -320,8 +320,7 @@ fn test_local_source_newer_than_local_metadata() {
         .unwrap();
     pyproject.sync_all().unwrap();
 
-    // pyproject.toml file is older than the cache, all else is the same
-    // so we do not expect a re-installation
+    // We expect a reinstall, because the pyproject.toml file is newer than the cache
     let plan = harness::install_planner();
     let install_plan = plan
         .plan(&site_packages, NoCache, &required.to_borrowed())
@@ -330,6 +329,47 @@ fn test_local_source_newer_than_local_metadata() {
         install_plan.reinstalls[0].1,
         NeedReinstall::SourceDirectoryNewerThanCache
     );
+}
+
+#[test]
+fn test_local_source_older_than_local_metadata() {
+    let (fake, pyproject) = harness::fake_pyproject_toml(Some(
+        std::time::SystemTime::now() - std::time::Duration::from_secs(60 * 60 * 24),
+    ));
+    let site_packages = MockedSitePackages::new().add_directory(
+        "aiofiles",
+        "0.6.0",
+        fake.path().to_path_buf(),
+        false,
+        // Set the metadata mtime to now explicitly
+        InstalledDistOptions::default().with_metadata_mtime(std::time::SystemTime::now()),
+    );
+    // Requires following package
+    let required = RequiredPackages::new().add_directory(
+        "aiofiles",
+        "0.6.0",
+        fake.path().to_path_buf(),
+        false,
+    );
+
+    let dist_info = site_packages
+        .base_dir()
+        .join(format!("{}-{}.dist-info", "aiofiles", "0.6.0"))
+        .join("METADATA");
+    // Sanity check that these timestamps are different
+    assert_ne!(
+        pyproject.metadata().unwrap().modified().unwrap(),
+        dist_info.metadata().unwrap().modified().unwrap()
+    );
+
+    // Install plan should not reinstall anything
+    let plan = harness::install_planner();
+    let install_plan = plan
+        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .expect("should install");
+    assert_eq!(install_plan.reinstalls.len(), 0);
+    assert_eq!(install_plan.local.len(), 0);
+    assert_eq!(install_plan.remote.len(), 0);
 }
 
 /// When we have an editable package installed and we require a non-editable package
