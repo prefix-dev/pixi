@@ -338,12 +338,10 @@ pub async fn resolve_pypi(
     };
     let git_resolver = GitResolver::default();
 
-    let in_flight_arc = context.in_flight.clone();
-    let in_flight = in_flight_arc.as_ref();
     let shared_state = SharedState::new(
         git_resolver.clone(),
         build_dispatch_in_memory_index,
-        in_flight.clone(),
+        context.in_flight.clone(),
         context.capabilities.clone(),
     );
 

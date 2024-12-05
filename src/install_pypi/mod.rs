@@ -123,12 +123,10 @@ pub async fn update_python_distributions(
     let dep_metadata = DependencyMetadata::default();
     let constraints = Constraints::default();
 
-    let in_flight_arc = uv_context.in_flight.clone();
-    let in_flight = in_flight_arc.as_ref();
     let shared_state = SharedState::new(
         git_resolver,
         in_memory_index,
-        in_flight.clone(),
+        uv_context.in_flight.clone(),
         uv_context.capabilities.clone(),
     );
 

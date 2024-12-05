@@ -347,11 +347,6 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
-#reqwest-middleware = { version = "0.4" }
-
-#reqwest-middleware = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
-#reqwest-retry = { git = "https://github.com/TrueLayer/reqwest-middleware", rev = "d95ec5a99fcc9a4339e1850d40378bbfe55ab121" }
-
 #file_url = { git = "https://github.com/conda/rattler", branch = "main" }
 #rattler = { git = "https://github.com/conda/rattler", branch = "main" }
 #rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
