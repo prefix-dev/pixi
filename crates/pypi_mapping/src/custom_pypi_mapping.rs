@@ -46,7 +46,7 @@ pub async fn fetch_mapping_from_url(
 }
 
 pub fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
-    let file = std::fs::File::open(path)
+    let file = fs_err::File::open(path)
         .into_diagnostic()
         .context(format!("failed to open file {}", path.display()))?;
     let reader = std::io::BufReader::new(file);

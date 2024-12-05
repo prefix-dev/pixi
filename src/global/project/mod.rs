@@ -1,22 +1,11 @@
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use std::{
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::OnceLock,
+};
 
-use super::common::{get_install_changes, EnvironmentUpdate};
-use super::install::find_binary_by_name;
-use super::trampoline::{self, GlobalExecutable};
-use super::{BinDir, EnvRoot, StateChange, StateChanges};
-use crate::global::common::{
-    channel_url_to_prioritized_channel, find_package_records, get_expose_scripts_sync_status,
-};
-use crate::global::find_executables_for_many_records;
-use crate::global::install::{create_executable_trampolines, script_exec_mapping};
-use crate::global::project::environment::environment_specs_in_sync;
-use crate::prefix::Executable;
-use crate::repodata::Repodata;
-use crate::rlimit::try_increase_rlimit_to_sensible;
-use crate::{
-    global::{find_executables, EnvDir},
-    prefix::Prefix,
-};
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
@@ -47,14 +36,30 @@ use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
-use std::{
-    ffi::OsStr,
-    fmt::{Debug, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::OnceLock,
-};
 use toml_edit::DocumentMut;
+
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use super::{
+    common::{get_install_changes, EnvironmentUpdate},
+    install::find_binary_by_name,
+    trampoline::{self, GlobalExecutable},
+    BinDir, EnvRoot, StateChange, StateChanges,
+};
+use crate::{
+    global::{
+        common::{
+            channel_url_to_prioritized_channel, find_package_records,
+            get_expose_scripts_sync_status,
+        },
+        find_executables, find_executables_for_many_records,
+        install::{create_executable_trampolines, script_exec_mapping},
+        project::environment::environment_specs_in_sync,
+        EnvDir,
+    },
+    prefix::{Executable, Prefix},
+    repodata::Repodata,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 
 mod environment;
 mod manifest;
@@ -485,6 +490,7 @@ impl Project {
 
         let (match_specs, dependencies_names) = environment
             .dependencies
+            .specs
             .iter()
             .map(|(name, spec)| {
                 if let Some(nameless_spec) = spec
@@ -790,6 +796,7 @@ impl Project {
 
         let specs = environment
             .dependencies
+            .specs
             .iter()
             .map(|(name, spec)| {
                 let match_spec = MatchSpec::from_nameless(

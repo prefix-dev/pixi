@@ -157,6 +157,9 @@ class Workspace(StrictBaseModel):
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
     )
+    build_variants: dict[NonEmptyStr, list[str]] | None = Field(
+        None, description="The build variants of the project"
+    )
 
 
 class Package(StrictBaseModel):
@@ -238,17 +241,17 @@ CondaPackageName = NonEmptyStr
 # The Build section #
 #####################
 class BuildSystem(StrictBaseModel):
-    channels: list[Channel] = Field(
-        None,
-        description="The `conda` channels that will be used to get build dependencies",
-    )
-    dependencies: list[MatchSpec] = Field(
-        None, description="The dependencies for the build backend"
-    )
-    build_backend: NonEmptyStr = Field(None, description="The build executable to call")
+    build_backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
     )
+    additional_dependencies: Dependencies = Field(
+        None, description="Additional dependencies to install alongside the build backend"
+    )
+
+
+class BuildBackend(MatchspecTable):
+    name: NonEmptyStr = Field(None, description="The name of the build backend package")
 
 
 class _PyPIRequirement(StrictBaseModel):
@@ -610,6 +613,9 @@ class BaseManifest(StrictBaseModel):
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
+    run_dependencies: Dependencies = Field(
+        None, description="The run-dependencies for the [package]"
+    )
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
     )
@@ -644,6 +650,9 @@ class BaseManifest(StrictBaseModel):
     )
     build_system: BuildSystem | None = Field(
         None, description="The build-system used to build the package."
+    )
+    build_backend: dict[NonEmptyStr, Any] | None = Field(
+        None, description="Configuration for the build backend."
     )
 
 

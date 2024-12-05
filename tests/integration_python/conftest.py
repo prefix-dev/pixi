@@ -19,8 +19,23 @@ def pixi(request: pytest.FixtureRequest) -> Path:
 
 
 @pytest.fixture
-def channels() -> Path:
-    return Path(__file__).parent.parent.joinpath("data", "channels", "channels").resolve()
+def tmp_pixi_workspace(tmp_path: Path) -> Path:
+    pixi_config = """
+[repodata-config."https://prefix.dev/"]
+disable-sharded = false
+"""
+    tmp_path.joinpath("config.toml").write_text(pixi_config)
+    return tmp_path
+
+
+@pytest.fixture
+def test_data() -> Path:
+    return Path(__file__).parents[1].joinpath("data").resolve()
+
+
+@pytest.fixture
+def channels(test_data: Path) -> Path:
+    return test_data.joinpath("channels", "channels")
 
 
 @pytest.fixture

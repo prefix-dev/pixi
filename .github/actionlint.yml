@@ -1,0 +1,10 @@
+self-hosted-runner:
+  labels:
+    - 8core_ubuntu_latest_runner
+    - 16core_windows_latest_runner
+
+paths:
+  .github/workflows/release.yml:
+    # This file is auto-generated so just ignore any error
+    ignore:
+    - .*

@@ -30,7 +30,7 @@ impl UvResolutionContext {
     pub(crate) fn from_project(project: &Project) -> miette::Result<Self> {
         let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
         if !uv_cache.exists() {
-            std::fs::create_dir_all(&uv_cache)
+            fs_err::create_dir_all(&uv_cache)
                 .into_diagnostic()
                 .context("failed to create uv cache directory")?;
         }

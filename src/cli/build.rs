@@ -3,7 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::Duration};
 use clap::{ArgAction, Parser};
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{CondaBuildReporter, SetupRequest};
+use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
     procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
 };
@@ -100,7 +100,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_tool_context(Arc::new(tool_context))
         .setup_protocol(SetupRequest {
             source_dir: project.root().to_path_buf(),
-            build_tool_override: None,
+            build_tool_override: BackendOverride::from_env(),
             build_id: 0,
         })
         .await
@@ -119,6 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 pixi_dir.display()
             )
         })?;
+
     let work_dir = tempfile::Builder::new()
         .prefix("pixi-build-")
         .tempdir_in(project.pixi_dir())
@@ -165,6 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 },
                 outputs: None,
                 work_directory: work_dir.path().to_path_buf(),
+                variant_configuration: Some(Default::default()),
             },
             progress.clone(),
         )
@@ -174,7 +176,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Move the built packages to the output directory.
     let output_dir = args.output_dir;
     for package in result.packages {
-        std::fs::create_dir_all(&output_dir)
+        fs_err::create_dir_all(&output_dir)
             .into_diagnostic()
             .with_context(|| {
                 format!(

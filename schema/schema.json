@@ -29,6 +29,11 @@
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
     },
+    "build-backend": {
+      "title": "Build-Backend",
+      "description": "Configuration for the build backend.",
+      "type": "object"
+    },
     "build-dependencies": {
       "title": "Build-Dependencies",
       "description": "The build `conda` dependencies, used in the build process",
@@ -158,6 +163,22 @@
       "$ref": "#/$defs/PyPIOptions",
       "description": "Options related to PyPI indexes, on the default feature"
     },
+    "run-dependencies": {
+      "title": "Run-Dependencies",
+      "description": "The run-dependencies for the [package]",
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "$ref": "#/$defs/MatchspecTable"
+          }
+        ]
+      }
+    },
     "system-requirements": {
       "$ref": "#/$defs/SystemRequirements",
       "description": "The system requirements of the project"
@@ -246,16 +267,135 @@
         }
       }
     },
-    "BuildSystem": {
-      "title": "BuildSystem",
+    "BuildBackend": {
+      "title": "BuildBackend",
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "build-backend": {
-          "title": "Build-Backend",
-          "description": "The build executable to call",
+        "branch": {
+          "title": "Branch",
+          "description": "A git branch to use",
           "type": "string",
           "minLength": 1
+        },
+        "build": {
+          "title": "Build",
+          "description": "The build string of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number of the package, can be a spec like `>=1` or `<=10` or `1`",
+          "type": "string",
+          "minLength": 1
+        },
+        "channel": {
+          "title": "Channel",
+          "description": "The channel the packages needs to be fetched from",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "conda-forge",
+            "pytorch",
+            "https://repo.prefix.dev/conda-forge"
+          ]
+        },
+        "file-name": {
+          "title": "File-Name",
+          "description": "The file name of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "git": {
+          "title": "Git",
+          "description": "The git URL to the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "md5": {
+          "title": "Md5",
+          "description": "The md5 hash of the package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{32}$"
+        },
+        "name": {
+          "title": "Name",
+          "description": "The name of the build backend package",
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "title": "Path",
+          "description": "The path to the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "title": "Rev",
+          "description": "A git SHA revision to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "title": "Sha256",
+          "description": "The sha256 hash of the package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "subdir": {
+          "title": "Subdir",
+          "description": "The subdir of the package, also known as platform",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "title": "Tag",
+          "description": "A git tag to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "title": "Url",
+          "description": "The URL to the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "title": "Version",
+          "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "BuildSystem": {
+      "title": "BuildSystem",
+      "type": "object",
+      "required": [
+        "build-backend"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "additional-dependencies": {
+          "title": "Additional-Dependencies",
+          "description": "Additional dependencies to install alongside the build backend",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          }
+        },
+        "build-backend": {
+          "$ref": "#/$defs/BuildBackend",
+          "description": "The build backend to instantiate"
         },
         "channels": {
           "title": "Channels",
@@ -274,22 +414,6 @@
               },
               {
                 "$ref": "#/$defs/ChannelInlineTable"
-              }
-            ]
-          }
-        },
-        "dependencies": {
-          "title": "Dependencies",
-          "description": "The dependencies for the build backend",
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
               }
             ]
           }
@@ -1418,6 +1542,17 @@
           "examples": [
             "John Doe <j.doe@prefix.dev>"
           ]
+        },
+        "build-variants": {
+          "title": "Build-Variants",
+          "description": "The build variants of the project",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",

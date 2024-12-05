@@ -24,10 +24,10 @@ const EXDEV: i32 = 17;
 /// the file if possible and otherwise copying the file and removing the
 /// original.
 pub(crate) fn move_file(from: &Path, to: &Path) -> Result<(), MoveError> {
-    if let Err(e) = std::fs::rename(from, to) {
+    if let Err(e) = fs_err::rename(from, to) {
         if e.raw_os_error() == Some(EXDEV) {
-            std::fs::copy(from, to).map_err(MoveError::CopyFailed)?;
-            std::fs::remove_file(from).map_err(MoveError::FailedToRemove)?
+            fs_err::copy(from, to).map_err(MoveError::CopyFailed)?;
+            fs_err::remove_file(from).map_err(MoveError::FailedToRemove)?
         } else {
             return Err(MoveError::MoveFailed(e));
         }

@@ -1,5 +1,6 @@
-use std::{fmt::Display, path::PathBuf};
+use std::{borrow::Cow, fmt::Display, path::PathBuf};
 
+use itertools::Either;
 use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec,
     ParseStrictness::{Lenient, Strict},
@@ -8,15 +9,17 @@ use rattler_conda_types::{
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
+use thiserror::Error;
 use url::Url;
 
-use crate::{DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
+use crate::{BinarySpec, DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
 
+/// A TOML representation of a package specification.
 #[serde_as]
-#[derive(serde::Deserialize)]
+#[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
-struct RawSpec {
+pub struct TomlSpec {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     pub version: Option<VersionSpec>,
@@ -114,6 +117,236 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
     None
 }
 
+#[derive(Error, Debug)]
+pub enum SpecError {
+    #[error("`branch`, `rev`, and `tag` are only valid when `git` is specified")]
+    NotAGitSpec,
+
+    #[error("only one of `branch`, `rev`, or `tag` can be specified")]
+    MultipleGitRefs,
+
+    #[error("one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified")]
+    MissingDetailedIdentifier,
+
+    #[error("only one of `url`, `path`, or `git` can be specified")]
+    MultipleIdentifiers,
+
+    #[error("{0} cannot be used with {1}")]
+    InvalidCombination(Cow<'static, str>, Cow<'static, str>),
+
+    #[error(transparent)]
+    NotABinary(NotBinary),
+}
+
+#[derive(Error, Debug)]
+pub enum NotBinary {
+    #[error("the url does not refer to a valid conda package archive")]
+    Url,
+
+    #[error("the path does not refer to a valid conda package archive")]
+    Path,
+
+    #[error(
+        "`git` can only refer to a source distributions but a binary distribution was expected"
+    )]
+    Git,
+}
+
+impl TomlSpec {
+    fn validate_field_combinations(&self) -> Result<(), SpecError> {
+        if self.git.is_none() && (self.branch.is_some() || self.rev.is_some() || self.tag.is_some())
+        {
+            return Err(SpecError::NotAGitSpec);
+        }
+
+        let is_git = self.git.is_some();
+        let is_path = self.path.is_some();
+        let is_url = self.url.is_some();
+
+        let git_key = is_git.then_some("`git`");
+        let path_key = is_path.then_some("`path`");
+        let url_key = is_url.then_some("`url`");
+        let non_detailed_keys = [git_key, path_key, url_key]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        if !non_detailed_keys.is_empty() && self.version.is_some() {
+            return Err(SpecError::InvalidCombination(
+                "`version`".into(),
+                non_detailed_keys.into(),
+            ));
+        }
+
+        if !non_detailed_keys.is_empty() && self.build.is_some() {
+            return Err(SpecError::InvalidCombination(
+                "`build`".into(),
+                non_detailed_keys.into(),
+            ));
+        }
+
+        if !non_detailed_keys.is_empty() && self.build_number.is_some() {
+            return Err(SpecError::InvalidCombination(
+                "`build_number`".into(),
+                non_detailed_keys.into(),
+            ));
+        }
+
+        if !non_detailed_keys.is_empty() && self.file_name.is_some() {
+            return Err(SpecError::InvalidCombination(
+                "`file_name`".into(),
+                non_detailed_keys.into(),
+            ));
+        }
+
+        if !non_detailed_keys.is_empty() && self.channel.is_some() {
+            return Err(SpecError::InvalidCombination(
+                "`channel`".into(),
+                non_detailed_keys.into(),
+            ));
+        }
+
+        if !non_detailed_keys.is_empty() && self.subdir.is_some() {
+            return Err(SpecError::InvalidCombination(
+                "`subdir`".into(),
+                non_detailed_keys.into(),
+            ));
+        }
+
+        let non_url_keys = [git_key, path_key]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !non_url_keys.is_empty() && self.sha256.is_some() {
+            return Err(SpecError::InvalidCombination(
+                "`sha256`".into(),
+                non_url_keys.into(),
+            ));
+        }
+        if !non_url_keys.is_empty() && self.md5.is_some() {
+            return Err(SpecError::InvalidCombination(
+                "`md5`".into(),
+                non_url_keys.into(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Convert the TOML representation into an actual [`PixiSpec`].
+    pub fn into_spec(self) -> Result<PixiSpec, SpecError> {
+        self.validate_field_combinations()?;
+
+        let spec = match (self.url, self.path, self.git) {
+            (Some(url), None, None) => PixiSpec::Url(UrlSpec {
+                url,
+                md5: self.md5,
+                sha256: self.sha256,
+            }),
+            (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
+            (None, None, Some(git)) => {
+                let rev = match (self.branch, self.rev, self.tag) {
+                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
+                    (None, None, None) => None,
+                    _ => {
+                        return Err(SpecError::MultipleGitRefs);
+                    }
+                };
+                PixiSpec::Git(GitSpec { git, rev })
+            }
+            (None, None, None) => {
+                let is_detailed = self.version.is_some()
+                    || self.build.is_some()
+                    || self.build_number.is_some()
+                    || self.file_name.is_some()
+                    || self.channel.is_some()
+                    || self.subdir.is_some()
+                    || self.md5.is_some()
+                    || self.sha256.is_some();
+                if !is_detailed {
+                    return Err(SpecError::MissingDetailedIdentifier);
+                }
+
+                PixiSpec::DetailedVersion(DetailedSpec {
+                    version: self.version,
+                    build: self.build,
+                    build_number: self.build_number,
+                    file_name: self.file_name,
+                    channel: self.channel,
+                    subdir: self.subdir,
+                    md5: self.md5,
+                    sha256: self.sha256,
+                })
+            }
+            (_, _, _) => return Err(SpecError::MultipleIdentifiers),
+        };
+
+        Ok(spec)
+    }
+
+    /// Convert the TOML representation into an actual [`PixiSpec`].
+    pub fn into_binary_spec(self) -> Result<BinarySpec, SpecError> {
+        self.validate_field_combinations()?;
+
+        let spec = match (self.url, self.path, self.git) {
+            (Some(url), None, None) => {
+                let url_spec = UrlSpec {
+                    url,
+                    md5: self.md5,
+                    sha256: self.sha256,
+                };
+                if let Either::Right(binary) = url_spec.into_source_or_binary() {
+                    BinarySpec::Url(binary)
+                } else {
+                    return Err(SpecError::NotABinary(NotBinary::Url));
+                }
+            }
+            (None, Some(path), None) => {
+                let path_spec = PathSpec { path: path.into() };
+                if let Either::Right(binary) = path_spec.into_source_or_binary() {
+                    BinarySpec::Path(binary)
+                } else {
+                    return Err(SpecError::NotABinary(NotBinary::Path));
+                }
+            }
+            (None, None, Some(_git)) => {
+                return Err(SpecError::NotABinary(NotBinary::Git));
+            }
+            (None, None, None) => {
+                let is_detailed = self.version.is_some()
+                    || self.build.is_some()
+                    || self.build_number.is_some()
+                    || self.file_name.is_some()
+                    || self.channel.is_some()
+                    || self.subdir.is_some()
+                    || self.md5.is_some()
+                    || self.sha256.is_some();
+                if !is_detailed {
+                    return Err(SpecError::MissingDetailedIdentifier);
+                }
+
+                BinarySpec::DetailedVersion(DetailedSpec {
+                    version: self.version,
+                    build: self.build,
+                    build_number: self.build_number,
+                    file_name: self.file_name,
+                    channel: self.channel,
+                    subdir: self.subdir,
+                    md5: self.md5,
+                    sha256: self.sha256,
+                })
+            }
+            (_, _, _) => return Err(SpecError::MultipleIdentifiers),
+        };
+
+        Ok(spec)
+    }
+}
+
 impl<'de> Deserialize<'de> for PixiSpec {
     fn deserialize<D>(deserializer: D) -> Result<PixiSpec, D::Error>
     where
@@ -125,150 +358,18 @@ impl<'de> Deserialize<'de> for PixiSpec {
             )
             .string(|str| {
                 VersionSpec::from_str(str, Strict)
-                    .map_err(|_err|{
+                    .map_err(|_err| {
                         if let Some(msg) = version_spec_error(str) {
                             serde_untagged::de::Error::custom(msg)
                         } else {
                             serde_untagged::de::Error::custom("invalid version specifier")
                         }
-                                            })
+                    })
                     .map(PixiSpec::Version)
             })
             .map(|map| {
-                let raw_spec: RawSpec = map.deserialize()?;
-
-                if raw_spec.git.is_none()
-                    && (raw_spec.branch.is_some()
-                        || raw_spec.rev.is_some()
-                        || raw_spec.tag.is_some())
-                {
-                    return Err(serde_untagged::de::Error::custom(
-                        "`branch`, `rev`, and `tag` are only valid when `git` is specified",
-                    ));
-                }
-
-                let is_git = raw_spec.git.is_some();
-                let is_path = raw_spec.path.is_some();
-                let is_url = raw_spec.url.is_some();
-
-
-                let git_key = is_git.then_some("`git`");
-                let path_key = is_path.then_some("`path`");
-                let url_key = is_url.then_some("`url`");
-                let non_detailed_keys = [git_key, path_key, url_key]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                if !non_detailed_keys.is_empty() && raw_spec.version.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("`version` cannot be used with {non_detailed_keys}"),
-                    ));
-                }
-
-                if !non_detailed_keys.is_empty() && raw_spec.build.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("`build` cannot be used with {non_detailed_keys}"),
-                    ));
-                }
-
-                if !non_detailed_keys.is_empty() && raw_spec.build_number.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("`build` cannot be used with {non_detailed_keys}"),
-                    ));
-                }
-
-                if !non_detailed_keys.is_empty() && raw_spec.file_name.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("`build` cannot be used with {non_detailed_keys}"),
-                    ));
-                }
-
-                if !non_detailed_keys.is_empty() && raw_spec.channel.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("`build` cannot be used with {non_detailed_keys}"),
-                    ));
-                }
-
-                if !non_detailed_keys.is_empty() && raw_spec.subdir.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("`build` cannot be used with {non_detailed_keys}"),
-                    ));
-                }
-
-                let non_url_keys = [git_key, path_key]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                if !non_url_keys.is_empty() && raw_spec.sha256.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("`sha256` cannot be used with {non_url_keys}"),
-                    ));
-                }
-                if !non_url_keys.is_empty() && raw_spec.md5.is_some() {
-                    return Err(serde_untagged::de::Error::custom(
-                        format!("`md5` cannot be used with {non_url_keys}"),
-                    ));
-                }
-
-                let spec = match (raw_spec.url, raw_spec.path, raw_spec.git) {
-                    (Some(url), None, None) => PixiSpec::Url(UrlSpec {
-                        url,
-                        md5: raw_spec.md5,
-                        sha256: raw_spec.sha256,
-                    }),
-                    (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
-                    (None, None, Some(git)) => {
-                        let rev = match (raw_spec.branch, raw_spec.rev, raw_spec.tag) {
-                            (Some(branch), None, None) => Some(GitReference::Branch(branch)),
-                            (None, Some(rev), None) => Some(GitReference::Rev(rev)),
-                            (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
-                            (None, None, None) => None,
-                            _ => {
-                                return Err(serde_untagged::de::Error::custom(
-                                    "only one of `branch`, `rev`, or `tag` can be specified",
-                                ));
-                            }
-                        };
-                        PixiSpec::Git(GitSpec { git, rev })
-                    },
-                    (None, None, None) => {
-                        let is_detailed =
-                            raw_spec.version.is_some() ||
-                                raw_spec.build.is_some() ||
-                                raw_spec.build_number.is_some() ||
-                                raw_spec.file_name.is_some() ||
-                                raw_spec.channel.is_some() ||
-                                raw_spec.subdir.is_some() ||
-                                raw_spec.md5.is_some() ||
-                                raw_spec.sha256.is_some();
-                        if !is_detailed {
-                            return Err(serde_untagged::de::Error::custom(
-                                "one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified",
-                            ))
-                        }
-
-                        PixiSpec::DetailedVersion(DetailedSpec {
-                            version: raw_spec.version,
-                            build: raw_spec.build,
-                            build_number: raw_spec.build_number,
-                            file_name: raw_spec.file_name,
-                            channel: raw_spec.channel,
-                            subdir: raw_spec.subdir,
-                            md5: raw_spec.md5,
-                            sha256: raw_spec.sha256,
-                        })
-                    }
-                    (_, _, _) => {
-                        return Err(serde_untagged::de::Error::custom(
-                            "only one of `url`, `path`, or `git` can be specified",
-                        ))
-                    }
-                };
-
-                Ok(spec)
+                let spec: TomlSpec = map.deserialize()?;
+                spec.into_spec().map_err(serde_untagged::de::Error::custom)
             })
             .deserialize(deserializer)
     }
