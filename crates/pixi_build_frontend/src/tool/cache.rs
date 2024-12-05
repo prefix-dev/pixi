@@ -39,6 +39,7 @@ pub struct ToolCache {
     /// The cache of tools.
     cache: DashMap<IsolatedToolSpec, PendingOrFetched<Arc<IsolatedTool>>>,
 }
+
 /// Finds the `PrefixRecord`s from `conda-meta` directory which starts with `Matchspec` names.
 pub(crate) async fn find_spec_records(
     conda_meta: &Path,
@@ -176,7 +177,7 @@ impl ToolCache {
         //
 
         // Let's start by finding already existing matchspec
-        let tool = match self.get_file_system_cached(&spec, cache_dir).await.unwrap() {
+        let tool = match self.get_file_system_cached(&spec, cache_dir).await? {
             // Let's start by installing tool. If an error occurs we immediately return
             // the error. This will drop the sender and all other waiting tasks will
             // receive an error.

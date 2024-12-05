@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::path::PathBuf;
 
-use pixi_consts::consts::{CACHED_BUILD_ENVS_DIR, CONDA_REPODATA_CACHE_DIR};
+use pixi_consts::consts::CACHED_BUILD_ENVS_DIR;
 use pixi_progress::wrap_in_progress;
 use pixi_utils::{EnvironmentHash, PrefixGuard};
 use rattler::{install::Installer, package_cache::PackageCache};
@@ -93,12 +93,9 @@ impl ToolContextBuilder {
 
     /// Build the `ToolContext` using builder configuration.
     pub fn build(self) -> ToolContext {
-        let gateway = self.gateway.unwrap_or_else(|| {
-            Gateway::builder()
-                .with_client(self.client.clone())
-                .with_cache_dir(self.cache_dir.join(CONDA_REPODATA_CACHE_DIR))
-                .finish()
-        });
+        let gateway = self
+            .gateway
+            .unwrap_or_else(|| Gateway::builder().with_client(self.client.clone()).finish());
 
         ToolContext {
             cache_dir: self.cache_dir,
@@ -244,6 +241,13 @@ impl ToolInstaller for ToolContext {
             channels.iter().map(|c| c.base_url.to_string()).collect(),
             self.platform,
         );
+
+        // ensure that the cache directory exists
+        if !self.cache_dir.exists() {
+            tokio::fs::create_dir(&self.cache_dir)
+                .await
+                .into_diagnostic()?;
+        }
 
         let cached_dir = self.cache_dir.join(cache.name());
 

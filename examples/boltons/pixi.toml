@@ -25,7 +25,7 @@ version = "0.1.0"
 hatchling = "*"
 
 [build-system]
-build-backend = { name = "pixi-build-rattler-build", version = ">0.0.1" }
+build-backend = { name = "pixi-build-rattler-build", version = "*" }
 channels = [
   "https://repo.prefix.dev/pixi-build-backends",
   "https://fast.prefix.dev/conda-forge",
