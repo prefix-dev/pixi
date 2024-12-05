@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::path::PathBuf;
 
-use pixi_consts::consts::CACHED_BUILD_ENVS_DIR;
+use pixi_consts::consts::CACHED_BUILD_TOOL_ENVS_DIR;
 use pixi_progress::wrap_in_progress;
 use pixi_utils::{EnvironmentHash, PrefixGuard};
 use rattler::{install::Installer, package_cache::PackageCache};
@@ -54,7 +54,7 @@ impl ToolContextBuilder {
             client: ClientWithMiddleware::default(),
             cache_dir: pixi_config::get_cache_dir()
                 .expect("we should have a cache dir")
-                .join(CACHED_BUILD_ENVS_DIR),
+                .join(CACHED_BUILD_TOOL_ENVS_DIR),
             cache: ToolCache::default(),
             platform: Platform::current(),
         }
