@@ -470,6 +470,11 @@ impl ManifestSource {
             .is_some())
     }
 
+    /// Sets the name of the project
+    pub fn set_name(&mut self, name: &str) {
+        self.as_table_mut()["project"]["name"] = value(name);
+    }
+
     /// Sets the description of the project
     pub fn set_description(&mut self, description: &str) {
         self.as_table_mut()["project"]["description"] = value(description);
