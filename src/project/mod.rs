@@ -1043,7 +1043,7 @@ pub(crate) fn find_project_manifest(current_dir: PathBuf) -> Option<PathBuf> {
             match *manifest {
                 consts::PROJECT_MANIFEST => return Some(path),
                 consts::PYPROJECT_MANIFEST => {
-                    if let Ok(content) = std::fs::read_to_string(&path) {
+                    if let Ok(content) = fs_err::read_to_string(&path) {
                         if content.contains("[tool.pixi") {
                             return Some(path);
                         }
@@ -1523,13 +1523,13 @@ mod tests {
         writeln!(file, "[project]").unwrap();
 
         // Pixi child manifest is pyproject.toml with pixi tool
-        std::fs::create_dir_all(&pixi_child_dir).unwrap();
+        fs_err::create_dir_all(&pixi_child_dir).unwrap();
         let mut file = File::create(&manifest_path_pixi_child).unwrap();
         writeln!(file, "[project]").unwrap();
         writeln!(file, "[tool.pixi.project]").unwrap();
 
         // Non pixi child manifest is pyproject.toml without pixi tool
-        std::fs::create_dir_all(&non_pixi_child_dir).unwrap();
+        fs_err::create_dir_all(&non_pixi_child_dir).unwrap();
         let mut file = File::create(&manifest_path_non_pixi_child).unwrap();
         writeln!(file, "[project]").unwrap();
 

@@ -29,8 +29,13 @@ disable-sharded = false
 
 
 @pytest.fixture
-def channels() -> Path:
-    return Path(__file__).parent.parent.joinpath("data", "channels", "channels").resolve()
+def test_data() -> Path:
+    return Path(__file__).parents[1].joinpath("data").resolve()
+
+
+@pytest.fixture
+def channels(test_data: Path) -> Path:
+    return test_data.joinpath("channels", "channels")
 
 
 @pytest.fixture

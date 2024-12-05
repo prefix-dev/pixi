@@ -619,7 +619,7 @@ async fn test_file_url_as_mapping_location() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let mapping_file = tmp_dir.path().join("custom_mapping.json");
 
-    let _ = std::fs::write(
+    let _ = fs_err::write(
         &mapping_file,
         r#"
     {

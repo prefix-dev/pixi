@@ -10,6 +10,8 @@ use pixi_manifest::task::{quote, Alias, CmdArgs, Execute, Task, TaskName};
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
+use serde::Serialize;
+use serde_with::serde_as;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::error::Error;
 use std::io;
@@ -135,6 +137,11 @@ pub struct ListArgs {
     /// If not specified, the default environment is used.
     #[arg(long, short)]
     pub environment: Option<String>,
+
+    /// List as json instead of a tree
+    /// If not specified, the default environment is used.
+    #[arg(long)]
+    pub json: bool,
 }
 
 impl From<AddArgs> for Task {
@@ -368,6 +375,11 @@ pub fn execute(args: Args) -> miette::Result<()> {
             );
         }
         Operation::List(args) => {
+            if args.json {
+                print_tasks_json(&project);
+                return Ok(());
+            }
+
             let explicit_environment = args
                 .environment
                 .map(|n| EnvironmentName::from_str(n.as_str()))
@@ -438,4 +450,108 @@ pub fn execute(args: Args) -> miette::Result<()> {
 
     Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
+}
+
+fn print_tasks_json(project: &Project) {
+    let env_feature_task_map: Vec<EnvTasks> = build_env_feature_task_map(project);
+
+    let json_string =
+        serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");
+    println!("{}", json_string);
+}
+
+fn build_env_feature_task_map(project: &Project) -> Vec<EnvTasks> {
+    project
+        .environments()
+        .iter()
+        .sorted_by_key(|env| env.name().to_string())
+        .filter_map(|env: &Environment<'_>| {
+            if verify_current_platform_has_required_virtual_packages(env).is_err() {
+                return None;
+            }
+            Some(EnvTasks::from(env))
+        })
+        .collect()
+}
+
+#[derive(Serialize, Debug)]
+struct EnvTasks {
+    environment: String,
+    features: Vec<SerializableFeature>,
+}
+
+impl From<&Environment<'_>> for EnvTasks {
+    fn from(env: &Environment) -> Self {
+        Self {
+            environment: env.name().to_string(),
+            features: env
+                .feature_tasks()
+                .iter()
+                .map(|(feature_name, task_map)| {
+                    SerializableFeature::from((*feature_name, task_map))
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Serialize, Debug)]
+struct SerializableFeature {
+    name: String,
+    tasks: Vec<SerializableTask>,
+}
+
+#[derive(Serialize, Debug)]
+struct SerializableTask {
+    name: String,
+    #[serde(flatten)]
+    info: TaskInfo,
+}
+
+impl From<(&FeatureName, &HashMap<&TaskName, &Task>)> for SerializableFeature {
+    fn from((feature_name, task_map): (&FeatureName, &HashMap<&TaskName, &Task>)) -> Self {
+        Self {
+            name: feature_name.to_string(),
+            tasks: task_map
+                .iter()
+                .map(|(task_name, task)| SerializableTask {
+                    name: task_name.to_string(),
+                    info: TaskInfo::from(*task),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// Collection of task properties for displaying in the UI.
+#[serde_as]
+#[derive(Serialize, Debug)]
+pub struct TaskInfo {
+    cmd: Option<String>,
+    description: Option<String>,
+    depends_on: Vec<TaskName>,
+    cwd: Option<PathBuf>,
+    env: Option<IndexMap<String, String>>,
+    clean_env: bool,
+    inputs: Option<Vec<String>>,
+    outputs: Option<Vec<String>>,
+}
+
+impl From<&Task> for TaskInfo {
+    fn from(task: &Task) -> Self {
+        TaskInfo {
+            cmd: task.as_single_command().map(|cmd| cmd.to_string()),
+            description: task.description().map(|desc| desc.to_string()),
+            depends_on: task.depends_on().to_vec(),
+            cwd: task.working_directory().map(PathBuf::from),
+            env: task.env().cloned(),
+            clean_env: task.clean_env(),
+            inputs: task
+                .inputs()
+                .map(|inputs| inputs.iter().map(String::from).collect()),
+            outputs: task
+                .outputs()
+                .map(|outputs| outputs.iter().map(String::from).collect()),
+        }
+    }
 }

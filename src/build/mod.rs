@@ -2,6 +2,7 @@ mod cache;
 mod reporters;
 
 use std::{
+    collections::HashMap,
     ffi::OsStr,
     hash::{Hash, Hasher},
     ops::Not,
@@ -13,7 +14,7 @@ use std::{
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
-use miette::Diagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
@@ -22,6 +23,7 @@ use pixi_build_types::{
     },
     ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
 };
+use pixi_config::get_cache_dir;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
@@ -52,6 +54,7 @@ pub struct BuildContext {
     cache_dir: PathBuf,
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
+    variant_config: Option<HashMap<String, Vec<String>>>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -114,6 +117,7 @@ impl BuildContext {
         cache_dir: PathBuf,
         dot_pixi_dir: PathBuf,
         channel_config: ChannelConfig,
+        variant_config: Option<HashMap<String, Vec<String>>>,
         tool_context: Arc<ToolContext>,
     ) -> Result<Self, std::io::Error> {
         Ok(Self {
@@ -124,7 +128,31 @@ impl BuildContext {
             cache_dir,
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
+            variant_config,
         })
+    }
+
+    pub fn from_project(project: &crate::project::Project) -> miette::Result<Self> {
+        Self::new(
+            get_cache_dir()?,
+            project.pixi_dir(),
+            project.channel_config(),
+            project
+                .manifest()
+                .workspace
+                .workspace
+                .build_variants
+                .clone(),
+            Arc::new(ToolContext::default()),
+        )
+        .into_diagnostic()
+    }
+
+    pub fn with_tool_context(self, tool_context: Arc<ToolContext>) -> Self {
+        Self {
+            tool_context,
+            ..self
+        }
     }
 
     /// Sets the input hash cache to use for caching input hashes.
@@ -291,6 +319,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
+                    variant_configuration: self.variant_config.clone(),
                 },
                 build_reporter.as_conda_build_reporter(),
             )
@@ -529,6 +558,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
+                    variant_configuration: self.variant_config.clone(),
                 },
                 metadata_reporter.as_conda_metadata_reporter().clone(),
             )

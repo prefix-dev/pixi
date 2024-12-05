@@ -186,7 +186,7 @@ exposed = {{ dummy-d = "dummy-d" }}
 [envs.test2]
 channels = ["https://prefix.dev/conda-forge"]
 # Small package with binary for testing purposes
-dependencies = {{ xz = "*" }}
+dependencies = {{ xz-tools = "*" }}
 exposed = {{ xz = "xz" }}
 """
     manifest.write_text(toml)

@@ -24,7 +24,7 @@ pub struct TomlBuildSystem {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct TomlBuildBackend {
-    pub name: rattler_conda_types::PackageName,
+    pub name: PixiSpanned<rattler_conda_types::PackageName>,
 
     #[serde(flatten)]
     pub spec: TomlSpec,
@@ -80,8 +80,9 @@ impl TomlBuildSystem {
 
         Ok(BuildSystem {
             build_backend: BuildBackend {
-                name: self.build_backend.value.name,
+                name: self.build_backend.value.name.value,
                 spec: build_backend_spec,
+                additional_args: None,
             },
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),

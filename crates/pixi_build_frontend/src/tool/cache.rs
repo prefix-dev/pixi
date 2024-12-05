@@ -397,9 +397,7 @@ mod tests {
             .await
             .unwrap();
 
-        let exec = tool.as_executable().unwrap();
-
-        exec.command().arg("--version").spawn().unwrap();
+        tool.command().arg("--version").spawn().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

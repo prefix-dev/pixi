@@ -11,7 +11,6 @@ use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use std::{
     collections::{BTreeSet as Set, HashMap},
-    fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
@@ -747,7 +746,7 @@ impl Config {
     /// I/O errors or parsing errors
     pub fn from_path(path: &Path) -> miette::Result<Config> {
         tracing::debug!("Loading config from {}", path.display());
-        let s = fs::read_to_string(path)
+        let s = fs_err::read_to_string(path)
             .into_diagnostic()
             .wrap_err(format!("failed to read config from '{}'", path.display()))?;
 
@@ -1201,13 +1200,13 @@ impl Config {
         tracing::debug!("Saving config to: {}", to.display());
 
         let parent = to.parent().expect("config path should have a parent");
-        fs::create_dir_all(parent)
+        fs_err::create_dir_all(parent)
             .into_diagnostic()
             .wrap_err(format!(
                 "failed to create directories in '{}'",
                 parent.display()
             ))?;
-        fs::write(to, contents)
+        fs_err::write(to, contents)
             .into_diagnostic()
             .wrap_err(format!("failed to write config to '{}'", to.display()))
     }

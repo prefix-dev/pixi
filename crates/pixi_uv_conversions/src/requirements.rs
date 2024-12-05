@@ -87,6 +87,7 @@ pub fn as_uv_req(
             RequirementSource::Registry {
                 specifier: to_version_specificers(version)?,
                 index: index.clone(),
+                conflict: None,
             }
         }
         PyPiRequirement::Git {
@@ -176,6 +177,7 @@ pub fn as_uv_req(
         PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
             specifier: to_version_specificers(version)?,
             index: None,
+            conflict: None,
         },
     };
 

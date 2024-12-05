@@ -472,7 +472,6 @@ mod tests {
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
         use crate::global::trampoline::GlobalExecutable;
-        use std::fs;
         use std::path::Path;
         let script_without_quote = r#"
 @SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
@@ -482,7 +481,7 @@ mod tests {
         let script_path = Path::new("hyperfine.bat");
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script_without_quote).unwrap();
+        fs_err::write(&script_path, script_without_quote).unwrap();
         let script_global_bin = GlobalExecutable::Script(script_path);
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
@@ -497,7 +496,7 @@ mod tests {
 "#;
         let script_path = Path::new("pydoc.bat");
         let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script_with_quote).unwrap();
+        fs_err::write(&script_path, script_with_quote).unwrap();
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(
             executable_path,
@@ -508,7 +507,7 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn test_extract_executable_from_script_unix() {
-        use std::{fs, path::Path};
+        use std::path::Path;
 
         use crate::global::trampoline::GlobalExecutable;
 
@@ -520,7 +519,7 @@ export CONDA_PREFIX="/home/user/.pixi/envs/nushell"
         let script_path = Path::new("nu");
         let tempdir = tempfile::tempdir().unwrap();
         let script_path = tempdir.path().join(script_path);
-        fs::write(&script_path, script).unwrap();
+        fs_err::write(&script_path, script).unwrap();
         let script_global_bin = GlobalExecutable::Script(script_path);
         let executable_path = script_global_bin.executable().await.unwrap();
         assert_eq!(

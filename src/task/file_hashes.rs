@@ -177,7 +177,7 @@ fn compute_file_hash(path: &Path) -> Result<String, FileHashesError> {
 mod test {
     use super::*;
     use assert_matches::assert_matches;
-    use std::fs::{create_dir, write};
+    use fs_err::{create_dir, write};
     use tempfile::tempdir;
 
     #[tokio::test]
