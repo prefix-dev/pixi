@@ -4330,9 +4330,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.28.4"
+version = "0.28.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "360e9b22e6e3a43e0f801050aa7ad457861fa34df1914132c53266ca5a4ab7c2"
+checksum = "238dd1b6ca1f2e622e438092e6523a37c6b018e25b236406a6aa182d13885b39"
 dependencies = [
  "anyhow",
  "clap",
@@ -4371,9 +4371,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.2.12"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d884a3183c7f986b158260394824a7ddcd3ca64e4664e58ce45ea3322b4d46d"
+checksum = "63a90b8eb4a8406619d0685a18d0f55ffae762399258ca5eb422c55ba1fe7282"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4488,9 +4488,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.21.7"
+version = "0.21.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01eaebf490a9057e0d2e0623a589573dc4c722e83f066b3ce6d50c2d185bae24"
+checksum = "40f5ad1da789b5bbe9585b4d255f2df82c676a951e2f002a76bf9fa7389c4962"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4517,9 +4517,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.15"
+version = "0.22.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b4f0a36ab3dfdd75770abb9c8998a83df04b3917240f31896cad21d4739de3b"
+checksum = "7b881c9f633407c171a62809e754315e09d273edcf4e9217d2cc4b102721e65c"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4557,9 +4557,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.21.24"
+version = "0.21.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5bde2d1b88382d83283c88120dd7b56f22c19a42083bbaf6e5ab3bbba01af8c8"
+checksum = "315d710364bd4ca46ed37fbb06f50d3e4774f5b7775fb77f1f232d35632fa149"
 dependencies = [
  "anyhow",
  "async-compression",
