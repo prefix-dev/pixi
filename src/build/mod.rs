@@ -168,11 +168,15 @@ impl BuildContext {
 
     fn resolve_variant(&self, platform: Platform) -> HashMap<String, Vec<String>> {
         let mut result = HashMap::new();
-        for item in self.variant_config.resolve(Some(platform)) {
-            if let Some(variants) = item {
-                result.extend(variants.clone());
+
+        // Resolves from most specific to least specific.
+        for variants in self.variant_config.resolve(Some(platform)).flatten() {
+            // Update the hash map, but only items that are not already in the map.
+            for (key, value) in variants {
+                result.entry(key.clone()).or_insert_with(|| value.clone());
             }
         }
+
         tracing::info!(
             "resolved variant configuration for {}: {:?}",
             platform,
