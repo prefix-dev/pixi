@@ -52,9 +52,7 @@ impl ToolContextBuilder {
         Self {
             gateway: None,
             client: ClientWithMiddleware::default(),
-            cache_dir: pixi_config::get_cache_dir()
-                .expect("we should have a cache dir")
-                .join(CACHED_BUILD_TOOL_ENVS_DIR),
+            cache_dir: pixi_config::get_cache_dir().expect("we should have a cache dir"),
             cache: ToolCache::default(),
             platform: Platform::current(),
         }
@@ -93,9 +91,12 @@ impl ToolContextBuilder {
 
     /// Build the `ToolContext` using builder configuration.
     pub fn build(self) -> ToolContext {
-        let gateway = self
-            .gateway
-            .unwrap_or_else(|| Gateway::builder().with_client(self.client.clone()).finish());
+        let gateway = self.gateway.unwrap_or_else(|| {
+            Gateway::builder()
+                .with_cache_dir(self.cache_dir.clone())
+                .with_client(self.client.clone())
+                .finish()
+        });
 
         ToolContext {
             cache_dir: self.cache_dir,
@@ -113,7 +114,8 @@ impl ToolContextBuilder {
 pub struct ToolContext {
     // Authentication client to use for fetching repodata.
     pub client: ClientWithMiddleware,
-    // The cache directory to use for the tools.
+    // The cache directory to use while installing tools.
+    // This cache directory is also passed to the Gateway and Installer.
     pub cache_dir: PathBuf,
     // The gateway to use for fetching repodata.
     pub gateway: Gateway,
@@ -183,7 +185,12 @@ impl ToolContext {
 
         let installed = self
             .cache
-            .get_or_install_tool(spec, self, &self.cache_dir, channel_config)
+            .get_or_install_tool(
+                spec,
+                self,
+                &self.cache_dir.join(CACHED_BUILD_TOOL_ENVS_DIR),
+                channel_config,
+            )
             .await
             .map_err(ToolCacheError::Install)?;
 
@@ -249,7 +256,10 @@ impl ToolInstaller for ToolContext {
                 .into_diagnostic()?;
         }
 
-        let cached_dir = self.cache_dir.join(cache.name());
+        let cached_dir = self
+            .cache_dir
+            .join(CACHED_BUILD_TOOL_ENVS_DIR)
+            .join(cache.name());
 
         let mut prefix_guard = PrefixGuard::new(&cached_dir).into_diagnostic()?;
 

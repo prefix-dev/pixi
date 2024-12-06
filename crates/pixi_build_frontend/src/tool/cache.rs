@@ -182,9 +182,19 @@ impl ToolCache {
             // the error. This will drop the sender and all other waiting tasks will
             // receive an error.
             // Installation happens outside the critical section
-            None => context.install(&spec, channel_config).await?,
+            None => {
+                tracing::debug!("not found any existing environment for {:?}", spec.specs);
+                context.install(&spec, channel_config).await?
+            }
 
-            Some(tool) => tool,
+            Some(tool) => {
+                tracing::debug!(
+                    "reusing existing environment in {} for {:?}",
+                    tool.prefix.display(),
+                    spec.specs
+                );
+                tool
+            }
         };
 
         let tool = Arc::new(tool);
@@ -271,14 +281,9 @@ impl ToolCache {
                 records.0.to_path_buf(),
                 activation_scripts,
             );
-            tracing::debug!(
-                "reusing existing environment in {} for {:?}",
-                records.0.display(),
-                spec.specs
-            );
+
             return Ok(Some(cached_tool));
         }
-        tracing::debug!("not found any existing environment for {:?}", spec.specs);
         Ok(None)
     }
 }
@@ -598,13 +603,7 @@ mod tests {
             .collect::<Vec<_>>();
 
         // now we need to validate that exactly one install was errored out
-        let errors = tools
-            .iter()
-            .filter(|tool| {
-                dbg!(tool);
-                tool.is_err()
-            })
-            .count();
+        let errors = tools.iter().filter(|tool| tool.is_err()).count();
         assert_eq!(errors, 1);
 
         let lock = tool_installer.count.lock().await;
