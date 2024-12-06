@@ -16,7 +16,7 @@ use utils::elapsed;
 use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound};
-use uv_dispatch::BuildDispatch;
+use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{DependencyMetadata, IndexLocations, Name};
 use uv_git::GitResolver;
@@ -122,6 +122,14 @@ pub async fn update_python_distributions(
 
     let dep_metadata = DependencyMetadata::default();
     let constraints = Constraints::default();
+
+    let shared_state = SharedState::new(
+        git_resolver,
+        in_memory_index,
+        uv_context.in_flight.clone(),
+        uv_context.capabilities.clone(),
+    );
+
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,
@@ -130,10 +138,7 @@ pub async fn update_python_distributions(
         &index_locations,
         &flat_index,
         &dep_metadata,
-        &in_memory_index,
-        &git_resolver,
-        &uv_context.capabilities,
-        &uv_context.in_flight,
+        shared_state,
         IndexStrategy::default(),
         &config_settings,
         build_isolation,

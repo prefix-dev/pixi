@@ -32,7 +32,7 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound, Overrides};
-use uv_dispatch::BuildDispatch;
+use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
@@ -40,7 +40,7 @@ use uv_distribution_types::{
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
-use uv_pypi_types::{HashAlgorithm, HashDigest, RequirementSource};
+use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
@@ -337,6 +337,14 @@ pub async fn resolve_pypi(
         ..Options::default()
     };
     let git_resolver = GitResolver::default();
+
+    let shared_state = SharedState::new(
+        git_resolver.clone(),
+        build_dispatch_in_memory_index,
+        context.in_flight.clone(),
+        context.capabilities.clone(),
+    );
+
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &context.cache,
@@ -346,10 +354,7 @@ pub async fn resolve_pypi(
         &flat_index,
         &dependency_metadata,
         // TODO: could use this later to add static metadata
-        &build_dispatch_in_memory_index,
-        &git_resolver,
-        &context.capabilities,
-        &context.in_flight,
+        shared_state,
         IndexStrategy::default(),
         &config_settings,
         build_isolation,
@@ -377,6 +382,7 @@ pub async fn resolve_pypi(
             let source = RequirementSource::Registry {
                 specifier: specifier.into(),
                 index: None,
+                conflict: None,
             };
 
             Ok::<_, ConversionError>(uv_pypi_types::Requirement {
@@ -479,6 +485,7 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
         resolver_env,
         &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
+        Conflicts::default(),
         &resolver_in_memory_index,
         &git_resolver,
         &context.capabilities,
@@ -647,11 +654,14 @@ async fn lock_pypi_packages<'a>(
 
         let pypi_package_data = match dist {
             // Ignore installed distributions
-            ResolvedDist::Installed(_) => {
+            ResolvedDist::Installed { .. } => {
                 continue;
             }
 
-            ResolvedDist::Installable(Dist::Built(dist)) => {
+            ResolvedDist::Installable {
+                dist: Dist::Built(dist),
+                ..
+            } => {
                 let (location, hash) = match &dist {
                     BuiltDist::Registry(dist) => {
                         let best_wheel = dist.best_wheel();
@@ -710,7 +720,10 @@ async fn lock_pypi_packages<'a>(
                     hash,
                 }
             }
-            ResolvedDist::Installable(Dist::Source(source)) => {
+            ResolvedDist::Installable {
+                dist: Dist::Source(source),
+                ..
+            } => {
                 // Handle new hash stuff
                 let hash = source
                     .file()
