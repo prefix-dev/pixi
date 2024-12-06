@@ -69,29 +69,6 @@ pub fn pixi_home() -> Option<PathBuf> {
     }
 }
 
-// TODO(tim): I think we should move this to another crate, dont know if global
-// config is really correct
-/// Returns the default cache directory.
-/// Most important is the `PIXI_CACHE_DIR` environment variable.
-/// - If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
-/// - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory
-///   exists.
-/// - If that is not set, the default cache directory of
-///   [`rattler::default_cache_dir`] is used.
-pub fn get_cache_dir() -> miette::Result<PathBuf> {
-    std::env::var("PIXI_CACHE_DIR")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
-        .or_else(|| {
-            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join("pixi"));
-
-            // Only use the xdg cache pixi directory when it exists
-            pixi_cache_dir.and_then(|d| d.exists().then_some(d))
-        })
-        .or_else(|| rattler::default_cache_dir().ok())
-        .ok_or_else(|| miette::miette!("could not determine default cache directory"))
-}
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
     /// Do not verify the TLS certificate of the server.
@@ -290,11 +267,11 @@ impl DetachedEnvironments {
 
     // Get the path to the detached-environments directory. None means the default
     // directory.
-    pub fn path(&self) -> miette::Result<Option<PathBuf>> {
+    pub fn path(&self, config: &Config) -> miette::Result<Option<PathBuf>> {
         match self {
             DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
             DetachedEnvironments::Boolean(b) if *b => {
-                let path = get_cache_dir()?.join(consts::ENVIRONMENTS_DIR);
+                let path = config.cache_dir()?.join(consts::ENVIRONMENTS_DIR);
                 Ok(Some(path))
             }
             _ => Ok(None),
@@ -619,6 +596,11 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "ConcurrencyConfig::is_default")]
     pub concurrency: ConcurrencyConfig,
+
+    /// Cache-dir configuration for pixi
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_dir: Option<PathBuf>,
 }
 
 impl Default for Config {
@@ -638,6 +620,7 @@ impl Default for Config {
             force_activate: None,
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
+            cache_dir: None,
         }
     }
 }
@@ -905,6 +888,7 @@ impl Config {
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
             "experimental.use-environment-activation-cache",
+            "cache-dir",
         ]
     }
 
@@ -937,6 +921,7 @@ impl Config {
             experimental: other.experimental.merge(self.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
+            cache_dir: other.cache_dir.or(self.cache_dir),
         }
     }
 
@@ -994,8 +979,38 @@ impl Config {
         self.detached_environments.clone().unwrap_or_default()
     }
 
+    pub fn detached_environments_path(&self) -> miette::Result<Option<PathBuf>> {
+        self.detached_environments().path(self)
+    }
+
     pub fn force_activate(&self) -> bool {
         self.force_activate.unwrap_or(false)
+    }
+
+    // TODO(tim): I think we should move this to another crate, dont know if global
+    // config is really correct
+    /// Returns the default cache directory.
+    /// Most important is the `PIXI_CACHE_DIR` environment variable.
+    /// - If that is not set, the `RATTLER_CACHE_DIR` environment variable is used.
+    /// - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory
+    ///   exists.
+    /// - If that is not set, the default cache directory of
+    ///   [`rattler::default_cache_dir`] is used.
+    pub fn cache_dir(&self) -> miette::Result<PathBuf> {
+        std::env::var("PIXI_CACHE_DIR")
+            .ok()
+            .map(PathBuf::from)
+            .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
+            // read from the config
+            .or_else(|| self.cache_dir.clone())
+            .or_else(|| {
+                let pixi_cache_dir = dirs::cache_dir().map(|d| d.join("pixi"));
+
+                // Only use the xdg cache pixi directory when it exists
+                pixi_cache_dir.and_then(|d| d.exists().then_some(d))
+            })
+            .or_else(|| rattler::default_cache_dir().ok())
+            .ok_or_else(|| miette::miette!("could not determine default cache directory"))
     }
 
     pub fn experimental_activation_cache_usage(&self) -> bool {
@@ -1062,6 +1077,9 @@ impl Config {
                     .map(|v| PinningStrategy::from_str(v.as_str()))
                     .transpose()
                     .into_diagnostic()?
+            }
+            "cache-dir" => {
+                self.cache_dir = value.map(PathBuf::from);
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -1214,7 +1232,7 @@ impl Config {
     /// Constructs a [`Gateway`] using a [`ClientWithMiddleware`]
     pub fn gateway(&self, client: ClientWithMiddleware) -> Gateway {
         // Determine the cache directory and fall back to sane defaults otherwise.
-        let cache_dir = get_cache_dir().unwrap_or_else(|e| {
+        let cache_dir = self.cache_dir().unwrap_or_else(|e| {
             tracing::error!("failed to determine repodata cache directory: {e}");
             std::env::current_dir().unwrap_or_else(|_| PathBuf::from("./"))
         });
@@ -1277,7 +1295,7 @@ UNUSED = "unused"
         );
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
-            config.detached_environments().path().unwrap(),
+            config.detached_environments_path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
@@ -1286,8 +1304,9 @@ UNUSED = "unused"
         let toml = r"detached-environments = true";
         let (config, _) = Config::from_toml(toml).unwrap();
         assert_eq!(
-            config.detached_environments().path().unwrap().unwrap(),
-            get_cache_dir()
+            config.detached_environments_path().unwrap().unwrap(),
+            config
+                .cache_dir()
                 .unwrap()
                 .join(consts::ENVIRONMENTS_DIR)
                 .as_path()
@@ -1405,7 +1424,7 @@ UNUSED = "unused"
         );
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
-            config.detached_environments().path().unwrap(),
+            config.detached_environments_path().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
 
@@ -1426,7 +1445,7 @@ UNUSED = "unused"
         );
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
-            config.detached_environments().path().unwrap(),
+            config.detached_environments_path().unwrap(),
             Some(PathBuf::from("/path/to/envs2"))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
@@ -1541,8 +1560,9 @@ UNUSED = "unused"
             .set("detached-environments", Some("true".to_string()))
             .unwrap();
         assert_eq!(
-            config.detached_environments().path().unwrap().unwrap(),
-            get_cache_dir()
+            config.detached_environments_path().unwrap().unwrap(),
+            config
+                .cache_dir()
                 .unwrap()
                 .join(consts::ENVIRONMENTS_DIR)
                 .as_path()
@@ -1552,7 +1572,7 @@ UNUSED = "unused"
             .set("detached-environments", Some("/path/to/envs".to_string()))
             .unwrap();
         assert_eq!(
-            config.detached_environments().path().unwrap(),
+            config.detached_environments_path().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
 
