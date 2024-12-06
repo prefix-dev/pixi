@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
 use uv_configuration::{BuildOptions, Concurrency, SourceStrategy, TrustedHost};
@@ -15,7 +13,7 @@ use pixi_uv_conversions::{to_uv_trusted_host, ConversionError};
 #[derive(Clone)]
 pub struct UvResolutionContext {
     pub cache: Cache,
-    pub in_flight: Arc<InFlight>,
+    pub in_flight: InFlight,
     pub build_options: BuildOptions,
     pub hash_strategy: HashStrategy,
     pub client: reqwest::Client,
@@ -48,7 +46,6 @@ impl UvResolutionContext {
             }
         };
 
-        let in_flight = Arc::new(InFlight::default());
         let allow_insecure_host = project
             .config()
             .pypi_config
@@ -66,7 +63,7 @@ impl UvResolutionContext {
             .context("failed to parse trusted host")?;
         Ok(Self {
             cache,
-            in_flight,
+            in_flight: InFlight::default(),
             hash_strategy: HashStrategy::None,
             client: project.client().clone(),
             build_options: BuildOptions::default(),

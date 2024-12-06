@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_manifest/src/pypi/pypi_requirement.rs
 expression: snapshot
+snapshot_kind: text
 ---
 - input:
     ver: 1.2.3
@@ -43,7 +44,7 @@ expression: snapshot
 - input:
     git: "ssh://github.com:conda-forge/21cmfast-feedstock"
   result:
-    error: "ERROR: invalid value: string \"ssh://github.com:conda-forge/21cmfast-feedstock\", expected invalid port number"
+    error: "ERROR: invalid port number: \"ssh://github.com:conda-forge/21cmfast-feedstock\""
 - input:
     branch: main
     tag: v1

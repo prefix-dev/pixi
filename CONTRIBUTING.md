@@ -49,7 +49,7 @@ By contributing to Pixi, you agree that your contributions will be licensed unde
 
 ## Pixi is a pixi project so use a preinstalled `pixi` to run the predefined tasks
 ```shell
-pixi run build
+pixi run build-debug # or `pixi run build-release` to build with optimizations
 pixi run lint
 pixi run test-all-fast
 pixi run install # only works on unix systems as on windows you can't overwrite the binary while it's running
