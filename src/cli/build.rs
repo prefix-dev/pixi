@@ -167,6 +167,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 outputs: None,
                 work_directory: work_dir.path().to_path_buf(),
                 variant_configuration: Some(Default::default()),
+                editable: false,
             },
             progress.clone(),
         )
