@@ -185,19 +185,8 @@ impl<'p> LockFileDerivedData<'p> {
         // environment file
         let hash = self.locked_environment_hash(environment)?;
         if update_mode == UpdateMode::QuickValidate {
-            if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
-                if environment_file.environment_lock_file_hash == hash {
-                    tracing::info!(
-                        "Environment '{}' is up-to-date with lock file hash",
-                        environment.name().fancy_display()
-                    );
-                    return Ok(Prefix::new(environment.dir()));
-                }
-            } else {
-                tracing::debug!(
-                    "Environment file not found or parsable for '{}'",
-                    environment.name().fancy_display()
-                );
+            if let Some(prefix) = self.cached_prefix(environment, &hash) {
+                return prefix;
             }
         }
 
@@ -217,6 +206,39 @@ impl<'p> LockFileDerivedData<'p> {
         )?;
 
         Ok(prefix)
+    }
+
+    fn cached_prefix(
+        &mut self,
+        environment: &Environment<'p>,
+        hash: &LockedEnvironmentHash,
+    ) -> Option<Result<Prefix, Report>> {
+        let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) else {
+            tracing::debug!(
+                "Environment file not found or parsable for '{}'",
+                environment.name().fancy_display()
+            );
+            return None;
+        };
+
+        if environment_file.environment_lock_file_hash == *hash {
+            let contains_source_packages = self.lock_file.environments().any(|(_, env)| {
+                env.conda_packages(Platform::current())
+                    .map_or(false, |mut packages| {
+                        packages.any(|package| package.as_source().is_some())
+                    })
+            });
+            if contains_source_packages {
+                tracing::debug!("Lock file contains source packages: ignore lock file hash and update the prefix");
+            } else {
+                tracing::info!(
+                    "Environment '{}' is up-to-date with lock file hash",
+                    environment.name().fancy_display()
+                );
+                return Some(Ok(Prefix::new(environment.dir())));
+            }
+        }
+        None
     }
 
     /// Returns the up-to-date prefix for the given environment.
