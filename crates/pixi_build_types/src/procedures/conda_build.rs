@@ -43,6 +43,13 @@ pub struct CondaBuildParams {
     ///
     /// The directory may not yet exist.
     pub work_directory: PathBuf,
+
+    /// Install the package in editable mode
+    /// This is supported by many languages without an explicit compile step like Python
+    /// When this parameter is set, changes in the source code will be reflected
+    /// without a rebuild
+    // TODO: Deprecate this parameter in favor of a "dev" profile
+    pub editable: bool,
 }
 
 /// Identifier of an output.
