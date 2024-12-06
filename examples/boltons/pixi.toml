@@ -21,6 +21,8 @@ description = "Add a short description here"
 name = "boltons"
 version = "0.1.0"
 
+[host-dependencies]
+hatchling = "*"
 
 [build-system]
 build-backend = { name = "pixi-build-rattler-build", version = "*" }

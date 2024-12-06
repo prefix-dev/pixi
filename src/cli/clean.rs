@@ -65,6 +65,10 @@ pub struct CacheArgs {
     #[arg(long)]
     pub repodata: bool,
 
+    /// Clean only the build backend tools cache.
+    #[arg(long)]
+    pub tool: bool,
+
     /// Answer yes to all questions.
     #[clap(short = 'y', long = "yes", alias = "assume-yes")]
     assume_yes: bool,
@@ -153,6 +157,12 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     }
     if args.exec {
         dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
+    }
+    if args.tool {
+        dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
+        // TODO: Let's clean deprecated cache directory.
+        // This will be removed in a future release.
+        dirs.push(cache_dir.join(consts::_CACHED_BUILD_ENVS_DIR));
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
