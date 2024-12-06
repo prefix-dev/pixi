@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 use rattler_solve::ChannelPriority;
 use serde::Deserialize;
@@ -10,8 +10,14 @@ use url::Url;
 
 use crate::{
     preview::Preview, pypi::pypi_options::PypiOptions, utils::PixiSpanned, PrioritizedChannel,
-    Workspace,
+    TargetSelector, Targets, Workspace,
 };
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct TomlWorkspaceTarget {
+    build_variants: Option<HashMap<String, Vec<String>>>,
+}
 
 /// The TOML representation of the `[[workspace]]` section in a pixi manifest.
 #[serde_as]
@@ -46,6 +52,9 @@ pub struct TomlWorkspace {
     #[serde(default)]
     pub preview: Preview,
 
+    #[serde(default)]
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
+
     pub build_variants: Option<HashMap<String, Vec<String>>>,
 }
 
@@ -65,7 +74,6 @@ pub struct ExternalWorkspaceProperties {
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
-    pub build_variants: Option<HashMap<String, Vec<String>>>,
 }
 
 #[derive(Debug, Error)]
@@ -99,7 +107,14 @@ impl TomlWorkspace {
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
             preview: self.preview,
-            build_variants: self.build_variants.or(external.build_variants),
+            build_variants: Targets::from_default_and_user_defined(
+                self.build_variants,
+                self.target
+                    .clone()
+                    .into_iter()
+                    .map(|(k, v)| (k, v.build_variants))
+                    .collect(),
+            ),
         })
     }
 }
