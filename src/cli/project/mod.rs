@@ -5,6 +5,7 @@ pub mod channel;
 pub mod description;
 pub mod environment;
 pub mod export;
+pub mod name;
 pub mod platform;
 pub mod version;
 
@@ -16,6 +17,7 @@ pub enum Command {
     Version(version::Args),
     Environment(environment::Args),
     Export(export::Args),
+    Name(name::Args),
 }
 
 /// Modify the project configuration file through the command line.
@@ -36,6 +38,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Version(args) => version::execute(args).await?,
         Command::Environment(args) => environment::execute(args).await?,
         Command::Export(cmd) => export::execute(cmd).await?,
+        Command::Name(args) => name::execute(args).await?,
     };
     Ok(())
 }
