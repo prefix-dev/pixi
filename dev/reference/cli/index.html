@@ -3401,12 +3401,18 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 <ul>
 <li><code>--pypi</code>: Clean the pypi cache.</li>
 <li><code>--conda</code>: Clean the conda cache.</li>
+<li><code>--mapping</code>: Clean the mapping cache.</li>
+<li><code>--exec</code>: Clean the <code>exec</code> cache.</li>
+<li><code>--repodata</code>: Clean the repodata cache.</li>
 <li><code>--yes</code>: Skip the confirmation prompt.</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>pixi<span class="w"> </span>clean<span class="w"> </span>cache<span class="w"> </span><span class="c1"># clean all pixi caches</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>pixi<span class="w"> </span>clean<span class="w"> </span>cache<span class="w"> </span>--pypi<span class="w"> </span><span class="c1"># clean only the pypi cache</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>pixi<span class="w"> </span>clean<span class="w"> </span>cache<span class="w"> </span>--conda<span class="w"> </span><span class="c1"># clean only the conda cache</span>
-</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>pixi<span class="w"> </span>clean<span class="w"> </span>cache<span class="w"> </span>--yes<span class="w"> </span><span class="c1"># skip the confirmation prompt</span>
+</span><span id="__span-30-4"><a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>pixi<span class="w"> </span>clean<span class="w"> </span>cache<span class="w"> </span>--mapping<span class="w"> </span><span class="c1"># clean only the mapping cache</span>
+</span><span id="__span-30-5"><a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>pixi<span class="w"> </span>clean<span class="w"> </span>cache<span class="w"> </span>--exec<span class="w"> </span><span class="c1"># clean only the `exec` cache</span>
+</span><span id="__span-30-6"><a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>pixi<span class="w"> </span>clean<span class="w"> </span>cache<span class="w"> </span>--repodata<span class="w"> </span><span class="c1"># clean only the `repodata` cache</span>
+</span><span id="__span-30-7"><a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>pixi<span class="w"> </span>clean<span class="w"> </span>cache<span class="w"> </span>--yes<span class="w"> </span><span class="c1"># skip the confirmation prompt</span>
 </span></code></pre></div>
 <h2 id="upload"><code>upload</code><a class="headerlink" href="#upload" title="Permanent link">#</a></h2>
 <p>Upload a package to a prefix.dev channel</p>
