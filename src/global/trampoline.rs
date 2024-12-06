@@ -65,13 +65,6 @@ const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-pc-windows-msvc.exe.zst"
 );
 
-#[cfg(target_arch = "powerpc64")]
-#[cfg(target_endian = "little")]
-#[cfg(target_os = "linux")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-powerpc64le-unknown-linux-gnu.zst"
-);
-
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "linux")]
 const TRAMPOLINE_BIN: &[u8] = include_bytes!(
@@ -353,6 +346,13 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
+        #[cfg(target_arch = "powerpc64")]
+        #[cfg(target_endian = "little")]
+        #[cfg(target_os = "linux")]
+        {
+            miette::bail!("powerpc64le is not supported for pixi global yet. If you need this, please open an issue on the pixi repository.");
+        }
+
         let trampoline_path = self.trampoline_path();
 
         // We need to check that there's indeed a trampoline at the path
