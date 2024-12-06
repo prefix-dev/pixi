@@ -48,6 +48,7 @@ pub struct CondaBuildParams {
     /// This is supported by many languages without an explicit compile step like Python
     /// When this parameter is set, changes in the source code will be reflected
     /// without a rebuild
+    // TODO: Deprecate this parameter in favor of a "dev" profile
     pub editable: bool,
 }
 
