@@ -176,6 +176,13 @@ impl TomlSpec {
             .collect::<Vec<_>>()
             .join(", ");
 
+        if self.version.is_some() && self.editable {
+            return Err(SpecError::InvalidCombination(
+                "`version`".into(),
+                "`editable".into(),
+            ));
+        }
+
         if !non_detailed_keys.is_empty() && self.version.is_some() {
             return Err(SpecError::InvalidCombination(
                 "`version`".into(),
@@ -448,6 +455,7 @@ mod test {
             // Errors:
             json!({ "ver": "1.2.3" }),
             json!({ "path": "foobar", "version": "1.2.3" }),
+            json!({ "version": "1.2.3", "editable": true }),
             json!({ "version": "//" }),
             json!({ "path": "foobar", "version": "//" }),
             json!({ "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
