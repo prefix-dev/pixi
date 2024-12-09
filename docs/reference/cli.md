@@ -829,12 +829,18 @@ Clean the pixi cache on your system.
 ##### Options
 - `--pypi`: Clean the pypi cache.
 - `--conda`: Clean the conda cache.
+- `--mapping`: Clean the mapping cache.
+- `--exec`: Clean the `exec` cache.
+- `--repodata`: Clean the repodata cache.
 - `--yes`: Skip the confirmation prompt.
 
 ```shell
 pixi clean cache # clean all pixi caches
 pixi clean cache --pypi # clean only the pypi cache
 pixi clean cache --conda # clean only the conda cache
+pixi clean cache --mapping # clean only the mapping cache
+pixi clean cache --exec # clean only the `exec` cache
+pixi clean cache --repodata # clean only the `repodata` cache
 pixi clean cache --yes # skip the confirmation prompt
 ```
 
