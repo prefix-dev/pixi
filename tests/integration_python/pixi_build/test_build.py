@@ -168,8 +168,8 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
         env=env,
     )
 
-    return
-
+    # TODO: why is that command not working?
+    # Is it always re-installing? If yes, how can we avoid that?
     # Verify that package is installed as editable
     verify_cli_command(
         [
@@ -181,6 +181,7 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
         ],
         env=env,
     )
+    return
 
     # Set editable to false
     manifest_path = target_dir.joinpath("pyproject.toml")
