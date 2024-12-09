@@ -66,6 +66,9 @@ pub struct TomlSpec {
     /// The sha256 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
     pub sha256: Option<Sha256Hash>,
+
+    /// Whether this dependency will be installed as editable
+    pub editable: Option<bool>,
 }
 
 /// Returns a more helpful message when a version spec is used incorrectly.

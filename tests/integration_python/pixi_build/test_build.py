@@ -1,9 +1,12 @@
 from pathlib import Path
 import shutil
 import json
+import tomllib
+
+import tomli_w
 
 
-from ..common import verify_cli_command
+from ..common import verify_cli_command, ExitCode
 
 
 def test_build_conda_package(pixi: Path, examples_dir: Path, tmp_pixi_workspace: Path) -> None:
@@ -88,12 +91,13 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
 def test_source_change_trigger_rebuild(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
-    test_data = build_data.joinpath("simple-pyproject")
+    project = "simple-pyproject"
+    test_data = build_data.joinpath(project)
 
     # TODO: Setting the cache dir shouldn't be necessary!
     env = {"PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache"))}
 
-    target_dir = tmp_pixi_workspace.joinpath("simple-pyproject")
+    target_dir = tmp_pixi_workspace.joinpath(project)
     shutil.copytree(test_data, target_dir)
     manifest_path = target_dir.joinpath("pyproject.toml")
 
@@ -123,5 +127,51 @@ def test_source_change_trigger_rebuild(
             "get-version",
         ],
         stdout_contains="The version of simple-pyproject is 2.0.0",
+        env=env,
+    )
+
+
+def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    project = "editable-pyproject"
+    test_data = build_data.joinpath(project)
+
+    # TODO: Setting the cache dir shouldn't be necessary!
+    env = {
+        "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
+        "PIXI_BUILD_BACKEND_OVERRIDE": "/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-python",
+    }
+
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    shutil.copytree(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pyproject.toml")
+
+    # Verify that package is installed as editable
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "check-editable",
+        ],
+        env=env,
+    )
+
+    # Set editable to false
+    manifest_path = target_dir.joinpath("pyproject.toml")
+    manifest = tomllib.loads(manifest_path.read_text())
+    manifest["tool"]["pixi"]["dependencies"]["editable-pyproject"]["editable"] = False
+    manifest_path.write_text(tomli_w.dumps(manifest))
+
+    # Verify that package is *not* installed as editable
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "check-editable",
+        ],
+        ExitCode.FAILURE,
         env=env,
     )
