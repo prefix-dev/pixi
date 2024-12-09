@@ -642,6 +642,14 @@ impl Manifest {
         Ok(())
     }
 
+    /// Set the project name
+    pub fn set_name(&mut self, name: &str) -> miette::Result<()> {
+        self.workspace.workspace.name = name.to_string();
+        self.document.set_name(name);
+
+        Ok(())
+    }
+
     /// Set the project description
     pub fn set_description(&mut self, description: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
