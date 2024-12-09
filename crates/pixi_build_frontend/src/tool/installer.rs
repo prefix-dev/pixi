@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::path::PathBuf;
 
-use pixi_consts::consts::{CACHED_BUILD_ENVS_DIR, CONDA_REPODATA_CACHE_DIR};
+use pixi_consts::consts::CACHED_BUILD_TOOL_ENVS_DIR;
 use pixi_progress::wrap_in_progress;
 use pixi_utils::{EnvironmentHash, PrefixGuard};
 use rattler::{install::Installer, package_cache::PackageCache};
@@ -93,8 +93,8 @@ impl ToolContextBuilder {
     pub fn build(self) -> ToolContext {
         let gateway = self.gateway.unwrap_or_else(|| {
             Gateway::builder()
+                .with_cache_dir(self.cache_dir.clone())
                 .with_client(self.client.clone())
-                .with_cache_dir(self.cache_dir.join(CONDA_REPODATA_CACHE_DIR))
                 .finish()
         });
 
@@ -114,7 +114,8 @@ impl ToolContextBuilder {
 pub struct ToolContext {
     // Authentication client to use for fetching repodata.
     pub client: ClientWithMiddleware,
-    // The cache directory to use for the tools.
+    // The cache directory to use while installing tools.
+    // This cache directory is also passed to the Gateway and Installer.
     pub cache_dir: PathBuf,
     // The gateway to use for fetching repodata.
     pub gateway: Gateway,
@@ -148,6 +149,16 @@ impl ToolContext {
         ToolContextBuilder::new()
     }
 
+    /// Create a new tool context builder to be used for tests
+    ///
+    /// The main difference is that it uses a tmp cache directory
+    /// instead of rattler one
+    #[cfg(test)]
+    pub fn for_tests() -> ToolContextBuilder {
+        let cache_dir = tempfile::tempdir().unwrap().into_path();
+        ToolContextBuilder::new().with_cache_dir(cache_dir)
+    }
+
     /// Instantiate a tool from a specification.
     ///
     /// If the tool is not already cached, it will be created, installed and cached.
@@ -174,7 +185,12 @@ impl ToolContext {
 
         let installed = self
             .cache
-            .get_or_install_tool(spec, self, channel_config)
+            .get_or_install_tool(
+                spec,
+                self,
+                &self.cache_dir.join(CACHED_BUILD_TOOL_ENVS_DIR),
+                channel_config,
+            )
             .await
             .map_err(ToolCacheError::Install)?;
 
@@ -233,9 +249,16 @@ impl ToolInstaller for ToolContext {
             self.platform,
         );
 
+        // ensure that the cache directory exists
+        if !self.cache_dir.exists() {
+            tokio::fs::create_dir(&self.cache_dir)
+                .await
+                .into_diagnostic()?;
+        }
+
         let cached_dir = self
             .cache_dir
-            .join(CACHED_BUILD_ENVS_DIR)
+            .join(CACHED_BUILD_TOOL_ENVS_DIR)
             .join(cache.name());
 
         let mut prefix_guard = PrefixGuard::new(&cached_dir).into_diagnostic()?;
