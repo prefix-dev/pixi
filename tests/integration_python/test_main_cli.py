@@ -167,6 +167,16 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ExitCode.SUCCESS,
         stderr_contains="2.1.1",
     )
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "name", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="test_project_commands",
+    )
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "name", "set", "new-name"],
+        ExitCode.SUCCESS,
+        stderr_contains="new-name",
+    )
 
 
 def test_broken_config(pixi: Path, tmp_pixi_workspace: Path) -> None:

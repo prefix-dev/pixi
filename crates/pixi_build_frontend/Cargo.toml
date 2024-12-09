@@ -11,7 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 dashmap = { workspace = true }
-fs-err = { workspace = true }
+fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }
@@ -41,6 +41,7 @@ tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
 url = "2.5.0"
 which = { workspace = true }
+
 
 pixi_build_types = { path = "../pixi_build_types" }
 
