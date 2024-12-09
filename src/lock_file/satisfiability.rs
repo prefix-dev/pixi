@@ -1487,7 +1487,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_example_satisfiability(#[files("examples/*/p*.toml")] manifest_path: PathBuf) {
-        // If pyproject.toml check for tool.pixi in the file to avoid deserialization of non pixi files.
+        // If a pyproject.toml is present check for `tool.pixi` in the file to avoid testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {
             let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
             if !manifest_str.contains("tool.pixi") {
