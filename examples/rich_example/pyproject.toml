@@ -50,8 +50,8 @@ build-backend = { name = "pixi-build-python", version = "*" }
 # These are the conda channels that are used to resolve the dependencies of the
 # build backend package.
 channels = [
-    "https://prefix.dev/pixi-build-backends",
-    "https://prefix.dev/conda-forge",
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
 ]
 
 
@@ -61,4 +61,3 @@ test = "rich_example"
 [tool.pixi.dependencies]
 rich = ">=13.9.4,<14"
 rich_example = { path = "." }
-
