@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.39.1] - 2024-12-09
+#### Added
+
+- Add proper unit testing for PyPI installation and fix re-installation issues by @tdejager in [#2617](https://github.com/prefix-dev/pixi/pull/2617)
+- Add detailed json output for task list by @jjjermiah in [#2608](https://github.com/prefix-dev/pixi/pull/2608)
+- Add `pixi project name` CLI by @LiamConnors in [#2649](https://github.com/prefix-dev/pixi/pull/2649)
+
+#### Changed
+
+- Use `fs-err` in more places by @Hofer-Julian in [#2636](https://github.com/prefix-dev/pixi/pull/2636)
+
+#### Documentation
+
+- Remove `tclf` from community.md📑 by @KarelZe in [#2619](https://github.com/prefix-dev/pixi/pull/2619)
+- Update contributing guide by @LiamConnors in [#2650](https://github.com/prefix-dev/pixi/pull/2650)
+- Update clean cache CLI doc by @LiamConnors in [#2657](https://github.com/prefix-dev/pixi/pull/2657)
+
+#### Fixed
+
+- Color formatting detection on stdout by @blmaier in [#2613](https://github.com/prefix-dev/pixi/pull/2613)
+- Use correct dependency location for `pixi upgrade` by @Hofer-Julian in [#2472](https://github.com/prefix-dev/pixi/pull/2472)
+- Regression `detached-environments` not used by @ruben-arts in [#2627](https://github.com/prefix-dev/pixi/pull/2627)
+- Allow configuring pypi insecure host by @zen-xu in [#2521](https://github.com/prefix-dev/pixi/pull/2521)[#2622](https://github.com/prefix-dev/pixi/pull/2622)
+
+#### Refactor
+
+- Rework CI and use `cargo-dist` for releases by @baszalmstra in [#2566](https://github.com/prefix-dev/pixi/pull/2566)
+
+#### `pixi build` Preview work
+- Refactor to `[build-system.build-backend]` by @baszalmstra in [#2601](https://github.com/prefix-dev/pixi/pull/2601)
+- Remove ipc override from options and give it manually to test by @wolfv in [#2629](https://github.com/prefix-dev/pixi/pull/2629)
+- Pixi build trigger rebuild by @Hofer-Julian in [#2641](https://github.com/prefix-dev/pixi/pull/2641)
+- Add variant config to `[workspace.build-variants]` by @wolfv in [#2634](https://github.com/prefix-dev/pixi/pull/2634)
+- Add request coalescing for isolated tools by @nichmor in [#2589](https://github.com/prefix-dev/pixi/pull/2589)
+- Add example using `rich` and `pixi-build-python` and remove flask by @Hofer-Julian in [#2638](https://github.com/prefix-dev/pixi/pull/2638)
+- (simple) build tool override by @wolfv in [#2620](https://github.com/prefix-dev/pixi/pull/2620)
+- Add caching of build tool installation by @nichmor in [#2637](https://github.com/prefix-dev/pixi/pull/2637)
+#### New Contributors
+* @blmaier made their first contribution in [#2613](https://github.com/prefix-dev/pixi/pull/2613)
+
 ### [0.39.0] - 2024-12-02
 #### ✨ Highlights
 
