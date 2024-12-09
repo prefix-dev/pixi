@@ -335,6 +335,7 @@ impl Trampoline {
     }
 
     /// Returns the decompressed trampoline binary
+    #[cfg(not(all(target_arch = "powerpc64", target_endian = "little", target_os = "linux")))]
     pub fn decompressed_trampoline() -> &'static [u8] {
         // A static variable to hold the cached decompressed trampoline binary
         static DECOMPRESSED_TRAMPOLINE_BIN: LazyLock<Vec<u8>> = LazyLock::new(|| {
