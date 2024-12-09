@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add proper unit testing for PyPI installation and fix re-installation issues by @tdejager in [#2617](https://github.com/prefix-dev/pixi/pull/2617)
 - Add detailed json output for task list by @jjjermiah in [#2608](https://github.com/prefix-dev/pixi/pull/2608)
+- Add `pixi project name` CLI by @LiamConnors in [#2649](https://github.com/prefix-dev/pixi/pull/2649)
 
 #### Changed
 
@@ -40,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add request coalescing for isolated tools by @nichmor in [#2589](https://github.com/prefix-dev/pixi/pull/2589)
 - Add example using `rich` and `pixi-build-python` and remove flask by @Hofer-Julian in [#2638](https://github.com/prefix-dev/pixi/pull/2638)
 - (simple) build tool override by @wolfv in [#2620](https://github.com/prefix-dev/pixi/pull/2620)
-
+- Add caching of build tool installation by @nichmor in [#2637](https://github.com/prefix-dev/pixi/pull/2637)
 #### New Contributors
 * @blmaier made their first contribution in [#2613](https://github.com/prefix-dev/pixi/pull/2613)
 
