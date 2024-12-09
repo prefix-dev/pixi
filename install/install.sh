@@ -93,8 +93,19 @@ mkdir -p "$BIN_DIR"
 if [[ "$(uname -o)" == "Msys" ]]; then
   unzip "$TEMP_FILE" -d "$BIN_DIR"
 else
-  tar -xzf "$TEMP_FILE" -C "$BIN_DIR"
+  # Extract to a temporary directory first
+  TEMP_DIR=$(mktemp -d)
+  tar -xzf "$TEMP_FILE" -C "$TEMP_DIR"
+
+  # Find and move the `pixi` binary, making sure to handle the case where it's in a subdirectory
+  if [[ -f "$TEMP_DIR/pixi" ]]; then
+    mv "$TEMP_DIR/pixi" "$BIN_DIR/"
+  else
+    mv "$(find "$TEMP_DIR" -type f -name pixi)" "$BIN_DIR/"
+  fi
+
   chmod +x "$BIN_DIR/pixi"
+  rm -rf "$TEMP_DIR"
 fi
 
 echo "The 'pixi' binary is installed into '${BIN_DIR}'"
