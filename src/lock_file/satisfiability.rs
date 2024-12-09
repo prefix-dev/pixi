@@ -1486,8 +1486,15 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-    async fn test_example_satisfiability(#[files("examples/*/pixi.toml")] manifest_path: PathBuf) {
+    async fn test_example_satisfiability(#[files("examples/*/p*.toml")] manifest_path: PathBuf) {
+        // If pyproject.toml check for tool.pixi in the file to avoid deserialization of non pixi files.
+        if manifest_path.file_name().unwrap() == "pyproject.toml" {
+            let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
+            if !manifest_str.contains("tool.pixi") {
+                return;
+            }
+        }
+
         let project = Project::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
