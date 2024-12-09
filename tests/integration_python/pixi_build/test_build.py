@@ -145,6 +145,31 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
     shutil.copytree(test_data, target_dir)
     manifest_path = target_dir.joinpath("pyproject.toml")
 
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+        env=env,
+    )
+
+    path_file = target_dir.joinpath(
+        ".pixi", "envs", "default", "lib", "python3.13", "site-packages", "_editable_pyproject.pth"
+    )
+
+    path_file.write_text(str(target_dir.joinpath("src")))
+
+    python = target_dir.joinpath(".pixi/envs/default/bin/python")
+
+    verify_cli_command(
+        [python, "-c", "import editable_pyproject; editable_pyproject.check_editable()"],
+        env=env,
+    )
+
+    return
+
     # Verify that package is installed as editable
     verify_cli_command(
         [

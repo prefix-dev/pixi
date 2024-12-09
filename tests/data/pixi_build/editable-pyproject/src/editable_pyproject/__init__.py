@@ -1,15 +1,15 @@
 __version__ = "1.0.0"
 
 import sys
-import os
+from pathlib import Path
 import site
 
 
 def is_editable() -> bool:
-    package_name = "editable-pyproject"  # Replace with your package name
+    package_name = "editable_pyproject"
     for site_package in site.getsitepackages():
-        egg_link_path = os.path.join(site_package, f"{package_name}.egg-link")
-        if os.path.isfile(egg_link_path):
+        egg_link_path = Path(site_package).joinpath(f"_{package_name}.pth")
+        if egg_link_path.is_file():
             return True
     return False
 
