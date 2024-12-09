@@ -312,11 +312,11 @@ mod tests {
 
     /// A test helper to create a temporary directory and write conda meta files.
     /// This is used to simulate already installed tools.
-    struct CondaMetaBuilder {
+    struct CondaMetaWriter {
         pub tmp_dir: PathBuf,
     }
 
-    impl CondaMetaBuilder {
+    impl CondaMetaWriter {
         async fn new() -> Self {
             let tempdir = tempfile::tempdir().unwrap();
             let tmp_dir = tempdir.path().to_path_buf();
@@ -617,7 +617,7 @@ mod tests {
 
         let tool_cache = ToolCache::new();
 
-        let conda_meta_builder = CondaMetaBuilder::new().await;
+        let conda_meta_builder = CondaMetaWriter::new().await;
 
         conda_meta_builder
             .write_meta_json(BAT_META_JSON, "bat-somehash", None)
@@ -652,7 +652,7 @@ mod tests {
 
         let tool_cache = ToolCache::new();
 
-        let conda_meta_builder = CondaMetaBuilder::new().await;
+        let conda_meta_builder = CondaMetaWriter::new().await;
 
         conda_meta_builder
             .write_meta_json(BAT_META_JSON, "bat-somehash", None)
@@ -674,7 +674,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_specs() {
-        let conda_meta_builder = CondaMetaBuilder::new().await;
+        let conda_meta_builder = CondaMetaWriter::new().await;
 
         conda_meta_builder
             .write_meta_json(BAT_META_JSON, "one-env", None)
@@ -698,7 +698,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_more_specs() {
-        let conda_meta_builder = CondaMetaBuilder::new().await;
+        let conda_meta_builder = CondaMetaWriter::new().await;
 
         // write only one meta-json file, but ask for more specs
         conda_meta_builder
@@ -722,7 +722,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_skip_wrong_json() {
-        let conda_meta_builder = CondaMetaBuilder::new().await;
+        let conda_meta_builder = CondaMetaWriter::new().await;
 
         // verify that event when we have wrong json file, we will skip reading it.
         conda_meta_builder
