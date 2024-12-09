@@ -1416,6 +1416,26 @@ pixi project export conda-explicit-spec output
 pixi project export conda-explicit-spec -e default -e test -p linux-64 output
 ```
 
+### `project name get`
+
+Get the project name.
+
+```sh
+$ pixi project name get
+my project name
+```
+
+### `project name set`
+
+Set the project name.
+
+##### Arguments
+
+1. `<NAME>`: The name to set.
+
+```sh
+pixi project name set "my new project name"
+```
 
 ### `project platform add`
 
