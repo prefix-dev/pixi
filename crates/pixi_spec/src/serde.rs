@@ -68,7 +68,8 @@ pub struct TomlSpec {
     pub sha256: Option<Sha256Hash>,
 
     /// Whether this dependency will be installed as editable
-    pub editable: Option<bool>,
+    #[serde(default)]
+    pub editable: bool,
 }
 
 /// Returns a more helpful message when a version spec is used incorrectly.
@@ -248,7 +249,10 @@ impl TomlSpec {
                 md5: self.md5,
                 sha256: self.sha256,
             }),
-            (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
+            (None, Some(path), None) => PixiSpec::Path(PathSpec {
+                path: path.into(),
+                editable: self.editable,
+            }),
             (None, None, Some(git)) => {
                 let rev = match (self.branch, self.rev, self.tag) {
                     (Some(branch), None, None) => Some(GitReference::Branch(branch)),
@@ -309,7 +313,10 @@ impl TomlSpec {
                 }
             }
             (None, Some(path), None) => {
-                let path_spec = PathSpec { path: path.into() };
+                let path_spec = PathSpec {
+                    path: path.into(),
+                    editable: self.editable,
+                };
                 if let Either::Right(binary) = path_spec.into_source_or_binary() {
                     BinarySpec::Path(binary)
                 } else {
@@ -386,10 +393,12 @@ impl<'de> Deserialize<'de> for PathSpec {
         #[derive(Deserialize)]
         struct Raw {
             path: String,
+            editable: Option<bool>,
         }
 
         Raw::deserialize(deserializer).map(|raw| PathSpec {
             path: raw.path.into(),
+            editable: raw.editable.unwrap_or_default(),
         })
     }
 }

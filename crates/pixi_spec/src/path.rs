@@ -11,6 +11,8 @@ use crate::{BinarySpec, SpecConversionError};
 pub struct PathSpec {
     /// The path to the package
     pub path: Utf8TypedPathBuf,
+    /// Whether the package is editable
+    pub editable: bool,
 }
 
 impl PathSpec {
@@ -42,7 +44,10 @@ impl PathSpec {
         if self.is_binary() {
             Err(self)
         } else {
-            Ok(PathSourceSpec { path: self.path })
+            Ok(PathSourceSpec {
+                path: self.path,
+                editable: self.editable,
+            })
         }
     }
 
@@ -58,9 +63,15 @@ impl PathSpec {
     /// source package. Or to a [`NamelessMatchSpec`] otherwise.
     pub fn into_source_or_binary(self) -> Either<PathSourceSpec, PathBinarySpec> {
         if self.is_binary() {
-            Either::Right(PathBinarySpec { path: self.path })
+            Either::Right(PathBinarySpec {
+                path: self.path,
+                editable: self.editable,
+            })
         } else {
-            Either::Left(PathSourceSpec { path: self.path })
+            Either::Left(PathSourceSpec {
+                path: self.path,
+                editable: self.editable,
+            })
         }
     }
 }
@@ -71,11 +82,16 @@ impl PathSpec {
 pub struct PathSourceSpec {
     /// The path to the package. Either a directory or an archive.
     pub path: Utf8TypedPathBuf,
+    /// Whether the package is editable
+    pub editable: bool,
 }
 
 impl From<PathSourceSpec> for PathSpec {
     fn from(value: PathSourceSpec) -> Self {
-        Self { path: value.path }
+        Self {
+            path: value.path,
+            editable: value.editable,
+        }
     }
 }
 
@@ -96,11 +112,16 @@ impl PathSourceSpec {
 pub struct PathBinarySpec {
     /// The path to the package. Either a directory or an archive.
     pub path: Utf8TypedPathBuf,
+    /// Whether the package is editable
+    pub editable: bool,
 }
 
 impl From<PathBinarySpec> for PathSpec {
     fn from(value: PathBinarySpec) -> Self {
-        Self { path: value.path }
+        Self {
+            path: value.path,
+            editable: value.editable,
+        }
     }
 }
 
