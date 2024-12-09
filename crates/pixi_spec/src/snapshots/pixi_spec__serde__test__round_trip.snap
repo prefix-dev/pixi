@@ -73,12 +73,17 @@ expression: snapshot
 - input:
     ver: 1.2.3
   result:
-    error: "ERROR: unknown field `ver`, expected one of `version`, `url`, `git`, `path`, `branch`, `rev`, `tag`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`"
+    error: "ERROR: unknown field `ver`, expected one of `version`, `url`, `git`, `path`, `branch`, `rev`, `tag`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `editable`"
 - input:
     path: foobar
     version: 1.2.3
   result:
     error: "ERROR: `version` cannot be used with `path`"
+- input:
+    version: 1.2.3
+    editable: true
+  result:
+    error: "ERROR: `version` cannot be used with `editable"
 - input:
     version: //
   result:
