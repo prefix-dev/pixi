@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::WheelFilename;
-use uv_distribution_types::{InstalledDirectUrlDist, InstalledDist, InstalledRegistryDist};
+use uv_distribution_types::{InstalledDirectUrlDist, InstalledDist, InstalledRegistryDist, Name};
 use uv_pypi_types::DirectUrl::VcsUrl;
 use uv_pypi_types::{ArchiveInfo, DirectUrl, VcsInfo, VcsKind};
 
@@ -193,6 +193,13 @@ impl MockedSitePackages {
     #[allow(dead_code)]
     pub fn base_dir(&self) -> &Path {
         self.fake_site_packages.path()
+    }
+
+    pub fn get_installed_dist<S: AsRef<str>>(&self, name: S) -> Option<InstalledDist> {
+        self.installed_dist
+            .iter()
+            .find(|d| d.name().as_str() == name.as_ref())
+            .cloned()
     }
 
     /// Create INSTALLER and METADATA files for the installed dist
@@ -434,6 +441,11 @@ pub struct RequiredPackages {
 impl RequiredPackages {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn get_required_dist<S: AsRef<str>>(&self, name: S) -> Option<&PypiPackageData> {
+        self.required
+            .get(&uv_normalize::PackageName::new(name.as_ref().to_owned()).unwrap())
     }
 
     /// Add a registry package to the required packages
