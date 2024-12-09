@@ -281,7 +281,6 @@ impl BuildContext {
                         .key(),
                     ),
                     variant_configuration: self.variant_config.clone(),
-                    editable: todo!(),
                 },
                 build_reporter.as_conda_build_reporter(),
             )
