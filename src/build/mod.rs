@@ -232,50 +232,11 @@ impl BuildContext {
             )
             .await?;
 
+        // Check if there are already cached builds
         if let Some(build) = cached_build {
-            // Check to see if the cached build is up-to-date.
-            if let Some(source_input) = build.source {
-                let glob_time = GlobModificationTime::from_patterns(
-                    &source_checkout.path,
-                    source_input.globs.iter().map(String::as_str),
-                )
-                .map_err(BuildError::GlobModificationError)?;
-                match glob_time {
-                    GlobModificationTime::MatchesFound {
-                        modified_at,
-                        designated_file,
-                    } => {
-                        if build
-                            .record
-                            .package_record
-                            .timestamp
-                            .map(|t| t >= chrono::DateTime::<Utc>::from(modified_at))
-                            .unwrap_or(false)
-                        {
-                            build_reporter.on_build_cached(build_id);
-                            tracing::debug!("found an up-to-date cached build.");
-                            return Ok(build.record);
-                        } else {
-                            tracing::debug!(
-                                "found an stale cached build, {} is newer than {}",
-                                designated_file.display(),
-                                build.record.package_record.timestamp.unwrap_or_default()
-                            );
-                        }
-                    }
-                    GlobModificationTime::NoMatches => {
-                        // No matches, so we should rebuild.
-                        tracing::debug!(
-                            "found a stale cached build, no files match the source glob"
-                        );
-                    }
-                }
-            } else {
-                tracing::debug!("found a cached build");
+            if let Some(record) = Self::cached_build_source_record(build, &source_checkout)? {
                 build_reporter.on_build_cached(build_id);
-
-                // If there is no source info in the cache we assume its still valid.
-                return Ok(build.record);
+                return Ok(record);
             }
         }
 
@@ -596,6 +557,57 @@ impl BuildContext {
             metadata.packages,
             input_hash,
         ))
+    }
+
+    fn cached_build_source_record(
+        cached_build: CachedBuild,
+        source_checkout: &SourceCheckout,
+    ) -> Result<Option<RepoDataRecord>, BuildError> {
+        // Check to see if the cached build is up-to-date.
+        if let Some(source_input) = cached_build.source {
+            let glob_time = GlobModificationTime::from_patterns(
+                &source_checkout.path,
+                source_input.globs.iter().map(String::as_str),
+            )
+            .map_err(BuildError::GlobModificationError)?;
+            match glob_time {
+                GlobModificationTime::MatchesFound {
+                    modified_at,
+                    designated_file,
+                } => {
+                    if cached_build
+                        .record
+                        .package_record
+                        .timestamp
+                        .map(|t| t >= chrono::DateTime::<Utc>::from(modified_at))
+                        .unwrap_or(false)
+                    {
+                        tracing::debug!("found an up-to-date cached build.");
+                        return Ok(Some(cached_build.record));
+                    } else {
+                        tracing::debug!(
+                            "found an stale cached build, {} is newer than {}",
+                            designated_file.display(),
+                            cached_build
+                                .record
+                                .package_record
+                                .timestamp
+                                .unwrap_or_default()
+                        );
+                    }
+                }
+                GlobModificationTime::NoMatches => {
+                    // No matches, so we should rebuild.
+                    tracing::debug!("found a stale cached build, no files match the source glob");
+                }
+            }
+        } else {
+            tracing::debug!("found a cached build");
+            // If there is no source info in the cache we assume its still valid.
+            return Ok(Some(cached_build.record));
+        }
+
+        Ok(None)
     }
 }
 
