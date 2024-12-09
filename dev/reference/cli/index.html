@@ -1835,6 +1835,24 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#project-name-get" class="md-nav__link">
+    <span class="md-ellipsis">
+      project name get
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-name-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      project name set
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#project-platform-add" class="md-nav__link">
     <span class="md-ellipsis">
       project platform add
@@ -2585,6 +2603,24 @@
   <a href="#project-export-conda-explicit-spec" class="md-nav__link">
     <span class="md-ellipsis">
       project export conda-explicit-spec
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-name-get" class="md-nav__link">
+    <span class="md-ellipsis">
+      project name get
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-name-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      project name set
     </span>
   </a>
   
@@ -3865,9 +3901,22 @@ for an environment. The file can be then used to create a conda environment usin
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-65-1"><a id="__codelineno-65-1" name="__codelineno-65-1" href="#__codelineno-65-1"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-explicit-spec<span class="w"> </span>output
 </span><span id="__span-65-2"><a id="__codelineno-65-2" name="__codelineno-65-2" href="#__codelineno-65-2"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-explicit-spec<span class="w"> </span>-e<span class="w"> </span>default<span class="w"> </span>-e<span class="w"> </span><span class="nb">test</span><span class="w"> </span>-p<span class="w"> </span>linux-64<span class="w"> </span>output
 </span></code></pre></div>
+<h3 id="project-name-get"><code>project name get</code><a class="headerlink" href="#project-name-get" title="Permanent link">#</a></h3>
+<p>Get the project name.</p>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>name<span class="w"> </span>get
+</span><span id="__span-66-2"><a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a>my<span class="w"> </span>project<span class="w"> </span>name
+</span></code></pre></div>
+<h3 id="project-name-set"><code>project name set</code><a class="headerlink" href="#project-name-set" title="Permanent link">#</a></h3>
+<p>Set the project name.</p>
+<h5 id="arguments_37">Arguments<a class="headerlink" href="#arguments_37" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;NAME&gt;</code>: The name to set.</li>
+</ol>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>name<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;my new project name&quot;</span>
+</span></code></pre></div>
 <h3 id="project-platform-add"><code>project platform add</code><a class="headerlink" href="#project-platform-add" title="Permanent link">#</a></h3>
 <p>Adds a platform(s) to the manifest file and updates the lock file.</p>
-<h5 id="arguments_37">Arguments<a class="headerlink" href="#arguments_37" title="Permanent link">#</a></h5>
+<h5 id="arguments_38">Arguments<a class="headerlink" href="#arguments_38" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PLATFORM&gt;...</code>: The platforms to add.</li>
 </ol>
@@ -3876,20 +3925,20 @@ for an environment. The file can be then used to create a conda environment usin
 <li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
 <li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the platform will be added.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-66-1"><a id="__codelineno-66-1" name="__codelineno-66-1" href="#__codelineno-66-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>win-64
-</span><span id="__span-66-2"><a id="__codelineno-66-2" name="__codelineno-66-2" href="#__codelineno-66-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>win-64
+</span><span id="__span-68-2"><a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
 </span></code></pre></div>
 <h3 id="project-platform-list"><code>project platform list</code><a class="headerlink" href="#project-platform-list" title="Permanent link">#</a></h3>
 <p>List the platforms in the manifest file.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-67-1"><a id="__codelineno-67-1" name="__codelineno-67-1" href="#__codelineno-67-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>list
-</span><span id="__span-67-2"><a id="__codelineno-67-2" name="__codelineno-67-2" href="#__codelineno-67-2"></a>osx-64
-</span><span id="__span-67-3"><a id="__codelineno-67-3" name="__codelineno-67-3" href="#__codelineno-67-3"></a>linux-64
-</span><span id="__span-67-4"><a id="__codelineno-67-4" name="__codelineno-67-4" href="#__codelineno-67-4"></a>win-64
-</span><span id="__span-67-5"><a id="__codelineno-67-5" name="__codelineno-67-5" href="#__codelineno-67-5"></a>osx-arm64
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>list
+</span><span id="__span-69-2"><a id="__codelineno-69-2" name="__codelineno-69-2" href="#__codelineno-69-2"></a>osx-64
+</span><span id="__span-69-3"><a id="__codelineno-69-3" name="__codelineno-69-3" href="#__codelineno-69-3"></a>linux-64
+</span><span id="__span-69-4"><a id="__codelineno-69-4" name="__codelineno-69-4" href="#__codelineno-69-4"></a>win-64
+</span><span id="__span-69-5"><a id="__codelineno-69-5" name="__codelineno-69-5" href="#__codelineno-69-5"></a>osx-arm64
 </span></code></pre></div>
 <h3 id="project-platform-remove"><code>project platform remove</code><a class="headerlink" href="#project-platform-remove" title="Permanent link">#</a></h3>
 <p>Remove platform(s) from the manifest file and updates the lock file.</p>
-<h5 id="arguments_38">Arguments<a class="headerlink" href="#arguments_38" title="Permanent link">#</a></h5>
+<h5 id="arguments_39">Arguments<a class="headerlink" href="#arguments_39" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;PLATFORM&gt;...</code>: The platforms to remove.</li>
 </ol>
@@ -3898,27 +3947,27 @@ for an environment. The file can be then used to create a conda environment usin
 <li><code>--no-install</code>: do not update the environment, only add changed packages to the lock-file.</li>
 <li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the platform will be removed.</li>
 </ul>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-68-1"><a id="__codelineno-68-1" name="__codelineno-68-1" href="#__codelineno-68-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>win-64
-</span><span id="__span-68-2"><a id="__codelineno-68-2" name="__codelineno-68-2" href="#__codelineno-68-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-70-1"><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>win-64
+</span><span id="__span-70-2"><a id="__codelineno-70-2" name="__codelineno-70-2" href="#__codelineno-70-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>platform<span class="w"> </span>remove<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>win-64
 </span></code></pre></div>
 <h3 id="project-version-get"><code>project version get</code><a class="headerlink" href="#project-version-get" title="Permanent link">#</a></h3>
 <p>Get the project version.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-69-1"><a id="__codelineno-69-1" name="__codelineno-69-1" href="#__codelineno-69-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>get
-</span><span id="__span-69-2"><a id="__codelineno-69-2" name="__codelineno-69-2" href="#__codelineno-69-2"></a><span class="m">0</span>.11.0
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-71-1"><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>get
+</span><span id="__span-71-2"><a id="__codelineno-71-2" name="__codelineno-71-2" href="#__codelineno-71-2"></a><span class="m">0</span>.11.0
 </span></code></pre></div>
 <h3 id="project-version-set"><code>project version set</code><a class="headerlink" href="#project-version-set" title="Permanent link">#</a></h3>
 <p>Set the project version.</p>
-<h5 id="arguments_39">Arguments<a class="headerlink" href="#arguments_39" title="Permanent link">#</a></h5>
+<h5 id="arguments_40">Arguments<a class="headerlink" href="#arguments_40" title="Permanent link">#</a></h5>
 <ol>
 <li><code>&lt;VERSION&gt;</code>: The version to set.</li>
 </ol>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-70-1"><a id="__codelineno-70-1" name="__codelineno-70-1" href="#__codelineno-70-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;0.13.0&quot;</span>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-72-1"><a id="__codelineno-72-1" name="__codelineno-72-1" href="#__codelineno-72-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span><span class="nb">set</span><span class="w"> </span><span class="s2">&quot;0.13.0&quot;</span>
 </span></code></pre></div>
 <h3 id="project-version-majorminorpatch"><code>project version {major|minor|patch}</code><a class="headerlink" href="#project-version-majorminorpatch" title="Permanent link">#</a></h3>
 <p>Bump the project version to {MAJOR|MINOR|PATCH}.</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-71-1"><a id="__codelineno-71-1" name="__codelineno-71-1" href="#__codelineno-71-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>major
-</span><span id="__span-71-2"><a id="__codelineno-71-2" name="__codelineno-71-2" href="#__codelineno-71-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>minor
-</span><span id="__span-71-3"><a id="__codelineno-71-3" name="__codelineno-71-3" href="#__codelineno-71-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>patch
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-73-1"><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>major
+</span><span id="__span-73-2"><a id="__codelineno-73-2" name="__codelineno-73-2" href="#__codelineno-73-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>minor
+</span><span id="__span-73-3"><a id="__codelineno-73-3" name="__codelineno-73-3" href="#__codelineno-73-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>patch
 </span></code></pre></div>
 <div class="footnote">
 <hr />
