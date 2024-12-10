@@ -3590,7 +3590,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.39.2-rc0"
+version = "0.39.2-prerelease.0"
 dependencies = [
  "ahash",
  "assert_matches",
