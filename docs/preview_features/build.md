@@ -1,11 +1,5 @@
-!!! note
-    This feature is currently in preview phase. To enable use the [preview feature](../reference/pixi_manifest.md#preview-features).
-    ```toml
-    [project]
-    # .. other configuration
-    preview = ["build"]
-    ```
 
+## Introduction
 Sometimes you might need to build packages from source. This can be due to a variety of reasons, such as:
 
 1. You are using the package for local development, and want to install and build the package into your workspace.
@@ -15,12 +9,29 @@ Sometimes you might need to build packages from source. This can be due to a var
 We've been working to support these use-cases with the `build` feature in pixi. 
 The vision is to enable building of packages from source, for any language, on any platform.
 
+??? note "Preview feature"
+    This feature is currently in preview phase. To enable use the [preview feature](../reference/pixi_manifest.md#preview-features).
+    ```toml
+    [project]
+    # .. other configuration
+    preview = ["build"]
+    ```
+
+## Limitations
+Currently, the `build` feature has a number of limitations:
+
+1. Recursive source dependencies are not supported.
+2. Workspace dependencies cannot be inherited.
+3. Progress reporting should be improved.
+4. Only a limited number of languages and build systems are supported.
+5. Missing parametrization of build-systems.
+6. Using a feedstock directly as a source package is not supported.
+
 ## High-level overview
 There are a couple of key concepts that make it easier to understand how the `build` feature works. The two most important
 additions are the concept of a *package* and a *build-system*.
 
 ### Package
-
 The package defines the `build-system` and other fields in the future that are used to build your project.
 Currently, the dependencies, host-dependencies and other dependency fields are associated with the package.
 When you want to build a project you need to add this section.
@@ -42,9 +53,10 @@ To enable the new build feature, you need to add the correct build configuration
 Below, an example will be given for a pixi **project** containing a single python **package**. 
 
 1.  Enable the `build` feature in your `pixi.toml` file. And add the `[build-section]` to your `pixi.toml` file.
+    For clarity, rename the `[project]` section to `[workspace]` and add the `preview` key.
     ```toml
-    [project]
-    # ... other configuration
+    [workspace] # Used to be `project`
+    # ... other project/workspace configuration
     preview = ["build"]
     ```
 
@@ -77,7 +89,11 @@ Below, an example will be given for a pixi **project** containing a single pytho
       "https://prefix.dev/conda-forge",
     ]
     ```
-3. Add the correct *host dependencies* to your `pixi.toml` file.
+3. ??? note "Host dependencies"
+       Read up on host-dependencies in the [Dependency Types](../advanced/dependency_types.md#host-dependencies).
+   Add the correct *host dependencies* to your `pixi.toml` file.
+   We need to add these to the host dependencies, because of it using the wrong python prefix otherwise.
+   We want to change this in the future, to be a bit less of a hassle.
     ```toml
     [host-dependencies]
     # To be able to install this pyproject we need to install the dependencies of
@@ -93,3 +109,7 @@ Below, an example will be given for a pixi **project** containing a single pytho
     [dependencies]
     name_of_pkg = { path = "." }
     ```
+
+Now you can build your package with pixi:
+  * `pixi build` will build your source package into a `.conda` file.
+  * `pixi install` will install your source package into a conda environment.

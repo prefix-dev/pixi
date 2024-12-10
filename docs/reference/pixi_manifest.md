@@ -94,7 +94,7 @@ This should be a valid version based on the conda Version Spec.
 See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 
 ```toml
--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_version"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_version"
 ```
 
 ### `authors` (optional)
@@ -354,6 +354,8 @@ By default, `uv` and thus `pixi`, will stop at the first index on which a given 
     The `index-strategy` only changes PyPI package resolution and not conda package resolution.
 
 ## The `dependencies` table(s)
+??? info "Details regarding the dependencies"
+    For more detail regarding the dependency types, make sure to check the [Run, Host, Build](../advanced/dependency_types.md) dependency documentation.
 
 This section defines what dependencies you would like to use for your project.
 
@@ -362,6 +364,7 @@ The default is `[dependencies]`, which are dependencies that are shared across p
 
 Dependencies are defined using a [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html).
 A `VersionSpec` combines a [Version](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html) with an optional operator.
+
 
 Some examples are:
 
@@ -401,6 +404,29 @@ Even if the dependency defines a channel that channel should be added to the `pr
 python = ">3.9,<=3.11"
 rust = "1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+```
+
+
+### `host-dependencies`
+
+```toml
+[host-dependencies]
+python = "~=3.10.3"
+```
+Typical examples of host dependencies are:
+
+- Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
+- Libraries your project links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
+
+### `build-dependencies`
+
+This table contains dependencies that are needed to build the project.
+Different from `dependencies` and `host-dependencies` these packages are installed for the architecture of the _build_ machine.
+This enables cross-compiling from one machine architecture to another.
+
+```toml
+[build-dependencies]
+cmake = "~=3.24"
 ```
 
 ### `pypi-dependencies`
@@ -551,46 +577,6 @@ Sdists usually depend on system packages to be built, especially when compiling 
 Think for example of Python SDL2 bindings depending on the C library: SDL2.
 To help built these dependencies we activate the conda environment that includes these pypi dependencies before resolving.
 This way when a source distribution depends on `gcc` for example, it's used from the conda environment instead of the system.
-
-### `host-dependencies`
-
-This table contains dependencies that are needed to build your project but which should not be included when your project is installed as part of another project.
-In other words, these dependencies are available during the build but are no longer available when your project is installed.
-Dependencies listed in this table are installed for the architecture of the target machine.
-
-```toml
-[host-dependencies]
-python = "~=3.10.3"
-```
-
-Typical examples of host dependencies are:
-
-- Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
-- Libraries your project links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
-
-### `build-dependencies`
-
-This table contains dependencies that are needed to build the project.
-Different from `dependencies` and `host-dependencies` these packages are installed for the architecture of the _build_ machine.
-This enables cross-compiling from one machine architecture to another.
-
-```toml
-[build-dependencies]
-cmake = "~=3.24"
-```
-
-Typical examples of build dependencies are:
-
-- Compilers are invoked on the build machine, but they generate code for the target machine.
-  If the project is cross-compiled, the architecture of the build and target machine might differ.
-- `cmake` is invoked on the build machine to generate additional code- or project-files which are then include in the compilation process.
-
-!!! info
-    The _build_ target refers to the machine that will execute the build.
-    Programs and libraries installed by these dependencies will be executed on the build machine.
-
-    For example, if you compile on a MacBook with an Apple Silicon chip but target Linux x86_64 then your *build* platform is `osx-arm64` and your *host* platform is `linux-64`.
-
 ## The `activation` table
 
 The activation table is used for specialized activation operations that need to be run when the environment is activated.

@@ -127,9 +127,10 @@ nav:
       - Build: preview_features/build.md
   - Advanced:
       - Authentication: advanced/authentication.md
-      - Info Command: advanced/explain_info_command.md
       - Channel Logic: advanced/channel_priority.md
+      - Run, Host and Build: advanced/dependency_types.md
       - GitHub Actions: advanced/github_actions.md
+      - Info Command: advanced/explain_info_command.md
       - Updates using GitHub Actions: advanced/updates_github_actions.md
       - Production Deployment: advanced/production_deployment.md
       - Pyproject.toml: advanced/pyproject_toml.md
