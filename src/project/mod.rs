@@ -305,7 +305,7 @@ impl Project {
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {
-        if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
+        if let Ok(Some(detached_environments_path)) = self.config().detached_environments_path() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
                 self.name(),
