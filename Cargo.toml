@@ -362,7 +362,7 @@ tokio = { workspace = true, features = ["rt"] }
 # Config for 'dist'
 [workspace.metadata.dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.25.1"
+cargo-dist-version = "0.26.0-prerelease.3"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
@@ -386,10 +386,12 @@ dispatch-releases = true
 github-release = "announce"
 # Whether to auto-include files like READMEs, LICENSEs, and CHANGELOGs (default true)
 auto-includes = false
+# Whether to put the binaries in the root of the archive or not, this only applies to unix archives
+binaries-in-root = true
 # Which actions to run on pull requests
 pr-run-mode = "skip"
 # Skip checking whether the specified configuration files are up to date
-allow-dirty = ["msi"]
+allow-dirty = ["msi", "ci"]
 # Whether to sign macOS executables
 macos-sign = true
 
