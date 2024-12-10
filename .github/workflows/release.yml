@@ -290,7 +290,7 @@ jobs:
 
               # Extract the artifact contents
               # Because zip is only used on windows we can assume the binary is an exe
-              unzip -p "$artifact" pixi > unpacked-artifacts/$base_name.exe
+              unzip -p "$artifact" pixi.exe > unpacked-artifacts/$base_name.exe
           done
 
       # Upload unpacked artifacts, not sure how to do this in one go as you have to name the artifact
