@@ -152,7 +152,6 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
         env=env,
     )
 
-    # TODO: Is it always re-installing? If yes, how can we avoid that?
     # Verify that package is installed as editable
     verify_cli_command(
         [

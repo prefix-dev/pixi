@@ -21,6 +21,9 @@ pub struct SourceRecord {
     /// If this is `None`, the input hash was not computed or is not relevant
     /// for this record. The record can always be considered up to date.
     pub input_hash: Option<InputHash>,
+
+    /// Whether the package is installed as editable
+    pub editable: bool,
 }
 
 /// Defines the hash of the input files that were used to build the metadata of
@@ -45,6 +48,7 @@ impl From<SourceRecord> for CondaPackageData {
                 hash: i.hash,
                 globs: i.globs,
             }),
+            editable: value.editable,
         })
     }
 }
@@ -60,6 +64,7 @@ impl TryFrom<CondaSourceData> for SourceRecord {
                 hash: hash.hash,
                 globs: hash.globs,
             }),
+            editable: value.editable,
         })
     }
 }

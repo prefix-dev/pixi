@@ -266,8 +266,8 @@ impl BuildContext {
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },
-                    // FIXME
-                    editable: Some(PathBuf::from_str("/var/home/julian/Projekte/github.com/prefix-dev/pixi-1/pytest-temp/test_editable_pyproject0/editable-pyproject").unwrap()),
+                    // FIXME: don't hardcode path, also figure out why source_spec.editable is false
+                    editable: source_spec.editable.then(|| PathBuf::from_str("/var/home/julian/Projekte/github.com/prefix-dev/pixi-1/pytest-temp/test_editable_pyproject0/editable-pyproject").unwrap()),
                     outputs: Some(vec![CondaOutputIdentifier {
                         name: Some(source_spec.package_record.name.as_normalized().to_string()),
                         version: Some(source_spec.package_record.version.version().to_string()),
@@ -371,6 +371,7 @@ impl BuildContext {
                     path: source_path,
                     pinned: PinnedPathSpec {
                         path: path.path.clone(),
+                        editable: source_spec.editable(),
                     }
                     .into(),
                 })
@@ -625,6 +626,7 @@ fn source_metadata_to_records(
             SourceRecord {
                 input_hash: input_hash.clone(),
                 source: source.pinned.clone(),
+                editable: source.pinned.editable(),
                 package_record: PackageRecord {
                     // We cannot now these values from the metadata because no actual package
                     // was built yet.
