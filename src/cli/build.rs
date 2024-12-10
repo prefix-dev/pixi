@@ -165,6 +165,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     base_url: channel_config.channel_alias,
                 },
                 outputs: None,
+                // FIXME
+                editable: None,
                 work_directory: work_dir.path().to_path_buf(),
                 variant_configuration: Some(Default::default()),
             },

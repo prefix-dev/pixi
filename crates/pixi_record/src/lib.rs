@@ -99,6 +99,9 @@ pub enum ParseLockFileError {
     #[error("invalid url for package {0}")]
     InvalidRecordUrl(UrlOrPath, #[source] file_url::FileURLParseError),
 
+    #[error("type of package {0} needs to be {1}")]
+    InvalidType(UrlOrPath, String),
+
     #[error(transparent)]
     PinnedSourceSpecError(#[from] pinned_source::ParseError),
 }

@@ -70,6 +70,10 @@ impl PinnedSourceSpec {
         }
     }
 
+    pub fn editable(&self) -> bool {
+        self.as_path().map(|p| p.editable).unwrap_or(false)
+    }
+
     /// Converts this instance into a [`MutablePinnedSourceSpec`], or if this
     /// instance does not refer to mutable source the original
     /// [`PinnedSourceSpec`].
@@ -147,6 +151,7 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
 #[derive(Debug, Clone)]
 pub struct PinnedPathSpec {
     pub path: Utf8TypedPathBuf,
+    pub editable: bool,
 }
 
 impl PinnedPathSpec {
@@ -197,17 +202,6 @@ impl From<PinnedUrlSpec> for UrlOrPath {
 
 #[derive(Debug, Error)]
 pub enum ParseError {}
-
-impl TryFrom<UrlOrPath> for PinnedSourceSpec {
-    type Error = ParseError;
-
-    fn try_from(value: UrlOrPath) -> Result<Self, Self::Error> {
-        match value {
-            UrlOrPath::Url(_) => unimplemented!(),
-            UrlOrPath::Path(path) => Ok(PinnedPathSpec { path }.into()),
-        }
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum SourceMismatchError {

@@ -332,6 +332,16 @@ pub enum SourceSpec {
     Path(PathSourceSpec),
 }
 
+impl SourceSpec {
+    /// Whether the spec is editable
+    pub fn editable(&self) -> bool {
+        match self {
+            Self::Path(path) => path.editable,
+            _ => false,
+        }
+    }
+}
+
 impl From<SourceSpec> for PixiSpec {
     fn from(value: SourceSpec) -> Self {
         match value {

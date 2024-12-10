@@ -43,6 +43,9 @@ pub struct CondaBuildParams {
     ///
     /// The directory may not yet exist.
     pub work_directory: PathBuf,
+
+    /// The path to the editable package
+    pub editable: Option<PathBuf>,
 }
 
 /// Identifier of an output.
