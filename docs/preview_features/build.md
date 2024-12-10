@@ -24,7 +24,7 @@ Currently, the `build` feature has a number of limitations:
 2. Workspace dependencies cannot be inherited.
 3. Progress reporting should be improved.
 4. Limited set of [build-backends](https://github.com/prefix-dev/pixi-build-backends).
-5. Missing parametrization of build-systems.
+5. Build-backends are probably missing a lot of parameters/features.
 6. Using a feedstock directly as a source package is not supported.
 
 ## High-level overview
