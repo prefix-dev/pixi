@@ -20,7 +20,7 @@ The vision is to enable building of packages from source, for any language, on a
 ## Limitations
 Currently, the `build` feature has a number of limitations:
 
-1. Recursive source dependencies are not supported.
+1. Recursive source dependencies are not supported. ( source dependencies that have source dependencies )
 2. Workspace dependencies cannot be inherited.
 3. Progress reporting should be improved.
 4. Only a limited number of languages and build systems are supported.
