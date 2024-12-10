@@ -74,7 +74,7 @@ jobs:
       - name: Install cargo-dist from git
         uses: baptiste0928/cargo-install@v3
         with:
-          crate: cargo-sort
+          crate: cargo-dist
           git: https://github.com/ruben-arts/cargo-dist
           branch: feature/allow_binaries_in_root_of_tar
 
