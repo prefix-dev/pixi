@@ -14,7 +14,7 @@ The vision is to enable building of packages from source, for any language, on a
     ```toml
     [project]
     # .. other configuration
-    preview = ["build"]
+    preview = ["pixi-build"]
     ```
 
 ## Limitations
