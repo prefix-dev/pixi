@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
+use pixi_spec::{GitSpec, PathSourceSpec, Reference, SourceSpec, UrlSourceSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
 use thiserror::Error;
@@ -134,7 +134,7 @@ impl From<PinnedUrlSpec> for PinnedSourceSpec {
 pub struct PinnedGitSpec {
     pub git: Url,
     pub commit: String,
-    pub rev: Option<GitReference>,
+    pub rev: Option<Reference>,
 }
 
 impl From<PinnedGitSpec> for PinnedSourceSpec {
@@ -185,6 +185,7 @@ impl From<PinnedPathSpec> for UrlOrPath {
 
 impl From<PinnedGitSpec> for UrlOrPath {
     fn from(_value: PinnedGitSpec) -> Self {
+        // TODO: implement this first
         unimplemented!()
     }
 }
@@ -301,7 +302,7 @@ impl PinnedGitSpec {
         let locked_git_ref = self
             .rev
             .clone()
-            .unwrap_or_else(|| GitReference::Rev(self.commit.clone()));
+            .unwrap_or_else(|| Reference::Rev(self.commit.clone()));
 
         if let Some(requested_ref) = &spec.rev {
             if requested_ref != &locked_git_ref {

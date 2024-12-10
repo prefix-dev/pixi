@@ -11,13 +11,13 @@ pub struct GitSpec {
 
     /// The git revision of the package
     #[serde(skip_serializing_if = "Option::is_none", flatten)]
-    pub rev: Option<GitReference>,
+    pub rev: Option<Reference>,
 }
 
 /// A reference to a specific commit in a git repository.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum GitReference {
+pub enum Reference {
     /// The HEAD commit of a branch.
     Branch(String),
 
@@ -28,12 +28,12 @@ pub enum GitReference {
     Rev(String),
 }
 
-impl Display for GitReference {
+impl Display for Reference {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            GitReference::Branch(branch) => write!(f, "{}", branch),
-            GitReference::Tag(tag) => write!(f, "{}", tag),
-            GitReference::Rev(rev) => write!(f, "{}", rev),
+            Reference::Branch(branch) => write!(f, "{}", branch),
+            Reference::Tag(tag) => write!(f, "{}", tag),
+            Reference::Rev(rev) => write!(f, "{}", rev),
         }
     }
 }

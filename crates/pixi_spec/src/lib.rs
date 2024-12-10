@@ -17,7 +17,7 @@ mod url;
 use std::{path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
-pub use git::{GitReference, GitSpec};
+pub use git::{GitSpec, Reference};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
@@ -257,6 +257,7 @@ impl PixiSpec {
 
     /// Converts this instance in a source or binary spec.
     pub fn into_source_or_binary(self) -> Either<SourceSpec, BinarySpec> {
+        eprintln!("into_source_or_binary: {:?}", self);
         match self {
             PixiSpec::Version(version) => Either::Right(BinarySpec::Version(version)),
             PixiSpec::DetailedVersion(detailed) => {

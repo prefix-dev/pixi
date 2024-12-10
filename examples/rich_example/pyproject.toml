@@ -12,7 +12,8 @@ requires = ["hatchling"]
 
 [tool.pixi.project]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+# platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+platforms = ["osx-arm64"]
 preview = ["pixi-build"]
 
 [tool.pixi.host-dependencies]
@@ -55,6 +56,8 @@ test = "rich_example"
 [tool.pixi.dependencies]
 rich = ">=13.9.4,<14"
 rich_example = { path = "." }
+
+boltons = { git = "https://github.com/mahmoud/boltons.git", branch = "master" }
 
 # This section marks the project as a pixi package.
 #

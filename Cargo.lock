@@ -3640,6 +3640,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_default_versions",
+ "pixi_git",
  "pixi_glob",
  "pixi_manifest",
  "pixi_progress",
@@ -3800,6 +3801,25 @@ name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
  "rattler_conda_types",
+]
+
+[[package]]
+name = "pixi_git"
+version = "0.0.1"
+dependencies = [
+ "dashmap",
+ "dunce",
+ "fs-err 2.11.0",
+ "miette 7.2.0",
+ "reqwest",
+ "reqwest-middleware",
+ "serde",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "url",
+ "urlencoding",
+ "which 6.0.3",
 ]
 
 [[package]]

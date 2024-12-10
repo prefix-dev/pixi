@@ -26,15 +26,17 @@ use pixi_build_types::{
 use pixi_config::get_cache_dir;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
-use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
-use pixi_spec::SourceSpec;
+use pixi_record::{InputHash, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
+use pixi_spec::{GitSpec, Reference, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
+
+use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl};
 use rattler_digest::Sha256;
 pub use reporters::{BuildMetadataReporter, BuildReporter};
 use thiserror::Error;
-use tracing::instrument;
+use tracing::{debug, instrument};
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 use xxhash_rust::xxh3::Xxh3;
@@ -55,6 +57,9 @@ pub struct BuildContext {
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
     variant_config: Option<HashMap<String, Vec<String>>>,
+
+    /// The resolved Git references.
+    git: GitResolver,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -129,6 +134,7 @@ impl BuildContext {
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
             variant_config,
+            git: GitResolver::default(),
         })
     }
 
@@ -176,6 +182,7 @@ impl BuildContext {
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
+        eprintln!("fetching {:?}", source_spec);
         let source = self.fetch_source(source_spec).await?;
         let records = self
             .extract_records(
@@ -360,7 +367,19 @@ impl BuildContext {
     ) -> Result<SourceCheckout, BuildError> {
         match source_spec {
             SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
-            SourceSpec::Git(_) => unimplemented!("fetching Git sources is not yet implemented"),
+            SourceSpec::Git(git_spec) => {
+                let fetched = self.resolve_git(git_spec.clone()).await.unwrap();
+                debug!("fetched {:?}", fetched);
+                let source_checkout = SourceCheckout {
+                    path: fetched.clone().into_path(),
+                    pinned: PinnedSourceSpec::Git(PinnedGitSpec {
+                        git: fetched.git().repository().clone(),
+                        commit: fetched.git().precise().unwrap().to_string(),
+                        rev: None,
+                    }),
+                };
+                Ok(source_checkout)
+            }
             SourceSpec::Path(path) => {
                 let source_path = self
                     .resolve_path(path.path.to_path())
@@ -419,6 +438,35 @@ impl BuildContext {
             debug_assert!(root_dir.is_absolute());
             normalize_absolute_path(&root_dir.join(native_path))
         }
+    }
+
+    /// Resolves the source path to a full path.
+    ///
+    /// This function does not check if the path exists and also does not follow
+    /// symlinks.
+    async fn resolve_git(&self, git: GitSpec) -> miette::Result<Fetch> {
+        let git_reference = match git.rev {
+            Some(Reference::Branch(branch)) => GitReference::Branch(branch),
+            Some(Reference::Tag(tag)) => GitReference::Tag(tag),
+            Some(Reference::Rev(rev)) => GitReference::from_rev(rev),
+            None => GitReference::DefaultBranch,
+        };
+
+        let git_url = GitUrl::from_reference(git.git, git_reference);
+
+        let resolver = self
+            .git
+            .fetch(
+                &git_url,
+                self.tool_context.clone().client.clone(),
+                self.cache_dir.clone(),
+            )
+            .await
+            .into_diagnostic()?;
+
+        Ok(resolver)
+
+        // now we have fetched the git repository, we need to checkout the specific revision
     }
 
     /// Extracts the metadata from a package whose source is located at the
