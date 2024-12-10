@@ -45,7 +45,7 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
                 .map_err(|err| match err {
                     ParseCondaLockError::IncompatibleVersion{ lock_file_version, max_supported_version} => {
                         miette::miette!(
-                            help="Please update `pixi` version to the latest version and try again.",
+                            help="Please update pixi to the latest version and try again.",
                             "The lock file version is {}, but only up to including version {} is supported by the current version.",
                             lock_file_version, max_supported_version
                         )
