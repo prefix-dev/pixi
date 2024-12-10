@@ -321,15 +321,12 @@ nix = { workspace = true, features = ["poll", "term"] }
 pixi_pty = { path = "crates/pixi_pty" }
 signal-hook = { workspace = true }
 
-# TODO revert these change, these are for quicker testing
 [profile.dist]
-codegen-units = 16
-#codegen-units = 1
+codegen-units = 1
 inherits = "release"
 lto = "fat"
 opt-level = 3
-strip = false
-# strip = "symbols"
+strip = "symbols"
 
 [profile.ci]
 codegen-units = 16
@@ -375,14 +372,13 @@ windows-archive = ".zip"
 # The archive format to use for non-windows builds (defaults .tar.xz)
 unix-archive = ".tar.gz"
 # Target platforms to build apps for (Rust target-triple syntax)
-# TODO: disabled for quicker testing
 targets = [
-  #  "aarch64-apple-darwin",
-  #  "aarch64-unknown-linux-musl",
-  #  "aarch64-pc-windows-msvc",
-  #  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "aarch64-unknown-linux-musl",
+  "aarch64-pc-windows-msvc",
+  "x86_64-apple-darwin",
   "x86_64-unknown-linux-musl",
-  #  "x86_64-pc-windows-msvc",
+  "x86_64-pc-windows-msvc",
 ]
 # Whether CI should trigger releases with dispatches instead of tag pushes
 dispatch-releases = true
