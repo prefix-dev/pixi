@@ -6,7 +6,7 @@ Sometimes you might need to build packages from source. This can be due to a var
 2. You want to use source for a package that is not available on conda-forge.
 3. You want to build your package locally into a conda package.
 
-We've been working to support these use-cases with the `build` feature in pixi. 
+We've been working to support these use-cases with the `build` feature in pixi.
 The vision is to enable building of packages from source, for any language, on any platform.
 
 ??? note "Preview feature"
@@ -37,7 +37,7 @@ Currently, the dependencies, host-dependencies and other dependency fields are a
 When you want to build a project you need to add this section.
 
 ### Build-system
-This defines the backend that is used to build the package. 
+This defines the backend that is used to build the package.
 The backend is an executable that is installed and invoked by pixi with the sole purpose to build the package.
 Backends can be versioned and are installed from a conda channel, by pixi.
 The currently available backends can be viewed in the [pixi-build-backends](https://prefix.dev/pixi-build-backends) channel.
@@ -50,7 +50,7 @@ The source of the backends is available in the [pixi-build-backends](https://git
     The new build feature is currently in preview, and both the manifest configuration and the build backends are subject to change.
 
 To enable the new build feature, you need to add the correct build configuration to your `pixi.toml` file.
-Below, an example will be given for a pixi **project** containing a single python **package**. 
+Below, an example will be given for a pixi **project** containing a single python **package**.
 
 1.  Enable the `build` feature in your `pixi.toml` file. And add the `[build-section]` to your `pixi.toml` file.
     For clarity, rename the `[project]` section to `[workspace]` and add the `preview` key.
@@ -60,7 +60,7 @@ Below, an example will be given for a pixi **project** containing a single pytho
     preview = ["build"]
     ```
 
-2. Add the `package` and the `build-system` section to your `pixi.toml` file. 
+2. Add the `package` and the `build-system` section to your `pixi.toml` file.
     ```toml
     # This section marks the project as a pixi package.
     #
@@ -68,7 +68,7 @@ Below, an example will be given for a pixi **project** containing a single pytho
     # However, since all these fields are already defined in the [project] section
     # at the top of this file they are not required.
     [package]
-   
+
     # The build-system section defines the build system that will be used to turn
     # the source code of this package into a conda package. Similarly to the above
     # [build-system] section this section instructs pixi which build backend to

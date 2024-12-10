@@ -32,7 +32,7 @@ Otherwise, it would use the wrong python prefix during the build process.
 This is more of a technical limitation, and we are looking into ways to make this less of a hassle.
 But for now, you will need to add these dependencies to the `host-dependencies` section.
 
-So as an example, say we want to use `hatchling` and `uv` as to build a python package. 
+So as an example, say we want to use `hatchling` and `uv` as to build a python package.
 You need to use, something like this in your manifest file:
 
 ```toml
@@ -41,7 +41,7 @@ hatchling = "*"
 uv = "*"
 ```
 
-#### Native code 
+#### Native code
 When cross-compiling, you might need to specify host dependencies that should have the *target* machine architecture, and are used during the build process.
 For example, for linking a library.
 Let's recap an explanation from here [A Master Guide To Linux Cross-Compiling](https://ruvi-d.medium.com/a-master-guide-to-linux-cross-compiling-b894bf909386)
@@ -81,9 +81,9 @@ When using something like `zlib`, you would only need to specify it in the `host
 ??? note "pixi-build-cmake"
     When using the `pixi-build-cmake` backend you do not need to specify `cmake` or the compiler as a dependency.
     The backend will install `cmake`, `ninja` and the C++ compilers by default.
-    
-This table contains dependencies that are needed to build the project. 
-Different from dependencies and host-dependencies these packages are installed for the architecture of the build machine. 
+
+This table contains dependencies that are needed to build the project.
+Different from dependencies and host-dependencies these packages are installed for the architecture of the build machine.
 This enables cross-compiling from one machine architecture to another.
 
 Typical examples of build dependencies are:
@@ -97,4 +97,3 @@ Typical examples of build dependencies are:
     Programs and libraries installed by these dependencies will be executed on the build machine.
 
     For example, if you compile on a MacBook with an Apple Silicon chip but target Linux x86_64 then your *build* platform is `osx-arm64` and your *host* platform is `linux-64`.
-    
