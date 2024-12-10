@@ -33,8 +33,7 @@ additions are the concept of a *package* and a *build-system*.
 
 ### Package
 The package defines the `build-system` and other fields in the future that are used to build your project.
-Currently, the dependencies, host-dependencies and other dependency fields are associated with the package.
-When you want to build a project you need to add this section.
+Currently, the `dependencies`, `host-dependencies` and `build-dependencies` fields are associated with the package.
 
 ### Build-system
 This defines the backend that is used to build the package.
