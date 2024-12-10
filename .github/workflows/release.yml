@@ -268,21 +268,28 @@ jobs:
           path: dist-manifest.json
 
       # Unpack binaries, required for setup-pixi
-      - name: Unpack binaries
+      - name: Unpack binaries tar
         run: |
           mkdir -p unpacked-artifacts
           for artifact in target/distrib/*.tar.gz; do
+            echo artifact: $artifact
             # Extract the base name without the extension
             base_name=$(basename "$artifact" .tar.gz)
 
-            # Create a directory for the specific artifact
-            mkdir -p unpacked-artifacts/$base_name
-
             # Extract the artifact contents
-            tar -xvf "$artifact" -C unpacked-artifacts/$base_name
+            tar -xvf "$artifact" pixi > unpacked-artifacts/$base_name
+            chmod +x unpacked-artifacts/$base_name
+          done
+      - name: Unpack binaries zip
+        run: |
+          for artifact in target/distrib/*.zip; do
+              echo artifact: $artifact
+              # Extract the base name without the extension
+              base_name=$(basename "$artifact" .zip)
 
-            # Move the pixi binary to the base name
-            mv unpacked-artifacts/$base_name/pixi unpacked-artifacts/$base_name
+              # Extract the artifact contents
+              # Because zip is only used on windows we can assume the binary is an exe
+              unzip -p "$artifact" pixi > unpacked-artifacts/$base_name.exe
           done
 
       # Upload unpacked artifacts, not sure how to do this in one go as you have to name the artifact
