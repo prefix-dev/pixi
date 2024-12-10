@@ -370,12 +370,23 @@ impl BuildContext {
             SourceSpec::Git(git_spec) => {
                 let fetched = self.resolve_git(git_spec.clone()).await.unwrap();
                 debug!("fetched {:?}", fetched);
+
+                let path = if git_spec.subdirectory.is_some() {
+                    fetched
+                        .clone()
+                        .into_path()
+                        .join(git_spec.subdirectory.as_ref().unwrap())
+                } else {
+                    fetched.clone().into_path()
+                };
+
                 let source_checkout = SourceCheckout {
-                    path: fetched.clone().into_path(),
+                    path,
                     pinned: PinnedSourceSpec::Git(PinnedGitSpec {
                         git: fetched.git().repository().clone(),
                         commit: fetched.git().precise().unwrap().to_string(),
-                        rev: None,
+                        rev: git_spec.rev.clone(),
+                        subdirectory: git_spec.subdirectory.clone(),
                     }),
                 };
                 Ok(source_checkout)

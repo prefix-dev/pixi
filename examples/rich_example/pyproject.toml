@@ -57,7 +57,7 @@ test = "rich_example"
 rich = ">=13.9.4,<14"
 rich_example = { path = "." }
 
-boltons = { git = "https://github.com/mahmoud/boltons.git", branch = "master" }
+boltons = { git = "https://github.com/wolfv/pixi-build-examples.git", branch = "main", subdirectory = "boost-check" }
 
 # This section marks the project as a pixi package.
 #

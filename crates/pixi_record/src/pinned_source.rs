@@ -135,6 +135,7 @@ pub struct PinnedGitSpec {
     pub git: Url,
     pub commit: String,
     pub rev: Option<Reference>,
+    pub subdirectory: Option<String>,
 }
 
 impl From<PinnedGitSpec> for PinnedSourceSpec {

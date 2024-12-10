@@ -42,6 +42,9 @@ pub struct TomlSpec {
     /// The git revision of the package
     pub tag: Option<String>,
 
+    /// The git subdirectory of the package
+    pub subdirectory: Option<String>,
+
     /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     pub build: Option<StringMatcher>,
@@ -256,7 +259,12 @@ impl TomlSpec {
                         return Err(SpecError::MultipleGitRefs);
                     }
                 };
-                PixiSpec::Git(GitSpec { git, rev })
+                let subdirectory = self.subdirectory;
+                PixiSpec::Git(GitSpec {
+                    git,
+                    rev,
+                    subdirectory,
+                })
             }
             (None, None, None) => {
                 let is_detailed = self.version.is_some()

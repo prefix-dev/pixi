@@ -12,6 +12,10 @@ pub struct GitSpec {
     /// The git revision of the package
     #[serde(skip_serializing_if = "Option::is_none", flatten)]
     pub rev: Option<Reference>,
+
+    /// The git subdirectory of the package
+    #[serde(skip_serializing_if = "Option::is_none", flatten)]
+    pub subdirectory: Option<String>,
 }
 
 /// A reference to a specific commit in a git repository.
