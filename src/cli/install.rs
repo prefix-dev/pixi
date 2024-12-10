@@ -31,18 +31,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.config);
 
-    dbg!(&project.clone().manifest.package.unwrap());
-    dbg!(
-        &project
-            .clone()
-            .manifest
-            .workspace
-            .default_feature()
-            .targets
-            .default()
-            .dependencies
-    );
-
     // Install either:
     //
     // 1. specific environments

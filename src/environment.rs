@@ -762,7 +762,6 @@ pub async fn update_prefix_conda(
 
     let mut progress_reporter = None;
     let source_records_length = source_records.len();
-    dbg!(&source_records);
     // Build conda packages out of the source records
     let mut processed_source_packages = stream::iter(source_records)
         .map(Ok)

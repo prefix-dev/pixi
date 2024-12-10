@@ -1,9 +1,9 @@
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
-use rattler_lock::{CondaPackageData, CondaSourceData};
+use rattler_lock::{CondaPackageData, CondaSourceData, UrlOrPath};
 use serde::{Deserialize, Serialize};
 
-use crate::{ParseLockFileError, PinnedSourceSpec};
+use crate::{ParseLockFileError, PinnedPathSpec, PinnedSourceSpec};
 
 /// A record of a conda package that still requires building.
 #[derive(Debug, Clone)]
@@ -59,7 +59,19 @@ impl TryFrom<CondaSourceData> for SourceRecord {
     fn try_from(value: CondaSourceData) -> Result<Self, Self::Error> {
         Ok(Self {
             package_record: value.package_record,
-            source: value.location.try_into()?,
+            source: value
+                .location
+                .as_path()
+                .map(|path| {
+                    PinnedPathSpec {
+                        path: path.to_path_buf(),
+                        editable: value.editable,
+                    }
+                    .into()
+                })
+                .ok_or_else(|| {
+                    ParseLockFileError::InvalidType(value.location, "Path".to_string())
+                })?,
             input_hash: value.input.map(|hash| InputHash {
                 hash: hash.hash,
                 globs: hash.globs,

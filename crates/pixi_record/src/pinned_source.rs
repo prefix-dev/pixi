@@ -203,21 +203,6 @@ impl From<PinnedUrlSpec> for UrlOrPath {
 #[derive(Debug, Error)]
 pub enum ParseError {}
 
-impl TryFrom<UrlOrPath> for PinnedSourceSpec {
-    type Error = ParseError;
-
-    fn try_from(value: UrlOrPath) -> Result<Self, Self::Error> {
-        match value {
-            UrlOrPath::Url(_) => unimplemented!(),
-            UrlOrPath::Path(path) => Ok(PinnedPathSpec {
-                path,
-                editable: false,
-            }
-            .into()),
-        }
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum SourceMismatchError {
     #[error("the locked path '{locked}' does not match the requested path '{requested}'")]
