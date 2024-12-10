@@ -134,7 +134,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Uncompress the archive
     if archive_name.ends_with(".tar.gz") {
         let mut archive = Archive::new(GzDecoder::new(archived_tempfile.as_file()));
-        archive.unpack(binary_tempdir).into_diagnostic()?;
+
+        for entry in archive.entries().into_diagnostic()? {
+            let mut entry = entry.into_diagnostic()?;
+            // Strip the first component from the path
+            let path = entry.path().into_diagnostic()?;
+            let stripped_path = path.iter().skip(1).collect::<std::path::PathBuf>();
+
+            if !stripped_path.as_os_str().is_empty() {
+                let final_path = binary_tempdir.path().join(stripped_path);
+                entry.unpack(final_path).into_diagnostic()?;
+            }
+        }
     } else if archive_name.ends_with(".zip") {
         let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
         archive.extract(binary_tempdir).into_diagnostic()?;
