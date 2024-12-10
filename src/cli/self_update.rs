@@ -7,6 +7,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use reqwest::Client;
 use serde::Deserialize;
+use tempfile::{NamedTempFile, TempDir};
 
 /// Update pixi to the latest version or a specific version.
 #[derive(Debug, clap::Parser)]
@@ -133,19 +134,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Uncompress the archive
     if archive_name.ends_with(".tar.gz") {
-        let mut archive = Archive::new(GzDecoder::new(archived_tempfile.as_file()));
-
-        for entry in archive.entries().into_diagnostic()? {
-            let mut entry = entry.into_diagnostic()?;
-            // Strip the first component from the path
-            let path = entry.path().into_diagnostic()?;
-            let stripped_path = path.iter().skip(1).collect::<std::path::PathBuf>();
-
-            if !stripped_path.as_os_str().is_empty() {
-                let final_path = binary_tempdir.path().join(stripped_path);
-                entry.unpack(final_path).into_diagnostic()?;
-            }
-        }
+        unpack_tar_gz(&archived_tempfile, binary_tempdir)?;
     } else if archive_name.ends_with(".zip") {
         let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
         archive.extract(binary_tempdir).into_diagnostic()?;
@@ -171,6 +160,34 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         target_version
     );
 
+    Ok(())
+}
+
+/// Unpack files from a tar.gz archive to a target directory.
+fn unpack_tar_gz(
+    archived_tempfile: &NamedTempFile,
+    binary_tempdir: &TempDir,
+) -> miette::Result<()> {
+    let mut archive = Archive::new(GzDecoder::new(archived_tempfile.as_file()));
+
+    for entry in archive.entries().into_diagnostic()? {
+        let mut entry = entry.into_diagnostic()?;
+        let path = entry.path().into_diagnostic()?;
+
+        // Skip directories; we only care about files.
+        if entry.header().entry_type().is_file() {
+            // Create a flat path by stripping any directory components.
+            let stripped_path = path
+                .file_name()
+                .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
+
+            // Construct the final path in the target directory.
+            let final_path = binary_tempdir.path().join(stripped_path);
+
+            // Unpack the file to the destination.
+            entry.unpack(final_path).into_diagnostic()?;
+        }
+    }
     Ok(())
 }
 
@@ -228,4 +245,53 @@ pub async fn execute_stub(_: Args) -> miette::Result<()> {
     miette::bail!(
         message.unwrap_or("This version of pixi was built without self-update support. Please use your package manager to update pixi.")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    #[test]
+    pub fn test_unarchive_flat_structure() {
+        // This archive contains a single file named "a_file"
+        // So we expect the file to be extracted to the target directory
+
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let archive_path = manifest_dir.join("tests").join("pixi_flat_archive.tar.gz");
+
+        let named_tempfile = tempfile::NamedTempFile::new().unwrap();
+        let binary_tempdir = tempfile::tempdir().unwrap();
+
+        fs_err::copy(archive_path, named_tempfile.path()).unwrap();
+
+        super::unpack_tar_gz(&named_tempfile, &binary_tempdir).unwrap();
+
+        let binary_path = binary_tempdir.path().join("a_file");
+        assert!(binary_path.exists());
+    }
+
+    #[test]
+    pub fn test_unarchive_nested_structure() {
+        // This archive contains following nested structure
+        // pixi_nested_archive.tar.gz
+        // ├── some_pixi (directory)
+        // │   └── some_pixi (file)
+        // So we want to test that we can extract only the file to the target directory
+        // without parent directory
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let archive_path = manifest_dir
+            .join("tests")
+            .join("pixi_nested_archive.tar.gz");
+
+        let named_tempfile = tempfile::NamedTempFile::new().unwrap();
+        let binary_tempdir = tempfile::tempdir().unwrap();
+
+        fs_err::copy(archive_path, named_tempfile.path()).unwrap();
+
+        super::unpack_tar_gz(&named_tempfile, &binary_tempdir).unwrap();
+
+        let binary_path = binary_tempdir.path().join("some_pixi");
+        assert!(binary_path.exists());
+        assert!(binary_path.is_file());
+    }
 }
