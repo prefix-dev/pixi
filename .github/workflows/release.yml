@@ -135,12 +135,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install cached dist
-        uses: actions/download-artifact@v4
+      # Install fork of dist to allow for binaries in the root of the tarball
+      - name: Install cargo-dist from git
+        uses: baptiste0928/cargo-install@v3
         with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/
-      - run: chmod +x ~/.cargo/bin/dist
+          crate: cargo-dist
+          git: https://github.com/ruben-arts/cargo-dist
+          branch: feature/allow_binaries_in_root_of_tar
       # Get the dist-manifest
       - name: Fetch local artifacts
         uses: actions/download-artifact@v4
