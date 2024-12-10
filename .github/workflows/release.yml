@@ -279,18 +279,48 @@ jobs:
             mkdir -p unpacked-artifacts/$base_name
 
             # Extract the artifact contents
-            tar -xvf --strip-component=1 "$artifact" -C unpacked-artifacts/$base_name
+            tar -xvf "$artifact" -C unpacked-artifacts/$base_name
 
             # Move the pixi binary to the base name
             mv unpacked-artifacts/$base_name/pixi unpacked-artifacts/$base_name
           done
 
-      # Test single binary upload
+      # Upload unpacked artifacts, not sure how to do this in one go as you have to name the artifact
       - name: Upload unpacked artifact for pixi-aarch64-unknown-linux-musl
         uses: actions/upload-artifact@v4
         with:
-          name: pixi-aarch64-unknown-linux-musl
+          name: artifacts-pixi-aarch64-unknown-linux-musl
           path: unpacked-artifacts/pixi-aarch64-unknown-linux-musl
+
+      - name: Upload unpacked artifact for pixi-x86_64-unknown-linux-musl
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-x86_64-unknown-linux-musl
+          path: unpacked-artifacts/pixi-x86_64-unknown-linux-musl
+
+      - name: Upload unpacked artifact for pixi-aarch64-apple-darwin
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-aarch64-apple-darwin
+          path: unpacked-artifacts/pixi-aarch64-apple-darwin
+
+      - name: Upload unpacked artifact for pixi-x86_64-apple-darwin
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-x86_64-apple-darwin
+          path: unpacked-artifacts/pixi-x86_64-apple-darwin
+
+      - name: Upload unpacked artifact for pixi-x86_64-pc-windows-msvc.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-x86_64-pc-windows-msvc.exe
+          path: unpacked-artifacts/pixi-x86_64-pc-windows-msvc.exe
+
+      - name: Upload unpacked artifact for pixi-aarch64-pc-windows-msvc.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-aarch64-pc-windows-msvc.exe
+          path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
 
   # Create a GitHub Release while uploading all files to it
   announce:
