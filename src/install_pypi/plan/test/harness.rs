@@ -325,12 +325,17 @@ impl<'a> InstalledDistProvider<'a> for MockedSitePackages {
 /// Builder to create pypi package data, this is essentially the locked data
 struct PyPIPackageDataBuilder;
 
+enum UrlType {
+    Direct,
+    Other,
+}
+
 impl PyPIPackageDataBuilder {
     fn registry<S: AsRef<str>>(name: S, version: S) -> PypiPackageData {
         PypiPackageData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
             version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
-            // We dont check these fields, for determining the installation from a registry
+            // We don't check these fields, for determining the installation from a registry
             //
             requires_dist: vec![],
             requires_python: None,
@@ -364,21 +369,13 @@ impl PyPIPackageDataBuilder {
         }
     }
 
-    fn direct_url<S: AsRef<str>>(name: S, version: S, url: Url) -> PypiPackageData {
+    fn url<S: AsRef<str>>(name: S, version: S, url: Url, url_type: UrlType) -> PypiPackageData {
         // Create new url with direct+ in the scheme
-        let url = Url::parse(&format!("direct+{}", url)).unwrap();
-        PypiPackageData {
-            name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
-            version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
-            requires_dist: vec![],
-            requires_python: None,
-            location: UrlOrPath::Url(url),
-            hash: None,
-            editable: false,
-        }
-    }
-
-    fn git<S: AsRef<str>>(name: S, version: S, url: Url) -> PypiPackageData {
+        let url = if matches!(url_type, UrlType::Direct) {
+            Url::parse(&format!("direct+{}", url)).unwrap()
+        } else {
+            url
+        };
         PypiPackageData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
             version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
@@ -463,7 +460,7 @@ impl RequiredPackages {
     pub fn add_archive<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
         let package_name =
             uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
-        let data = PyPIPackageDataBuilder::direct_url(name, version, url);
+        let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Direct);
         self.required.insert(package_name, data);
         self
     }
@@ -471,12 +468,12 @@ impl RequiredPackages {
     pub fn add_git<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
         let package_name =
             uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
-        let data = PyPIPackageDataBuilder::git(name, version, url);
+        let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Other);
         self.required.insert(package_name, data);
         self
     }
 
-    /// Convert the required packages where it the data is borrowed
+    /// Convert the required packages where the data is borrowed
     /// this is needed to pass it into the [`InstallPlanner`]
     pub fn to_borrowed(&self) -> HashMap<uv_normalize::PackageName, &PypiPackageData> {
         self.required.iter().map(|(k, v)| (k.clone(), v)).collect()
@@ -491,7 +488,7 @@ fn python_version() -> uv_pep440::Version {
     uv_pep440::Version::from_str(TEST_PYTHON_VERSION).unwrap()
 }
 
-/// Simple function to create an install planner
+/// Simple function to create an installation planner
 pub fn install_planner() -> InstallPlanner {
     InstallPlanner::new(
         uv_cache::Cache::temp().unwrap(),
