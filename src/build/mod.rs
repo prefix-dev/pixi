@@ -266,6 +266,8 @@ impl BuildContext {
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },
+                    // FIXME
+                    editable: Some(PathBuf::from_str("/var/home/julian/Projekte/github.com/prefix-dev/pixi-1/pytest-temp/test_editable_pyproject0/editable-pyproject").unwrap()),
                     outputs: Some(vec![CondaOutputIdentifier {
                         name: Some(source_spec.package_record.name.as_normalized().to_string()),
                         version: Some(source_spec.package_record.version.version().to_string()),
