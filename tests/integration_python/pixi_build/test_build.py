@@ -1,9 +1,6 @@
 from pathlib import Path
 import shutil
 import json
-import tomllib
-
-import tomli_w
 
 
 from ..common import verify_cli_command, ExitCode
@@ -155,21 +152,7 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
         env=env,
     )
 
-    path_file = target_dir.joinpath(
-        ".pixi", "envs", "default", "lib", "python3.13", "site-packages", "_editable_pyproject.pth"
-    )
-
-    path_file.write_text(str(target_dir.joinpath("src")))
-
-    python = target_dir.joinpath(".pixi/envs/default/bin/python")
-
-    verify_cli_command(
-        [python, "-c", "import editable_pyproject; editable_pyproject.check_editable()"],
-        env=env,
-    )
-
-    # TODO: why is that command not working?
-    # Is it always re-installing? If yes, how can we avoid that?
+    # TODO: Is it always re-installing? If yes, how can we avoid that?
     # Verify that package is installed as editable
     verify_cli_command(
         [
@@ -180,14 +163,14 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
             "check-editable",
         ],
         env=env,
+        stdout_contains="The package is installed as editable.",
     )
-    return
 
     # Set editable to false
     manifest_path = target_dir.joinpath("pyproject.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
-    manifest["tool"]["pixi"]["dependencies"]["editable-pyproject"]["editable"] = False
-    manifest_path.write_text(tomli_w.dumps(manifest))
+    manifest_path.write_text(
+        manifest_path.read_text().replace("editable = true", "editable = false")
+    )
 
     # Verify that package is *not* installed as editable
     verify_cli_command(
@@ -200,4 +183,5 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
         ],
         ExitCode.FAILURE,
         env=env,
+        stdout_contains="The package is not installed as editable.",
     )
