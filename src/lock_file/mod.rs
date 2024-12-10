@@ -50,7 +50,7 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
                             lock_file_version, max_supported_version
                         )
                     }
-                    _ => miette::miette!(err).into(),
+                    _ => miette::miette!(err),
                 })
                 .wrap_err_with(|| {
                     format!(
