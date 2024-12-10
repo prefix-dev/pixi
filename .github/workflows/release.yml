@@ -272,7 +272,7 @@ jobs:
       - name: Unpack binaries tar
         run: |
           mkdir -p unpacked-artifacts
-          for artifact in target/distrib/*.tar.gz; do
+          for artifact in target/distrib/pixi-*.tar.gz; do
             echo artifact: $artifact
             # Extract the base name without the extension
             base_name=$(basename "$artifact" .tar.gz)
@@ -283,7 +283,7 @@ jobs:
           done
       - name: Unpack binaries zip
         run: |
-          for artifact in target/distrib/*.zip; do
+          for artifact in target/distrib/pixi-*.zip; do
               echo artifact: $artifact
               # Extract the base name without the extension
               base_name=$(basename "$artifact" .zip)
