@@ -302,9 +302,9 @@ impl ParsedEnvironment {
         &self.exposed
     }
 
-    /// Returns the menu installation flag associated with this environment.
-    pub(crate) fn menu_install(&self) -> Option<bool> {
-        self.menu_install
+    /// Returns true if the menu items should be installed for this environment
+    pub(crate) fn menu_install(&self) -> bool {
+        self.menu_install.unwrap_or(true)
     }
 }
 

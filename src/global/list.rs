@@ -307,6 +307,16 @@ pub async fn list_global_environments(
             message.push_str(&exp_message);
         }
 
+        // Write menu install
+        if env.menu_install() {
+            message.push_str(&format_asciiart_section(
+                "menu install",
+                env.menu_install().to_string(),
+                last,
+                false,
+            ));
+        }
+
         if !last {
             message.push('\n');
         }

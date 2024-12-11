@@ -63,8 +63,8 @@ pub struct Args {
     force_reinstall: bool,
 
     /// Specify that the menu items of the environment should be installed, defaults to true.
-    #[arg(long)]
-    menu_install: Option<bool>,
+    #[arg(long, default_value_t = true)]
+    menu_install: bool,
 }
 
 impl HasSpecs for Args {
@@ -217,6 +217,9 @@ async fn setup_environment(
     let expose_type = ExposedType::new(args.expose.clone(), with_package_names);
 
     project.sync_exposed_names(env_name, expose_type).await?;
+
+    // Install the menu items if any
+    state_changes |= project.install_menu_items(env_name).await?;
 
     // Figure out added packages and their corresponding versions
     state_changes |= project.added_packages(specs, env_name).await?;

@@ -1377,8 +1377,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2789b7b3e160530d89d1e126aff9811c3421bb77ebb9b62ffa3abbeba69f12d"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
@@ -2709,6 +2708,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "known-folders"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7d9a1740cc8b46e259a0eb787d79d855e79ff10b9855a5eba58868d5da7927c"
+dependencies = [
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "krata-tokio-tar"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3654,6 +3662,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
+ "rattler_menuinst",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
@@ -3993,7 +4002,7 @@ checksum = "42cf17e9a1800f5f396bc67d193dc9411b59012a5876445ef450d449881e1016"
 dependencies = [
  "base64 0.22.1",
  "indexmap 2.7.0",
- "quick-xml",
+ "quick-xml 0.32.0",
  "serde",
  "time",
 ]
@@ -4217,6 +4226,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "quick-xml"
+version = "0.37.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f22f29bdff3987b4d8632ef95fd6424ec7e4e0a57e2f4fc63e489e75357f6a03"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "quinn"
 version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4331,8 +4349,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.28.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "238dd1b6ca1f2e622e438092e6523a37c6b018e25b236406a6aa182d13885b39"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "anyhow",
  "clap",
@@ -4352,6 +4369,7 @@ dependencies = [
  "rattler_cache",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_menuinst",
  "rattler_networking",
  "rattler_package_streaming",
  "rattler_shell",
@@ -4372,8 +4390,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.2.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63a90b8eb4a8406619d0685a18d0f55ffae762399258ca5eb422c55ba1fe7282"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4401,8 +4418,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.29.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa6e2010c1a639982d9c22766598159dbeda9b5701ab01a863c66e55520c1ba1"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "chrono",
  "dirs",
@@ -4437,8 +4453,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6a97526971dd357657ea4c88f6d39b31b2875c87dfe9fd12aac305fec6c0f60"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "blake2",
  "digest",
@@ -4454,8 +4469,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8bddb02b5eb7bbf245438f1b5eb7feb44c0186bf7d8750b51c4cdf046e0dcff"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "chrono",
  "file_url",
@@ -4479,18 +4493,42 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19eadf6fea87bd67d9d4c372caa3c2bed33cd91cdc235ce86210d7bc513ae0a4"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "quote",
  "syn",
 ]
 
 [[package]]
+name = "rattler_menuinst"
+version = "0.1.0"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
+dependencies = [
+ "chrono",
+ "dirs",
+ "fs-err 3.0.0",
+ "known-folders",
+ "plist",
+ "quick-xml 0.37.1",
+ "rattler_conda_types",
+ "rattler_shell",
+ "regex",
+ "serde",
+ "serde_json",
+ "shlex",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
+ "unicode-normalization",
+ "which 7.0.0",
+ "winapi",
+ "winreg",
+]
+
+[[package]]
 name = "rattler_networking"
 version = "0.21.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40f5ad1da789b5bbe9585b4d255f2df82c676a951e2f002a76bf9fa7389c4962"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4518,8 +4556,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b881c9f633407c171a62809e754315e09d273edcf4e9217d2cc4b102721e65c"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4547,8 +4584,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "575cd5c830c5c2d25412531c5a3d307a0ca66ddccc466baaa5219cfa9e90c60e"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -4558,8 +4594,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.21.25"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "315d710364bd4ca46ed37fbb06f50d3e4774f5b7775fb77f1f232d35632fa149"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4613,8 +4648,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.22.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "070b851b93cd8973a6e9377c06323aca1d8faeeeb5b59f80f3cd1e2c8a7684bf"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "enum_dispatch",
  "fs-err 3.0.0",
@@ -4632,8 +4666,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "1.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "948f7a8d90cfe3cd48637724d2112a82928cdedb1f17027ce1019927cc8ad977"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "chrono",
  "futures",
@@ -4651,8 +4684,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "1.1.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7567e46d8ad302bbc3c5d657843c957d481a2c6b7c45397d95e0cd4b8ae47a17"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "archspec",
  "libloading",
@@ -5630,8 +5662,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b31ed96d1593e129cc76cb7aca364fb5c173558bfda922c15aac4e2f2f5844e"
+source = "git+https://github.com/wolfv/rattler?branch=menuinst#10161b8a4a9aaedaf1e16f40d39aabde0362a11b"
 dependencies = [
  "tokio",
 ]
@@ -6347,6 +6378,15 @@ name = "unicode-linebreak"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b09c83c3c29d37506a3e260c08c03743a6bb66a9cd432c6934ab501a190571f"
+
+[[package]]
+name = "unicode-normalization"
+version = "0.1.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5033c97c4262335cded6d6fc3e5c18ab755e1a3dc96376350f3d8e9f009ad956"
+dependencies = [
+ "tinyvec",
+]
 
 [[package]]
 name = "unicode-width"

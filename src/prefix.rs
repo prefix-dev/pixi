@@ -14,6 +14,7 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;
+use pixi_consts::consts;
 
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]
@@ -107,6 +108,22 @@ impl Prefix {
         }
 
         Ok(result)
+    }
+
+    pub async fn find_menu_schema_files(&self) -> miette::Result<Vec<PathBuf>> {
+        let mut schemas = Vec::new();
+        for entry in fs_err::read_dir(self.root.join(consts::CONDA_MENU_SCHEMA_DIR))
+            .into_iter()
+            .flatten()
+        {
+            let entry = entry.into_diagnostic()?;
+            let path = entry.path();
+            if !path.is_file() || path.extension() != Some("json".as_ref()) {
+                continue;
+            }
+            schemas.push(path);
+        }
+        Ok(schemas)
     }
 
     /// Processes prefix records (that you can get by using `find_installed_packages`)
