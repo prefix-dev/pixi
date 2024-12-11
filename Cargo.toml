@@ -322,11 +322,17 @@ pixi_pty = { path = "crates/pixi_pty" }
 signal-hook = { workspace = true }
 
 [profile.dist]
-codegen-units = 1
+# codegen-units = 1
+#inherits = "release"
+#lto = "fat"
+#opt-level = 3
+#strip = "symbols"
+# codegen-units = 1
+codegen-units = 16
 inherits = "release"
-lto = "fat"
-opt-level = 3
-strip = "symbols"
+lto = false
+opt-level = 0
+strip = false
 
 [profile.ci]
 codegen-units = 16
