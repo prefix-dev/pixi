@@ -128,6 +128,10 @@ jobs:
       CODESIGN_CERTIFICATE: ${{ secrets.CODESIGN_CERTIFICATE }}
       CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.CODESIGN_CERTIFICATE_PASSWORD }}
       CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+      CODESIGN_ADDITIONAL_ARGS: ${{ variables.CODESIGN_ADDITIONAL_ARGS }}
+      APPLEID_TEAMID: ${{ secrets.APPLEID_TEAMID }}
+      APPLEID_USERNAME: ${{ secrets.APPLEID_USERNAME }}
+      APPLEID_PASSWORD: ${{ secrets.APPLEID_PASSWORD }}
     steps:
       - name: enable windows longpaths
         run: |
@@ -279,7 +283,7 @@ jobs:
             base_name=$(basename "$artifact" .tar.gz)
 
             # Extract the artifact contents
-            tar -xvf "$artifact" -O pixi > unpacked-artifacts/$base_name 
+            tar -xvf "$artifact" -O pixi > unpacked-artifacts/$base_name
           done
       - name: Unpack binaries zip
         run: |
