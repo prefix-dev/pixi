@@ -271,6 +271,7 @@ jobs:
       # Unpack binaries, required for setup-pixi
       - name: Unpack binaries tar
         run: |
+          set -e pipefail # fail if any command fails
           mkdir -p unpacked-artifacts
           for artifact in target/distrib/pixi-*.tar.gz; do
             echo artifact: $artifact
@@ -278,11 +279,11 @@ jobs:
             base_name=$(basename "$artifact" .tar.gz)
 
             # Extract the artifact contents
-            tar -xvf "$artifact" pixi > unpacked-artifacts/$base_name
-            chmod +x unpacked-artifacts/$base_name
+            tar -xvf "$artifact" -O pixi > unpacked-artifacts/$base_name 
           done
       - name: Unpack binaries zip
         run: |
+          set -e pipefail # fail if any command fails
           for artifact in target/distrib/pixi-*.zip; do
               echo artifact: $artifact
               # Extract the base name without the extension
@@ -367,4 +368,4 @@ jobs:
           # Write and read notes from a file to avoid quoting breaking things
           echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
 
-          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --draft true  --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --draft --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
