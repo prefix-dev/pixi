@@ -1,0 +1,41 @@
+[project]
+# --8<-- [start:project_name]
+name = "project-name"
+# --8<-- [end:project_name]
+# --8<-- [start:project_channels]
+channels = ["conda-forge", "https://repo.prefix.dev/channel-name"]
+# --8<-- [end:project_channels]
+# --8<-- [start:project_platforms]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+# --8<-- [end:project_platforms]
+# --8<-- [start:project_version]
+version = "1.2.3"
+# --8<-- [end:project_version]
+# --8<-- [start:project_authors]
+authors = ["John Doe <j.doe@prefix.dev>", "Marie Curie <mss1867@gmail.com>"]
+# --8<-- [end:project_authors]
+# --8<-- [start:project_description]
+description = "A simple description"
+# --8<-- [end:project_description]
+# --8<-- [start:project_license]
+license = "MIT"
+# --8<-- [end:project_license]
+
+# Untestable because it's a path to a must have file.
+# --8<-- [start:project_license_file]
+# license-file = "LICENSE.md"
+# --8<-- [end:project_license_file]
+# --8<-- [start:project_readme]
+# readme = "README.md"
+# --8<-- [end:project_readme]
+
+
+# --8<-- [start:project_homepage]
+homepage = "https://pixi.sh"
+# --8<-- [end:project_homepage]
+# --8<-- [start:project_repository]
+repository = "https://github.com/prefix-dev/pixi"
+# --8<-- [end:project_repository]
+# --8<-- [start:project_documentation]
+documentation = "https://pixi.sh"
+# --8<-- [end:project_documentation]
