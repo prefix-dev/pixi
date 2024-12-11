@@ -61,6 +61,10 @@ pub struct Args {
     /// Specifies that the packages should be reinstalled even if they are already installed.
     #[arg(action, long)]
     force_reinstall: bool,
+
+    /// Specify that the menu items of the environment should be installed, defaults to true.
+    #[arg(long)]
+    menu_install: Option<bool>,
 }
 
 impl HasSpecs for Args {

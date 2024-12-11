@@ -255,8 +255,10 @@ where
 pub(crate) struct ParsedEnvironment {
     #[serde_as(as = "IndexSet<pixi_manifest::toml::TomlPrioritizedChannel>")]
     pub channels: IndexSet<pixi_manifest::PrioritizedChannel>,
-    // Platform used by the environment.
+
+    /// Platform used by the environment.
     pub platform: Option<Platform>,
+
     #[serde(default)]
     pub(crate) dependencies: UniquePackageMap,
     #[serde(
@@ -265,6 +267,11 @@ pub(crate) struct ParsedEnvironment {
         serialize_with = "serialize_expose_mappings"
     )]
     pub(crate) exposed: IndexSet<Mapping>,
+
+    /// Whether to install the menuitems for the environment, using the Menuinst technology
+    /// True means we install the item for the package of the toplevel dependencies.
+    #[serde(default)]
+    pub(crate) menu_install: Option<bool>,
 }
 
 impl ParsedEnvironment {
@@ -293,6 +300,11 @@ impl ParsedEnvironment {
     /// Returns the exposed name mappings associated with this environment.
     pub(crate) fn exposed(&self) -> &IndexSet<Mapping> {
         &self.exposed
+    }
+
+    /// Returns the menu installation flag associated with this environment.
+    pub(crate) fn menu_install(&self) -> Option<bool> {
+        self.menu_install
     }
 }
 
@@ -479,6 +491,19 @@ mod tests {
 
         [envs.python3-10.exposed]
         "python3.10" = "python"
+        "#;
+        let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+    }
+
+    #[test]
+    fn test_menu_install_deserialization() {
+        let contents = r#"
+        # The name of the environment is `python`
+        [envs.spyder]
+        channels = ["conda-forge"]
+        dependencies = { spyder = "*" }
+        exposed = { spyder = "spyder" }
+        menu-install = true
         "#;
         let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
     }
