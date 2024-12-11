@@ -165,7 +165,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.39.1"
+version = "0.39.2"
 
 [features]
 default = ["rustls-tls"]
@@ -362,7 +362,7 @@ tokio = { workspace = true, features = ["rt"] }
 # Config for 'dist'
 [workspace.metadata.dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.26.0-prerelease.3"
+cargo-dist-version = "0.25.1"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
