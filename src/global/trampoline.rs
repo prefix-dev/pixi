@@ -359,45 +359,51 @@ impl Trampoline {
         {
             miette::bail!("powerpc64le is not supported for pixi global yet. If you need this, please open an issue on the pixi repository.");
         }
-
-        let trampoline_path = self.trampoline_path();
-
-        // We need to check that there's indeed a trampoline at the path
-        if trampoline_path.is_file().not()
-            || Trampoline::is_trampoline(&self.trampoline_path())
-                .await?
-                .not()
+        #[cfg(not(all(
+            target_arch = "powerpc64",
+            target_endian = "little",
+            target_os = "linux"
+        )))]
         {
-            tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
+            let trampoline_path = self.trampoline_path();
+
+            // We need to check that there's indeed a trampoline at the path
+            if trampoline_path.is_file().not()
+                || Trampoline::is_trampoline(&self.trampoline_path())
+                    .await?
+                    .not()
+            {
+                tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
+                    .await
+                    .into_diagnostic()?;
+                tokio_fs::write(
+                    self.trampoline_path(),
+                    Trampoline::decompressed_trampoline(),
+                )
                 .await
                 .into_diagnostic()?;
-            tokio_fs::write(
-                self.trampoline_path(),
-                Trampoline::decompressed_trampoline(),
-            )
-            .await
-            .into_diagnostic()?;
-        }
+            }
 
-        // If the path doesn't exist yet, create a hard link to the shared trampoline binary
-        // If creating a hard link doesn't succeed, try copying
-        // Hard-linking might for example fail because the file-system enforces a maximum number of hard-links per file
-        if !self.path().exists()
-            && tokio_fs::hard_link(&trampoline_path, self.path())
-                .await
-                .is_err()
-        {
-            tokio_fs::copy(&trampoline_path, self.path())
-                .await
-                .into_diagnostic()?;
-        }
+            // If the path doesn't exist yet, create a hard link to the shared trampoline binary
+            // If creating a hard link doesn't succeed, try copying
+            // Hard-linking might for example fail because the file-system enforces a maximum number of hard-links per file
+            if !self.path().exists()
+                && tokio_fs::hard_link(&trampoline_path, self.path())
+                    .await
+                    .is_err()
+            {
+                tokio_fs::copy(&trampoline_path, self.path())
+                    .await
+                    .into_diagnostic()?;
+            }
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            tokio_fs::set_permissions(self.path(), std::fs::Permissions::from_mode(0o755))
-                .await
-                .into_diagnostic()?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                tokio_fs::set_permissions(self.path(), std::fs::Permissions::from_mode(0o755))
+                    .await
+                    .into_diagnostic()?;
+            }
         }
 
         Ok(())
