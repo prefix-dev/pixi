@@ -24,31 +24,22 @@ The vision is to enable building of packages from source, for any language, on a
 There are a couple of key concepts that make it easier to understand how the `build` feature works. The two most important
 additions are the concept of a *package* and a *build-system*.
 
-### Package
-The package defines the `build-system` and other fields in the future that are used to build your project.
-Currently, the `dependencies`, `host-dependencies` and `build-dependencies` fields are associated with the package.
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml"
+```
 
-### Build-system
-This defines the backend that is used to build the package.
-The backend is an executable that is installed and invoked by pixi with the sole purpose to build the package.
-Backends can be versioned and are installed from a conda channel, by pixi.
-The currently available backends can be viewed in the [pixi-build-backends](https://prefix.dev/pixi-build-backends) channel.
-The source of the backends is available in the [pixi-build-backends](https://github.com/prefix-dev/pixi-build-backends) repository.
+Coming from a `pixi.toml` created before `pixi 0.39`, these are the steps that you need to take:
+
+
 
 
 ## Migrate to the new build feature
-??? note "Preview feature"
-    This feature is currently in preview phase. To enable use the [preview feature](../reference/pixi_manifest.md#preview-features).
-    ```toml
-    [project]
-    # .. other configuration
-    preview = ["pixi-build"]
-    ```
 
 !!! note
     The new build feature is currently in preview, and both the manifest configuration and the build backends are subject to change.
 
 To enable the new build feature, you need to add the correct build configuration to your `pixi.toml` file.
+These instructions assume that the `pixi.toml` has been used by a `pixi` version `<0.39`.
 Below, an example will be given for a pixi **project** containing a single python **package**.
 
 1.  Enable the `build` feature in your `pixi.toml` file. And add the `[build-section]` to your `pixi.toml` file.
