@@ -28,16 +28,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut errors = Vec::new();
+    let mut has_changed = false;
     for env_name in project.environments().keys() {
         match project.sync_environment(env_name, None).await {
-            Ok(state_change) => state_changes |= state_change,
+            Ok(state_change) => {
+                if state_change.has_changed() {
+                    has_changed = true;
+                    state_change.report();
+                }
+            }
             Err(err) => errors.push((env_name, err)),
         }
     }
 
-    if state_changes.has_changed() {
-        state_changes.report();
-    } else {
+    if !has_changed {
         eprintln!(
             "{}Nothing to do. The pixi global installation is already up-to-date.",
             console::style(console::Emoji("✔ ", "")).green()
