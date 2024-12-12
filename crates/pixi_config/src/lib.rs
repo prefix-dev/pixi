@@ -155,6 +155,7 @@ impl RepodataConfig {
 
     /// Merge the given RepodataConfig into the current one.
     /// `other` is mutable to allow for moving the values out of it.
+    /// The given config will have higher priority
     pub fn merge(&self, mut other: Self) -> Self {
         let mut per_channel: HashMap<_, _> = self
             .per_channel
@@ -909,10 +910,11 @@ impl Config {
     }
 
     /// Merge the given config into the current one.
+    /// The given config will have higher priority
     #[must_use]
-    pub fn merge_config(mut self, other: Config) -> Self {
-        self.mirrors.extend(other.mirrors);
-        self.loaded_from.extend(other.loaded_from);
+    pub fn merge_config(self, mut other: Config) -> Self {
+        other.mirrors.extend(self.mirrors);
+        other.loaded_from.extend(self.loaded_from);
 
         Self {
             default_channels: if other.default_channels.is_empty() {
@@ -925,16 +927,16 @@ impl Config {
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
-            mirrors: self.mirrors,
-            loaded_from: self.loaded_from,
+            mirrors: other.mirrors,
+            loaded_from: other.loaded_from,
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,
-            repodata_config: other.repodata_config.merge(self.repodata_config),
-            pypi_config: other.pypi_config.merge(self.pypi_config),
+            repodata_config: self.repodata_config.merge(other.repodata_config),
+            pypi_config: self.pypi_config.merge(other.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
-            experimental: other.experimental.merge(self.experimental),
+            experimental: self.experimental.merge(other.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
         }
