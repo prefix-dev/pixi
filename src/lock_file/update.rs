@@ -74,7 +74,7 @@ impl Project {
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
-        self::update_lock_file(self, options).await
+        update_lock_file(self, options).await
     }
 
     /// Get lockfile without checking

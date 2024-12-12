@@ -43,6 +43,10 @@ pub struct CondaBuildParams {
     ///
     /// The directory may not yet exist.
     pub work_directory: PathBuf,
+
+    /// Whether we want to install the package as editable
+    // TODO: remove this parameter as soon as we have profiles
+    pub editable: bool,
 }
 
 /// Identifier of an output.
