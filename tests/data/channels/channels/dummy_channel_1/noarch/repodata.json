@@ -3,6 +3,20 @@
     "subdir": "noarch"
   },
   "packages": {},
-  "packages.conda": {},
+  "packages.conda": {
+    "pixi-editor-0.1.0-h4616a5c_0.conda": {
+      "build": "h4616a5c_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "8b3ea7ebd549ca1cd65e3a5f0084b7f0",
+      "name": "pixi-editor",
+      "noarch": "generic",
+      "sha256": "47013163c65a8963b069f6048db92b6ad16ccf2db1c427645fa61f120b0b5c7c",
+      "size": 94749,
+      "subdir": "noarch",
+      "timestamp": 1733997891268,
+      "version": "0.1.0"
+    }
+  },
   "repodata_version": 2
 }

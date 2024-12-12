@@ -1,6 +1,7 @@
 ---
 source: src/global/project/parsed_manifest.rs
 expression: "examples.into_iter().map(|example|\nParsedManifest::from_toml_str(example).unwrap_err().to_string()).collect::<Vec<_>>().join(\"\\n\")"
+snapshot_kind: text
 ---
 TOML parse error at line 1, column 2
   |
@@ -12,7 +13,7 @@ TOML parse error at line 1, column 15
   |
 1 | [envs.ipython.invalid]
   |               ^^^^^^^
-unknown field `invalid`, expected one of `channels`, `platform`, `dependencies`, `exposed`
+unknown field `invalid`, expected one of `channels`, `platform`, `dependencies`, `exposed`, `menu-install`
 
 TOML parse error at line 1, column 7
   |

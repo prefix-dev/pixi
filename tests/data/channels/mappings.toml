@@ -7,3 +7,4 @@
 "trampoline/trampoline_1.yaml" = "trampoline_1"
 "trampoline/trampoline_2.yaml" = "trampoline_2"
 "trampoline/trampoline_path.yaml" = "trampoline_path_channel"
+"pixi-editor/recipe.yaml" = "dummy_channel_1"
