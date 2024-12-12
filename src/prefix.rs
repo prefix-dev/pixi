@@ -8,6 +8,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_utils::{is_binary_folder, strip_executable_extension};
+use rattler::install::Installer;
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -53,7 +54,8 @@ impl Prefix {
         &self,
         concurrency_limit: Option<usize>,
     ) -> miette::Result<Vec<PrefixRecord>> {
-        let concurrency_limit = concurrency_limit.unwrap_or(100);
+        let concurrency_limit =
+            concurrency_limit.unwrap_or_else(|| Installer::ideal_io_concurrency_limit());
         let mut meta_futures = FuturesUnordered::<JoinHandle<miette::Result<PrefixRecord>>>::new();
         let mut result = Vec::new();
         for entry in fs_err::read_dir(self.root.join("conda-meta"))
@@ -109,8 +111,8 @@ impl Prefix {
         Ok(result)
     }
 
-    /// Processes prefix records (that you can get by using `find_installed_packages`)
-    /// to filter and collect executable files.
+    /// Processes prefix records (that you can get by using
+    /// `find_installed_packages`) to filter and collect executable files.
     pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
         let executables = prefix_packages
             .iter()

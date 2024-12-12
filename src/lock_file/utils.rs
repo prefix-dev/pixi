@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use pixi_manifest::FeaturesExt;
+use rattler::install::Installer;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockFileBuilder, LockedPackageRef};
 use tokio::sync::Semaphore;
@@ -17,7 +18,9 @@ pub struct IoConcurrencyLimit(Arc<Semaphore>);
 
 impl Default for IoConcurrencyLimit {
     fn default() -> Self {
-        Self(Arc::new(Semaphore::new(100)))
+        Self(Arc::new(Semaphore::new(
+            Installer::ideal_io_concurrency_limit(),
+        )))
     }
 }
 

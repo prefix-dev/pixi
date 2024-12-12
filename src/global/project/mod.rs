@@ -574,7 +574,6 @@ impl Project {
             |pb| {
                 Installer::new()
                     .with_download_client(self.authenticated_client().clone())
-                    .with_io_concurrency_limit(100)
                     .with_execute_link_scripts(false)
                     .with_package_cache(package_cache)
                     .with_target_platform(platform)

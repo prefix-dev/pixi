@@ -347,17 +347,17 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
-#file_url = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_digest = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_lock = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_networking = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
-#rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
+file_url = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_package_streaming = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
+rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
 
 # Config for 'dist'
 [workspace.metadata.dist]
