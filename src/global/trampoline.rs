@@ -351,9 +351,11 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
-        #[cfg(target_arch = "powerpc64")]
-        #[cfg(target_endian = "little")]
-        #[cfg(target_os = "linux")]
+        #[cfg(all(
+            target_arch = "powerpc64",
+            target_endian = "little",
+            target_os = "linux"
+        ))]
         {
             miette::bail!("powerpc64le is not supported for pixi global yet. If you need this, please open an issue on the pixi repository.");
         }
