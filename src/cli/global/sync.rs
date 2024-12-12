@@ -1,4 +1,4 @@
-use crate::global::{self, StateChanges};
+use crate::global;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
@@ -17,10 +17,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    let mut state_changes = StateChanges::default();
+    let mut has_changed = false;
 
     // Prune environments that are not listed
-    state_changes |= project.prune_old_environments().await?;
+    let state_change = project.prune_old_environments().await?;
+
+    if state_change.has_changed() {
+        has_changed = true;
+        state_change.report();
+    }
 
     // Remove broken files
     if let Err(err) = project.remove_broken_files().await {
@@ -28,7 +33,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut errors = Vec::new();
-    let mut has_changed = false;
     for env_name in project.environments().keys() {
         match project.sync_environment(env_name, None).await {
             Ok(state_change) => {
