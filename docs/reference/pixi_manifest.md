@@ -355,7 +355,7 @@ By default, `uv` and thus `pixi`, will stop at the first index on which a given 
 
 ## The `dependencies` table(s)
 ??? info "Details regarding the dependencies"
-    For more detail regarding the dependency types, make sure to check the [Run, Host, Build](../advanced/dependency_types.md) dependency documentation.
+    For more detail regarding the dependency types, make sure to check the [Run, Host, Build](../build/dependency_types.md) dependency documentation.
 
 This section defines what dependencies you would like to use for your project.
 

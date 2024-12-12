@@ -1,31 +1,24 @@
 
 ## Introduction
-Sometimes you might need to build packages from source. This can be due to a variety of reasons, such as:
 
-1. You are using the package for local development, and want to install and build the package into your workspace.
-2. You want to use source for a package that is not available on conda-forge.
-3. You want to build your package locally into a conda package.
+Next to managing workflows and environments, pixi can also build packages.
+This is useful for the following reasons:
+
+- Building and uploading a package to a conda channel
+- Allowing users to directly depend on the source and build it automatically
+- Managing multiple packages in a workspace
 
 We've been working to support these use-cases with the `build` feature in pixi.
 The vision is to enable building of packages from source, for any language, on any platform.
 
-??? note "Preview feature"
-    This feature is currently in preview phase. To enable use the [preview feature](../reference/pixi_manifest.md#preview-features).
-    ```toml
-    [project]
-    # .. other configuration
-    preview = ["pixi-build"]
-    ```
 
-## Limitations
-Currently, the `build` feature has a number of limitations:
+!!! note "Known limitations"
+    Currently, the `build` feature has a number of limitations:
 
-1. Recursive source dependencies are not supported. ( source dependencies that have source dependencies )
-2. Workspace dependencies cannot be inherited.
-3. Progress reporting should be improved.
-4. Limited set of [build-backends](https://github.com/prefix-dev/pixi-build-backends).
-5. Build-backends are probably missing a lot of parameters/features.
-6. Using a feedstock directly as a source package is not supported.
+    1. Limited set of [build-backends](https://github.com/prefix-dev/pixi-build-backends).
+    2. Build-backends are probably missing a lot of parameters/features.
+    3. Recursive source dependencies are not supported. ( source dependencies that have source dependencies )
+    4. Workspace dependencies cannot be inherited.
 
 ## High-level overview
 There are a couple of key concepts that make it easier to understand how the `build` feature works. The two most important
@@ -44,6 +37,13 @@ The source of the backends is available in the [pixi-build-backends](https://git
 
 
 ## Migrate to the new build feature
+??? note "Preview feature"
+    This feature is currently in preview phase. To enable use the [preview feature](../reference/pixi_manifest.md#preview-features).
+    ```toml
+    [project]
+    # .. other configuration
+    preview = ["pixi-build"]
+    ```
 
 !!! note
     The new build feature is currently in preview, and both the manifest configuration and the build backends are subject to change.
@@ -89,7 +89,7 @@ Below, an example will be given for a pixi **project** containing a single pytho
     ]
     ```
 3. ??? note "Host dependencies"
-       Read up on host-dependencies in the [Dependency Types](../advanced/dependency_types.md#host-dependencies).
+       Read up on host-dependencies in the [Dependency Types](./dependency_types.md#host-dependencies).
    Add the correct *host dependencies* to your `pixi.toml` file.
    We need to add these to the host dependencies, because of it using the wrong python prefix otherwise.
    We want to change this in the future, to be a bit less of a hassle.

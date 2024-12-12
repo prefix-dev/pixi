@@ -1,7 +1,7 @@
 # Run, Host and Build Dependencies
 
 If you add package to the [dependency](../reference/pixi_manifest.md#dependencies) table that package will be available in your pixi environment.
-As soon as you are using the [build feature](../preview_features/build.md) to build a package, it is important to know how the other dependency types work.
+As soon as you are using the [build feature](./build.md) to build a package, it is important to know how the other dependency types work.
 This document describes the different types of dependencies that can be used in the manifest and what the differences are.
 
 Currently, there are 3 types of dependencies, with the following manifest specification:
