@@ -59,5 +59,7 @@ channels = [
 test = "rich_example"
 
 [tool.pixi.dependencies]
-rich = ">=13.9.4,<14"
 rich_example = { path = "." }
+
+[tool.pixi.run-dependencies]
+rich = ">=13.9.4,<14"
