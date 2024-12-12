@@ -68,28 +68,29 @@ uv = "*"
 
 #### Native code
 When cross-compiling, you might need to specify host dependencies that should have the *target* machine architecture, and are used during the build process.
-For example, for linking a library.
-Let's recap an explanation from here [A Master Guide To Linux Cross-Compiling](https://ruvi-d.medium.com/a-master-guide-to-linux-cross-compiling-b894bf909386)
+When linking a library, for example.
+Let's recap an explanation that can be found here [A Master Guide To Linux Cross-Compiling](https://ruvi-d.medium.com/a-master-guide-to-linux-cross-compiling-b894bf909386)
 
 - *Build machine*: where the code is built.
 - *Host machine*: where the built code runs.
 - *Target machine*: where the binaries spit out by the built code runs.
 
-For example, Lets say we are using a Linux PC (x86_64-linux-gnu) to cross compile a CMake application called `Awesome` to run on a Linux ARM target machine (armv7-linux-gnueabihf).
+Lets say we are using a Linux PC (linux-64) to cross compile a CMake application called `Awesome` to run on a Linux ARM target machine (linux-aarch64).
 We would get the following table:
 
 | Component |    Type     | Build  |  Host  | Target |
 |-----------|-------------|--------|--------|--------|
-| GCC       | Compiler    | x86_64 | x86_64 | armv7  |
+| GCC       | Compiler    | x86_64 | x86_64 | aarch64|
 | CMake     | Build tool  | x86_64 | x86_64 | N/A    |
-| Awesome   | Application | x86_64 | armv7  | N/A    |
+| Awesome   | Application | x86_64 | aarch64  | N/A  |
 
 So if I need to use a library like SDL2, I would need to add it to the `host-dependencies` table.
-As `Awesome` has a different host architecture than the build architecture.
+As the machine running `Awesome` will have a different host architecture than the build architecture.
 
 Giving you something like this in your manifest file:
 
 ```toml
+ # in our example these dependencies will use the aarch64 binaries
 [host-dependencies]
 sdl2 = "*"
 ```
@@ -104,5 +105,5 @@ When using something like `zlib`, you would only need to specify it in the `host
 
 ### [Dependencies (Run Dependencies)](../reference/pixi_manifest.md#dependencies)
 
-These are the dependencies that are required to run the package, they are the most common dependencies.
-And are what you would usually use in `project` or `workspace`.
+These are the dependencies that are required to when running the package, they are the most common dependencies.
+And are what you would usually use in a `workspace`.
