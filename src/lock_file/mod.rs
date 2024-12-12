@@ -65,3 +65,44 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
         Ok(LockFile::default())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{load_lock_file, Project};
+
+    #[tokio::test]
+    async fn test_load_newer_lock_file() {
+        // Test that loading a lock file with a newer version than the current
+        // version of pixi will return an error.
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = []
+        "#;
+        let project =
+            Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+
+        let lock_file_path = project.lock_file_path();
+        let raw_lock_file = r#"
+        version: 9999
+        environments:
+        default:
+            channels:
+            - url: https://conda.anaconda.org/conda-forge/
+            packages: {}
+        packages: []
+        "#;
+        fs_err::tokio::write(&lock_file_path, raw_lock_file)
+            .await
+            .unwrap();
+
+        let err = load_lock_file(&project).await.unwrap_err();
+        let dbg_err = format!("{:?}", err);
+        // Test that the error message contains the correct information.
+        assert!(dbg_err.contains("The lock file version is 9999, but only up to including version"));
+        // Also test that we try to help user by suggesting to update pixi.
+        assert!(dbg_err.contains("Please update pixi to the latest version and try again."));
+    }
+}
