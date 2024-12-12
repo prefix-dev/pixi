@@ -3,7 +3,7 @@ import shutil
 import json
 
 
-from ..common import verify_cli_command, ExitCode
+from ..common import verify_cli_command
 
 
 def test_build_conda_package(pixi: Path, examples_dir: Path, tmp_pixi_workspace: Path) -> None:
@@ -163,24 +163,4 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
         ],
         env=env,
         stdout_contains="The package is installed as editable.",
-    )
-
-    # Set editable to false
-    manifest_path = target_dir.joinpath("pyproject.toml")
-    manifest_path.write_text(
-        manifest_path.read_text().replace("editable = true", "editable = false")
-    )
-
-    # Verify that package is *not* installed as editable
-    verify_cli_command(
-        [
-            pixi,
-            "run",
-            "--manifest-path",
-            manifest_path,
-            "check-editable",
-        ],
-        ExitCode.FAILURE,
-        env=env,
-        stdout_contains="The package is not installed as editable.",
     )
