@@ -4,7 +4,7 @@ import platform
 import subprocess
 import os
 
-PIXI_VERSION = "0.39.1"
+PIXI_VERSION = "0.39.2"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'

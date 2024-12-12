@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Version: v0.39.1
+# Version: v0.39.2
 
 __wrap__() {
 
@@ -69,6 +69,16 @@ else
 fi
 
 if hash curl 2> /dev/null; then
+  # Check that the curl version is not 8.8.0, which is broken for --write-out
+  # https://github.com/curl/curl/issues/13845
+  if [[ "$(curl --version | head -n 1 | cut -d ' ' -f 2)" == "8.8.0" ]]; then
+    echo "error: curl 8.8.0 is known to be broken, please use a different version"
+    if [[ $(uname -o) == "Msys" ]]; then
+      echo "A common way to get an updated version of curl is to upgrade Git for Windows:"
+      echo "      https://gitforwindows.org/"
+    fi
+    exit 1
+  fi
   HTTP_CODE="$(curl -SL $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")"
   if [[ "${HTTP_CODE}" -lt 200 || "${HTTP_CODE}" -gt 299 ]]; then
     echo "error: '${DOWNLOAD_URL}' is not available"
