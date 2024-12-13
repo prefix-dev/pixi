@@ -26,8 +26,6 @@ pub enum GitResolverError {
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
     #[error("Git operation failed")]
-    // #[error(transparent)]
-    // // #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()))]
     Git(String),
 }
 
@@ -69,7 +67,6 @@ impl GitResolver {
 
         // Avoid races between different processes, too.
         let lock_dir = cache.join("locks");
-        // fs::create_dir_all(&lock_dir).await?;
         let repository_url = RepositoryUrl::new(url.repository());
 
         let write_guard_path = lock_dir.join(cache_digest(&repository_url));

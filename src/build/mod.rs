@@ -605,8 +605,6 @@ impl BuildContext {
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
 
-        eprintln!("metadata is : {:?}", metadata);
-
         // Compute the input globs for the mutable source checkouts.
         let input_hash = if source.pinned.is_immutable() {
             None
