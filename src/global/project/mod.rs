@@ -32,6 +32,7 @@ use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
 };
 use rattler_lock::Matches;
+use rattler_menuinst::MenuMode;
 use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
@@ -605,6 +606,9 @@ impl Project {
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
+        // Remove all menu installs, using the information still available in the environment
+        state_changes |= self.remove_menu_items(env_name).await?;
+
         // Remove the environment from the manifest, if it exists, otherwise ignore
         // error.
         self.manifest.remove_environment(env_name)?;
@@ -949,6 +953,9 @@ impl Project {
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
+        // Install menu items
+        state_changes |= self.install_menu_items(env_name).await?;
+
         Ok(state_changes)
     }
 
@@ -1044,6 +1051,101 @@ impl Project {
                 .map(|r| r.repodata_record.package_record)
                 .map(StateChange::AddedPackage),
         );
+        Ok(state_changes)
+    }
+
+    /// Install the menu items of the environment
+    pub async fn install_menu_items(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        if environment.menu_install() {
+            // Find menu items in the prefix
+            let prefix = self.environment_prefix(env_name).await?;
+            let menu_files = prefix.find_menu_schema_files().await?;
+
+            // Install menu items
+            for menu_file in menu_files {
+                // TODO: Make the mode configurable
+                match rattler_menuinst::install_menuitems(
+                    menu_file.as_path(),
+                    prefix.root(),
+                    prefix.root(),
+                    environment.platform().unwrap_or(Platform::current()),
+                    MenuMode::User,
+                ) {
+                    Ok(_) => {
+                        tracing::info!("Installed menu item: {}", menu_file.display());
+                        state_changes.insert_change(
+                            env_name,
+                            StateChange::InstalledMenuItem(
+                                menu_file.file_name().unwrap().to_string_lossy().to_string(),
+                            ),
+                        );
+                    }
+                    // Don't fail on menu install errors, menuinst is too unstable to break the whole process because of issue with it.
+                    Err(e) => {
+                        tracing::warn!("Couldn't install menu item: {}", menu_file.display());
+                        tracing::warn!("{:?}", e);
+                        tracing::warn!("Please report this issue to the pixi developers.");
+                    }
+                }
+                state_changes.insert_change(
+                    env_name,
+                    StateChange::InstalledMenuItem(
+                        menu_file.file_name().unwrap().to_string_lossy().to_string(),
+                    ),
+                );
+            }
+        }
+        Ok(state_changes)
+    }
+
+    /// Remove the menu items of the environment
+    pub async fn remove_menu_items(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        // Find menu items in the prefix
+        let prefix = self.environment_prefix(env_name).await?;
+        let menu_files = prefix.find_menu_schema_files().await?;
+
+        // Remove menu items
+        for menu_file in menu_files {
+            match rattler_menuinst::remove_menu_items(
+                menu_file.as_path(),
+                prefix.root(),
+                prefix.root(),
+                environment.platform().unwrap_or(Platform::current()),
+                MenuMode::User,
+            ) {
+                Ok(_) => {
+                    tracing::info!("Uninstalled menu item: {}", menu_file.display());
+                    state_changes.insert_change(
+                        env_name,
+                        StateChange::UninstalledMenuItem(
+                            menu_file.file_name().unwrap().to_string_lossy().to_string(),
+                        ),
+                    );
+                }
+                // Don't fail on menu install errors, menuinst is too unstable to break the whole process because of issue with it.
+                Err(e) => {
+                    tracing::warn!("Couldn't uninstall menu item: {}", menu_file.display());
+                    tracing::warn!("{:?}", e);
+                    tracing::warn!("Please report this issue to the pixi developers.");
+                }
+            }
+        }
         Ok(state_changes)
     }
 }

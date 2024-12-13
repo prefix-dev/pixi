@@ -28,6 +28,7 @@ pub const CONDA_PACKAGE_CACHE_DIR: &str = rattler_cache::PACKAGE_CACHE_DIR;
 pub const CONDA_REPODATA_CACHE_DIR: &str = rattler_cache::REPODATA_CACHE_DIR;
 // TODO: move to rattler
 pub const CONDA_META_DIR: &str = "conda-meta";
+pub const CONDA_MENU_SCHEMA_DIR: &str = "Menu";
 pub const PYPI_CACHE_DIR: &str = "uv-cache";
 pub const CONDA_PYPI_MAPPING_CACHE_DIR: &str = "conda-pypi-mapping";
 pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";

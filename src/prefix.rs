@@ -7,6 +7,7 @@ use std::{
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
+use pixi_consts::consts;
 use pixi_utils::{is_binary_folder, strip_executable_extension};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
@@ -107,6 +108,22 @@ impl Prefix {
         }
 
         Ok(result)
+    }
+
+    pub async fn find_menu_schema_files(&self) -> miette::Result<Vec<PathBuf>> {
+        let mut schemas = Vec::new();
+        for entry in fs_err::read_dir(self.root.join(consts::CONDA_MENU_SCHEMA_DIR))
+            .into_iter()
+            .flatten()
+        {
+            let entry = entry.into_diagnostic()?;
+            let path = entry.path();
+            if !path.is_file() || path.extension() != Some("json".as_ref()) {
+                continue;
+            }
+            schemas.push(path);
+        }
+        Ok(schemas)
     }
 
     /// Processes prefix records (that you can get by using `find_installed_packages`)
