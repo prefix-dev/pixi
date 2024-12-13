@@ -33,7 +33,7 @@
                     ]
                 },
                 "osx": {
-                    "command": ["open", "$@"],
+                    "command": ["open", "-a", "TextEdit"],
                     "CFBundleName": "Pixi Editor",
                     "CFBundleIdentifier": "dev.prefix.pixi-editor",
                     "CFBundleVersion": "0.1.0",

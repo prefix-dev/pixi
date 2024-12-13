@@ -1,6 +1,6 @@
 package:
   name: pixi-editor
-  version: "0.1.0"
+  version: "0.1.3"
 
 build:
   noarch: generic
@@ -18,16 +18,10 @@ build:
       menu_dir.mkdir(parents=True, exist_ok=True)
 
       # Copy menu.json
-      shutil.copy(Path(recipe_dir) / "menu" / "menu.json", menu_dir / "pixi-editor.json")
+      shutil.copy(Path(recipe_dir) / "Menu" / "menu.json", menu_dir / "pixi-editor.json")
 
       # Copy icon files
-      for icon_name in ["pixi-icon.ico", "pixi-icon.png"]:  # Add more extensions as needed
-          src = Path(recipe_dir) / "menu" / icon_name
+      for icon_name in ["pixi-icon.ico", "pixi-icon.png", "pixi-icon.icns"]:
+          src = Path(recipe_dir) / "Menu" / icon_name
           if src.exists():
               shutil.copy(src, menu_dir)
-
-# Actually required but to slow to make me care about it for now.
-# Assuming it's run in a pixi env that already has python.
-#requirements:
-#  build:
-#    - python
