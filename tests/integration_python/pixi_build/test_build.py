@@ -135,7 +135,6 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
     # TODO: Setting the cache dir shouldn't be necessary!
     env = {
         "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
-        "PIXI_BUILD_BACKEND_OVERRIDE": "/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-python",
     }
 
     target_dir = tmp_pixi_workspace.joinpath(project)
