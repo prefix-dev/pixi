@@ -3,10 +3,8 @@ use std::sync::{Arc, LazyLock, RwLock};
 use url::Url;
 
 use crate::url::RepositoryUrl;
-// use uv_auth::Credentials;
-// use uv_cache_key::RepositoryUrl;
 
-/// Global authentication cache for a uv invocation.
+/// Global authentication cache.
 ///
 /// This is used to share Git credentials within a single process.
 pub static GIT_STORE: LazyLock<GitStore> = LazyLock::new(GitStore::default);
