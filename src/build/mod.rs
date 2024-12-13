@@ -266,8 +266,8 @@ impl BuildContext {
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },
-                    // TODO: only build path dependencies
-                    editable: true,
+                    // only use editable for build path dependencies
+                    editable: source_spec.source.as_path().is_some(),
                     outputs: Some(vec![CondaOutputIdentifier {
                         name: Some(source_spec.package_record.name.as_normalized().to_string()),
                         version: Some(source_spec.package_record.version.version().to_string()),
