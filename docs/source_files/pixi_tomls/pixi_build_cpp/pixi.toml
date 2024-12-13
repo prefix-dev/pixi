@@ -1,0 +1,23 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "python-bindings"
+platforms = ["osx-arm64"]
+preview = ["pixi-build"]                      # (1)!
+
+[tasks]
+
+[dependencies] # (2)!
+python-bindings = { path = "." }
+
+[package]
+version = "0.1.0" # (3)!
+
+[build-system] # (4)!
+build-backend = { name = "pixi-build-cpp", version = "*" }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+
+[host-dependencies]
+nanobind = ">=2.4.0, <2.5.0"
