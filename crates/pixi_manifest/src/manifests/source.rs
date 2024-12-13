@@ -7,7 +7,7 @@ use toml_edit::{value, Array, Item, Table, Value};
 
 use crate::toml::TomlDocument;
 use crate::{
-    manifests::project::TableName, pypi::PyPiPackageName, FeatureName, PyPiRequirement,
+    manifests::table_name::TableName, pypi::PyPiPackageName, FeatureName, PyPiRequirement,
     PypiDependencyLocation, SpecType, Task, TomlError,
 };
 

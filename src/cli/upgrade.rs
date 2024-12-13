@@ -199,7 +199,7 @@ fn parse_specs(
         .filter(|(name, _)| {
             if name.as_normalized() == "python" {
                 if let pixi_manifest::ManifestSource::PyProjectToml(document) =
-                    project.manifest.document.clone()
+                    project.manifest.source.clone()
                 {
                     if document
                         .get_nested_table("[tool.pixi.dependencies.python]")
@@ -251,7 +251,7 @@ fn parse_specs(
             _ => None,
         })
         .map(|(name, req)| {
-            let location = project.manifest.document.pypi_dependency_location(
+            let location = project.manifest.source.pypi_dependency_location(
                 &name,
                 None, // TODO: add support for platforms
                 &args.specs.feature,

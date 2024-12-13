@@ -82,7 +82,7 @@ impl WorkspaceManifest {
 
 #[cfg(test)]
 mod tests {
-    use insta::{assert_snapshot, assert_yaml_snapshot};
+    use insta::{assert_debug_snapshot, assert_snapshot, assert_yaml_snapshot};
     use itertools::Itertools;
     use rattler_conda_types::{NamedChannelOrUrl, Platform};
 
@@ -475,5 +475,36 @@ mod tests {
         test = "test"
         "#;
         let _manifest = WorkspaceManifest::from_toml_str(contents).unwrap();
+    }
+
+    #[test]
+    fn test_build_variants() {
+        let contents = r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [workspace.build-variants]
+        python = ["3.10.*", "3.11.*"]
+
+        [workspace.target.win-64.build-variants]
+        python = ["1.0.*"]
+        "#;
+        let manifest = WorkspaceManifest::from_toml_str(contents).unwrap();
+        println!("{:?}", manifest.workspace.build_variants);
+        let resolved_linux = manifest
+            .workspace
+            .build_variants
+            .resolve(Some(Platform::Linux64))
+            .collect::<Vec<_>>();
+        assert_debug_snapshot!(resolved_linux);
+
+        let resolved_win = manifest
+            .workspace
+            .build_variants
+            .resolve(Some(Platform::Win64))
+            .collect::<Vec<_>>();
+        assert_debug_snapshot!(resolved_win);
     }
 }

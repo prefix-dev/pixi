@@ -64,8 +64,9 @@ pub struct Manifest {
     /// Note that if the document is edited, this field will not be updated.
     pub contents: Option<String>,
 
-    /// Editable toml document
-    pub document: ManifestSource,
+    /// Reference to the original toml source
+    /// used for modification
+    pub source: ManifestSource,
 
     /// The parsed workspace manifest
     pub workspace: WorkspaceManifest,
@@ -90,7 +91,7 @@ impl Manifest {
 
     /// Return the toml manifest file name ('pixi.toml' or 'pyproject.toml')
     pub fn file_name(&self) -> &str {
-        match self.document {
+        match self.source {
             ManifestSource::PixiToml(_) => consts::PROJECT_MANIFEST,
             ManifestSource::PyProjectToml(_) => consts::PYPROJECT_MANIFEST,
         }
@@ -153,7 +154,7 @@ impl Manifest {
         Ok(Self {
             path: manifest_path.to_path_buf(),
             contents: Some(contents),
-            document: source,
+            source,
             workspace: workspace_manifest,
             package: package_manifest,
         })
@@ -161,7 +162,7 @@ impl Manifest {
 
     /// Save the manifest to the file and update the contents
     pub fn save(&mut self) -> miette::Result<()> {
-        let contents = self.document.to_string();
+        let contents = self.source.to_string();
         fs_err::write(&self.path, &contents).into_diagnostic()?;
         self.contents = Some(contents);
         Ok(())
@@ -203,7 +204,7 @@ impl Manifest {
         }
 
         // Add the task to the Toml manifest
-        self.document
+        self.source
             .add_task(name.as_str(), task.clone(), platform, feature_name)?;
 
         // Add the task to the manifest
@@ -230,7 +231,7 @@ impl Manifest {
             }
         }
 
-        self.document.add_environment(
+        self.source.add_environment(
             name.clone(),
             features.clone(),
             solve_group.clone(),
@@ -257,7 +258,7 @@ impl Manifest {
     /// Removes an environment from the project.
     pub fn remove_environment(&mut self, name: &str) -> miette::Result<bool> {
         // Remove the environment from the TOML document
-        if !self.document.remove_environment(name)? {
+        if !self.source.remove_environment(name)? {
             return Ok(false);
         }
 
@@ -291,7 +292,7 @@ impl Manifest {
             .ok_or_else(|| miette::miette!("task {} does not exist", name))?;
 
         // Remove the task from the Toml manifest
-        self.document
+        self.source
             .remove_task(name.as_str(), platform, feature_name)?;
 
         // Remove the task from the internal manifest
@@ -321,7 +322,7 @@ impl Manifest {
         current.extend(new.clone());
 
         // Then to the TOML document
-        let platforms = self.document.get_array_mut("platforms", feature_name)?;
+        let platforms = self.source.get_array_mut("platforms", feature_name)?;
         for platform in new.iter() {
             platforms.push(platform.to_string());
         }
@@ -359,7 +360,7 @@ impl Manifest {
 
         // And from the TOML document
         let retained = retained.iter().map(|p| p.to_string()).collect_vec();
-        let platforms = self.document.get_array_mut("platforms", feature_name)?;
+        let platforms = self.source.get_array_mut("platforms", feature_name)?;
         platforms.retain(|x| retained.contains(&x.to_string()));
 
         Ok(())
@@ -388,13 +389,8 @@ impl Manifest {
                 .try_add_dependency(&name, &spec, spec_type, overwrite_behavior)
             {
                 Ok(true) => {
-                    self.document.add_dependency(
-                        &name,
-                        &spec,
-                        spec_type,
-                        platform,
-                        feature_name,
-                    )?;
+                    self.source
+                        .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
                     any_added = true;
                 }
                 Ok(false) => {}
@@ -422,7 +418,7 @@ impl Manifest {
                 .try_add_pep508_dependency(requirement, editable, overwrite_behavior)
             {
                 Ok(true) => {
-                    self.document.add_pypi_dependency(
+                    self.source.add_pypi_dependency(
                         requirement,
                         platform,
                         feature_name,
@@ -466,7 +462,7 @@ impl Manifest {
                 Err(e) => return Err(e.into()),
             };
             // Remove the dependency from the TOML document
-            self.document
+            self.source
                 .remove_dependency(dep, spec_type, platform, feature_name)?;
         }
         Ok(())
@@ -499,7 +495,7 @@ impl Manifest {
                 Err(e) => return Err(e.into()),
             };
             // Remove the dependency from the TOML document
-            self.document
+            self.source
                 .remove_pypi_dependency(dep, platform, feature_name)?;
         }
         Ok(())
@@ -589,7 +585,7 @@ impl Manifest {
         *current = final_channels.clone();
 
         // Update the TOML document
-        let channels = self.document.get_array_mut("channels", feature_name)?;
+        let channels = self.source.get_array_mut("channels", feature_name)?;
         channels.clear();
         for channel in final_channels {
             channels.push(Value::from(channel));
@@ -632,7 +628,7 @@ impl Manifest {
         let current_clone = current.clone();
 
         // And from the TOML document
-        let channels = self.document.get_array_mut("channels", feature_name)?;
+        let channels = self.source.get_array_mut("channels", feature_name)?;
         // clear and recreate from current list
         channels.clear();
         for channel in current_clone.iter() {
@@ -645,7 +641,7 @@ impl Manifest {
     /// Set the project name
     pub fn set_name(&mut self, name: &str) -> miette::Result<()> {
         self.workspace.workspace.name = name.to_string();
-        self.document.set_name(name);
+        self.source.set_name(name);
 
         Ok(())
     }
@@ -654,7 +650,7 @@ impl Manifest {
     pub fn set_description(&mut self, description: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
         self.workspace.workspace.description = Some(description.to_string());
-        self.document.set_description(description);
+        self.source.set_description(description);
 
         Ok(())
     }
@@ -667,7 +663,7 @@ impl Manifest {
                 .into_diagnostic()
                 .context("could not convert version to a valid project version")?,
         );
-        self.document.set_version(version);
+        self.source.set_version(version);
         Ok(())
     }
 
@@ -1049,10 +1045,7 @@ mod tests {
         }
 
         // Write the toml to string and verify the content
-        assert_snapshot!(
-            format!("test_remove_{}", name),
-            manifest.document.to_string()
-        );
+        assert_snapshot!(format!("test_remove_{}", name), manifest.source.to_string());
     }
 
     fn test_remove_pypi(
@@ -1103,7 +1096,7 @@ mod tests {
         // Write the toml to string and verify the content
         assert_snapshot!(
             format!("test_remove_pypi_{}", name),
-            manifest.document.to_string()
+            manifest.source.to_string()
         );
     }
 
@@ -1661,7 +1654,7 @@ platforms = ["linux-64", "win-64"]
             .iter()
             .any(|c| c.channel == prioritized_channel2.channel && c.priority == Some(-12i32)));
 
-        assert_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.source.to_string());
     }
 
     #[test]
@@ -2012,7 +2005,7 @@ test = "test initial"
                 &FeatureName::Named("test".to_string()),
             )
             .unwrap();
-        assert_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.source.to_string());
     }
 
     #[test]
@@ -2135,7 +2128,7 @@ bar = "*"
             ">=2.3".to_string()
         );
 
-        assert_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.source.to_string());
     }
 
     #[test]
