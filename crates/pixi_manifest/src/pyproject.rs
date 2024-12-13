@@ -618,7 +618,7 @@ mod tests {
             .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
             .is_some());
 
-        assert_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.source.to_string());
     }
 
     #[test]
@@ -643,7 +643,7 @@ mod tests {
             .get(&name)
             .is_none());
 
-        assert_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.source.to_string());
     }
 
     #[test]
