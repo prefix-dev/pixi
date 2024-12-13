@@ -40,7 +40,7 @@ In `package` you specify properties specific to the package you want to build.
 ```
 
 Packages are built by using build backends.
-By specifying `package.build-system.build-backend` and `package.build-system.channels` you determine which backend is used and from which channel it will be downloaded.
+By specifying `build-system.build-backend` and `build-system.channels` you determine which backend is used and from which channel it will be downloaded.
 In this example, we are using `pixi-build-python` in order to build a Python package.
 
 ```toml
