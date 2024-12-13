@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, RwLock};
-use tracing::trace;
 use url::Url;
 
 use crate::url::RepositoryUrl;
@@ -31,9 +30,10 @@ impl GitStore {
 /// Populate the global authentication store with credentials on a Git URL, if there are any.
 ///
 /// Returns `true` if the store was updated.
+/// // TODO: figure out where we need to call it
 pub fn store_credentials_from_url(url: &Url) -> bool {
     if let Some(credentials) = Credentials::from_url(url) {
-        trace!("Caching credentials for {url}");
+        tracing::debug!("Caching credentials for {url}");
         GIT_STORE.insert(RepositoryUrl::new(url), credentials);
         true
     } else {
@@ -69,18 +69,6 @@ impl Username {
         }
     }
 
-    pub(crate) fn none() -> Self {
-        Self::new(None)
-    }
-
-    pub(crate) fn is_none(&self) -> bool {
-        self.0.is_none()
-    }
-
-    pub(crate) fn is_some(&self) -> bool {
-        self.0.is_some()
-    }
-
     pub(crate) fn as_deref(&self) -> Option<&str> {
         self.0.as_deref()
     }
@@ -99,33 +87,17 @@ impl From<Option<String>> for Username {
 }
 
 impl Credentials {
-    pub(crate) fn new(username: Option<String>, password: Option<String>) -> Self {
-        Self {
-            username: Username::new(username),
-            password,
-        }
-    }
-
     pub fn username(&self) -> Option<&str> {
         self.username.as_deref()
-    }
-
-    pub(crate) fn to_username(&self) -> Username {
-        self.username.clone()
     }
 
     pub fn password(&self) -> Option<&str> {
         self.password.as_deref()
     }
 
-    pub(crate) fn is_empty(&self) -> bool {
-        self.password.is_none() && self.username.is_none()
-    }
-
     /// Apply the credentials to the given URL.
     ///
     /// Any existing credentials will be overridden.
-    #[must_use]
     pub fn apply(&self, mut url: Url) -> Url {
         if let Some(username) = self.username() {
             let _ = url.set_username(username);

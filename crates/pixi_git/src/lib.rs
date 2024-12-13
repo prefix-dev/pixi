@@ -2,20 +2,19 @@ use ::url::Url;
 use git::GitReference;
 use sha::{GitSha, OidParseError};
 
-mod credentials;
+pub mod credentials;
 pub mod git;
 pub mod resolver;
-mod sha;
+pub mod sha;
 pub mod source;
-mod url;
+pub mod url;
 
 // use resolver::GitResolver;
 
 /// A URL reference to a Git repository.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord)]
 pub struct GitUrl {
-    /// The URL of the Git repository, with any query parameters, fragments, and leading `git+`
-    /// removed.
+    /// The URL of the Git repository, with any query parameters, fragments removed.
     repository: Url,
     /// The reference to the commit to use, which could be a branch, tag or revision.
     reference: GitReference,

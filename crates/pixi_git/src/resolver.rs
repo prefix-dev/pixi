@@ -2,22 +2,19 @@ use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use pixi_progress::wrap_in_progress;
+use pixi_utils::PrefixGuard;
 use tracing::debug;
-
-use miette::Diagnostic;
-// use miette::diagnostic_de
 
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
-use fs_err::tokio as fs;
 use reqwest_middleware::ClientWithMiddleware;
-// use uv_cache_key::{cache_digest, RepositoryUrl};
-// use uv_fs::LockedFile;
+use url::Url;
 
 use crate::{
     git::GitReference,
     sha::GitSha,
-    source::{Fetch, GitSource},
+    source::{cache_digest, Fetch, GitSource},
     url::RepositoryUrl,
     GitUrl,
 };
@@ -28,10 +25,10 @@ pub enum GitResolverError {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Join(#[from] tokio::task::JoinError),
-    // #[error("Git operation failed")]
+    #[error("Git operation failed")]
     // #[error(transparent)]
     // // #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()))]
-    // Git(#[diagnostic_source] miette::Report),
+    Git(String),
 }
 
 /// A resolver for Git repositories.
@@ -49,60 +46,12 @@ impl GitResolver {
         self.0.get(reference)
     }
 
-    /// Resolve a Git URL to a specific commit.
-    pub async fn resolve(
-        &self,
-        url: &GitUrl,
-        client: ClientWithMiddleware,
-        cache: PathBuf,
-        // reporter: Option<impl Reporter + 'static>,
-    ) -> Result<GitSha, GitResolverError> {
-        debug!("Resolving source distribution from Git: {url}");
-
-        let reference = RepositoryReference::from(url);
-
-        // If we know the precise commit already, return it.
-        if let Some(precise) = self.get(&reference) {
-            return Ok(*precise);
-        }
-
-        // Avoid races between different processes, too.
-        let lock_dir = cache.join("locks");
-        fs::create_dir_all(&lock_dir).await?;
-        let repository_url = RepositoryUrl::new(url.repository());
-        // let _lock = LockedFile::acquire(
-        //     lock_dir.join(cache_digest(&repository_url)),
-        //     &repository_url,
-        // )
-        // .await?;
-
-        // Fetch the Git repository.
-        // let source = if let Some(reporter) = reporter {
-        //     GitSource::new(url.clone(), client, cache).with_reporter(reporter)
-        // } else {
-        //     GitSource::new(url.clone(), client, cache)
-        // };
-        let source = GitSource::new(url.clone(), client, cache);
-
-        let precise = tokio::task::spawn_blocking(move || source.resolve())
-            .await?
-            .unwrap();
-        // .map_err(GitResolverError::Git)?;
-
-        // Insert the resolved URL into the in-memory cache. This ensures that subsequent fetches
-        // resolve to the same precise commit.
-        self.insert(reference, precise);
-
-        Ok(precise)
-    }
-
     /// Fetch a remote Git repository.
     pub async fn fetch(
         &self,
         url: &GitUrl,
         client: ClientWithMiddleware,
         cache: PathBuf,
-        // reporter: Option<impl Reporter + 'static>,
     ) -> Result<Fetch, GitResolverError> {
         debug!("Fetching source distribution from Git: {url}");
 
@@ -122,31 +71,27 @@ impl GitResolver {
         let lock_dir = cache.join("locks");
         // fs::create_dir_all(&lock_dir).await?;
         let repository_url = RepositoryUrl::new(url.repository());
-        // let _lock = LockedFile::acquire(
-        //     lock_dir.join(cache_digest(&repository_url)),
-        //     &repository_url,
-        // )
-        // .await?;
 
-        // // Fetch the Git repository.
-        // let source = if let Some(reporter) = reporter {
-        //     GitSource::new(url.as_ref().clone(), client, cache).with_reporter(reporter)
-        // } else {
-        //     GitSource::new(url.as_ref().clone(), client, cache)
-        // };
+        let write_guard_path = lock_dir.join(cache_digest(&repository_url));
+        let mut guard = PrefixGuard::new(&write_guard_path)?;
+        let mut write_guard = wrap_in_progress("acquiring write lock on prefix", || guard.write())?;
+
+        // Update the prefix to indicate that we are installing it.
+        write_guard.begin()?;
+
+        // Fetch the Git repository.
         let source = GitSource::new(url.as_ref().clone(), client, cache);
 
         let fetch = tokio::task::spawn_blocking(move || source.fetch())
-            .await
-            .unwrap()
-            .unwrap();
-        // .map_err(GitResolverError::Git)?;
+            .await?
+            .map_err(|err| GitResolverError::Git(err.to_string()))?;
 
         // Insert the resolved URL into the in-memory cache. This ensures that subsequent fetches
         // resolve to the same precise commit.
         if let Some(precise) = fetch.git().precise() {
             self.insert(reference, precise);
         }
+        let _ = write_guard.finish();
 
         Ok(fetch)
     }
@@ -224,4 +169,13 @@ impl From<&GitUrl> for RepositoryReference {
             reference: git.reference().clone(),
         }
     }
+}
+
+/// Reporter trait for reporting the progress of git operations.
+pub trait GitReporter: Send + Sync {
+    /// Callback to invoke when a repository checkout begins.
+    fn on_checkout_start(&self, url: &Url, rev: &str) -> usize;
+
+    /// Callback to invoke when a repository checkout completes.
+    fn on_checkout_complete(&self, url: &Url, rev: &str, index: usize);
 }

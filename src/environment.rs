@@ -17,9 +17,11 @@ use miette::{IntoDiagnostic, WrapErr};
 use parking_lot::Mutex;
 use pixi_build_frontend::CondaBuildReporter;
 use pixi_consts::consts;
+use pixi_git::credentials::store_credentials_from_url;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
+use pixi_spec::PixiSpec;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -327,6 +329,27 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     Ok(())
 }
 
+/// Extract any credentials that are defined on the project dependencies themselves.
+/// While we don't store plaintext credentials in the `pixi.lock`, we do respect credentials that are defined
+/// in the `pixi.toml` or `pyproject.toml`.
+pub async fn store_credentials_from_project(project: &Project) -> miette::Result<()> {
+    for env in project.environments() {
+        let env_platforms = env.platforms();
+        for platform in env_platforms {
+            let dependencies = env.combined_dependencies(Some(platform));
+            for (_, dep_spec) in dependencies {
+                for spec in dep_spec {
+                    if let PixiSpec::Git(spec) = spec {
+                        store_credentials_from_url(&spec.git);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
@@ -412,6 +435,9 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 
     // Make sure the project is in a sane state
     sanity_check_project(project).await?;
+
+    // Extract credentials from the environment
+    store_credentials_from_project(project).await?;
 
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project

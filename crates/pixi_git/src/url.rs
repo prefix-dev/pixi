@@ -115,3 +115,15 @@ impl RepositoryUrl {
         Ok(Self::new(&Url::parse(url)?))
     }
 }
+
+/// Remove the credentials from a URL, allowing the generic `git` username (without a password)
+/// in SSH URLs, as in, `ssh://git@github.com/...`.
+pub fn redact_credentials(url: &mut Url) {
+    // For URLs that use the `git` convention (i.e., `ssh://git@github.com/...`), avoid dropping the
+    // username.
+    if url.scheme() == "ssh" && url.username() == "git" && url.password().is_none() {
+        return;
+    }
+    let _ = url.set_password(None);
+    let _ = url.set_username("");
+}

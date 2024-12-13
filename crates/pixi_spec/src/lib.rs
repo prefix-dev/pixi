@@ -257,7 +257,6 @@ impl PixiSpec {
 
     /// Converts this instance in a source or binary spec.
     pub fn into_source_or_binary(self) -> Either<SourceSpec, BinarySpec> {
-        eprintln!("into_source_or_binary: {:?}", self);
         match self {
             PixiSpec::Version(version) => Either::Right(BinarySpec::Version(version)),
             PixiSpec::DetailedVersion(detailed) => {

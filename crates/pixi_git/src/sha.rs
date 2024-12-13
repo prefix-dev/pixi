@@ -25,6 +25,8 @@ pub enum OidParseError {
     TooLong,
     #[error("Object ID cannot be parsed from empty string")]
     Empty,
+    #[error("Not a valid URL: `{0}`")]
+    UrlParse(String),
 }
 
 impl FromStr for GitOid {

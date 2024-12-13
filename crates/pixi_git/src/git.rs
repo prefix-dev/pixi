@@ -1,6 +1,5 @@
 use std::{
     fmt::Display,
-    fs,
     path::{Path, PathBuf},
     process::Command,
     str::FromStr,
@@ -10,7 +9,6 @@ use std::{
 use miette::{Context, IntoDiagnostic};
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
-use tracing::debug;
 use url::Url;
 
 use crate::sha::{GitOid, GitSha};
@@ -18,7 +16,7 @@ use crate::sha::{GitOid, GitSha};
 /// A file indicates that if present, `git reset` has been done and a repo
 /// checkout is ready to go. See [`GitCheckout::reset`] for why we need this.
 const CHECKOUT_READY_LOCK: &str = ".ok";
-pub const GIT_DIR: &'static str = "GIT_DIR";
+pub const GIT_DIR: &str = "GIT_DIR";
 
 #[derive(Debug, thiserror::Error)]
 pub enum GitError {
@@ -190,11 +188,6 @@ impl GitRemote {
         Self { url: url.clone() }
     }
 
-    /// Gets the remote repository URL.
-    pub(crate) fn url(&self) -> &Url {
-        &self.url
-    }
-
     /// Fetches and checkouts to a reference or a revision from this remote
     /// into a local path.
     ///
@@ -231,15 +224,14 @@ impl GitRemote {
             }
         }
 
-        eprintln!("path is {:?}", into);
         // Otherwise start from scratch to handle corrupt git repositories.
         // After our fetch (which is interpreted as a clone now) we do the same
         // resolution to figure out what we cloned.
         if into.exists() {
-            fs::remove_dir_all(into).into_diagnostic()?;
+            fs_err::remove_dir_all(into).into_diagnostic()?;
         }
 
-        fs::create_dir_all(into).into_diagnostic()?;
+        fs_err::create_dir_all(into).into_diagnostic()?;
         let mut repo = GitRepository::init(into)?;
         fetch(&mut repo, self.url.as_str(), reference, client)
             .with_context(|| format!("failed to clone into: {}", into.display()))?;
@@ -247,8 +239,6 @@ impl GitRemote {
             Some(rev) => rev,
             None => reference.resolve(&repo)?,
         };
-
-        debug!("cloned {} to {} for rev {}", self.url, into.display(), rev);
 
         Ok((GitDatabase { repo }, rev))
     }
@@ -299,7 +289,7 @@ impl GitDatabase {
         let mut result = String::from_utf8(output.stdout).into_diagnostic()?;
 
         result.truncate(result.trim_end().len());
-        debug!("result of short id is  {:?}", result);
+        tracing::debug!("result of short id is  {:?}", result);
         Ok(result)
     }
 
@@ -319,7 +309,7 @@ impl GitRepository {
     /// Opens an existing Git repository at `path`.
     pub(crate) fn open(path: &Path) -> miette::Result<GitRepository> {
         // Make sure there is a Git repository at the specified path.
-        Command::new(GIT.as_ref().unwrap())
+        Command::new(GIT.as_ref().into_diagnostic()?)
             .arg("rev-parse")
             .current_dir(path)
             .output()
@@ -362,7 +352,7 @@ impl GitRepository {
         let mut result = String::from_utf8(result.stdout).into_diagnostic()?;
 
         result.truncate(result.trim_end().len());
-        Ok(result.parse().into_diagnostic()?)
+        result.parse().into_diagnostic()
     }
 }
 
@@ -386,11 +376,11 @@ impl GitCheckout {
     /// Clone a repo for a `revision` into a local path from a `database`.
     /// This is a filesystem-to-filesystem clone.
     fn clone_into(into: &Path, database: &GitDatabase, revision: GitOid) -> miette::Result<Self> {
-        debug!("cloning into {:?} from {:?}", database.repo.path, into);
-        let dirname = into.parent().unwrap();
-        fs::create_dir_all(dirname).into_diagnostic()?;
+        tracing::debug!("cloning into {:?} from {:?}", database.repo.path, into);
+        let dirname = into.parent().expect("into path must have a parent");
+        fs_err::create_dir_all(dirname).into_diagnostic()?;
         if into.exists() {
-            fs::remove_dir_all(into).into_diagnostic()?;
+            fs_err::remove_dir_all(into).into_diagnostic()?;
         }
 
         // Perform a local clone of the repository, which will attempt to use
@@ -407,7 +397,7 @@ impl GitCheckout {
             .output()
             .into_diagnostic();
 
-        debug!("output after cloning {:?}", output);
+        tracing::debug!("output after cloning {:?}", output);
 
         let repo = GitRepository::open(into)?;
         let checkout = GitCheckout::new(revision, repo);
@@ -441,9 +431,9 @@ impl GitCheckout {
     /// [`.cargo-ok`]: CHECKOUT_READY_LOCK
     fn reset(&self) -> miette::Result<()> {
         let ok_file = self.repo.path.join(CHECKOUT_READY_LOCK);
-        let _ = fs::remove_file(&ok_file);
+        let _ = fs_err::remove_file(&ok_file);
 
-        debug!("reset {} to {}", self.repo.path.display(), self.revision);
+        tracing::debug!("reset {} to {}", self.repo.path.display(), self.revision);
 
         // Perform the hard reset.
         let output = Command::new(GIT.as_ref().into_diagnostic()?)
@@ -453,7 +443,6 @@ impl GitCheckout {
             .current_dir(&self.repo.path)
             .output();
 
-        debug!("output after reset {:?}", output);
         output.into_diagnostic()?;
 
         // Update submodules (`git submodule update --recursive`).
@@ -467,7 +456,7 @@ impl GitCheckout {
             .map(drop)
             .into_diagnostic()?;
 
-        fs::File::create(ok_file).into_diagnostic()?;
+        fs_err::File::create(ok_file).into_diagnostic()?;
         Ok(())
     }
 }
@@ -491,7 +480,7 @@ pub(crate) fn fetch(
         Ok(FastPathRev::NeedsFetch(rev)) => Some(rev),
         Ok(FastPathRev::Indeterminate) => None,
         Err(e) => {
-            debug!("failed to check github {:?}", e);
+            tracing::debug!("failed to check github fast path {:?}", e);
             None
         }
     };
@@ -568,9 +557,8 @@ pub(crate) fn fetch(
             }
         }
     }
-    eprintln!("fetching with cli");
 
-    debug!(
+    tracing::debug!(
         "Performing a Git fetch for: {remote_url} with repo path {}",
         repo.path.display()
     );
@@ -587,7 +575,7 @@ pub(crate) fn fetch(
                     // Stop after the first success and log failures
                     match fetch_result {
                         Err(ref err) => {
-                            debug!("failed to fetch refspec `{refspec}`: {err}");
+                            tracing::debug!("failed to fetch refspec `{refspec}`: {err}");
                             Some(fetch_result)
                         }
                         Ok(()) => None,
@@ -608,7 +596,7 @@ pub(crate) fn fetch(
             }
         }
     };
-    debug!("fetched with cli {:?}", result);
+    tracing::debug!("fetched with cli {:?}", result);
     match reference {
         // With the default branch, adding context is confusing
         GitReference::DefaultBranch => result,
@@ -643,19 +631,13 @@ fn fetch_with_cli(
         //     // location (this takes precedence over the cwd). Make sure this is
         //     // unset so git will look at cwd for the repo.
         .env_remove(GIT_DIR)
-        //     // The reset of these may not be necessary, but I'm including them
-        //     // just to be extra paranoid and avoid any issues.
-        //     .env_remove(EnvVars::GIT_WORK_TREE)
-        //     .env_remove(EnvVars::GIT_INDEX_FILE)
-        //     .env_remove(EnvVars::GIT_OBJECT_DIRECTORY)
-        //     .env_remove(EnvVars::GIT_ALTERNATE_OBJECT_DIRECTORIES)
         .current_dir(&repo.path);
 
     // // We capture the output to avoid streaming it to the user's console during clones.
     // // The required `on...line` callbacks currently do nothing.
     // // The output appears to be included in error messages by default.
     let output = cmd.output().into_diagnostic()?;
-    debug!("git fetch output: {:?}", output);
+    tracing::debug!("git fetch output: {:?}", output);
     Ok(())
 }
 
@@ -761,7 +743,7 @@ fn github_fast_path(
         .into_diagnostic()?;
 
     runtime.block_on(async move {
-        debug!("Attempting GitHub fast path for: {url}");
+        tracing::debug!("Attempting GitHub fast path for: {url}");
         let mut request = client.get(&url);
         request = request.header("Accept", "application/vnd.github.3.sha");
         request = request.header("User-Agent", "uv");

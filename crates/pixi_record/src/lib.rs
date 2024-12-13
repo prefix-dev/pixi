@@ -2,8 +2,8 @@ mod pinned_source;
 mod source_record;
 
 pub use pinned_source::{
-    MutablePinnedSourceSpec, ParseError, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec,
-    PinnedUrlSpec, SourceMismatchError,
+    MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec,
+    PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord, RepoDataRecord};
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};

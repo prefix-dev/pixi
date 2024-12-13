@@ -3811,6 +3811,8 @@ dependencies = [
  "dunce",
  "fs-err 2.11.0",
  "miette 7.2.0",
+ "pixi_progress",
+ "pixi_utils",
  "reqwest",
  "reqwest-middleware",
  "serde",
@@ -3901,6 +3903,8 @@ name = "pixi_record"
 version = "0.1.0"
 dependencies = [
  "file_url",
+ "miette 7.2.0",
+ "pixi_git",
  "pixi_spec",
  "rattler_conda_types",
  "rattler_digest",
@@ -3919,6 +3923,7 @@ dependencies = [
  "file_url",
  "insta",
  "itertools 0.13.0",
+ "pixi_git",
  "rattler_conda_types",
  "rattler_digest",
  "serde",

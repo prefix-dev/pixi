@@ -26,7 +26,9 @@ use pixi_build_types::{
 use pixi_config::get_cache_dir;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
-use pixi_record::{InputHash, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
+use pixi_record::{
+    InputHash, PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, SourceRecord,
+};
 use pixi_spec::{GitSpec, Reference, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
@@ -36,7 +38,7 @@ use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl};
 use rattler_digest::Sha256;
 pub use reporters::{BuildMetadataReporter, BuildReporter};
 use thiserror::Error;
-use tracing::{debug, instrument};
+use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
 use xxhash_rust::xxh3::Xxh3;
@@ -369,24 +371,18 @@ impl BuildContext {
             SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
             SourceSpec::Git(git_spec) => {
                 let fetched = self.resolve_git(git_spec.clone()).await.unwrap();
-                debug!("fetched {:?}", fetched);
-
-                let path = if git_spec.subdirectory.is_some() {
-                    fetched
-                        .clone()
-                        .into_path()
-                        .join(git_spec.subdirectory.as_ref().unwrap())
-                } else {
-                    fetched.clone().into_path()
-                };
+                //TODO: will be removed when manifest will be merged in pixi-build-backend
+                let path = fetched.clone().into_path().join("boost-check");
 
                 let source_checkout = SourceCheckout {
                     path,
                     pinned: PinnedSourceSpec::Git(PinnedGitSpec {
                         git: fetched.git().repository().clone(),
-                        commit: fetched.git().precise().unwrap().to_string(),
-                        rev: git_spec.rev.clone(),
-                        subdirectory: git_spec.subdirectory.clone(),
+                        source: PinnedGitCheckout {
+                            commit: fetched.git().precise().expect("should be precies"),
+                            reference: git_spec.rev.clone().unwrap_or(Reference::DefaultBranch),
+                            subdirectory: git_spec.subdirectory.clone(),
+                        },
                     }),
                 };
                 Ok(source_checkout)
@@ -418,8 +414,12 @@ impl BuildContext {
             PinnedSourceSpec::Url(_) => {
                 unimplemented!("fetching URL sources is not yet implemented")
             }
-            PinnedSourceSpec::Git(_) => {
-                unimplemented!("fetching Git sources is not yet implemented")
+            PinnedSourceSpec::Git(pinned_git_spec) => {
+                let fetched = self
+                    .resolve_precise_git(pinned_git_spec.clone())
+                    .await
+                    .unwrap();
+                Ok(fetched.into_path().join("boost-check"))
             }
             PinnedSourceSpec::Path(path) => self
                 .resolve_path(path.path.to_path())
@@ -456,14 +456,14 @@ impl BuildContext {
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
     async fn resolve_git(&self, git: GitSpec) -> miette::Result<Fetch> {
-        let git_reference = match git.rev {
-            Some(Reference::Branch(branch)) => GitReference::Branch(branch),
-            Some(Reference::Tag(tag)) => GitReference::Tag(tag),
-            Some(Reference::Rev(rev)) => GitReference::from_rev(rev),
-            None => GitReference::DefaultBranch,
-        };
+        let git_reference = git
+            .rev
+            .map(|rev| rev.into())
+            .unwrap_or(GitReference::DefaultBranch);
 
-        let git_url = GitUrl::from_reference(git.git, git_reference);
+        let git_url = GitUrl::try_from(git.git)
+            .into_diagnostic()?
+            .with_reference(git_reference);
 
         let resolver = self
             .git
@@ -476,8 +476,28 @@ impl BuildContext {
             .into_diagnostic()?;
 
         Ok(resolver)
+    }
 
-        // now we have fetched the git repository, we need to checkout the specific revision
+    /// Resolves the source path to a full path.
+    ///
+    /// This function does not check if the path exists and also does not follow
+    /// symlinks.
+    async fn resolve_precise_git(&self, git: PinnedGitSpec) -> miette::Result<Fetch> {
+        let git_reference = git.source.reference.into();
+
+        let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
+
+        let resolver = self
+            .git
+            .fetch(
+                &git_url,
+                self.tool_context.clone().client.clone(),
+                self.cache_dir.clone(),
+            )
+            .await
+            .into_diagnostic()?;
+
+        Ok(resolver)
     }
 
     /// Extracts the metadata from a package whose source is located at the
@@ -584,6 +604,8 @@ impl BuildContext {
             )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
+
+        eprintln!("metadata is : {:?}", metadata);
 
         // Compute the input globs for the mutable source checkouts.
         let input_hash = if source.pinned.is_immutable() {
