@@ -737,9 +737,10 @@ packages:
   build: pyhbf21a9e_0
   subdir: noarch
   depends:
+  - rich >=13.9.4,<14
   - python
   input:
-    hash: 838c2144d5cbf29b8080a4f13fe011a48a1dfda18faf9dc1137319d65f603db4
+    hash: bfdfc32d8617e2c3448398649d982ae510f7c27fe6e90067aefb1f965d40df8a
     globs:
     - pyproject.toml
 - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda

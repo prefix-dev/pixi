@@ -2,7 +2,6 @@ from pathlib import Path
 import shutil
 import json
 
-
 from ..common import verify_cli_command
 
 
@@ -16,17 +15,6 @@ def test_build_conda_package(pixi: Path, examples_dir: Path, tmp_pixi_workspace:
     shutil.rmtree(target_dir.joinpath(".pixi"), ignore_errors=True)
 
     manifest_path = target_dir / "pyproject.toml"
-
-    # Add a boltons package to it
-    verify_cli_command(
-        [
-            pixi,
-            "add",
-            "boltons",
-            "--manifest-path",
-            manifest_path,
-        ],
-    )
 
     # build it
     verify_cli_command(
