@@ -740,7 +740,7 @@ fn github_fast_path(
         tracing::debug!("Attempting GitHub fast path for: {url}");
         let mut request = client.get(&url);
         request = request.header("Accept", "application/vnd.github.3.sha");
-        request = request.header("User-Agent", "uv");
+        request = request.header("User-Agent", "pixi");
         if let Some(local_object) = local_object {
             request = request.header("If-None-Match", local_object.to_string());
         }
