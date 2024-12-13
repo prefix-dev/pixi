@@ -8,7 +8,7 @@
 //! manifest file which allows relating certain parts of the manifest back to
 //! the original source code.
 
-pub mod project;
+pub mod table_name;
 
 mod manifest;
 mod package;
