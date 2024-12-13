@@ -20,18 +20,36 @@ The vision is to enable building of packages from source, for any language, on a
     3. Recursive source dependencies are not supported. ( source dependencies that have source dependencies )
     4. Workspace dependencies cannot be inherited.
 
-## High-level overview
-There are a couple of key concepts that make it easier to understand how the `build` feature works. The two most important
-additions are the concept of a *package* and a *build-system*.
+## Setting up the Manifest
+
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml"
 ```
 
-Coming from a `pixi.toml` created before `pixi 0.39`, these are the steps that you need to take:
+Since the build feature is still in preview, you have to add "pixi-build" to `workspace.preview`.
 
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
+```
 
+In `package` you specify properties specific to the package you want to build.
 
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:package"
+```
+
+Packages are built by using build backends.
+By specifying `package.build-system.build-backend` and `package.build-system.channels` you determine which backend is used and from which channel it will be downloaded.
+In this example, we are using `pixi-build-python` in order to build a Python package.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
+```
+
+If the package itself has dependencies they need to be mentioned here
+
+TODO
 
 ## Migrate to the new build feature
 

@@ -1,8 +1,8 @@
 # Specifies properties for the whole workspace
-# --8<-- [start:pixi-build]
+# --8<-- [start:preview]
 [workspace]
 preview = ["pixi-build"]
-# --8<-- [end:pixi-build]
+# --8<-- [end:preview]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 
@@ -17,7 +17,7 @@ version = "0.1.0"
 # Here the build system of the package is specified
 # We are using `pixi-build-python` in order to build a Python package
 # --8<-- [start:build-system]
-[build-system]
+[package.build-system]
 build-backend = { name = "pixi-build-python", version = "*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
@@ -28,7 +28,7 @@ channels = [
 
 # The Python package `simple_python` uses `hatchling` as Python build backend
 # --8<-- [start:host-dependencies]
-[host-dependencies]
+[package.host-dependencies]
 hatchling = "*"
 # --8<-- [end:host-dependencies]
 

@@ -1,27 +1,20 @@
 # Run, Host and Build Dependencies
 
-If you add package to the [dependency](../reference/pixi_manifest.md#dependencies) table that package will be available in your pixi environment.
-As soon as you are using the [build feature](./build.md) to build a package, it is important to know how the other dependency types work.
-This document describes the different types of dependencies that can be used in the manifest and what the differences are.
+If you add a package to the [dependency table](../reference/pixi_manifest.md#dependencies) of a feature that dependency will be available in all environments that include that feature.
+The dependencies of a package that is being built are a bit more granular.
+Here you can see the three types of dependencies for a simple C++ package.
 
-Currently, there are 3 types of dependencies, with the following manifest specification:
-
-1. Build dependencies: `build-dependencies`
-2. Host dependencies: `host-dependencies`
-3. Runtime dependencies: `dependencies` or `run-dependencies`
-
-The other dependency type [`pypi-dependencies`](../reference/pixi_manifest.md#pypi-dependencies) is not covered in this document, as it is not used by the conda ecosystem.
-
-Here we have the dependencies of a simple C++ package
 ```toml
 --8<-- "docs/source_files/pixi_tomls/dependency_types.toml:dependencies"
 ```
 
-<!-- TODO: Let's use this example to explain the different dependency types -->
+Each dependency is used at a different step of the package building process.
+`gxx` is used to build the package, `catch` will be linked into the package and `git` will be available during runtime.
 
+Let's go a bit more into detail of the different kinds of package dependencies.
 
 ### [Build Dependencies](../reference/pixi_manifest.md#build-dependencies)
-??? note "pixi-build-cmake"
+!!! note "pixi-build-cmake"
     When using the `pixi-build-cmake` backend you do not need to specify `cmake` or the compiler as a dependency.
     The backend will install `cmake`, `ninja` and the C++ compilers by default.
 
