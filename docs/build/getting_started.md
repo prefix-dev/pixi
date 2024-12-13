@@ -23,10 +23,6 @@ The vision is to enable building of packages from source, for any language, on a
 ## Setting up the Manifest
 
 
-```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml"
-```
-
 Since the build feature is still in preview, you have to add "pixi-build" to `workspace.preview`.
 
 ```toml
@@ -47,9 +43,18 @@ In this example, we are using `pixi-build-python` in order to build a Python pac
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
-If the package itself has dependencies they need to be mentioned here
+If the package itself has dependencies they need to be mentioned here.
+The different kinds of dependencies are explained at the [dependency types chapter](dependency_types.md).
 
-TODO
+`simple_python` uses `hatchling` as Python build backend so this needs to be mentioned in `host-dependencies`
+
+??? "Pixi backends and Python backends"
+    Note, that these are two different kind of backends.
+    Pixi backends can describe how build a conda package.
+    One of these backends is called `pixi-build-python`, which allows building a Python package.
+    Python backends like `hatchling` know how to build a Python package.
+    So `hatchling` creates a Python package, and `pixi-build-python` turns the Python package into a conda package.
+
 
 ## Migrate to the new build feature
 

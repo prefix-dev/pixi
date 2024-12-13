@@ -11,7 +11,7 @@ Here you can see the three types of dependencies for a simple C++ package.
 Each dependency is used at a different step of the package building process.
 `gxx` is used to build the package, `catch` will be linked into the package and `git` will be available during runtime.
 
-Let's go a bit more into detail of the different kinds of package dependencies.
+Let's delve deeper into the various types of package dependencies and their specific roles in the build process.
 
 ### [Build Dependencies](../reference/pixi_manifest.md#build-dependencies)
 !!! note "pixi-build-cmake"
@@ -36,12 +36,14 @@ Typical examples of build dependencies are:
 
 ### [Host Dependencies](../reference/pixi_manifest.md#host-dependencies)
 
-<!-- TODO: Let's add one sentence what host dependencies are and how pixi treats them differently from run or build -->
-
+Host dependencies are the dependencies needed during build/link time that are specific to the host machine.
+The difference to build dependencies becomes for example important during cross compilation.
+The compiler is a build dependency since it is specific to your machine.
+In contrast, the libraries you link to are host dependencies since they are specific to the host machine.
 Typical examples of host dependencies are:
 
 - Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
-- Libraries your project links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
+- Libraries your project links against like `openssl`, `rapidjson`, or `xtensor`.
 
 #### Python code
 Because of the way building currently works, dependencies like `hatchling`,`pip`,`uv` etc. are host dependencies.
