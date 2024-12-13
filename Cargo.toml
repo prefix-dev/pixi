@@ -109,16 +109,16 @@ file_url = { git = "https://github.com/wolfv/rattler", branch = "menuinst", defa
 rattler = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
 rattler_cache = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
 rattler_conda_types = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
-rattler_digest = {git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
+rattler_digest = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
 rattler_lock = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
+rattler_menuinst = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
 rattler_networking = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false, features = [
   "gcs",
 ] }
 rattler_repodata_gateway = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
 rattler_shell = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
 rattler_solve = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
-rattler_virtual_packages = {git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
-rattler_menuinst = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
+rattler_virtual_packages = { git = "https://github.com/wolfv/rattler", branch = "menuinst", default-features = false }
 
 
 # Bumping this to a higher version breaks the Windows path handling.
@@ -248,6 +248,7 @@ rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
+rattler_menuinst = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = [
   "sparse",
@@ -255,7 +256,6 @@ rattler_repodata_gateway = { workspace = true, features = [
 ] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
-rattler_menuinst = { workspace = true }
 uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }

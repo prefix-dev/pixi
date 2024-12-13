@@ -1850,6 +1850,7 @@ def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1
         stderr_contains="Environment dummy-a doesn't exist",
     )
 
+
 def test_menuinst_install(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
@@ -1867,6 +1868,5 @@ def test_menuinst_install(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1:
             "pixi-editor",
             "menu install: true",
         ],
-
         # TODO: Check if there was an actual menu item on the machine.
     )

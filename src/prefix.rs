@@ -7,6 +7,7 @@ use std::{
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
+use pixi_consts::consts;
 use pixi_utils::{is_binary_folder, strip_executable_extension};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
@@ -14,7 +15,6 @@ use rattler_shell::{
     shell::ShellEnum,
 };
 use tokio::task::JoinHandle;
-use pixi_consts::consts;
 
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]

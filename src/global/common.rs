@@ -616,8 +616,6 @@ impl StateChanges {
                                 eprintln!("   - {}", installed_item);
                             }
                         }
-
-
                     }
                     StateChange::UninstalledMenuItem(name) => {
                         let mut uninstalled_items = StateChanges::accumulate_changes(
