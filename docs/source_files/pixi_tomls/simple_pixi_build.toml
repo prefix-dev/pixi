@@ -1,39 +1,34 @@
-# Specifies properties for the whole workspace
+# --8<-- [start:all]
 # --8<-- [start:preview]
-[workspace]
-preview = ["pixi-build"]
+[workspace] # (1)!
+preview = ["pixi-build"] # (2)!
 # --8<-- [end:preview]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 
-# There can be multiple packages in a workspace
-# In `package` you specify properties specific to the package
+# --8<-- [start:dependencies]
+[dependencies] # (3)!
+simple_python = { path = "." }
+# --8<-- [end:dependencies]
+
 # --8<-- [start:package]
-[package]
+[package] # (4)!
 name = "simple_python"
 version = "0.1.0"
 # --8<-- [end:package]
 
-# Here the build system of the package is specified
-# We are using `pixi-build-python` in order to build a Python package
 # --8<-- [start:build-system]
-[build-system]
-build-backend = { name = "pixi-build-python", version = "*" }
+[build-system] # (5)!
+build-backend = { name = "pixi-build-python", version = "*" } # (6)!
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 # --8<-- [end:build-system]
 
-
-# The Python package `simple_python` uses `hatchling` as Python build backend
 # --8<-- [start:host-dependencies]
-[host-dependencies]
-hatchling = "*"
+[host-dependencies] # (7)!
+hatchling = "*" # (8)!
 # --8<-- [end:host-dependencies]
 
-# --8<-- [start:dependencies]
-# We add our package as dependency to the workspace
-[dependencies]
-simple_python = { path = "." }
-# --8<-- [end:dependencies]
+# --8<-- [start:all]
