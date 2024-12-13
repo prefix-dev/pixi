@@ -4330,9 +4330,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.28.6"
+version = "0.28.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7401c660efdc73b2c617b19458d8da7252870223fc01bcde9f74fc796bd7f9ec"
+checksum = "fdd552c29726ad42d6023060dc3f42c6bad97af00b479b4c1fb77d3c3e1f6db4"
 dependencies = [
  "anyhow",
  "clap",
@@ -4371,9 +4371,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a81013e4d652c9925652e1a131f3076bf8c68d09749d0fca02673370221b4326"
+checksum = "2523385739abca920f8b9ac5c292b0835f003ee4fa3d5da89b44fa2e4be68961"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4400,9 +4400,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.29.4"
+version = "0.29.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ecb8083d6e91a3f45cc740430a6e5caba7bbf4eb20a51923a20d274ef146ced"
+checksum = "f4fe3619a8d2903b0adfb2889fa58f906855fc5dd260c17d5a4dc2c447a701d1"
 dependencies = [
  "chrono",
  "dirs",
@@ -4517,9 +4517,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.17"
+version = "0.22.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a858e5c43dcc64d42fdd617887b4b1a24930761f39654587bfe0ee44cf361fd6"
+checksum = "37e5d3a43c996a379bcc3c68bb8322d31baa11d6170f3746fc5667317cf10f8d"
 dependencies = [
  "bzip2",
  "chrono",
@@ -4612,9 +4612,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.9"
+version = "0.22.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36c0ab95a3fd48f3287545ca356abd51cbafd9433c901e9a6d6ffb07416e5d0d"
+checksum = "86d2b039c5e575929d91f62364cd84c13c115a705e4a4d634d852b77f1fcb5af"
 dependencies = [
  "enum_dispatch",
  "fs-err 3.0.0",
