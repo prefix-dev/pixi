@@ -184,7 +184,6 @@ impl BuildContext {
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
-        eprintln!("fetching {:?}", source_spec);
         let source = self.fetch_source(source_spec).await?;
         let records = self
             .extract_records(
