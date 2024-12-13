@@ -138,7 +138,7 @@ impl ConfigCliPrompt {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct RepodataConfig {
     #[serde(flatten)]
@@ -155,6 +155,7 @@ impl RepodataConfig {
 
     /// Merge the given RepodataConfig into the current one.
     /// `other` is mutable to allow for moving the values out of it.
+    /// The given config will have higher priority
     pub fn merge(&self, mut other: Self) -> Self {
         let mut per_channel: HashMap<_, _> = self
             .per_channel
@@ -198,7 +199,7 @@ impl From<ConfigCliActivation> for Config {
         }
     }
 }
-#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataChannelConfig {
     /// Disable JLAP compression for repodata.
@@ -256,7 +257,7 @@ pub enum KeyringProvider {
     Subprocess,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
@@ -436,7 +437,7 @@ impl PyPIConfig {
 }
 
 /// The strategy for that will be used for pinning a version of a package.
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum PinningStrategy {
     /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0"
@@ -544,7 +545,7 @@ impl PinningStrategy {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
@@ -909,10 +910,11 @@ impl Config {
     }
 
     /// Merge the given config into the current one.
+    /// The given config will have higher priority
     #[must_use]
-    pub fn merge_config(mut self, other: Config) -> Self {
-        self.mirrors.extend(other.mirrors);
-        self.loaded_from.extend(other.loaded_from);
+    pub fn merge_config(self, mut other: Config) -> Self {
+        other.mirrors.extend(self.mirrors);
+        other.loaded_from.extend(self.loaded_from);
 
         Self {
             default_channels: if other.default_channels.is_empty() {
@@ -925,16 +927,16 @@ impl Config {
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
-            mirrors: self.mirrors,
-            loaded_from: self.loaded_from,
+            mirrors: other.mirrors,
+            loaded_from: other.loaded_from,
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,
-            repodata_config: other.repodata_config.merge(self.repodata_config),
-            pypi_config: other.pypi_config.merge(self.pypi_config),
+            repodata_config: self.repodata_config.merge(other.repodata_config),
+            pypi_config: self.pypi_config.merge(other.pypi_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
-            experimental: other.experimental.merge(self.experimental),
+            experimental: self.experimental.merge(other.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
         }
@@ -1385,7 +1387,57 @@ UNUSED = "unused"
     }
 
     #[test]
-    fn test_config_merge() {
+    fn test_config_merge_priority() {
+        // If I set every config key, ensure that `other wins`
+        let mut config = Config::default();
+        let other = Config {
+            default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
+            tls_no_verify: Some(true),
+            detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
+            concurrency: ConcurrencyConfig {
+                solves: 5,
+                ..ConcurrencyConfig::default()
+            },
+            change_ps1: Some(false),
+            authentication_override_file: Some(PathBuf::default()),
+            mirrors: HashMap::from([(
+                Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+                Vec::default(),
+            )]),
+            pinning_strategy: Some(PinningStrategy::NoPin),
+            experimental: ExperimentalConfig {
+                use_environment_activation_cache: Some(true),
+            },
+            loaded_from: Vec::from([PathBuf::from_str("test").unwrap()]),
+            force_activate: Some(true),
+            pypi_config: PyPIConfig {
+                allow_insecure_host: Vec::from(["test".to_string()]),
+                extra_index_urls: Vec::from([
+                    Url::parse("https://conda.anaconda.org/conda-forge").unwrap()
+                ]),
+                index_url: Some(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
+                keyring_provider: Some(KeyringProvider::Subprocess),
+            },
+            repodata_config: RepodataConfig {
+                default: RepodataChannelConfig {
+                    disable_bzip2: Some(true),
+                    disable_jlap: Some(true),
+                    disable_sharded: Some(true),
+                    disable_zstd: Some(true),
+                },
+                per_channel: HashMap::from([(
+                    Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+                    RepodataChannelConfig::default(),
+                )]),
+            },
+        };
+        let original_other = other.clone();
+        config = config.merge_config(other);
+        assert_eq!(config, original_other);
+    }
+    #[test]
+    fn test_config_merge_multiple() {
         let mut config = Config::default();
         let other = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],

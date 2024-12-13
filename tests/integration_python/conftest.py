@@ -21,10 +21,26 @@ def pixi(request: pytest.FixtureRequest) -> Path:
 @pytest.fixture
 def tmp_pixi_workspace(tmp_path: Path) -> Path:
     pixi_config = """
+# Reset to defaults
+default-channels = ["conda-forge"]
+change-ps1 = true
+tls-no-verify = false
+detached-environments = false
+pinning-strategy = "semver"
+
+[concurrency]
+downloads = 50
+
+[experimental]
+use-environment-activation-cache = false
+
+# Enable sharded repodata
 [repodata-config."https://prefix.dev/"]
 disable-sharded = false
 """
-    tmp_path.joinpath("config.toml").write_text(pixi_config)
+    dot_pixi = tmp_path.joinpath(".pixi")
+    dot_pixi.mkdir()
+    dot_pixi.joinpath("config.toml").write_text(pixi_config)
     return tmp_path
 
 

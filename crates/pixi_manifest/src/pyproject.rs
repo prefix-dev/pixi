@@ -267,7 +267,6 @@ impl PyProjectManifest {
                 homepage: None,
                 repository: None,
                 documentation: None,
-                build_variants: None,
             })?;
 
         // Add python as dependency based on the `project.requires_python` property
@@ -618,7 +617,7 @@ mod tests {
             .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
             .is_some());
 
-        assert_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.source.to_string());
     }
 
     #[test]
@@ -643,7 +642,7 @@ mod tests {
             .get(&name)
             .is_none());
 
-        assert_snapshot!(manifest.document.to_string());
+        assert_snapshot!(manifest.source.to_string());
     }
 
     #[test]
