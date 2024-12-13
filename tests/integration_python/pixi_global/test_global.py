@@ -129,6 +129,34 @@ def test_sync_change_expose(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     assert not dummy_in_disguise.is_file()
 
 
+def test_sync_prune(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    dependencies = {{ dummy-a = "*" }}
+    exposed = {{ dummy-a = "dummy-a"}}
+    """
+    parsed_toml = tomllib.loads(toml)
+    manifest.write_text(toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # Test basic commands
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    assert dummy_a.is_file()
+
+    # Remove environment
+    del parsed_toml["envs"]["test"]
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command(
+        [pixi, "global", "sync"], env=env, stderr_contains="Removed environment test"
+    )
+    assert not dummy_a.is_file()
+
+
 def test_sync_manually_remove_binary(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:

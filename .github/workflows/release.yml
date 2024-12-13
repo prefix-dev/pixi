@@ -82,7 +82,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cargo-dist-cache
-          path: ~/.cargo/bin/dist
+          # TODO: revert after switching back to released dist
+          path: ~/.cargo-install/cargo-dist/bin/dist
       # sure would be cool if github gave us proper conditionals...
       # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
       # functionality based on whether this is a pull_request, and whether it's from a fork.
@@ -127,6 +128,10 @@ jobs:
       CODESIGN_CERTIFICATE: ${{ secrets.CODESIGN_CERTIFICATE }}
       CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.CODESIGN_CERTIFICATE_PASSWORD }}
       CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+      CODESIGN_ADDITIONAL_ARGS: ${{ vars.CODESIGN_ADDITIONAL_ARGS }}
+      APPLEID_TEAMID: ${{ secrets.APPLEID_TEAMID }}
+      APPLEID_USERNAME: ${{ secrets.APPLEID_USERNAME }}
+      APPLEID_PASSWORD: ${{ secrets.APPLEID_PASSWORD }}
     steps:
       - name: enable windows longpaths
         run: |
@@ -134,8 +139,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Install dist
-        run: ${{ matrix.install_dist }}
+      # Install fork of dist to allow for binaries in the root of the tarball
+      - name: Install cargo-dist from git
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: cargo-dist
+          git: https://github.com/ruben-arts/cargo-dist
+          branch: feature/allow_binaries_in_root_of_tar
       # Get the dist-manifest
       - name: Fetch local artifacts
         uses: actions/download-artifact@v4
@@ -262,6 +272,69 @@ jobs:
           name: artifacts-dist-manifest
           path: dist-manifest.json
 
+      # Unpack binaries, required for setup-pixi
+      - name: Unpack binaries tar
+        run: |
+          set -e pipefail # fail if any command fails
+          mkdir -p unpacked-artifacts
+          for artifact in target/distrib/pixi-*.tar.gz; do
+            echo artifact: $artifact
+            # Extract the base name without the extension
+            base_name=$(basename "$artifact" .tar.gz)
+
+            # Extract the artifact contents
+            tar -xvf "$artifact" -O pixi > unpacked-artifacts/$base_name
+          done
+      - name: Unpack binaries zip
+        run: |
+          set -e pipefail # fail if any command fails
+          for artifact in target/distrib/pixi-*.zip; do
+              echo artifact: $artifact
+              # Extract the base name without the extension
+              base_name=$(basename "$artifact" .zip)
+
+              # Extract the artifact contents
+              # Because zip is only used on windows we can assume the binary is an exe
+              unzip -p "$artifact" pixi.exe > unpacked-artifacts/$base_name.exe
+          done
+
+      # Upload unpacked artifacts, not sure how to do this in one go as you have to name the artifact
+      - name: Upload unpacked artifact for pixi-aarch64-unknown-linux-musl
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-aarch64-unknown-linux-musl
+          path: unpacked-artifacts/pixi-aarch64-unknown-linux-musl
+
+      - name: Upload unpacked artifact for pixi-x86_64-unknown-linux-musl
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-x86_64-unknown-linux-musl
+          path: unpacked-artifacts/pixi-x86_64-unknown-linux-musl
+
+      - name: Upload unpacked artifact for pixi-aarch64-apple-darwin
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-aarch64-apple-darwin
+          path: unpacked-artifacts/pixi-aarch64-apple-darwin
+
+      - name: Upload unpacked artifact for pixi-x86_64-apple-darwin
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-x86_64-apple-darwin
+          path: unpacked-artifacts/pixi-x86_64-apple-darwin
+
+      - name: Upload unpacked artifact for pixi-x86_64-pc-windows-msvc.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-x86_64-pc-windows-msvc.exe
+          path: unpacked-artifacts/pixi-x86_64-pc-windows-msvc.exe
+
+      - name: Upload unpacked artifact for pixi-aarch64-pc-windows-msvc.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-pixi-aarch64-pc-windows-msvc.exe
+          path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
+
   # Create a GitHub Release while uploading all files to it
   announce:
     needs:
@@ -299,4 +372,4 @@ jobs:
           # Write and read notes from a file to avoid quoting breaking things
           echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
 
-          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --draft true  --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --draft --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*

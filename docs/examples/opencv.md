@@ -25,6 +25,7 @@ pixi run start
 ```
 
 The screen that starts should look like this:
+
 ![](https://storage.googleapis.com/prefix-cms-images/docs/opencv_face_recognition.png)
 
 Check out the `webcame_capture.py` to see how we detect a face.
@@ -34,7 +35,9 @@ Check out the `webcame_capture.py` to see how we detect a face.
 Next to face recognition, a camera calibration example is also included.
 
 You'll need a checkerboard for this to work.
-Print this: [![chessboard](https://github.com/opencv/opencv/blob/4.x/doc/pattern.png?raw=true)](https://github.com/opencv/opencv/blob/4.x/doc/pattern.png)
+Print this:
+
+[![chessboard](https://github.com/opencv/opencv/blob/4.x/doc/pattern.png?raw=true)](https://github.com/opencv/opencv/blob/4.x/doc/pattern.png)
 
 Then run
 
