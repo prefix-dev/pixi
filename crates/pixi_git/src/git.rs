@@ -322,13 +322,7 @@ impl GitRepository {
 
     /// Initializes a Git repository at `path`.
     fn init(path: &Path) -> miette::Result<GitRepository> {
-        // TODO(ibraheem): see if this still necessary now that we no longer use libgit2
-        // Skip anything related to templates, they just call all sorts of issues as
-        // we really don't want to use them yet they insist on being used. See #6240
-        // for an example issue that comes up.
-        // opts.external_template(false);
-
-        // // Initialize the repository.
+        // Initialize the repository.
         Command::new(GIT.as_ref().into_diagnostic()?)
             .arg("init")
             .current_dir(path)
@@ -423,12 +417,12 @@ impl GitCheckout {
     /// because of a signal) Cargo needs to be sure to try to check out this
     /// repo again on the next go-round.
     ///
-    /// To enable this we have a dummy file in our checkout, [`.cargo-ok`],
+    /// To enable this we have a dummy file in our checkout, [`.ok`],
     /// which if present means that the repo has been successfully reset and is
     /// ready to go. Hence if we start to do a reset, we make sure this file
     /// *doesn't* exist, and then once we're done we create the file.
     ///
-    /// [`.cargo-ok`]: CHECKOUT_READY_LOCK
+    /// [`.ok`]: CHECKOUT_READY_LOCK
     fn reset(&self) -> miette::Result<()> {
         let ok_file = self.repo.path.join(CHECKOUT_READY_LOCK);
         let _ = fs_err::remove_file(&ok_file);

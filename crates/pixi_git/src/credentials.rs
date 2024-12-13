@@ -28,7 +28,6 @@ impl GitStore {
 /// Populate the global authentication store with credentials on a Git URL, if there are any.
 ///
 /// Returns `true` if the store was updated.
-/// // TODO: figure out where we need to call it
 pub fn store_credentials_from_url(url: &Url) -> bool {
     if let Some(credentials) = Credentials::from_url(url) {
         tracing::debug!("Caching credentials for {url}");
@@ -53,7 +52,7 @@ pub(crate) struct Username(Option<String>);
 impl Username {
     /// Create a new username.
     ///
-    /// Unlike `reqwest`, empty usernames are be encoded as `None` instead of an empty string.
+    /// Empty usernames are be encoded as `None` instead of an empty string.
     pub(crate) fn new(value: Option<String>) -> Self {
         // Ensure empty strings are `None`
         if let Some(value) = value {
