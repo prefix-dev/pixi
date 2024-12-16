@@ -1,19 +1,22 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
-name = "python-bindings"
+name = "python_bindings"
 platforms = ["osx-arm64"]
 preview = ["pixi-build"]                      # (1)!
 
 [tasks]
+test = "python -c 'import python_bindings as b; import sys; print(b.add(1, 2)); sys.exit(0)'"
+
 
 [dependencies] # (2)!
-python-bindings = { path = "." }
+python = ">=3.12, <3.13"
+python_bindings = { path = "." }
 
 [package]
 version = "0.1.0" # (3)!
 
 [build-system] # (4)!
-build-backend = { name = "pixi-build-cpp", version = "*" }
+build-backend = { name = "pixi-build-cmake", version = "*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
@@ -21,3 +24,7 @@ channels = [
 
 [host-dependencies]
 nanobind = ">=2.4.0, <2.5.0"
+# TODO move to host-dependencies
+python = ">=3.12, <3.13"
+
+[build-dependencies]
