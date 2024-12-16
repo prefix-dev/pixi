@@ -1,6 +1,6 @@
 [project]
 dependencies = ["rich"]
-name = "rich-example"
+name = "rich_example"
 requires-python = ">= 3.11"
 version = "0.1.0"
 

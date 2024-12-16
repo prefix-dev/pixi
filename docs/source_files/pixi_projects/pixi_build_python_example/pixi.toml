@@ -4,13 +4,13 @@ platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 
 [dependencies]
-rich-example = { path = "." }
+rich_example = { path = "." }
 
 [tasks]
 test = "rich-example-main"
 
 [package]
-name = "rich-example"
+name = "rich_example"
 version = "0.1.0"
 
 [build-system]
@@ -26,8 +26,6 @@ channels = [
 # pyproject build-system this refers to a conda package instead of a pypi
 # package.
 hatchling = "==1.26.3"
-# This way uv is used instead of pip
-uv = "*"
 
 [run-dependencies]
 rich = ">=13.9.4,<14"
