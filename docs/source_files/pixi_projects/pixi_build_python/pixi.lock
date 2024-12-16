@@ -742,7 +742,7 @@ packages:
   size: 185646
   timestamp: 1733342347277
 - conda: .
-  name: rich-example
+  name: rich_example
   version: 0.1.0
   build: pyhbf21a9e_0
   subdir: noarch
@@ -750,7 +750,7 @@ packages:
   - rich >=13.9.4,<14
   - python
   input:
-    hash: 77f6f1205a5e91cda10b683f2e0e61f4c8cb0e890ab987111e9fe5c662ad7802
+    hash: a0fa8e2205e41657fe6d9166741ec2d74c3c12776c2aa1fbdbb9236c21fbef90
     globs:
     - pixi.toml
 - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda
