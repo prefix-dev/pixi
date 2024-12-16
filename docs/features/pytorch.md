@@ -137,4 +137,4 @@ Virtual packages: __unix=0=0
 ```
 This error occurs when the ABI tag of the Python version doesn't match the wheels available on PyPI.
 Fix this by lowering the `requires-python` or `python` dependency.
-At the time of writing Python 3.13 is not supported by PyTorch wheels yet.
+At the time of writing Python 3.13 is not supported by many PyTorch-dependent wheels yet.
