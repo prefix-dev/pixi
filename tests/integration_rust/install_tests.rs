@@ -3,6 +3,7 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
 };
 use crate::common::{LockFileExt, PixiControl};
+use fs_err::tokio as tokio_fs;
 use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
@@ -13,7 +14,7 @@ use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use rattler_conda_types::Platform;
 use std::{
-    fs::{create_dir_all, File},
+    fs::File,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
@@ -159,10 +160,10 @@ async fn install_locked_with_config() {
     let mut config = Config::default();
     let target_dir = pixi.project_path().join("target");
     config.detached_environments = Some(DetachedEnvironments::Path(target_dir.clone()));
-    create_dir_all(target_dir.clone()).unwrap();
+    fs_err::create_dir_all(target_dir.clone()).unwrap();
 
     let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
-    create_dir_all(config_path.parent().unwrap()).unwrap();
+    fs_err::create_dir_all(config_path.parent().unwrap()).unwrap();
 
     let mut file = File::create(config_path).unwrap();
     file.write_all(toml_edit::ser::to_string(&config).unwrap().as_bytes())
@@ -527,12 +528,12 @@ async fn test_installer_name() {
     // Check that installer name is uv-pixi
     assert!(dist_info.exists(), "{dist_info:?} does not exist");
     let installer = dist_info.join("INSTALLER");
-    let installer = std::fs::read_to_string(installer).unwrap();
+    let installer = fs_err::read_to_string(installer).unwrap();
     assert_eq!(installer, consts::PIXI_UV_INSTALLER);
 
     // Write a new installer name to the INSTALLER file
     // so that we fake that it is not installed by pixi
-    std::fs::write(dist_info.join("INSTALLER"), "not-pixi").unwrap();
+    fs_err::write(dist_info.join("INSTALLER"), "not-pixi").unwrap();
     pixi.remove("click==8.0.0")
         .with_install(true)
         .set_type(pixi::DependencyType::PypiDependency)
@@ -544,7 +545,7 @@ async fn test_installer_name() {
     // we know that pixi did not touch the package
     assert!(dist_info.exists());
     let installer = dist_info.join("INSTALLER");
-    let installer = std::fs::read_to_string(installer).unwrap();
+    let installer = fs_err::read_to_string(installer).unwrap();
     assert_eq!(installer, "not-pixi");
 
     // re-manage the package by adding it, this should cause a reinstall
@@ -554,7 +555,7 @@ async fn test_installer_name() {
         .await
         .unwrap();
     let installer = dist_info.join("INSTALLER");
-    let installer = std::fs::read_to_string(installer).unwrap();
+    let installer = fs_err::read_to_string(installer).unwrap();
     assert_eq!(installer, consts::PIXI_UV_INSTALLER);
 }
 
@@ -565,7 +566,7 @@ async fn test_installer_name() {
 /// installed.
 async fn test_old_lock_install() {
     let lock_str =
-        std::fs::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap();
+        fs_err::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap();
     let project = Project::from_path(Path::new(
         "tests/data/satisfiability/old_lock_file/pyproject.toml",
     ))
@@ -583,7 +584,7 @@ async fn test_old_lock_install() {
     .unwrap();
     assert_eq!(
         lock_str,
-        std::fs::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap()
+        fs_err::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap()
     );
 }
 
@@ -645,8 +646,8 @@ setup(
     let project_path = pixi.project_path();
     // Write setup.py to a my-pkg folder
     let my_pkg = project_path.join("my-pkg");
-    std::fs::create_dir_all(&my_pkg).unwrap();
-    std::fs::write(my_pkg.join("setup.py"), setup_py).unwrap();
+    fs_err::create_dir_all(&my_pkg).unwrap();
+    fs_err::write(my_pkg.join("setup.py"), setup_py).unwrap();
 
     let has_pkg = pixi
         .project()
@@ -726,7 +727,7 @@ async fn test_ensure_gitignore_file_creation() {
         gitignore_path.exists(),
         ".pixi/.gitignore file was not created"
     );
-    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
         contents, "*\n",
         ".pixi/.gitignore file does not contain the expected content"
@@ -737,7 +738,7 @@ async fn test_ensure_gitignore_file_creation() {
         .await
         .unwrap();
     pixi.install().await.unwrap();
-    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
         contents, "*\nsome_file\n",
         ".pixi/.gitignore file does not contain the expected content"
@@ -754,7 +755,7 @@ async fn test_ensure_gitignore_file_creation() {
         gitignore_path.exists(),
         ".pixi/.gitignore file was not recreated"
     );
-    let contents = tokio::fs::read_to_string(&gitignore_path).await.unwrap();
+    let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
         contents, "*\n",
         ".pixi/.gitignore file does not contain the expected content"

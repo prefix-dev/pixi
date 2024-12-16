@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use rattler_conda_types::GenericVirtualPackage;
 use serde::{Deserialize, Serialize};
@@ -34,12 +34,19 @@ pub struct CondaBuildParams {
     #[serde(default)]
     pub outputs: Option<Vec<CondaOutputIdentifier>>,
 
+    /// The variants that we want to build
+    pub variant_configuration: Option<HashMap<String, Vec<String>>>,
+
     /// A directory that can be used by the backend to store files for
     /// subsequent requests. This directory is unique for each separate source
     /// dependency.
     ///
     /// The directory may not yet exist.
     pub work_directory: PathBuf,
+
+    /// Whether we want to install the package as editable
+    // TODO: remove this parameter as soon as we have profiles
+    pub editable: bool,
 }
 
 /// Identifier of an output.

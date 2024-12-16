@@ -2,45 +2,19 @@ from pathlib import Path
 import shutil
 import json
 
-
 from ..common import verify_cli_command
 
 
-def get_data_dir(backend: str | None = None) -> Path:
+def test_build_conda_package(pixi: Path, examples_dir: Path, tmp_pixi_workspace: Path) -> None:
     """
-    Returns the path to the test-data directory next to the tests
+    This one tries to build the rich example project
     """
-    if backend is None:
-        return Path(__file__).parent / "test-data"
-    else:
-        return Path(__file__).parent / "test-data" / backend
+    pyproject = examples_dir / "rich_example"
+    target_dir = tmp_pixi_workspace / "pyproject"
+    shutil.copytree(pyproject, target_dir)
+    shutil.rmtree(target_dir.joinpath(".pixi"), ignore_errors=True)
 
-
-def examples_dir() -> Path:
-    """
-    Returns the path to the examples directory in the root of the repository
-    """
-    return (Path(__file__).parent / "../../../examples").resolve()
-
-
-def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """
-    This one tries to build the example flask hello world project
-    """
-    pyproject = examples_dir() / "flask-hello-world-pyproject"
-    shutil.copytree(pyproject, tmp_pixi_workspace / "pyproject")
-
-    manifest_path = tmp_pixi_workspace / "pyproject" / "pyproject.toml"
-    # Add a boltons package to it
-    verify_cli_command(
-        [
-            pixi,
-            "add",
-            "boltons",
-            "--manifest-path",
-            manifest_path,
-        ],
-    )
+    manifest_path = target_dir / "pyproject.toml"
 
     # build it
     verify_cli_command(
@@ -53,8 +27,10 @@ def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert package_to_be_built.exists()
 
 
-def test_build_using_rattler_build_backend(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    test_data = get_data_dir("rattler-build-backend")
+def test_build_using_rattler_build_backend(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
     shutil.copytree(test_data / "pixi", tmp_pixi_workspace / "pixi")
     shutil.copyfile(
         test_data / "recipes/smokey/recipe.yaml", tmp_pixi_workspace / "pixi/recipe.yaml"
@@ -74,8 +50,8 @@ def test_build_using_rattler_build_backend(pixi: Path, tmp_pixi_workspace: Path)
     assert package_to_be_built.exists()
 
 
-def test_smokey(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    test_data = get_data_dir("rattler-build-backend")
+def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    test_data = build_data.joinpath("rattler-build-backend")
     # copy the whole smokey project to the tmp_pixi_workspace
     shutil.copytree(test_data, tmp_pixi_workspace / "test_data")
     manifest_path = tmp_pixi_workspace / "test_data" / "smokey" / "pixi.toml"
@@ -95,3 +71,83 @@ def test_smokey(pixi: Path, tmp_pixi_workspace: Path) -> None:
     metadata = json.loads(conda_meta.read_text())
 
     assert metadata["name"] == "smokey"
+
+
+def test_source_change_trigger_rebuild(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    project = "simple-pyproject"
+    test_data = build_data.joinpath(project)
+
+    # TODO: Setting the cache dir shouldn't be necessary!
+    env = {"PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache"))}
+
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    shutil.copytree(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pyproject.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "get-version",
+        ],
+        stdout_contains="The version of simple-pyproject is 1.0.0",
+        env=env,
+    )
+
+    # Bump version from 1.0.0 to 2.0.0
+    init_file = target_dir.joinpath("src", "simple_pyproject", "__init__.py")
+    init_file.write_text(init_file.read_text().replace("1.0.0", "2.0.0"))
+
+    # Since we modified the source this should trigger a rebuild and therefore report 2.0.0
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "get-version",
+        ],
+        stdout_contains="The version of simple-pyproject is 2.0.0",
+        env=env,
+    )
+
+
+def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    project = "editable-pyproject"
+    test_data = build_data.joinpath(project)
+
+    # TODO: Setting the cache dir shouldn't be necessary!
+    env = {
+        "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
+    }
+
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    shutil.copytree(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pyproject.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+        env=env,
+    )
+
+    # Verify that package is installed as editable
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "check-editable",
+        ],
+        env=env,
+        stdout_contains="The package is installed as editable.",
+    )

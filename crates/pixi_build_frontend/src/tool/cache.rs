@@ -1,11 +1,20 @@
 use std::{
+    ffi::OsStr,
     fmt::Debug,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Weak},
 };
 
 use dashmap::{DashMap, Entry};
-use rattler_conda_types::ChannelConfig;
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic};
+use rattler_conda_types::{ChannelConfig, Matches, Platform, PrefixRecord};
+use rattler_shell::{
+    activation::{ActivationVariables, Activator},
+    shell::ShellEnum,
+};
+
+use fs_err::tokio as tokio_fs;
 use tokio::sync::broadcast;
 
 use super::{installer::ToolInstaller, IsolatedTool};
@@ -18,7 +27,7 @@ enum PendingOrFetched<T> {
     Fetched(T),
 }
 
-/// A [`ToolCache`] maintains a cache of environments for isolated build tools.
+/// A [`ToolCache`] maintains a cache of environments for build tools.
 ///
 /// This is useful to ensure that if we need to build multiple packages that use
 /// the same tool, we can reuse their environments.
@@ -29,6 +38,56 @@ enum PendingOrFetched<T> {
 pub struct ToolCache {
     /// The cache of tools.
     cache: DashMap<IsolatedToolSpec, PendingOrFetched<Arc<IsolatedTool>>>,
+}
+
+/// Finds the `PrefixRecord`s from `conda-meta` directory which starts with `Matchspec` names.
+pub(crate) async fn find_spec_records(
+    conda_meta: &Path,
+    name_to_match: Vec<String>,
+) -> miette::Result<Option<Vec<PrefixRecord>>> {
+    let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
+    let mut records = Vec::new();
+
+    // Set to keep track of which names have matching files
+    let mut matched_names = std::collections::HashSet::new();
+
+    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+        let path = entry.path();
+
+        // Check if the entry is a file and has a .json extension
+        if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
+            if let Some(file_name) = path.file_name().and_then(OsStr::to_str) {
+                // Check if the file name starts with any of the names in name_to_match
+                for name in &name_to_match {
+                    // Filename is in the form of: <name>-<version>-<build>
+                    // this part is taken from ArchiveIdentifier
+                    // https://github.com/conda/rattler/blob/b90daf5032e5c83ead9f9623576105ee08be837b/crates/rattler_conda_types/src/package/archive_identifier.rs#L11
+                    let Some((_, _, filename)) = file_name.rsplitn(3, '-').next_tuple() else {
+                        continue;
+                    };
+
+                    if name == filename {
+                        matched_names.insert(name.clone());
+
+                        let prefix_record = PrefixRecord::from_path(&path)
+                            .into_diagnostic()
+                            .wrap_err_with(|| {
+                                format!("Couldn't parse JSON from {}", path.display())
+                            })?;
+
+                        records.push(prefix_record);
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if all names in name_to_match were matched
+    if matched_names.len() == name_to_match.len() {
+        return Ok(Some(records));
+    }
+
+    Ok(None)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -53,6 +112,7 @@ impl ToolCache {
         &self,
         spec: IsolatedToolSpec,
         context: &impl ToolInstaller,
+        cache_dir: &Path,
         channel_config: &ChannelConfig,
     ) -> miette::Result<Arc<IsolatedTool>> {
         let sender = match self.cache.entry(spec.clone()) {
@@ -84,13 +144,13 @@ impl ToolCache {
 
                             // Explicitly drop the entry, so we don't block any other tasks.
                             drop(entry);
-                            // Drop the sender
+                            // // Drop the sender
                             drop(sender);
 
                             return match receiver.recv().await {
                                 Ok(tool) => Ok(tool),
-                                Err(_) => miette::bail!(
-                                    "a coalesced tool {} request install failed",
+                                Err(err) => miette::bail!(
+                                    "installing of {} tool failed. Reason: {err}",
                                     spec.command
                                 ),
                             };
@@ -115,11 +175,29 @@ impl ToolCache {
         // other tasks will find a pending entry and will wait for the tool
         // to become available.
         //
-        // Let's start by installing tool. If an error occurs we immediately return
-        // the error. This will drop the sender and all other waiting tasks will
-        // receive an error.
-        // Installation happens outside the critical section
-        let tool = Arc::new(context.install(&spec, channel_config).await?);
+
+        // Let's start by finding already existing matchspec
+        let tool = match self.get_file_system_cached(&spec, cache_dir).await? {
+            // Let's start by installing tool. If an error occurs we immediately return
+            // the error. This will drop the sender and all other waiting tasks will
+            // receive an error.
+            // Installation happens outside the critical section
+            None => {
+                tracing::debug!("not found any existing environment for {:?}", spec.specs);
+                context.install(&spec, channel_config).await?
+            }
+
+            Some(tool) => {
+                tracing::debug!(
+                    "reusing existing environment in {} for {:?}",
+                    tool.prefix.display(),
+                    spec.specs
+                );
+                tool
+            }
+        };
+
+        let tool = Arc::new(tool);
 
         // Store the fetched files in the entry.
         self.cache
@@ -130,6 +208,83 @@ impl ToolCache {
         let _ = sender.send(tool.clone());
 
         Ok(tool)
+    }
+
+    /// Try to find already existing environment with the same tool spec
+    /// in the cache directory.
+    pub async fn get_file_system_cached(
+        &self,
+        spec: &IsolatedToolSpec,
+        cache_dir: &Path,
+    ) -> miette::Result<Option<IsolatedTool>> {
+        // check if the cache directory exists
+        if !cache_dir.exists() {
+            return Ok(None);
+        }
+
+        let specs: Vec<String> = spec
+            .specs
+            .iter()
+            .filter_map(|match_spec| match_spec.name.as_ref())
+            .map(|name| name.as_normalized().to_string())
+            .collect();
+
+        if specs.len() != spec.specs.len() {
+            return Ok(None);
+        }
+
+        // verify if we have a similar environment that match our matchspec
+        // we need to load all prefix record from all folders in the cache
+        // load all package records
+        let mut entries = tokio_fs::read_dir(&cache_dir).await.into_diagnostic()?;
+        let mut directories = Vec::new();
+
+        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if path.is_dir() {
+                directories.push(path);
+            }
+        }
+
+        // let's find existing package records
+        let mut records_of_records = Vec::new();
+
+        for dir in directories.iter() {
+            let records = find_spec_records(&dir.join("conda-meta"), specs.clone()).await?;
+
+            if let Some(records) = records {
+                records_of_records.push((dir, records));
+            }
+        }
+
+        // Find the first set of records where all specs in the manifest are present
+        let matching_record = records_of_records.iter().find(|records| {
+            spec.specs.iter().all(|spec| {
+                records
+                    .1
+                    .iter()
+                    .any(|record| spec.matches(&record.repodata_record.package_record))
+            })
+        });
+
+        if let Some(records) = matching_record {
+            // Get the activation scripts
+            let activator =
+                Activator::from_path(records.0, ShellEnum::default(), Platform::current()).unwrap();
+
+            let activation_scripts = activator
+                .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
+                .unwrap();
+
+            let cached_tool = IsolatedTool::new(
+                spec.command.clone(),
+                records.0.to_path_buf(),
+                activation_scripts,
+            );
+
+            return Ok(Some(cached_tool));
+        }
+        Ok(None)
     }
 }
 
@@ -142,15 +297,55 @@ mod tests {
         ChannelConfig, MatchSpec, NamedChannelOrUrl, ParseStrictness, Platform,
     };
     use reqwest_middleware::ClientWithMiddleware;
-    use tokio::sync::{Barrier, Mutex};
+    use tokio::sync::{Barrier, Mutex, Semaphore};
 
     use crate::{
         tool::{
+            cache::{find_spec_records, ToolCache},
             installer::{ToolContext, ToolInstaller},
             IsolatedTool, ToolSpec,
         },
         IsolatedToolSpec,
     };
+
+    const BAT_META_JSON: &str = "bat-0.24.0-h3bba108_1.json";
+
+    /// A test helper to create a temporary directory and write conda meta files.
+    /// This is used to simulate already installed tools.
+    struct CondaMetaWriter {
+        pub tmp_dir: PathBuf,
+    }
+
+    impl CondaMetaWriter {
+        async fn new() -> Self {
+            let tempdir = tempfile::tempdir().unwrap();
+            let tmp_dir = tempdir.path().to_path_buf();
+
+            tokio::fs::create_dir_all(&tmp_dir).await.unwrap();
+            Self { tmp_dir }
+        }
+
+        /// Write a meta-json file to the conda-meta directory.
+        /// If `override_name` is provided, the file will be written with that name.
+        async fn write_meta_json(
+            &self,
+            meta_json: &str,
+            env_dir_name: &str,
+            override_name: Option<&str>,
+        ) {
+            let bat_conda_meta = self.tmp_dir.join(env_dir_name).join("conda-meta");
+            tokio::fs::create_dir_all(&bat_conda_meta).await.unwrap();
+
+            let meta_file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/data/conda-meta")
+                .join(meta_json);
+            // copy file and override the original name if necessary
+            let name = override_name.unwrap_or(meta_json);
+            tokio::fs::copy(meta_file, bat_conda_meta.join(name))
+                .await
+                .unwrap();
+        }
+    }
 
     /// A test installer that will count how many times a tool was installed.
     /// This is used to verify that we only install a tool once.
@@ -191,7 +386,7 @@ mod tests {
         let auth_client = ClientWithMiddleware::default();
         let channel_config = config.global_channel_config();
 
-        let tool_context = ToolContext::builder()
+        let tool_context = ToolContext::for_tests()
             .with_platform(compatible_target_platform())
             .with_client(auth_client.clone())
             .with_gateway(config.gateway(auth_client))
@@ -208,9 +403,7 @@ mod tests {
             .await
             .unwrap();
 
-        let exec = tool.as_executable().unwrap();
-
-        exec.command().arg("--version").spawn().unwrap();
+        tool.command().arg("--version").spawn().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -225,7 +418,7 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::new());
 
         let tool_context = Arc::new(
-            ToolContext::builder()
+            ToolContext::for_tests()
                 .with_client(auth_client.clone())
                 .build(),
         );
@@ -259,7 +452,12 @@ mod tests {
 
                 tool_context
                     .cache
-                    .get_or_install_tool(tool_spec, &tool_installer, &channel_config)
+                    .get_or_install_tool(
+                        tool_spec,
+                        &tool_installer,
+                        &tool_context.cache_dir,
+                        &channel_config,
+                    )
                     .await
             });
 
@@ -320,7 +518,7 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::new());
 
         let tool_context = Arc::new(
-            ToolContext::builder()
+            ToolContext::for_tests()
                 .with_client(auth_client.clone())
                 .build(),
         );
@@ -333,31 +531,67 @@ mod tests {
             channels: Vec::from([NamedChannelOrUrl::Name("conda-forge".to_string())]),
         };
 
-        // Let's imitate that we have 4 requests to install a tool
-        // we will use a barrier to ensure all tasks start at the same time.
-        let num_tasks = 2;
-        let barrier = Arc::new(Barrier::new(num_tasks));
         let mut handles = Vec::new();
 
-        for _ in 0..num_tasks {
-            let barrier = barrier.clone();
+        // We need to test that failure of one task will not block other tasks
+        // to execute.
+        // To test it we want to synchronize the installation of the tool
+        // in the following way
+        // first task will fail, and set the semaphore to true
+        // so other task can proceed to execute.
+        // in this way we can verify that we handle a task failure correctly
+        // and other tasks can proceed to install the tool.
+
+        // It is is necessary to do it in this way because
+        // without synchronization, all tasks will be blocked on the waiting stage
+        // and failure of one task will be propagated to all other tasks.
+
+        let semaphore = Arc::new(Semaphore::new(1));
+        {
+            let semaphore = semaphore.clone();
 
             let tool_context = tool_context.clone();
-
             let tool_installer = tool_installer.clone();
 
             let channel_config = channel_config.clone();
             let tool_spec = tool_spec.clone();
 
             let handle = tokio::spawn(async move {
-                barrier.wait().await;
+                let _sem = semaphore.acquire().await.unwrap();
 
                 tool_context
                     .cache
-                    .get_or_install_tool(tool_spec, &tool_installer, &channel_config)
+                    .get_or_install_tool(
+                        tool_spec,
+                        &tool_installer,
+                        &tool_context.cache_dir,
+                        &channel_config,
+                    )
                     .await
             });
+            handles.push(handle);
+        }
+        {
+            let semaphore = semaphore.clone();
 
+            let tool_context = tool_context.clone();
+            let tool_installer = tool_installer.clone();
+
+            let channel_config = channel_config.clone();
+            let tool_spec = tool_spec.clone();
+
+            let handle = tokio::spawn(async move {
+                let _sem = semaphore.acquire().await.unwrap();
+                tool_context
+                    .cache
+                    .get_or_install_tool(
+                        tool_spec,
+                        &tool_installer,
+                        &tool_context.cache_dir,
+                        &channel_config,
+                    )
+                    .await
+            });
             handles.push(handle);
         }
 
@@ -375,5 +609,137 @@ mod tests {
         let lock = tool_installer.count.lock().await;
         let install_count = lock.get(&tool_spec).unwrap();
         assert_eq!(install_count, &2);
+    }
+
+    #[tokio::test]
+    async fn test_can_find_from_filesystem() {
+        let config = Config::for_tests();
+
+        let tool_cache = ToolCache::new();
+
+        let conda_meta_builder = CondaMetaWriter::new().await;
+
+        conda_meta_builder
+            .write_meta_json(BAT_META_JSON, "bat-somehash", None)
+            .await;
+
+        let tool_spec = IsolatedToolSpec {
+            specs: vec![MatchSpec::from_str("bat", ParseStrictness::Strict).unwrap()],
+            command: "bat".into(),
+            channels: config.default_channels.clone(),
+        };
+
+        let tool = tool_cache
+            .get_file_system_cached(&tool_spec, &conda_meta_builder.tmp_dir)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            tool.prefix
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+            "bat-somehash"
+        );
+        assert_eq!(tool.command, "bat");
+    }
+
+    #[tokio::test]
+    async fn test_missing_from_filesystem() {
+        let config = Config::for_tests();
+
+        let tool_cache = ToolCache::new();
+
+        let conda_meta_builder = CondaMetaWriter::new().await;
+
+        conda_meta_builder
+            .write_meta_json(BAT_META_JSON, "bat-somehash", None)
+            .await;
+
+        let tool_spec = IsolatedToolSpec {
+            specs: vec![MatchSpec::from_str("bat==1.0.0", ParseStrictness::Strict).unwrap()],
+            command: "bat".into(),
+            channels: config.default_channels.clone(),
+        };
+
+        let tool = tool_cache
+            .get_file_system_cached(&tool_spec, &conda_meta_builder.tmp_dir)
+            .await
+            .unwrap();
+
+        assert!(tool.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_find_specs() {
+        let conda_meta_builder = CondaMetaWriter::new().await;
+
+        conda_meta_builder
+            .write_meta_json(BAT_META_JSON, "one-env", None)
+            .await;
+
+        // we have there bat and batt. We need to find only bat
+
+        let records = find_spec_records(
+            &conda_meta_builder
+                .tmp_dir
+                .join("one-env")
+                .join("conda-meta"),
+            vec!["bat".to_string()],
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        insta::assert_yaml_snapshot!(records);
+    }
+
+    #[tokio::test]
+    async fn test_find_more_specs() {
+        let conda_meta_builder = CondaMetaWriter::new().await;
+
+        // write only one meta-json file, but ask for more specs
+        conda_meta_builder
+            .write_meta_json(BAT_META_JSON, "one-env", None)
+            .await;
+
+        // we have there bat and batt. We need to find only bat
+
+        let records = find_spec_records(
+            &conda_meta_builder
+                .tmp_dir
+                .join("one-env")
+                .join("conda-meta"),
+            vec!["bat".to_string(), "boltons".to_string()],
+        )
+        .await
+        .unwrap();
+
+        assert!(records.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_skip_wrong_json() {
+        let conda_meta_builder = CondaMetaWriter::new().await;
+
+        // verify that event when we have wrong json file, we will skip reading it.
+        conda_meta_builder
+            .write_meta_json(BAT_META_JSON, "one-env", Some("wrong.json"))
+            .await;
+
+        // we have there bat and batt. We need to find only bat
+
+        let records = find_spec_records(
+            &conda_meta_builder
+                .tmp_dir
+                .join("one-env")
+                .join("conda-meta"),
+            vec!["bat".to_string()],
+        )
+        .await
+        .unwrap();
+        assert!(records.is_none());
     }
 }

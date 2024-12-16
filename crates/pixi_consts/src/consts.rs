@@ -14,7 +14,7 @@ pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_DIR: &str = ".pixi";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.39.0",
+    None => "0.39.2",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -31,7 +31,9 @@ pub const CONDA_META_DIR: &str = "conda-meta";
 pub const PYPI_CACHE_DIR: &str = "uv-cache";
 pub const CONDA_PYPI_MAPPING_CACHE_DIR: &str = "conda-pypi-mapping";
 pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
-pub const CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
+// TODO: CACHED_BUILD_ENVS_DIR was deprecated in favor of CACHED_BUILD_ENVS_DIR. This constant will be removed in a future release.
+pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
+pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 
 pub const CONDA_INSTALLER: &str = "conda";
 

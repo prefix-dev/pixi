@@ -829,12 +829,18 @@ Clean the pixi cache on your system.
 ##### Options
 - `--pypi`: Clean the pypi cache.
 - `--conda`: Clean the conda cache.
+- `--mapping`: Clean the mapping cache.
+- `--exec`: Clean the `exec` cache.
+- `--repodata`: Clean the repodata cache.
 - `--yes`: Skip the confirmation prompt.
 
 ```shell
 pixi clean cache # clean all pixi caches
 pixi clean cache --pypi # clean only the pypi cache
 pixi clean cache --conda # clean only the conda cache
+pixi clean cache --mapping # clean only the mapping cache
+pixi clean cache --exec # clean only the `exec` cache
+pixi clean cache --repodata # clean only the `repodata` cache
 pixi clean cache --yes # skip the confirmation prompt
 ```
 
@@ -1416,6 +1422,26 @@ pixi project export conda-explicit-spec output
 pixi project export conda-explicit-spec -e default -e test -p linux-64 output
 ```
 
+### `project name get`
+
+Get the project name.
+
+```sh
+$ pixi project name get
+my project name
+```
+
+### `project name set`
+
+Set the project name.
+
+##### Arguments
+
+1. `<NAME>`: The name to set.
+
+```sh
+pixi project name set "my new project name"
+```
 
 ### `project platform add`
 

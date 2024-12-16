@@ -119,6 +119,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 pixi_dir.display()
             )
         })?;
+
     let work_dir = tempfile::Builder::new()
         .prefix("pixi-build-")
         .tempdir_in(project.pixi_dir())
@@ -164,7 +165,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     base_url: channel_config.channel_alias,
                 },
                 outputs: None,
+                editable: false,
                 work_directory: work_dir.path().to_path_buf(),
+                variant_configuration: Some(Default::default()),
             },
             progress.clone(),
         )
@@ -174,7 +177,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Move the built packages to the output directory.
     let output_dir = args.output_dir;
     for package in result.packages {
-        std::fs::create_dir_all(&output_dir)
+        fs_err::create_dir_all(&output_dir)
             .into_diagnostic()
             .with_context(|| {
                 format!(

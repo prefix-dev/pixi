@@ -2,6 +2,7 @@ mod cache;
 mod reporters;
 
 use std::{
+    collections::HashMap,
     ffi::OsStr,
     hash::{Hash, Hasher},
     ops::Not,
@@ -13,7 +14,7 @@ use std::{
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
-use miette::Diagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
@@ -22,8 +23,10 @@ use pixi_build_types::{
     },
     ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
 };
+use pixi_config::get_cache_dir;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
+use pixi_manifest::Targets;
 use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{
@@ -52,6 +55,7 @@ pub struct BuildContext {
     cache_dir: PathBuf,
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
+    variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -114,6 +118,7 @@ impl BuildContext {
         cache_dir: PathBuf,
         dot_pixi_dir: PathBuf,
         channel_config: ChannelConfig,
+        variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
         tool_context: Arc<ToolContext>,
     ) -> Result<Self, std::io::Error> {
         Ok(Self {
@@ -124,7 +129,33 @@ impl BuildContext {
             cache_dir,
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
+            variant_config,
         })
+    }
+
+    pub fn from_project(project: &crate::project::Project) -> miette::Result<Self> {
+        let variant = project
+            .manifest()
+            .workspace
+            .workspace
+            .build_variants
+            .clone();
+
+        Self::new(
+            get_cache_dir()?,
+            project.pixi_dir(),
+            project.channel_config(),
+            variant,
+            Arc::new(ToolContext::default()),
+        )
+        .into_diagnostic()
+    }
+
+    pub fn with_tool_context(self, tool_context: Arc<ToolContext>) -> Self {
+        Self {
+            tool_context,
+            ..self
+        }
     }
 
     /// Sets the input hash cache to use for caching input hashes.
@@ -133,6 +164,26 @@ impl BuildContext {
             glob_hash_cache,
             ..self
         }
+    }
+
+    fn resolve_variant(&self, platform: Platform) -> HashMap<String, Vec<String>> {
+        let mut result = HashMap::new();
+
+        // Resolves from most specific to least specific.
+        for variants in self.variant_config.resolve(Some(platform)).flatten() {
+            // Update the hash map, but only items that are not already in the map.
+            for (key, value) in variants {
+                result.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
+
+        tracing::info!(
+            "resolved variant configuration for {}: {:?}",
+            platform,
+            result
+        );
+
+        result
     }
 
     /// Extracts the metadata for a package from the given source specification.
@@ -204,50 +255,11 @@ impl BuildContext {
             )
             .await?;
 
+        // Check if there are already cached builds
         if let Some(build) = cached_build {
-            // Check to see if the cached build is up-to-date.
-            if let Some(source_input) = build.source {
-                let glob_time = GlobModificationTime::from_patterns(
-                    &source_checkout.path,
-                    source_input.globs.iter().map(String::as_str),
-                )
-                .map_err(BuildError::GlobModificationError)?;
-                match glob_time {
-                    GlobModificationTime::MatchesFound {
-                        modified_at,
-                        designated_file,
-                    } => {
-                        if build
-                            .record
-                            .package_record
-                            .timestamp
-                            .map(|t| t >= chrono::DateTime::<Utc>::from(modified_at))
-                            .unwrap_or(false)
-                        {
-                            build_reporter.on_build_cached(build_id);
-                            tracing::debug!("found an up-to-date cached build.");
-                            return Ok(build.record);
-                        } else {
-                            tracing::debug!(
-                                "found an stale cached build, {} is newer than {}",
-                                designated_file.display(),
-                                build.record.package_record.timestamp.unwrap_or_default()
-                            );
-                        }
-                    }
-                    GlobModificationTime::NoMatches => {
-                        // No matches, so we should rebuild.
-                        tracing::debug!(
-                            "found a stale cached build, no files match the source glob"
-                        );
-                    }
-                }
-            } else {
-                tracing::debug!("found a cached build");
+            if let Some(record) = Self::cached_build_source_record(build, &source_checkout)? {
                 build_reporter.on_build_cached(build_id);
-
-                // If there is no source info in the cache we assume its still valid.
-                return Ok(build.record);
+                return Ok(record);
             }
         }
 
@@ -277,6 +289,8 @@ impl BuildContext {
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },
+                    // only use editable for build path dependencies
+                    editable: source_spec.source.as_path().is_some(),
                     outputs: Some(vec![CondaOutputIdentifier {
                         name: Some(source_spec.package_record.name.as_normalized().to_string()),
                         version: Some(source_spec.package_record.version.version().to_string()),
@@ -291,6 +305,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
+                    variant_configuration: Some(self.resolve_variant(host_platform)),
                 },
                 build_reporter.as_conda_build_reporter(),
             )
@@ -529,6 +544,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
+                    variant_configuration: Some(self.resolve_variant(host_platform)),
                 },
                 metadata_reporter.as_conda_metadata_reporter().clone(),
             )
@@ -566,6 +582,57 @@ impl BuildContext {
             metadata.packages,
             input_hash,
         ))
+    }
+
+    fn cached_build_source_record(
+        cached_build: CachedBuild,
+        source_checkout: &SourceCheckout,
+    ) -> Result<Option<RepoDataRecord>, BuildError> {
+        // Check to see if the cached build is up-to-date.
+        if let Some(source_input) = cached_build.source {
+            let glob_time = GlobModificationTime::from_patterns(
+                &source_checkout.path,
+                source_input.globs.iter().map(String::as_str),
+            )
+            .map_err(BuildError::GlobModificationError)?;
+            match glob_time {
+                GlobModificationTime::MatchesFound {
+                    modified_at,
+                    designated_file,
+                } => {
+                    if cached_build
+                        .record
+                        .package_record
+                        .timestamp
+                        .map(|t| t >= chrono::DateTime::<Utc>::from(modified_at))
+                        .unwrap_or(false)
+                    {
+                        tracing::debug!("found an up-to-date cached build.");
+                        return Ok(Some(cached_build.record));
+                    } else {
+                        tracing::debug!(
+                            "found an stale cached build, {} is newer than {}",
+                            designated_file.display(),
+                            cached_build
+                                .record
+                                .package_record
+                                .timestamp
+                                .unwrap_or_default()
+                        );
+                    }
+                }
+                GlobModificationTime::NoMatches => {
+                    // No matches, so we should rebuild.
+                    tracing::debug!("found a stale cached build, no files match the source glob");
+                }
+            }
+        } else {
+            tracing::debug!("found a cached build");
+            // If there is no source info in the cache we assume its still valid.
+            return Ok(Some(cached_build.record));
+        }
+
+        Ok(None)
     }
 }
 

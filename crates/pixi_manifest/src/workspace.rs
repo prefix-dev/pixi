@@ -6,7 +6,7 @@ use rattler_solve::ChannelPriority;
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{preview::Preview, utils::PixiSpanned, PrioritizedChannel};
+use crate::{preview::Preview, utils::PixiSpanned, PrioritizedChannel, Targets};
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
 #[derive(Debug, Clone)]
@@ -60,4 +60,7 @@ pub struct Workspace {
 
     /// Preview features
     pub preview: Preview,
+
+    /// Build variants
+    pub build_variants: Targets<Option<HashMap<String, Vec<String>>>>,
 }

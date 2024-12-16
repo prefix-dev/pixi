@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
-    fs,
     hash::{Hash, Hasher},
     sync::Once,
 };
@@ -133,8 +132,8 @@ impl<'p> Environment<'p> {
                         "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
                     );
                     // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs::create_dir_all(warn_folder).and_then(|_| {
-                        std::fs::File::create(emulation_warn)
+                    fs_err::create_dir_all(warn_folder).and_then(|_| {
+                        fs_err::File::create(emulation_warn)
                     }).ok();
                 }
             });
@@ -152,8 +151,8 @@ impl<'p> Environment<'p> {
                         "win-arm64 is not supported by the pixi.toml, falling back to win-64 (emulation)"
                     );
                     // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs::create_dir_all(warn_folder).and_then(|_| {
-                        std::fs::File::create(emulation_warn)
+                    fs_err::create_dir_all(warn_folder).and_then(|_| {
+                        fs_err::File::create(emulation_warn)
                     }).ok();
                 }
             });
@@ -226,6 +225,26 @@ impl<'p> Environment<'p> {
             }),
             Ok(Some(task)) => Ok(task),
         }
+    }
+
+    /// Returns a map of all the features and their tasks for this environment.
+    ///
+    /// Resolves for the best platform target.
+    pub(crate) fn feature_tasks(
+        &self,
+    ) -> HashMap<&'p FeatureName, HashMap<&'p TaskName, &'p Task>> {
+        self.features()
+            .map(|feature| {
+                (
+                    &feature.name,
+                    feature
+                        .targets
+                        .resolve(Some(self.best_platform()))
+                        .flat_map(|target| target.tasks.iter())
+                        .collect::<HashMap<_, _>>(),
+                )
+            })
+            .collect()
     }
 
     /// Returns the system requirements for this environment.

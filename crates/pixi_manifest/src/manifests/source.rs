@@ -7,7 +7,7 @@ use toml_edit::{value, Array, Item, Table, Value};
 
 use crate::toml::TomlDocument;
 use crate::{
-    manifests::project::TableName, pypi::PyPiPackageName, FeatureName, PyPiRequirement,
+    manifests::table_name::TableName, pypi::PyPiPackageName, FeatureName, PyPiRequirement,
     PypiDependencyLocation, SpecType, Task, TomlError,
 };
 
@@ -63,11 +63,17 @@ impl ManifestSource {
         }
     }
 
-    fn manifest(&self) -> &TomlDocument {
+    /// Returns the inner TOML document
+    pub fn manifest(&self) -> &TomlDocument {
         match self {
             ManifestSource::PyProjectToml(document) => document,
             ManifestSource::PixiToml(document) => document,
         }
+    }
+
+    /// Returns `true` if the manifest is a 'pyproject.toml' manifest.
+    pub fn is_pyproject_toml(&self) -> bool {
+        matches!(self, ManifestSource::PyProjectToml(_))
     }
 
     /// Returns a mutable reference to the specified array either in project or
@@ -462,6 +468,11 @@ impl ManifestSource {
             .get_or_insert_nested_table(env_table.to_string().as_str())?
             .remove(name)
             .is_some())
+    }
+
+    /// Sets the name of the project
+    pub fn set_name(&mut self, name: &str) {
+        self.as_table_mut()["project"]["name"] = value(name);
     }
 
     /// Sets the description of the project

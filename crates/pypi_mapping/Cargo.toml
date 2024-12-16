@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 async-once-cell = { workspace = true }
+fs-err = { workspace = true }
 futures = { workspace = true }
 http-cache-reqwest = { workspace = true }
 itertools = { workspace = true }

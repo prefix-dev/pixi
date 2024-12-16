@@ -157,6 +157,9 @@ class Workspace(StrictBaseModel):
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
     )
+    build_variants: dict[NonEmptyStr, list[str]] | None = Field(
+        None, description="The build variants of the project"
+    )
 
 
 class Package(StrictBaseModel):
@@ -647,6 +650,9 @@ class BaseManifest(StrictBaseModel):
     )
     build_system: BuildSystem | None = Field(
         None, description="The build-system used to build the package."
+    )
+    build_backend: dict[NonEmptyStr, Any] | None = Field(
+        None, description="Configuration for the build backend."
     )
 
 

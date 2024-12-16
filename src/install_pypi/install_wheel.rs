@@ -37,7 +37,7 @@ pub(crate) fn get_wheel_info(
 /// See: <https://github.com/pypa/pip/blob/36823099a9cdd83261fdbc8c1d2a24fa2eea72ca/src/pip/_internal/utils/wheel.py#L38>
 fn find_dist_info(path: impl AsRef<Path>) -> miette::Result<String> {
     // Iterate over `path` to find the `.dist-info` directory. It should be at the top-level.
-    let Some(dist_info) = fs::read_dir(path.as_ref())
+    let Some(dist_info) = fs_err::read_dir(path.as_ref())
         .into_diagnostic()?
         .find_map(|entry| {
             let entry = entry.ok()?;
@@ -92,14 +92,14 @@ pub(crate) fn get_wheel_kind(
     // > 1.a Parse distribution-1.0.dist-info/WHEEL.
     // > 1.b Check that installer is compatible with Wheel-Version. Warn if minor version is greater, abort if major version is greater.
     let wheel_file_path = wheel_path.join(format!("{dist_info_prefix}.dist-info/WHEEL"));
-    let wheel_text = fs::read_to_string(wheel_file_path).into_diagnostic()?;
+    let wheel_text = fs_err::read_to_string(wheel_file_path).into_diagnostic()?;
     let lib_kind = parse_wheel_file(&wheel_text)?;
     Ok(lib_kind)
 }
 
 use std::{
     collections::HashMap,
-    fs::{self, File},
+    fs::File,
     io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
 };

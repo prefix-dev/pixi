@@ -5,6 +5,7 @@ description: How to build and run an SDL application in C++
 ---
 
 ![](https://storage.googleapis.com/prefix-cms-images/docs/sdl_examle.png)
+
 The `cpp-sdl` example is located in the pixi repository.
 
 ```shell

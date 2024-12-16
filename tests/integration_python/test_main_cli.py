@@ -155,17 +155,27 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "version", "major"],
         ExitCode.SUCCESS,
-        stderr_contains="2.2.3",
+        stderr_contains="2.0.0",
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "version", "minor"],
         ExitCode.SUCCESS,
-        stderr_contains="2.3.3",
+        stderr_contains="2.1.0",
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "version", "patch"],
         ExitCode.SUCCESS,
-        stderr_contains="2.3.4",
+        stderr_contains="2.1.1",
+    )
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "name", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="test_project_commands",
+    )
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "name", "set", "new-name"],
+        ExitCode.SUCCESS,
+        stderr_contains="new-name",
     )
 
 

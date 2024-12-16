@@ -16,7 +16,6 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
-use pixi_config::get_cache_dir;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
@@ -75,7 +74,7 @@ impl Project {
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
-        self::update_lock_file(self, options).await
+        update_lock_file(self, options).await
     }
 
     /// Get lockfile without checking
@@ -186,19 +185,8 @@ impl<'p> LockFileDerivedData<'p> {
         // environment file
         let hash = self.locked_environment_hash(environment)?;
         if update_mode == UpdateMode::QuickValidate {
-            if let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) {
-                if environment_file.environment_lock_file_hash == hash {
-                    tracing::info!(
-                        "Environment '{}' is up-to-date with lock file hash",
-                        environment.name().fancy_display()
-                    );
-                    return Ok(Prefix::new(environment.dir()));
-                }
-            } else {
-                tracing::debug!(
-                    "Environment file not found or parsable for '{}'",
-                    environment.name().fancy_display()
-                );
+            if let Some(prefix) = self.cached_prefix(environment, &hash) {
+                return prefix;
             }
         }
 
@@ -218,6 +206,39 @@ impl<'p> LockFileDerivedData<'p> {
         )?;
 
         Ok(prefix)
+    }
+
+    fn cached_prefix(
+        &mut self,
+        environment: &Environment<'p>,
+        hash: &LockedEnvironmentHash,
+    ) -> Option<Result<Prefix, Report>> {
+        let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) else {
+            tracing::debug!(
+                "Environment file not found or parsable for '{}'",
+                environment.name().fancy_display()
+            );
+            return None;
+        };
+
+        if environment_file.environment_lock_file_hash == *hash {
+            let contains_source_packages = self.lock_file.environments().any(|(_, env)| {
+                env.conda_packages(Platform::current())
+                    .map_or(false, |mut packages| {
+                        packages.any(|package| package.as_source().is_some())
+                    })
+            });
+            if contains_source_packages {
+                tracing::debug!("Lock file contains source packages: ignore lock file hash and update the prefix");
+            } else {
+                tracing::info!(
+                    "Environment '{}' is up-to-date with lock file hash",
+                    environment.name().fancy_display()
+                );
+                return Some(Ok(Prefix::new(environment.dir())));
+            }
+        }
+        None
     }
 
     /// Returns the up-to-date prefix for the given environment.
@@ -680,13 +701,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(
-                get_cache_dir()?,
-                project.pixi_dir(),
-                project.channel_config(),
-                Arc::new(ToolContext::default()),
-            )
-            .into_diagnostic()?,
+            build_context: BuildContext::from_project(project)?,
             glob_hash_cache,
         });
     }
@@ -710,13 +725,7 @@ pub async fn update_lock_file(
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::new(
-                get_cache_dir()?,
-                project.pixi_dir(),
-                project.channel_config(),
-                Arc::new(ToolContext::default()),
-            )
-            .into_diagnostic()?,
+            build_context: BuildContext::from_project(project)?,
             glob_hash_cache,
         });
     }
@@ -1011,13 +1020,8 @@ impl<'p> UpdateContextBuilder<'p> {
             .with_client(client)
             .build();
 
-        let build_context = BuildContext::new(
-            pixi_config::get_cache_dir()?,
-            project.pixi_dir(),
-            project.channel_config(),
-            tool_context.into(),
-        )
-        .into_diagnostic()?;
+        let build_context =
+            BuildContext::from_project(project)?.with_tool_context(Arc::new(tool_context));
 
         Ok(UpdateContext {
             project,
