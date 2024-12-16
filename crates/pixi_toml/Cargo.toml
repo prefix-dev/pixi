@@ -10,6 +10,8 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+digest = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 strum = { workspace = true }

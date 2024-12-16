@@ -177,6 +177,18 @@ impl Diagnostic for TomlError {
                     }
                     return Some(Box::new(labels.into_iter()));
                 }
+                toml_span::ErrorKind::DuplicateKey { first, .. } => {
+                    let mut labels = Vec::new();
+                    labels.push(LabeledSpan::new_primary_with_span(
+                        Some(format!("duplicate defined here")),
+                        SourceSpan::new(span.start.into(), span.end - span.start),
+                    ));
+                    labels.push(LabeledSpan::new_with_span(
+                        Some(format!("first defined here")),
+                        SourceSpan::new(first.start.into(), first.end - first.start),
+                    ));
+                    return Some(Box::new(labels.into_iter()));
+                }
                 _ => Some(SourceSpan::new(span.start.into(), span.end - span.start)),
             },
             TomlError::NoPixiTable => Some(SourceSpan::new(SourceOffset::from(0), 1)),

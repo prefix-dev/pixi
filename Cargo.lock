@@ -3902,6 +3902,7 @@ dependencies = [
  "file_url",
  "insta",
  "itertools 0.13.0",
+ "pixi_toml",
  "rattler_conda_types",
  "rattler_digest",
  "serde",
@@ -3909,6 +3910,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "thiserror 1.0.69",
+ "toml-span",
  "toml_edit",
  "typed-path",
  "url",
@@ -3918,6 +3920,8 @@ dependencies = [
 name = "pixi_toml"
 version = "0.1.0"
 dependencies = [
+ "digest",
+ "hex",
  "indexmap 2.7.0",
  "insta",
  "itertools 0.13.0",

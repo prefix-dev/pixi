@@ -1,8 +1,10 @@
+mod digest;
 mod from_str;
 mod index_map;
 mod variant;
 mod with;
 
+pub use digest::TomlDigest;
 pub use from_str::TomlFromStr;
 pub use index_map::TomlIndexMap;
 use toml_span::{value::ValueInner, DeserError, Error, ErrorKind, Value};
