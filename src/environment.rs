@@ -437,6 +437,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     sanity_check_project(project).await?;
 
     // Extract credentials from the environment
+    // TODO: split loading and storing into two separate functions
     store_credentials_from_project(project).await?;
 
     // Ensure that the lock-file is up-to-date
