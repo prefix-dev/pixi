@@ -327,13 +327,11 @@ fn disambiguate_task_interactive<'p>(
     };
 
     // Ignore CTRL+C in the dialoguer prompt so that it shows the cursor again.
-    ctrlc::set_handler(move || {
+    // Related: https://github.com/console-rs/dialoguer/issues/77
+    tokio::spawn(async {
+        let _ = tokio::signal::ctrl_c().await;
         dialoguer_reset_cursor_hack();
-        // Exit the process, this potentially leaves the running program in an unexpected way.
-        // But not exiting make ctrl-c not work at all.
-        std::process::exit(0);
-    })
-    .ok()?;
+    });
 
     dialoguer::Select::with_theme(&theme)
         .with_prompt(format!(
