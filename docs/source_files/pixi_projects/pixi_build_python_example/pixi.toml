@@ -1,0 +1,33 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+rich-example = { path = "." }
+
+[tasks]
+test = "rich-example-main"
+
+[package]
+name = "rich-example"
+version = "0.1.0"
+
+[build-system]
+build-backend = { name = "pixi-build-python", version = "*" }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+
+[host-dependencies]
+# To be able to install this pyproject we need to install the dependencies of
+# the python build-system defined above. Note that different from the
+# pyproject build-system this refers to a conda package instead of a pypi
+# package.
+hatchling = "==1.26.3"
+# This way uv is used instead of pip
+uv = "*"
+
+[run-dependencies]
+rich = ">=13.9.4,<14"
