@@ -123,11 +123,14 @@ nav:
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
       - Global Tools: features/global_tools.md
+  - Building Packages:
+      - Getting started: build/getting_started.md
+      - Dependency Types: build/dependency_types.md
   - Advanced:
       - Authentication: advanced/authentication.md
-      - Info Command: advanced/explain_info_command.md
       - Channel Logic: advanced/channel_priority.md
       - GitHub Actions: advanced/github_actions.md
+      - Info Command: advanced/explain_info_command.md
       - Updates using GitHub Actions: advanced/updates_github_actions.md
       - Production Deployment: advanced/production_deployment.md
       - Pyproject.toml: advanced/pyproject_toml.md
