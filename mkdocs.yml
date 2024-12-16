@@ -123,6 +123,7 @@ nav:
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
       - Global Tools: features/global_tools.md
+      - Pytorch Installation: features/pytorch.md
   - Building Packages:
       - Getting started: build/getting_started.md
       - Dependency Types: build/dependency_types.md

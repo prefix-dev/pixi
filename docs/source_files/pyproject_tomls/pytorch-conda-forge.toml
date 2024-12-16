@@ -1,0 +1,33 @@
+# --8<-- [start:minimal]
+[project]
+name = "pytorch-conda-forge"
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.system-requirements]
+cuda = "12.0"
+
+# --8<-- [start:cuda-version]
+[tool.pixi.dependencies]
+pytorch-gpu = "*"
+# --8<-- [end:minimal]
+cuda-version = "12.6"
+# --8<-- [end:cuda-version]
+
+# --8<-- [start:use-envs]
+[tool.pixi.feature.gpu.system-requirements]
+cuda = "12.0"
+
+[tool.pixi.feature.gpu.dependencies]
+cuda-version = "12.6"
+pytorch-gpu = "*"
+
+[tool.pixi.feature.cpu.dependencies]
+pytorch-cpu = "*"
+
+[tool.pixi.environments]
+cpu = ["cpu"]
+default = ["gpu"]
+# --8<-- [start:use-envs]
