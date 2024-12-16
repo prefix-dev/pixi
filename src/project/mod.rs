@@ -1030,10 +1030,10 @@ impl<'source> HasManifestRef<'source> for &'source Project {
 /// Iterates over the current directory and all its parent directories and
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
-pub(crate) fn find_project_manifest(current_dir: PathBuf) -> Option<PathBuf> {
+pub(crate) fn find_project_manifest(current_dir: impl AsRef<Path>) -> Option<PathBuf> {
     let manifests = [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST];
 
-    for dir in current_dir.ancestors() {
+    for dir in current_dir.as_ref().ancestors() {
         for manifest in &manifests {
             let path = dir.join(manifest);
             if !path.is_file() {
