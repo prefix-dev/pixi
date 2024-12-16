@@ -3837,6 +3837,7 @@ dependencies = [
  "pep508_rs",
  "pixi_consts",
  "pixi_spec",
+ "pixi_toml",
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
@@ -3851,8 +3852,10 @@ dependencies = [
  "serde_with",
  "spdx",
  "strsim",
+ "strum",
  "tempfile",
  "thiserror 1.0.69",
+ "toml-span",
  "toml_edit",
  "tracing",
  "url",
@@ -3909,6 +3912,17 @@ dependencies = [
  "toml_edit",
  "typed-path",
  "url",
+]
+
+[[package]]
+name = "pixi_toml"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.7.0",
+ "insta",
+ "itertools 0.13.0",
+ "strum",
+ "toml-span",
 ]
 
 [[package]]
@@ -6182,6 +6196,14 @@ dependencies = [
  "serde_spanned",
  "toml_datetime",
  "toml_edit",
+]
+
+[[package]]
+name = "toml-span"
+version = "0.3.0"
+source = "git+https://github.com/baszalmstra/toml-span?branch=add_found_value#655ab75109e416689afe48cead54185eb297caae"
+dependencies = [
+ "smallvec",
 ]
 
 [[package]]

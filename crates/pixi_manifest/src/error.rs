@@ -1,6 +1,6 @@
 use std::{
     borrow::{Borrow, Cow},
-    fmt::Display,
+    fmt::{Display, Formatter},
     ops::Range,
 };
 
@@ -8,6 +8,7 @@ use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
 use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNameError};
 use thiserror::Error;
+use toml_span::DeserError;
 
 use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
 use crate::{KnownPreviewFeature, WorkspaceManifest};
@@ -34,36 +35,89 @@ pub enum RequirementConversionError {
     InvalidVersion(#[from] ParseVersionSpecError),
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug)]
 pub enum TomlError {
-    #[error("{}", .0.message())]
     Error(toml_edit::TomlError),
-    #[error("Missing table `[tool.pixi.project]`. Try running `pixi init`")]
+    TomlError(toml_span::Error),
     NoPixiTable,
-    #[error("Missing field `{0}`")]
     MissingField(Cow<'static, str>, Option<Range<usize>>),
-    #[error("{0}")]
     Generic(Cow<'static, str>, Option<Range<usize>>),
-    #[error("{0}")]
     GenericLabels(Cow<'static, str>, Vec<LabeledSpan>),
     #[error(transparent)]
     FeatureNotEnabled(#[from] FeatureNotEnabled),
-    #[error("Could not find or access the part '{part}' in the path '[{table_name}]'")]
-    TableError { part: String, table_name: String },
-    #[error("Could not find or access array '{array_name}' in '[{table_name}]'")]
+    TableError {
+        part: String,
+        table_name: String,
+    },
     ArrayError {
         array_name: String,
         table_name: String,
     },
-    #[error("Could not convert pep508 to pixi pypi requirement")]
+    #[error(transparent)]
     Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
     #[error(transparent)]
     InvalidNonPackageDependencies(#[from] InvalidNonPackageDependencies),
 }
 
+impl Display for TomlError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TomlError::Error(err) => write!(f, "{}", err.message()),
+            TomlError::TomlError(err) => match &err.kind {
+                toml_span::ErrorKind::UnexpectedKeys { expected, .. } => {
+                    write!(
+                        f,
+                        "Unexpected keys, expected only {}",
+                        expected
+                            .iter()
+                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                    )
+                }
+                toml_span::ErrorKind::UnexpectedValue { expected, .. } => {
+                    write!(
+                        f,
+                        "Expected one of {}",
+                        expected
+                            .into_iter()
+                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                    )
+                }
+                _ => write!(f, "{}", err),
+            },
+            TomlError::NoPixiTable => write!(f, "Missing table `[tool.pixi.project]`"),
+            TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
+            TomlError::Generic(key, _) => write!(f, "{key}"),
+            TomlError::GenericLabels(key, _) => write!(f, "{key}"),
+            TomlError::FeatureNotEnabled(err) => write!(f, "{err}"),
+            TomlError::TableError { part, table_name } => write!(
+                f,
+                "Could not find or access the part '{part}' in the path '[{table_name}]'"
+            ),
+            TomlError::ArrayError {
+                array_name,
+                table_name,
+            } => write!(
+                f,
+                "Could not find or access array '{array_name}' in '[{table_name}]'"
+            ),
+            TomlError::Conversion(_) => {
+                write!(f, "Could not convert pep508 to pixi pypi requirement")
+            }
+            TomlError::InvalidNonPackageDependencies(err) => write!(f, "{err}"),
+        }
+    }
+}
+
 impl From<toml_edit::TomlError> for TomlError {
     fn from(e: toml_edit::TomlError) -> Self {
         TomlError::Error(e)
+    }
+}
+
+impl From<DeserError> for TomlError {
+    fn from(mut value: DeserError) -> Self {
+        // TODO: Now we only take the first error, but we could make this smarter
+        TomlError::TomlError(value.errors.remove(0))
     }
 }
 
@@ -112,6 +166,19 @@ impl Diagnostic for TomlError {
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
         let span = match self {
             TomlError::Error(err) => err.span().map(SourceSpan::from),
+            TomlError::TomlError(toml_span::Error { kind, span, .. }) => match kind {
+                toml_span::ErrorKind::UnexpectedKeys { keys, .. } => {
+                    let mut labels = Vec::new();
+                    for (key, span) in keys {
+                        labels.push(LabeledSpan::new_with_span(
+                            Some(format!("'{key}' was not expected here")),
+                            SourceSpan::new(span.start.into(), span.end - span.start),
+                        ));
+                    }
+                    return Some(Box::new(labels.into_iter()));
+                }
+                _ => Some(SourceSpan::new(span.start.into(), span.end - span.start)),
+            },
             TomlError::NoPixiTable => Some(SourceSpan::new(SourceOffset::from(0), 1)),
             TomlError::Generic(_, span) | TomlError::MissingField(_, span) => {
                 span.clone().map(SourceSpan::from)
@@ -142,6 +209,43 @@ impl Diagnostic for TomlError {
             TomlError::NoPixiTable => {
                 Some(Box::new("Run `pixi init` to create a new project manifest"))
             }
+            TomlError::TomlError(toml_span::Error { kind, .. }) => match kind {
+                toml_span::ErrorKind::UnexpectedValue { expected, value } => {
+                    if let Some(value) = value {
+                        if let Some((_, similar)) = expected
+                            .iter()
+                            .filter_map(|expected| {
+                                let distance = strsim::jaro(expected, value);
+                                (distance > 0.6).then_some((distance, expected))
+                            })
+                            .max_by(|(a, _), (b, _)| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                        {
+                            return Some(Box::new(format!("Did you mean '{similar}'?")));
+                        }
+                    }
+                    None
+                }
+                toml_span::ErrorKind::UnexpectedKeys { expected, keys } => {
+                    if let Ok((single, _)) = keys.iter().exactly_one() {
+                        if let Some((_, similar)) = expected
+                            .iter()
+                            .filter_map(|expected| {
+                                let distance = strsim::jaro(expected, single);
+                                (distance > 0.6).then_some((distance, expected))
+                            })
+                            .max_by(|(a, _), (b, _)| {
+                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                        {
+                            return Some(Box::new(format!("Did you mean '{similar}'?")));
+                        }
+                    }
+                    None
+                }
+                _ => None,
+            },
             TomlError::FeatureNotEnabled(err) => err.help(),
             TomlError::InvalidNonPackageDependencies(err) => err.help(),
             _ => None,

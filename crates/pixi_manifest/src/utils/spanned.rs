@@ -1,6 +1,10 @@
 //! Taken from: <https://docs.rs/serde_spanned/latest/serde_spanned/struct.Spanned.html>
-use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
+use std::{
+    cmp::Ordering,
+    hash::{Hash, Hasher},
+};
+
+use toml_span::Spanned;
 
 // Currently serde itself doesn't have a spanned type, so we map our `Spanned`
 // to a special value in the serde data model. Namely one with these special
@@ -24,6 +28,15 @@ pub struct PixiSpanned<T> {
     pub span: Option<std::ops::Range<usize>>,
     /// The spanned value.
     pub value: T,
+}
+
+impl<T> From<Spanned<T>> for PixiSpanned<T> {
+    fn from(value: Spanned<T>) -> Self {
+        Self {
+            span: Some(value.span.start..value.span.end),
+            value: value.value,
+        }
+    }
 }
 
 impl<T: Default> Default for PixiSpanned<T> {
@@ -171,8 +184,9 @@ impl<T: serde::ser::Serialize> serde::ser::Serialize for PixiSpanned<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::utils::spanned::PixiSpanned;
     use serde::Deserialize;
+
+    use crate::utils::spanned::PixiSpanned;
 
     #[test]
     pub fn test_spanned() {

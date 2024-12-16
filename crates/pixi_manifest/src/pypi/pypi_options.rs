@@ -1,4 +1,4 @@
-use std::{fmt::Display, hash::Hash, path::PathBuf};
+use std::{hash::Hash, path::PathBuf};
 
 use indexmap::IndexSet;
 use serde::{Deserialize, Serialize};
@@ -12,8 +12,20 @@ use url::Url;
 /// available, and limit resolutions to those present on that first index
 /// (first-match). This prevents "dependency confusion" attacks, whereby an
 /// attack can upload a malicious package under the same name to a secondary.
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Eq)]
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    Eq,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantNames,
+)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
 pub enum IndexStrategy {
     #[default]
     /// Only use results from the first index that returns a match for a given
@@ -26,17 +38,6 @@ pub enum IndexStrategy {
     /// version found. If a package version is in multiple indexes, only look at
     /// the entry for the first index
     UnsafeBestMatch,
-}
-
-impl Display for IndexStrategy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = match self {
-            IndexStrategy::FirstIndex => "first-index",
-            IndexStrategy::UnsafeFirstMatch => "unsafe-first-match",
-            IndexStrategy::UnsafeBestMatch => "unsafe-best-match",
-        };
-        write!(f, "{}", s)
-    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
@@ -263,10 +264,9 @@ pub enum PypiOptionsMergeError {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use url::Url;
 
-    use super::PypiOptions;
+    use super::{PypiOptions, *};
     use crate::pypi::pypi_options::IndexStrategy;
 
     #[test]

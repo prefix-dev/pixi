@@ -18,6 +18,7 @@ pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_toml = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-untagged = { workspace = true }
@@ -25,7 +26,9 @@ serde-value = { workspace = true }
 serde_with = { workspace = true }
 spdx = { workspace = true }
 strsim = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+toml-span = { workspace = true }
 toml_edit = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
