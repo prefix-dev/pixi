@@ -4,27 +4,26 @@ name = "python_bindings"
 platforms = ["osx-arm64"]
 preview = ["pixi-build"]                      # (1)!
 
-[tasks]
-test = "python -c 'import python_bindings as b; import sys; print(b.add(1, 2)); sys.exit(0)'"
-
-
 [dependencies] # (2)!
-python = ">=3.12, <3.13"
 python_bindings = { path = "." }
 
-[package]
-version = "0.1.0" # (3)!
+[feature.test.dependencies] # (3)!
+python = ">=3.12, <3.13"
 
-[build-system] # (4)!
-build-backend = { name = "pixi-build-cmake", version = "*" }
+[feature.test.tasks]
+test = "python -c 'import python_bindings as b; print(b.add(1, 2))'"
+
+[package] # (4)!
+version = "0.1.0"
+
+[build-system]
+build-backend = { name = "pixi-build-cmake", version = "*" } # (5)!
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 
 [host-dependencies]
-nanobind = ">=2.4.0, <2.5.0"
-# TODO move to host-dependencies
-python = ">=3.12, <3.13"
-
-[build-dependencies]
+cmake = ">=3.18, <3.27"      # (8)!
+nanobind = ">=2.4.0, <2.5.0" # (6)!
+python = ">=3.12, <3.13"     # (7)!
