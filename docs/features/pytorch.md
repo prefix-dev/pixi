@@ -42,7 +42,7 @@ Without specifying the `cuda-version` package, the latest version of cuda will b
     ```
 
 With `conda-forge` you can also install the `cpu` version of PyTorch.
-A common use-case is having two environments, one for CUDA machines and one for none-CUDA machines.
+A common use-case is having two environments, one for CUDA machines and one for non-CUDA machines.
 
 === "`pixi.toml`"
     ```toml title="Adding a cpu environment"
