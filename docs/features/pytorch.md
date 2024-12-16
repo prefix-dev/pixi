@@ -30,7 +30,7 @@ You can make direct use of the Nvidia provided packages to make sure the package
     --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge.toml:minimal"
     ```
 
-To deliberately install a specific version of the `cuda` packages you can depend on the `cuda-version` package which will then be interpreted by the other packages at resolve time.
+To deliberately install a specific version of the `cuda` packages you can depend on the `cuda-version` package which will then be interpreted by the other packages during resolution.
 Without specifying the `cuda-version` package, the latest version of cuda will be installed.
 === "`pixi.toml`"
     ```toml title="Add cuda version to the conda-forge pytorch installation"
