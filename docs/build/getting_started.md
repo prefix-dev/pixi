@@ -47,5 +47,5 @@ This is what the `pixi.toml` file looks like for a simple Python package:
 ## CLI Commands
 Using the preview feature you can now build packages from source.
 
-- `pixi build` *has been addeded* and will build your source package into a `.conda` file.
-- Other commands like `pixi install`, `pixi run` etc. automatically make use of the build feature.
+- `pixi build` has been added and will build a `.conda` file out of your package.
+- Other commands like `pixi install` and `pixi run` automatically make use of the build feature when a `path`, `git` or `url` dependency is present.
