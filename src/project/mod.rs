@@ -242,7 +242,21 @@ impl Project {
     /// or any of the parent
     pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
         let project = match manifest_path {
-            Some(path) => Project::from_path(path)?,
+            Some(path) => {
+                let path = if path.is_dir() {
+                    &find_project_manifest(path).ok_or_else(|| {
+                        miette::miette!(
+                            "could not find {} or {} at directory {}",
+                            consts::PROJECT_MANIFEST,
+                            consts::PYPROJECT_MANIFEST,
+                            path.to_string_lossy()
+                        )
+                    })?
+                } else {
+                    path
+                };
+                Project::from_path(path)?
+            }
             None => Project::discover()?,
         };
         Ok(project)
