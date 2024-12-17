@@ -24,6 +24,9 @@ channels = [
 ]
 
 [host-dependencies]
-cmake = ">=3.18, <3.27"      # (8)!
+cmake = ">=3.20, <3.27"      # (8)!
 nanobind = ">=2.4.0, <2.5.0" # (6)!
-python = ">=3.12, <3.13"     # (7)!
+python_abi = ">=3.12, <3.13" # (7)!
+
+[environments]
+test = ["test"]
