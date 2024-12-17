@@ -6,7 +6,7 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = 
     ╭─[pixi.toml:14:24]
  11 │         [build-system]
  12 │         build-backend = { name = "foobar", version = "*" }
-    ·                                  ────┬───
+    ·                                   ───┬──
     ·                                      ╰── the backend name is defined here
  13 │ 
  14 │         [build-backend.backend]

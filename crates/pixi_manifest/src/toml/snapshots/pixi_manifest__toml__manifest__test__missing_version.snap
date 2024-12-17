@@ -1,11 +1,12 @@
 ---
 source: crates/pixi_manifest/src/toml/manifest.rs
-expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n\n        [package]\n\n        [build-system]\n        dependencies = [\"python-build-backend > 12\"]\n        build-backend = \"python-build-backend\"\n        channels = []\n        \"#,)"
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n\n        [package]\n\n        [build-system]\n        build-backend = { name = \"foobar\", version = \"*\" }\n        \"#,)"
 ---
   × Missing field `version`
-   ╭─[pixi.toml:8:9]
- 7 │ 
- 8 │         [package]
-   ·         ─────────
- 9 │ 
-   ╰────
+    ╭─[pixi.toml:8:9]
+  7 │ 
+  8 │         [package]
+    ·         ──────────
+  9 │ 
+ 10 │         [build-system]
+    ╰────

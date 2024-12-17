@@ -4,6 +4,7 @@ use indexmap::IndexMap;
 use pixi_spec::BinarySpec;
 use rattler_conda_types::NamedChannelOrUrl;
 
+use crate::toml::FromTomlStr;
 use crate::{toml::TomlBuildSystem, TomlError};
 
 /// A build section in the pixi manifest.

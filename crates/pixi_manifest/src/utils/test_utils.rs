@@ -1,5 +1,6 @@
 use miette::{GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
 
+use crate::toml::FromTomlStr;
 use crate::{
     toml::{ExternalWorkspaceProperties, TomlManifest},
     TomlError,

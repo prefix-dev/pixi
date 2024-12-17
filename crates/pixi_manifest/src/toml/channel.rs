@@ -1,9 +1,11 @@
 use std::str::FromStr;
 
-use rattler_conda_types::NamedChannelOrUrl;
-use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-
 use crate::PrioritizedChannel;
+use pixi_toml::TomlFromStr;
+use rattler_conda_types::NamedChannelOrUrl;
+use serde::{Serialize, Serializer};
+use toml_span::de_helpers::expected;
+use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, ErrorKind, Value};
 
 /// Layout of a prioritized channel in a toml file.
 ///
@@ -45,23 +47,6 @@ impl From<PrioritizedChannel> for TomlPrioritizedChannel {
     }
 }
 
-impl<'de> Deserialize<'de> for TomlPrioritizedChannel {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .map(|map| map.deserialize().map(TomlPrioritizedChannel::Map))
-            .string(|str| {
-                NamedChannelOrUrl::from_str(str)
-                    .map_err(serde_untagged::de::Error::custom)
-                    .map(TomlPrioritizedChannel::Str)
-            })
-            .expecting("either a map or a string")
-            .deserialize(deserializer)
-    }
-}
-
 impl Serialize for TomlPrioritizedChannel {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -74,26 +59,130 @@ impl Serialize for TomlPrioritizedChannel {
     }
 }
 
-/// Helper so that we can deserialize [`crate::channel::PrioritizedChannel`]
-/// from a string or a map.
-impl<'de> serde_with::DeserializeAs<'de, PrioritizedChannel> for TomlPrioritizedChannel {
-    fn deserialize_as<D>(deserializer: D) -> Result<PrioritizedChannel, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let prioritized_channel = TomlPrioritizedChannel::deserialize(deserializer)?;
-        Ok(prioritized_channel.into())
-    }
-}
-
-/// Helper so that we can serialize [`crate::channel::PrioritizedChannel`] to a
-/// string or a map.
-impl serde_with::SerializeAs<PrioritizedChannel> for TomlPrioritizedChannel {
-    fn serialize_as<S>(source: &PrioritizedChannel, serializer: S) -> Result<S::Ok, S::Error>
+impl Serialize for PrioritizedChannel {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let toml_prioritized_channel: TomlPrioritizedChannel = source.clone().into();
-        toml_prioritized_channel.serialize(serializer)
+        TomlPrioritizedChannel::from(self.clone()).serialize(serializer)
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
+    fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::String(name) => {
+                let name = NamedChannelOrUrl::from_str(&name).map_err(|e| toml_span::Error {
+                    kind: ErrorKind::Custom(e.to_string().into()),
+                    span: value.span,
+                    line_info: None,
+                })?;
+                Ok(TomlPrioritizedChannel::Str(name))
+            }
+            inner @ ValueInner::Table(_) => {
+                let mut th = TableHelper::new(&mut toml_span::Value::with_span(inner, value.span))?;
+                let channel = th.required::<TomlFromStr<_>>("channel")?;
+                let priority = th.optional("priority");
+                th.finalize(None)?;
+                Ok(TomlPrioritizedChannel::Map(PrioritizedChannel {
+                    channel: channel.into_inner(),
+                    priority,
+                }))
+            }
+            other => Err(expected("a string or table", other, value.span).into()),
+        }
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for PrioritizedChannel {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        <TomlPrioritizedChannel as toml_span::Deserialize>::deserialize(value).map(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use insta::{assert_debug_snapshot, assert_snapshot};
+    use toml_span::Value;
+
+    use super::*;
+    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+
+    #[allow(dead_code)]
+    #[derive(Debug)]
+    struct TopLevel {
+        channel: TomlPrioritizedChannel,
+    }
+
+    impl<'de> toml_span::Deserialize<'de> for TopLevel {
+        fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+            let mut th = TableHelper::new(value)?;
+            let channel = th.required("channel")?;
+            th.finalize(None)?;
+            Ok(TopLevel { channel })
+        }
+    }
+
+    #[test]
+    fn test_map() {
+        let channel = TopLevel::from_toml_str(
+            r#"
+        channel = { channel = "some-channel" }
+        "#,
+        )
+        .unwrap();
+        assert_debug_snapshot!(channel, @r###"
+        TopLevel {
+            channel: Map(
+                PrioritizedChannel {
+                    channel: Name(
+                        "some-channel",
+                    ),
+                    priority: None,
+                },
+            ),
+        }
+        "###);
+    }
+
+    #[test]
+    fn test_with_priority() {
+        let channel = TopLevel::from_toml_str(
+            r#"
+        channel = { channel = "some-channel", priority = 10 }
+        "#,
+        )
+        .unwrap();
+        assert_debug_snapshot!(channel, @r###"
+        TopLevel {
+            channel: Map(
+                PrioritizedChannel {
+                    channel: Name(
+                        "some-channel",
+                    ),
+                    priority: Some(
+                        10,
+                    ),
+                },
+            ),
+        }
+        "###);
+    }
+
+    #[test]
+    fn test_without_name() {
+        let input = r#"
+        channel = { priority = 10 }
+        "#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        assert_snapshot!(format_parse_error(input, error), @r###"
+         × missing field 'channel' in table
+          ╭─[pixi.toml:2:19]
+        1 │
+        2 │         channel = { priority = 10 }
+          ·                   ─────────────────
+        3 │
+          ╰────
+        "###);
     }
 }

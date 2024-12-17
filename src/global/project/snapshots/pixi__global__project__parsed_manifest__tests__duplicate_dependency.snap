@@ -2,8 +2,4 @@
 source: src/global/project/parsed_manifest.rs
 expression: manifest.unwrap_err()
 ---
-TOML parse error at line 6, column 9
-  |
-6 |         PYTHON = "*"
-  |         ^^^^^^
-duplicate dependency: python (please avoid using capitalized names for the dependencies)
+duplicate key: `PYTHON`

@@ -3,7 +3,7 @@ source: crates/pixi_build_frontend/tests/diagnostics.rs
 expression: snapshot
 ---
   × failed to setup a build backend, the pixi.toml could not be parsed
-  ╰─▶   × missing field `channels`
+  ╰─▶   × missing field 'channels' in table
          ╭─[pixi.toml:1:1]
        1 │ [workspace]
          · ───────────
