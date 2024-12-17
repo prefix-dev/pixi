@@ -80,7 +80,7 @@ Next lets add the `src/bindings.cpp` file, this one is quite simple:
 Now that we have created the files we can test if everything works:
 
 ```bash
-$ pixi r test
+$ pixi run test
 3
 ```
 
