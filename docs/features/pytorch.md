@@ -28,7 +28,7 @@ A more indepth explanation of system requirements can be found [here](./system_r
 
 ## Installing from Conda-forge
 You can install PyTorch using the `conda-forge` channel.
-These are the community maintained builds of PyTorch.
+These are the conda-forge community maintained builds of PyTorch.
 You can make direct use of the Nvidia provided packages to make sure the packages can work together.
 
 !!! note "Windows"
@@ -140,28 +140,65 @@ You can tell pixi to use multiple environment for the multiple versions of PyTor
     ```
 
 ## Troubleshooting
+When you had trouble figuring out why your PyTorch installation is not working, please share your solution or tips with the community by creating a **PR** to this documentation.
 
-- You can test the installation with the following command:
+#### Testing the `pytorch` installation
+You can verify your PyTorch installation with this command:
 ```shell
 pixi run python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 ```
-- You can ask pixi which version of CUDA it finds on your computer with `pixi info`.
+
+#### Checking the CUDA version of your machine
+To check which CUDA version pixi detects on your machine, run:
 ```
-> pixi info
+pixi info
+```
+Example output:
+```
 ...
 Virtual packages: __unix=0=0
                 : __linux=6.5.9=0
                 : __cuda=12.5=0
 ...
 ```
-- Installing `torch` from PyPI and other packages from Conda channels doesn't work.
-  - The lowest level package in the dependency tree that uses a PyPI package demands that all later packages are also PyPI packages.
-- Reasons for broken installations
-  - Using both `conda-forge` and `pytorch` channels, this can lead to conflicts. Choose one or the other.
-- Not installing the GPU version of the `pytorch` package:
-  - Using [conda-forge](./#installing-from-conda-forge): Use the `system-requirements.cuda` to tell pixi to install the `cuda` packages. And set the `cuda-version` package to the version you want to install.
-  - Using [PyPI](./#installing-from-pypi): Make sure you are using the correct [index](./#pytorch-index) for the version you want to install.
-- Not being able to solve the environment:
+
+If `__cuda` is missing, you can verify your system’s CUDA version using NVIDIA tools:
+```shell
+nvidia-smi
+```
+To check the version of the CUDA toolkit installed in your environment:
+```shell
+pixi run nvcc --version
+```
+
+#### Reasons for broken installations
+Broken installations often result from mixing incompatible channels or package sources:
+
+1.	**Mixing Conda Channels**
+
+    Using both conda-forge and the legacy pytorch channel can cause conflicts.
+    Choose one channel and stick with it to avoid dependency resolution issues.
+
+2.	**Mixing Conda and PyPI Packages**
+
+    If you install PyTorch from pypi, all packages that depend on torch must also come from PyPI.
+    Mixing Conda and PyPI packages within the same dependency chain leads to conflicts.
+
+To summarize:
+
+- Pick one Conda channel (conda-forge or pytorch) to fetch `pytorch` from, and avoid mixing.
+- For PyPI installations, ensure all related packages come from PyPI.
+
+#### GPU version of `pytorch` not installing:
+
+1. Using [conda-Forge](#installing-from-conda-forge)
+   - Ensure `system-requirements.cuda` is set to inform pixi to install CUDA-enabled packages.
+   - Use the `cuda-version` package to pin the desired CUDA version.
+2. Using [PyPI](#installing-from-pypi)
+   - Use the appropriate PyPI index to fetch the correct CUDA-enabled wheels.
+
+#### Environment Resolution Failures
+If you see an error like this:
 ```
 ├─▶ failed to resolve pypi dependencies
 ╰─▶ Because only the following versions of torch are available:
@@ -171,6 +208,9 @@ Virtual packages: __unix=0=0
   And because torch==2.5.1+cpu has no wheels with a matching platform tag and you require torch>=2.5.1, we can conclude that your requirements are
   unsatisfiable.
 ```
-This error occurs when the ABI tag of the Python version doesn't match the wheels available on PyPI.
-Fix this by lowering the `requires-python` or `python` dependency.
-At the time of writing Python 3.13 is not supported by many PyTorch-dependent wheels yet.
+This happens when the Python ABI tag doesn’t match the available PyPI wheels.
+
+Solution:
+
+- Lower the requires-python or python dependency in your configuration.
+- At the time of writing, Python 3.13 is unsupported by many PyTorch-related wheels. Use Python 3.12 or below for compatibility.
