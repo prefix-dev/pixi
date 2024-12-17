@@ -49,11 +49,11 @@ A common use-case is having two environments, one for CUDA machines and one for 
 
 === "`pixi.toml`"
     ```toml title="Adding a cpu environment"
-    --8<-- "docs/source_files/pixi_tomls/pytorch-conda-forge.toml:use-envs"
+    --8<-- "docs/source_files/pixi_tomls/pytorch-conda-forge-envs.toml:use-envs"
     ```
 === "`pyproject.toml`"
     ```toml title="Split into environments and add a CPU environment"
-    --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge.toml:use-envs"
+    --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge-envs.toml:use-envs"
     ```
 
 Now you should be able to extend that with your dependencies and tasks.
@@ -100,11 +100,11 @@ You can tell pixi to use multiple environment for the multiple versions of PyTor
 
 === "`pixi.toml`"
     ```toml title="Use multiple environments for the pypi pytorch installation"
-    --8<-- "docs/source_files/pixi_tomls/pytorch-pypi.toml:multi-env"
+    --8<-- "docs/source_files/pixi_tomls/pytorch-pypi-envs.toml:multi-env"
     ```
 === "`pyproject.toml`"
     ```toml title="Use multiple environments for the pypi pytorch installation"
-    --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi.toml:multi-env"
+    --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi-envs.toml:multi-env"
     ```
 
 ## Installing from PyTorch channel
