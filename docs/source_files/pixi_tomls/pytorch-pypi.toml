@@ -17,4 +17,3 @@ torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
 # --8<-- [end:minimal]
-
