@@ -132,8 +132,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let description = th.optional("description");
         let authors = th.optional("authors");
         let channels = th
-            .optional::<TomlIndexSet<_>>("channels")
-            .map(TomlIndexSet::into_inner);
+            .required::<TomlIndexSet<_>>("channels")
+            .map(TomlIndexSet::into_inner)?;
         let channel_priority = th.optional("channel-priority");
         let platforms = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexSet<TomlPlatform>>>>("platforms")
@@ -173,7 +173,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             version,
             description,
             authors,
-            channels: channels.unwrap_or_default(),
+            channels,
             channel_priority,
             platforms: platforms.unwrap_or_default(),
             license,

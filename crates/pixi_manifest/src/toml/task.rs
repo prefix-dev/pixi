@@ -1,4 +1,4 @@
-use pixi_toml::{TomlFromStr, TomlIndexMap, TomlWith};
+use pixi_toml::{OneOrMany, TomlFromStr, TomlIndexMap, TomlWith};
 use toml_span::{
     de_helpers::{expected, TableHelper},
     value::ValueInner,
@@ -24,7 +24,7 @@ impl<'de> toml_span::Deserialize<'de> for Task {
             let inputs = th.optional("inputs");
             let outputs = th.optional("outputs");
             let depends_on = th
-                .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("depends-on")
+                .optional::<TomlWith<_, OneOrMany<TomlFromStr<_>>>>("depends-on")
                 .map(TomlWith::into_inner)
                 .unwrap_or_default();
             let cwd = th
@@ -35,7 +35,22 @@ impl<'de> toml_span::Deserialize<'de> for Task {
                 .map(TomlIndexMap::into_inner);
             let description = th.optional("description");
             let clean_env = th.optional("clean-env").unwrap_or(false);
+
+            // Deprecated fields
+            let deprecated_depends_on = th.table.remove_entry("depends_on");
+
             th.finalize(None)?;
+
+            if let Some((depends_on, _)) = deprecated_depends_on {
+                return Err(DeserError::from(toml_span::Error {
+                    kind: toml_span::ErrorKind::Deprecated {
+                        old: "depends_on",
+                        new: "depends-on",
+                    },
+                    span: depends_on.span,
+                    line_info: None,
+                }));
+            }
 
             Ok(Self::Execute(Execute {
                 cmd,
@@ -82,5 +97,24 @@ impl<'de> toml_span::Deserialize<'de> for CmdArgs {
 impl<'de> toml_span::Deserialize<'de> for TaskName {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         TomlFromStr::deserialize(value).map(TomlFromStr::into_inner)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use insta::assert_snapshot;
+
+    use super::*;
+    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+
+    #[test]
+    fn test_depends_on_deprecation() {
+        let input = r#"
+        cmd = "test"
+        depends_on = ["a", "b"]
+        "#;
+
+        let result = Task::from_toml_str(input).unwrap_err();
+        assert_snapshot!(format_parse_error(input, result));
     }
 }

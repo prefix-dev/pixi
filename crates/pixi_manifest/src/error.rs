@@ -204,6 +204,12 @@ impl Diagnostic for TomlError {
         // This is here to make it easier to add more match arms in the future.
         #[allow(clippy::match_single_binding)]
         let message = match self {
+            TomlError::TomlError(toml_span::Error { kind, .. }) => match kind {
+                toml_span::ErrorKind::Deprecated { new, .. } => {
+                    Some(format!("replace this with '{}'", new))
+                }
+                _ => None,
+            },
             _ => None,
         };
 
