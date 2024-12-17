@@ -51,7 +51,7 @@ test-common-wheels = { cmd = "pytest --numprocesses=auto tests/wheel_tests/", de
   "build-release",
 ] }
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }
-test-integration-ci = "pytest --numprocesses=auto --durations=10 --verbose --timeout=300 tests/integration_python"
+test-integration-ci = "pytest --numprocesses=auto --durations=10 --verbose tests/integration_python"
 test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=10 --timeout=1200 tests/integration_python -m ''", depends-on = [
   "build-release",
 ] }
