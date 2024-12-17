@@ -44,7 +44,7 @@ Use the following `pixi.toml` file, you can hover over the annotations to see wh
 2. These are the workspace dependencies and we add a reference to our own package.
 3. Let's add a task that will run our test, for this we require a python interpreter.
 4. This is where we specify the package name and version.
-   This section denotes that there is both a worskpace and a package defined by this `pixi.toml` file.
+   This section denotes that there is both a workspace and a package defined by this `pixi.toml` file.
 5. We use `pixi-build-cmake` as the build-system, so that we get the backend to build cmake packages.
 6. We use the [nanobind](https://github.com/wjakob/nanobind) package to build our bindings.
 7. We need python to build the bindings, so we add a host dependency on the `python_abi` package.
