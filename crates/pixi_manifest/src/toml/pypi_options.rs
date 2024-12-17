@@ -18,7 +18,7 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             .optional::<TomlFromStr<_>>("index-url")
             .map(TomlFromStr::into_inner);
         let extra_index_urls = th
-            .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("extra-index-url")
+            .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("extra-index-urls")
             .map(|x| x.into_inner());
         let find_links = th.optional("find-links");
         let no_build_isolation = th.optional("no-build-isolation");
@@ -125,10 +125,39 @@ mod test {
     }
 
     #[test]
+    fn test_deserialize_pypi_options() {
+        let toml_str = r#"
+                 index-url = "https://example.com/pypi"
+                 extra-index-urls = ["https://example.com/extra"]
+                 no-build-isolation = ["pkg1", "pkg2"]
+
+                 [[find-links]]
+                 path = "/path/to/flat/index"
+
+                 [[find-links]]
+                 url = "https://flat.index"
+             "#;
+        let deserialized_options: PypiOptions = PypiOptions::from_toml_str(toml_str).unwrap();
+        assert_eq!(
+            deserialized_options,
+            PypiOptions {
+                index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
+                extra_index_urls: Some(vec![Url::parse("https://example.com/extra").unwrap()]),
+                find_links: Some(vec![
+                    FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
+                    FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap())
+                ]),
+                no_build_isolation: Some(vec!["pkg1".to_string(), "pkg2".to_string()]),
+                index_strategy: None,
+            },
+        );
+    }
+
+    #[test]
     fn test_full() {
         let input = r#"
         index-url = "https://pypi.org/simple"
-        extra-index-url = ["https://pypi.org/simple", "file:///path/to/simple"]
+        extra-index-urls = ["https://pypi.org/simple", "file:///path/to/simple"]
         find-links = [
             { path = "../" },
             { url = "https://google.com" }

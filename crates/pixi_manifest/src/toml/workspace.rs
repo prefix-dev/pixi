@@ -1,16 +1,18 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use indexmap::{IndexMap, IndexSet};
+use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
-use rattler_solve::ChannelPriority;
 use serde::Deserialize;
 use serde_with::{serde_as, DisplayFromStr};
 use thiserror::Error;
+use toml_span::{de_helpers::TableHelper, DeserError, Value};
 use url::Url;
 
 use crate::{
-    preview::Preview, pypi::pypi_options::PypiOptions, utils::PixiSpanned, PrioritizedChannel,
-    TargetSelector, Targets, Workspace,
+    preview::Preview, pypi::pypi_options::PypiOptions, toml::platform::TomlPlatform,
+    utils::PixiSpanned, workspace::ChannelPriority, PrioritizedChannel, TargetSelector, Targets,
+    Workspace,
 };
 
 #[derive(Debug, Clone, Deserialize)]
@@ -116,5 +118,89 @@ impl TomlWorkspace {
                     .collect(),
             ),
         })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let name = th.optional("name");
+        let version = th
+            .optional::<TomlFromStr<_>>("version")
+            .map(TomlFromStr::into_inner);
+        let description = th.optional("description");
+        let authors = th.optional("authors");
+        let channels = th
+            .optional::<TomlIndexSet<_>>("channels")
+            .map(TomlIndexSet::into_inner);
+        let channel_priority = th.optional("channel-priority");
+        let platforms = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexSet<TomlPlatform>>>>("platforms")
+            .map(TomlWith::into_inner);
+        let license = th.optional("license");
+        let license_file = th
+            .optional::<TomlFromStr<_>>("license-file")
+            .map(TomlFromStr::into_inner);
+        let readme = th
+            .optional::<TomlFromStr<_>>("readme")
+            .map(TomlFromStr::into_inner);
+        let homepage = th
+            .optional::<TomlFromStr<_>>("homepage")
+            .map(TomlFromStr::into_inner);
+        let repository = th
+            .optional::<TomlFromStr<_>>("repository")
+            .map(TomlFromStr::into_inner);
+        let documentation = th
+            .optional::<TomlFromStr<_>>("documentation")
+            .map(TomlFromStr::into_inner);
+        let conda_pypi_map = th
+            .optional::<TomlHashMap<_, _>>("conda-pypi-map")
+            .map(TomlHashMap::into_inner);
+        let pypi_options = th.optional("pypi-options");
+        let preview = th.optional("preview").unwrap_or_default();
+        let target = th
+            .optional::<TomlIndexMap<_, _>>("target")
+            .map(TomlIndexMap::into_inner);
+        let build_variants = th
+            .optional::<TomlHashMap<_, _>>("build-variants")
+            .map(TomlHashMap::into_inner);
+
+        th.finalize(None)?;
+
+        Ok(TomlWorkspace {
+            name,
+            version,
+            description,
+            authors,
+            channels: channels.unwrap_or_default(),
+            channel_priority,
+            platforms: platforms.unwrap_or_default(),
+            license,
+            license_file,
+            readme,
+            homepage,
+            repository,
+            documentation,
+            conda_pypi_map,
+            pypi_options,
+            preview,
+            target: target.unwrap_or_default(),
+            build_variants,
+        })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let build_variants = th
+            .optional::<TomlHashMap<_, _>>("build-variants")
+            .map(TomlHashMap::into_inner);
+
+        th.finalize(None)?;
+
+        Ok(TomlWorkspaceTarget { build_variants })
     }
 }

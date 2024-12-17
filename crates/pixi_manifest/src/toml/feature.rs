@@ -1,18 +1,21 @@
 use std::collections::HashMap;
 
-use indexmap::{IndexMap, IndexSet};
-use rattler_conda_types::Platform;
-use rattler_solve::ChannelPriority;
-use serde::Deserialize;
-use serde_with::serde_as;
-
+use crate::toml::platform::TomlPlatform;
 use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{TomlPrioritizedChannel, TomlTarget},
     utils::{package_map::UniquePackageMap, PixiSpanned},
+    workspace::ChannelPriority,
     Activation, Feature, FeatureName, Preview, PyPiRequirement, SystemRequirements, TargetSelector,
     Targets, Task, TaskName, TomlError,
 };
+use indexmap::{IndexMap, IndexSet};
+use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
+use rattler_conda_types::Platform;
+use serde::Deserialize;
+use serde_with::serde_as;
+use toml_span::de_helpers::TableHelper;
+use toml_span::{DeserError, Value};
 
 #[serde_as]
 #[derive(Debug, Deserialize)]
@@ -79,6 +82,51 @@ impl TomlFeature {
             system_requirements: self.system_requirements,
             pypi_options: self.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, targets),
+        })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlFeature {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let platforms = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexSet<TomlPlatform>>>>("platforms")
+            .map(TomlWith::into_inner);
+        let channels = th.optional("channels");
+        let channel_priority = th.optional("channel-priority");
+        let target = th
+            .optional::<TomlIndexMap<_, _>>("target")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
+        let dependencies = th.optional("dependencies");
+        let host_dependencies = th.optional("host-dependencies");
+        let build_dependencies = th.optional("build-dependencies");
+        let pypi_dependencies = th
+            .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
+            .map(TomlIndexMap::into_inner);
+        let activation = th.optional("activation");
+        let tasks = th
+            .optional::<TomlHashMap<_, _>>("tasks")
+            .map(TomlHashMap::into_inner)
+            .unwrap_or_default();
+        let pypi_options = th.optional("pypi-options");
+
+        th.finalize(None)?;
+
+        Ok(TomlFeature {
+            platforms,
+            channels,
+            channel_priority,
+            system_requirements: SystemRequirements::default(),
+            target,
+            dependencies,
+            host_dependencies,
+            build_dependencies,
+            pypi_dependencies,
+            activation,
+            tasks,
+            pypi_options,
         })
     }
 }

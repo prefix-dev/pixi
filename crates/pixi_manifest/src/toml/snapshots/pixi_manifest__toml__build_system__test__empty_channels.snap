@@ -6,6 +6,6 @@ expression: "expect_parse_failure(r#\"\n            build-backend = { name = \"f
    ╭─[pixi.toml:3:24]
  2 │             build-backend = { name = "foobar", version = "*" }
  3 │             channels = []
-   ·                        ▲
+   ·                        ──
  4 │         
    ╰────

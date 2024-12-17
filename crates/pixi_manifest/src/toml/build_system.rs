@@ -118,7 +118,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildSystem {
             .optional_s::<TomlWith<_, Vec<TomlFromStr<_>>>>("channels")
             .map(|s| PixiSpanned {
                 value: s.value.into_inner(),
-                span: Some(s.span.start..s.span.end - s.span.start),
+                span: Some(s.span.start..s.span.end),
             });
         let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
         th.finalize(None)?;

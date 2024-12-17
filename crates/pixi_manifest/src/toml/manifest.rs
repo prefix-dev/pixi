@@ -3,11 +3,17 @@ use std::{borrow::Cow, collections::HashMap, fmt::Formatter};
 use indexmap::IndexMap;
 use itertools::chain;
 use miette::LabeledSpan;
+use pixi_toml::{TomlHashMap, TomlIndexMap};
 use serde::{
     de::{MapAccess, Visitor},
     Deserialize, Deserializer,
 };
 use serde_with::serde_as;
+use toml_span::{
+    de_helpers::{expected, TableHelper},
+    value::ValueInner,
+    DeserError, Value,
+};
 
 use crate::{
     environment::EnvironmentIdx,
@@ -145,12 +151,44 @@ impl<'de> Deserialize<'de> for TomlBuildBackendConfig {
     }
 }
 
+impl<'de> toml_span::Deserialize<'de> for TomlBuildBackendConfig {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let table = match value.take() {
+            ValueInner::Table(table) => table,
+            other => return Err(expected("a table", other, value.span).into()),
+        };
+
+        let mut key_values = table.into_iter();
+        let result = if let Some((key, value)) = key_values.next() {
+            TomlBuildBackendConfig {
+                name: PixiSpanned {
+                    value: key.name.into_owned(),
+                    span: Some(key.span.into()),
+                },
+                additional_args: serde_value::to_value(value).unwrap(),
+            }
+        } else {
+            return Err(DeserError::from(toml_span::Error {
+                kind: toml_span::ErrorKind::MissingField("name"),
+                span: value.span,
+                line_info: None,
+            }));
+        };
+
+        for (key, _value) in key_values {
+            return Err(DeserError::from(toml_span::Error {
+                kind: toml_span::ErrorKind::Custom("unexpected key".into()),
+                span: key.span,
+                line_info: None,
+            }));
+        }
+
+        Ok(result)
+    }
+}
+
 impl TomlManifest {
     /// Parses a toml string into a project manifest.
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
-    }
-
     pub fn is_pixi_build_enabled(&self) -> bool {
         self.workspace
             .value
@@ -304,12 +342,18 @@ impl TomlManifest {
         for (name, env) in self.environments {
             // Decompose the TOML
             let (features, features_source_loc, solve_group, no_default_feature) = match env {
-                TomlEnvironmentList::Map(env) => (
-                    env.features.value,
-                    env.features.span,
-                    env.solve_group,
-                    env.no_default_feature,
-                ),
+                TomlEnvironmentList::Map(env) => {
+                    let (features, features_span) = match env.features {
+                        Some(features) => (features.value, features.span),
+                        None => (Vec::new(), None),
+                    };
+                    (
+                        features,
+                        features_span,
+                        env.solve_group,
+                        env.no_default_feature,
+                    )
+                }
                 TomlEnvironmentList::Seq(features) => (features, None, None, false),
             };
 
@@ -487,12 +531,87 @@ impl TomlManifest {
     }
 }
 
+impl<'de> toml_span::Deserialize<'de> for TomlManifest {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let workspace_s = if th.contains("workspace") {
+            th.required_s("workspace")?
+        } else {
+            th.required_s("project")?
+        };
+        let workspace = workspace_s.value;
+        let package = th.optional("package");
+        let target = th
+            .optional::<TomlIndexMap<_, _>>("target")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
+        let dependencies = th.optional("dependencies");
+        let host_dependencies = th.optional("host-dependencies");
+        let build_dependencies = th.optional("build-dependencies");
+        let build_backend = th.optional("build-backend");
+        let run_dependencies = th.optional("run-dependencies");
+        let pypi_dependencies = th
+            .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
+            .map(TomlIndexMap::into_inner);
+        let activation = th.optional("activation");
+        let tasks = th
+            .optional::<TomlHashMap<_, _>>("tasks")
+            .map(TomlHashMap::into_inner)
+            .unwrap_or_default();
+        let feature = th
+            .optional::<TomlIndexMap<_, _>>("feature")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
+        let environments = th
+            .optional::<TomlIndexMap<_, _>>("environments")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
+        let pypi_options = th.optional("pypi-options");
+        let build_system = th.optional("build-system");
+
+        th.finalize(None)?;
+
+        Ok(TomlManifest {
+            workspace,
+            package,
+            system_requirements: SystemRequirements::default(),
+            target,
+            dependencies,
+            host_dependencies,
+            build_dependencies,
+            run_dependencies,
+            pypi_dependencies,
+            activation,
+            tasks,
+            feature,
+            environments,
+            pypi_options,
+            build_system,
+            build_backend,
+            _schema: None,
+            _tool: serde::de::IgnoredAny,
+        })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use insta::assert_snapshot;
 
     use super::*;
-    use crate::utils::test_utils::expect_parse_failure;
+    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+
+    /// A helper function that generates a snapshot of the error message when
+    /// parsing a manifest TOML. The error is returned.
+    #[must_use]
+    pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
+        let parse_error = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml)
+            .and_then(|manifest| manifest.into_manifests(ExternalWorkspaceProperties::default()))
+            .expect_err("parsing should fail");
+
+        format_parse_error(pixi_toml, parse_error)
+    }
 
     #[test]
     fn test_build_section_without_preview() {

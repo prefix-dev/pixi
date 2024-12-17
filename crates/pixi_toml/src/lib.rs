@@ -1,12 +1,17 @@
 mod digest;
 mod from_str;
+mod hash_map;
 mod index_map;
+mod one_or_many;
 mod variant;
 mod with;
 
 pub use digest::TomlDigest;
 pub use from_str::TomlFromStr;
-pub use index_map::TomlIndexMap;
+pub use hash_map::TomlHashMap;
+pub use index_map::{TomlIndexMap, TomlIndexSet};
+pub use one_or_many::OneOrMany;
+use std::str::FromStr;
 use toml_span::{value::ValueInner, DeserError, Error, ErrorKind, Value};
 pub use variant::TomlEnum;
 pub use with::TomlWith;
@@ -49,5 +54,19 @@ where
         } else {
             Err(errors)
         }
+    }
+}
+
+pub trait FromKey<'de>: Sized {
+    type Err;
+
+    fn from_key(key: toml_span::value::Key<'de>) -> Result<Self, Self::Err>;
+}
+
+impl<'de, T: FromStr> FromKey<'de> for T {
+    type Err = <T as FromStr>::Err;
+
+    fn from_key(key: toml_span::value::Key<'de>) -> Result<Self, Self::Err> {
+        key.name.parse()
     }
 }

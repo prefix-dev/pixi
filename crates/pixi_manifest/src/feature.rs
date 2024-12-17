@@ -1,17 +1,18 @@
+use indexmap::{IndexMap, IndexSet};
+use itertools::Either;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{PackageName, Platform};
+use serde::{de::Error, Deserialize};
+use serde_with::SerializeDisplay;
+use std::convert::Infallible;
+use std::str::FromStr;
 use std::{
     borrow::{Borrow, Cow},
     fmt,
     hash::{Hash, Hasher},
 };
 
-use indexmap::{IndexMap, IndexSet};
-use itertools::Either;
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform};
-use rattler_solve::ChannelPriority;
-use serde::{de::Error, Deserialize};
-use serde_with::SerializeDisplay;
-
+use crate::workspace::ChannelPriority;
 use crate::{
     channel::PrioritizedChannel,
     consts,
@@ -81,6 +82,14 @@ impl FeatureName {
 impl Borrow<str> for FeatureName {
     fn borrow(&self) -> &str {
         self.as_str()
+    }
+}
+
+impl FromStr for FeatureName {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(FeatureName::from(s))
     }
 }
 

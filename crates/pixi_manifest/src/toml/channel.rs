@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
+use pixi_toml::TomlFromStr;
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, ErrorKind};
+use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, ErrorKind, Value};
 
 use crate::PrioritizedChannel;
-use pixi_toml::TomlFromStr;
 
 /// Layout of a prioritized channel in a toml file.
 ///
@@ -131,6 +131,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
             }
             .into()),
         }
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for PrioritizedChannel {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        <TomlPrioritizedChannel as toml_span::Deserialize>::deserialize(value).map(Into::into)
     }
 }
 

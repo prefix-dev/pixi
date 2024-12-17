@@ -1,8 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use indexmap::IndexSet;
+use pixi_toml::TomlEnum;
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
-use rattler_solve::ChannelPriority;
+use serde::Deserialize;
+use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
@@ -63,4 +65,28 @@ pub struct Workspace {
 
     /// Build variants
     pub build_variants: Targets<Option<HashMap<String, Vec<String>>>>,
+}
+
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    strum::Display,
+    strum::VariantNames,
+    strum::EnumString,
+    Deserialize,
+)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum ChannelPriority {
+    Strict,
+    Disabled,
+}
+
+impl<'de> toml_span::Deserialize<'de> for ChannelPriority {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        TomlEnum::deserialize(value).map(TomlEnum::into_inner)
+    }
 }

@@ -3841,7 +3841,6 @@ dependencies = [
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
- "rattler_solve",
  "rattler_virtual_packages",
  "regex",
  "rstest",
@@ -6204,9 +6203,10 @@ dependencies = [
 
 [[package]]
 name = "toml-span"
-version = "0.3.0"
-source = "git+https://github.com/baszalmstra/toml-span?branch=add_found_value#655ab75109e416689afe48cead54185eb297caae"
+version = "0.4.0"
+source = "git+https://github.com/baszalmstra/toml-span?branch=add_table_spans#197cc408c4d596dcbbda999fc131119afc1b857c"
 dependencies = [
+ "serde",
  "smallvec",
 ]
 

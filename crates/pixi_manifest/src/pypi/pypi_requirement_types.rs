@@ -6,7 +6,9 @@ use std::{
 
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{InvalidNameError, PackageName};
+use pixi_toml::TomlFromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use toml_span::{DeserError, Value};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 /// A package name for PyPI that also stores the source version of the name.
@@ -78,6 +80,12 @@ impl FromStr for VersionOrStar {
         } else {
             Ok(VersionOrStar::Version(VersionSpecifiers::from_str(s)?))
         }
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for VersionOrStar {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        TomlFromStr::deserialize(value).map(TomlFromStr::into_inner)
     }
 }
 

@@ -270,35 +270,6 @@ mod tests {
     use crate::pypi::pypi_options::IndexStrategy;
 
     #[test]
-    fn test_deserialize_pypi_options() {
-        let toml_str = r#"
-                 index-url = "https://example.com/pypi"
-                 extra-index-urls = ["https://example.com/extra"]
-                 no-build-isolation = ["pkg1", "pkg2"]
-
-                 [[find-links]]
-                 path = "/path/to/flat/index"
-
-                 [[find-links]]
-                 url = "https://flat.index"
-             "#;
-        let deserialized_options: PypiOptions = toml_edit::de::from_str(toml_str).unwrap();
-        assert_eq!(
-            deserialized_options,
-            PypiOptions {
-                index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
-                extra_index_urls: Some(vec![Url::parse("https://example.com/extra").unwrap()]),
-                find_links: Some(vec![
-                    FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
-                    FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap())
-                ]),
-                no_build_isolation: Some(vec!["pkg1".to_string(), "pkg2".to_string()]),
-                index_strategy: None,
-            },
-        );
-    }
-
-    #[test]
     fn test_merge_pypi_options() {
         // Create the first set of options
         let opts = PypiOptions {

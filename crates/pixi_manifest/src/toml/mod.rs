@@ -5,8 +5,10 @@ mod environment;
 mod feature;
 mod manifest;
 mod package;
+mod platform;
 mod pypi_options;
 mod target;
+mod task;
 mod workspace;
 
 pub use build_system::TomlBuildSystem;

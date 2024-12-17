@@ -3,7 +3,7 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 use indexmap::{map::Entry, IndexMap};
 use itertools::Either;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 use serde::{Deserialize, Deserializer};
 
 use super::error::DependencyError;
@@ -405,14 +405,20 @@ impl<'de> Deserialize<'de> for TargetSelector {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        match s.as_str() {
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl FromStr for TargetSelector {
+    type Err = ParsePlatformError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
             "linux" => Ok(TargetSelector::Linux),
             "unix" => Ok(TargetSelector::Unix),
             "win" => Ok(TargetSelector::Win),
             "osx" => Ok(TargetSelector::MacOs),
-            _ => Platform::from_str(&s)
-                .map(TargetSelector::Platform)
-                .map_err(serde::de::Error::custom),
+            _ => Platform::from_str(s).map(TargetSelector::Platform),
         }
     }
 }
