@@ -7,11 +7,11 @@ preview = ["pixi-build"]                      # (1)!
 [dependencies] # (2)!
 python_bindings = { path = "." }
 
-[feature.test.dependencies] # (3)!
+[feature.test.dependencies]
 python = ">=3.12, <3.13"
 
 [feature.test.tasks]
-test = "python -c 'import python_bindings as b; print(b.add(1, 2))'"
+test = "python -c 'import python_bindings as b; print(b.add(1, 2))'" # (3)!
 
 [package] # (4)!
 version = "0.1.0"

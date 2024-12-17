@@ -46,7 +46,7 @@ Use the following `pixi.toml` file, you can hover over the annotations to see wh
    This section denotes that there is both a worskpace and a package defined by this `pixi.toml` file.
 5. We use `pixi-build-cmake` as the build-system, so that we get the backend to build cmake packages.
 6. We use the [nanobind](https://github.com/wjakob/nanobind) package to build our bindings.
-7. We need python to build the bindings, so we add a host dependency on python.
+7. We need python to build the bindings, so we add a host dependency on the `python_abi` package.
 8. We override the cmake version to ensure it matches our `CMakeLists.txt` file.
 
 ### The `CMakeLists.txt` file
