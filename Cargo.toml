@@ -17,82 +17,82 @@ repository = "https://github.com/prefix-dev/pixi"
 ahash = "0.8.11"
 assert_matches = "1.5.0"
 async-fd-lock = "0.2.0"
-async-once-cell = "0.5.3"
-async-trait = "0.1.82"
+async-once-cell = "0.5.4"
+async-trait = "0.1.83"
 base64 = "0.22.1"
 bytes = "1.9.0"
-chrono = "0.4.38"
-clap = { version = "4.5.9", default-features = false }
-clap-verbosity-flag = "2.2.0"
-clap_complete = "4.5.2"
-clap_complete_nushell = "4.5.2"
+chrono = "0.4.39"
+clap = { version = "4.5.23", default-features = false }
+clap-verbosity-flag = "3.0.2"
+clap_complete = "4.5.39"
+clap_complete_nushell = "4.5.4"
 concat-idents = "1.1.5"
-console = "0.15.8"
-crossbeam-channel = "0.5.12"
-csv = "1.3.0"
+console = "0.15.10"
+crossbeam-channel = "0.5.14"
+csv = "1.3.1"
 dashmap = "6.1.0"
-deno_task_shell = "0.16.0"
+deno_task_shell = "0.20.2"
 dialoguer = "0.11.0"
 dirs = "5.0.1"
-dunce = "1.0.4"
+dunce = "1.0.5"
 fd-lock = "4.0.2"
-flate2 = "1.0.28"
-fs-err = { version = "2.11.0" }
+flate2 = "1.0.35"
+fs-err = { version = "3.0.0" }
 fs_extra = "1.3.0"
-futures = "0.3.30"
-http = "1.1.0"
+futures = "0.3.31"
+http = "1.2.0"
 http-cache-reqwest = "0.15.0"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
-ignore = "0.4.22"
-indexmap = "2.2.6"
-indicatif = "0.17.8"
-insta = "1.38.0"
-is_executable = "1.0.1"
+ignore = "0.4.23"
+indexmap = "2.7.0"
+indicatif = "0.17.9"
+insta = "1.41.1"
+is_executable = "1.0.4"
 itertools = "0.13.0"
 jsonrpsee = "=0.24.2"
-lazy_static = "1.4.0"
-libc = { version = "0.2.153", default-features = false }
+lazy_static = "1.5.0"
+libc = { version = "0.2.168", default-features = false }
 memchr = "2.7.4"
-miette = { version = "7.2.0", features = ["fancy"] }
-minijinja = "2.1.1"
+miette = { version = "7.4.0", features = ["fancy"] }
+minijinja = "2.5.0"
 nix = { version = "0.29.0", default-features = false }
-once_cell = "1.19.0"
-parking_lot = "0.12.2"
-pep440_rs = "0.7.2"
+once_cell = "1.20.2"
+parking_lot = "0.12.3"
+pep440_rs = "0.7.3"
 pep508_rs = "0.9.1"
 percent-encoding = "2.3.1"
 pyproject-toml = "0.13.4"
-regex = "1.10.4"
+regex = "1.11.1"
 reqwest = { version = "0.12.9", default-features = false }
 reqwest-middleware = "0.4"
 reqwest-retry = "0.7.0"
-rlimit = "0.10.1"
-rstest = "0.19.0"
-self-replace = "1.3.7"
-serde = "1.0.198"
-serde-untagged = "0.1.5"
+rlimit = "0.10.2"
+rstest = "0.23.0"
+self-replace = "1.5.0"
+serde = "1.0.216"
+serde-untagged = "0.1.6"
 serde-value = "0.7.0"
 serde_ignored = "0.1.10"
-serde_json = "1.0.116"
-serde_with = "3.7.0"
+serde_json = "1.0.133"
+serde_with = "3.11.0"
 serde_yaml = "0.9.34"
 sha1 = "0.10.6"
 shlex = "1.3.0"
 signal-hook = "0.3.17"
-spdx = "0.10.4"
+spdx = "0.10.7"
 strsim = "0.11.1"
 tabwriter = "1.4.0"
-tar = "0.4.40"
+tar = "0.4.43"
 tempfile = "3.14.0"
-thiserror = "1.0.58"
-tokio = "1.37.0"
-tokio-stream = "0.1.16"
-tokio-util = "0.7.10"
-toml_edit = "0.22.11"
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
-typed-path = "0.9.2"
+thiserror = "2.0.7"
+tokio = "1.42.0"
+tokio-stream = "0.1.17"
+tokio-util = "0.7.13"
+toml_edit = "0.22.22"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+typed-path = "0.10.0"
 uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
@@ -102,26 +102,26 @@ uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.4.30" }
 wax = "0.6.0"
-which = "6.0.3"
+which = "7.0.0"
 
 # Rattler crates
-file_url = "0.2.0"
-rattler = { version = "0.28.6", default-features = false }
-rattler_cache = { version = "0.2.14", default-features = false }
-rattler_conda_types = { version = "0.29.4", default-features = false }
-rattler_digest = { version = "1.0.3", default-features = false }
-rattler_lock = { version = "0.22.33", default-features = false }
-rattler_networking = { version = "0.21.8", default-features = false, features = [
+file_url = "0.2.1"
+rattler = { version = "0.28.8", default-features = false }
+rattler_cache = { version = "0.3.0", default-features = false }
+rattler_conda_types = { version = "0.29.6", default-features = false }
+rattler_digest = { version = "1.0.4", default-features = false }
+rattler_lock = { version = "0.22.35", default-features = false }
+rattler_networking = { version = "0.21.9", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { version = "0.21.26", default-features = false }
-rattler_shell = { version = "0.22.9", default-features = false }
-rattler_solve = { version = "1.2.5", default-features = false }
-rattler_virtual_packages = { version = "1.1.12", default-features = false }
+rattler_repodata_gateway = { version = "0.21.28", default-features = false }
+rattler_shell = { version = "0.22.11", default-features = false }
+rattler_solve = { version = "1.3.0", default-features = false }
+rattler_virtual_packages = { version = "1.1.14", default-features = false }
 
 
 # Bumping this to a higher version breaks the Windows path handling.
-url = "2.5.2"
+url = "2.5.4"
 uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
@@ -136,8 +136,8 @@ uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 winapi = { version = "0.3.9", default-features = false }
-xxhash-rust = "0.8.10"
-zip = { version = "2.2.0", default-features = false }
+xxhash-rust = "0.8.12"
+zip = { version = "2.2.2", default-features = false }
 zstd = { version = "0.13.2", default-features = false }
 
 fancy_display = { path = "crates/fancy_display" }
@@ -224,14 +224,7 @@ indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
-miette = { workspace = true, features = [
-  "fancy",
-  "supports-color",
-  "supports-hyperlinks",
-  "supports-unicode",
-  "terminal_size",
-  "textwrap",
-] }
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
@@ -338,7 +331,7 @@ strip = false
 
 [dev-dependencies]
 async-trait = { workspace = true }
-fake = "2.9.2"
+fake = "3.0.1"
 http = { workspace = true }
 insta = { workspace = true, features = ["yaml", "glob"] }
 rstest = { workspace = true }
@@ -347,17 +340,6 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
-file_url = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_conda_types = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_digest = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_lock = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_networking = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_package_streaming = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_repodata_gateway = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_shell = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_solve = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
-rattler_virtual_packages = { git = "https://github.com/baszalmstra/rattler", branch = "perf/ideal_concurrency_limit" }
 
 # Config for 'dist'
 [workspace.metadata.dist]

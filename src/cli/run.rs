@@ -297,8 +297,13 @@ async fn execute_task<'p>(
     // might want to revaluate this.
     let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
 
-    let execute_future =
-        deno_task_shell::execute(script, command_env.clone(), &cwd, Default::default());
+    let execute_future = deno_task_shell::execute(
+        script,
+        command_env.clone(),
+        &cwd,
+        Default::default(),
+        Default::default(),
+    );
     let status_code = tokio::select! {
         code = execute_future => code,
         // This should never exit

@@ -152,11 +152,11 @@ impl ExposedData {
 
         // Find all channels used to create the environment
         let all_channels = prefix
-            .find_installed_packages(None)
-            .await?
+            .find_installed_packages()?
             .iter()
             .map(|prefix_record| prefix_record.repodata_record.channel.clone())
             .collect::<HashSet<_>>();
+
         for channel in all_channels.into_iter().flatten() {
             tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
             channels.push(channel_url_to_prioritized_channel(
@@ -871,7 +871,7 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        let prefix_records = &prefix.find_installed_packages(None).await?;
+        let prefix_records = &prefix.find_installed_packages()?;
 
         let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
@@ -1036,8 +1036,7 @@ impl Project {
             env_name,
             self.environment_prefix(env_name)
                 .await?
-                .find_installed_packages(None)
-                .await?
+                .find_installed_packages()?
                 .into_iter()
                 .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
                 .map(|r| r.repodata_record.package_record)

@@ -191,7 +191,7 @@ version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df895a515f70646414f4b45c0b79082783b80552b373a68283012928df56f522"
 dependencies = [
- "bzip2",
+ "bzip2 0.4.4",
  "flate2",
  "futures-core",
  "futures-io",
@@ -431,7 +431,7 @@ dependencies = [
 name = "barrier_cell"
 version = "0.1.0"
 dependencies = [
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tokio",
 ]
 
@@ -589,6 +589,16 @@ name = "bzip2"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdb116a6ef3f6c3698828873ad02c3014b3c85cadb88496095628e3ef1e347f8"
+dependencies = [
+ "bzip2-sys",
+ "libc",
+]
+
+[[package]]
+name = "bzip2"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bafdbf26611df8c14810e268ddceda071c297570a5fb360ceddf617fe417ef58"
 dependencies = [
  "bzip2-sys",
  "libc",
@@ -755,9 +765,9 @@ dependencies = [
 
 [[package]]
 name = "clap-verbosity-flag"
-version = "2.2.3"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34c77f67047557f62582784fd7482884697731b2932c7d37ced54bce2312e1e2"
+checksum = "2678fade3b77aa3a8ff3aae87e9c008d3fb00473a41c71fbf74e91c8c7b37e84"
 dependencies = [
  "clap",
  "log",
@@ -773,7 +783,7 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
- "terminal_size 0.4.1",
+ "terminal_size",
 ]
 
 [[package]]
@@ -992,7 +1002,7 @@ version = "3.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90eeab0aa92f3f9b4e87f258c72b139c207d251f9cbc1080a0086b86a8870dd3"
 dependencies = [
- "nix",
+ "nix 0.29.0",
  "windows-sys 0.59.0",
 ]
 
@@ -1082,19 +1092,20 @@ dependencies = [
 
 [[package]]
 name = "deno_task_shell"
-version = "0.16.1"
+version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97e5ff66a1e89edb7ca0c36b73a8fcdc008ba426c4ad7a36e1dfb3f4a166179e"
+checksum = "fa3763bc068e17b6d488fb73ecda463c13ef792b0a5288b6018bc2119becd635"
 dependencies = [
  "anyhow",
  "futures",
  "glob",
  "monch",
+ "nix 0.27.1",
  "os_pipe",
  "path-dedot",
  "thiserror 1.0.69",
  "tokio",
- "tokio-util",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1342,9 +1353,9 @@ dependencies = [
 
 [[package]]
 name = "fake"
-version = "2.10.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d391ba4af7f1d93f01fcf7b2f29e2bc9348e109dfdbf4dcbdc51dfa38dab0b6"
+checksum = "661cb0601b5f4050d1e65452c5b0ea555c0b3e88fb5ed7855906adc6c42523ef"
 dependencies = [
  "deunicode",
  "rand",
@@ -1376,12 +1387,13 @@ dependencies = [
 
 [[package]]
 name = "file_url"
-version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95ad84121770c9766a67e4dd0a96b0467c6a5a2c43e873bf853aeaa6632b687c"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "typed-path",
  "url",
 ]
@@ -1461,16 +1473,6 @@ dependencies = [
 
 [[package]]
 name = "fs-err"
-version = "2.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
-dependencies = [
- "autocfg",
- "tokio",
-]
-
-[[package]]
-name = "fs-err"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bb60e7409f34ef959985bc9d9c5ee8f5db24ee46ed9775850548021710f807f"
@@ -1491,12 +1493,13 @@ dependencies = [
 
 [[package]]
 name = "fs4"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e871a4cfa68bb224863b53149d973df1ac8d1ed2fa1d1bfc37ac1bb65dd37207"
+checksum = "c29c30684418547d476f0b48e84f4821639119c483b1eccd566c8cd0cd05f521"
 dependencies = [
- "fs-err 2.11.0",
+ "fs-err",
  "rustix",
+ "tokio",
  "windows-sys 0.52.0",
 ]
 
@@ -2922,20 +2925,20 @@ dependencies = [
 
 [[package]]
 name = "miette"
-version = "7.2.0"
+version = "7.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4edc8853320c2a0dab800fbda86253c8938f6ea88510dc92c5f1ed20e794afc1"
+checksum = "317f146e2eb7021892722af37cf1b971f0a70c8406f487e24952667616192c64"
 dependencies = [
  "backtrace",
  "backtrace-ext",
  "cfg-if",
- "miette-derive 7.2.0",
+ "miette-derive 7.4.0",
  "owo-colors",
  "serde",
  "supports-color",
  "supports-hyperlinks",
  "supports-unicode",
- "terminal_size 0.3.0",
+ "terminal_size",
  "textwrap",
  "thiserror 1.0.69",
  "unicode-width 0.1.14",
@@ -2954,9 +2957,9 @@ dependencies = [
 
 [[package]]
 name = "miette-derive"
-version = "7.2.0"
+version = "7.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcf09caffaac8068c346b6df2a7fc27a177fd20b39421a39ce0a211bde679a6c"
+checksum = "23c9b935fbe1d6cbd1dac857b54a688145e2d93f48db36010514d0f612d0ad67"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3080,6 +3083,17 @@ name = "netrc-rs"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2970fbbc8c785e8246234a7bd004ed66cd1ed1a35ec73669a92545e419b836"
+
+[[package]]
+name = "nix"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2eb04e9c688eff1c89d72b407f168cf79bb9e867a9d3323ed6c01519eb9cc053"
+dependencies = [
+ "bitflags 2.6.0",
+ "cfg-if",
+ "libc",
+]
 
 [[package]]
 name = "nix"
@@ -3613,7 +3627,7 @@ dependencies = [
  "fake",
  "fancy_display",
  "flate2",
- "fs-err 2.11.0",
+ "fs-err",
  "fs_extra",
  "futures",
  "http",
@@ -3626,9 +3640,9 @@ dependencies = [
  "is_executable",
  "itertools 0.13.0",
  "libc",
- "miette 7.2.0",
+ "miette 7.4.0",
  "minijinja",
- "nix",
+ "nix 0.29.0",
  "once_cell",
  "parking_lot 0.12.3",
  "pep440_rs",
@@ -3650,7 +3664,7 @@ dependencies = [
  "pypi_mapping",
  "pypi_modifiers",
  "rattler",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
  "rattler_networking",
@@ -3673,7 +3687,7 @@ dependencies = [
  "tabwriter",
  "tar",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
  "toml_edit",
@@ -3711,12 +3725,12 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "dashmap",
- "fs-err 2.11.0",
+ "fs-err",
  "futures",
  "insta",
  "itertools 0.13.0",
  "jsonrpsee",
- "miette 7.2.0",
+ "miette 7.4.0",
  "pixi_build_types",
  "pixi_config",
  "pixi_consts",
@@ -3725,7 +3739,7 @@ dependencies = [
  "pixi_spec",
  "pixi_utils",
  "rattler",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
@@ -3739,20 +3753,20 @@ dependencies = [
  "serde_yaml",
  "sha1",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-stream",
  "tokio-util",
  "tracing",
  "url",
- "which 6.0.3",
+ "which",
 ]
 
 [[package]]
 name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "serde",
  "serde_json",
  "serde_with",
@@ -3766,13 +3780,13 @@ dependencies = [
  "clap",
  "console",
  "dirs",
- "fs-err 2.11.0",
+ "fs-err",
  "insta",
  "itertools 0.13.0",
- "miette 7.2.0",
+ "miette 7.4.0",
  "pixi_consts",
  "rattler",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_repodata_gateway",
  "reqwest-middleware",
  "rstest",
@@ -3790,7 +3804,7 @@ version = "0.1.0"
 dependencies = [
  "console",
  "lazy_static",
- "rattler_cache 0.2.15",
+ "rattler_cache",
  "url",
 ]
 
@@ -3798,7 +3812,7 @@ dependencies = [
 name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
 ]
 
 [[package]]
@@ -3806,14 +3820,14 @@ name = "pixi_glob"
 version = "0.1.0"
 dependencies = [
  "dashmap",
- "fs-err 2.11.0",
+ "fs-err",
  "insta",
  "itertools 0.13.0",
  "memchr",
  "rattler_digest",
  "rstest",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tokio",
  "wax",
 ]
@@ -3826,18 +3840,18 @@ dependencies = [
  "console",
  "dunce",
  "fancy_display",
- "fs-err 2.11.0",
+ "fs-err",
  "glob",
  "indexmap 2.7.0",
  "insta",
  "itertools 0.13.0",
- "miette 7.2.0",
+ "miette 7.4.0",
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
  "pixi_spec",
  "pyproject-toml",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_lock",
  "rattler_solve",
  "rattler_virtual_packages",
@@ -3851,7 +3865,7 @@ dependencies = [
  "spdx",
  "strsim",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "toml_edit",
  "tracing",
  "url",
@@ -3871,7 +3885,7 @@ name = "pixi_pty"
 version = "0.1.0"
 dependencies = [
  "libc",
- "nix",
+ "nix 0.29.0",
  "signal-hook",
 ]
 
@@ -3881,11 +3895,11 @@ version = "0.1.0"
 dependencies = [
  "file_url",
  "pixi_spec",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "typed-path",
  "url",
 ]
@@ -3898,13 +3912,13 @@ dependencies = [
  "file_url",
  "insta",
  "itertools 0.13.0",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_digest",
  "serde",
  "serde-untagged",
  "serde_json",
  "serde_with",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "toml_edit",
  "typed-path",
  "url",
@@ -3915,15 +3929,15 @@ name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
  "fd-lock",
- "fs-err 2.11.0",
+ "fs-err",
  "indicatif",
  "insta",
  "itertools 0.13.0",
- "miette 7.2.0",
+ "miette 7.4.0",
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_networking",
  "reqwest",
  "reqwest-middleware",
@@ -3932,7 +3946,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -3948,7 +3962,7 @@ dependencies = [
  "pixi_manifest",
  "rattler_lock",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "url",
  "uv-configuration",
  "uv-distribution-filename",
@@ -4160,16 +4174,16 @@ name = "pypi_mapping"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
- "fs-err 2.11.0",
+ "fs-err",
  "futures",
  "http-cache-reqwest",
  "itertools 0.13.0",
- "miette 7.2.0",
+ "miette 7.4.0",
  "pep440_rs",
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_digest",
  "reqwest",
  "reqwest-middleware",
@@ -4184,10 +4198,10 @@ dependencies = [
 name = "pypi_modifiers"
 version = "0.1.0"
 dependencies = [
- "miette 7.2.0",
+ "miette 7.4.0",
  "pixi_default_versions",
  "pixi_manifest",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "uv-pep508",
  "uv-platform-tags",
 ]
@@ -4329,15 +4343,16 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.28.6"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "0.28.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb6b55310ef1c0479d8ec23bdaf4f243cad29c7b0e4a855c72e6b2e51bd649e0"
 dependencies = [
  "anyhow",
  "clap",
  "console",
  "digest",
  "dirs",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "humantime",
  "indexmap 2.7.0",
@@ -4345,23 +4360,23 @@ dependencies = [
  "itertools 0.13.0",
  "memchr",
  "memmap2 0.9.5",
- "num_cpus",
  "once_cell",
  "parking_lot 0.12.3",
- "rattler_cache 0.2.14",
- "rattler_conda_types 0.29.4",
+ "rattler_cache",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
- "rattler_package_streaming 0.22.17",
+ "rattler_package_streaming",
  "rattler_shell",
+ "rayon",
  "reflink-copy",
  "regex",
  "reqwest",
  "reqwest-middleware",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit)",
+ "simple_spawn_blocking",
  "smallvec",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tokio",
  "tracing",
  "url",
@@ -4370,56 +4385,29 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.2.14"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
-dependencies = [
- "anyhow",
- "dashmap",
- "digest",
- "dirs",
- "fs-err 3.0.0",
- "fs4",
- "futures",
- "fxhash",
- "itertools 0.13.0",
- "parking_lot 0.12.3",
- "rattler_conda_types 0.29.4",
- "rattler_digest",
- "rattler_networking",
- "rattler_package_streaming 0.22.17",
- "reqwest",
- "reqwest-middleware",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit)",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "rattler_cache"
-version = "0.2.15"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2523385739abca920f8b9ac5c292b0835f003ee4fa3d5da89b44fa2e4be68961"
+checksum = "c1c21d2868933899284c54f0336269dd1e8f63b979c9a8256020f166cea176b3"
 dependencies = [
  "anyhow",
  "dashmap",
  "digest",
  "dirs",
- "fs-err 3.0.0",
+ "fs-err",
  "fs4",
  "futures",
  "fxhash",
  "itertools 0.13.0",
  "parking_lot 0.12.3",
- "rattler_conda_types 0.29.5",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
- "rattler_package_streaming 0.22.18",
+ "rattler_package_streaming",
+ "rayon",
  "reqwest",
  "reqwest-middleware",
- "simple_spawn_blocking 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "thiserror 1.0.69",
+ "simple_spawn_blocking",
+ "thiserror 2.0.7",
  "tokio",
  "tracing",
  "url",
@@ -4427,12 +4415,14 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.29.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "0.29.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a13391d33d1511153902d8e512a5c84c1f4e84a389fcb6ad650e7909408cf544"
 dependencies = [
  "chrono",
  "dirs",
  "file_url",
+ "fs-err",
  "fxhash",
  "glob",
  "hex",
@@ -4442,8 +4432,8 @@ dependencies = [
  "nom",
  "purl",
  "rattler_digest",
- "rattler_macros 1.0.3",
- "rattler_redaction 0.1.4",
+ "rattler_macros",
+ "rattler_redaction",
  "regex",
  "serde",
  "serde-untagged",
@@ -4454,43 +4444,7 @@ dependencies = [
  "simd-json",
  "smallvec",
  "strum",
- "thiserror 1.0.69",
- "tracing",
- "typed-path",
- "url",
-]
-
-[[package]]
-name = "rattler_conda_types"
-version = "0.29.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4fe3619a8d2903b0adfb2889fa58f906855fc5dd260c17d5a4dc2c447a701d1"
-dependencies = [
- "chrono",
- "dirs",
- "file_url",
- "fxhash",
- "glob",
- "hex",
- "indexmap 2.7.0",
- "itertools 0.13.0",
- "lazy-regex",
- "nom",
- "purl",
- "rattler_digest",
- "rattler_macros 1.0.4",
- "rattler_redaction 0.1.5",
- "regex",
- "serde",
- "serde-untagged",
- "serde_json",
- "serde_repr",
- "serde_with",
- "serde_yaml",
- "simd-json",
- "smallvec",
- "strum",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tracing",
  "typed-path",
  "url",
@@ -4498,8 +4452,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "1.0.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ffd5141cd51f0de194c8c05d97f138d2ea70274636ce911bbdf7dd371942a47"
 dependencies = [
  "blake2",
  "digest",
@@ -4514,8 +4469,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.33"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "0.22.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b54218759724416f1456e3e3e459dcd507690f0b59b4fb2fa158530647bf1f7"
 dependencies = [
  "chrono",
  "file_url",
@@ -4524,25 +4480,16 @@ dependencies = [
  "itertools 0.13.0",
  "pep440_rs",
  "pep508_rs",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_digest",
  "serde",
  "serde-value",
  "serde_repr",
  "serde_with",
  "serde_yaml",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "typed-path",
  "url",
-]
-
-[[package]]
-name = "rattler_macros"
-version = "1.0.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
-dependencies = [
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -4557,8 +4504,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.21.8"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "0.21.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d10545baa6dc04e294d50984aca155d57ee6e92600296a8d42b6d6d27ded833a"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4578,76 +4526,38 @@ dependencies = [
  "retry-policies",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tracing",
  "url",
 ]
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.17"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
-dependencies = [
- "bzip2",
- "chrono",
- "fs-err 3.0.0",
- "futures-util",
- "num_cpus",
- "rattler_conda_types 0.29.4",
- "rattler_digest",
- "rattler_networking",
- "rattler_redaction 0.1.4",
- "reqwest",
- "reqwest-middleware",
- "serde_json",
- "tar",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "zip 2.2.2",
- "zstd",
-]
-
-[[package]]
-name = "rattler_package_streaming"
-version = "0.22.18"
+version = "0.22.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37e5d3a43c996a379bcc3c68bb8322d31baa11d6170f3746fc5667317cf10f8d"
+checksum = "e3b7f8d479f3e1e9fe5eaa6ccb8cf296258f9d56cb0423baced7720fe9512e6b"
 dependencies = [
- "bzip2",
+ "bzip2 0.5.0",
  "chrono",
- "fs-err 3.0.0",
+ "fs-err",
  "futures-util",
  "num_cpus",
- "rattler_conda_types 0.29.5",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
- "rattler_redaction 0.1.5",
+ "rattler_redaction",
  "reqwest",
  "reqwest-middleware",
  "serde_json",
  "tar",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
  "tracing",
  "url",
  "zip 2.2.2",
  "zstd",
-]
-
-[[package]]
-name = "rattler_redaction"
-version = "0.1.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
-dependencies = [
- "reqwest",
- "reqwest-middleware",
- "url",
 ]
 
 [[package]]
@@ -4663,8 +4573,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.21.26"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "0.21.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f24b5beea6fbf6b76356e361897c919abc4bf7db706ae5f5868a24815f2ff711"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4677,7 +4588,7 @@ dependencies = [
  "dashmap",
  "dirs",
  "file_url",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "hex",
  "http",
@@ -4692,21 +4603,21 @@ dependencies = [
  "ouroboros",
  "parking_lot 0.12.3",
  "pin-project-lite",
- "rattler_cache 0.2.14",
- "rattler_conda_types 0.29.4",
+ "rattler_cache",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
- "rattler_redaction 0.1.4",
+ "rattler_redaction",
  "reqwest",
  "reqwest-middleware",
  "rmp-serde",
  "serde",
  "serde_json",
  "serde_with",
- "simple_spawn_blocking 1.0.0 (git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit)",
+ "simple_spawn_blocking",
  "superslice",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tokio",
  "tokio-util",
  "tracing",
@@ -4717,54 +4628,57 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.9"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "0.22.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06401300c3f5718abb5c3ed1c66f9837c5cac5879c33a440d6bf95f4336ba38d"
 dependencies = [
  "enum_dispatch",
- "fs-err 3.0.0",
+ "fs-err",
  "indexmap 2.7.0",
  "itertools 0.13.0",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "serde_json",
  "shlex",
  "sysinfo",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tracing",
 ]
 
 [[package]]
 name = "rattler_solve"
-version = "1.2.5"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "896a10d47c9a24f9274f9e54cda3721aa92b316a09a066a7e8aad372d1cd6d28"
 dependencies = [
  "chrono",
  "futures",
  "itertools 0.13.0",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "rattler_digest",
  "resolvo",
  "serde",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tracing",
  "url",
 ]
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "1.1.12"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
+version = "1.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4bb283545cf1241c2ee61d72c2149a3f32f856ebfa1440ea913c71d438247c7e"
 dependencies = [
  "archspec",
  "libloading",
  "nom",
  "once_cell",
  "plist",
- "rattler_conda_types 0.29.4",
+ "rattler_conda_types",
  "regex",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tracing",
 ]
 
@@ -5112,9 +5026,9 @@ dependencies = [
 
 [[package]]
 name = "rstest"
-version = "0.19.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d5316d2a1479eeef1ea21e7f9ddc67c191d497abc8fc3ba2467857abbb68330"
+checksum = "0a2c585be59b6b5dd66a9d2084aa1d8bd52fbdb806eafdeffb52791147862035"
 dependencies = [
  "futures",
  "futures-timer",
@@ -5124,12 +5038,13 @@ dependencies = [
 
 [[package]]
 name = "rstest_macros"
-version = "0.19.0"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04a9df72cc1f67020b0d63ad9bfe4a323e459ea7eb68e03bd9824db49f9a4c25"
+checksum = "825ea780781b15345a146be27eaefb05085e337e869bff01b4306a4fd4a9ad5a"
 dependencies = [
  "cfg-if",
  "glob",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "regex",
@@ -5739,14 +5654,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "simple_spawn_blocking"
-version = "1.0.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf/ideal_concurrency_limit#c52feb3489ae5e70ca92309667612b3e1b667cc0"
-dependencies = [
- "tokio",
-]
-
-[[package]]
 name = "siphasher"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5974,9 +5881,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.32.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c33cd241af0f2e9e3b5c32163b873b29956890b5342e6745b917ce9d490f4af"
+checksum = "948512566b1895f93b1592c7574baeb2de842f224f2aab158799ecadb8ebbb46"
 dependencies = [
  "core-foundation-sys",
  "libc",
@@ -6050,16 +5957,6 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "terminal_size"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21bebf2b7c9e0a515f6e0f8c51dc0f8e4696391e6f1ff30379559f8365fb0df7"
-dependencies = [
- "rustix",
- "windows-sys 0.48.0",
 ]
 
 [[package]]
@@ -6412,9 +6309,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "typed-path"
-version = "0.9.3"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82205ffd44a9697e34fc145491aa47310f9871540bb7909eaa9365e0a9a46607"
+checksum = "41713888c5ccfd99979fcd1afd47b71652e331b3d4a0e19d30769e80fec76cce"
 
 [[package]]
 name = "typeid"
@@ -6574,7 +6471,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd541
 dependencies = [
  "anstream",
  "anyhow",
- "fs-err 3.0.0",
+ "fs-err",
  "indoc",
  "itertools 0.13.0",
  "owo-colors",
@@ -6605,7 +6502,7 @@ name = "uv-cache"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
- "fs-err 3.0.0",
+ "fs-err",
  "nanoid",
  "rmp-serde",
  "rustc-hash",
@@ -6629,7 +6526,7 @@ name = "uv-cache-info"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
- "fs-err 3.0.0",
+ "fs-err",
  "globwalk",
  "serde",
  "thiserror 2.0.7",
@@ -6657,7 +6554,7 @@ dependencies = [
  "async_http_range_reader",
  "async_zip",
  "bytecheck",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "html-escape",
  "http",
@@ -6702,7 +6599,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "either",
- "fs-err 3.0.0",
+ "fs-err",
  "rayon",
  "rustc-hash",
  "serde",
@@ -6720,7 +6617,7 @@ dependencies = [
  "uv-platform-tags",
  "uv-pypi-types",
  "uv-static",
- "which 7.0.0",
+ "which",
 ]
 
 [[package]]
@@ -6773,7 +6670,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd541
 dependencies = [
  "anyhow",
  "either",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "nanoid",
  "owo-colors",
@@ -6832,7 +6729,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd541
 dependencies = [
  "anyhow",
  "bitflags 2.6.0",
- "fs-err 3.0.0",
+ "fs-err",
  "itertools 0.13.0",
  "jiff",
  "petgraph",
@@ -6865,7 +6762,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd541
 dependencies = [
  "async-compression",
  "async_zip",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "krata-tokio-tar",
  "md-5",
@@ -6894,7 +6791,7 @@ dependencies = [
  "dunce",
  "either",
  "encoding_rs_io",
- "fs-err 3.0.0",
+ "fs-err",
  "fs2",
  "junction",
  "path-slash",
@@ -6916,7 +6813,7 @@ dependencies = [
  "anyhow",
  "cargo-util",
  "dashmap",
- "fs-err 3.0.0",
+ "fs-err",
  "reqwest",
  "reqwest-middleware",
  "serde",
@@ -6928,7 +6825,7 @@ dependencies = [
  "uv-cache-key",
  "uv-fs",
  "uv-static",
- "which 7.0.0",
+ "which",
 ]
 
 [[package]]
@@ -6939,7 +6836,7 @@ dependencies = [
  "configparser",
  "csv",
  "data-encoding",
- "fs-err 3.0.0",
+ "fs-err",
  "mailparse",
  "pathdiff",
  "platform-info",
@@ -6975,7 +6872,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd541
 dependencies = [
  "anyhow",
  "async-channel",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "rayon",
  "rustc-hash",
@@ -7022,7 +6919,7 @@ version = "0.1.0"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "async_zip",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "thiserror 2.0.7",
  "tokio",
@@ -7141,7 +7038,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd541
 dependencies = [
  "anyhow",
  "configparser",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "goblin",
  "itertools 0.13.0",
@@ -7179,7 +7076,7 @@ dependencies = [
  "uv-static",
  "uv-trampoline-builder",
  "uv-warnings",
- "which 7.0.0",
+ "which",
  "windows-registry 0.3.0",
  "windows-result 0.2.0",
  "windows-sys 0.59.0",
@@ -7193,7 +7090,7 @@ dependencies = [
  "anyhow",
  "configparser",
  "console",
- "fs-err 3.0.0",
+ "fs-err",
  "futures",
  "rustc-hash",
  "serde",
@@ -7225,7 +7122,7 @@ name = "uv-requirements-txt"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
- "fs-err 3.0.0",
+ "fs-err",
  "regex",
  "reqwest",
  "reqwest-middleware",
@@ -7313,7 +7210,7 @@ name = "uv-state"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
- "fs-err 3.0.0",
+ "fs-err",
  "tempfile",
  "uv-dirs",
 ]
@@ -7331,7 +7228,7 @@ name = "uv-trampoline-builder"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
- "fs-err 3.0.0",
+ "fs-err",
  "thiserror 2.0.7",
  "uv-fs",
  "zip 0.6.6",
@@ -7368,7 +7265,7 @@ name = "uv-virtualenv"
 version = "0.0.4"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
- "fs-err 3.0.0",
+ "fs-err",
  "itertools 0.13.0",
  "pathdiff",
  "thiserror 2.0.7",
@@ -7396,7 +7293,7 @@ name = "uv-workspace"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
- "fs-err 3.0.0",
+ "fs-err",
  "glob",
  "itertools 0.13.0",
  "owo-colors",
@@ -7632,18 +7529,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d642ff16b7e79272ae451b7322067cdc17cadf68c23264be9d94a32319efe7e"
 dependencies = [
  "rustls-pki-types",
-]
-
-[[package]]
-name = "which"
-version = "6.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ee928febd44d98f2f459a4a79bd4d928591333a494a10a868418ac1b39cf1f"
-dependencies = [
- "either",
- "home",
- "rustix",
- "winsafe 0.0.19",
 ]
 
 [[package]]
@@ -8135,7 +8020,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "hex",
- "nix",
+ "nix 0.29.0",
  "ordered-stream",
  "rand",
  "serde",

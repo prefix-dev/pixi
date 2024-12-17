@@ -223,7 +223,12 @@ impl<'p> ExecutableTask<'p> {
         drop(stdin_writer); // prevent a deadlock by dropping the writer
         let (stdout, stdout_handle) = get_output_writer_and_handle();
         let (stderr, stderr_handle) = get_output_writer_and_handle();
-        let state = ShellState::new(command_env.clone(), &cwd, Default::default());
+        let state = ShellState::new(
+            command_env.clone(),
+            &cwd,
+            Default::default(),
+            Default::default(),
+        );
         let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
         Ok(RunOutput {
             exit_code: code,
