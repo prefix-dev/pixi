@@ -13,7 +13,7 @@ def test_doc_pixi_projects(pixi: Path, tmp_pixi_workspace: Path, doc_pixi_projec
     shutil.copytree(doc_pixi_projects, target_dir)
 
     for pixi_project in target_dir.iterdir():
-        shutil.rmtree(pixi_project.joinpath(".pixi"))
+        shutil.rmtree(pixi_project.joinpath(".pixi"), ignore_errors=True)
         manifest = pixi_project.joinpath("pixi.toml")
         # Run the test command
         verify_cli_command(
