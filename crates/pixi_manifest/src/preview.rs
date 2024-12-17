@@ -20,8 +20,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use toml_span::de_helpers::expected;
 use toml_span::{value::ValueInner, DeserError, Value};
 
-#[derive(Debug, Serialize, Clone, PartialEq)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq)]
 /// The preview features of the project
 pub enum Preview {
     /// All preview features are enabled
@@ -65,19 +64,6 @@ impl Preview {
                 })
                 .collect(),
         }
-    }
-}
-
-impl<'de> Deserialize<'de> for Preview {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .bool(|bool| Ok(Preview::AllEnabled(bool)))
-            .seq(|seq| Ok(Preview::Features(seq.deserialize()?)))
-            .expecting("bool or list of features e.g `true` or `[\"new-resolve\"]`")
-            .deserialize(deserializer)
     }
 }
 
@@ -171,14 +157,13 @@ impl KnownPreviewFeature {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-    use toml_edit::ser::to_string;
     use toml_span::de_helpers::TableHelper;
 
     use super::*;
     use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
 
     /// Fake table to test the `Preview` enum
-    #[derive(Debug, Serialize, Deserialize)]
+    #[derive(Debug)]
     struct TopLevel {
         preview: Preview,
     }
@@ -197,9 +182,6 @@ mod tests {
         let input = "preview = true";
         let top = TopLevel::from_toml_str(input).expect("should parse as `AllEnabled`");
         assert_eq!(top.preview, Preview::AllEnabled(true));
-
-        let output = to_string(&top).expect("should serialize back to TOML");
-        assert_eq!(output.trim(), input);
     }
 
     #[test]
@@ -211,9 +193,6 @@ mod tests {
             top.preview,
             Preview::Features(vec![PreviewFeature::Unknown("build".to_string())])
         );
-
-        let output = to_string(&top).expect("should serialize back to TOML");
-        assert_eq!(output.trim(), input);
     }
 
     #[test]

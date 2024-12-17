@@ -2,7 +2,6 @@ use itertools::Either;
 use pixi_spec::TomlSpec;
 use pixi_toml::{TomlFromStr, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
-use serde::Deserialize;
 use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
 
 use crate::{
@@ -11,32 +10,20 @@ use crate::{
     BuildSystem, TomlError,
 };
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug)]
 pub struct TomlBuildSystem {
     pub build_backend: PixiSpanned<TomlBuildBackend>,
-
-    #[serde(default)]
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
-
-    #[serde(default)]
     pub additional_dependencies: UniquePackageMap,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug)]
 pub struct TomlBuildBackend {
     pub name: PixiSpanned<rattler_conda_types::PackageName>,
-
-    #[serde(flatten)]
     pub spec: TomlSpec,
 }
 
 impl TomlBuildSystem {
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
-    }
-
     pub fn into_build_system(self) -> Result<BuildSystem, TomlError> {
         // Parse the build backend and ensure it is a binary spec.
         let build_backend_spec = self

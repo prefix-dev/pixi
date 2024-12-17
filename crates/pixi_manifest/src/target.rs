@@ -4,7 +4,6 @@ use indexmap::{map::Entry, IndexMap};
 use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
-use serde::{Deserialize, Deserializer};
 
 use super::error::DependencyError;
 use crate::{
@@ -396,16 +395,6 @@ impl std::fmt::Display for TargetSelector {
 impl From<Platform> for TargetSelector {
     fn from(value: Platform) -> Self {
         TargetSelector::Platform(value)
-    }
-}
-
-impl<'de> Deserialize<'de> for TargetSelector {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        s.parse().map_err(serde::de::Error::custom)
     }
 }
 

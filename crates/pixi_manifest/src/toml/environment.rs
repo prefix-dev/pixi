@@ -1,17 +1,13 @@
-use serde::{Deserialize, Deserializer};
 use toml_span::{de_helpers::expected, DeserError, Value};
 
 use crate::utils::PixiSpanned;
 
 /// Helper struct to deserialize the environment from TOML.
 /// The environment description can only hold these values.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug)]
 pub struct TomlEnvironment {
-    #[serde(default)]
     pub features: Option<PixiSpanned<Vec<String>>>,
     pub solve_group: Option<String>,
-    #[serde(default)]
     pub no_default_feature: bool,
 }
 
@@ -19,19 +15,6 @@ pub struct TomlEnvironment {
 pub enum TomlEnvironmentList {
     Map(TomlEnvironment),
     Seq(Vec<String>),
-}
-
-impl<'de> Deserialize<'de> for TomlEnvironmentList {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .map(|map| map.deserialize().map(TomlEnvironmentList::Map))
-            .seq(|seq| seq.deserialize().map(TomlEnvironmentList::Seq))
-            .expecting("either a map or a sequence")
-            .deserialize(deserializer)
-    }
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {

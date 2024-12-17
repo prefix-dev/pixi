@@ -23,18 +23,6 @@ impl Borrow<PackageName> for PyPiPackageName {
     }
 }
 
-impl<'de> Deserialize<'de> for PyPiPackageName {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .string(|str| PyPiPackageName::from_str(str).map_err(serde::de::Error::custom))
-            .expecting("a string")
-            .deserialize(deserializer)
-    }
-}
-
 impl FromStr for PyPiPackageName {
     type Err = InvalidNameError;
 

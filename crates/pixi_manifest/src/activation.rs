@@ -1,11 +1,9 @@
 use indexmap::IndexMap;
-use serde::Deserialize;
 use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use pixi_toml::TomlIndexMap;
 
-#[derive(Default, Clone, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+#[derive(Default, Clone, Debug)]
 pub struct Activation {
     pub scripts: Option<Vec<String>>,
     /// Environment variables to set before running the scripts.
