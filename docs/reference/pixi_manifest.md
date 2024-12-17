@@ -850,6 +850,9 @@ The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:
 
 - `channels`: specifies the channels to get the build backend from.
+- `build-backend`: specifies the build backend to use. This is a table that can contain the following fields:
+  - `name`: the name of the build backend to use. This will also be the executable name.
+  - `version`: the version of the build backend to use.
 
 ```toml
 [build-system] # (5)!
@@ -860,8 +863,9 @@ channels = [
 ]
 ```
 
-
-
+!!! note
+    We are currently not publishing the backends on conda-forge, but will do so in the future.
+    This is why the custom channel is listed above.
 
 
 ## Global configuration
