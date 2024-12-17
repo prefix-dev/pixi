@@ -153,6 +153,7 @@ To check which CUDA version pixi detects on your machine, run:
 ```
 pixi info
 ```
+
 Example output:
 ```
 ...
@@ -166,6 +167,7 @@ If `__cuda` is missing, you can verify your system’s CUDA version using NVIDIA
 ```shell
 nvidia-smi
 ```
+
 To check the version of the CUDA toolkit installed in your environment:
 ```shell
 pixi run nvcc --version
@@ -174,12 +176,12 @@ pixi run nvcc --version
 #### Reasons for broken installations
 Broken installations often result from mixing incompatible channels or package sources:
 
-1.	**Mixing Conda Channels**
+1. **Mixing Conda Channels**
 
-    Using both conda-forge and the legacy pytorch channel can cause conflicts.
-    Choose one channel and stick with it to avoid dependency resolution issues.
+    Using both `conda-forge` and the legacy `pytorch` channel can cause conflicts.
+    Choose one channel and stick with it to avoid issues in the installed environment.
 
-2.	**Mixing Conda and PyPI Packages**
+2. **Mixing Conda and PyPI Packages**
 
     If you install PyTorch from pypi, all packages that depend on torch must also come from PyPI.
     Mixing Conda and PyPI packages within the same dependency chain leads to conflicts.
