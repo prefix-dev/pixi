@@ -9,8 +9,10 @@ Unlike PyPI, the conda ecosystem is cross-language and also offers packages writ
 
 By building a Python package with pixi, you can:
 
-- build both conda and Python packages with the same tool
-- manage Python packages and packages written in other languages in the same workspace
+1. manage Python packages and packages written in other languages in the same workspace
+2. build both conda and Python packages with the same tool
+
+In this tutorial we will focus on point 1.
 
 ## Let's get started
 
