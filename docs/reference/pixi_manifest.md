@@ -786,13 +786,14 @@ When an environment comprises several features (including the default feature):
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
 - The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
 
+
 ## Preview features
 Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
 
 An example of a preview feature in the project manifest:
 
-```toml title="Example preview features in the project manifest"
-[project]
+```toml title="Example preview features in the workspace manifest"
+[workspace]
 name = "foo"
 channels = []
 platforms = []
@@ -800,6 +801,31 @@ preview = ["new-resolve"]
 ```
 
 Preview features in the documentation will be marked as such on the relevant pages.
+
+## Workspace section
+Currently, `workspace` is an alias for `project` and we recommend using `workspace` instead of `project`,
+when making use of the `pixi-build` preview feature.
+To use this keyword the preview feature *does not* need to be enabled, but for now we do recommend it for that use-case solely.
+
+!!! note "preview feature: pixi-build"
+    Everything under this admonition is only available when the `pixi-build` preview feature is enabled.
+
+## Package section
+The package section is used to define the package that is built by the project.
+It re-uses all metadata from the `package/workspace` section.
+
+```toml
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+preview = ["pixi-build"]
+
+[package]
+version = "1.0.0"
+```
+
+
 
 
 ## Global configuration
