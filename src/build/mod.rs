@@ -24,6 +24,7 @@ use pixi_build_types::{
     ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
 };
 use pixi_config::get_cache_dir;
+use pixi_consts::consts::CACHED_GIT_DIR;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_manifest::Targets;
@@ -494,7 +495,7 @@ impl BuildContext {
             .fetch(
                 &git_url,
                 self.tool_context.clone().client.clone(),
-                self.cache_dir.clone(),
+                self.cache_dir.clone().join(CACHED_GIT_DIR),
             )
             .await
             .into_diagnostic()?;
@@ -516,7 +517,7 @@ impl BuildContext {
             .fetch(
                 &git_url,
                 self.tool_context.clone().client.clone(),
-                self.cache_dir.clone(),
+                self.cache_dir.clone().join(CACHED_GIT_DIR),
             )
             .await
             .into_diagnostic()?;
