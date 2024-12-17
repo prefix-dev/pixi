@@ -6,7 +6,7 @@ use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Value};
 
 use crate::DeserializeAs;
 
-/// [`IndexSap`] is not supported by `toml_span` so we need to implement our own
+/// [`IndexSet`] is not supported by `toml_span` so we need to implement our own
 /// deserializer.
 ///
 /// The deserializer will expect a table and will attempt to deserialize the
