@@ -803,6 +803,7 @@ preview = ["new-resolve"]
 Preview features in the documentation will be marked as such on the relevant pages.
 
 ## Workspace section
+
 Currently, `workspace` is an alias for `project` and we recommend using `workspace` instead of `project`,
 when making use of the `pixi-build` preview feature.
 To use this keyword the preview feature *does not* need to be enabled, but for now we do recommend it for that use-case solely.
@@ -811,6 +812,7 @@ To use this keyword the preview feature *does not* need to be enabled, but for n
     Everything under this admonition is only available when the `pixi-build` preview feature is enabled.
 
 ## Package section
+
 The package section is used to define the package that is built by the project.
 It re-uses all metadata from the `package/workspace` section.
 
@@ -824,6 +826,40 @@ preview = ["pixi-build"]
 [package]
 version = "1.0.0"
 ```
+
+## Host, Build, dependencies
+
+The package section re-uses the `host-dependencies` and `build-dependencies`,
+which you can read about here: [host-build-dependencies](#host-dependencies) and [build-dependencies](#build-dependencies).
+If you have the `preview = ["pixi-build"]` enabled these are interpreted as part of the package.
+
+## Run dependencies
+
+Run dependencies are dependencies that are required at runtime by your package.
+For python packages, these are the most common dependency types.
+For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.
+
+```toml
+[run-dependencies]
+rich = "*"
+```
+
+## The `build-system`
+
+The build system specifies how the package can be built.
+The build system is a table that can contain the following fields:
+
+- `channels`: specifies the channels to get the build backend from.
+
+```toml
+[build-system] # (5)!
+build-backend = { name = "pixi-build-python", version = "*" }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+```
+
 
 
 
