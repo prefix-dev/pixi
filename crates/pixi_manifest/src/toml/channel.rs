@@ -1,11 +1,11 @@
 use std::str::FromStr;
 
+use crate::PrioritizedChannel;
 use pixi_toml::TomlFromStr;
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::{Serialize, Serializer};
+use toml_span::de_helpers::expected;
 use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, ErrorKind, Value};
-
-use crate::PrioritizedChannel;
 
 /// Layout of a prioritized channel in a toml file.
 ///
@@ -89,15 +89,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
                     priority,
                 }))
             }
-            other => Err(toml_span::Error {
-                kind: ErrorKind::Wanted {
-                    expected: "a string or a table",
-                    found: other.type_str().into(),
-                },
-                span: value.span,
-                line_info: None,
-            }
-            .into()),
+            other => Err(expected("a string or table", other, value.span).into()),
         }
     }
 }

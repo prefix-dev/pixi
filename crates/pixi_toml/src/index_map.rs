@@ -122,14 +122,7 @@ impl<'de, T: toml_span::Deserialize<'de> + Hash + Eq> toml_span::Deserialize<'de
                     Err(errors)
                 }
             }
-            other => Err(DeserError::from(Error {
-                kind: ErrorKind::Wanted {
-                    expected: "array".into(),
-                    found: other.type_str().into(),
-                },
-                span: value.span,
-                line_info: None,
-            })),
+            other => Err(DeserError::from(expected("array", other, value.span))),
         }
     }
 }
@@ -159,14 +152,7 @@ where
                     Err(errors)
                 }
             }
-            other => Err(DeserError::from(Error {
-                kind: ErrorKind::Wanted {
-                    expected: "array".into(),
-                    found: other.type_str().into(),
-                },
-                span: value.span,
-                line_info: None,
-            })),
+            other => Err(DeserError::from(expected("array", other, value.span))),
         }
     }
 }

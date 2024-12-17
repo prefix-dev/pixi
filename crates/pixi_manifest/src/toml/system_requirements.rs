@@ -61,18 +61,18 @@ impl<'de> toml_span::Deserialize<'de> for LibCSystemRequirement {
                     version,
                 }))
             }
-            inner => return Err(expected("a string or table", inner, value.span).into()),
+            inner => Err(expected("a string or table", inner, value.span).into()),
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::toml::FromTomlStr;
-    use crate::utils::test_utils::format_parse_error;
     use insta::assert_snapshot;
     use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
+
+    use super::*;
+    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
 
     #[test]
     fn system_requirements_works() {

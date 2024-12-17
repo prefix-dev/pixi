@@ -46,7 +46,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
 
         if features.is_none() && solve_group.is_none() {
             return Err(DeserError::from(toml_span::Error {
-                kind: toml_span::ErrorKind::MissingField("features".into()),
+                kind: toml_span::ErrorKind::MissingField("features"),
                 span: value.span,
                 line_info: None,
             }));

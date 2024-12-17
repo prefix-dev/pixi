@@ -17,6 +17,7 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Deserializer, Serialize};
+use toml_span::de_helpers::expected;
 use toml_span::{value::ValueInner, DeserError, Value};
 
 #[derive(Debug, Serialize, Clone, PartialEq)]
@@ -91,16 +92,11 @@ impl<'de> toml_span::Deserialize<'de> for Preview {
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Preview::Features(features))
             }
-            other => {
-                return Err(DeserError::from(toml_span::Error {
-                    kind: toml_span::ErrorKind::Wanted {
-                        expected: "bool or list of features e.g `true` or `[\"new-resolve\"]`",
-                        found: other.type_str().into(),
-                    },
-                    span: value.span,
-                    line_info: None,
-                }))
-            }
+            other => Err(DeserError::from(expected(
+                "bool or list of features e.g `true` or `[\"new-resolve\"]`",
+                other,
+                value.span,
+            ))),
         }
     }
 }

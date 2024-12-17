@@ -1,5 +1,5 @@
-use std::fmt::Display;
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
+
 use toml_span::{DeserError, Error, ErrorKind, Value};
 
 pub struct TomlEnum<T>(T);
@@ -16,7 +16,7 @@ where
 {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let value_str = value.take_string(None)?;
-        Ok(value_str.parse().map(TomlEnum).map_err(|_| {
+        value_str.parse().map(TomlEnum).map_err(|_| {
             DeserError::from(Error {
                 kind: ErrorKind::UnexpectedValue {
                     expected: T::VARIANTS,
@@ -25,6 +25,6 @@ where
                 span: value.span,
                 line_info: None,
             })
-        })?)
+        })
     }
 }

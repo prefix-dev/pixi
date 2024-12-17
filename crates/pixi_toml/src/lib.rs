@@ -13,7 +13,8 @@ pub use from_str::TomlFromStr;
 pub use hash_map::TomlHashMap;
 pub use index_map::{TomlIndexMap, TomlIndexSet};
 pub use one_or_many::OneOrMany;
-use toml_span::{value::ValueInner, DeserError, Error, ErrorKind, Value};
+use toml_span::de_helpers::expected;
+use toml_span::{value::ValueInner, DeserError, Value};
 pub use variant::TomlEnum;
 pub use with::TomlWith;
 
@@ -38,14 +39,7 @@ where
         let array = match value.take() {
             ValueInner::Array(array) => array,
             other => {
-                return Err(DeserError::from(Error {
-                    kind: ErrorKind::Wanted {
-                        expected: "array".into(),
-                        found: other.type_str().into(),
-                    },
-                    span: value.span,
-                    line_info: None,
-                }))
+                return Err(DeserError::from(expected("array", other, value.span)));
             }
         };
 

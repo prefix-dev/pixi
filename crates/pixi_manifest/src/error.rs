@@ -78,7 +78,7 @@ impl Display for TomlError {
                         f,
                         "Expected one of {}",
                         expected
-                            .into_iter()
+                            .iter()
                             .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
                     )
                 }
@@ -178,15 +178,16 @@ impl Diagnostic for TomlError {
                     return Some(Box::new(labels.into_iter()));
                 }
                 toml_span::ErrorKind::DuplicateKey { first, .. } => {
-                    let mut labels = Vec::new();
-                    labels.push(LabeledSpan::new_primary_with_span(
-                        Some(format!("duplicate defined here")),
-                        SourceSpan::new(span.start.into(), span.end - span.start),
-                    ));
-                    labels.push(LabeledSpan::new_with_span(
-                        Some(format!("first defined here")),
-                        SourceSpan::new(first.start.into(), first.end - first.start),
-                    ));
+                    let labels = vec![
+                        LabeledSpan::new_primary_with_span(
+                            Some("duplicate defined here".to_string()),
+                            SourceSpan::new(span.start.into(), span.end - span.start),
+                        ),
+                        LabeledSpan::new_with_span(
+                            Some("first defined here".to_string()),
+                            SourceSpan::new(first.start.into(), first.end - first.start),
+                        ),
+                    ];
                     return Some(Box::new(labels.into_iter()));
                 }
                 _ => Some(SourceSpan::new(span.start.into(), span.end - span.start)),
@@ -204,12 +205,10 @@ impl Diagnostic for TomlError {
         // This is here to make it easier to add more match arms in the future.
         #[allow(clippy::match_single_binding)]
         let message = match self {
-            TomlError::TomlError(toml_span::Error { kind, .. }) => match kind {
-                toml_span::ErrorKind::Deprecated { new, .. } => {
-                    Some(format!("replace this with '{}'", new))
-                }
-                _ => None,
-            },
+            TomlError::TomlError(toml_span::Error {
+                kind: toml_span::ErrorKind::Deprecated { new, .. },
+                ..
+            }) => Some(format!("replace this with '{}'", new)),
             _ => None,
         };
 

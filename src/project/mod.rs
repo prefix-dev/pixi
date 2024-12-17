@@ -1107,7 +1107,7 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
     );
 
     // Create directory if it doesn't exist
-    if let Err(e) = std::fs::create_dir_all(default_envs_dir) {
+    if let Err(e) = fs_err::create_dir_all(default_envs_dir) {
         tracing::error!(
             "Failed to create directory '{}': {}",
             default_envs_dir.display(),
@@ -1117,7 +1117,7 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
     }
 
     // Write warning message to file
-    match std::fs::write(&warning_file, warning_message.clone()) {
+    match fs_err::write(&warning_file, warning_message.clone()) {
         Ok(_) => tracing::info!(
             "Symlink warning file written to '{}': {}",
             warning_file.display(),

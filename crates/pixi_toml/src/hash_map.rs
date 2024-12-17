@@ -4,6 +4,7 @@ use std::{
     str::FromStr,
 };
 
+use toml_span::de_helpers::expected;
 use toml_span::{value::ValueInner, DeserError, ErrorKind, Value};
 
 /// [`IndexMap`] is not supported by `toml_span` so we need to implement our own
@@ -35,14 +36,7 @@ where
         let table = match value.take() {
             ValueInner::Table(table) => table,
             other => {
-                return Err(DeserError::from(toml_span::Error {
-                    kind: ErrorKind::Wanted {
-                        expected: "table".into(),
-                        found: other.type_str().into(),
-                    },
-                    span: value.span,
-                    line_info: None,
-                }))
+                return Err(DeserError::from(expected("a table", other, value.span)));
             }
         };
 

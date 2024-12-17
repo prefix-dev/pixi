@@ -93,7 +93,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackendConfig {
             }));
         };
 
-        for (key, _value) in key_values {
+        if let Some((key, _value)) = key_values.next() {
             return Err(DeserError::from(toml_span::Error {
                 kind: toml_span::ErrorKind::Custom("unexpected key".into()),
                 span: key.span,

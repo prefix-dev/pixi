@@ -10,7 +10,7 @@ use pixi_spec::PixiSpec;
 use pixi_toml::{TomlIndexMap, TomlIndexSet};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{ser::SerializeMap, Serialize, Serializer};
-use serde_with::{serde_as, serde_derive::Deserialize};
+use serde_with::serde_derive::Deserialize;
 use thiserror::Error;
 use toml_span::{de_helpers::TableHelper, DeserError, Deserialize, Value};
 
@@ -30,7 +30,7 @@ impl Default for ManifestVersion {
 
 impl From<ManifestVersion> for toml_edit::Item {
     fn from(version: ManifestVersion) -> Self {
-        toml_edit::value(version.0 as i64)
+        toml_edit::value(version.0)
     }
 }
 
