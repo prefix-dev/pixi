@@ -383,7 +383,7 @@ jobs:
         run: pixi run --locked test-integration-ci
 
       - name: Run long running integration tests
-        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'extra_slow') }}
+        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
         run: pixi run --locked test-integration-ci -m "extra_slow"
 
       - name: Test examples
@@ -441,7 +441,7 @@ jobs:
         run: pixi run --locked test-integration-ci
 
       - name: Run long running integration tests
-        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'extra_slow') }}
+        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
         run: pixi run --locked test-integration-ci -m "extra_slow"
 
       - name: Test examples
@@ -496,7 +496,7 @@ jobs:
         run: pixi run --locked test-integration-ci
 
       - name: Run long running integration tests
-        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'extra_slow') }}
+        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
         run: pixi run --locked test-integration-ci -m "extra_slow"
 
       - name: "Test examples"
