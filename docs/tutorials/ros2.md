@@ -227,3 +227,7 @@ Let's inspire the community together!
 
 Currently, we don't support `rosdep` in a pixi environment, so you'll have to add the packages using `pixi add`.
 `rosdep` will call `conda install` which isn't supported in a pixi environment.
+
+
+### Community examples
+ROS 2 Humble on macOS,[Simulating differential drive using Gazebo](https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655).

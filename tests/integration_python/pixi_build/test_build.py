@@ -5,16 +5,17 @@ import json
 from ..common import verify_cli_command
 
 
-def test_build_conda_package(pixi: Path, examples_dir: Path, tmp_pixi_workspace: Path) -> None:
+def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path, doc_pixi_projects: Path) -> None:
     """
     This one tries to build the rich example project
     """
-    pyproject = examples_dir / "rich_example"
-    target_dir = tmp_pixi_workspace / "pyproject"
-    shutil.copytree(pyproject, target_dir)
+
+    project = doc_pixi_projects / "pixi_build_python"
+    target_dir = tmp_pixi_workspace / "project"
+    shutil.copytree(project, target_dir)
     shutil.rmtree(target_dir.joinpath(".pixi"), ignore_errors=True)
 
-    manifest_path = target_dir / "pyproject.toml"
+    manifest_path = target_dir / "pixi.toml"
 
     # build it
     verify_cli_command(
