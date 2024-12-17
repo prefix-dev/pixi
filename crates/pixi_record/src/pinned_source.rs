@@ -232,7 +232,7 @@ pub struct PinnedGitSpec {
 }
 
 impl PinnedGitSpec {
-    /// Construct the lockfile-compatible [`URL`] from [`PinnedGitSpec`].
+    /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
     pub fn into_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
 
@@ -347,7 +347,7 @@ impl From<PinnedUrlSpec> for UrlOrPath {
     }
 }
 
-/// A lockfile-compatible [`URL`].
+/// A lockfile-compatible [`Url`].
 /// The main difference between this and a regular URL
 /// is that the fragments contains the precise commit hash and a reference
 /// and all credentials are redacted.
