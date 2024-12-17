@@ -8,7 +8,7 @@ authors = [
 description = "Package management made easy!"
 name = "pixi"
 # Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
-channels = ["https://fast.prefix.dev/conda-forge"]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [dependencies]
@@ -38,6 +38,7 @@ test-slow = """cargo nextest run --workspace --all-targets --retries 2 --feature
 [feature.pytest.dependencies]
 filelock = ">=3.16.0,<4"
 mypy = ">=1.11,<1.12"
+py-rattler = ">=0.6.3,<0.10"
 pytest = "*"
 pytest-rerunfailures = ">=14.0,<15"
 pytest-timeout = ">=2.3.1,<3"

@@ -4,6 +4,8 @@ import platform
 import subprocess
 import os
 
+from rattler import Platform
+
 PIXI_VERSION = "0.39.2"
 
 
@@ -116,3 +118,11 @@ def pixi_dir(project_root: Path) -> Path:
 
 def default_env_path(project_root: Path) -> Path:
     return pixi_dir(project_root).joinpath("envs", "default")
+
+
+def root() -> Path:
+    return Path(__file__).parent.parent.parent
+
+
+def current_platform() -> str:
+    return str(Platform.current())
