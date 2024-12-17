@@ -6,12 +6,13 @@ mod one_or_many;
 mod variant;
 mod with;
 
+use std::str::FromStr;
+
 pub use digest::TomlDigest;
 pub use from_str::TomlFromStr;
 pub use hash_map::TomlHashMap;
 pub use index_map::{TomlIndexMap, TomlIndexSet};
 pub use one_or_many::OneOrMany;
-use std::str::FromStr;
 use toml_span::{value::ValueInner, DeserError, Error, ErrorKind, Value};
 pub use variant::TomlEnum;
 pub use with::TomlWith;
@@ -19,6 +20,14 @@ pub use with::TomlWith;
 /// A trait that enables efficient deserialization of one type into another.
 pub trait DeserializeAs<'de, T> {
     fn deserialize_as(value: &mut Value<'de>) -> Result<T, DeserError>;
+}
+
+pub struct Same;
+
+impl<'de, T: toml_span::Deserialize<'de>> DeserializeAs<'de, T> for Same {
+    fn deserialize_as(value: &mut Value<'de>) -> Result<T, DeserError> {
+        T::deserialize(value)
+    }
 }
 
 impl<'de, T, U> DeserializeAs<'de, Vec<T>> for Vec<U>

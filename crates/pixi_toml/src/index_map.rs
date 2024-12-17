@@ -2,12 +2,9 @@ use std::hash::Hash;
 
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-use toml_span::{
-    value::{Table, ValueInner},
-    DeserError, Error, ErrorKind, Value,
-};
+use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Error, ErrorKind, Value};
 
-use crate::{DeserializeAs, FromKey};
+use crate::{DeserializeAs, FromKey, Same};
 
 /// [`IndexMap`] is not supported by `toml_span` so we need to implement our own
 /// deserializer.
@@ -34,57 +31,54 @@ where
     <K as FromKey<'de>>::Err: std::fmt::Display,
 {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        match value.take() {
-            ValueInner::Table(table) => Self::from_table(table),
-            other => Err(DeserError::from(Error {
-                kind: ErrorKind::Wanted {
-                    expected: "table".into(),
-                    found: other.type_str().into(),
-                },
-                span: value.span,
-                line_info: None,
-            })),
-        }
+        Ok(Self(TomlIndexMap::<K, Same>::deserialize_as(value)?))
     }
 }
 
-impl<'de, K: FromKey<'de> + Hash + Eq, V: toml_span::Deserialize<'de>> TomlIndexMap<K, V>
+impl<'de, K: FromKey<'de> + Hash + Eq, T, U> DeserializeAs<'de, IndexMap<K, T>>
+    for TomlIndexMap<K, U>
 where
     <K as FromKey<'de>>::Err: std::fmt::Display,
+    U: DeserializeAs<'de, T>,
 {
-    pub fn from_table(table: Table<'de>) -> Result<Self, DeserError> {
-        let mut errors = DeserError { errors: Vec::new() };
-        let mut result = IndexMap::new();
-        for (key, mut value) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
-            let key_span = key.span;
-            let key = K::from_key(key).map_err(|e: <K as FromKey>::Err| Error {
-                kind: ErrorKind::Custom(e.to_string().into()),
-                span: key_span,
-                line_info: None,
-            });
+    fn deserialize_as(value: &mut Value<'de>) -> Result<IndexMap<K, T>, DeserError> {
+        match value.take() {
+            ValueInner::Table(table) => {
+                let mut errors = DeserError { errors: Vec::new() };
+                let mut result = IndexMap::new();
+                for (key, mut value) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
+                    let key_span = key.span;
+                    let key = K::from_key(key).map_err(|e: <K as FromKey>::Err| Error {
+                        kind: ErrorKind::Custom(e.to_string().into()),
+                        span: key_span,
+                        line_info: None,
+                    });
 
-            let value = V::deserialize(&mut value);
+                    let value = U::deserialize_as(&mut value);
 
-            match (key, value) {
-                (Ok(k), Ok(v)) => {
-                    result.insert(k, v);
+                    match (key, value) {
+                        (Ok(k), Ok(v)) => {
+                            result.insert(k, v);
+                        }
+                        (Err(ke), Err(ve)) => {
+                            errors.errors.push(ke);
+                            errors.merge(ve);
+                        }
+                        (Err(e), _) => {
+                            errors.errors.push(e);
+                        }
+                        (_, Err(e)) => {
+                            errors.merge(e);
+                        }
+                    }
                 }
-                (Err(ke), Err(ve)) => {
-                    errors.errors.push(ke);
-                    errors.merge(ve);
-                }
-                (Err(e), _) => {
-                    errors.errors.push(e);
-                }
-                (_, Err(e)) => {
-                    errors.merge(e);
+                if errors.errors.is_empty() {
+                    Ok(result)
+                } else {
+                    Err(errors)
                 }
             }
-        }
-        if errors.errors.is_empty() {
-            Ok(Self(result))
-        } else {
-            Err(errors)
+            other => Err(DeserError::from(expected("a table", other, value.span))),
         }
     }
 }
