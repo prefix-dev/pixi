@@ -69,6 +69,12 @@ A common use-case is having two environments, one for CUDA machines and one for 
     --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge-envs.toml:use-envs"
     ```
 
+Running these environments then can be done with the `pixi run` command.
+```shell
+pixi run --environment cpu python -c "import torch; print(torch.cuda.is_available())"
+pixi run -e gpu python -c "import torch; print(torch.cuda.is_available())"
+```
+
 Now you should be able to extend that with your dependencies and tasks.
 
 Here are some links to notable packages:
@@ -110,8 +116,6 @@ Best to do this per dependency to force the index to be used.
     --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi.toml:minimal"
     ```
 
-In the PyPI world there is no such thing as `system-requirements` so you will have to specify this logic yourself.
-Otherwise, like in the previous example it will always install the cuda version.
 You can tell pixi to use multiple environment for the multiple versions of PyTorch, either `cpu` or `gpu`.
 
 === "`pixi.toml`"
@@ -122,6 +126,24 @@ You can tell pixi to use multiple environment for the multiple versions of PyTor
     ```toml title="Use multiple environments for the pypi pytorch installation"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi-envs.toml:multi-env"
     ```
+
+Running these environments then can be done with the `pixi run` command.
+```shell
+pixi run --environment cpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+pixi run -e gpu python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+```
+
+### Mixing MacOS and CUDA with `pypi-dependencies`
+When using pypi-dependencies, pixi creates a “solve” environment to resolve the PyPI dependencies.
+This process involves installing the Conda dependencies first and then resolving the PyPI packages within that environment.
+
+This can become problematic if you’re on a macOS machine and trying to resolve the CUDA version of PyTorch for Linux or Windows.
+Since macOS doesn’t support those environments, the Conda dependencies for CUDA will fail to install, preventing proper resolution.
+
+**Current Status:**
+The pixi maintainers are aware of this limitation and are actively working on a solution to enable cross-platform dependency resolution for such cases.
+
+In the meantime, you may need to run the resolution process on a machine that supports CUDA, such as a Linux or Windows host.
 
 ## Installing from PyTorch channel
 !!! warning
@@ -201,6 +223,7 @@ To summarize:
 
 #### Environment Resolution Failures
 If you see an error like this:
+**ABI tag mismatch**
 ```
 ├─▶ failed to resolve pypi dependencies
 ╰─▶ Because only the following versions of torch are available:
@@ -210,9 +233,37 @@ If you see an error like this:
   And because torch==2.5.1+cpu has no wheels with a matching platform tag and you require torch>=2.5.1, we can conclude that your requirements are
   unsatisfiable.
 ```
-This happens when the Python ABI tag doesn’t match the available PyPI wheels.
+This happens when the Python ABI tag (Application Binary Interface) doesn’t match the available PyPI wheels.
 
 Solution:
 
-- Lower the requires-python or python dependency in your configuration.
-- At the time of writing, Python 3.13 is unsupported by many PyTorch-related wheels. Use Python 3.12 or below for compatibility.
+- Check your Python version and ensure it’s compatible with the PyPI wheels for `torch`.
+The ABI tag is based on the Python version is embedded in the wheel filename, e.g. `cp312` for Python 3.12.
+- If needed, lower the `requires-python` or `python` version in your configuration.
+- For example, as of now, PyTorch doesn’t fully support Python 3.13; use Python 3.12 or earlier.
+
+
+**Platform tag mismatch**
+```
+├─▶ failed to resolve pypi dependencies
+╰─▶ Because only the following versions of torch are available:
+    torch<=2.5.1
+    torch==2.5.1+cu124
+and torch>=2.5.1 has no wheels with a matching platform tag, we can conclude that torch>=2.5.1,<2.5.1+cu124 cannot be used.
+And because you require torch>=2.5.1, we can conclude that your requirements are unsatisfiable.
+```
+This occurs when the platform tag doesn’t match the PyPI wheels available to be installed.
+
+Example Issue:
+`torch==2.5.1+cu124` (CUDA 12.4) was attempted on an `osx` machine, but this version is only available for `linux-64` and `win-64`.
+
+Solution:
+- Use the correct PyPI index for your platform:
+  - CPU-only: Use the cpu index for all platforms.
+  - CUDA versions: Use cu124 for linux-64 and win-64.
+
+Correct Indexes:
+- CPU: https://download.pytorch.org/whl/cpu
+- CUDA 12.4: https://download.pytorch.org/whl/cu124
+
+This ensures PyTorch installations are compatible with your system’s platform and Python version.
