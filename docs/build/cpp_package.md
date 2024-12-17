@@ -84,7 +84,7 @@ $ pixi r test
 3
 ```
 
-This command *builds* the bindings *installs* it into the `test` environment and then runs the `test` task.
+This command builds the bindings, installs them and then runs the `test` task.
 
 ## Conclusion
 
