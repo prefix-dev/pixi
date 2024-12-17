@@ -126,8 +126,9 @@ nav:
   - Building Packages:
       - Getting started: build/getting_started.md
       - Dependency Types: build/dependency_types.md
-      - Building a C++ Package: build/cpp_package.md
-      - Building a Python package: build/python.md
+      - Tutorials:
+          - Building a Python package: build/python.md
+          - Building a C++ Package: build/cpp_package.md
   - Advanced:
       - Authentication: advanced/authentication.md
       - Channel Logic: advanced/channel_priority.md
