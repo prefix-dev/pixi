@@ -382,6 +382,10 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi run --locked test-integration-ci
 
+      - name: Run long running integration tests
+        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'extra_slow') }}
+        run: pixi run --locked test-integration-ci -m "extra_slow"
+
       - name: Test examples
         shell: bash
         working-directory: ${{ env.PIXI_WORKSPACE }}
@@ -490,6 +494,10 @@ jobs:
 
       - name: Run integration tests
         run: pixi run --locked test-integration-ci
+
+      - name: Run long running integration tests
+        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'extra_slow') }}
+        run: pixi run --locked test-integration-ci -m "extra_slow"
 
       - name: "Test examples"
         run: bash tests/scripts/test-examples.sh
