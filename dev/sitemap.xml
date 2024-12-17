@@ -66,6 +66,11 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/cpp_package/</loc>
+         <lastmod>2024-12-17</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/dependency_types/</loc>
          <lastmod>2024-12-17</lastmod>
          <changefreq>daily</changefreq>
