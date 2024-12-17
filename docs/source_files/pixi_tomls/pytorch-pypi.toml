@@ -2,13 +2,13 @@
 [project]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-pypi"
-platforms = ["osx-arm64", "linux-64"]
+platforms = ["osx-arm64", "linux-64", "win-64"]
 
 [dependencies]
 # We need a python version that is compatible with pytorch
 python = ">=3.11,<3.13"
 
-[target.linux-64.pypi-dependencies]
+[pypi-dependencies]
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cu124" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cu124" }
 
@@ -16,4 +16,5 @@ torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/
 # OSX has no CUDA support so use the CPU here
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = { version = ">=0.20.1", index = "https://download.pytorch.org/whl/cpu" }
-# --8<-- [start:minimal]
+# --8<-- [end:minimal]
+

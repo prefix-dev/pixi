@@ -94,6 +94,19 @@ Best to do this per dependency to force the index to be used.
     --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi.toml:minimal"
     ```
 
+In the PyPI world there is no such thing as `system-requirements` so you will have to specify this logic yourself.
+Otherwise, like in the previous example it will always install the cuda version.
+You can tell pixi to use multiple environment for the multiple versions of PyTorch, either `cpu` or `gpu`.
+
+=== "`pixi.toml`"
+    ```toml title="Use multiple environments for the pypi pytorch installation"
+    --8<-- "docs/source_files/pixi_tomls/pytorch-pypi.toml:multi-env"
+    ```
+=== "`pyproject.toml`"
+    ```toml title="Use multiple environments for the pypi pytorch installation"
+    --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi.toml:multi-env"
+    ```
+
 ## Installing from PyTorch channel
 !!! warning
     This depends on the [non-free](https://www.anaconda.com/blog/is-conda-free) `main` channel from Anaconda and mixing it with `conda-forge` can lead to conflicts.

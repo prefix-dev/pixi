@@ -14,18 +14,3 @@ pytorch-gpu = "*"
 cuda-version = "12.6"
 # --8<-- [end:cuda-version]
 
-# --8<-- [start:use-envs]
-[feature.gpu.system-requirements]
-cuda = "12.0"
-
-[feature.gpu.dependencies]
-cuda-version = "12.6"
-pytorch-gpu = "*"
-
-[feature.cpu.dependencies]
-pytorch-cpu = "*"
-
-[environments]
-cpu = ["cpu"]
-default = ["gpu"]
-# --8<-- [start:use-envs]
