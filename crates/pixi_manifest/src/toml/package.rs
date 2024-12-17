@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 pub use pixi_toml::TomlFromStr;
 use rattler_conda_types::Version;
-use serde::Deserialize;
-use serde_with::{serde_as, DisplayFromStr};
 use thiserror::Error;
 use toml_span::{de_helpers::TableHelper, DeserError, Value};
 use url::Url;
@@ -15,15 +13,12 @@ use crate::{package::Package, toml::workspace::ExternalWorkspaceProperties, Toml
 /// In TOML some of the fields can be empty even though they are required in the
 /// data model (e.g. `name`, `version`). This is allowed because some of the
 /// fields might be derived from other sections of the TOML.
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug, Clone)]
 pub struct TomlPackage {
     // In TOML the workspace name can be empty. It is a required field though, but this is enforced
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use
     // the name from the PyProject file.
     pub name: Option<String>,
-    #[serde_as(as = "Option<DisplayFromStr>")]
     pub version: Option<Version>,
     pub description: Option<String>,
     pub authors: Option<Vec<String>>,

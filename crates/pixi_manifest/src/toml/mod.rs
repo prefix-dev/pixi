@@ -20,6 +20,7 @@ pub use environment::{TomlEnvironment, TomlEnvironmentList};
 pub use feature::TomlFeature;
 pub use manifest::TomlManifest;
 pub use package::{ExternalPackageProperties, PackageError, TomlPackage};
+pub use platform::TomlPlatform;
 pub use target::TomlTarget;
 use toml_span::DeserError;
 pub use workspace::{ExternalWorkspaceProperties, TomlWorkspace, WorkspaceError};

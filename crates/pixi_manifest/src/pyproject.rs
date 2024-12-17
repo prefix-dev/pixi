@@ -7,7 +7,6 @@ use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
 use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact, DependencyGroups, Project};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
-use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
@@ -22,20 +21,19 @@ use crate::{
     FeatureName,
 };
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct PyProjectManifest {
-    #[serde(flatten)]
     pub inner: pyproject_toml::PyProjectToml,
     pub tool: Option<Tool>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct Tool {
     pub pixi: Option<TomlManifest>,
     pub poetry: Option<ToolPoetry>,
 }
 
-#[derive(Default, Deserialize, Debug)]
+#[derive(Default, Debug)]
 pub struct ToolPoetry {
     pub name: Option<String>,
     pub description: Option<String>,

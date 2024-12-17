@@ -277,6 +277,7 @@ pixi_manifest = { workspace = true, features = [
 pixi_progress = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_toml = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
@@ -301,6 +302,7 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = { workspace = true }
+toml-span = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }

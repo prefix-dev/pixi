@@ -1,28 +1,20 @@
 use miette::Diagnostic;
 use rattler_conda_types::Version;
 use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
-use serde::Deserialize;
-use serde_with::{serde_as, DisplayFromStr};
-use std::str::FromStr;
 use thiserror::Error;
 
 const GLIBC_FAMILY: &str = "glibc";
 
 /// Describes the minimal system requirements to be able to run a certain environment.
-#[serde_as]
-#[derive(Debug, Clone, Deserialize, Default, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SystemRequirements {
     /// Dictates the minimum version of macOS required.
-    #[serde_as(as = "Option<DisplayFromStr>")]
     pub macos: Option<Version>,
 
     /// Dictates the minimum linux version required.
-    #[serde_as(as = "Option<DisplayFromStr>")]
     pub linux: Option<Version>,
 
     /// Dictates the minimum cuda version required.
-    #[serde_as(as = "Option<DisplayFromStr>")]
     pub cuda: Option<Version>,
 
     /// Dictates information about the libc version (and optional family).
@@ -154,23 +146,6 @@ impl PartialEq for LibCSystemRequirement {
 
 impl Eq for LibCSystemRequirement {}
 
-impl<'de> Deserialize<'de> for LibCSystemRequirement {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .map(|map| map.deserialize().map(LibCSystemRequirement::OtherFamily))
-            .string(|s| {
-                Version::from_str(s)
-                    .map(LibCSystemRequirement::GlibC)
-                    .map_err(serde::de::Error::custom)
-            })
-            .expecting("a version or a mapping with `family` and `version`")
-            .deserialize(deserializer)
-    }
-}
-
 impl LibCSystemRequirement {
     /// Returns the family and version of this libc requirement.
     pub fn family_and_version(&self) -> (&str, &Version) {
@@ -183,15 +158,12 @@ impl LibCSystemRequirement {
     }
 }
 
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Clone)]
 pub struct LibCFamilyAndVersion {
     /// The libc family, e.g. glibc
     pub family: Option<String>,
 
     /// The minimum version of the libc family
-    #[serde_as(as = "DisplayFromStr")]
     pub version: Version,
 }
 
@@ -220,95 +192,8 @@ impl From<LibCFamilyAndVersion> for LibC {
 mod tests {
     use super::*;
     use assert_matches::assert_matches;
-    use insta::assert_snapshot;
     use rattler_conda_types::Version;
-    use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
-    use serde::Deserialize;
     use std::str::FromStr;
-
-    #[test]
-    fn system_requirements_works() {
-        let file_content = r#"
-        linux = "5.11"
-        cuda = "12.2"
-        macos = "10.15"
-        libc = { family = "glibc", version = "2.12" }
-        "#;
-
-        let system_requirements: SystemRequirements =
-            toml_edit::de::from_str(file_content).unwrap();
-
-        let expected_requirements: Vec<VirtualPackage> = vec![
-            VirtualPackage::Linux(Linux {
-                version: Version::from_str("5.11").unwrap(),
-            }),
-            VirtualPackage::Cuda(Cuda {
-                version: Version::from_str("12.2").unwrap(),
-            }),
-            VirtualPackage::Osx(Osx {
-                version: Version::from_str("10.15").unwrap(),
-            }),
-            VirtualPackage::LibC(LibC {
-                version: Version::from_str("2.12").unwrap(),
-                family: "glibc".to_string(),
-            }),
-        ];
-
-        assert_eq!(
-            system_requirements.virtual_packages(),
-            expected_requirements
-        );
-    }
-
-    #[test]
-    fn test_system_requirements_failing_edge_cases() {
-        #[derive(Deserialize)]
-        struct Manifest {
-            #[serde(rename = "system-requirements")]
-            _system_requirements: SystemRequirements,
-        }
-
-        let file_contents = [
-            (
-                "version_misspelled",
-                r#"
-        [system-requirements]
-        libc = { veion = "2.12" }
-        "#,
-            ),
-            (
-                "unknown_key",
-                r#"
-        [system-requirements]
-        lib = "2.12"
-        "#,
-            ),
-            (
-                "fam_misspelled",
-                r#"
-        [system-requirements.libc]
-        version = "2.12"
-        fam = "glibc"
-        "#,
-            ),
-            (
-                "lic_misspelled",
-                r#"
-        [system-requirements.lic]
-        version = "2.12"
-        family = "glibc"
-        "#,
-            ),
-        ];
-
-        for (name, file_content) in file_contents {
-            let error = match toml_edit::de::from_str::<Manifest>(file_content) {
-                Ok(_) => panic!("Expected error"),
-                Err(e) => e.to_string(),
-            };
-            assert_snapshot!(name, &error, file_content);
-        }
-    }
 
     #[test]
     fn test_empty_union() {

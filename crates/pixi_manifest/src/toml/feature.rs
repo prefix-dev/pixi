@@ -12,44 +12,28 @@ use crate::{
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::Platform;
-use serde::Deserialize;
-use serde_with::serde_as;
 use toml_span::de_helpers::TableHelper;
 use toml_span::{DeserError, Value};
 
-#[serde_as]
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug)]
 pub struct TomlFeature {
-    #[serde(default)]
     pub platforms: Option<PixiSpanned<IndexSet<Platform>>>,
-    #[serde(default)]
     pub channels: Option<Vec<TomlPrioritizedChannel>>,
-    #[serde(default)]
     pub channel_priority: Option<ChannelPriority>,
-    #[serde(default)]
     pub system_requirements: SystemRequirements,
-    #[serde(default)]
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
-    #[serde(default)]
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    #[serde(default)]
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    #[serde(default)]
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    #[serde(default)]
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
-    #[serde(default)]
     pub activation: Option<Activation>,
 
     /// Target specific tasks to run in the environment
-    #[serde(default)]
     pub tasks: HashMap<TaskName, Task>,
 
     /// Additional options for PyPi dependencies.
-    #[serde(default)]
     pub pypi_options: Option<PypiOptions>,
 }
 

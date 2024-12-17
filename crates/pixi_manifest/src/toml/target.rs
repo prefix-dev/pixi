@@ -3,8 +3,6 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use pixi_spec::PixiSpec;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
-use serde::Deserialize;
-use serde_with::serde_as;
 use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use crate::{
@@ -16,32 +14,18 @@ use crate::{
     WorkspaceTarget,
 };
 
-#[serde_as]
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Default)]
 pub struct TomlTarget {
-    #[serde(default)]
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
-    #[serde(default)]
     pub activation: Option<Activation>,
 
     /// Target specific tasks to run in the environment
-    #[serde(default)]
     pub tasks: HashMap<TaskName, Task>,
 }
 

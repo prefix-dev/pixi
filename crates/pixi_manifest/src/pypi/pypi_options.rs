@@ -1,8 +1,7 @@
 use std::{hash::Hash, path::PathBuf};
 
 use indexmap::IndexSet;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
+use serde::Serialize;
 use thiserror::Error;
 use url::Url;
 
@@ -17,15 +16,14 @@ use url::Url;
     Debug,
     Clone,
     PartialEq,
-    Serialize,
-    Deserialize,
     Eq,
+    Serialize,
     strum::Display,
     strum::EnumString,
     strum::VariantNames,
 )]
-#[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub enum IndexStrategy {
     #[default]
     /// Only use results from the first index that returns a match for a given
@@ -40,7 +38,7 @@ pub enum IndexStrategy {
     UnsafeBestMatch,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum FindLinksUrlOrPath {
     /// Can be a path to a directory or a file containing the flat index
@@ -51,9 +49,7 @@ pub enum FindLinksUrlOrPath {
 }
 
 /// Specific options for a PyPI registries
-#[serde_as]
-#[derive(Debug, Clone, PartialEq, Serialize, Eq, Deserialize, Default)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[derive(Debug, Clone, PartialEq, Serialize, Eq, Default)]
 pub struct PypiOptions {
     /// The index URL to use as the primary pypi index
     pub index_url: Option<Url>,

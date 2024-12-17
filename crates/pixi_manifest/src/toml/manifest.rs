@@ -1,14 +1,9 @@
-use std::{borrow::Cow, collections::HashMap, fmt::Formatter};
+use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use itertools::chain;
 use miette::LabeledSpan;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
-use serde::{
-    de::{MapAccess, Visitor},
-    Deserialize, Deserializer,
-};
-use serde_with::serde_as;
 use toml_span::{
     de_helpers::{expected, TableHelper},
     value::ValueInner,
@@ -33,122 +28,45 @@ use crate::{
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
 /// manifest without any validation logic applied.
-#[serde_as]
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug)]
 pub struct TomlManifest {
-    #[serde(alias = "project")]
     pub workspace: PixiSpanned<TomlWorkspace>,
-
     pub package: Option<PixiSpanned<TomlPackage>>,
-
-    #[serde(default)]
     pub system_requirements: SystemRequirements,
-
-    #[serde(default)]
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
-
-    // HACK: If we use `flatten`, unknown keys will point to the wrong location in the
-    // file.  When https://github.com/toml-rs/toml/issues/589 is fixed we should use that
-    //
-    // Instead we currently copy the keys from the Target deserialize implementation which
-    // is really ugly.
-    //
-    // #[serde(flatten)]
-    // default_target: Target,
-    #[serde(default)]
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
-    #[serde(default)]
     pub activation: Option<Activation>,
 
     /// Target specific tasks to run in the environment
-    #[serde(default)]
     pub tasks: HashMap<TaskName, Task>,
 
     /// The features defined in the project.
-    #[serde(default)]
     pub feature: IndexMap<FeatureName, TomlFeature>,
 
     /// The environments the project can create.
-    #[serde(default)]
     pub environments: IndexMap<EnvironmentName, TomlEnvironmentList>,
 
     /// pypi-options
-    #[serde(default)]
     pub pypi_options: Option<PypiOptions>,
 
     /// The build section
-    #[serde(default)]
     pub build_system: Option<PixiSpanned<TomlBuildSystem>>,
 
     /// The build backend is unused by pixi and is only used by build backend
     /// instead.
-    #[serde(default)]
     pub build_backend: Option<TomlBuildBackendConfig>,
-
-    /// The URI for the manifest schema which is unused by pixi
-    #[serde(rename = "$schema")]
-    pub _schema: Option<String>,
-
-    /// The tool configuration which is unused by pixi
-    #[serde(default, skip_serializing, rename = "tool")]
-    pub _tool: serde::de::IgnoredAny,
 }
 
 #[derive(Debug)]
 pub struct TomlBuildBackendConfig {
     name: PixiSpanned<String>,
     additional_args: serde_value::Value,
-}
-
-impl<'de> Deserialize<'de> for TomlBuildBackendConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct TomlBuildBackendConfigVisitor;
-        impl<'de> Visitor<'de> for TomlBuildBackendConfigVisitor {
-            type Value = TomlBuildBackendConfig;
-
-            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                write!(formatter, "expecting a map")
-            }
-
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-            where
-                A: MapAccess<'de>,
-            {
-                let result = TomlBuildBackendConfig {
-                    name: map
-                        .next_key()?
-                        .ok_or_else(|| serde::de::Error::missing_field("name"))?,
-                    additional_args: map.next_value()?,
-                };
-
-                let key: Option<Cow<'de, str>> = map.next_key()?;
-                if let Some(key) = key {
-                    return Err(serde::de::Error::unknown_field(key.as_ref(), &[]));
-                }
-                Ok(result)
-            }
-        }
-
-        deserializer.deserialize_map(TomlBuildBackendConfigVisitor)
-    }
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlBuildBackendConfig {
@@ -610,8 +528,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             pypi_options,
             build_system,
             build_backend,
-            _schema: None,
-            _tool: serde::de::IgnoredAny,
         })
     }
 }

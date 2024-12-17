@@ -8,12 +8,11 @@ use std::{
 
 use indexmap::IndexMap;
 use itertools::Itertools;
-use serde::{Deserialize, Serialize};
-use serde_with::{formats::PreferMany, serde_as, OneOrMany};
+use serde::Serialize;
 use toml_edit::{Array, Item, Table, Value};
 
 /// Represents a task name
-#[derive(Debug, Clone, Deserialize, Serialize, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct TaskName(String);
 
 impl TaskName {
@@ -54,15 +53,11 @@ impl FromStr for TaskName {
 }
 
 /// Represents different types of scripts
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum Task {
     Plain(String),
     Execute(Execute),
     Alias(Alias),
-    // We want a way for the deserializer to except a custom task, as they are meant for tasks
-    // given in the command line.
-    #[serde(skip)]
     Custom(Custom),
 }
 
@@ -193,9 +188,7 @@ impl Task {
 }
 
 /// A command script executes a single command from the environment
-#[serde_as]
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug, Clone)]
 pub struct Execute {
     /// A list of arguments, the first argument denotes the command to run. When
     /// deserializing both an array of strings and a single string are
@@ -211,8 +204,6 @@ pub struct Execute {
 
     /// A list of commands that should be run before this one
     // BREAK: Make the remove the alias and force kebab-case
-    #[serde(default, alias = "depends_on")]
-    #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
 
     /// The working directory for the command relative to the root of the
@@ -226,7 +217,6 @@ pub struct Execute {
     pub description: Option<String>,
 
     /// Isolate the task from the running machine
-    #[serde(default)]
     pub clean_env: bool,
 }
 
@@ -255,8 +245,7 @@ impl From<Custom> for Task {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum CmdArgs {
     Single(String),
     Multiple(Vec<String>),
@@ -292,13 +281,9 @@ impl CmdArgs {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde_as]
+#[derive(Debug, Clone)]
 pub struct Alias {
     /// A list of commands that should be run before this one
-    #[serde(alias = "depends-on")]
-    #[serde_as(deserialize_as = "OneOrMany<_, PreferMany>")]
     pub depends_on: Vec<TaskName>,
 
     /// A description of the task.

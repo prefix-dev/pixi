@@ -1,34 +1,40 @@
+use std::{
+    borrow::{Borrow, Cow},
+    convert::Infallible,
+    fmt,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
+
 use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
-use serde::{de::Error, Deserialize};
-use serde_with::SerializeDisplay;
-use std::convert::Infallible;
-use std::str::FromStr;
-use std::{
-    borrow::{Borrow, Cow},
-    fmt,
-    hash::{Hash, Hasher},
-};
+use serde::{de::Error, Deserialize, Serialize};
 
-use crate::workspace::ChannelPriority;
 use crate::{
     channel::PrioritizedChannel,
     consts,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
     utils::PixiSpanned,
+    workspace::ChannelPriority,
     PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
 };
 
 /// The name of a feature. This is either a string or default for the default
 /// feature.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, SerializeDisplay, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Default)]
 pub enum FeatureName {
     #[default]
     Default,
     Named(String),
+}
+
+impl Serialize for FeatureName {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
 }
 
 impl Hash for FeatureName {

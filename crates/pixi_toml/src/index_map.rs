@@ -11,6 +11,7 @@ use crate::{DeserializeAs, FromKey, Same};
 ///
 /// The deserializer will expect a table and will attempt to deserialize the
 /// keys and values in the order they are defined in the document.
+#[derive(Debug)]
 pub struct TomlIndexMap<K, V>(IndexMap<K, V>);
 
 impl<K, V> TomlIndexMap<K, V> {
