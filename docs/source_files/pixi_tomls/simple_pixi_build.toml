@@ -18,7 +18,7 @@ version = "0.1.0"
 # Here the build system of the package is specified
 # We are using `pixi-build-python` in order to build a Python package
 # --8<-- [start:build-system]
-[package.build-system]
+[build-system]
 build-backend = { name = "pixi-build-python", version = "*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
@@ -29,7 +29,7 @@ channels = [
 
 # The Python package `simple_python` uses `hatchling` as Python build backend
 # --8<-- [start:host-dependencies]
-[package.host-dependencies]
+[host-dependencies]
 hatchling = "*"
 # --8<-- [end:host-dependencies]
 
