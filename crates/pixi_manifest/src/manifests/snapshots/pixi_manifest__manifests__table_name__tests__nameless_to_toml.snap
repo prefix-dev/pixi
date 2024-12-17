@@ -1,5 +1,5 @@
 ---
-source: crates/pixi_manifest/src/manifests/project.rs
+source: crates/pixi_manifest/src/manifests/table_name.rs
 expression: table
 ---
 "rattler >=1" = ">=1"

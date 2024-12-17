@@ -1,8 +1,10 @@
+/// Derived from `uv-git` implementation
+/// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/resolver.rs
+/// This module expose types and functions to interact with Git repositories.
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use pixi_progress::wrap_in_progress;
 use pixi_utils::PrefixGuard;
 use tracing::debug;
 
@@ -29,7 +31,9 @@ pub enum GitResolverError {
     Git(String),
 }
 
-/// A resolver for Git repositories.
+/// [`GitResolver`] is responsible for managing and resolving Git repository references.
+/// It maintains a mapping between [`RepositoryReference`] (e.g., a Git URL with branch or tag) and the precise commit [`GitSha`]
+/// and it also provides methods to fetch Git repositories from given [`GitUrl`] and cache it.
 #[derive(Default, Clone)]
 pub struct GitResolver(Arc<DashMap<RepositoryReference, GitSha>>);
 
@@ -71,7 +75,7 @@ impl GitResolver {
 
         let write_guard_path = lock_dir.join(cache_digest(&repository_url));
         let mut guard = PrefixGuard::new(&write_guard_path)?;
-        let mut write_guard = wrap_in_progress("acquiring write lock on prefix", || guard.write())?;
+        let mut write_guard = guard.write()?;
 
         // Update the prefix to indicate that we are installing it.
         write_guard.begin()?;

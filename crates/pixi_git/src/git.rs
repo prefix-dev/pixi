@@ -1,3 +1,10 @@
+/// Derived from `uv-git` implementation
+/// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/git.rs
+/// This module represents all necessary git types and operations to interact with git repositories.
+/// Example:
+///   * `GitReference` that can represent a branch, tag, commit, or named ref.
+///   * `GitRemote` that represents a remote repository and can be fetched somewhere on the local filesystem.
+///   * `GitDatabase` and `GitRepository` that represents a local clone of a remote repository's database.
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
@@ -71,7 +78,7 @@ impl GitReference {
     pub fn from_rev(rev: String) -> Self {
         if rev.starts_with("refs/") {
             Self::NamedRef(rev)
-        } else if looks_like_commit_hash(&rev) {
+        } else if GitReference::looks_like_commit_hash(&rev) {
             if rev.len() == 40 {
                 Self::FullCommit(rev)
             } else {
@@ -166,6 +173,11 @@ impl GitReference {
         };
 
         result.with_context(|| miette::miette!("failed to find {refkind} `{self}`"))
+    }
+
+    /// Whether a `rev` looks like a commit hash (ASCII hex digits).
+    pub fn looks_like_commit_hash(rev: &str) -> bool {
+        rev.len() >= 7 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
     }
 }
 
@@ -779,9 +791,4 @@ fn is_short_hash_of(rev: &str, oid: GitOid) -> bool {
         Some(truncated_long_hash) => truncated_long_hash.eq_ignore_ascii_case(rev),
         None => false,
     }
-}
-
-/// Whether a `rev` looks like a commit hash (ASCII hex digits).
-fn looks_like_commit_hash(rev: &str) -> bool {
-    rev.len() >= 7 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
 }

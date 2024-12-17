@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use pixi_git::git::GitReference;
+use thiserror::Error;
 use url::Url;
 
 /// A specification of a package from a git repository.
@@ -64,13 +65,31 @@ impl From<GitReference> for Reference {
     }
 }
 
-impl From<Reference> for GitReference {
-    fn from(value: Reference) -> Self {
+#[derive(Error, Debug)]
+pub enum GitReferenceError {
+    #[error("The commit string is invalid: \"{0}\"")]
+    InvalidCommit(String),
+}
+
+impl TryFrom<Reference> for GitReference {
+    type Error = GitReferenceError;
+
+    fn try_from(value: Reference) -> Result<Self, Self::Error> {
         match value {
-            Reference::Branch(branch) => GitReference::Branch(branch),
-            Reference::Tag(tag) => GitReference::Tag(tag),
-            Reference::Rev(rev) => GitReference::from_rev(rev),
-            Reference::DefaultBranch => GitReference::DefaultBranch,
+            Reference::Branch(branch) => Ok(GitReference::Branch(branch)),
+            Reference::Tag(tag) => Ok(GitReference::Tag(tag)),
+            Reference::Rev(rev) => {
+                if GitReference::looks_like_commit_hash(&rev) {
+                    if rev.len() == 40 {
+                        Ok(GitReference::FullCommit(rev))
+                    } else {
+                        Ok(GitReference::ShortCommit(rev))
+                    }
+                } else {
+                    Err(GitReferenceError::InvalidCommit(rev))
+                }
+            }
+            Reference::DefaultBranch => Ok(GitReference::DefaultBranch),
         }
     }
 }

@@ -1,3 +1,8 @@
+/// Derived from `uv-auth` implementation
+/// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-auth/src/credentials.rs
+/// This module contains the global authentication store for Git credentials.
+/// It can be used to store credentials ( usernames and passwords, or personal access tokens ) used in Urls
+/// and applied them back to redacted Urls.
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, RwLock};
 use url::Url;

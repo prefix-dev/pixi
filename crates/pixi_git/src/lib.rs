@@ -1,3 +1,6 @@
+/// Derived from `uv-git` implementation
+/// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/lib.rs
+/// This module expose types and functions to interact with Git repositories.
 use ::url::Url;
 use git::GitReference;
 use sha::{GitSha, OidParseError};

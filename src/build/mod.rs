@@ -26,6 +26,7 @@ use pixi_build_types::{
 use pixi_config::get_cache_dir;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
+use pixi_manifest::Targets;
 use pixi_record::{
     InputHash, PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, SourceRecord,
 };
@@ -58,7 +59,7 @@ pub struct BuildContext {
     cache_dir: PathBuf,
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
-    variant_config: Option<HashMap<String, Vec<String>>>,
+    variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
 
     /// The resolved Git references.
     git: GitResolver,
@@ -124,7 +125,7 @@ impl BuildContext {
         cache_dir: PathBuf,
         dot_pixi_dir: PathBuf,
         channel_config: ChannelConfig,
-        variant_config: Option<HashMap<String, Vec<String>>>,
+        variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
         tool_context: Arc<ToolContext>,
     ) -> Result<Self, std::io::Error> {
         Ok(Self {
@@ -141,16 +142,18 @@ impl BuildContext {
     }
 
     pub fn from_project(project: &crate::project::Project) -> miette::Result<Self> {
+        let variant = project
+            .manifest()
+            .workspace
+            .workspace
+            .build_variants
+            .clone();
+
         Self::new(
             get_cache_dir()?,
             project.pixi_dir(),
             project.channel_config(),
-            project
-                .manifest()
-                .workspace
-                .workspace
-                .build_variants
-                .clone(),
+            variant,
             Arc::new(ToolContext::default()),
         )
         .into_diagnostic()
@@ -169,6 +172,26 @@ impl BuildContext {
             glob_hash_cache,
             ..self
         }
+    }
+
+    fn resolve_variant(&self, platform: Platform) -> HashMap<String, Vec<String>> {
+        let mut result = HashMap::new();
+
+        // Resolves from most specific to least specific.
+        for variants in self.variant_config.resolve(Some(platform)).flatten() {
+            // Update the hash map, but only items that are not already in the map.
+            for (key, value) in variants {
+                result.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
+
+        tracing::info!(
+            "resolved variant configuration for {}: {:?}",
+            platform,
+            result
+        );
+
+        result
     }
 
     /// Extracts the metadata for a package from the given source specification.
@@ -274,6 +297,8 @@ impl BuildContext {
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },
+                    // only use editable for build path dependencies
+                    editable: source_spec.source.as_path().is_some(),
                     outputs: Some(vec![CondaOutputIdentifier {
                         name: Some(source_spec.package_record.name.as_normalized().to_string()),
                         version: Some(source_spec.package_record.version.version().to_string()),
@@ -288,7 +313,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
-                    variant_configuration: self.variant_config.clone(),
+                    variant_configuration: Some(self.resolve_variant(host_platform)),
                 },
                 build_reporter.as_conda_build_reporter(),
             )
@@ -457,8 +482,8 @@ impl BuildContext {
     async fn resolve_git(&self, git: GitSpec) -> miette::Result<Fetch> {
         let git_reference = git
             .rev
-            .map(|rev| rev.into())
-            .unwrap_or(GitReference::DefaultBranch);
+            .map(|rev| rev.try_into().into_diagnostic())
+            .unwrap_or(Ok(GitReference::DefaultBranch))?;
 
         let git_url = GitUrl::try_from(git.git)
             .into_diagnostic()?
@@ -482,7 +507,7 @@ impl BuildContext {
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
     async fn resolve_precise_git(&self, git: PinnedGitSpec) -> miette::Result<Fetch> {
-        let git_reference = git.source.reference.into();
+        let git_reference = git.source.reference.try_into().into_diagnostic()?;
 
         let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
 
@@ -597,7 +622,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
-                    variant_configuration: self.variant_config.clone(),
+                    variant_configuration: Some(self.resolve_variant(host_platform)),
                 },
                 metadata_reporter.as_conda_metadata_reporter().clone(),
             )

@@ -1,3 +1,6 @@
+/// Derived from `uv-git` implementation
+/// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/source.rs
+/// This module expose `GitSource` type that represents a remote Git source that can be checked out locally.
 use std::{
     borrow::Cow,
     hash::{DefaultHasher, Hash, Hasher},

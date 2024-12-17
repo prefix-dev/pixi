@@ -1,3 +1,7 @@
+/// Derived from `uv-git` implementation
+/// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/sha.rs
+/// This module expose types that represent Git object IDs (OIDs) and SHAs, and some
+/// utility functions to convert to them from strings.
 use core::str;
 use std::{fmt::Display, str::FromStr};
 
@@ -90,5 +94,23 @@ impl FromStr for GitSha {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(Self(GitOid::from_str(value)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::{GitOid, OidParseError};
+
+    #[test]
+    fn git_oid() {
+        GitOid::from_str("4a23745badf5bf5ef7928f1e346e9986bd696d82").unwrap();
+
+        assert_eq!(GitOid::from_str(""), Err(OidParseError::Empty));
+        assert_eq!(
+            GitOid::from_str(&str::repeat("a", 41)),
+            Err(OidParseError::TooLong)
+        );
     }
 }

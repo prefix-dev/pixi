@@ -1,7 +1,6 @@
 ---
 source: crates/pixi_config/src/lib.rs
 expression: debug
-snapshot_kind: text
 ---
 Config {
     default_channels: [
@@ -25,8 +24,8 @@ Config {
     mirrors: {},
     pinning_strategy: None,
     loaded_from: [
-        "path/config_1.toml",
         "path/config_2.toml",
+        "path/config_1.toml",
     ],
     channel_config: ChannelConfig {
         channel_alias: Url {
