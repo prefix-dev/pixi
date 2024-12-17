@@ -45,8 +45,8 @@ You can make direct use of the Nvidia provided packages to make sure the package
     ```
 
 To deliberately install a specific version of the `cuda` packages you can depend on the `cuda-version` package which will then be interpreted by the other packages during resolution.
-The `cuda-version` package constraints the version of other `cuda` packages, like `cudatoolkit` and it is depended on by some package to make sure the correct version is installed.
-
+The `cuda-version` package constraints the version of the `__cuda` virtual package and `cudatoolkit` package.
+This ensures that the correct version of the `cudatoolkit` package is installed and the tree of dependencies is resolved correctly.
 
 === "`pixi.toml`"
     ```toml title="Add cuda version to the conda-forge pytorch installation"
