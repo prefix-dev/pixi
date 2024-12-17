@@ -3,6 +3,13 @@ from pathlib import Path
 import shutil
 
 from .common import ExitCode, verify_cli_command
+import sys
+
+
+pytestmark = pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="Enable again as soon as pixi build supports windows builds with multiple platforms",
+)
 
 
 @pytest.mark.slow
