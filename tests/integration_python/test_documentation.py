@@ -1,12 +1,11 @@
-# These are test that are to be run nightly as they are very slow.
-# They are not part of the normal test suite.
+# These test are not part of the normal test suite and are only run on main or with the `-m "extra_slow"` flag.
 from pathlib import Path
 
 from .common import verify_cli_command, ExitCode, root, current_platform
 import pytest
 
 
-@pytest.mark.slow
+@pytest.mark.extra_slow
 @pytest.mark.parametrize(
     "manifest",
     [
