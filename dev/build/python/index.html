@@ -6,32 +6,30 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="How to package pixi for distribution with another package manager?">
       
       
-      
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/packaging/">
-      
-      
-        <link rel="prev" href="../vision/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/build/python/">
       
       
-        <link rel="next" href="../Community/">
+        <link rel="prev" href="../dependency_types/">
       
       
-      <link rel="icon" href="../assets/pixi.png">
+        <link rel="next" href="../../advanced/authentication/">
+      
+      
+      <link rel="icon" href="../../assets/pixi.png">
       <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.20">
     
     
       
-        <title>Packaging pixi - Pixi by prefix.dev</title>
+        <title>Building a Python package - Pixi by prefix.dev</title>
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.66ac8b77.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.66ac8b77.min.css">
       
         
-        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -50,9 +48,9 @@
       
     
     
-      <link rel="stylesheet" href="../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -61,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Packaging pixi - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Building a Python package - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="How to package pixi for distribution with another package manager?" >
+        <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/packaging.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/python.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/packaging/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/build/python/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Packaging pixi - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Building a Python package - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="How to package pixi for distribution with another package manager?" >
+        <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/packaging.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/python.png" >
       
     
     
@@ -104,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#building" class="md-skip">
+        <a href="#tutorial-doing-python-development-with-pixi" class="md-skip">
           Skip to content
         </a>
       
@@ -126,7 +124,7 @@
   <nav class="md-header__inner md-grid" aria-label="Header">
     <a href="https://prefix.dev" title="Pixi by prefix.dev" class="md-header__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
       
-  <img src="../assets/pixi.png" alt="logo">
+  <img src="../../assets/pixi.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -143,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Packaging pixi
+              Building a Python package
             
           </span>
         </div>
@@ -268,7 +266,7 @@
   <label class="md-nav__title" for="__drawer">
     <a href="https://prefix.dev" title="Pixi by prefix.dev" class="md-nav__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
       
-  <img src="../assets/pixi.png" alt="logo">
+  <img src="../../assets/pixi.png" alt="logo">
 
     </a>
     Pixi by prefix.dev
@@ -295,7 +293,7 @@
   
   
     <li class="md-nav__item">
-      <a href=".." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -315,7 +313,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../basic_usage/" class="md-nav__link">
+      <a href="../../basic_usage/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -375,7 +373,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../switching_from/poetry/" class="md-nav__link">
+      <a href="../../switching_from/poetry/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -396,7 +394,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../switching_from/conda/" class="md-nav__link">
+      <a href="../../switching_from/conda/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -424,7 +422,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../CHANGELOG/" class="md-nav__link">
+      <a href="../../CHANGELOG/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -484,7 +482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ide_integration/jupyterlab/" class="md-nav__link">
+      <a href="../../ide_integration/jupyterlab/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -505,7 +503,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ide_integration/pycharm/" class="md-nav__link">
+      <a href="../../ide_integration/pycharm/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -526,7 +524,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ide_integration/r_studio/" class="md-nav__link">
+      <a href="../../ide_integration/r_studio/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -547,7 +545,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ide_integration/devcontainer/" class="md-nav__link">
+      <a href="../../ide_integration/devcontainer/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -615,7 +613,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tutorials/python/" class="md-nav__link">
+      <a href="../../tutorials/python/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -636,7 +634,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tutorials/ros2/" class="md-nav__link">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -657,7 +655,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../tutorials/rust/" class="md-nav__link">
+      <a href="../../tutorials/rust/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -725,7 +723,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/cpp-sdl/" class="md-nav__link">
+      <a href="../../examples/cpp-sdl/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -746,7 +744,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/opencv/" class="md-nav__link">
+      <a href="../../examples/opencv/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -767,7 +765,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../examples/ros2-nav2/" class="md-nav__link">
+      <a href="../../examples/ros2-nav2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -835,7 +833,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../features/environment/" class="md-nav__link">
+      <a href="../../features/environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -856,7 +854,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../features/advanced_tasks/" class="md-nav__link">
+      <a href="../../features/advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -877,7 +875,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../features/multi_platform_configuration/" class="md-nav__link">
+      <a href="../../features/multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -898,7 +896,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../features/multi_environment/" class="md-nav__link">
+      <a href="../../features/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -919,7 +917,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../features/lockfile/" class="md-nav__link">
+      <a href="../../features/lockfile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -940,7 +938,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../features/system_requirements/" class="md-nav__link">
+      <a href="../../features/system_requirements/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -961,7 +959,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../features/global_tools/" class="md-nav__link">
+      <a href="../../features/global_tools/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -986,8 +984,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -997,11 +997,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
@@ -1015,7 +1015,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             Building Packages
@@ -1029,7 +1029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../build/getting_started/" class="md-nav__link">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1050,7 +1050,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../build/dependency_types/" class="md-nav__link">
+      <a href="../dependency_types/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1068,10 +1068,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../build/python/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Building a Python package
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1080,6 +1100,68 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-is-this-useful" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why is this useful?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lets-get-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      Let's get started
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Let's get started">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-pixitoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      Adding a pixi.toml
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1139,7 +1221,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced/authentication/" class="md-nav__link">
+      <a href="../../advanced/authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1160,7 +1242,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced/channel_priority/" class="md-nav__link">
+      <a href="../../advanced/channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1181,7 +1263,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced/github_actions/" class="md-nav__link">
+      <a href="../../advanced/github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1202,7 +1284,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../../advanced/explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1223,7 +1305,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced/updates_github_actions/" class="md-nav__link">
+      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1244,7 +1326,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced/production_deployment/" class="md-nav__link">
+      <a href="../../advanced/production_deployment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1265,7 +1347,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced/pyproject_toml/" class="md-nav__link">
+      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1333,7 +1415,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../reference/pixi_manifest/" class="md-nav__link">
+      <a href="../../reference/pixi_manifest/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1354,7 +1436,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../reference/pixi_configuration/" class="md-nav__link">
+      <a href="../../reference/pixi_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1375,7 +1457,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../reference/cli/" class="md-nav__link">
+      <a href="../../reference/cli/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1400,8 +1482,6 @@
       
   
   
-    
-  
   
   
     
@@ -1413,11 +1493,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
         
           
           <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="">
@@ -1431,7 +1511,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_12">
             <span class="md-nav__icon md-icon"></span>
             Misc
@@ -1445,7 +1525,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../vision/" class="md-nav__link">
+      <a href="../../vision/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1463,28 +1543,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Packaging
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../packaging/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1493,57 +1555,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#building" class="md-nav__link">
-    <span class="md-ellipsis">
-      Building
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Building">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#build-time-options" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build-time Options
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#shell-completion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Shell completion
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1556,7 +1567,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../Community/" class="md-nav__link">
+      <a href="../../Community/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1577,7 +1588,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../FAQ/" class="md-nav__link">
+      <a href="../../FAQ/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1615,6 +1626,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1623,19 +1636,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#building" class="md-nav__link">
+  <a href="#why-is-this-useful" class="md-nav__link">
     <span class="md-ellipsis">
-      Building
+      Why is this useful?
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Building">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lets-get-started" class="md-nav__link">
+    <span class="md-ellipsis">
+      Let's get started
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Let's get started">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#build-time-options" class="md-nav__link">
+  <a href="#adding-a-pixitoml" class="md-nav__link">
     <span class="md-ellipsis">
-      Build-time Options
+      Adding a pixi.toml
     </span>
   </a>
   
@@ -1647,9 +1669,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#shell-completion" class="md-nav__link">
+  <a href="#conclusion" class="md-nav__link">
     <span class="md-ellipsis">
-      Shell completion
+      Conclusion
     </span>
   </a>
   
@@ -1670,7 +1692,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/packaging.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/python.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1678,44 +1700,137 @@
   
 
 
-  <h1>Packaging</h1>
-
-<p>This is a guide for distribution maintainers wanting to package pixi for a different package manager.
-Users of pixi can ignore this page.</p>
-<h2 id="building">Building<a class="headerlink" href="#building" title="Permanent link">#</a></h2>
-<p>Pixi is written in Rust and compiled using Cargo, which are needed as compile-time dependencies.
-At runtime pixi needs no dependencies in other than the runtime it was compiled against (<code>libc</code>, ...).</p>
-<p>To build pixi run
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
+<h1 id="tutorial-doing-python-development-with-pixi">Tutorial: Doing Python development with Pixi<a class="headerlink" href="#tutorial-doing-python-development-with-pixi" title="Permanent link">#</a></h1>
+<p>In this tutorial, we will show you how to create a simple Python package with pixi.</p>
+<h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
+<p>Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
+Unlike PyPI, the conda ecosystem is cross-language and also offers packages written in Rust, R, C, C++ and many other languages.</p>
+<p>By building a Python package with pixi, you can:</p>
+<ol>
+<li>manage Python packages and packages written in other languages in the same workspace</li>
+<li>build both conda and Python packages with the same tool</li>
+</ol>
+<p>In this tutorial we will focus on point 1.</p>
+<h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
+<p>First, we create a simple Python package with a <code>pyproject.toml</code> and a single Python file.
+The package will be called <code>rich_example</code>, so we will create the following structure</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>├──<span class="w"> </span>src<span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>│<span class="w">   </span>└──<span class="w"> </span>rich_example
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│<span class="w">       </span>└──<span class="w"> </span>__init__.py
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>└──<span class="w"> </span>pyproject.toml
 </span></code></pre></div>
-Instead of using the predefined <code>dist</code> profile, which is optimized for binary size, you can also pass other options to
-let cargo optimize the binary for other metrics.</p>
-<h3 id="build-time-options">Build-time Options<a class="headerlink" href="#build-time-options" title="Permanent link">#</a></h3>
-<p>Pixi provides some compile-time options, which can influence the build</p>
-<h4 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">#</a></h4>
-<p>By default, pixi is built with Rustls TLS implementation. You can compile pixi using the platform native TLS implementation
-using by adding <code>--no-default-features --feature native-tls</code> to the build command. Note that this might add additional
-runtime dependencies, such as OpenSSL on Linux.</p>
-<h4 id="self-update">Self-Update<a class="headerlink" href="#self-update" title="Permanent link">#</a></h4>
-<p>Pixi has a self-update functionality. When pixi is installed using another package manager one usually doesn't want pixi
-to try to update itself and instead let it be updated by the package manager.
-For this reason the self-update feature is disabled by default. It can be enabled by adding <code>--feature self_update</code> to
-the build command.</p>
-<p>When the self-update feature is disabled and a user tries to run <code>pixi self-update</code> an error message is displayed. This
-message can be customized by setting the <code>PIXI_SELF_UPDATE_DISABLED_MESSAGE</code> environment variable at build time to point
-the user to the package manager they should be using to update pixi.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="nv">PIXI_SELF_UPDATE_DISABLED_MESSAGE</span><span class="o">=</span><span class="s2">&quot;`self-update` has been disabled for this build. Run `brew upgrade pixi` instead&quot;</span><span class="w"> </span>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
-</span></code></pre></div></p>
-<h4 id="custom-version">Custom version<a class="headerlink" href="#custom-version" title="Permanent link">#</a></h4>
-<p>You can specify a custom version string to be used in the <code>--version</code> output by setting the <code>PIXI_VERSION</code> environment variable during the build.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">PIXI_VERSION</span><span class="o">=</span><span class="s2">&quot;HEAD-123456&quot;</span><span class="w"> </span>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
+<ol>
+<li>This project uses a src-layout, but pixi supports both <a href="https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout">flat- and src-layouts</a>.</li>
+</ol>
+<p>The Python package has a single function <code>main</code>.
+Calling that, will print a table containing the name, age and city of three people.</p>
+<div class="language-py highlight"><span class="filename">src/rich_example/__init__.py</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span> <span class="nn">rich.console</span> <span class="kn">import</span> <span class="n">Console</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span> <span class="nn">rich.table</span> <span class="kn">import</span> <span class="n">Table</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">console</span> <span class="o">=</span> <span class="n">Console</span><span class="p">()</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">()</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;Name&quot;</span><span class="p">)</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;Age&quot;</span><span class="p">)</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="s2">&quot;City&quot;</span><span class="p">)</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;John Doe&quot;</span><span class="p">,</span> <span class="s2">&quot;30&quot;</span><span class="p">,</span> <span class="s2">&quot;New York&quot;</span><span class="p">)</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Jane Smith&quot;</span><span class="p">,</span> <span class="s2">&quot;25&quot;</span><span class="p">,</span> <span class="s2">&quot;Los Angeles&quot;</span><span class="p">)</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="s2">&quot;Tim de Jager&quot;</span><span class="p">,</span> <span class="s2">&quot;35&quot;</span><span class="p">,</span> <span class="s2">&quot;Utrecht&quot;</span><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
 </span></code></pre></div>
-<h2 id="shell-completion">Shell completion<a class="headerlink" href="#shell-completion" title="Permanent link">#</a></h2>
-<p>After building pixi you can generate shell autocompletion scripts by running
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>&lt;SHELL&gt;
+<p>The metadata of the Python package is defined in <code>pyproject.toml</code>.</p>
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;rich&quot;</span><span class="p">]</span><span class="w">                               </span><span class="c1"># (1)!</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rich_example&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;= 3.11&quot;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">rich-example-main</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;rich_example:main&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (2)!</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="k">[build-system]</span><span class="w"> </span><span class="c1"># (3)!</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hatchling.build&quot;</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-and saving the output to a file.
-Currently supported shells are <code>bash</code>, <code>elvish</code>, <code>fish</code>, <code>nushell</code>, <code>powershell</code> and <code>zsh</code>.</p>
+<ol>
+<li>We use the <code>rich</code> package to print the table in the terminal.</li>
+<li>By specifying a script, the executable <code>rich-example-main</code> will be available in the environment. When being called it will in return call the <code>main</code> function of the <code>rich_example</code> module.</li>
+<li>One can choose multiple backends to build a Python package, we choose <code>hatchling</code> which works well without additional configuration.</li>
+</ol>
+<h3 id="adding-a-pixitoml">Adding a <code>pixi.toml</code><a class="headerlink" href="#adding-a-pixitoml" title="Permanent link">#</a></h3>
+<p>What we have in the moment, constitutes a full Python package.
+It could be uploaded to <a href="https://pypi.org/">PyPI</a> as-is.</p>
+<p>However, we still need a tool to manage our environments and if we want other pixi projects to depend on our tool, we need to include more information.
+We will do exactly that by creating a <code>pixi.toml</code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The pixi manifest can be in its own <code>pixi.toml</code> file or integrated in <code>pyproject.toml</code>
+In this tutorial, we will use <code>pixi.toml</code>.
+If you want everything integrated in <code>pyproject.toml</code> just copy the content of <code>pixi.toml</code> in this tutorial to your <code>pyproject.toml</code> and append <code>tool.pixi</code> to each table.</p>
+</div>
+<p>The file structure will then look like this:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>├──<span class="w"> </span>src
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>│<span class="w">   </span>└──<span class="w"> </span>rich_example
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>│<span class="w">       </span>└──<span class="w"> </span>__init__.py
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>├──<span class="w"> </span>pixi.toml
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>└──<span class="w"> </span>pyproject.toml
+</span></code></pre></div>
+<p>This is the content of the <code>pixi.toml</code>:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[workspace]</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">]</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="k">[dependencies]</span><span class="w"> </span><span class="c1"># (2)!</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">rich_example</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="k">[tasks]</span><span class="w"> </span><span class="c1"># (3)!</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rich-example-main&quot;</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="k">[package]</span><span class="w"> </span><span class="c1"># (4)!</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;rich_example&quot;</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="k">[build-system]</span><span class="w"> </span><span class="c1"># (5)!</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-python&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">  </span><span class="s2">&quot;https://prefix.dev/pixi-build-backends&quot;</span><span class="p">,</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">  </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="p">]</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="k">[host-dependencies]</span><span class="w"> </span><span class="c1"># (6)!</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="n">hatchling</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==1.26.3&quot;</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="k">[run-dependencies]</span><span class="w"> </span><span class="c1"># (7)!</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
+</span></code></pre></div>
+<ol>
+<li>In <code>workspace</code> information is set that is shared across all packages in the workspace.</li>
+<li>In <code>dependencies</code> you specify all of your pixi packages. Here, this includes only our own package that is defined further below under <code>package</code></li>
+<li>We define a task that runs the <code>rich-example-main</code> executable we defined earlier. You can learn more about tasks in this <a href="../../features/advanced_tasks/">section</a></li>
+<li>In <code>package</code> we define the actual pixi package. This information will be used when other pixi packages or workspaces depend on our package or when we upload it to a conda channel.</li>
+<li>The same way, Python uses build backends to build a Python package, pixi uses build backends to build pixi packages. <code>pixi-build-python</code> creates a pixi package out of a Python package.</li>
+<li>In <code>host-dependencies</code>, we add Python dependencies that are necessary to build the Python package. By adding them here as well, the dependencies will come from the conda channel rather than PyPI.</li>
+<li>In <code>run-dependencies</code>, we add the Python dependencies needed during runtime.</li>
+</ol>
+<p>When we now run <code>pixi run start</code>, we get the following output:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>┃ Name         ┃ Age ┃ City        ┃
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>│ John Doe     │ 30  │ New York    │
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>│ Jane Smith   │ 25  │ Los Angeles │
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>│ Tim de Jager │ 35  │ Utrecht     │
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>└──────────────┴─────┴─────────────┘
+</span></code></pre></div>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
+<p>In this tutorial, we created a pixi package based on Python.
+It can be used as-is, to upload to a conda channel or to PyPI.
+In another tutorial we will learn how to add multiple pixi packages to the same workspace and let one pixi package use another.</p>
+<p>Thanks for reading! Happy Coding 🚀</p>
+<p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
 
 
 
@@ -1787,9 +1902,9 @@ Currently supported shells are <code>bash</code>, <code>elvish</code>, <code>fis
           
             
             <a
-              href="../vision/"
+              href="../dependency_types/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Pixi vision"
+              aria-label="Previous: Dependency Types"
             >
               <div class="md-footer__button md-icon">
                 
@@ -1800,7 +1915,7 @@ Currently supported shells are <code>bash</code>, <code>elvish</code>, <code>fis
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Pixi vision
+                  Dependency Types
                 </div>
               </div>
             </a>
@@ -1810,16 +1925,16 @@ Currently supported shells are <code>bash</code>, <code>elvish</code>, <code>fis
           
             
             <a
-              href="../Community/"
+              href="../../advanced/authentication/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Community"
+              aria-label="Next: Authentication"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Community
+                  Authentication
                 </div>
               </div>
               <div class="md-footer__button md-icon">
@@ -1848,7 +1963,7 @@ Currently supported shells are <code>bash</code>, <code>elvish</code>, <code>fis
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
             <a href="https://prefix.dev" target="_blank">
-                <img src="../assets/logo_dark.svg" alt="">
+                <img src="../../assets/logo_dark.svg" alt="">
             </a>
         </div>
 
@@ -1903,10 +2018,10 @@ Currently supported shells are <code>bash</code>, <code>elvish</code>, <code>fis
       <div class="md-progress" data-md-component="progress" role="progressbar"></div>
     
     
-    <script id="__config" type="application/json">{"base": "..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer"], "search": "../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    <script id="__config" type="application/json">{"base": "../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.dd8806f2.min.js"></script>
+      <script src="../../assets/javascripts/bundle.dd8806f2.min.js"></script>
       
     
   </body>
