@@ -164,27 +164,59 @@ impl PinnedGitCheckout {
     /// fragment in the given URL.
     fn from_locked_url(locked_url: &LockedGitUrl) -> miette::Result<PinnedGitCheckout> {
         let url = &locked_url.0;
-        let mut reference = Reference::DefaultBranch;
+        let mut reference = None;
         let mut subdirectory = None;
+
         for (key, val) in url.query_pairs() {
             match &*key {
-                "tag" => reference = Reference::Tag(val.into_owned()),
-                "branch" => reference = Reference::Branch(val.into_owned()),
-                "rev" => reference = Reference::Rev(val.into_owned()),
+                "tag" => {
+                    if reference
+                        .replace(Reference::Tag(val.into_owned()))
+                        .is_some()
+                    {
+                        return Err(miette::miette!("multiple tags in URL"));
+                    }
+                }
+                "branch" => {
+                    if reference
+                        .replace(Reference::Branch(val.into_owned()))
+                        .is_some()
+                    {
+                        return Err(miette::miette!("multiple branches in URL"));
+                    }
+                }
+                "rev" => {
+                    if reference
+                        .replace(Reference::Rev(val.into_owned()))
+                        .is_some()
+                    {
+                        return Err(miette::miette!("multiple revs in URL"));
+                    }
+                }
                 // If the URL points to a subdirectory, extract it, as in (git):
                 //   `git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir`
                 //   `git+https://git.example.com/MyProject.git@v1.0#egg=pkg&subdirectory=pkg_dir`
-                "subdirectory" => subdirectory = Some(val.into_owned()),
+                "subdirectory" => {
+                    if subdirectory.replace(val.into_owned()).is_some() {
+                        return Err(miette::miette!("multiple subdirectories in URL"));
+                    }
+                }
                 _ => continue,
             };
         }
+
+        // set the default reference if none is provided.
+        if reference.is_none() {
+            reference.replace(Reference::DefaultBranch);
+        }
+
         let commit = GitSha::from_str(url.fragment().ok_or(miette::miette!("missing sha"))?)
             .into_diagnostic()?;
 
         Ok(PinnedGitCheckout {
             commit,
             subdirectory,
-            reference,
+            reference: reference.expect("reference should be set"),
         })
     }
 }
