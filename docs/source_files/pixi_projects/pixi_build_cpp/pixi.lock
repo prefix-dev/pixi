@@ -5,13 +5,6 @@ environments:
     - url: https://prefix.dev/conda-forge/
     packages:
       osx-arm64:
-      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.5-ha82da77_0.conda
-      - conda: .
-  test:
-    channels:
-    - url: https://prefix.dev/conda-forge/
-    packages:
-      osx-arm64:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/ca-certificates-2024.12.14-hf0a4a13_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.5-ha82da77_0.conda
@@ -146,7 +139,7 @@ packages:
   depends:
   - libcxx >=19
   input:
-    hash: 04db6cbc8fffa2f7163f87a1fa38b7559c8d981347d9bf2a4fdec3d9a20032e4
+    hash: 8913dbf93cd19419a5b2b59382ad14a7a4669d6f891b2005a9f667e32f9a897e
     globs:
     - pixi.toml
 - conda: https://prefix.dev/conda-forge/osx-arm64/readline-8.2-h92ec313_1.conda
