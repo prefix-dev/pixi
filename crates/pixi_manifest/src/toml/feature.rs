@@ -1,19 +1,18 @@
 use std::collections::HashMap;
 
-use crate::toml::platform::TomlPlatform;
+use indexmap::{IndexMap, IndexSet};
+use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
+use rattler_conda_types::Platform;
+use toml_span::{de_helpers::TableHelper, DeserError, Value};
+
 use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    toml::{TomlPrioritizedChannel, TomlTarget},
+    toml::{platform::TomlPlatform, TomlPrioritizedChannel, TomlTarget},
     utils::{package_map::UniquePackageMap, PixiSpanned},
     workspace::ChannelPriority,
     Activation, Feature, FeatureName, Preview, PyPiRequirement, SystemRequirements, TargetSelector,
     Targets, Task, TaskName, TomlError,
 };
-use indexmap::{IndexMap, IndexSet};
-use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::Platform;
-use toml_span::de_helpers::TableHelper;
-use toml_span::{DeserError, Value};
 
 #[derive(Debug)]
 pub struct TomlFeature {

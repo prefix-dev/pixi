@@ -1,7 +1,17 @@
+//! This crate provides utilities to work with [`toml_span`].
+//!
+//! Deserialization helper structs are provide to deserialize types that are not
+//! directly supported by [`toml_span`].
+//!
+//! This crate also provides [`TomlWith`] which enables directly parsing from
+//! one type into another. This makes it possible to efficiently implement
+//! deserializers for types from external crates.
+
 mod digest;
 mod from_str;
 mod hash_map;
 mod index_map;
+mod index_set;
 mod one_or_many;
 mod variant;
 mod with;
@@ -11,10 +21,10 @@ use std::str::FromStr;
 pub use digest::TomlDigest;
 pub use from_str::TomlFromStr;
 pub use hash_map::TomlHashMap;
-pub use index_map::{TomlIndexMap, TomlIndexSet};
+pub use index_map::TomlIndexMap;
+pub use index_set::TomlIndexSet;
 pub use one_or_many::OneOrMany;
-use toml_span::de_helpers::expected;
-use toml_span::{value::ValueInner, DeserError, Value};
+use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Value};
 pub use variant::TomlEnum;
 pub use with::TomlWith;
 

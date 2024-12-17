@@ -2,6 +2,12 @@ use std::{fmt::Display, str::FromStr};
 
 use toml_span::{DeserError, Error, ErrorKind, Value};
 
+/// A wrapper around an enum that implements `FromStr` and
+/// [`strum::VariantNames`] for deserialization.
+///
+/// This type will parse the type as a string and then attempt to parse it. If
+/// parsing fails a [`ErrorKind::UnexpectedValue`] error will be returned which
+/// contains the possible values of the enum.
 pub struct TomlEnum<T>(T);
 
 impl<T> TomlEnum<T> {

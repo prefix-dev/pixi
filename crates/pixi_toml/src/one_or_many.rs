@@ -4,6 +4,8 @@ use toml_span::{value::ValueInner, DeserError, Value};
 
 use crate::DeserializeAs;
 
+/// A deserializer helper that will deserialize either a single value or a
+/// sequence of values as a `Vec<T>`.
 pub struct OneOrMany<T>(PhantomData<T>);
 
 impl<'de, T, U> DeserializeAs<'de, Vec<T>> for OneOrMany<U>

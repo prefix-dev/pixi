@@ -3,6 +3,7 @@ use std::{cmp::Ordering, fmt, path::Path, str::FromStr};
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{toml::TomlPlatform, utils::package_map::UniquePackageMap, PrioritizedChannel};
@@ -34,7 +35,7 @@ impl From<ManifestVersion> for toml_edit::Item {
     }
 }
 
-#[derive(Error, Debug, Clone, Diagnostic)]
+#[derive(Error, Debug, Clone)]
 pub enum ManifestParsingError {
     #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
@@ -75,12 +76,32 @@ impl ManifestParsingError {
     fn span(&self) -> Option<std::ops::Range<usize>> {
         match self {
             ManifestParsingError::Error(e) => e.span(),
+            ManifestParsingError::TomlError(e) => Some(e.span.into()),
             _ => None,
         }
     }
     fn message(&self) -> String {
         match self {
             ManifestParsingError::Error(e) => e.message().to_owned(),
+            ManifestParsingError::TomlError(err) => match &err.kind {
+                toml_span::ErrorKind::UnexpectedKeys { expected, .. } => {
+                    format!(
+                        "Unexpected keys, expected only {}",
+                        expected
+                            .iter()
+                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                    )
+                }
+                toml_span::ErrorKind::UnexpectedValue { expected, .. } => {
+                    format!(
+                        "Expected one of {}",
+                        expected
+                            .iter()
+                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                    )
+                }
+                _ => err.to_string(),
+            },
             _ => self.to_string(),
         }
     }
@@ -99,10 +120,14 @@ impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
 
-        let version = th.required("version").map(ManifestVersion)?;
+        let version = th
+            .optional("version")
+            .map(ManifestVersion)
+            .unwrap_or_default();
         let envs = th
-            .required::<TomlIndexMap<_, ParsedEnvironment>>("envs")
-            .map(TomlIndexMap::into_inner)?;
+            .optional::<TomlIndexMap<_, ParsedEnvironment>>("envs")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
 
         th.finalize(None)?;
 
@@ -207,8 +232,9 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
         let mut th = TableHelper::new(value)?;
 
         let channels = th
-            .required::<TomlIndexSet<PrioritizedChannel>>("channels")?
-            .into_inner();
+            .optional::<TomlIndexSet<PrioritizedChannel>>("channels")
+            .map(TomlIndexSet::into_inner)
+            .unwrap_or_default();
         let platform = th.optional::<TomlPlatform>("platform").map(Platform::from);
         let dependencies = th.optional("dependencies").unwrap_or_default();
         let exposed = th

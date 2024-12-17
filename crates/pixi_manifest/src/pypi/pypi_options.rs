@@ -39,7 +39,7 @@ pub enum IndexStrategy {
 }
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+#[serde(rename_all = "kebab-case")]
 pub enum FindLinksUrlOrPath {
     /// Can be a path to a directory or a file containing the flat index
     Path(PathBuf),
@@ -50,6 +50,7 @@ pub enum FindLinksUrlOrPath {
 
 /// Specific options for a PyPI registries
 #[derive(Debug, Clone, PartialEq, Serialize, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
 pub struct PypiOptions {
     /// The index URL to use as the primary pypi index
     pub index_url: Option<Url>,

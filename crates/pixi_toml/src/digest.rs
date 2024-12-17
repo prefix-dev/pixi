@@ -1,6 +1,9 @@
 use digest::{Digest, Output};
-use toml_span::{DeserError, ErrorKind, Value};
+use toml_span::{DeserError, Deserialize, ErrorKind, Value};
 
+use crate::DeserializeAs;
+
+/// Parse a digest from a string TOML value.
 pub struct TomlDigest<D: Digest>(Output<D>);
 
 impl<D: Digest> TomlDigest<D> {
@@ -22,5 +25,11 @@ impl<'de, D: Digest> toml_span::Deserialize<'de> for TomlDigest<D> {
             }
             .into()),
         }
+    }
+}
+
+impl<'de, D: Digest> DeserializeAs<'de, Output<D>> for TomlDigest<D> {
+    fn deserialize_as(value: &mut Value<'de>) -> Result<Output<D>, DeserError> {
+        Self::deserialize(value).map(|digest| digest.into_inner())
     }
 }

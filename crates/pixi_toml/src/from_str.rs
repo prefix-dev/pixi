@@ -1,9 +1,16 @@
-use crate::DeserializeAs;
 use std::str::FromStr;
+
 use toml_span::{DeserError, Deserialize, Error, ErrorKind, Value};
+
+use crate::DeserializeAs;
 
 /// A helper type that implements [`toml_span::Deserialize`] for types that
 /// implement [`FromStr`].
+///
+/// It often happens that a certain type is encoded as a string and needs
+/// additional parsing beyond checking if the value is a string. If a type
+/// provides a [`FromStr`] implementation, this type can be used to deserialize
+/// the value and return the parsed value.
 pub struct TomlFromStr<T>(T);
 
 impl<T> TomlFromStr<T> {

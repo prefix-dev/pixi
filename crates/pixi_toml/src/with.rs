@@ -4,6 +4,8 @@ use toml_span::{DeserError, Deserialize, Value};
 
 use crate::DeserializeAs;
 
+/// A wrapper around a type that implements [`DeserializeAs`]. This enables
+/// using a type to deserialize into another type.
 pub struct TomlWith<T, U> {
     value: T,
     _data: PhantomData<U>,

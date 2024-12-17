@@ -7,11 +7,11 @@ use std::{
 use toml_span::de_helpers::expected;
 use toml_span::{value::ValueInner, DeserError, ErrorKind, Value};
 
-/// [`IndexMap`] is not supported by `toml_span` so we need to implement our own
+/// [`HashMap`] is not supported by `toml_span` so we need to implement our own
 /// deserializer.
 ///
 /// The deserializer will expect a table and will attempt to deserialize the
-/// keys and values in the order they are defined in the document.
+/// keys and values from the document. The order is not retained.
 pub struct TomlHashMap<K, V, H = RandomState>(HashMap<K, V, H>);
 
 impl<K, V, H> TomlHashMap<K, V, H> {

@@ -822,7 +822,14 @@ mod tests {
     #[test]
     fn test_deserialize_fail_on_unknown() {
         let input = r#"foo = { borked = "bork"}"#;
-        assert_snapshot!(format_parse_error(input, TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(input).unwrap_err()), @r#""#);
+        assert_snapshot!(format_parse_error(input, TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(input).unwrap_err()), @r###"
+         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index'
+          ╭─[pixi.toml:1:9]
+        1 │ foo = { borked = "bork"}
+          ·         ───┬──
+          ·            ╰── 'borked' was not expected here
+          ╰────
+        "###);
     }
 
     #[test]
@@ -1092,7 +1099,7 @@ mod tests {
 
         let mut snapshot = Vec::new();
         for input in EXAMPLES {
-            let mut toml_value = toml_span::parse(&input).unwrap();
+            let mut toml_value = toml_span::parse(input).unwrap();
             let mut th = TableHelper::new(&mut toml_value).unwrap();
             let req: PyPiRequirement = th.required("pkg").unwrap();
             let result = serde_json::to_value(&req).unwrap();
@@ -1130,7 +1137,7 @@ mod tests {
 
         let mut snapshot = Vec::new();
         for input in EXAMPLES {
-            let mut toml_value = toml_span::parse(&input).unwrap();
+            let mut toml_value = toml_span::parse(input).unwrap();
             let mut th = TableHelper::new(&mut toml_value).unwrap();
             let req = th.required::<PyPiRequirement>("pkg").unwrap_err();
 
