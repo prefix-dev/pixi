@@ -3,7 +3,7 @@
 name = "pytorch-from-pytorch-channel"
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
-platforms = ["osx-arm64", "linux-64"]
+platforms = ["osx-arm64", "linux-64", "win-64"]
 
 [feature.gpu.system-requirements]
 cuda = "12.0"
