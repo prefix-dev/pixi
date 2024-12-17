@@ -28,9 +28,10 @@ python_bindings/
 
 ## Creating the project files
 Next up we'll create the:
-  - `pixi.toml` file that will be used to configure pixi.
-  - `CMakeLists.txt` file that will be used to build the bindings.
-  - `src/bindings.cpp` file that will contain the bindings.
+
+- `pixi.toml` file that will be used to configure pixi.
+- `CMakeLists.txt` file that will be used to build the bindings.
+- `src/bindings.cpp` file that will contain the bindings.
 
 ### The `pixi.toml` file
 Use the following `pixi.toml` file, you can hover over the annotations to see why each step was added.
