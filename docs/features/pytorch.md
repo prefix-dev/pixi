@@ -9,6 +9,23 @@ This guide explains how to integrate PyTorch with `pixi`, it supports multiple w
 
 With these options you can choose the best way to install PyTorch based on your requirements.
 
+## System requirements
+In the context of PyTorch, [**system requirements**](./system_requirements.md) help pixi understand whether it can install and use CUDA-related packages.
+These requirements ensure compatibility during dependency resolution.
+
+The key mechanism here is the use of virtual packages like __cuda.
+Virtual packages signal the available system capabilities (e.g., CUDA version).
+By specifying `system-requirements.cuda = "12"`, you are telling pixi that CUDA version 12 is available and can be used during resolution.
+
+For example:
+
+- If a package depends on `__cuda >= 12`, pixi will resolve the correct version.
+- If a package depends on `__cuda` without version constraints, any available CUDA version can be used.
+
+Without setting the appropriate `system-requirements.cuda`, pixi will default to installing the **CPU-only** versions of PyTorch and its dependencies.
+
+A more indepth explanation of system requirements can be found [here](./system_requirements.md).
+
 ## Installing from Conda-forge
 You can install PyTorch using the `conda-forge` channel.
 These are the community maintained builds of PyTorch.
@@ -17,10 +34,6 @@ You can make direct use of the Nvidia provided packages to make sure the package
 !!! note "Windows"
     Currently not well-supported for Windows, but there is lots of work being done to get this working.
     Follow the work on the [feedstock](https://github.com/conda-forge/pytorch-cpu-feedstock)
-!!! note "System requirements"
-    Pixi uses the `system-requirements.cuda` to tell it can use the `cuda` packages.
-    Without it, pixi will install the `cpu` versions.
-    More information on how to use `system-requirements` can be found [here](./system_requirements.md).
 
 === "`pixi.toml`"
     ```toml title="Bare minimum conda-forge pytorch with cuda installation"
@@ -73,6 +86,9 @@ Thanks to the integration with `uv` we can also install PyTorch from `pypi`.
 !!! note "Mixing `[dependencies]` and `[pypi-dependencies]`"
     When using this approach for the `torch` package, you should also install the packages that depend on `torch` from `pypi`.
     Thus, not mix the PyPI packages with Conda packages if there are dependencies from the Conda packages to the PyPI ones.
+
+    The reason for this is that our resolving is a two step process, first resolve the Conda packages and then the PyPI packages.
+    Thus this can not succeed if we require a Conda package to depend on a PyPI package.
 
 ### Pytorch index
 PyTorch packages are provided through a custom index, these are similar to Conda channels, which are maintained by the PyTorch team.
