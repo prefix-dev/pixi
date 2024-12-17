@@ -42,6 +42,7 @@ rattler_virtual_packages = { workspace = true }
 
 # These rattler crates are optionally used in the build system
 rattler_lock = { workspace = true, optional = true }
+rattler_solve = { workspace = true, optional = true }
 
 # TODO: Remove these dependencies
 console = { workspace = true }

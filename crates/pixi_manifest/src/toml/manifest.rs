@@ -569,13 +569,34 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             .unwrap_or_default();
         let pypi_options = th.optional("pypi-options");
         let build_system = th.optional("build-system");
+        let system_requirements = th.optional("system-requirements").unwrap_or_default();
+
+        // Parse the tool section by ignoring it.
+        if let Some(mut tool) = th.table.remove("tool") {
+            match tool.take() {
+                ValueInner::Table(_) => {}
+                other => {
+                    return Err(expected("a table", other, tool.span).into());
+                }
+            }
+        }
+
+        // Parse the $schema section by ignoring it.
+        if let Some(mut schema) = th.table.remove("$schema") {
+            match schema.take() {
+                ValueInner::String(_) => {}
+                other => {
+                    return Err(expected("a string", other, schema.span).into());
+                }
+            }
+        }
 
         th.finalize(None)?;
 
         Ok(TomlManifest {
             workspace,
             package,
-            system_requirements: SystemRequirements::default(),
+            system_requirements,
             target,
             dependencies,
             host_dependencies,
@@ -867,6 +888,34 @@ mod test {
         [build-backend.foobar]
 
         [build-backend.foobar2]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_tool_must_be_table() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        tool = false
+
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_schema_must_be_string() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        schema = false
+
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
         "#,
         ));
     }

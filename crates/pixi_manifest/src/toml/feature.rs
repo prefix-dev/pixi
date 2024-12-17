@@ -111,6 +111,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             .map(TomlHashMap::into_inner)
             .unwrap_or_default();
         let pypi_options = th.optional("pypi-options");
+        let system_requirements = th.optional("system-requirements").unwrap_or_default();
 
         th.finalize(None)?;
 
@@ -118,7 +119,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             platforms,
             channels,
             channel_priority,
-            system_requirements: SystemRequirements::default(),
+            system_requirements,
             target,
             dependencies,
             host_dependencies,

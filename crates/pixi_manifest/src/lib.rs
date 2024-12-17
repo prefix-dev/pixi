@@ -45,7 +45,7 @@ pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
 pub use target::{TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
-pub use workspace::Workspace;
+pub use workspace::{ChannelPriority, Workspace};
 
 pub use crate::{
     environments::Environments,

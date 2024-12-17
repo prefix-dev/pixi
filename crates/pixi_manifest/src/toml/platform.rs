@@ -2,6 +2,10 @@ use pixi_toml::TomlEnum;
 use rattler_conda_types::Platform;
 use toml_span::{DeserError, Deserialize, Value};
 
+/// This type is used to represent the platform in the manifest file. The
+/// [`Platform`] type from rattler contains more platforms than we actually
+/// support like `noarch`. And this type allows us to alias some common
+/// misspellings.
 #[derive(
     Debug, Clone, Copy, Eq, PartialEq, strum::EnumString, strum::Display, strum::VariantNames,
 )]
@@ -79,9 +83,10 @@ impl<'de> pixi_toml::DeserializeAs<'de, Platform> for TomlPlatform {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use insta::assert_debug_snapshot;
     use strum::VariantNames;
+
+    use super::*;
 
     #[test]
     fn test_deserialize() {

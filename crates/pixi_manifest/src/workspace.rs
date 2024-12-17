@@ -71,6 +71,7 @@ pub struct Workspace {
     Debug,
     Copy,
     Clone,
+    Default,
     Eq,
     PartialEq,
     strum::Display,
@@ -81,6 +82,7 @@ pub struct Workspace {
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum ChannelPriority {
+    #[default]
     Strict,
     Disabled,
 }
@@ -88,5 +90,25 @@ pub enum ChannelPriority {
 impl<'de> toml_span::Deserialize<'de> for ChannelPriority {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         TomlEnum::deserialize(value).map(TomlEnum::into_inner)
+    }
+}
+
+#[cfg(feature = "rattler_solve")]
+impl From<ChannelPriority> for rattler_solve::ChannelPriority {
+    fn from(value: ChannelPriority) -> Self {
+        match value {
+            ChannelPriority::Strict => rattler_solve::ChannelPriority::Strict,
+            ChannelPriority::Disabled => rattler_solve::ChannelPriority::Disabled,
+        }
+    }
+}
+
+#[cfg(feature = "rattler_solve")]
+impl From<rattler_solve::ChannelPriority> for ChannelPriority {
+    fn from(value: rattler_solve::ChannelPriority) -> Self {
+        match value {
+            rattler_solve::ChannelPriority::Strict => ChannelPriority::Strict,
+            rattler_solve::ChannelPriority::Disabled => ChannelPriority::Disabled,
+        }
     }
 }

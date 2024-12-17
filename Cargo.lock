@@ -3841,6 +3841,7 @@ dependencies = [
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
+ "rattler_solve",
  "rattler_virtual_packages",
  "regex",
  "rstest",

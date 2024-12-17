@@ -17,7 +17,7 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
@@ -30,7 +30,6 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 use tokio::sync::Semaphore;

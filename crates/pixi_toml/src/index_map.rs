@@ -194,7 +194,9 @@ mod test {
         "#,
         )
         .unwrap();
-        let result = TomlIndexMap::<String, i32>::deserialize(&mut result);
+        let result = TomlIndexMap::<String, i32>::deserialize(&mut result)
+            .unwrap()
+            .into_inner();
         assert_debug_snapshot!(result, @r###"
         {
             "b": 1,
