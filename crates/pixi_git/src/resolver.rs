@@ -107,7 +107,7 @@ impl GitResolver {
     /// prefix kinds.
     ///
     /// This method will only return precise URLs for URLs that have already been resolved via
-    /// [`resolve_precise`], and will return `None` for URLs that have not been resolved _or_
+    /// `resolve_precise`, and will return `None` for URLs that have not been resolved _or_
     /// already have a precise reference.
     pub fn precise(&self, url: GitUrl) -> Option<GitUrl> {
         let reference = RepositoryReference::from(&url);
