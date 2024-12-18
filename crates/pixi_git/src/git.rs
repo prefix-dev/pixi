@@ -643,6 +643,10 @@ fn fetch_with_cli(
     // // The required `on...line` callbacks currently do nothing.
     // // The output appears to be included in error messages by default.
     let output = cmd.output().into_diagnostic()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8(output.stderr).into_diagnostic()?;
+        miette::bail!("failed to fetch into `{}`: {}", repo.path.display(), stderr);
+    }
     tracing::debug!("git fetch output: {:?}", output);
     Ok(())
 }
