@@ -17,7 +17,7 @@ In this tutorial we will focus on point 1.
 ## Let's get started
 
 First, we create a simple Python package with a `pyproject.toml` and a single Python file.
-The package will be called `rich_example`, so we will create the following structure
+The package will be called `rich_example`, so we will create the following structure:
 
 ```shell
 ├── src # (1)!

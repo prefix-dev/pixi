@@ -129,7 +129,7 @@ nav:
       - Tutorials:
           - Building a Python package: build/python.md
           - Building a C++ Package: build/cpp.md
-          - Integrating Multiple Packages in a Workspace: build/workspace.md
+          - Multiple Packages in Workspace: build/workspace.md
   - Advanced:
       - Authentication: advanced/authentication.md
       - Channel Logic: advanced/channel_priority.md

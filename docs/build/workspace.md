@@ -4,89 +4,48 @@ In this tutorial, we will show you how to integrate multiple pixi packages into 
 
 ## Why is this useful?
 
-Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
-Unlike PyPI, the conda ecosystem is cross-language and also offers packages written in Rust, R, C, C++ and many other languages.
-
-By building a Python package with pixi, you can:
-
-1. manage Python packages and packages written in other languages in the same workspace
-2. build both conda and Python packages with the same tool
-
-In this tutorial we will focus on point 1.
+The packages coming from conda channels are already built and ready to use.
+If you want to depend on a package you therefore typically get that package from such a channel.
+However, there are situations where you want to depend on the source of a package.
+This is the case for example if you want to develop on multiple packages within the same repository.
+Or if you need the changes of an unreleased version of one of your dependencies.
 
 ## Let's get started
 
-First, we create a simple Python package with a `pyproject.toml` and a single Python file.
-The package will be called `rich_example`, so we will create the following structure
+In this tutorial we will showcase how to develop two packages in one workspace.
+For that we will use the `rich_example` Python package developed in chapter [Building a Python package](python.md) and let it depend on the `python_binding` C++ package developed in chapter [Building a C++ package](cpp.md).
+
+We will start with the original setup of `rich_example` and copy `python_binding` into a folder called `packages`.
+The source directory structure now looks like this:
 
 ```shell
-├── src # (1)!
-│   └── rich_example
-│       └── __init__.py
-└── pyproject.toml
-```
-
-1. This project uses a src-layout, but pixi supports both [flat- and src-layouts](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout).
-
-
-The Python package has a single function `main`.
-Calling that, will print a table containing the name, age and city of three people.
-
-```py title="src/rich_example/__init__.py"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/src/rich_example/__init__.py"
-```
-
-
-The metadata of the Python package is defined in `pyproject.toml`.
-
-```toml title="pyproject.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/pyproject.toml"
-```
-
-1. We use the `rich` package to print the table in the terminal.
-2. By specifying a script, the executable `rich-example-main` will be available in the environment. When being called it will in return call the `main` function of the `rich_example` module.
-3. One can choose multiple backends to build a Python package, we choose `hatchling` which works well without additional configuration.
-
-
-### Adding a `pixi.toml`
-
-What we have in the moment, constitutes a full Python package.
-It could be uploaded to [PyPI](https://pypi.org/) as-is.
-
-However, we still need a tool to manage our environments and if we want other pixi projects to depend on our tool, we need to include more information.
-We will do exactly that by creating a `pixi.toml`.
-
-!!! note
-    The pixi manifest can be in its own `pixi.toml` file or integrated in `pyproject.toml`
-    In this tutorial, we will use `pixi.toml`.
-    If you want everything integrated in `pyproject.toml` just copy the content of `pixi.toml` in this tutorial to your `pyproject.toml` and append `tool.pixi` to each table.
-
-The file structure will then look like this:
-
-```shell
-├── src
-│   └── rich_example
-│       └── __init__.py
+.
+├── packages
+│   └── python_bindings
+│       ├── CMakeLists.txt
+│       ├── pixi.toml
+│       └── src
+│           └── bindings.cpp
+├── pixi.lock
 ├── pixi.toml
-└── pyproject.toml
+├── pyproject.toml
+└── src
+    └── rich_example
+        └── __init__.py
 ```
 
-This is the content of the `pixi.toml`:
+Within a pixi manifest, you can manage a workspace and/or describe a package.
+In the case of `rich_example` we choose to do both, so the only thing we have to add is the dependency on the `python_bindings`.
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/pixi.toml"
+```py title="pixi.toml"
+--8<-- "docs/source_files/pixi_projects/pixi_build_workspace/pixi.toml:workspace"
 ```
 
-1. In `workspace` information is set that is shared across all packages in the workspace.
-2. In `dependencies` you specify all of your pixi packages. Here, this includes only our own package that is defined further below under `package`
-3. We define a task that runs the `rich-example-main` executable we defined earlier. You can learn more about tasks in this [section](../features/advanced_tasks.md)
-4. In `package` we define the actual pixi package. This information will be used when other pixi packages or workspaces depend on our package or when we upload it to a conda channel.
-5. The same way, Python uses build backends to build a Python package, pixi uses build backends to build pixi packages. `pixi-build-python` creates a pixi package out of a Python package.
-6. In `host-dependencies`, we add Python dependencies that are necessary to build the Python package. By adding them here as well, the dependencies will come from the conda channel rather than PyPI.
-7. In `run-dependencies`, we add the Python dependencies needed during runtime.
+We could remove the workspace section in `packages/python_bindings/pixi.toml`, but if we leave it, it will just be ignored.
 
 
-When we now run `pixi run start`, we get the following output:
+There is actually one problem with `rich_example`.
+The ages of these people are only accurate in 2024, the year when this tutorial is written.
 
 ```
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
@@ -98,11 +57,20 @@ When we now run `pixi run start`, we get the following output:
 └──────────────┴─────┴─────────────┘
 ```
 
+Luckily `python_bindings` exposes a function `add` which we can use to add the difference between the current year and 2024.
+
+
+```py title="src/rich_example/__init__.py"
+--8<-- "docs/source_files/pixi_projects/pixi_build_workspace/src/rich_example/__init__.py"
+```
+
+If you run `pixi run start`, the age of each person should be up-to-date!
+
 ## Conclusion
 
-In this tutorial, we created a pixi package based on Python.
-It can be used as-is, to upload to a conda channel or to PyPI.
-In another tutorial we will learn how to add multiple pixi packages to the same workspace and let one pixi package use another.
+In this tutorial, we created a pixi workspace containing two packages.
+The manifest of `rich_example` describes the workspace as well as the package, with `python_bindings` only the `package` section is used.
+Feel free to add more packages, written in different languages to this workspace!
 
 Thanks for reading! Happy Coding 🚀
 

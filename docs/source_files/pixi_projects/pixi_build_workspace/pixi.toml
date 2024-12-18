@@ -1,28 +1,31 @@
-[workspace] # (1)!
+# --8<-- [start:workspace]
+[workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 
-[dependencies] # (2)!
+[dependencies]
 python_bindings = { path = "packages/python_bindings" }
 rich_example = { path = "." }
+# --8<-- [end:workspace]
 
-[tasks] # (3)!
+
+[tasks]
 start = "rich-example-main"
 
-[package] # (4)!
+[package]
 name = "rich_example"
 version = "0.1.0"
 
-[build-system] # (5)!
+[build-system]
 build-backend = { name = "pixi-build-python", version = "*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 
-[host-dependencies] # (6)!
+[host-dependencies]
 hatchling = "==1.26.3"
 
-[run-dependencies] # (7)!
+[run-dependencies]
 rich = ">=13.9.4,<14"
