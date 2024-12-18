@@ -59,6 +59,10 @@ def verify_cli_command(
     # Set `NO_GRAPHICS` to avoid to have miette splitting up lines
     complete_env |= {"NO_GRAPHICS": "1"}
 
+    # Add -v after the `pixi` command to get verbose output
+    if isinstance(command, list) and "pixi" in str(command[0]):
+        command.insert(1, "-vv")
+
     attempt = 0
     while attempt < retries:
         try:
