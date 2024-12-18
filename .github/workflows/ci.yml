@@ -372,14 +372,11 @@ jobs:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
       - name: Verify pixi installation
-        run: pixi --version
-
-      - name: Install pixi
-        working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi install -v
+        run: pixi info
 
       - name: Run long running integration tests
         if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
+        working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi run --locked test-integration-ci -m "extra_slow"
 
       - name: Run integration tests
@@ -390,6 +387,10 @@ jobs:
         shell: bash
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: bash tests/scripts/test-examples.sh
+
+      - name: Install pixi
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        run: pixi install -v
 
       - name: "Checkout Deltares/Ribasim"
         uses: actions/checkout@v4
@@ -432,10 +433,7 @@ jobs:
           chmod a+x ${{ env.TARGET_RELEASE }}/pixi
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
-        run: pixi --version
-
-      - name: Install pixi
-        run: pixi install -v
+        run: pixi info
 
       - name: Run long running integration tests
         if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
@@ -449,6 +447,9 @@ jobs:
 
       - name: Test export
         run: pixi run --locked test-export
+
+      - name: Install pixi
+        run: pixi install -v
 
       - name: "Checkout Deltares/Ribasim"
         uses: actions/checkout@v4
@@ -487,10 +488,7 @@ jobs:
           chmod a+x ${{ env.TARGET_RELEASE }}/pixi
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
-        run: pixi --version
-
-      - name: Install pixi
-        run: pixi install -v
+        run: pixi info
 
       - name: Run long running integration tests
         if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
@@ -504,6 +502,9 @@ jobs:
 
       - name: "Test export"
         run: pixi run --locked test-export
+
+      - name: Install pixi
+        run: pixi install -v
 
       - name: "Checkout nerfstudio-project/nerfstudio"
         uses: actions/checkout@v4
