@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 import shutil
 
-from .common import ExitCode, verify_cli_command
+from .common import verify_cli_command, repo_root, get_manifest
 import sys
 
 
@@ -12,17 +12,26 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.mark.slow
-def test_doc_pixi_projects(pixi: Path, tmp_pixi_workspace: Path, doc_pixi_projects: Path) -> None:
+@pytest.mark.extra_slow
+@pytest.mark.parametrize(
+    "pixi_project",
+    [
+        pytest.param(pixi_project, id=pixi_project.name)
+        for pixi_project in repo_root().joinpath("docs/source_files/pixi_projects").iterdir()
+    ],
+)
+def test_doc_pixi_projects(pixi_project: Path, pixi: Path, tmp_pixi_workspace: Path) -> None:
     # TODO: Setting the cache dir shouldn't be necessary!
     env = {"PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache"))}
-    target_dir = tmp_pixi_workspace.joinpath("pixi_projects")
-    shutil.copytree(doc_pixi_projects, target_dir)
 
-    for pixi_project in target_dir.iterdir():
-        shutil.rmtree(pixi_project.joinpath(".pixi"), ignore_errors=True)
-        manifest = pixi_project.joinpath("pixi.toml")
-        # Run the test command
-        verify_cli_command(
-            [pixi, "run", "--manifest-path", manifest, "start"], ExitCode.SUCCESS, env=env
-        )
+    # Remove existing .pixi folders
+    shutil.rmtree(pixi_project.joinpath(".pixi"), ignore_errors=True)
+
+    # Copy to workspace
+    shutil.copytree(pixi_project, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    # Get manifest
+    manifest = get_manifest(tmp_pixi_workspace)
+
+    # Run task 'start'
+    verify_cli_command([pixi, "run", "--manifest-path", manifest, "start"], env=env)
