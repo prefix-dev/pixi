@@ -1,3 +1,4 @@
+import time
 from enum import IntEnum
 from pathlib import Path
 import platform
@@ -49,20 +50,70 @@ def verify_cli_command(
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
     reset_env: bool = False,
+    retries: int = 1,
+    retry_timeout: int = 5,  # Time to wait between retries in seconds
+    command_timeout: int = 100,  # Timeout for subprocess.run in seconds
 ) -> Output:
     base_env = {} if reset_env else dict(os.environ)
     complete_env = base_env if env is None else base_env | env
     # Set `NO_GRAPHICS` to avoid to have miette splitting up lines
     complete_env |= {"NO_GRAPHICS": "1"}
 
-    process = subprocess.run(command, capture_output=True, text=True, env=complete_env, cwd=cwd)
-    stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
-    output = Output(command, stdout, stderr, returncode)
-    print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
-    assert (
-        returncode == expected_exit_code
-    ), f"Return code was {returncode}, expected {expected_exit_code}, stderr: {stderr}"
+    attempt = 0
+    while attempt < retries:
+        try:
+            process = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                env=complete_env,
+                cwd=cwd,
+                timeout=command_timeout,  # Timeout for this run
+            )
+            stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
+            output = Output(command, stdout, stderr, returncode)
+            print(f"Attempt {attempt + 1}/{retries}:")
+            print(f"  Command: {command}")
+            print(f"  Exit code: {returncode}")
+            print(f"  Stdout:\n{stdout}")
+            print(f"  Stderr:\n{stderr}")
 
+            # Check if the command succeeded
+            if returncode == expected_exit_code:
+                break
+            else:
+                print(
+                    f"Command failed with return code {returncode}. Retrying in {retry_timeout} seconds..."
+                )
+        except subprocess.TimeoutExpired as e:
+            stdout = (
+                e.stdout.decode("utf-8", errors="replace")
+                if isinstance(e.stdout, bytes)
+                else (e.stdout or "None")
+            )
+            stderr = (
+                e.stderr.decode("utf-8", errors="replace")
+                if isinstance(e.stderr, bytes)
+                else (e.stderr or "None")
+            )
+            warning_msg = (
+                f"Command timed out after {command_timeout} seconds. "
+                f"Command: {e.cmd}, Partial stdout: {stdout}, Partial stderr: {stderr}"
+            )
+            print(f"Attempt {attempt + 1}/{retries}: {warning_msg}")
+            stdout, stderr, returncode = stdout, stderr, 123
+            output = Output(command, stdout, stderr, returncode)
+        except Exception as e:
+            print(f"Command failed with unexpected error: {e}. Retrying...")
+            raise  # Reraise any non-timeout errors
+
+        attempt += 1
+        if attempt < retries:
+            time.sleep(retry_timeout)
+        else:
+            assert (
+                returncode == expected_exit_code
+            ), f"Return code was {returncode}, expected {expected_exit_code}, stderr: {stderr}"
     if stdout_contains:
         if isinstance(stdout_contains, str):
             stdout_contains = [stdout_contains]

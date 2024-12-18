@@ -25,20 +25,20 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     # Run the default task
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--environment", "default", "task"],
+        [pixi, "run", "-vvv", "--manifest-path", manifest, "--environment", "default", "task"],
         stdout_contains="default",
         stderr_excludes="default1",
     )
 
     # Run the a task
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--environment", "a", "task"],
+        [pixi, "run", "-vvv", "--manifest-path", manifest, "--environment", "a", "task"],
         stdout_contains=["a", "a1"],
     )
 
     # Error on non-specified environment as ambiguous
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
+        [pixi, "run", "-vvv", "--manifest-path", manifest, "task"],
         ExitCode.FAILURE,
         stderr_contains=["ambiguous", "default", "a"],
     )
@@ -46,7 +46,7 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Simulate activated shell in environment 'a'
     env = {"PIXI_IN_SHELL": "true", "PIXI_ENVIRONMENT_NAME": "a"}
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
+        [pixi, "run", "-vvv", "--manifest-path", manifest, "task"],
         stdout_contains=["a", "a1"],
         env=env,
     )
@@ -87,7 +87,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
 
         # Run task with PIXI_PROJECT_MANIFEST set to manifest_2
         verify_cli_command(
-            [pixi, "run", "task"],
+            [pixi, "run", "-vvv", "task"],
             stdout_contains="manifest_2",
             env=extended_env,
             cwd=tmp_pixi_workspace,
@@ -96,7 +96,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
 
         # Run with working directory at manifest_1_dir
         verify_cli_command(
-            [pixi, "run", "task"],
+            [pixi, "run", "-vvv", "task"],
             stdout_contains="manifest_1",
             env=base_env,
             cwd=manifest_1_dir,
@@ -107,7 +107,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
         # working directory should win
         # pixi should warn that it uses the local manifest rather than PIXI_PROJECT_MANIFEST
         verify_cli_command(
-            [pixi, "run", "task"],
+            [pixi, "run", "-vvv", "task"],
             stdout_contains="manifest_1",
             stderr_contains="manifest_2",
             env=extended_env,
@@ -163,7 +163,7 @@ def test_using_prefix_validation(
 
     # Run an actual re-install
     verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
+        [pixi, "install", "-vvv", "--manifest-path", manifest],
     )
 
     # Validate the files are back
