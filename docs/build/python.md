@@ -90,7 +90,7 @@ When we now run `pixi run start`, we get the following output:
 
 ```
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-┃ Name         ┃ Age ┃ City        ┃
+┃ name         ┃ age ┃ city        ┃
 ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
 │ John Doe     │ 30  │ New York    │
 │ Jane Smith   │ 25  │ Los Angeles │

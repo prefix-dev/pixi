@@ -1,18 +1,30 @@
+from dataclasses import dataclass, fields
 from rich.console import Console
 from rich.table import Table
+
+
+@dataclass
+class Person:
+    name: str
+    age: int
+    city: str
 
 
 def main() -> None:
     console = Console()
 
+    people = [
+        Person("John Doe", 30, "New York"),
+        Person("Jane Smith", 25, "Los Angeles"),
+        Person("Tim de Jager", 35, "Utrecht"),
+    ]
+
     table = Table()
 
-    table.add_column("Name")
-    table.add_column("Age")
-    table.add_column("City")
+    for column in fields(Person):
+        table.add_column(column.name)
 
-    table.add_row("John Doe", "30", "New York")
-    table.add_row("Jane Smith", "25", "Los Angeles")
-    table.add_row("Tim de Jager", "35", "Utrecht")
+    for person in people:
+        table.add_row(person.name, str(person.age), person.city)
 
     console.print(table)
