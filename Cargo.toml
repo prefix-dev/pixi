@@ -237,7 +237,7 @@ pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
-rattler_conda_types = { workspace = true }
+rattler_conda_types = { workspace = true, features = ["rayon"] }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true }
