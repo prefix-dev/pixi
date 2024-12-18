@@ -100,7 +100,7 @@ impl RepositoryUrl {
         let mut url = CanonicalUrl::new(url).0;
 
         // If a Git URL ends in a reference (like a branch, tag, or commit), remove it.
-        if url.scheme().starts_with("git+") {
+        let mut url = if url.scheme().starts_with("git+") {
             if let Some(prefix) = url
                 .path()
                 .rsplit_once('@')
@@ -108,7 +108,13 @@ impl RepositoryUrl {
             {
                 url.set_path(&prefix);
             }
-        }
+
+            // Remove the `git+` prefix.
+            let url_as_str = &url.as_str()[4..];
+            Url::parse(url_as_str).expect("url should be valid")
+        } else {
+            url
+        };
 
         // Drop any fragments and query parameters.
         url.set_fragment(None);

@@ -731,7 +731,9 @@ mod tests {
 
         let result = locked_git_spec.satisfies(&requested_git_spec_with_prefix);
 
-        assert!(result.is_ok());
+        result.unwrap();
+
+        // assert!(result.is_ok());
     }
 
     #[test]
