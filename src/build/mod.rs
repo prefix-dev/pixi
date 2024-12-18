@@ -397,7 +397,11 @@ impl BuildContext {
             SourceSpec::Git(git_spec) => {
                 let fetched = self.resolve_git(git_spec.clone()).await.unwrap();
                 //TODO: will be removed when manifest will be merged in pixi-build-backend
-                let path = fetched.clone().into_path().join("boost-check");
+                let path = if let Some(subdir) = git_spec.subdirectory.as_ref() {
+                    fetched.clone().into_path().join(subdir)
+                } else {
+                    fetched.clone().into_path()
+                };
 
                 let source_checkout = SourceCheckout {
                     path,
@@ -444,7 +448,12 @@ impl BuildContext {
                     .resolve_precise_git(pinned_git_spec.clone())
                     .await
                     .unwrap();
-                Ok(fetched.into_path().join("boost-check"))
+                let path = if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
+                    fetched.into_path().join(subdir)
+                } else {
+                    fetched.into_path()
+                };
+                Ok(path)
             }
             PinnedSourceSpec::Path(path) => self
                 .resolve_path(path.path.to_path())
