@@ -377,7 +377,10 @@ jobs:
       - name: Run long running integration tests
         if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run --locked test-integration-ci -m "extra_slow"
+        run: |
+          pixi run --locked test-integration-ci -m "extra_slow"
+          # Clean the cache to avoid running out of space
+          pixi clean cache --conda
 
       - name: Run integration tests
         working-directory: ${{ env.PIXI_WORKSPACE }}
