@@ -434,6 +434,8 @@ jobs:
         run: pixi install -v
 
       - name: Run integration tests
+        env:
+          RUST_LOG: rattler_package_cache=debug,rattler_cache=debug,rattler_repodata_gateway=debug
         run: pixi run --locked test-integration-ci
 
       - name: Test examples
