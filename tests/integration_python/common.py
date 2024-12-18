@@ -121,7 +121,7 @@ def default_env_path(project_root: Path) -> Path:
 
 
 def root() -> Path:
-    return Path(__file__).parent.parent.parent
+    return Path(__file__).parents[2]
 
 
 def current_platform() -> str:

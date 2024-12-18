@@ -492,12 +492,12 @@ jobs:
       - name: Install pixi
         run: pixi install -v
 
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
-
       - name: Run long running integration tests
         if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
         run: pixi run --locked test-integration-ci -m "extra_slow"
+
+      - name: Run integration tests
+        run: pixi run --locked test-integration-ci
 
       - name: "Test examples"
         run: bash tests/scripts/test-examples.sh
