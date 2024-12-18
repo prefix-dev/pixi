@@ -14,7 +14,9 @@ import pytest
     ],
 )
 def test_pytorch_documentation_examples(
-    pixi: Path, tmp_pixi_workspace: Path, manifest: Path
+    manifest: Path,
+    pixi: Path,
+    tmp_pixi_workspace: Path,
 ) -> None:
     # Copy the manifest to the tmp workspace
     toml = manifest.read_text()
