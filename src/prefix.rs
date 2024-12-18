@@ -4,7 +4,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_utils::{is_binary_folder, strip_executable_extension};
@@ -13,7 +12,6 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
 };
-use tokio::task::JoinHandle;
 
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]
@@ -49,68 +47,12 @@ impl Prefix {
 
     /// Scans the `conda-meta` directory of an environment and returns all the
     /// [`PrefixRecord`]s found in there.
-    pub async fn find_installed_packages(
-        &self,
-        concurrency_limit: Option<usize>,
-    ) -> miette::Result<Vec<PrefixRecord>> {
-        let concurrency_limit = concurrency_limit.unwrap_or(100);
-        let mut meta_futures = FuturesUnordered::<JoinHandle<miette::Result<PrefixRecord>>>::new();
-        let mut result = Vec::new();
-        for entry in fs_err::read_dir(self.root.join("conda-meta"))
-            .into_iter()
-            .flatten()
-        {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-            if !path.is_file() || path.extension() != Some("json".as_ref()) {
-                continue;
-            }
-
-            // If there are too many pending entries, wait for one to be finished
-            if meta_futures.len() >= concurrency_limit {
-                match meta_futures
-                    .next()
-                    .await
-                    .expect("we know there are pending futures")
-                {
-                    Ok(record) => result.push(record?),
-                    Err(e) => {
-                        if let Ok(panic) = e.try_into_panic() {
-                            std::panic::resume_unwind(panic);
-                        }
-                        // The future was cancelled, we can simply return what we have.
-                        return Ok(result);
-                    }
-                }
-            }
-
-            // Spawn loading on another thread
-            let future = tokio::task::spawn_blocking(move || {
-                PrefixRecord::from_path(&path)
-                    .into_diagnostic()
-                    .with_context(move || format!("failed to parse '{}'", path.display()))
-            });
-            meta_futures.push(future);
-        }
-
-        while let Some(record) = meta_futures.next().await {
-            match record {
-                Ok(record) => result.push(record?),
-                Err(e) => {
-                    if let Ok(panic) = e.try_into_panic() {
-                        std::panic::resume_unwind(panic);
-                    }
-                    // The future was cancelled, we can simply return what we have.
-                    return Ok(result);
-                }
-            }
-        }
-
-        Ok(result)
+    pub fn find_installed_packages(&self) -> miette::Result<Vec<PrefixRecord>> {
+        PrefixRecord::collect_from_prefix(&self.root).into_diagnostic()
     }
 
-    /// Processes prefix records (that you can get by using `find_installed_packages`)
-    /// to filter and collect executable files.
+    /// Processes prefix records (that you can get by using
+    /// `find_installed_packages`) to filter and collect executable files.
     pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
         let executables = prefix_packages
             .iter()
@@ -165,7 +107,7 @@ impl Prefix {
         &self,
         package_name: &PackageName,
     ) -> miette::Result<PrefixRecord> {
-        let prefix_records = self.find_installed_packages(None).await?;
+        let prefix_records = self.find_installed_packages()?;
         prefix_records
             .into_iter()
             .find(|r| r.repodata_record.package_record.name == *package_name)

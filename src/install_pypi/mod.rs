@@ -203,15 +203,12 @@ pub async fn update_python_distributions(
     .plan(&site_packages, registry_index, &required_map)?;
 
     // Determine the currently installed conda packages.
-    let installed_packages = prefix
-        .find_installed_packages(None)
-        .await
-        .with_context(|| {
-            format!(
-                "failed to determine the currently installed packages for {}",
-                prefix.root().display()
-            )
-        })?;
+    let installed_packages = prefix.find_installed_packages().with_context(|| {
+        format!(
+            "failed to determine the currently installed packages for {}",
+            prefix.root().display()
+        )
+    })?;
 
     let pypi_conda_clobber = PypiCondaClobberRegistry::with_conda_packages(&installed_packages);
 

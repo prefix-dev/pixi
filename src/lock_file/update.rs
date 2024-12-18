@@ -382,15 +382,12 @@ impl<'p> LockFileDerivedData<'p> {
         let platform = environment.best_platform();
 
         // Determine the currently installed packages.
-        let installed_packages = prefix
-            .find_installed_packages(None)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to determine the currently installed packages for '{}'",
-                    environment.name(),
-                )
-            })?;
+        let installed_packages = prefix.find_installed_packages().with_context(|| {
+            format!(
+                "failed to determine the currently installed packages for '{}'",
+                environment.name(),
+            )
+        })?;
 
         // Get the locked environment from the lock-file.
         let records = self
@@ -2222,7 +2219,7 @@ async fn spawn_create_prefix_task(
     // Spawn a task to determine the currently installed packages.
     let installed_packages_future = tokio::spawn({
         let prefix = prefix.clone();
-        async move { prefix.find_installed_packages(None).await }
+        async move { prefix.find_installed_packages() }
     })
     .unwrap_or_else(|e| match e.try_into_panic() {
         Ok(panic) => std::panic::resume_unwind(panic),
