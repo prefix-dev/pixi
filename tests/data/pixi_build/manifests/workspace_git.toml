@@ -1,0 +1,9 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "test-example"
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+
+[dependencies]
+rich_example = { "git" = "file:///" }
