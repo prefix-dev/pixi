@@ -1,6 +1,6 @@
-# Tutorial: Building a Python package
+# Tutorial: Integrating multiple packages in a workspace
 
-In this tutorial, we will show you how to create a simple Python package with pixi.
+In this tutorial, we will show you how to integrate multiple pixi packages into a single workspace.
 
 ## Why is this useful?
 
@@ -61,17 +61,12 @@ We will do exactly that by creating a `pixi.toml`.
     In this tutorial, we will use `pixi.toml`.
     If you want everything integrated in `pyproject.toml` just copy the content of `pixi.toml` in this tutorial to your `pyproject.toml` and append `tool.pixi` to each table.
 
-Let's run the following command:
-
-```
-pixi init --format pixi
-```
+The file structure will then look like this:
 
 ```shell
 ├── src
 │   └── rich_example
 │       └── __init__.py
-├── .gitignore
 ├── pixi.toml
 └── pyproject.toml
 ```

@@ -9,8 +9,6 @@ rich_example = { path = "." }
 
 [tasks] # (3)!
 start = "rich-example-main"
-#start = "python -c 'import python_bindings as b; print(b.add(1, 2))'" # (3)!
-
 
 [package] # (4)!
 name = "rich_example"
