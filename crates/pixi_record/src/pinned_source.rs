@@ -249,7 +249,6 @@ impl PinnedGitSpec {
                 .append_pair("subdirectory", subdirectory);
         }
 
-        dbg!("piined git spec reference {:?}", &self.source.reference);
         // Put the requested reference in the query.
         match &self.source.reference {
             Reference::Branch(branch) => {
@@ -273,15 +272,11 @@ impl PinnedGitSpec {
         // prepend git+ to the scheme
         // by transforming it into the string
         // as url does not allow to change from https to git+https.
-
         let url_str = url.to_string();
 
-        dbg!("url str {:?}", &url_str);
         let git_prefix = format!("git+{}", url_str);
 
         let url = Url::parse(&git_prefix).unwrap();
-
-        dbg!("url parsed is {:?}", &url);
 
         LockedGitUrl(url)
     }
