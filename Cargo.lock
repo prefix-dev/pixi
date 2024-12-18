@@ -3822,18 +3822,18 @@ version = "0.0.1"
 dependencies = [
  "dashmap",
  "dunce",
- "fs-err 2.11.0",
- "miette 7.2.0",
+ "fs-err",
+ "miette 7.4.0",
  "pixi_utils",
  "reqwest",
  "reqwest-middleware",
  "serde",
- "thiserror 1.0.69",
+ "thiserror 2.0.7",
  "tokio",
  "tracing",
  "url",
  "urlencoding",
- "which 6.0.3",
+ "which",
 ]
 
 [[package]]
@@ -3915,7 +3915,7 @@ name = "pixi_record"
 version = "0.1.0"
 dependencies = [
  "file_url",
- "miette 7.2.0",
+ "miette 7.4.0",
  "pixi_git",
  "pixi_spec",
  "rattler_conda_types",
