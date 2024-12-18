@@ -565,6 +565,16 @@ impl PinnedGitSpec {
             });
         }
 
+        // Check if the subdirectory matches.
+        if self.source.subdirectory != spec.subdirectory {
+            return Err(SourceMismatchError::GitSubdirectoryMismatch {
+                git: self.git.clone(),
+                locked: self.source.subdirectory.clone(),
+                requested: spec.subdirectory.clone(),
+            });
+        }
+
+        // Check if requested rev matches.
         let locked_git_ref = self.source.reference.clone();
 
         if let Some(requested_ref) = &spec.rev {
@@ -792,5 +802,55 @@ mod tests {
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_requesting_subdirectory() {
+        let locked_git_spec = PinnedGitSpec {
+            git: Url::parse("https://github.com/example/repo.git").unwrap(),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
+                subdirectory: Some("some-subdir".to_string()),
+                reference: Reference::DefaultBranch,
+            },
+        };
+
+        let requested_git_spec = GitSpec {
+            git: Url::parse("https://github.com/example/repo.git").unwrap(),
+            subdirectory: None,
+            // we are not specifying the rev
+            // and request the default branch
+            rev: None,
+        };
+
+        let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
+        assert!(matches!(
+            result,
+            SourceMismatchError::GitSubdirectoryMismatch { .. }
+        ));
+
+        // check when we dont lock subdirectory, but request it
+        let locked_git_spec = PinnedGitSpec {
+            git: Url::parse("https://github.com/example/repo.git").unwrap(),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
+                subdirectory: None,
+                reference: Reference::DefaultBranch,
+            },
+        };
+
+        let requested_git_spec = GitSpec {
+            git: Url::parse("https://github.com/example/repo.git").unwrap(),
+            subdirectory: Some("some-subdir".to_string()),
+            // we are not specifying the rev
+            // and request the default branch
+            rev: None,
+        };
+
+        let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
+        assert!(matches!(
+            result,
+            SourceMismatchError::GitSubdirectoryMismatch { .. }
+        ));
     }
 }
