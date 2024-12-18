@@ -3,14 +3,13 @@ use std::{collections::HashMap, path::PathBuf};
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
-use thiserror::Error;
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Value};
 use url::Url;
 
 use crate::{
     preview::Preview, pypi::pypi_options::PypiOptions, toml::platform::TomlPlatform,
     utils::PixiSpanned, workspace::ChannelPriority, PrioritizedChannel, TargetSelector, Targets,
-    Workspace,
+    TomlError, Workspace,
 };
 
 #[derive(Debug, Clone)]
@@ -42,6 +41,8 @@ pub struct TomlWorkspace {
     pub preview: Preview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
+
+    pub span: Span,
 }
 
 /// Defines some of the properties that might be defined in other parts of the
@@ -62,22 +63,17 @@ pub struct ExternalWorkspaceProperties {
     pub documentation: Option<Url>,
 }
 
-#[derive(Debug, Error)]
-pub enum WorkspaceError {
-    #[error("missing `name` in `[workspace]` section")]
-    MissingName,
-}
-
 impl TomlWorkspace {
     pub fn into_workspace(
         self,
         external: ExternalWorkspaceProperties,
-    ) -> Result<Workspace, WorkspaceError> {
+    ) -> Result<Workspace, TomlError> {
         Ok(Workspace {
-            name: self
-                .name
-                .or(external.name)
-                .ok_or(WorkspaceError::MissingName)?,
+            name: self.name.or(external.name).ok_or(Error {
+                kind: ErrorKind::MissingField("name"),
+                span: self.span,
+                line_info: None,
+            })?,
             version: self.version.or(external.version),
             description: self.description.or(external.description),
             authors: self.authors.or(external.authors),
@@ -171,6 +167,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             preview,
             target: target.unwrap_or_default(),
             build_variants,
+            span: value.span,
         })
     }
 }

@@ -8,7 +8,7 @@ use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
 use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNameError};
 use thiserror::Error;
-use toml_span::DeserError;
+use toml_span::{DeserError, Error};
 
 use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
 use crate::{KnownPreviewFeature, WorkspaceManifest};
@@ -57,6 +57,12 @@ pub enum TomlError {
     Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
     #[error(transparent)]
     InvalidNonPackageDependencies(#[from] InvalidNonPackageDependencies),
+}
+
+impl From<toml_span::Error> for TomlError {
+    fn from(value: Error) -> Self {
+        TomlError::TomlError(value)
+    }
 }
 
 impl Display for TomlError {

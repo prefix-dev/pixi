@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use itertools::chain;
-use miette::LabeledSpan;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{
     de_helpers::{expected, TableHelper},
@@ -17,8 +16,7 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
         environment::TomlEnvironmentList, ExternalPackageProperties, ExternalWorkspaceProperties,
-        PackageError, TomlBuildSystem, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
-        WorkspaceError,
+        TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
@@ -37,7 +35,6 @@ pub struct TomlManifest {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
@@ -54,55 +51,6 @@ pub struct TomlManifest {
 
     /// pypi-options
     pub pypi_options: Option<PypiOptions>,
-
-    /// The build section
-    pub build_system: Option<PixiSpanned<TomlBuildSystem>>,
-
-    /// The build backend is unused by pixi and is only used by build backend
-    /// instead.
-    pub build_backend: Option<TomlBuildBackendConfig>,
-}
-
-#[derive(Debug)]
-pub struct TomlBuildBackendConfig {
-    name: PixiSpanned<String>,
-    additional_args: serde_value::Value,
-}
-
-impl<'de> toml_span::Deserialize<'de> for TomlBuildBackendConfig {
-    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        let table = match value.take() {
-            ValueInner::Table(table) => table,
-            other => return Err(expected("a table", other, value.span).into()),
-        };
-
-        let mut key_values = table.into_iter();
-        let result = if let Some((key, value)) = key_values.next() {
-            TomlBuildBackendConfig {
-                name: PixiSpanned {
-                    value: key.name.into_owned(),
-                    span: Some(key.span.into()),
-                },
-                additional_args: serde_value::to_value(value).unwrap(),
-            }
-        } else {
-            return Err(DeserError::from(toml_span::Error {
-                kind: toml_span::ErrorKind::MissingField("name"),
-                span: value.span,
-                line_info: None,
-            }));
-        };
-
-        if let Some((key, _value)) = key_values.next() {
-            return Err(DeserError::from(toml_span::Error {
-                kind: toml_span::ErrorKind::Custom("unexpected key".into()),
-                span: key.span,
-                line_info: None,
-            }));
-        }
-
-        Ok(result)
-    }
 }
 
 impl TomlManifest {
@@ -129,13 +77,11 @@ impl TomlManifest {
         // Find all the dependency sections which are not allowed without the
         // `[package]` section.
         let top_level_dependencies = vec![
-            self.run_dependencies.as_ref().and_then(PixiSpanned::span),
             self.host_dependencies.as_ref().and_then(PixiSpanned::span),
             self.build_dependencies.as_ref().and_then(PixiSpanned::span),
         ];
         let target_dependencies = self.target.values().flat_map(|t| {
             [
-                t.run_dependencies.as_ref().and_then(PixiSpanned::span),
                 t.host_dependencies.as_ref().and_then(PixiSpanned::span),
                 t.build_dependencies.as_ref().and_then(PixiSpanned::span),
             ]
@@ -188,22 +134,15 @@ impl TomlManifest {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
-            run_dependencies: self.run_dependencies,
             pypi_dependencies: self.pypi_dependencies,
             activation: self.activation,
             tasks: self.tasks,
         };
 
-        let (default_workspace_target, default_package_target) =
-            default_top_level_target.into_top_level_targets(preview)?;
-
+        let default_workspace_target = default_top_level_target.into_workspace_target(preview)?;
         let mut workspace_targets = IndexMap::new();
-        let mut package_targets = IndexMap::new();
         for (selector, target) in self.target {
-            let (workspace_target, package_target) = target.into_top_level_targets(preview)?;
-            if let Some(package_target) = package_target {
-                package_targets.insert(selector.clone(), package_target);
-            }
+            let workspace_target = target.into_workspace_target(preview)?;
             workspace_targets.insert(selector, workspace_target);
         }
 
@@ -293,19 +232,12 @@ impl TomlManifest {
             .and_then(|p| p.value.name.as_ref())
             .cloned();
 
-        let PixiSpanned {
-            span: workspace_span,
-            value: workspace,
-        } = self.workspace;
-        let workspace = workspace
+        let workspace = self
+            .workspace
+            .value
             .into_workspace(ExternalWorkspaceProperties {
                 name: project_name.or(external.name),
                 ..external
-            })
-            .map_err(|e| match e {
-                WorkspaceError::MissingName => {
-                    TomlError::MissingField("name".into(), workspace_span)
-                }
             })?;
 
         let package_manifest = if let Some(PixiSpanned {
@@ -325,116 +257,21 @@ impl TomlManifest {
                 .into());
             }
 
-            let PixiSpanned {
-                value: build_system,
-                span: build_system_span,
-            } = self
-                .build_system
-                .ok_or_else(|| TomlError::MissingField("[build-system]".into(), None))?;
+            let package = package.into_manifest(ExternalPackageProperties {
+                name: Some(workspace.name.clone()),
+                version: workspace.version.clone(),
+                description: workspace.description.clone(),
+                authors: workspace.authors.clone(),
+                license: workspace.license.clone(),
+                license_file: workspace.license_file.clone(),
+                readme: workspace.readme.clone(),
+                homepage: workspace.homepage.clone(),
+                repository: workspace.repository.clone(),
+                documentation: workspace.documentation.clone(),
+            })?;
 
-            let package = package
-                .into_package(ExternalPackageProperties {
-                    name: Some(workspace.name.clone()),
-                    version: workspace.version.clone(),
-                    description: workspace.description.clone(),
-                    authors: workspace.authors.clone(),
-                    license: workspace.license.clone(),
-                    license_file: workspace.license_file.clone(),
-                    readme: workspace.readme.clone(),
-                    homepage: workspace.homepage.clone(),
-                    repository: workspace.repository.clone(),
-                    documentation: workspace.documentation.clone(),
-                })
-                .map_err(|e| match e {
-                    PackageError::MissingName => {
-                        TomlError::MissingField("name".into(), package_span)
-                    }
-                    PackageError::MissingVersion => {
-                        TomlError::MissingField("version".into(), package_span)
-                    }
-                })?;
-
-            let backend_configuration = if let Some(map) = self.build_backend {
-                let PixiSpanned {
-                    value: name,
-                    span: name_span,
-                } = map.name;
-                let expected_build_backend_name =
-                    build_system.build_backend.value.name.value.as_source();
-                if name != build_system.build_backend.value.name.value.as_source() {
-                    let backend_name_span = build_system
-                        .build_backend
-                        .value
-                        .name
-                        .span
-                        .or(build_system.build_backend.span)
-                        .or(build_system_span);
-
-                    return Err(TomlError::GenericLabels(
-                        format!(
-                            "The build backend name `{name}` does not match the name defined in the build system `{expected_build_backend_name}`",
-                        )
-                        .into(),
-                        [
-                            name_span.map(|span| LabeledSpan::new_primary_with_span(Some(format!("this should be {expected_build_backend_name}")), span)),
-                            backend_name_span.map(|span| {
-                                LabeledSpan::new_with_span(
-                                    Some(String::from("the backend name is defined here")),
-                                    span,
-                                )
-                            }),
-                        ]
-                        .into_iter()
-                        .flatten()
-                        .collect(),
-                    ));
-                }
-                Some(map.additional_args)
-            } else {
-                None
-            };
-
-            let mut build_system = build_system.into_build_system()?;
-            build_system.build_backend.additional_args = backend_configuration;
-
-            Some(PackageManifest {
-                package,
-                build_system,
-                targets: Targets::from_default_and_user_defined(
-                    default_package_target.unwrap_or_default(),
-                    package_targets,
-                ),
-            })
+            Some(package)
         } else {
-            // If we do have a build-system section we have to error out.
-            if let Some(PixiSpanned {
-                value: _,
-                span: build_system_span,
-            }) = self.build_system
-            {
-                return if !pixi_build_enabled {
-                    Err(FeatureNotEnabled::new(
-                        format!(
-                            "[build-system] section is only allowed when the `{}` feature is enabled",
-                            KnownPreviewFeature::PixiBuild
-                        ),
-                        KnownPreviewFeature::PixiBuild,
-                    )
-                        .with_opt_span(build_system_span)
-                        .into())
-                } else {
-                    Err(TomlError::Generic(
-                        "Cannot use [build-system] without [package]".into(),
-                        build_system_span,
-                    ))
-                };
-            } else if let Some(map) = self.build_backend {
-                return Err(TomlError::Generic(
-                    "Cannot use [build-backend] without [build-system]".into(),
-                    map.name.span,
-                ));
-            };
-
             None
         };
 
@@ -467,8 +304,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let dependencies = th.optional("dependencies");
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
-        let build_backend = th.optional("build-backend");
-        let run_dependencies = th.optional("run-dependencies");
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
@@ -486,7 +321,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             .map(TomlIndexMap::into_inner)
             .unwrap_or_default();
         let pypi_options = th.optional("pypi-options");
-        let build_system = th.optional("build-system");
         let system_requirements = th.optional("system-requirements").unwrap_or_default();
 
         // Parse the tool section by ignoring it.
@@ -519,15 +353,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             dependencies,
             host_dependencies,
             build_dependencies,
-            run_dependencies,
             pypi_dependencies,
             activation,
             tasks,
             feature,
             environments,
             pypi_options,
-            build_system,
-            build_backend,
         })
     }
 }
@@ -551,37 +382,6 @@ mod test {
     }
 
     #[test]
-    fn test_build_section_without_preview() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = []
-
-        [build-system]
-        build-backend = { name = "foobar", version = "*" }
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_build_section_without_package() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-
-        [build-system]
-        build-backend = { name = "foobar", version = "*" }
-        "#,
-        ));
-    }
-
-    #[test]
     fn test_package_without_build_section() {
         assert_snapshot!(expect_parse_failure(
             r#"
@@ -591,6 +391,9 @@ mod test {
         platforms = []
 
         [package]
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
         "#,
         ));
     }
@@ -607,8 +410,8 @@ mod test {
 
         [package]
 
-        [build-system]
-        build-backend = { name = "foobar", version = "*" }
+        [package.build]
+        backend = { name = "foobar", version = "*" }
         "#,
         ));
     }
@@ -638,39 +441,13 @@ mod test {
         name = "foo"
         version = "0.1.0"
 
-        [build-system]
-        build-backend = { name = "foobar", version = "*" }
+        [package.build]
+        backend = { name = "foobar", version = "*" }
         "#,
         )
         .unwrap();
 
         assert_eq!(workspace_manifest.workspace.name, "foo");
-    }
-
-    #[test]
-    fn test_run_dependencies_without_pixi_build() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        channels = []
-        platforms = []
-
-        [run-dependencies]
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_run_dependencies_in_target_without_pixi_build() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        channels = []
-        platforms = []
-
-        [target.win.run-dependencies]
-        "#,
-        ));
     }
 
     #[test]
@@ -697,6 +474,9 @@ mod test {
 
         [package]
 
+        [package.build]
+        backend = { name = "foobar", version = "*" }
+
         [feature.foobar.host-dependencies]
         "#,
         ));
@@ -712,6 +492,9 @@ mod test {
         preview = ["pixi-build"]
 
         [package]
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
 
         [feature.foobar.build-dependencies]
         "#,
@@ -737,78 +520,6 @@ mod test {
     }
 
     #[test]
-    fn test_invalid_build_backend_sections() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foobar"
-        channels = []
-        platforms = []
-
-        [build-backend]
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_invalid_named_build_backend_sections() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foobar"
-        channels = []
-        platforms = []
-
-        [build-backend.backend]
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_invalid_incorrectly_named_build_backend_sections() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-
-        [package]
-        name = "foobar"
-        version = "0.1.0"
-
-        [build-system]
-        build-backend = { name = "foobar", version = "*" }
-
-        [build-backend.backend]
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_multiple_backend_config() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-
-        [package]
-        name = "foobar"
-        version = "0.1.0"
-
-        [build-system]
-        build-backend = { name = "foobar", version = "*" }
-
-        [build-backend.foobar]
-
-        [build-backend.foobar2]
-        "#,
-        ));
-    }
-
-    #[test]
     fn test_tool_must_be_table() {
         assert_snapshot!(expect_parse_failure(
             r#"
@@ -817,7 +528,6 @@ mod test {
         [workspace]
         channels = []
         platforms = []
-        preview = ["pixi-build"]
         "#,
         ));
     }
@@ -831,7 +541,6 @@ mod test {
         [workspace]
         channels = []
         platforms = []
-        preview = ["pixi-build"]
         "#,
         ));
     }

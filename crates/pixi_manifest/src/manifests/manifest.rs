@@ -25,7 +25,7 @@ use crate::{
     pyproject::{PyProjectManifest, PyProjectToManifestError},
     to_options,
     toml::{ExternalWorkspaceProperties, TomlDocument, TomlManifest},
-    BuildSystem, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
+    PackageBuild, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
     GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, SystemRequirements,
     TargetSelector, Task, TaskName, WorkspaceManifest, WorkspaceTarget,
 };
@@ -800,8 +800,8 @@ impl Manifest {
     }
 
     /// Return the build section from the parsed manifest
-    pub fn build_section(&self) -> Option<&BuildSystem> {
-        self.package.as_ref().map(|package| &package.build_system)
+    pub fn build_section(&self) -> Option<&PackageBuild> {
+        self.package.as_ref().map(|package| &package.build)
     }
 }
 
