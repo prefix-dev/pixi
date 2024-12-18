@@ -178,10 +178,10 @@ mod test {
         assert_snapshot!(format_parse_error(input, error), @r###"
          × missing field 'channel' in table
           ╭─[pixi.toml:2:19]
-        1 │
+        1 │ 
         2 │         channel = { priority = 10 }
           ·                   ─────────────────
-        3 │
+        3 │         
           ╰────
         "###);
     }

@@ -42,16 +42,15 @@ impl TomlFeature {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
-            run_dependencies: None,
             pypi_dependencies: self.pypi_dependencies,
             activation: self.activation,
             tasks: self.tasks,
         }
-        .into_feature_target(preview)?;
+        .into_workspace_target(preview)?;
 
         let mut targets = IndexMap::new();
         for (selector, target) in self.target {
-            let target = target.into_feature_target(preview)?;
+            let target = target.into_workspace_target(preview)?;
             targets.insert(selector, target);
         }
 

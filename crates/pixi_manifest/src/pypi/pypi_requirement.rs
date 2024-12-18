@@ -1086,9 +1086,9 @@ mod tests {
             r#"pkg = { path = "~/.cache" } "#,
             r#"pkg = { url = "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }"#,
             r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock" }"#,
-            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }"#,
-            r#"pkg = { git = "ssh://github.com/conda-forge/21cmfast-feedstock", "tag": "v1.2.3" }"#,
-            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "rev": "123456" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main" }"#,
+            r#"pkg = { git = "ssh://github.com/conda-forge/21cmfast-feedstock", tag = "v1.2.3" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", rev = "123456" }"#,
         ];
 
         #[derive(Serialize)]
@@ -1112,15 +1112,15 @@ mod tests {
     #[test]
     fn test_deserialize_failing() {
         const EXAMPLES: &[&str] = &[
-            r#"pkg = { ver: "1.2.3" }"#,
-            r#"pkg = { path: "foobar", "version": "==1.2.3" }"#,
-            r#"pkg = { version: "//" }"#,
-            r#"pkg = { git: "https://github.com/conda-forge/21cmfast-feedstock", branch: "main", tag: "v1" }"#,
-            r#"pkg = { git: "https://github.com/conda-forge/21cmfast-feedstock", branch: "main", tag: "v1", "rev": "123456" }"#,
-            r#"pkg = { git: "https://github.com/conda-forge/21cmfast-feedstock", branch: "main", rev: "v1" }"#,
-            r#"pkg = { git: "https://github.com/conda-forge/21cmfast-feedstock", tag: "v1", rev: "123456" }"#,
-            r#"pkg = { git: "ssh://github.com:conda-forge/21cmfast-feedstock"}"#,
-            r#"pkg = { branch: "main", tag: "v1", rev: "123456"  }"#,
+            r#"pkg = { ver = "1.2.3" }"#,
+            r#"pkg = { path = "foobar", version = "==1.2.3" }"#,
+            r#"pkg = { version = "//" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", tag = "v1" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", tag = "v1", rev = "123456" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", rev = "v1" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", tag = "v1", rev = "123456" }"#,
+            r#"pkg = { git = "ssh://github.com:conda-forge/21cmfast-feedstock"}"#,
+            r#"pkg = { branch = "main", tag = "v1", rev = "123456" }"#,
             r#"pkg = "/path/style""#,
             r#"pkg = "./path/style""#,
             r#"pkg = "\\path\\style""#,

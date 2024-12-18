@@ -1,19 +1,29 @@
 use std::path::PathBuf;
 
+use indexmap::IndexMap;
 pub use pixi_toml::TomlFromStr;
+use pixi_toml::{TomlIndexMap, TomlWith};
 use rattler_conda_types::Version;
 use thiserror::Error;
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Value};
 use url::Url;
 
-use crate::{package::Package, toml::workspace::ExternalWorkspaceProperties, TomlError};
+use crate::{
+    package::Package,
+    target::PackageTarget,
+    toml::{
+        package_target::TomlPackageTarget, workspace::ExternalWorkspaceProperties, TomlPackageBuild,
+    },
+    utils::{package_map::UniquePackageMap, PixiSpanned},
+    PackageManifest, TargetSelector, Targets, TomlError,
+};
 
 /// The TOML representation of the `[workspace]` section in a pixi manifest.
 ///
 /// In TOML some of the fields can be empty even though they are required in the
 /// data model (e.g. `name`, `version`). This is allowed because some of the
 /// fields might be derived from other sections of the TOML.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TomlPackage {
     // In TOML the workspace name can be empty. It is a required field though, but this is enforced
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use
@@ -28,6 +38,13 @@ pub struct TomlPackage {
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
+    pub build: TomlPackageBuild,
+    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, PackageTarget>,
+
+    pub span: Span,
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlPackage {
@@ -56,7 +73,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let documentation = th
             .optional::<TomlFromStr<_>>("documentation")
             .map(TomlFromStr::into_inner);
-
+        let host_dependencies = th.optional("host-dependencies");
+        let build_dependencies = th.optional("build-dependencies");
+        let run_dependencies = th.optional("run-dependencies");
+        let build = th.required("build")?;
+        let target = th
+            .optional::<TomlWith<_, TomlIndexMap<_, TomlPackageTarget>>>("target")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
         th.finalize(None)?;
 
         Ok(TomlPackage {
@@ -70,17 +94,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             homepage,
             repository,
             documentation,
+            host_dependencies,
+            build_dependencies,
+            run_dependencies,
+            build,
+            target,
+            span: value.span,
         })
-    }
-}
-
-impl TomlPackage {
-    /// Parses an instance from a string.
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_span::parse(source)
-            .map_err(DeserError::from)
-            .and_then(|mut v| toml_span::Deserialize::deserialize(&mut v))
-            .map_err(TomlError::from)
     }
 }
 
@@ -126,33 +146,49 @@ pub enum PackageError {
 
     #[error("missing `version` in `[package]` section")]
     MissingVersion,
+
+    #[error(transparent)]
+    TomlError(#[from] TomlError),
 }
 
 impl TomlPackage {
-    pub fn into_package(
+    pub fn into_manifest(
         self,
         external: ExternalPackageProperties,
-    ) -> Result<Package, PackageError> {
-        let name = self
-            .name
-            .or(external.name)
-            .ok_or(PackageError::MissingName)?;
-        let version = self
-            .version
-            .or(external.version)
-            .ok_or(PackageError::MissingVersion)?;
+    ) -> Result<PackageManifest, TomlError> {
+        let name = self.name.or(external.name).ok_or(Error {
+            kind: ErrorKind::MissingField("name"),
+            span: self.span,
+            line_info: None,
+        })?;
+        let version = self.version.or(external.version).ok_or(Error {
+            kind: ErrorKind::MissingField("version"),
+            span: self.span,
+            line_info: None,
+        })?;
 
-        Ok(Package {
-            name,
-            version,
-            description: self.description.or(external.description),
-            authors: self.authors.or(external.authors),
-            license: self.license.or(external.license),
-            license_file: self.license_file.or(external.license_file),
-            readme: self.readme.or(external.readme),
-            homepage: self.homepage.or(external.homepage),
-            repository: self.repository.or(external.repository),
-            documentation: self.documentation.or(external.documentation),
+        let default_package_target = TomlPackageTarget {
+            run_dependencies: self.run_dependencies,
+            host_dependencies: self.host_dependencies,
+            build_dependencies: self.build_dependencies,
+        }
+        .into_package_target();
+
+        Ok(PackageManifest {
+            package: Package {
+                name,
+                version,
+                description: self.description.or(external.description),
+                authors: self.authors.or(external.authors),
+                license: self.license.or(external.license),
+                license_file: self.license_file.or(external.license_file),
+                readme: self.readme.or(external.readme),
+                homepage: self.homepage.or(external.homepage),
+                repository: self.repository.or(external.repository),
+                documentation: self.documentation.or(external.documentation),
+            },
+            build: self.build.into_build_system()?,
+            targets: Targets::from_default_and_user_defined(default_package_target, self.target),
         })
     }
 }
@@ -162,7 +198,7 @@ mod test {
     use insta::assert_snapshot;
 
     use super::*;
-    use crate::utils::test_utils::format_parse_error;
+    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
 
     #[must_use]
     fn expect_parse_failure(pixi_toml: &str) -> String {
@@ -172,7 +208,13 @@ mod test {
 
     #[test]
     fn test_invalid_version() {
-        assert_snapshot!(expect_parse_failure(r#"version = "a!0""#));
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        version = "a!0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }"#
+        ));
     }
 
     #[test]
@@ -182,6 +224,9 @@ mod test {
         foo = "bar"
         name = "bla"
         extra = "key"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
         "#,
         ));
     }
