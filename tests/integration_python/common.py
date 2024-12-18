@@ -6,7 +6,7 @@ import os
 
 from rattler import Platform
 
-PIXI_VERSION = "0.39.2"
+PIXI_VERSION = "0.39.3"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
