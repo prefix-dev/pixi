@@ -1,7 +1,7 @@
 # These test are not part of the normal test suite and are only run on main or with the `-m "extra_slow"` flag.
 from pathlib import Path
 
-from .common import verify_cli_command, ExitCode, root, current_platform
+from .common import verify_cli_command, ExitCode, repo_root, current_platform
 import pytest
 
 
@@ -10,7 +10,7 @@ import pytest
     "manifest",
     [
         pytest.param(manifest, id=manifest.stem)
-        for manifest in root().joinpath("docs/source_files/").glob("**/pytorch-*.toml")
+        for manifest in repo_root().joinpath("docs/source_files/").glob("**/pytorch-*.toml")
     ],
 )
 def test_pytorch_documentation_examples(
