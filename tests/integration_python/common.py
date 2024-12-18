@@ -120,7 +120,7 @@ def default_env_path(project_root: Path) -> Path:
     return pixi_dir(project_root).joinpath("envs", "default")
 
 
-def root() -> Path:
+def repo_root() -> Path:
     return Path(__file__).parents[2]
 
 
