@@ -433,6 +433,11 @@ jobs:
       - name: Install pixi
         run: pixi install -v
 
+      - name: Increase ulimit
+        run: |
+          ulimit -n
+          ulimit -n 1234567
+
       - name: Run integration tests
         run: pixi run --locked test-integration-ci
 
