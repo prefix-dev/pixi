@@ -349,6 +349,12 @@
           "type": "string",
           "minLength": 1
         },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "A subdirectory to use in the repo",
+          "type": "string",
+          "minLength": 1
+        },
         "tag": {
           "title": "Tag",
           "description": "A git tag to use",
@@ -803,6 +809,12 @@
         "subdir": {
           "title": "Subdir",
           "description": "The subdir of the package, also known as platform",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "A subdirectory to use in the repo",
           "type": "string",
           "minLength": 1
         },
