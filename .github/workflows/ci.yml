@@ -378,6 +378,7 @@ jobs:
         if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: |
+          set -e
           pixi run --locked test-integration-ci -m "extra_slow"
           # Clean the cache to avoid running out of space
           pixi clean cache --conda
