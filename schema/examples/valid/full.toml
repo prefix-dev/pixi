@@ -47,10 +47,10 @@ md5 = { url = "https://example.com/package-1.2.3-asdf2.conda", md5 = "6f5902ac23
 package_path = { path = "path/to/package-1.2.3-abc1.conda" }
 sha256 = { url = "https://example.com/package-1.2.3-asdf2.conda", sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447" }
 
-# In the future we'll add source dependencies
-#git = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
-#git2 = { git = "https://github.com/prefix-dev/rattler-build", tag = "v0.1.0" }
-#git3 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0" }
+git = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
+git2 = { git = "https://github.com/prefix-dev/rattler-build", tag = "v0.1.0" }
+git3 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0" }
+git4 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0", subdirectory = "python" }
 #path = { path = "~/path/to/package" }
 #path2 = { path = "path/to/package" }
 

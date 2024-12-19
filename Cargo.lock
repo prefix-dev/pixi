@@ -3654,6 +3654,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_default_versions",
+ "pixi_git",
  "pixi_glob",
  "pixi_manifest",
  "pixi_progress",
@@ -3818,6 +3819,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_git"
+version = "0.0.1"
+dependencies = [
+ "dashmap",
+ "dunce",
+ "fs-err",
+ "miette 7.4.0",
+ "pixi_utils",
+ "reqwest",
+ "reqwest-middleware",
+ "serde",
+ "thiserror 2.0.7",
+ "tokio",
+ "tracing",
+ "url",
+ "urlencoding",
+ "which",
+]
+
+[[package]]
 name = "pixi_glob"
 version = "0.1.0"
 dependencies = [
@@ -3896,6 +3917,8 @@ name = "pixi_record"
 version = "0.1.0"
 dependencies = [
  "file_url",
+ "miette 7.4.0",
+ "pixi_git",
  "pixi_spec",
  "rattler_conda_types",
  "rattler_digest",
@@ -3914,6 +3937,7 @@ dependencies = [
  "file_url",
  "insta",
  "itertools 0.13.0",
+ "pixi_git",
  "rattler_conda_types",
  "rattler_digest",
  "serde",

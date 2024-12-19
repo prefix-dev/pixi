@@ -4,6 +4,8 @@ import platform
 import subprocess
 import os
 
+from rattler import Platform
+
 PIXI_VERSION = "0.39.3"
 
 
@@ -120,6 +122,10 @@ def default_env_path(project_root: Path) -> Path:
 
 def repo_root() -> Path:
     return Path(__file__).parents[2]
+
+
+def current_platform() -> str:
+    return str(Platform.current())
 
 
 def get_manifest(directory: Path) -> Path:

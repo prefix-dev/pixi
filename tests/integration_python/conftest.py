@@ -77,3 +77,8 @@ def non_self_expose_channel_1(channels: Path) -> str:
 @pytest.fixture
 def non_self_expose_channel_2(channels: Path) -> str:
     return channels.joinpath("non_self_expose_channel_2").as_uri()
+
+
+@pytest.fixture
+def doc_pixi_projects() -> Path:
+    return Path(__file__).parents[2].joinpath("docs", "source_files", "pixi_projects")

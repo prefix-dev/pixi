@@ -4,7 +4,7 @@ import shutil
 from syrupy.assertion import SnapshotAssertion
 
 
-from .common import verify_cli_command, repo_root, get_manifest
+from .common import verify_cli_command, repo_root, current_platform, get_manifest
 import sys
 
 
@@ -42,3 +42,35 @@ def test_doc_pixi_projects(
         [pixi, "run", "--locked", "--manifest-path", manifest, "start"], env=env
     )
     assert output.stdout == snapshot
+
+
+@pytest.mark.extra_slow
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        pytest.param(manifest, id=manifest.stem)
+        for manifest in repo_root().joinpath("docs/source_files/").glob("**/pytorch-*.toml")
+    ],
+)
+def test_pytorch_documentation_examples(
+    manifest: Path,
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+) -> None:
+    # Copy the manifest to the tmp workspace
+    toml = manifest.read_text()
+    toml_name = "pyproject.toml" if "pyproject_tomls" in str(manifest) else "pixi.toml"
+    manifest = tmp_pixi_workspace.joinpath(toml_name)
+    manifest.write_text(toml)
+
+    # Only solve if the platform is supported
+    if (
+        current_platform()
+        in verify_cli_command(
+            [pixi, "project", "platform", "ls", "--manifest-path", manifest],
+        ).stdout
+    ):
+        # Run the installation
+        verify_cli_command(
+            [pixi, "install", "--manifest-path", manifest],
+        )

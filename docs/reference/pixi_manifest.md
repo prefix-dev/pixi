@@ -525,6 +525,7 @@ torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 ```
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
+Learn more about installing PyTorch [here](../features/pytorch.md).
 
 ##### `git`
 

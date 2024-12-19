@@ -58,9 +58,9 @@ bat pixi.toml
 ```
 
 !!! warn "Never install `pip` with `pixi global`"
-Installations with `pixi global` get their own isolated environment.
-Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary.
-Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
+    Installations with `pixi global` get their own isolated environment.
+    Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary.
+    Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
 
 
 ## Automated switching
