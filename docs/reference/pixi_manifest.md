@@ -786,6 +786,11 @@ When an environment comprises several features (including the default feature):
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
 - The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
 
+## Global configuration
+
+The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
+
+
 ## Preview features
 Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
 
@@ -801,7 +806,7 @@ preview = ["new-resolve"]
 
 Preview features in the documentation will be marked as such on the relevant pages.
 
-## Workspace section
+### Workspace section
 
 Currently, `workspace` is an alias for `project` and we recommend using `workspace` instead of `project`,
 when making use of the `pixi-build` preview feature.
@@ -810,7 +815,7 @@ To use this keyword the preview feature *does not* need to be enabled, but for n
 !!! note "preview feature: pixi-build"
     Everything under this admonition is only available when the `pixi-build` preview feature is enabled.
 
-## Package section
+### Package section
 
 The package section is used to define the package that is built by the project.
 It re-uses all metadata from the `package/workspace` section.
@@ -826,13 +831,13 @@ preview = ["pixi-build"]
 version = "1.0.0"
 ```
 
-## Host, Build, dependencies
+### Host, Build, dependencies
 
 The package section re-uses the `host-dependencies` and `build-dependencies`,
 which you can read about here: [host-build-dependencies](#host-dependencies) and [build-dependencies](#build-dependencies).
 If you have the `preview = ["pixi-build"]` enabled these are interpreted as part of the package.
 
-## Run dependencies
+### Run dependencies
 
 Run dependencies are dependencies that are required at runtime by your package.
 For python packages, these are the most common dependency types.
@@ -843,7 +848,7 @@ For compiled languages, these are less common and would basically be dependencie
 rich = "*"
 ```
 
-## The `build-system`
+### The `build-system`
 
 The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:
@@ -865,8 +870,3 @@ channels = [
 !!! note
     We are currently not publishing the backends on conda-forge, but will do so in the future.
     This is why the custom channel is listed above.
-
-
-## Global configuration
-
-The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
