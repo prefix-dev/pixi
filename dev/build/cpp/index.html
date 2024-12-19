@@ -6,17 +6,15 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
-        <meta name="description" content="Authenticate pixi to access private channels">
       
       
-      
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/authentication/">
-      
-      
-        <link rel="prev" href="../../build/workspace/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/build/cpp/">
       
       
-        <link rel="next" href="../channel_priority/">
+        <link rel="prev" href="../python/">
+      
+      
+        <link rel="next" href="../workspace/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -24,7 +22,7 @@
     
     
       
-        <title>Authenticate pixi with a server - Pixi by prefix.dev</title>
+        <title>Building a C++ Package - Pixi by prefix.dev</title>
       
     
     
@@ -61,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Authenticate pixi with a server - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Building a C++ Package - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="Authenticate pixi to access private channels" >
+        <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/authentication.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/cpp.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -73,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/authentication/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/build/cpp/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Authenticate pixi with a server - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Building a C++ Package - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="Authenticate pixi to access private channels" >
+        <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/authentication.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/cpp.png" >
       
     
     
@@ -104,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#examples" class="md-skip">
+        <a href="#tutorial-building-a-c-package" class="md-skip">
           Skip to content
         </a>
       
@@ -143,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Authenticate pixi with a server
+              Building a C++ Package
             
           </span>
         </div>
@@ -986,8 +984,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -997,11 +997,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
@@ -1015,7 +1015,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             Building Packages
@@ -1029,7 +1029,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/getting_started/" class="md-nav__link">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1050,7 +1050,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/dependency_types/" class="md-nav__link">
+      <a href="../dependency_types/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1068,6 +1068,8 @@
                 
   
   
+    
+  
   
   
     
@@ -1076,11 +1078,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3" checked>
         
           
           <label class="md-nav__link" for="__nav_9_3" id="__nav_9_3_label" tabindex="0">
@@ -1094,7 +1096,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9_3">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -1108,7 +1110,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/python/" class="md-nav__link">
+      <a href="../python/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1126,10 +1128,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../build/cpp/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Building a C++ Package
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1138,6 +1160,95 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#creating-a-new-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating a new project
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#creating-the-project-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      Creating the project files
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Creating the project files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-pixitoml-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      The pixi.toml file
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-cmakeliststxt-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      The CMakeLists.txt file
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-srcbindingscpp-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      The src/bindings.cpp file
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-if-everything-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing if everything works
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1150,7 +1261,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/workspace/" class="md-nav__link">
+      <a href="../workspace/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1183,8 +1294,6 @@
       
   
   
-    
-  
   
   
     
@@ -1196,11 +1305,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
         
           
           <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="">
@@ -1214,7 +1323,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_10">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -1225,28 +1334,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Authentication
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../advanced/authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1255,93 +1346,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      Examples
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-does-pixi-store-the-authentication-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      Where does pixi store the authentication information?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fallback-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Fallback storage
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#override-the-authentication-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Override the authentication storage
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pypi-authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      PyPI authentication
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="PyPI authentication">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#keyring-authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      Keyring authentication
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#netrc-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      .netrc file
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1354,7 +1358,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../channel_priority/" class="md-nav__link">
+      <a href="../../advanced/channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1375,7 +1379,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../github_actions/" class="md-nav__link">
+      <a href="../../advanced/github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1396,7 +1400,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../explain_info_command/" class="md-nav__link">
+      <a href="../../advanced/explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1417,7 +1421,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../updates_github_actions/" class="md-nav__link">
+      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1438,7 +1442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../production_deployment/" class="md-nav__link">
+      <a href="../../advanced/production_deployment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1459,7 +1463,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pyproject_toml/" class="md-nav__link">
+      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1738,6 +1742,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1746,64 +1752,46 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
+  <a href="#creating-a-new-project" class="md-nav__link">
     <span class="md-ellipsis">
-      Examples
+      Creating a new project
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#where-does-pixi-store-the-authentication-information" class="md-nav__link">
+  <a href="#creating-the-project-files" class="md-nav__link">
     <span class="md-ellipsis">
-      Where does pixi store the authentication information?
+      Creating the project files
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fallback-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Fallback storage
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#override-the-authentication-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Override the authentication storage
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pypi-authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      PyPI authentication
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="PyPI authentication">
+    <nav class="md-nav" aria-label="Creating the project files">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#keyring-authentication" class="md-nav__link">
+  <a href="#the-pixitoml-file" class="md-nav__link">
     <span class="md-ellipsis">
-      Keyring authentication
+      The pixi.toml file
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#netrc-file" class="md-nav__link">
+  <a href="#the-cmakeliststxt-file" class="md-nav__link">
     <span class="md-ellipsis">
-      .netrc file
+      The CMakeLists.txt file
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-srcbindingscpp-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      The src/bindings.cpp file
     </span>
   </a>
   
@@ -1811,6 +1799,24 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-if-everything-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing if everything works
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion
+    </span>
+  </a>
   
 </li>
       
@@ -1829,7 +1835,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/authentication.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/cpp.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1837,154 +1843,141 @@
   
 
 
-  <h1>Authentication</h1>
-
-<p>You can authenticate pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
-Different servers use different authentication methods.
-In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Usage:<span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>&lt;HOST&gt;
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Arguments:
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>&lt;HOST&gt;<span class="w">  </span>The<span class="w"> </span>host<span class="w"> </span>to<span class="w"> </span>authenticate<span class="w"> </span>with<span class="w"> </span><span class="o">(</span>e.g.<span class="w"> </span>repo.prefix.dev<span class="o">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Options:
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span>--token<span class="w"> </span>&lt;TOKEN&gt;<span class="w">              </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>authentication<span class="w"> </span>with<span class="w"> </span>prefix.dev<span class="o">)</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span>--username<span class="w"> </span>&lt;USERNAME&gt;<span class="w">        </span>The<span class="w"> </span>username<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span>--password<span class="w"> </span>&lt;PASSWORD&gt;<span class="w">        </span>The<span class="w"> </span>password<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span>--conda-token<span class="w"> </span>&lt;CONDA_TOKEN&gt;<span class="w">  </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>on<span class="w"> </span>anaconda.org<span class="w"> </span>/<span class="w"> </span>quetz<span class="w"> </span>authentication
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>-v,<span class="w"> </span>--verbose...<span class="w">                 </span>More<span class="w"> </span>output<span class="w"> </span>per<span class="w"> </span>occurrence
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>-q,<span class="w"> </span>--quiet...<span class="w">                   </span>Less<span class="w"> </span>output<span class="w"> </span>per<span class="w"> </span>occurrence
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>-h,<span class="w"> </span>--help<span class="w">                       </span>Print<span class="w"> </span><span class="nb">help</span>
+<h1 id="tutorial-building-a-c-package">Tutorial: Building a C++ package<a class="headerlink" href="#tutorial-building-a-c-package" title="Permanent link">#</a></h1>
+<p>This example shows how to build a C++ project with CMake and use it together with <code>pixi-build</code>.
+To read more about how building packages work with pixi see the <a href="../getting_started/">Getting Started</a> guide.</p>
+<p>We'll start off by creating a project that use <a href="https://github.com/wjakob/nanobind">nanobind</a> to build Python bindings.
+That we can also test using pixi.
+We'll later combine this example together with a Python package.</p>
+<h2 id="creating-a-new-project">Creating a new project<a class="headerlink" href="#creating-a-new-project" title="Permanent link">#</a></h2>
+<p>To get started, create a new project with pixi:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>python_bindings
 </span></code></pre></div>
-<p>The different options are "token", "conda-token" and "username + password".</p>
-<p>The token variant implements a standard "Bearer Token" authentication as is used on the prefix.dev platform.
-A Bearer Token is sent with every request as an additional header of the form <code>Authentication: Bearer &lt;TOKEN&gt;</code>.</p>
-<p>The conda-token option is used on anaconda.org and can be used with a quetz server. With this option, the token is sent as part of the URL following this scheme: <code>conda.anaconda.org/t/&lt;TOKEN&gt;/conda-forge/linux-64/...</code>.</p>
-<p>The last option, username &amp; password, are used for "Basic HTTP Authentication". This is the equivalent of adding <code>http://user:password@myserver.com/...</code>. This authentication method can be configured quite easily with a reverse NGinx or Apache server and is thus commonly used in self-hosted systems.</p>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
-<p>Login to prefix.dev:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
-</span></code></pre></div>
-<p>Login to anaconda.org:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>xy-72b914cc-c105-4ec7-a969-ab21d23480ed
-</span></code></pre></div>
-<p>Login to a basic HTTP secured server:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>myserver.com<span class="w"> </span>--username<span class="w"> </span>user<span class="w"> </span>--password<span class="w"> </span>password
-</span></code></pre></div>
-<h2 id="where-does-pixi-store-the-authentication-information">Where does pixi store the authentication information?<a class="headerlink" href="#where-does-pixi-store-the-authentication-information" title="Permanent link">#</a></h2>
-<p>The storage location for the authentication information is system-dependent. By default, pixi tries to use the keychain to store this sensitive information securely on your machine.</p>
-<p>On Windows, the credentials are stored in the "credentials manager". Searching for <code>rattler</code> (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).</p>
-<p>On macOS, the passwords are stored in the keychain. To access the password, you can use the <code>Keychain Access</code> program that comes pre-installed on macOS. Searching for <code>rattler</code> (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).</p>
-<p>On Linux, one can use <code>GNOME Keyring</code> (or just Keyring) to access credentials that are securely stored by <code>libsecret</code>. Searching for <code>rattler</code> should list all the credentials stored by pixi and other rattler-based programs.</p>
-<h2 id="fallback-storage">Fallback storage<a class="headerlink" href="#fallback-storage" title="Permanent link">#</a></h2>
-<p>If you run on a server with none of the aforementioned keychains available, then pixi falls back to store the credentials in an <em>insecure</em> JSON file.
-This JSON file is located at <code>~/.rattler/credentials.json</code> and contains the credentials.</p>
-<h2 id="override-the-authentication-storage">Override the authentication storage<a class="headerlink" href="#override-the-authentication-storage" title="Permanent link">#</a></h2>
-<p>You can use the <code>RATTLER_AUTH_FILE</code> environment variable to override the default location of the credentials file.
-When this environment variable is set, it provides the only source of authentication data that is used by pixi.</p>
-<p>E.g.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">RATTLER_AUTH_FILE</span><span class="o">=</span><span class="nv">$HOME</span>/credentials.json
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># You can also specify the file in the command line</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--auth-file<span class="w"> </span><span class="nv">$HOME</span>/credentials.json<span class="w"> </span>...
-</span></code></pre></div>
-<p>The JSON should follow the following format:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="nt">&quot;*.prefix.dev&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">        </span><span class="nt">&quot;BearerToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">&quot;otherhost.com&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">        </span><span class="nt">&quot;BasicHTTP&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">            </span><span class="nt">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_username&quot;</span><span class="p">,</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">            </span><span class="nt">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_password&quot;</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">    </span><span class="nt">&quot;conda.anaconda.org&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">        </span><span class="nt">&quot;CondaToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>Note: if you use a wildcard in the host, any subdomain will match (e.g. <code>*.prefix.dev</code> also matches <code>repo.prefix.dev</code>).</p>
-<p>Lastly you can set the authentication override file in the <a href="../../reference/pixi_configuration/">global configuration file</a>.</p>
-<h2 id="pypi-authentication">PyPI authentication<a class="headerlink" href="#pypi-authentication" title="Permanent link">#</a></h2>
-<p>Currently, we support the following methods for authenticating against PyPI:</p>
-<ol>
-<li><a href="https://pypi.org/project/keyring/">keyring</a> authentication.</li>
-<li><code>.netrc</code> file authentication.</li>
-</ol>
-<p>We want to add more methods in the future, so if you have a specific method you would like to see, please let us know.</p>
-<h3 id="keyring-authentication">Keyring authentication<a class="headerlink" href="#keyring-authentication" title="Permanent link">#</a></h3>
-<p>Currently, pixi supports the uv method of authentication through the python <a href="https://pypi.org/project/keyring/">keyring</a> library.</p>
-<h4 id="installing-keyring">Installing keyring<a class="headerlink" href="#installing-keyring" title="Permanent link">#</a></h4>
-<p>To install keyring you can use pixi global install:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Basic Auth</label><label for="__tabbed_1_2">Google Artifact Registry</label><label for="__tabbed_1_3">Azure DevOps Artifacts</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.google-artifactregistry-auth
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyring.artifacts
-</span></code></pre></div>
-</div>
-</div>
-</div>
-<p>For other registries, you will need to adapt these instructions to add the right keyring backend.</p>
-<h4 id="configuring-your-project-to-use-keyring">Configuring your project to use keyring<a class="headerlink" href="#configuring-your-project-to-use-keyring" title="Permanent link">#</a></h4>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:3"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Basic Auth</label><label for="__tabbed_2_2">Google Artifact Registry</label><label for="__tabbed_2_3">Azure DevOps Artifacts</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p>Use keyring to store your credentials e.g:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>keyring<span class="w"> </span><span class="nb">set</span><span class="w"> </span>https://my-index/simple<span class="w"> </span>your_username
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># prompt will appear for your password</span>
-</span></code></pre></div>
-<p>Add the following configuration to your pixi manifest, making sure to include <code>your_username@</code> in the URL of the registry:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://your_username@custom-registry.com/simple&quot;</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>After making sure you are logged in, for instance by running <code>gcloud auth login</code>, add the following configuration to your pixi manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://oauth2accesstoken@&lt;location&gt;-python.pkg.dev/&lt;project&gt;/&lt;repository&gt;/simple&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>To find this URL more easily, you can use the <code>gcloud</code> command:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>gcloud<span class="w"> </span>artifacts<span class="w"> </span>print-settings<span class="w"> </span>python<span class="w"> </span>--project<span class="o">=</span>&lt;project&gt;<span class="w"> </span>--repository<span class="o">=</span>&lt;repository&gt;<span class="w"> </span>--location<span class="o">=</span>&lt;location&gt;
-</span></code></pre></div>
-</div>
-</div>
-<div class="tabbed-block">
-<p>After following the <a href="https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage"><code>keyring.artifacts</code> instructions</a> and making sure that keyring works correctly, add the following configuration to your pixi manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</div>
-</div>
-</div>
-<h4 id="installing-your-environment">Installing your environment<a class="headerlink" href="#installing-your-environment" title="Permanent link">#</a></h4>
-<p>Either configure your <a href="../../reference/pixi_configuration/#pypi-config">Global Config</a>, or use the flag <code>--pypi-keyring-provider</code> which can either be set to <code>subprocess</code> (activated) or <code>disabled</code>:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># From an existing pixi project</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
-</span></code></pre></div>
-<h3 id="netrc-file"><code>.netrc</code> file<a class="headerlink" href="#netrc-file" title="Permanent link">#</a></h3>
-<p><code>pixi</code> allows you to access private registries securely by authenticating with credentials stored in a <code>.netrc</code> file.</p>
+<p>This should give you the basic <code>pixi.toml</code> to get started.</p>
+<p>We'll now create the following source directory structure:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python_bindings/
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>CMakeLists.txt
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>pixi.toml
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>├──<span class="w"> </span>.gitignore
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>└──<span class="w"> </span>src
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>└──<span class="w"> </span>bindings.cpp
+</span></code></pre></div></p>
+<h2 id="creating-the-project-files">Creating the project files<a class="headerlink" href="#creating-the-project-files" title="Permanent link">#</a></h2>
+<p>Next up we'll create the:</p>
 <ul>
-<li>The <code>.netrc</code> file can be stored in your home directory (<code>$HOME/.netrc</code> for Unix-like systems)</li>
-<li>or in the user profile directory on Windows (<code>%HOME%\_netrc</code>).</li>
-<li>You can also set up a different location for it using the <code>NETRC</code> variable (<code>export NETRC=/my/custom/location/.netrc</code>).
-  e.g <code>export NETRC=/my/custom/location/.netrc pixi install</code></li>
+<li><code>pixi.toml</code> file that will be used to configure pixi.</li>
+<li><code>CMakeLists.txt</code> file that will be used to build the bindings.</li>
+<li><code>src/bindings.cpp</code> file that will contain the bindings.</li>
 </ul>
-<p>In the <code>.netrc</code> file, you store authentication details like this:</p>
-<p><div class="language-sh highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>machine<span class="w"> </span>registry-name
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>login<span class="w"> </span>admin
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>password<span class="w"> </span>admin
+<h3 id="the-pixitoml-file">The <code>pixi.toml</code> file<a class="headerlink" href="#the-pixitoml-file" title="Permanent link">#</a></h3>
+<p>Use the following <code>pixi.toml</code> file, you can hover over the annotations to see why each step was added.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span><span class="w">                                  </span><span class="c1"># (1)!</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">[dependencies]</span><span class="w"> </span><span class="c1"># (2)!</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">python_bindings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">[tasks]</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python -c &#39;import python_bindings as b; print(b.add(1, 2))&#39;&quot;</span><span class="w"> </span><span class="c1"># (3)!</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[package]</span><span class="w"> </span><span class="c1"># (4)!</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python_bindings&quot;</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">[build-system]</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (5)!</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">  </span><span class="s2">&quot;https://prefix.dev/pixi-build-backends&quot;</span><span class="p">,</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="p">]</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="k">[host-dependencies]</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.20, &lt;3.27&quot;</span><span class="w">      </span><span class="c1"># (8)!</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="n">nanobind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.4.0, &lt;2.5.0&quot;</span><span class="w"> </span><span class="c1"># (6)!</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="n">python_abi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.12, &lt;3.13&quot;</span><span class="w"> </span><span class="c1"># (7)!</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="k">[run-dependencies]</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.12, &lt;3.13&quot;</span><span class="w"> </span><span class="c1"># (9)!</span>
 </span></code></pre></div>
-For more details, you can access the <a href="https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip">.netrc docs</a>.</p>
+<ol>
+<li>Add the <strong>preview</strong> feature <code>pixi-build</code> that enables pixi to build the package.</li>
+<li>These are the workspace dependencies, and we add a reference to our own package.</li>
+<li>Let's add a task that will run our test</li>
+<li>This is where we specify the package name and version.
+   This section denotes that there is both a workspace and a package defined by this <code>pixi.toml</code> file.</li>
+<li>We use <code>pixi-build-cmake</code> as the build-system, so that we get the backend to build cmake packages.</li>
+<li>We use the <a href="https://github.com/wjakob/nanobind">nanobind</a> package to build our bindings.</li>
+<li>We need python to build the bindings, so we add a host dependency on the <code>python_abi</code> package.</li>
+<li>We override the cmake version to ensure it matches our <code>CMakeLists.txt</code> file.</li>
+<li>In order to use the package, users will need Python available. Let's add it to the <code>run-dependencies</code>.</li>
+</ol>
+<h3 id="the-cmakeliststxt-file">The <code>CMakeLists.txt</code> file<a class="headerlink" href="#the-cmakeliststxt-file" title="Permanent link">#</a></h3>
+<p>Next lets add the <code>CMakeList.txt</code> file:
+<div class="language-CMake highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span><span class="w"> </span><span class="s">3.20...3.27</span><span class="p">)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">project</span><span class="p">(</span><span class="s">python_bindings</span><span class="p">)</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">find_package</span><span class="p">(</span><span class="s">Python</span><span class="w"> </span><span class="s">3.8</span><span class="w"> </span><span class="s">COMPONENTS</span><span class="w"> </span><span class="s">Interpreter</span><span class="w"> </span><span class="s">Development.Module</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span><span class="w"> </span><span class="c"># (1)!</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">execute_process</span><span class="p">(</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="s">COMMAND</span><span class="w"> </span><span class="s2">&quot;${Python_EXECUTABLE}&quot;</span><span class="w"> </span><span class="s">-m</span><span class="w"> </span><span class="s">nanobind</span><span class="w"> </span><span class="s">--cmake_dir</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="s">OUTPUT_STRIP_TRAILING_WHITESPACE</span><span class="w"> </span><span class="s">OUTPUT_VARIABLE</span><span class="w"> </span><span class="s">nanobind_ROOT</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span><span class="w"> </span><span class="c"># (2)!</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="nb">execute_process</span><span class="p">(</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="o">${</span><span class="nv">Python_EXECUTABLE</span><span class="o">}</span><span class="w"> </span><span class="s">-c</span><span class="w"> </span><span class="s2">&quot;import sysconfig; print(sysconfig.get_path(&#39;purelib&#39;))&quot;</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="s">OUTPUT_VARIABLE</span><span class="w"> </span><span class="s">PYTHON_SITE_PACKAGES</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="s">OUTPUT_STRIP_TRAILING_WHITESPACE</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="p">)</span><span class="w"> </span><span class="c"># (3)!</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="nb">find_package</span><span class="p">(</span><span class="s">nanobind</span><span class="w"> </span><span class="s">CONFIG</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span><span class="w"> </span><span class="c"># (4)!</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="nb">nanobind_add_module</span><span class="p">(</span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span><span class="w"> </span><span class="s">src/bindings.cpp</span><span class="p">)</span><span class="w"> </span><span class="c"># (5)!</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="nb">install</span><span class="p">(</span><span class="w"> </span><span class="c"># (6)!</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">    </span><span class="s">TARGETS</span><span class="w"> </span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">    </span><span class="s">EXPORT</span><span class="w"> </span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span><span class="s">Targets</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">    </span><span class="s">LIBRARY</span><span class="w"> </span><span class="s">DESTINATION</span><span class="w"> </span><span class="o">${</span><span class="nv">PYTHON_SITE_PACKAGES</span><span class="o">}</span>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">    </span><span class="s">ARCHIVE</span><span class="w"> </span><span class="s">DESTINATION</span><span class="w"> </span><span class="o">${</span><span class="nv">CMAKE_INSTALL_LIBDIR</span><span class="o">}</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">    </span><span class="s">RUNTIME</span><span class="w"> </span><span class="s">DESTINATION</span><span class="w"> </span><span class="o">${</span><span class="nv">BINDIR</span><span class="o">}</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="p">)</span>
+</span></code></pre></div></p>
+<ol>
+<li>Find <code>python</code>, this actually finds anything above 3.8, but we are using 3.8 as a minimum version.</li>
+<li>Because we are using <code>python</code> in a conda environment we need to query the python interpreter to find the <code>nanobind</code> package.</li>
+<li>Because we want to make the installation directory independent of the python version, we query the python <code>site-packages</code> directory.</li>
+<li>Find the installed nanobind package.</li>
+<li>Use our bindings file as the source file.</li>
+<li>Install the bindings into the designated prefix.</li>
+</ol>
+<h3 id="the-srcbindingscpp-file">The <code>src/bindings.cpp</code> file<a class="headerlink" href="#the-srcbindingscpp-file" title="Permanent link">#</a></h3>
+<p>Next lets add the <code>src/bindings.cpp</code> file, this one is quite simple:</p>
+<div class="language-cpp highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;nanobind/nanobind.h&gt;</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kt">int</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1">// (1)!</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">NB_MODULE</span><span class="p">(</span><span class="n">python_bindings</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">{</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="n">m</span><span class="p">.</span><span class="n">def</span><span class="p">(</span><span class="s">&quot;add&quot;</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">add</span><span class="p">);</span><span class="w"> </span><span class="c1">// (2)!</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">}</span>
+</span></code></pre></div>
+<ol>
+<li>We define a function that will be used to add two numbers together.</li>
+<li>We bind this function to the python module using the <code>nanobind</code> package.</li>
+</ol>
+<h2 id="testing-if-everything-works">Testing if everything works<a class="headerlink" href="#testing-if-everything-works" title="Permanent link">#</a></h2>
+<p>Now that we have created the files we can test if everything works:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>run<span class="w"> </span>start
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="m">3</span>
+</span></code></pre></div>
+<p>This command builds the bindings, installs them and then runs the <code>test</code> task.</p>
+<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
+<p>In this tutorial, we created a pixi package using C++.
+It can be used as-is, to upload to a conda channel.
+In another tutorial we will learn how to add multiple pixi packages to the same workspace and let one pixi package use another.</p>
+<p>Thanks for reading! Happy Coding 🚀</p>
+<p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, <a href="mailto:hi@prefix.dev">e-mail</a> us or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
 
 
 
@@ -2056,9 +2049,9 @@ For more details, you can access the <a href="https://www.ibm.com/docs/en/aix/7.
           
             
             <a
-              href="../../build/workspace/"
+              href="../python/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Multiple Packages in Workspace"
+              aria-label="Previous: Building a Python package"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2069,7 +2062,7 @@ For more details, you can access the <a href="https://www.ibm.com/docs/en/aix/7.
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Multiple Packages in Workspace
+                  Building a Python package
                 </div>
               </div>
             </a>
@@ -2079,16 +2072,16 @@ For more details, you can access the <a href="https://www.ibm.com/docs/en/aix/7.
           
             
             <a
-              href="../channel_priority/"
+              href="../workspace/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Channel Logic"
+              aria-label="Next: Multiple Packages in Workspace"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Channel Logic
+                  Multiple Packages in Workspace
                 </div>
               </div>
               <div class="md-footer__button md-icon">

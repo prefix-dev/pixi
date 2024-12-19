@@ -8,10 +8,10 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/build/cpp_package/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/build/workspace/">
       
       
-        <link rel="prev" href="../python/">
+        <link rel="prev" href="../cpp/">
       
       
         <link rel="next" href="../../advanced/authentication/">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Building a C++ Package - Pixi by prefix.dev</title>
+        <title>Multiple Packages in Workspace - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Building a C++ Package - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Multiple Packages in Workspace - Pixi by prefix.dev" >
       
         <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/cpp_package.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/workspace.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/build/cpp_package/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/build/workspace/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Building a C++ Package - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Multiple Packages in Workspace - Pixi by prefix.dev" >
       
         <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/cpp_package.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/workspace.png" >
       
     
     
@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-building-a-c-package" class="md-skip">
+        <a href="#tutorial-integrating-multiple-packages-in-a-workspace" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Building a C++ Package
+              Multiple Packages in Workspace
             
           </span>
         </div>
@@ -1128,6 +1128,27 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../cpp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building a C++ Package
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1144,7 +1165,7 @@
           
   
   <span class="md-ellipsis">
-    Building a C++ Package
+    Multiple Packages in Workspace
   </span>
   
 
@@ -1155,7 +1176,7 @@
         
   
   <span class="md-ellipsis">
-    Building a C++ Package
+    Multiple Packages in Workspace
   </span>
   
 
@@ -1177,60 +1198,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#creating-a-new-project" class="md-nav__link">
+  <a href="#why-is-this-useful" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating a new project
+      Why is this useful?
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#creating-the-project-files" class="md-nav__link">
+  <a href="#lets-get-started" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating the project files
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Creating the project files">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#the-pixitoml-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      The pixi.toml file
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-cmakeliststxt-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      The CMakeLists.txt file
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-srcbindingscpp-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      The src/bindings.cpp file
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#testing-if-everything-works" class="md-nav__link">
-    <span class="md-ellipsis">
-      Testing if everything works
+      Let's get started
     </span>
   </a>
   
@@ -1731,60 +1710,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#creating-a-new-project" class="md-nav__link">
+  <a href="#why-is-this-useful" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating a new project
+      Why is this useful?
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#creating-the-project-files" class="md-nav__link">
+  <a href="#lets-get-started" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating the project files
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Creating the project files">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#the-pixitoml-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      The pixi.toml file
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-cmakeliststxt-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      The CMakeLists.txt file
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#the-srcbindingscpp-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      The src/bindings.cpp file
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#testing-if-everything-works" class="md-nav__link">
-    <span class="md-ellipsis">
-      Testing if everything works
+      Let's get started
     </span>
   </a>
   
@@ -1814,7 +1751,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/cpp_package.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/workspace.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
     </a>
@@ -1822,138 +1759,106 @@
   
 
 
-<h1 id="tutorial-building-a-c-package">Tutorial: Building a C++ package<a class="headerlink" href="#tutorial-building-a-c-package" title="Permanent link">#</a></h1>
-<p>This example shows how to build a C++ project with CMake and use it together with <code>pixi-build</code>.
-To read more about how building packages work with pixi see the <a href="../getting_started/">Getting Started</a> guide.</p>
-<p>We'll start off by creating a project that use <a href="https://github.com/wjakob/nanobind">nanobind</a> to build Python bindings.
-That we can also test using pixi.
-We'll later combine this example together with a Python package.</p>
-<h2 id="creating-a-new-project">Creating a new project<a class="headerlink" href="#creating-a-new-project" title="Permanent link">#</a></h2>
-<p>To get started, create a new project with pixi:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>python_bindings
+<h1 id="tutorial-integrating-multiple-packages-in-a-workspace">Tutorial: Integrating multiple packages in a workspace<a class="headerlink" href="#tutorial-integrating-multiple-packages-in-a-workspace" title="Permanent link">#</a></h1>
+<p>In this tutorial, we will show you how to integrate multiple pixi packages into a single workspace.</p>
+<h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
+<p>The packages coming from conda channels are already built and ready to use.
+If you want to depend on a package you therefore typically get that package from such a channel.
+However, there are situations where you want to depend on the source of a package.
+This is the case for example if you want to develop on multiple packages within the same repository.
+Or if you need the changes of an unreleased version of one of your dependencies.</p>
+<h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
+<p>In this tutorial we will showcase how to develop two packages in one workspace.
+For that we will use the <code>rich_example</code> Python package developed in chapter <a href="../python/">Building a Python package</a> and let it depend on the <code>python_binding</code> C++ package developed in chapter <a href="../cpp/">Building a C++ package</a>.</p>
+<p>We will start with the original setup of <code>rich_example</code> and copy <code>python_binding</code> into a folder called <code>packages</code>.
+The source directory structure now looks like this:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├──<span class="w"> </span>packages
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│<span class="w">   </span>└──<span class="w"> </span>python_bindings
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│<span class="w">       </span>├──<span class="w"> </span>CMakeLists.txt
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│<span class="w">       </span>├──<span class="w"> </span>pixi.toml
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│<span class="w">       </span>└──<span class="w"> </span>src
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│<span class="w">           </span>└──<span class="w"> </span>bindings.cpp
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├──<span class="w"> </span>pixi.lock
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├──<span class="w"> </span>pixi.toml
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>├──<span class="w"> </span>pyproject.toml
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>└──<span class="w"> </span>src
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>└──<span class="w"> </span>rich_example
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span>└──<span class="w"> </span>__init__.py
 </span></code></pre></div>
-<p>This should give you the basic <code>pixi.toml</code> to get started.</p>
-<p>We'll now create the following source directory structure:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python_bindings/
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>CMakeLists.txt
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>pixi.toml
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>├──<span class="w"> </span>.gitignore
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>└──<span class="w"> </span>src
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>└──<span class="w"> </span>bindings.cpp
-</span></code></pre></div></p>
-<h2 id="creating-the-project-files">Creating the project files<a class="headerlink" href="#creating-the-project-files" title="Permanent link">#</a></h2>
-<p>Next up we'll create the:</p>
-<ul>
-<li><code>pixi.toml</code> file that will be used to configure pixi.</li>
-<li><code>CMakeLists.txt</code> file that will be used to build the bindings.</li>
-<li><code>src/bindings.cpp</code> file that will contain the bindings.</li>
-</ul>
-<h3 id="the-pixitoml-file">The <code>pixi.toml</code> file<a class="headerlink" href="#the-pixitoml-file" title="Permanent link">#</a></h3>
-<p>Use the following <code>pixi.toml</code> file, you can hover over the annotations to see why each step was added.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span><span class="w">                        </span><span class="c1"># (1)!</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="k">[dependencies]</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.12, &lt;3.13&quot;</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">python_bindings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">[tasks]</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python -c &#39;import python_bindings as b; print(b.add(1, 2))&#39;&quot;</span><span class="w"> </span><span class="c1"># (3)!</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="k">[package]</span><span class="w"> </span><span class="c1"># (4)!</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python_bindings&quot;</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="k">[build-system]</span>
-</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1"># (5)!</span>
-</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">  </span><span class="s2">&quot;https://prefix.dev/pixi-build-backends&quot;</span><span class="p">,</span>
-</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">  </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">,</span>
-</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="p">]</span>
-</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>
-</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="k">[host-dependencies]</span>
-</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.20, &lt;3.27&quot;</span><span class="w">      </span><span class="c1"># (8)!</span>
-</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="n">nanobind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.4.0, &lt;2.5.0&quot;</span><span class="w"> </span><span class="c1"># (6)!</span>
-</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="n">python_abi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.12, &lt;3.13&quot;</span><span class="w"> </span><span class="c1"># (7)!</span>
+<p>Within a pixi manifest, you can manage a workspace and/or describe a package.
+In the case of <code>rich_example</code> we choose to do both, so the only thing we have to add is the dependency on the <code>python_bindings</code>.</p>
+<div class="language-py highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">[</span><span class="n">workspace</span><span class="p">]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">channels</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">platforms</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span> <span class="s2">&quot;linux-64&quot;</span><span class="p">,</span> <span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span> <span class="s2">&quot;osx-64&quot;</span><span class="p">]</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">preview</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">[</span><span class="n">dependencies</span><span class="p">]</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">python_bindings</span> <span class="o">=</span> <span class="p">{</span> <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;packages/python_bindings&quot;</span> <span class="p">}</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">rich_example</span> <span class="o">=</span> <span class="p">{</span> <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span> <span class="p">}</span>
 </span></code></pre></div>
-<ol>
-<li>Add the <strong>preview</strong> feature <code>pixi-build</code> that enables pixi to build the package.</li>
-<li>These are the workspace dependencies, and we add a reference to our own package.</li>
-<li>Let's add a task that will run our test, for this we require a python interpreter.</li>
-<li>This is where we specify the package name and version.
-   This section denotes that there is both a workspace and a package defined by this <code>pixi.toml</code> file.</li>
-<li>We use <code>pixi-build-cmake</code> as the build-system, so that we get the backend to build cmake packages.</li>
-<li>We use the <a href="https://github.com/wjakob/nanobind">nanobind</a> package to build our bindings.</li>
-<li>We need python to build the bindings, so we add a host dependency on the <code>python_abi</code> package.</li>
-<li>We override the cmake version to ensure it matches our <code>CMakeLists.txt</code> file.</li>
-</ol>
-<h3 id="the-cmakeliststxt-file">The <code>CMakeLists.txt</code> file<a class="headerlink" href="#the-cmakeliststxt-file" title="Permanent link">#</a></h3>
-<p>Next lets add the <code>CMakeList.txt</code> file:
-<div class="language-CMake highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span><span class="w"> </span><span class="s">3.20...3.27</span><span class="p">)</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">project</span><span class="p">(</span><span class="s">python_bindings</span><span class="p">)</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">find_package</span><span class="p">(</span><span class="s">Python</span><span class="w"> </span><span class="s">3.8</span><span class="w"> </span><span class="s">COMPONENTS</span><span class="w"> </span><span class="s">Interpreter</span><span class="w"> </span><span class="s">Development.Module</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span><span class="w"> </span><span class="c"># (1)!</span>
+<p>Only the <code>workspace</code> table of the top-level manifest is used.
+Therefore, we could remove the workspace section in <code>packages/python_bindings/pixi.toml</code>, but if we leave it, it will just be ignored.</p>
+<p>There is actually one problem with <code>rich_example</code>.
+The age of every person is off by one year!</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>┃ name         ┃ age ┃ city        ┃
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>│ John Doe     │ 30  │ New York    │
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>│ Jane Smith   │ 25  │ Los Angeles │
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>│ Tim de Jager │ 35  │ Utrecht     │
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>└──────────────┴─────┴─────────────┘
+</span></code></pre></div>
+<p>We need to add one year to the age of every person.
+Luckily <code>python_bindings</code> exposes a function <code>add</code> which allows us to do exactly that.</p>
+<div class="language-py highlight"><span class="filename">src/rich_example/__init__.py</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">fields</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span> <span class="nn">rich.console</span> <span class="kn">import</span> <span class="n">Console</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span> <span class="nn">rich.table</span> <span class="kn">import</span> <span class="n">Table</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">import</span> <span class="nn">python_bindings</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="nb">execute_process</span><span class="p">(</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="w">  </span><span class="s">COMMAND</span><span class="w"> </span><span class="s2">&quot;${Python_EXECUTABLE}&quot;</span><span class="w"> </span><span class="s">-m</span><span class="w"> </span><span class="s">nanobind</span><span class="w"> </span><span class="s">--cmake_dir</span>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="w">  </span><span class="s">OUTPUT_STRIP_TRAILING_WHITESPACE</span><span class="w"> </span><span class="s">OUTPUT_VARIABLE</span><span class="w"> </span><span class="s">nanobind_ROOT</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="p">)</span><span class="w"> </span><span class="c"># (2)!</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="nb">execute_process</span><span class="p">(</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="o">${</span><span class="nv">Python_EXECUTABLE</span><span class="o">}</span><span class="w"> </span><span class="s">-c</span><span class="w"> </span><span class="s2">&quot;import sysconfig; print(sysconfig.get_path(&#39;purelib&#39;))&quot;</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="w">    </span><span class="s">OUTPUT_VARIABLE</span><span class="w"> </span><span class="s">PYTHON_SITE_PACKAGES</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="w">    </span><span class="s">OUTPUT_STRIP_TRAILING_WHITESPACE</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="p">)</span><span class="w"> </span><span class="c"># (3)!</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="nd">@dataclass</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">class</span> <span class="nc">Person</span><span class="p">:</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>    <span class="n">age</span><span class="p">:</span> <span class="nb">int</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">city</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">def</span> <span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">console</span> <span class="o">=</span> <span class="n">Console</span><span class="p">()</span>
 </span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="nb">find_package</span><span class="p">(</span><span class="s">nanobind</span><span class="w"> </span><span class="s">CONFIG</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span><span class="w"> </span><span class="c"># (4)!</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="nb">nanobind_add_module</span><span class="p">(</span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span><span class="w"> </span><span class="s">src/bindings.cpp</span><span class="p">)</span><span class="w"> </span><span class="c"># (5)!</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="nb">install</span><span class="p">(</span><span class="w"> </span><span class="c"># (6)!</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">    </span><span class="s">TARGETS</span><span class="w"> </span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span>
-</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a><span class="w">    </span><span class="s">EXPORT</span><span class="w"> </span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span><span class="s">Targets</span>
-</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a><span class="w">    </span><span class="s">LIBRARY</span><span class="w"> </span><span class="s">DESTINATION</span><span class="w"> </span><span class="o">${</span><span class="nv">PYTHON_SITE_PACKAGES</span><span class="o">}</span>
-</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a><span class="w">    </span><span class="s">ARCHIVE</span><span class="w"> </span><span class="s">DESTINATION</span><span class="w"> </span><span class="o">${</span><span class="nv">CMAKE_INSTALL_LIBDIR</span><span class="o">}</span>
-</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a><span class="w">    </span><span class="s">RUNTIME</span><span class="w"> </span><span class="s">DESTINATION</span><span class="w"> </span><span class="o">${</span><span class="nv">BINDIR</span><span class="o">}</span>
-</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a><span class="p">)</span>
-</span></code></pre></div></p>
-<ol>
-<li>Find <code>python</code>, this actually finds anything above 3.8, but we are using 3.8 as a minimum version.</li>
-<li>Because we are using <code>python</code> in a conda environment we need to query the python interpreter to find the <code>nanobind</code> package.</li>
-<li>Because we want to make the installation directory independent of the python version, we query the python <code>site-packages</code> directory.</li>
-<li>Find the installed nanobind package.</li>
-<li>Use our bindings file as the source file.</li>
-<li>Install the bindings into the designated prefix.</li>
-</ol>
-<h3 id="the-srcbindingscpp-file">The <code>src/bindings.cpp</code> file<a class="headerlink" href="#the-srcbindingscpp-file" title="Permanent link">#</a></h3>
-<p>Next lets add the <code>src/bindings.cpp</code> file, this one is quite simple:</p>
-<div class="language-cpp highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;nanobind/nanobind.h&gt;</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kt">int</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1">// (1)!</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">NB_MODULE</span><span class="p">(</span><span class="n">python_bindings</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">{</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="n">m</span><span class="p">.</span><span class="n">def</span><span class="p">(</span><span class="s">&quot;add&quot;</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">add</span><span class="p">);</span><span class="w"> </span><span class="c1">// (2)!</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">}</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>    <span class="n">people</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;John Doe&quot;</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="s2">&quot;New York&quot;</span><span class="p">),</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;Jane Smith&quot;</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="s2">&quot;Los Angeles&quot;</span><span class="p">),</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;Tim de Jager&quot;</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="s2">&quot;Utrecht&quot;</span><span class="p">),</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="p">]</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>    <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">()</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>    <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">(</span><span class="n">Person</span><span class="p">):</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>        <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>    <span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">people</span><span class="p">:</span>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>        <span class="n">updated_age</span> <span class="o">=</span> <span class="n">python_bindings</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">age</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">updated_age</span><span class="p">),</span> <span class="n">person</span><span class="o">.</span><span class="n">city</span><span class="p">)</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
 </span></code></pre></div>
-<ol>
-<li>We define a function that will be used to add two numbers together.</li>
-<li>We bind this function to the python module using the <code>nanobind</code> package.</li>
-</ol>
-<h2 id="testing-if-everything-works">Testing if everything works<a class="headerlink" href="#testing-if-everything-works" title="Permanent link">#</a></h2>
-<p>Now that we have created the files we can test if everything works:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>run<span class="w"> </span>start
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="m">3</span>
+<p>If you run <code>pixi run start</code>, the age of each person should now be accurate:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>┃ name         ┃ age ┃ city        ┃
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>│ John Doe     │ 31  │ New York    │
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>│ Jane Smith   │ 26  │ Los Angeles │
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>│ Tim de Jager │ 36  │ Utrecht     │
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>└──────────────┴─────┴─────────────┘
 </span></code></pre></div>
-<p>This command builds the bindings, installs them and then runs the <code>test</code> task.</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we created a pixi package using C++.
-It can be used as-is, to upload to a conda channel.
-In another tutorial we will learn how to add multiple pixi packages to the same workspace and let one pixi package use another.</p>
+<p>In this tutorial, we created a pixi workspace containing two packages.
+The manifest of <code>rich_example</code> describes the workspace as well as the package, with <code>python_bindings</code> only the <code>package</code> section is used.
+Feel free to add more packages, written in different languages to this workspace!</p>
 <p>Thanks for reading! Happy Coding 🚀</p>
-<p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, <a href="mailto:hi@prefix.dev">e-mail</a> us or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
+<p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
 
 
 
@@ -2025,9 +1930,9 @@ In another tutorial we will learn how to add multiple pixi packages to the same 
           
             
             <a
-              href="../python/"
+              href="../cpp/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Building a Python package"
+              aria-label="Previous: Building a C++ Package"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2038,7 +1943,7 @@ In another tutorial we will learn how to add multiple pixi packages to the same 
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Building a Python package
+                  Building a C++ Package
                 </div>
               </div>
             </a>

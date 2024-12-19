@@ -66,7 +66,7 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/build/cpp_package/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/cpp/</loc>
          <lastmod>2024-12-19</lastmod>
          <changefreq>daily</changefreq>
     </url>
@@ -82,6 +82,11 @@
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/python/</loc>
+         <lastmod>2024-12-19</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/build/workspace/</loc>
          <lastmod>2024-12-19</lastmod>
          <changefreq>daily</changefreq>
     </url>
