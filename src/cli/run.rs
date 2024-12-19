@@ -108,6 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .await?;
 
+    tracing::info!("Before SearchEnvironments::from_opt_env");
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
         &project,
@@ -115,6 +116,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(best_platform),
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
+
+    tracing::info!("After SearchEnvironments::from_opt_env");
 
     let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, args.task)?;
 
@@ -321,6 +324,7 @@ async fn execute_task<'p>(
 fn disambiguate_task_interactive<'p>(
     problem: &AmbiguousTask<'p>,
 ) -> Option<TaskAndEnvironment<'p>> {
+    tracing::info!("Disambiguate task interactive");
     let environment_names = problem
         .environments
         .iter()
