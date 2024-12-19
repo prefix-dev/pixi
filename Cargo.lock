@@ -431,6 +431,7 @@ dependencies = [
 name = "barrier_cell"
 version = "0.1.0"
 dependencies = [
+ "parking_lot 0.12.3",
  "thiserror 1.0.69",
  "tokio",
 ]
