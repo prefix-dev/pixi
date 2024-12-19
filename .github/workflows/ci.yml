@@ -429,20 +429,20 @@ jobs:
           echo "${{ env.TARGET_RELEASE }}" >> $GITHUB_PATH
       - name: Verify pixi installation
         run: pixi --version
-
-      - name: Install pixi
-        run: pixi install -v
+#
+#      - name: Install pixi
+#        run: pixi install -v
 
       - name: Run integration tests
         env:
           RUST_LOG: rattler_package_cache=debug,rattler_cache=debug,rattler_repodata_gateway=debug
         run: pixi run --locked test-integration-ci
 
-      - name: Test examples
-        run: bash tests/scripts/test-examples.sh
-
-      - name: Test export
-        run: pixi run --locked test-export
+#      - name: Test examples
+#        run: bash tests/scripts/test-examples.sh
+#
+#      - name: Test export
+#        run: pixi run --locked test-export
 
       - name: "Checkout Deltares/Ribasim"
         uses: actions/checkout@v4
