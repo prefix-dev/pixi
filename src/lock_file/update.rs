@@ -1502,6 +1502,8 @@ impl<'p> UpdateContext<'p> {
                     }
                 }
             }
+
+            tracing::info!("{} futures still pending!", pending_futures.len());
         }
 
         tracing::info!("all tasks have completed");
