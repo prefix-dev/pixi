@@ -89,8 +89,7 @@ pub(crate) async fn environment_specs_in_sync(
     let prefix = Prefix::new(env_dir.path());
 
     let repodata_records = prefix
-        .find_installed_packages(Some(50))
-        .await?
+        .find_installed_packages()?
         .into_iter()
         .map(|r| r.repodata_record)
         .collect_vec();

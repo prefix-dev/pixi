@@ -39,7 +39,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["process", "io-std"] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
-url = "2.5.0"
+url = "2.5.4"
 which = { workspace = true }
 
 

@@ -96,6 +96,7 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
         .user_agent(app_user_agent)
         .danger_accept_invalid_certs(config.tls_no_verify())
         .read_timeout(Duration::from_secs(timeout))
+        .use_rustls_tls()
         .build()
         .expect("failed to create reqwest Client");
 
