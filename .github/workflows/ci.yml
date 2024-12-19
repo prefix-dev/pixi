@@ -434,9 +434,9 @@ jobs:
         run: pixi install -v
 
       - name: change ulimit
-        run:
+        run: |
           ulimit -n
-          ulimit -n 123456
+          ulimit -n 1234567
 
       - name: Run integration tests
         env:
