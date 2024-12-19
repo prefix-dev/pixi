@@ -436,7 +436,7 @@ jobs:
       - name: change ulimit
         run:
           ulimit -n
-          ulimit -n 1234567
+          ulimit -n 123456
 
       - name: Run integration tests
         env:
