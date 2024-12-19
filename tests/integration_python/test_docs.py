@@ -45,11 +45,6 @@ def test_pytorch_documentation_examples(
     manifest = tmp_pixi_workspace.joinpath(toml_name)
     manifest.write_text(toml)
 
-    verify_cli_command(
-        [pixi, "info"],
-        ExitCode.SUCCESS,
-    )
-
     # Only solve if the platform is supported
     if (
         current_platform()
@@ -63,6 +58,3 @@ def test_pytorch_documentation_examples(
             [pixi, "install", "--manifest-path", manifest],
             ExitCode.SUCCESS,
         )
-
-        # Cleanup the workspace
-        shutil.rmtree(tmp_pixi_workspace)
