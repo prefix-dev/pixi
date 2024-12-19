@@ -1507,6 +1507,8 @@ impl<'p> UpdateContext<'p> {
         // Construct a new lock-file containing all the updated or old records.
         let mut builder = LockFile::builder();
 
+        tracing::info!("building lock-file");
+
         // Iterate over all environments and add their records to the lock-file.
         for environment in project.environments() {
             let environment_name = environment.name().to_string();
@@ -1554,9 +1556,13 @@ impl<'p> UpdateContext<'p> {
             }
         }
 
+        tracing::info!("lock-file built");
+
         // Store the lock file
         let lock_file = builder.finish();
         top_level_progress.finish_and_clear();
+
+        tracing::info!("lock-file finished");
 
         Ok(LockFileDerivedData {
             project,
