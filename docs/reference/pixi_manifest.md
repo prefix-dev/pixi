@@ -796,15 +796,19 @@ Pixi sometimes introduces new features that are not yet stable, but that we woul
 
 An example of a preview feature in the project manifest:
 
-```toml title="Example preview features in the workspace manifest"
+```toml title="pixi.toml"
 [workspace]
 name = "foo"
 channels = []
 platforms = []
-preview = ["new-resolve"]
+preview = ["pixi-build"]
 ```
 
 Preview features in the documentation will be marked as such on the relevant pages.
+
+## Pixi Build
+
+Pixi build is an experimental feature that requires `preview = ["pixi-build"]` to be set in `[workspace]`
 
 ### Workspace section
 
@@ -812,21 +816,12 @@ Currently, `workspace` is an alias for `project` and we recommend using `workspa
 when making use of the `pixi-build` preview feature.
 To use this keyword the preview feature *does not* need to be enabled, but for now we do recommend it for that use-case solely.
 
-!!! note "preview feature: pixi-build"
-    Everything under this admonition is only available when the `pixi-build` preview feature is enabled.
-
 ### Package section
 
 The package section is used to define the package that is built by the project.
-It re-uses all metadata from the `package/workspace` section.
+Pixi only allows this table if `preview = ["pixi-build"]` is set in `[workspace]`.
 
 ```toml
-[workspace]
-name = "foo"
-channels = []
-platforms = []
-preview = ["pixi-build"]
-
 [package]
 version = "1.0.0"
 ```
@@ -840,11 +835,11 @@ If you have the `preview = ["pixi-build"]` enabled these are interpreted as part
 ### Run dependencies
 
 Run dependencies are dependencies that are required at runtime by your package.
-For python packages, these are the most common dependency types.
+For Python packages, these are the most common dependency types.
 For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.
 
 ```toml
-[run-dependencies]
+[package.run-dependencies]
 rich = "*"
 ```
 
