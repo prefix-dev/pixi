@@ -96,6 +96,8 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
         // Default to 90 seconds
         .unwrap_or(90);
 
+    println!("Pool idle timeout: {}", pool_idle_timeout);
+    tracing::warn!("Pool idle timeout: {}", pool_idle_timeout);
     let timeout = 5 * 60;
     let client = Client::builder()
         .pool_max_idle_per_host(20)
