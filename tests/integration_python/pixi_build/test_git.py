@@ -88,7 +88,7 @@ def test_build_git_source_deps_from_branch(
 
     full_path = f"file://{target_git_dir}"
     # Replace the rich_example entry using string manipulation
-    original = '[dependencies]\nrich_example = { "git" = "file:///"}'
+    original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = '[dependencies]\nrich_example = { "git" = "file:///", "branch" = "test-branch"}'
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
@@ -145,7 +145,7 @@ def test_build_git_source_deps_from_rev(
 
     full_path = f"file://{target_git_dir}"
     # Replace the rich_example entry using string manipulation
-    original = '[dependencies]\nrich_example = { "git" = "file:///"}'
+    original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = (
         '[dependencies]\nrich_example = {{ "git" = "file:///", "rev" = "{commit_hash}" }}'.format(
             commit_hash=commit_hash[:7]
@@ -208,7 +208,7 @@ def test_build_git_source_deps_from_tag(
 
     full_path = f"file://{target_git_dir}"
     # Replace the rich_example entry using string manipulation
-    original = '[dependencies]\nrich_example = { "git" = "file:///"}'
+    original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = '[dependencies]\nrich_example = { "git" = "file:///", "tag" = "v1.0.0" }'
 
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
