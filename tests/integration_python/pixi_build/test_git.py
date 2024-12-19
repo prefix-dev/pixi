@@ -1,18 +1,15 @@
 from pathlib import Path
 import shutil
 
-
 from ..common import verify_cli_command
 
 
-def test_build_git_source_deps(
-    pixi: Path, tmp_pixi_workspace: Path, doc_pixi_projects: Path, build_data: Path
-) -> None:
+def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data: Path) -> None:
     """
     This one tries to build the rich example project
     """
 
-    project = doc_pixi_projects / "pixi_build_python"
+    project = build_data / "rich_example"
     target_git_dir = tmp_pixi_workspace / "git_project"
     shutil.copytree(project, target_git_dir)
     shutil.rmtree(target_git_dir.joinpath(".pixi"), ignore_errors=True)
@@ -40,9 +37,10 @@ def test_build_git_source_deps(
     # edit the minimal_workspace to include the git_project
     workspace_manifest = minimal_workspace / "pixi.toml"
 
-    full_path = f"file://{target_git_dir}"
+    target_git_url = target_git_dir.as_uri()
+
     workspace_manifest.write_text(
-        workspace_manifest.read_text().replace("file:///", f"file://{target_git_dir}")
+        workspace_manifest.read_text().replace("file:///", target_git_url)
     )
 
     # build it
@@ -51,23 +49,20 @@ def test_build_git_source_deps(
     # verify that we indeed recorded the git url with it's commit
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
-    # first replace the real path with the fake one
-    pixi_lock_file.write_text(pixi_lock_file.read_text().replace(full_path, "file:///fake_path"))
-
-    assert f"- conda: git+file:///fake_path#{commit_hash}" in pixi_lock_file.read_text()
+    assert f"conda: git+{target_git_url}#{commit_hash}" in pixi_lock_file.read_text()
 
 
 def test_build_git_source_deps_from_branch(
-    pixi: Path, tmp_pixi_workspace: Path, doc_pixi_projects: Path, build_data: Path
+    pixi: Path, tmp_pixi_workspace: Path, build_data: Path
 ) -> None:
     """
     This one tries to build the rich example project
     """
 
-    project = doc_pixi_projects / "pixi_build_python"
+    project = build_data / "rich_example"
     target_git_dir = tmp_pixi_workspace / "git_project"
+    shutil.rmtree(project.joinpath(".pixi"), ignore_errors=True)
     shutil.copytree(project, target_git_dir)
-    shutil.rmtree(target_git_dir.joinpath(".pixi"), ignore_errors=True)
 
     # init it as a git repo and commit all files to a test-branch
     verify_cli_command(["git", "init"], cwd=target_git_dir)
@@ -94,13 +89,14 @@ def test_build_git_source_deps_from_branch(
     # edit the minimal_workspace to include the git_project
     workspace_manifest = minimal_workspace / "pixi.toml"
 
-    full_path = f"file://{target_git_dir}"
+    target_git_url = target_git_dir.as_uri()
+
     # Replace the rich_example entry using string manipulation
     original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = '[dependencies]\nrich_example = { "git" = "file:///", "branch" = "test-branch"}'
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
-        workspace_manifest.read_text().replace("file:///", f"file://{target_git_dir}")
+        workspace_manifest.read_text().replace("file:///", target_git_url)
     )
 
     # build it
@@ -109,24 +105,21 @@ def test_build_git_source_deps_from_branch(
     # verify that we indeed recorded the git url with it's commit
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
-    # first replace the real path with the fake one
-    pixi_lock_file.write_text(pixi_lock_file.read_text().replace(full_path, "file:///fake_path"))
-
     # verify that we recorded used the branch
     assert (
-        f"- conda: git+file:///fake_path?branch=test-branch#{commit_hash}"
+        f"conda: git+{target_git_url}?branch=test-branch#{commit_hash}"
         in pixi_lock_file.read_text()
     )
 
 
 def test_build_git_source_deps_from_rev(
-    pixi: Path, tmp_pixi_workspace: Path, doc_pixi_projects: Path, build_data: Path
+    pixi: Path, tmp_pixi_workspace: Path, build_data: Path
 ) -> None:
     """
     This one tries to build the rich example project
     """
 
-    project = doc_pixi_projects / "pixi_build_python"
+    project = build_data / "rich_example"
     target_git_dir = tmp_pixi_workspace / "git_project"
     shutil.copytree(project, target_git_dir)
     shutil.rmtree(target_git_dir.joinpath(".pixi"), ignore_errors=True)
@@ -154,7 +147,6 @@ def test_build_git_source_deps_from_rev(
     # edit the minimal_workspace to include the git_project
     workspace_manifest = minimal_workspace / "pixi.toml"
 
-    full_path = f"file://{target_git_dir}"
     # Replace the rich_example entry using string manipulation
     original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = (
@@ -163,9 +155,11 @@ def test_build_git_source_deps_from_rev(
         )
     )
 
+    target_git_url = target_git_dir.as_uri()
+
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
-        workspace_manifest.read_text().replace("file:///", f"file://{target_git_dir}")
+        workspace_manifest.read_text().replace("file:///", target_git_url)
     )
 
     # build it
@@ -174,27 +168,24 @@ def test_build_git_source_deps_from_rev(
     # verify that we indeed recorded the git url with it's commit
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
-    # first replace the real path with the fake one
-    pixi_lock_file.write_text(pixi_lock_file.read_text().replace(full_path, "file:///fake_path"))
-
     # verify that we recorded used rev but also the full one
     assert (
-        f"- conda: git+file:///fake_path?rev={commit_hash[:7]}#{commit_hash}"
+        f"conda: git+{target_git_url}?rev={commit_hash[:7]}#{commit_hash}"
         in pixi_lock_file.read_text()
     )
 
 
 def test_build_git_source_deps_from_tag(
-    pixi: Path, tmp_pixi_workspace: Path, doc_pixi_projects: Path, build_data: Path
+    pixi: Path, tmp_pixi_workspace: Path, build_data: Path
 ) -> None:
     """
     This one tries to build the rich example project
     """
 
-    project = doc_pixi_projects / "pixi_build_python"
+    project = build_data / "rich_example"
     target_git_dir = tmp_pixi_workspace / "git_project"
+    shutil.rmtree(project.joinpath(".pixi"), ignore_errors=True)
     shutil.copytree(project, target_git_dir)
-    shutil.rmtree(target_git_dir.joinpath(".pixi"), ignore_errors=True)
 
     # init it as a git repo and commit all files to a tag called v1.0.0
     verify_cli_command(["git", "init"], cwd=target_git_dir)
@@ -220,14 +211,13 @@ def test_build_git_source_deps_from_tag(
     # edit the minimal_workspace to include the git_project
     workspace_manifest = minimal_workspace / "pixi.toml"
 
-    full_path = f"file://{target_git_dir}"
     # Replace the rich_example entry using string manipulation
     original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = '[dependencies]\nrich_example = { "git" = "file:///", "tag" = "v1.0.0" }'
 
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
-        workspace_manifest.read_text().replace("file:///", f"file://{target_git_dir}")
+        workspace_manifest.read_text().replace("file:///", target_git_dir.as_uri())
     )
 
     # build it
@@ -236,8 +226,8 @@ def test_build_git_source_deps_from_tag(
     # verify that we indeed recorded the git url with it's commit
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
-    # first replace the real path with the fake one
-    pixi_lock_file.write_text(pixi_lock_file.read_text().replace(full_path, "file:///fake_path"))
-
     # verify that we recorded used rev but also the full one
-    assert f"- conda: git+file:///fake_path?tag=v1.0.0#{commit_hash}" in pixi_lock_file.read_text()
+    assert (
+        f"conda: git+{target_git_dir.as_uri()}?tag=v1.0.0#{commit_hash}"
+        in pixi_lock_file.read_text()
+    )
