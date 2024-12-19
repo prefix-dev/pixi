@@ -33,7 +33,7 @@ It also makes use of `pixi shell-hook` to not rely on pixi being installed in th
     For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.39.2 AS build
+FROM ghcr.io/prefix-dev/pixi:0.39.3 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
