@@ -257,7 +257,11 @@ mod tests {
         // So we expect the file to be extracted to the target directory
 
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let archive_path = manifest_dir.join("tests").join("pixi_flat_archive.tar.gz");
+        let archive_path = manifest_dir
+            .join("tests")
+            .join("data")
+            .join("archives")
+            .join("pixi_flat_archive.tar.gz");
 
         let named_tempfile = tempfile::NamedTempFile::new().unwrap();
         let binary_tempdir = tempfile::tempdir().unwrap();
@@ -281,6 +285,8 @@ mod tests {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let archive_path = manifest_dir
             .join("tests")
+            .join("data")
+            .join("archives")
             .join("pixi_nested_archive.tar.gz");
 
         let named_tempfile = tempfile::NamedTempFile::new().unwrap();
