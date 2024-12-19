@@ -262,6 +262,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--revalidate`: Revalidate the full environment, instead of checking the lock file hash. [more info](../features/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
+- `--skip-deps`: Skip the dependencies of the task, which where defined in the `depends-on` field of the task.
 
 ```shell
 pixi run python
@@ -273,6 +274,8 @@ pixi run --locked python
 pixi run build
 # Extra arguments will be passed to the tasks command.
 pixi run task argument1 argument2
+# Skip dependencies of the task
+pixi run --skip-deps task
 
 # If you have multiple environments you can select the right one with the --environment flag.
 pixi run --environment cuda python
@@ -281,6 +284,7 @@ pixi run --environment cuda python
 # If you want to run a command in a clean environment you can use the --clean-env flag.
 # The PATH should only contain the pixi environment here.
 pixi run --clean-env "echo \$PATH"
+
 ```
 
 !!! info

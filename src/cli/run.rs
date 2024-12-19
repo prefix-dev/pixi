@@ -51,6 +51,10 @@ pub struct Args {
     /// minimum environment to activate the pixi environment in.
     #[arg(long)]
     pub clean_env: bool,
+
+    /// Don't run the dependencies of the task ('depends-on' field in the task definition)
+    #[arg(long)]
+    pub skip_deps: bool,
 }
 
 /// CLI entry point for `pixi run`
@@ -116,7 +120,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, args.task)?;
+    let task_graph =
+        TaskGraph::from_cmd_args(&project, &search_environment, args.task, args.skip_deps)?;
 
     tracing::info!("Task graph: {}", task_graph);
 
