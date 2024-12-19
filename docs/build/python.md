@@ -1,4 +1,4 @@
-# Tutorial: Doing Python development with Pixi
+# Tutorial: Building a Python package
 
 In this tutorial, we will show you how to create a simple Python package with pixi.
 
@@ -17,7 +17,7 @@ In this tutorial we will focus on point 1.
 ## Let's get started
 
 First, we create a simple Python package with a `pyproject.toml` and a single Python file.
-The package will be called `rich_example`, so we will create the following structure
+The package will be called `rich_example`, so we will create the following structure:
 
 ```shell
 ├── src # (1)!
@@ -61,12 +61,20 @@ We will do exactly that by creating a `pixi.toml`.
     In this tutorial, we will use `pixi.toml`.
     If you want everything integrated in `pyproject.toml` just copy the content of `pixi.toml` in this tutorial to your `pyproject.toml` and append `tool.pixi` to each table.
 
-The file structure will then look like this:
+Let's initialize a pixi project.
+
+```
+pixi init --format pixi
+```
+
+We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.toml` rather than extending `pyproject.toml`.
+
 
 ```shell
 ├── src
 │   └── rich_example
 │       └── __init__.py
+├── .gitignore
 ├── pixi.toml
 └── pyproject.toml
 ```
@@ -90,7 +98,7 @@ When we now run `pixi run start`, we get the following output:
 
 ```
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-┃ Name         ┃ Age ┃ City        ┃
+┃ name         ┃ age ┃ city        ┃
 ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
 │ John Doe     │ 30  │ New York    │
 │ Jane Smith   │ 25  │ Los Angeles │

@@ -1,21 +1,21 @@
 from pathlib import Path
 import shutil
 import json
+import pytest
 
 from ..common import verify_cli_command
 
 
-def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path, doc_pixi_projects: Path) -> None:
+def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path, build_data: Path) -> None:
     """
     This one tries to build the rich example project
     """
 
-    project = doc_pixi_projects / "pixi_build_python"
-    target_dir = tmp_pixi_workspace / "project"
-    shutil.copytree(project, target_dir)
-    shutil.rmtree(target_dir.joinpath(".pixi"), ignore_errors=True)
+    project = build_data / "rich_example"
+    shutil.rmtree(project.joinpath(".pixi"), ignore_errors=True)
+    shutil.copytree(project, tmp_pixi_workspace, dirs_exist_ok=True)
 
-    manifest_path = target_dir / "pixi.toml"
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
 
     # build it
     verify_cli_command(
@@ -29,7 +29,9 @@ def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path, doc_pixi_proj
 
 
 def test_build_using_rattler_build_backend(
-    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    build_data: Path,
 ) -> None:
     test_data = build_data.joinpath("rattler-build-backend")
     shutil.copytree(test_data / "pixi", tmp_pixi_workspace / "pixi")
@@ -74,6 +76,7 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     assert metadata["name"] == "smokey"
 
 
+@pytest.mark.slow
 def test_source_change_trigger_rebuild(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -117,6 +120,7 @@ def test_source_change_trigger_rebuild(
     )
 
 
+@pytest.mark.slow
 def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "editable-pyproject"
     test_data = build_data.joinpath(project)
