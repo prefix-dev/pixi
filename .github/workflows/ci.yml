@@ -438,7 +438,8 @@ jobs:
           ulimit -n
           ulimit -n 1234567
           sysctl kern.maxfiles
-          sudo launchctl limit maxfiles 10240 unlimited
+          sudo launchctl limit maxfiles 245760 unlimited
+          sudo sysctl -w kern.maxfiles=245760
 
       - name: Run integration tests
         env:
