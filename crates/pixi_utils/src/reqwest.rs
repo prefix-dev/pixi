@@ -93,8 +93,8 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
     let pool_idle_timeout = std::env::var("PIXI_POOL_IDLE_TIMEOUT")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
-        // Default to 30 seconds
-        .unwrap_or(30);
+        // Default to 90 seconds
+        .unwrap_or(90);
 
     let timeout = 5 * 60;
     let client = Client::builder()
