@@ -41,7 +41,8 @@ In the case of `rich_example` we choose to do both, so the only thing we have to
 --8<-- "docs/source_files/pixi_projects/pixi_build_workspace/pixi.toml:workspace"
 ```
 
-We could remove the workspace section in `packages/python_bindings/pixi.toml`, but if we leave it, it will just be ignored.
+Only the `workspace` table of the top-level manifest is used.
+Therefore, we could remove the workspace section in `packages/python_bindings/pixi.toml`, but if we leave it, it will just be ignored.
 
 
 There is actually one problem with `rich_example`.

@@ -61,11 +61,14 @@ We will do exactly that by creating a `pixi.toml`.
     In this tutorial, we will use `pixi.toml`.
     If you want everything integrated in `pyproject.toml` just copy the content of `pixi.toml` in this tutorial to your `pyproject.toml` and append `tool.pixi` to each table.
 
-Let's run the following command:
+Let's initialize a pixi project.
 
 ```
 pixi init --format pixi
 ```
+
+We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.toml` rather than extending `pyproject.toml`.
+
 
 ```shell
 ├── src
