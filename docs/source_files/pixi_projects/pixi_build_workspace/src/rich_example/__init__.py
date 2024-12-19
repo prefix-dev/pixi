@@ -2,7 +2,6 @@ from dataclasses import dataclass, fields
 from rich.console import Console
 from rich.table import Table
 import python_bindings
-from datetime import datetime
 
 
 @dataclass
@@ -14,8 +13,6 @@ class Person:
 
 def main() -> None:
     console = Console()
-
-    years_since_2020 = datetime.now().year - 2020
 
     people = [
         Person("John Doe", 30, "New York"),
@@ -29,7 +26,7 @@ def main() -> None:
         table.add_column(column.name)
 
     for person in people:
-        updated_age = python_bindings.add(person.age, years_since_2020)
+        updated_age = python_bindings.add(person.age, 1)
         table.add_row(person.name, str(updated_age), person.city)
 
     console.print(table)

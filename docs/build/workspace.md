@@ -45,7 +45,7 @@ We could remove the workspace section in `packages/python_bindings/pixi.toml`, b
 
 
 There is actually one problem with `rich_example`.
-The ages of these people are only accurate in 2024, the year when this tutorial is written.
+The age of every person is off by one year!
 
 ```
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
@@ -57,14 +57,25 @@ The ages of these people are only accurate in 2024, the year when this tutorial 
 └──────────────┴─────┴─────────────┘
 ```
 
-Luckily `python_bindings` exposes a function `add` which we can use to add the difference between the current year and 2024.
+We need to add one year to the age of every person.
+Luckily `python_bindings` exposes a function `add` which allows us to do exactly that.
 
 
 ```py title="src/rich_example/__init__.py"
 --8<-- "docs/source_files/pixi_projects/pixi_build_workspace/src/rich_example/__init__.py"
 ```
 
-If you run `pixi run start`, the age of each person should be up-to-date!
+If you run `pixi run start`, the age of each person should now be accurate:
+
+```
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 31  │ New York    │
+│ Jane Smith   │ 26  │ Los Angeles │
+│ Tim de Jager │ 36  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+```
 
 ## Conclusion
 
