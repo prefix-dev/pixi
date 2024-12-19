@@ -116,3 +116,19 @@ def pixi_dir(project_root: Path) -> Path:
 
 def default_env_path(project_root: Path) -> Path:
     return pixi_dir(project_root).joinpath("envs", "default")
+
+
+def repo_root() -> Path:
+    return Path(__file__).parents[2]
+
+
+def get_manifest(directory: Path) -> Path:
+    pixi_toml = directory / "pixi.toml"
+    pyproject_toml = directory / "pyproject.toml"
+
+    if pixi_toml.exists():
+        return pixi_toml
+    elif pyproject_toml.exists():
+        return pyproject_toml
+    else:
+        raise ValueError("Neither pixi.toml nor pyproject.toml found")

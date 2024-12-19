@@ -26,4 +26,4 @@ nanobind = ">=2.4.0, <2.5.0" # (6)!
 python_abi = ">=3.12, <3.13" # (7)!
 
 [run-dependencies]
-python = ">=3.12, <3.13" # (9)!
+python = ">=3.12, <3.13"
