@@ -11,8 +11,6 @@ use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use std::{
     collections::{BTreeSet as Set, HashMap},
-    error::Error,
-    fmt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
