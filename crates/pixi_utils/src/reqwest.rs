@@ -90,12 +90,22 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
         tracing::warn!("TLS verification is disabled. This is insecure and should only be used for testing or internal networks.");
     }
 
+    let pool_idle_timeout = std::env::var("PIXI_POOL_IDLE_TIMEOUT")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        // Default to 90 seconds
+        .unwrap_or(90);
+
+    eprintln!("Pool idle timeout: {}", pool_idle_timeout);
+    tracing::warn!("Pool idle timeout: {}", pool_idle_timeout);
     let timeout = 5 * 60;
     let client = Client::builder()
         .pool_max_idle_per_host(20)
         .user_agent(app_user_agent)
         .danger_accept_invalid_certs(config.tls_no_verify())
+        .pool_idle_timeout(Duration::from_secs(pool_idle_timeout))
         .read_timeout(Duration::from_secs(timeout))
+        .tcp_keepalive(Duration::from_secs(60))
         .use_rustls_tls()
         .build()
         .expect("failed to create reqwest Client");
