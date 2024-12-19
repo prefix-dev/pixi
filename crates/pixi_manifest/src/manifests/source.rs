@@ -84,7 +84,9 @@ impl ManifestSource {
         feature_name: &FeatureName,
     ) -> Result<&mut Array, TomlError> {
         let table = match feature_name {
-            FeatureName::Default => Some("project"),
+            FeatureName::Default => {
+                todo!("If workspace exists use that, if project use that, otherwise error out")
+            }
             FeatureName::Named(_) => None,
         };
 
