@@ -19,6 +19,10 @@ def test_build_git_source_deps(
 
     # init it as a git repo and commit all files
     verify_cli_command(["git", "init"], cwd=target_git_dir)
+    # set some identity
+    verify_cli_command(["git", "config", "user.email", "some@email.com"], cwd=target_git_dir)
+    verify_cli_command(["git", "config", "user.name", "some-name"], cwd=target_git_dir)
+
     verify_cli_command(["git", "add", "."], cwd=target_git_dir)
     verify_cli_command(["git", "commit", "-m", "initial commit"], cwd=target_git_dir)
 
@@ -67,6 +71,10 @@ def test_build_git_source_deps_from_branch(
 
     # init it as a git repo and commit all files to a test-branch
     verify_cli_command(["git", "init"], cwd=target_git_dir)
+    # set some identity
+    verify_cli_command(["git", "config", "user.email", "some@email.com"], cwd=target_git_dir)
+    verify_cli_command(["git", "config", "user.name", "some-name"], cwd=target_git_dir)
+
     verify_cli_command(["git", "checkout", "-b", "test-branch"], cwd=target_git_dir)
 
     verify_cli_command(["git", "add", "."], cwd=target_git_dir)
@@ -125,6 +133,9 @@ def test_build_git_source_deps_from_rev(
 
     # init it as a git repo and commit all files to a test-branch
     verify_cli_command(["git", "init"], cwd=target_git_dir)
+    # set some identity
+    verify_cli_command(["git", "config", "user.email", "some@email.com"], cwd=target_git_dir)
+    verify_cli_command(["git", "config", "user.name", "some-name"], cwd=target_git_dir)
 
     verify_cli_command(["git", "add", "."], cwd=target_git_dir)
     verify_cli_command(["git", "commit", "-m", "initial commit"], cwd=target_git_dir)
@@ -187,6 +198,9 @@ def test_build_git_source_deps_from_tag(
 
     # init it as a git repo and commit all files to a tag called v1.0.0
     verify_cli_command(["git", "init"], cwd=target_git_dir)
+    # set some identity
+    verify_cli_command(["git", "config", "user.email", "some@email.com"], cwd=target_git_dir)
+    verify_cli_command(["git", "config", "user.name", "some-name"], cwd=target_git_dir)
 
     verify_cli_command(["git", "add", "."], cwd=target_git_dir)
     verify_cli_command(["git", "commit", "-m", "initial commit"], cwd=target_git_dir)
