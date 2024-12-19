@@ -431,6 +431,7 @@ dependencies = [
 name = "barrier_cell"
 version = "0.1.0"
 dependencies = [
+ "parking_lot 0.12.3",
  "thiserror 2.0.7",
  "tokio",
 ]
@@ -3793,6 +3794,7 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
+ "thiserror 2.0.7",
  "toml_edit",
  "tracing",
  "url",
