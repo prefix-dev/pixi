@@ -1687,11 +1687,21 @@ async fn spawn_solve_conda_environment_task(
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
-    // Get the virtual packages for this platform
-    let virtual_packages = group.virtual_packages(platform);
-
     // Get the environment name
     let group_name = group.name();
+
+    // Early out if there are no dependencies to solve.
+    if dependencies.is_empty() {
+        return Ok(TaskResult::CondaGroupSolved(
+            group_name,
+            platform,
+            PixiRecordsByName::default(),
+            Duration::default(),
+        ));
+    }
+
+    // Get the virtual packages for this platform
+    let virtual_packages = group.virtual_packages(platform);
 
     // The list of channels and platforms we need for this task
     let channels = group.channels().into_iter().cloned().collect_vec();
