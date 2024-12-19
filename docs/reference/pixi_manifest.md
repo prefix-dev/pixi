@@ -864,4 +864,4 @@ channels = [
 
 !!! note
     We are currently not publishing the backends on conda-forge, but will do so in the future.
-    This is why the custom channel is listed above.
+    For now the backends are published at "https://prefix.dev/pixi-build-backends".
