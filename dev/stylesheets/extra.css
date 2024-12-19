@@ -94,3 +94,7 @@ table code {
   white-space: nowrap;
   word-break: keep-all;
 }
+
+.md-typeset .admonition {
+  font-size: 0.75rem;
+}

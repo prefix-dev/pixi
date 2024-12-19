@@ -136,6 +136,11 @@
          <changefreq>daily</changefreq>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/features/pytorch/</loc>
+         <lastmod>2024-12-19</lastmod>
+         <changefreq>daily</changefreq>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/features/system_requirements/</loc>
          <lastmod>2024-12-19</lastmod>
          <changefreq>daily</changefreq>

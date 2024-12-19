@@ -1084,6 +1084,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pytorch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pytorch Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1842,12 +1863,17 @@
 
 
 <h1 id="system-requirements-in-pixi">System Requirements in pixi<a class="headerlink" href="#system-requirements-in-pixi" title="Permanent link">#</a></h1>
-<p><strong>System requirements</strong> define the minimal system specifications necessary during dependency resolution for a project.
-For instance, specifying a Unix system with a particular minimal <code>libc</code> version ensures that dependencies are compatible
-with the project's environment.</p>
-<p>System specifications are closely related
-to <a href="https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual packages</a>, allowing for
-flexible and accurate dependency management.</p>
+<p><strong>System requirements</strong> tell pixi the minimum system specifications needed to install and run your project’s environment.
+They ensure that the dependencies match the operating system and hardware of your machine.</p>
+<p>Think of it like this:
+You’re defining what “kind of computer” your project can run on.
+For example, you might require a specific Linux kernel version or a minimum glibc version.
+If your machine doesn’t meet these requirements, <code>pixi run</code> will fail because the environment can’t work reliably on your system.</p>
+<p>When resolving dependencies, pixi combines:
+•   The default requirements for the operating system.
+•   Any custom requirements you’ve added for your project through the <code>[system-requirements]</code>.</p>
+<p>This way, pixi guarantees your environment is consistent and compatible with your machine.</p>
+<p>System specifications are closely related to <a href="https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual packages</a>, allowing for flexible and accurate dependency management.</p>
 <h2 id="default-system-requirements">Default System Requirements<a class="headerlink" href="#default-system-requirements" title="Permanent link">#</a></h2>
 <p>The following configurations outline the default minimal system requirements for different operating systems:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">Windows</label><label for="__tabbed_1_3">osx-64</label><label for="__tabbed_1_4">osx-arm64</label></div>
@@ -1897,6 +1923,12 @@ This ensures that CUDA is recognized and appropriately locked into the lock file
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[system-requirements]</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w">  </span><span class="c1"># Replace &quot;12&quot; with the specific CUDA version you intend to use</span>
 </span></code></pre></div>
+<ol>
+<li>Can <code>system-requirements</code> enforce a specific CUDA runtime version?
+    - No. The <code>system-requirements</code> field is used to specify the maximum supported CUDA version based on the host’s NVIDIA driver API.
+Adding this field ensures that packages depending on <code>__cuda &gt;= {version}</code> are resolved correctly.
+2.</li>
+</ol>
 <h3 id="setting-system-requirements-environment-specific">Setting System Requirements environment specific<a class="headerlink" href="#setting-system-requirements-environment-specific" title="Permanent link">#</a></h3>
 <p>This can be set per <code>feature</code> in the <code>the manifest</code> file.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[feature.cuda.system-requirements]</span>

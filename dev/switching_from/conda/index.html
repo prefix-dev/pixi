@@ -1069,6 +1069,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/pytorch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pytorch Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1899,10 +1920,10 @@ It creates a single isolated environment for the given requirement and installs 
 </span></code></pre></div></p>
 <div class="admonition warn">
 <p class="admonition-title">Never install <code>pip</code> with <code>pixi global</code></p>
-</div>
 <p>Installations with <code>pixi global</code> get their own isolated environment.
 Installing <code>pip</code> with <code>pixi global</code> will create a new isolated environment with its own <code>pip</code> binary.
 Using that <code>pip</code> binary will install packages in the <code>pip</code> environment, making it unreachable form anywhere as you can't activate it.</p>
+</div>
 <h2 id="automated-switching">Automated switching<a class="headerlink" href="#automated-switching" title="Permanent link">#</a></h2>
 <p>With <code>pixi</code> you can import <code>environment.yml</code> files into a pixi project. (See <a href="../../reference/cli/#init">import</a>)
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--import<span class="w"> </span>environment.yml
