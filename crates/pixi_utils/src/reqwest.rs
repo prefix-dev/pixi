@@ -96,7 +96,7 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
         // Default to 90 seconds
         .unwrap_or(90);
 
-    println!("Pool idle timeout: {}", pool_idle_timeout);
+    eprintln!("Pool idle timeout: {}", pool_idle_timeout);
     tracing::warn!("Pool idle timeout: {}", pool_idle_timeout);
     let timeout = 5 * 60;
     let client = Client::builder()
@@ -105,6 +105,7 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
         .danger_accept_invalid_certs(config.tls_no_verify())
         .pool_idle_timeout(Duration::from_secs(pool_idle_timeout))
         .read_timeout(Duration::from_secs(timeout))
+        .tcp_keepalive(Duration::from_secs(60))
         .use_rustls_tls()
         .build()
         .expect("failed to create reqwest Client");
