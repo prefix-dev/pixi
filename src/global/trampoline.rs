@@ -65,13 +65,6 @@ const TRAMPOLINE_BIN: &[u8] = include_bytes!(
     "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-pc-windows-msvc.exe.zst"
 );
 
-#[cfg(target_arch = "powerpc64")]
-#[cfg(target_endian = "little")]
-#[cfg(target_os = "linux")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-powerpc64le-unknown-linux-gnu.zst"
-);
-
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "linux")]
 const TRAMPOLINE_BIN: &[u8] = include_bytes!(
@@ -342,6 +335,11 @@ impl Trampoline {
     }
 
     /// Returns the decompressed trampoline binary
+    #[cfg(not(all(
+        target_arch = "powerpc64",
+        target_endian = "little",
+        target_os = "linux"
+    )))]
     pub fn decompressed_trampoline() -> &'static [u8] {
         // A static variable to hold the cached decompressed trampoline binary
         static DECOMPRESSED_TRAMPOLINE_BIN: LazyLock<Vec<u8>> = LazyLock::new(|| {
@@ -353,44 +351,59 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
-        let trampoline_path = self.trampoline_path();
-
-        // We need to check that there's indeed a trampoline at the path
-        if trampoline_path.is_file().not()
-            || Trampoline::is_trampoline(&self.trampoline_path())
-                .await?
-                .not()
+        #[cfg(all(
+            target_arch = "powerpc64",
+            target_endian = "little",
+            target_os = "linux"
+        ))]
         {
-            tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
-                .await
-                .into_diagnostic()?;
-            tokio_fs::write(
-                self.trampoline_path(),
-                Trampoline::decompressed_trampoline(),
-            )
-            .await
-            .into_diagnostic()?;
+            miette::bail!("powerpc64le is not supported for pixi global yet. If you need this, please open an issue on the pixi repository.");
         }
-
-        // If the path doesn't exist yet, create a hard link to the shared trampoline binary
-        // If creating a hard link doesn't succeed, try copying
-        // Hard-linking might for example fail because the file-system enforces a maximum number of hard-links per file
-        if !self.path().exists()
-            && tokio_fs::hard_link(&trampoline_path, self.path())
-                .await
-                .is_err()
+        #[cfg(not(all(
+            target_arch = "powerpc64",
+            target_endian = "little",
+            target_os = "linux"
+        )))]
         {
-            tokio_fs::copy(&trampoline_path, self.path())
+            let trampoline_path = self.trampoline_path();
+
+            // We need to check that there's indeed a trampoline at the path
+            if trampoline_path.is_file().not()
+                || Trampoline::is_trampoline(&self.trampoline_path())
+                    .await?
+                    .not()
+            {
+                tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
+                    .await
+                    .into_diagnostic()?;
+                tokio_fs::write(
+                    self.trampoline_path(),
+                    Trampoline::decompressed_trampoline(),
+                )
                 .await
                 .into_diagnostic()?;
-        }
+            }
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            tokio_fs::set_permissions(self.path(), std::fs::Permissions::from_mode(0o755))
-                .await
-                .into_diagnostic()?;
+            // If the path doesn't exist yet, create a hard link to the shared trampoline binary
+            // If creating a hard link doesn't succeed, try copying
+            // Hard-linking might for example fail because the file-system enforces a maximum number of hard-links per file
+            if !self.path().exists()
+                && tokio_fs::hard_link(&trampoline_path, self.path())
+                    .await
+                    .is_err()
+            {
+                tokio_fs::copy(&trampoline_path, self.path())
+                    .await
+                    .into_diagnostic()?;
+            }
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                tokio_fs::set_permissions(self.path(), std::fs::Permissions::from_mode(0o755))
+                    .await
+                    .into_diagnostic()?;
+            }
         }
 
         Ok(())
