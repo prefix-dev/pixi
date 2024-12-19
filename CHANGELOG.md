@@ -18,6 +18,8 @@ This release includes a little Christmas present, the environment installation g
 - Enforce rust-tls for reqwest by @Hofer-Julian in [#2719](https://github.com/prefix-dev/pixi/pull/2719)
 - Help user with lockfile update error by @ruben-arts in [#2684](https://github.com/prefix-dev/pixi/pull/2684)
 - Add broken curl version check in install.sh by @thewtex in [#2686](https://github.com/prefix-dev/pixi/pull/2686)
+- Avoid race condition on bariercell when future is instant by @baszalmstra in [#2736](https://github.com/prefix-dev/pixi/pull/2736)
+- Log config parsing errors as errors by @Hofer-Julian in [#2739](https://github.com/prefix-dev/pixi/pull/2739)
 
 #### `pixi build` Preview work
 - Introduction to pixi build by @tdejager in [#2685](https://github.com/prefix-dev/pixi/pull/2685)
