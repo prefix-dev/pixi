@@ -3,8 +3,8 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use thiserror::Error;
 
-/// A synchronization primitive, around [`OnceLock`] that can be used to wait
-/// for a value to become available.
+/// A synchronization primitive, that can be used to wait for a value to become
+/// available.
 ///
 /// The [`BarrierCell`] is initially empty, requesters can wait for a value to
 /// become available using the `wait` method. Once a value is available, the
