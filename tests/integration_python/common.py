@@ -126,3 +126,15 @@ def repo_root() -> Path:
 
 def current_platform() -> str:
     return str(Platform.current())
+
+
+def get_manifest(directory: Path) -> Path:
+    pixi_toml = directory / "pixi.toml"
+    pyproject_toml = directory / "pyproject.toml"
+
+    if pixi_toml.exists():
+        return pixi_toml
+    elif pyproject_toml.exists():
+        return pyproject_toml
+    else:
+        raise ValueError("Neither pixi.toml nor pyproject.toml found")
