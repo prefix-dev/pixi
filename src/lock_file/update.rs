@@ -1504,6 +1504,8 @@ impl<'p> UpdateContext<'p> {
             }
         }
 
+        tracing::info!("all tasks have completed");
+
         // Construct a new lock-file containing all the updated or old records.
         let mut builder = LockFile::builder();
 
