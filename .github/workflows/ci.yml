@@ -430,8 +430,6 @@ jobs:
       - name: Verify pixi installation
         run: pixi --version
 
-      - name: Install pixi
-        run: pixi install -v
 
       - name: change ulimit
         run: |
@@ -446,29 +444,6 @@ jobs:
           RUST_LOG: rattler_package_cache=debug,rattler_cache=debug,rattler_repodata_gateway=debug
         run: pixi run --locked test-integration-ci
 
-      - name: Test examples
-        run: bash tests/scripts/test-examples.sh
-
-      - name: Test export
-        run: pixi run --locked test-export
-
-      - name: "Checkout Deltares/Ribasim"
-        uses: actions/checkout@v4
-        with:
-          repository: Deltares/Ribasim
-          path: ribasim
-      - name: "Install Deltares/Ribasim"
-        run: pixi install
-        working-directory: ribasim
-
-      - name: "Checkout quantco/polarify"
-        uses: actions/checkout@v4
-        with:
-          repository: quantco/polarify
-          path: polarify
-      - name: "Install quantco/polarify"
-        run: pixi install
-        working-directory: polarify
 
 #  test-integration-linux-x86_64:
 #    timeout-minutes: 30

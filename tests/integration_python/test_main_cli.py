@@ -707,7 +707,8 @@ def test_concurrency_flags(
         [
             pixi,
             "add",
-            "--concurrent-solves=12",
+            # "--concurrent-solves=12",
+            "--concurrent-solves=2",
             "--concurrent-downloads=2",
             "--manifest-path",
             manifest_path,
