@@ -72,7 +72,6 @@ impl ProtocolBuilder {
         source_path: &Path,
         enabled_protocols: &EnabledProtocols,
     ) -> Result<Self, DiscoveryError> {
-        eprintln!("Discovering protocol for {:?}", source_path);
         if !source_path.exists() {
             return Err(DiscoveryError::NotFound(source_path.to_path_buf()));
         }
@@ -94,8 +93,6 @@ impl ProtocolBuilder {
                 Err(DiscoveryError::UnsupportedFormat)
             };
         }
-
-        eprintln!("Discovering protocol for {:?}", source_path);
 
         // Try to discover as a pixi project
         if enabled_protocols.enable_pixi {
