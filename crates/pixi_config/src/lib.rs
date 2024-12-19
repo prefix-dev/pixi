@@ -11,6 +11,8 @@ use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use std::{
     collections::{BTreeSet as Set, HashMap},
+    error::Error,
+    fmt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
@@ -695,6 +697,18 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum ConfigError {
+    #[error("no file was found at {0}")]
+    FileNotFound(PathBuf),
+    #[error("failed to read config from '{0}'")]
+    ReadError(std::io::Error),
+    #[error("failed to parse config of {1}: {0}")]
+    ParseError(miette::Report, PathBuf),
+    #[error("validation error of {1}: {0}")]
+    ValidationError(miette::Report, PathBuf),
+}
+
 impl Config {
     /// Constructs a new config that is optimized to be used in tests.
     ///
@@ -745,13 +759,18 @@ impl Config {
     /// # Errors
     ///
     /// I/O errors or parsing errors
-    pub fn from_path(path: &Path) -> miette::Result<Config> {
+    pub fn from_path(path: &Path) -> Result<Config, ConfigError> {
         tracing::debug!("Loading config from {}", path.display());
-        let s = fs_err::read_to_string(path)
-            .into_diagnostic()
-            .wrap_err(format!("failed to read config from '{}'", path.display()))?;
+        let s = match fs_err::read_to_string(path) {
+            Ok(content) => content,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(ConfigError::FileNotFound(path.to_path_buf()))
+            }
+            Err(e) => return Err(ConfigError::ReadError(e)),
+        };
 
-        let (mut config, unused_keys) = Config::from_toml(&s)?;
+        let (mut config, unused_keys) =
+            Config::from_toml(&s).map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
 
         if !unused_keys.is_empty() {
             tracing::warn!(
@@ -771,7 +790,9 @@ impl Config {
         config.loaded_from.push(path.to_path_buf());
         tracing::info!("Loaded config from: {}", path.display());
 
-        config.validate()?;
+        config
+            .validate()
+            .map_err(|e| ConfigError::ValidationError(e, path.to_path_buf()))?;
 
         Ok(config)
     }
@@ -785,7 +806,7 @@ impl Config {
     /// # Errors
     ///
     /// I/O errors or parsing errors
-    pub fn try_load_system() -> miette::Result<Config> {
+    pub fn try_load_system() -> Result<Config, ConfigError> {
         Self::from_path(&config_path_system())
     }
 
@@ -796,12 +817,11 @@ impl Config {
     /// The loaded system config
     pub fn load_system() -> Config {
         Self::try_load_system().unwrap_or_else(|e| {
-            let path = config_path_system();
-            tracing::debug!(
-                "Failed to load system config: {} (error: {})",
-                path.display(),
-                e
-            );
+            match e {
+                ConfigError::FileNotFound(_) => (), // it's fine that no file is there
+                e => tracing::error!("{e}"),
+            }
+
             Self::default()
         })
     }
@@ -835,12 +855,10 @@ impl Config {
         let mut config = Self::load_system();
 
         for p in config_path_global() {
-            if !p.is_file() {
-                continue;
-            }
             match Self::from_path(&p) {
                 Ok(c) => config = config.merge_config(c),
-                Err(e) => tracing::warn!(
+                Err(ConfigError::FileNotFound(_)) => (),
+                Err(e) => tracing::error!(
                     "Failed to load global config '{}' with error: {}",
                     p.display(),
                     e

@@ -3793,6 +3793,7 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
+ "thiserror 2.0.7",
  "toml_edit",
  "tracing",
  "url",
