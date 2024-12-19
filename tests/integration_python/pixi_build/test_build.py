@@ -1,6 +1,7 @@
 from pathlib import Path
 import shutil
 import json
+import pytest
 
 from ..common import verify_cli_command
 
@@ -74,6 +75,7 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     assert metadata["name"] == "smokey"
 
 
+@pytest.mark.slow
 def test_source_change_trigger_rebuild(
     pixi: Path, build_data: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -117,6 +119,7 @@ def test_source_change_trigger_rebuild(
     )
 
 
+@pytest.mark.slow
 def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "editable-pyproject"
     test_data = build_data.joinpath(project)
