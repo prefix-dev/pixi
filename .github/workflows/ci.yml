@@ -353,7 +353,7 @@ jobs:
 
   test-pytest-windows-x86_64:
     timeout-minutes: 10
-    name: pytest integration | windows x86_64
+    name: Pytest | windows x86_64
     runs-on: windows-latest
     needs: build-binary-windows-x86_64
     env:
@@ -381,7 +381,7 @@ jobs:
 
   test-pytest-macos-aarch64:
     timeout-minutes: 10
-    name: pytest integration | macos aarch64
+    name: Pytest | macos aarch64
     runs-on: macos-14
     needs: build-binary-macos-aarch64
     env:
@@ -405,7 +405,7 @@ jobs:
 
   test-pytest-linux-x86_64:
     timeout-minutes: 10
-    name: pytest integration | linux x86_64
+    name: Pytest | linux x86_64
     runs-on: 8core_ubuntu_latest_runner
     needs: build-binary-linux-x86_64
     env:
@@ -465,7 +465,7 @@ jobs:
 
   test-integration-macos-aarch64:
     timeout-minutes: 30
-    name: pytest integration | macos aarch64
+    name: Integration tests | macos aarch64
     runs-on: macos-14
     needs: build-binary-macos-aarch64
     if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
@@ -683,7 +683,7 @@ jobs:
   #
 
   test-common-wheels-linux-x86_64:
-    name: "test wheel installation | linux x86_64"
+    name: Wheel Tests | linux x86_64
     needs:
       - build-binary-linux-x86_64
     uses: ./.github/workflows/test_common_wheels.yml
@@ -693,7 +693,7 @@ jobs:
         runs-on: 8core_ubuntu_latest_runner
 
   test-common-wheels-windows-x86_64:
-    name: "test wheel installation | windows x86_64"
+    name: Wheel Tests | windows x86_64
     needs:
       - build-binary-windows-x86_64
     uses: ./.github/workflows/test_common_wheels.yml
@@ -703,7 +703,7 @@ jobs:
       runs-on: windows-latest
 
   test-common-wheels-macos-aarch64:
-    name: "test wheel installation | macos aarch64"
+    name: Wheel Tests | macos aarch64
     needs:
       - build-binary-macos-aarch64
     uses: ./.github/workflows/test_common_wheels.yml
