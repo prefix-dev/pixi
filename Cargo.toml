@@ -1,9 +1,5 @@
 [workspace]
 members = ["crates/*"]
-# exclude pixi_trampoline as it's not possible
-# to override some of the profile settings in workspace
-# https://github.com/rust-lang/cargo/issues/8264
-exclude = ["crates/pixi_trampoline"]
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
