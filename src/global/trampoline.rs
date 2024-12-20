@@ -37,46 +37,39 @@ use super::ExposedName;
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "macos")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-apple-darwin.zst"
-);
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../trampoline/binaries/pixi-trampoline-aarch64-apple-darwin.zst");
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "windows")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-pc-windows-msvc.exe.zst"
-);
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../trampoline/binaries/pixi-trampoline-aarch64-pc-windows-msvc.exe.zst");
 
 #[cfg(target_arch = "aarch64")]
 #[cfg(target_os = "linux")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-aarch64-unknown-linux-musl.zst"
-);
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../trampoline/binaries/pixi-trampoline-aarch64-unknown-linux-musl.zst");
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "macos")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-apple-darwin.zst"
-);
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../trampoline/binaries/pixi-trampoline-x86_64-apple-darwin.zst");
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "windows")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-pc-windows-msvc.exe.zst"
-);
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../trampoline/binaries/pixi-trampoline-x86_64-pc-windows-msvc.exe.zst");
 
 #[cfg(target_arch = "powerpc64")]
 #[cfg(target_endian = "little")]
 #[cfg(target_os = "linux")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-powerpc64le-unknown-linux-gnu.zst"
-);
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../trampoline/binaries/pixi-trampoline-powerpc64le-unknown-linux-gnu.zst");
 
 #[cfg(target_arch = "x86_64")]
 #[cfg(target_os = "linux")]
-const TRAMPOLINE_BIN: &[u8] = include_bytes!(
-    "../../crates/pixi_trampoline/trampolines/pixi-trampoline-x86_64-unknown-linux-musl.zst"
-);
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../trampoline/binaries/pixi-trampoline-x86_64-unknown-linux-musl.zst");
 
 // trampoline configuration folder name
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
