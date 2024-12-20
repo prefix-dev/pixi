@@ -1389,8 +1389,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95ad84121770c9766a67e4dd0a96b0467c6a5a2c43e873bf853aeaa6632b687c"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "itertools 0.13.0",
  "percent-encoding",
@@ -4370,8 +4369,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.28.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb6b55310ef1c0479d8ec23bdaf4f243cad29c7b0e4a855c72e6b2e51bd649e0"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "anyhow",
  "clap",
@@ -4412,8 +4410,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1c21d2868933899284c54f0336269dd1e8f63b979c9a8256020f166cea176b3"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -4442,8 +4439,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.29.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a13391d33d1511153902d8e512a5c84c1f4e84a389fcb6ad650e7909408cf544"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "chrono",
  "dirs",
@@ -4480,8 +4476,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ffd5141cd51f0de194c8c05d97f138d2ea70274636ce911bbdf7dd371942a47"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "blake2",
  "digest",
@@ -4497,8 +4492,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.35"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b54218759724416f1456e3e3e459dcd507690f0b59b4fb2fa158530647bf1f7"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "chrono",
  "file_url",
@@ -4522,8 +4516,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ae24d4a02bfa3805a358d4adcdcb6426f0045c56189f13dc69234b1e4fe9fbe"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "quote",
  "syn",
@@ -4532,8 +4525,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.21.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d10545baa6dc04e294d50984aca155d57ee6e92600296a8d42b6d6d27ded833a"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4561,8 +4553,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3b7f8d479f3e1e9fe5eaa6ccb8cf296258f9d56cb0423baced7720fe9512e6b"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "bzip2 0.5.0",
  "chrono",
@@ -4590,8 +4581,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd7c1c0dd452161e62e6d112ebd12618e61f641609d5205c3a68eb9907254dc2"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -4601,8 +4591,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.21.28"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f24b5beea6fbf6b76356e361897c919abc4bf7db706ae5f5868a24815f2ff711"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4656,8 +4645,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.22.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06401300c3f5718abb5c3ed1c66f9837c5cac5879c33a440d6bf95f4336ba38d"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "enum_dispatch",
  "fs-err",
@@ -4675,8 +4663,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "1.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "896a10d47c9a24f9274f9e54cda3721aa92b316a09a066a7e8aad372d1cd6d28"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "chrono",
  "futures",
@@ -4694,8 +4681,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "1.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bb283545cf1241c2ee61d72c2149a3f32f856ebfa1440ea913c71d438247c7e"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "archspec",
  "libloading",
@@ -5674,8 +5660,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b31ed96d1593e129cc76cb7aca364fb5c173558bfda922c15aac4e2f2f5844e"
+source = "git+https://github.com/wolfv/rattler?branch=blast-directories#ca87b881a4dcf5f3185f5b450e719c3c8ea2d624"
 dependencies = [
  "tokio",
 ]
