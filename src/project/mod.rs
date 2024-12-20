@@ -714,7 +714,7 @@ impl Project {
             }
         }
 
-        // Only save to disk if not a dry run
+        // TODO: Figure out if we really need this save here
         if !dry_run {
             self.save()?;
         }
@@ -803,7 +803,7 @@ impl Project {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // Only write to disk if not a dry run
+        // TODO: figure out if we really need this save here.
         if !dry_run {
             self.save()?;
         }
