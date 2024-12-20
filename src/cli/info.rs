@@ -1,12 +1,13 @@
 use std::{fmt::Display, path::PathBuf};
 
+use crate::cli::cli_config::ProjectConfig;
 use chrono::{DateTime, Local};
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeatureName};
+use pixi_manifest::{EnvironmentName, FeatureName, SystemRequirements};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
@@ -15,8 +16,7 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
-
-use crate::cli::cli_config::ProjectConfig;
+use toml_edit::ser::to_string;
 
 use crate::{
     global,
@@ -26,7 +26,7 @@ use crate::{
 };
 use fancy_display::FancyDisplay;
 
-static WIDTH: usize = 18;
+static WIDTH: usize = 19;
 
 /// Information about the system, project and environments for the current
 /// machine.
@@ -65,6 +65,7 @@ pub struct EnvironmentInfo {
     tasks: Vec<TaskName>,
     channels: Vec<String>,
     prefix: PathBuf,
+    system_requirements: SystemRequirements,
 }
 
 impl Display for EnvironmentInfo {
@@ -145,6 +146,27 @@ impl Display for EnvironmentInfo {
                 platform_list
             )?;
         }
+
+        if !self.system_requirements.is_empty() {
+            let serialized = to_string(&self.system_requirements).unwrap();
+            let indented = serialized
+                .lines()
+                .enumerate()
+                .map(|(i, line)| {
+                    if i == 0 {
+                        // First line includes the label
+                        format!("{:>WIDTH$}: {}", bold.apply_to("System requirements"), line)
+                    } else {
+                        // Subsequent lines are indented to align
+                        format!("{:>WIDTH$}  {}", "", line)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            writeln!(f, "{}", indented)?;
+        }
+
         if !self.tasks.is_empty() {
             let tasks_list = self
                 .tasks
@@ -403,6 +425,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),
                         platforms: env.platforms().into_iter().collect(),
+                        system_requirements: env.system_requirements().clone(),
                         channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
                         prefix: env.dir(),
                         tasks,

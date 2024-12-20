@@ -1,0 +1,10 @@
+---
+source: crates/pixi_manifest/src/system_requirements.rs
+expression: serialized
+snapshot_kind: text
+---
+macos = "10.15"
+linux = "5.11"
+cuda = "12.2"
+libc = "2.12"
+archspec = "x86_64"
