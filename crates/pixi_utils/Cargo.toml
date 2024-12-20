@@ -36,6 +36,7 @@ rattler_conda_types = { workspace = true }
 rattler_networking = { workspace = true, features = ["gcs"] }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
