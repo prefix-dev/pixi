@@ -11,6 +11,7 @@ use rattler_networking::{
 
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
 
 use pixi_config::Config;
@@ -112,6 +113,10 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
 
     client_builder = client_builder.with_arc(Arc::new(
         auth_middleware(&config).expect("could not create auth middleware"),
+    ));
+
+    client_builder = client_builder.with(RetryTransientMiddleware::new_with_policy(
+        default_retry_policy(),
     ));
 
     let authenticated_client = client_builder.build();
