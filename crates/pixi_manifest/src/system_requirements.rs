@@ -522,18 +522,7 @@ mod tests {
         };
 
         let serialized = to_string_pretty(&system_requirements).unwrap();
-
-        let expected = r#"
-        macos = "10.15"
-        linux = "5.11"
-        cuda = "12.2"
-        libc = "2.12"
-        archspec = "x86_64"
-        "#;
-        assert_eq!(
-            serialized.replace("\n", "").replace(" ", ""),
-            expected.replace("\n", "").replace(" ", "")
-        );
+        assert_snapshot!(serialized);
     }
 
     #[test]
@@ -550,19 +539,6 @@ mod tests {
         };
 
         let serialized = to_string_pretty(&system_requirements).unwrap();
-        let expected = r#"
-        macos = "10.15"
-        linux = "5.11"
-        cuda = "12.2"
-        archspec = "x86_64"
-
-        [libc]
-        family = "glibc"
-        version = "2.12"
-        "#;
-        assert_eq!(
-            serialized.replace("\n", "").replace(" ", ""),
-            expected.replace("\n", "").replace(" ", "")
-        );
+        assert_snapshot!(serialized);
     }
 }
