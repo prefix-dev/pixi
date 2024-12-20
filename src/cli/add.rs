@@ -1,5 +1,6 @@
 use clap::Parser;
 use indexmap::IndexMap;
+use miette::IntoDiagnostic;
 use pixi_manifest::FeatureName;
 
 use super::has_specs::HasSpecs;
@@ -120,7 +121,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // TODO: add dry_run logic to add
     let dry_run = false;
 
-    let update_deps = project
+    // Save original manifest
+    let original_manifest_content =
+        fs_err::read_to_string(project.manifest_path()).into_diagnostic()?;
+
+    let update_deps = match project
         .update_dependencies(
             match_specs,
             pypi_deps,
@@ -130,7 +135,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             args.editable,
             dry_run,
         )
-        .await?;
+        .await
+    {
+        Ok(update_deps) => update_deps,
+        Err(e) => {
+            // Restore original manifest
+            fs_err::write(project.manifest_path(), original_manifest_content).into_diagnostic()?;
+            return Err(e);
+        }
+    };
 
     if let Some(update_deps) = update_deps {
         // Notify the user we succeeded
