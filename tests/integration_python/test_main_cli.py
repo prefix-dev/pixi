@@ -714,3 +714,37 @@ def test_concurrency_flags(
             "package3",
         ]
     )
+
+
+def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+
+    # Modify project without manifest path
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "description",
+            "set",
+            "blabla",
+        ],
+        ExitCode.SUCCESS,
+        cwd=tmp_pixi_workspace,
+    )
+
+    # Verify project by manifest path to 'pixi.toml'
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "description", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="blabla",
+    )
+
+    # Verify project by manifest path to workspace
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", tmp_pixi_workspace, "description", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="blabla",
+    )
