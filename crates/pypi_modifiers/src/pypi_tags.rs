@@ -25,7 +25,8 @@ pub fn get_pypi_tags(
     let platform = get_platform_tags(platform, system_requirements)?;
     let python_version = get_python_version(python_record)?;
     let implementation_name = get_implementation_name(python_record)?;
-    create_tags(platform, python_version, implementation_name)
+    let gil_disabled = gil_disabled(python_record)?;
+    create_tags(platform, python_version, implementation_name, gil_disabled)
 }
 
 /// Create a uv platform tag for the specified platform
@@ -159,10 +160,20 @@ fn get_implementation_name(python_record: &PackageRecord) -> miette::Result<&'st
     }
 }
 
+/// Return whether the specified record has gil disabled (by being a free-threaded python interpreter)
+/// by looking into the build string of the record.
+fn gil_disabled(python_record: &PackageRecord) -> miette::Result<bool> {
+    match &python_record.build.ends_with("t") {
+        true => Ok(true),
+        false => Ok(false),
+    }
+}
+
 fn create_tags(
     platform: uv_platform_tags::Platform,
     python_version: (u8, u8),
     implementation_name: &str,
+    gil_disabled: bool,
 ) -> miette::Result<Tags> {
     // Build the wheel tags based on the interpreter, the target platform, and the python version.
     let tags = Tags::from_env(
@@ -173,7 +184,7 @@ fn create_tags(
         python_version,
         true,
         // Should revisit this when this lands: https://github.com/conda-forge/python-feedstock/pull/679
-        false,
+        gil_disabled,
     )
     .into_diagnostic()
     .context("failed to determine the python wheel tags for the target platform")?;
