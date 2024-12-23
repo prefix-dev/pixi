@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### [0.39.4] - 2024-12-23
 #### ✨ Highlights
-To finish up the last release's Christmas present, the environment installation for macOS just got another huge speedup! 🚀
+Last release got an additional speedup for macOS specifically! 🚀
 
 #### Performance
 - Speedup environment installation on macOS by @wolfv in [#2754](https://github.com/prefix-dev/pixi/pull/2701)
