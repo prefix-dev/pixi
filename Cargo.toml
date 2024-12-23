@@ -313,8 +313,8 @@ zstd = { workspace = true }
 libc = { workspace = true, default-features = false }
 nix = { workspace = true, features = ["poll", "term"] }
 pixi_pty = { path = "crates/pixi_pty" }
-signal-hook = { workspace = true }
 sha2 = { workspace = true, features = ["asm"] }
+signal-hook = { workspace = true }
 
 [profile.dist]
 codegen-units = 1
