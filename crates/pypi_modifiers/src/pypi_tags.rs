@@ -183,7 +183,6 @@ fn create_tags(
         // TODO: This might not be entirely correct..
         python_version,
         true,
-        // Should revisit this when this lands: https://github.com/conda-forge/python-feedstock/pull/679
         gil_disabled,
     )
     .into_diagnostic()
