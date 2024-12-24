@@ -25,8 +25,8 @@ use crate::{
     to_options,
     toml::{ExternalWorkspaceProperties, TomlDocument, TomlManifest},
     BuildSystem, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector, Task,
-    TaskName, WorkspaceManifest, WorkspaceTarget,
+    GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, SystemRequirements,
+    TargetSelector, Task, TaskName, WorkspaceManifest, WorkspaceTarget,
 };
 
 #[derive(Debug, Clone)]
@@ -665,6 +665,36 @@ impl Manifest {
         );
         self.source.set_version(version);
         Ok(())
+    }
+
+    /// Add a system requirement to the project
+    pub fn add_system_requirement(
+        &mut self,
+        system_requirements: SystemRequirements,
+        feature_name: &FeatureName,
+    ) -> miette::Result<SystemRequirements> {
+        // Get the current system requirements
+        let current = match feature_name {
+            FeatureName::Default => &mut self.workspace.default_feature_mut().system_requirements,
+            FeatureName::Named(_) => {
+                &mut self
+                    .get_or_insert_feature_mut(feature_name)
+                    .system_requirements
+            }
+        };
+
+        // Replace the system requirements with the new ones
+        // All given requirements are replaced, all optional requirements are kept
+        let result = current.union(&system_requirements).into_diagnostic()?;
+
+        *current = result.clone();
+
+        // Update the TOML document
+        self.source
+            .add_system_requirements(&result, feature_name)
+            .into_diagnostic()?;
+
+        Ok(result)
     }
 
     /// Returns a mutable reference to a target, creating it if needed

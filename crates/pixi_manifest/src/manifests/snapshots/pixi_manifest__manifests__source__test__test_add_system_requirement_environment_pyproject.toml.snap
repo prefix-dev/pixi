@@ -9,5 +9,9 @@ name = "test"
 channels = []
 platforms = []
 
-[tool.pixi.environments]
-bar = ["default"]
+[tool.pixi.system-requirements]
+linux = "4.18"
+cuda = "11.1"
+macos = "13.0"
+libc = { family = "glibc", version = "1.2" }
+archspec = "x86_64"
