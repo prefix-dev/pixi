@@ -87,7 +87,7 @@ You can then specify the corresponding environment in the bottom right corner of
 ### Multiple pixi projects
 
 When using multiple pixi projects, remember to select the correct _Conda Executable_ for each project as mentioned above.
-It also might come up that you have multiple environments it might come up that you have multiple environments with the same name.
+It also might come up that you have multiple environments with the same name.
 
 ![Multiple default environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-light.png#only-light)
 ![Multiple default environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-dark.png#only-dark)
