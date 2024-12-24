@@ -5,9 +5,8 @@ snapshot_kind: text
 ---
 [project]
 name = "test"
-[tool.pixi.project]
 channels = []
 platforms = []
 
-[tool.pixi.environments]
-bar = ["default"]
+[system-requirements]
+libc = { family = "glibc", version = "1.2" }
