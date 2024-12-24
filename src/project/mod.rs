@@ -243,6 +243,9 @@ impl Project {
     pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
         let project = match manifest_path {
             Some(path) => {
+                if !path.exists() {
+                    miette::bail!("manifest path does not exist at {}", path.to_string_lossy());
+                }
                 let path = if path.is_dir() {
                     &find_project_manifest(path).ok_or_else(|| {
                         miette::miette!(
