@@ -458,7 +458,9 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
         project::environment::execute(project::environment::Args {
-            manifest_path: self.manifest_path,
+            project_config: ProjectConfig {
+                manifest_path: self.manifest_path,
+            },
             command: project::environment::Command::Add(self.args),
         })
         .boxed_local()
