@@ -514,16 +514,12 @@ def test_upgrade_pypi_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
 
     # Check dry-run
-    verify_cli_command(
-        [pixi, "add", "--pypi", "--manifest-path", manifest_path, "array-api-extra"]
-    )
+    verify_cli_command([pixi, "add", "--pypi", "--manifest-path", manifest_path, "array-api-extra"])
 
     manifest_content = manifest_path.read_text()
     lock_file_content = lock_file_path.read_text()
 
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "--dry-run"]
-    )
+    verify_cli_command([pixi, "upgrade", "--manifest-path", manifest_path, "--dry-run"])
 
     assert manifest_path.read_text() == manifest_content
     assert lock_file_path.read_text() == lock_file_content
