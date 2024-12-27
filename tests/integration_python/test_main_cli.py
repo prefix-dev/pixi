@@ -480,6 +480,7 @@ def test_upgrade_dryrun(
 @pytest.mark.slow
 def test_upgrade_pypi_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
+    lock_file_path = tmp_pixi_workspace / "pixi.lock"
 
     # Create a new project
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -511,6 +512,22 @@ def test_upgrade_pypi_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
     parsed_manifest = tomllib.loads(manifest_path.read_text())
     assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] != "==0.26.0"
     assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
+
+    # Check dry-run
+    verify_cli_command(
+        [pixi, "add", "--pypi", "--manifest-path", manifest_path, "array-api-extra"]
+    )
+
+    manifest_content = manifest_path.read_text()
+    lock_file_content = lock_file_path.read_text()
+
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "--dry-run"]
+    )
+
+    assert manifest_path.read_text() == manifest_content
+    assert lock_file_path.read_text() == lock_file_content
+    # assert not os.path.exists(tmp_pixi_workspace / ".pixi")
 
 
 @pytest.mark.slow

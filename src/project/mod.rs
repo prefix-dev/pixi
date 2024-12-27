@@ -773,7 +773,7 @@ impl Project {
             io_concurrency_limit,
         } = UpdateContext::builder(self)
             .with_lock_file(unlocked_lock_file)
-            .with_no_install(prefix_update_config.no_install() || dry_run)
+            .with_no_install(prefix_update_config.no_install())
             .finish()
             .await?
             .update()
