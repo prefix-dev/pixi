@@ -112,7 +112,7 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
         script,
         replacement
             .replace("BIN_NAME", bin_name)
-            .replace("CLAP_NANE", &clap_name),
+            .replace("CLAP_NAME", &clap_name),
     )
 }
 
