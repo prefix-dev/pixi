@@ -82,8 +82,8 @@ pub fn execute(args: Args) -> miette::Result<()> {
 /// Generate the completion script using clap_complete for a specified shell.
 fn get_completion_script(shell: Shell) -> String {
     let mut buf = vec![];
-    let bin_name: String = pixi_consts::consts::PIXI_BIN_NAME.to_string();
-    clap_complete::generate(shell, &mut CommandArgs::command(), &bin_name, &mut buf);
+    let bin_name: &str = pixi_consts::consts::PIXI_BIN_NAME.as_str();
+    clap_complete::generate(shell, &mut CommandArgs::command(), bin_name, &mut buf);
     String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
 }
 
@@ -92,11 +92,10 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
-    let bin_name: String = pixi_consts::consts::PIXI_BIN_NAME
-        .to_string()
-        .replace('-', "__");
-    let pattern = format!(r#"(?s){}__run\).*?opts="(.*?)".*?(if.*?fi)"#, &bin_name);
-    let replacement = r#"BIN_NAME__run)
+    let bin_name: &str = pixi_consts::consts::PIXI_BIN_NAME.as_str();
+    let clap_name = bin_name.replace("-", "__");
+    let pattern = format!(r#"(?s){}__run\).*?opts="(.*?)".*?(if.*?fi)"#, &clap_name);
+    let replacement = r#"CLAP_NAME__run)
             opts="$1"
             if [[ $${cur} == -* ]] ; then
                COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
@@ -109,7 +108,7 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
                fi
             fi"#;
     let re = Regex::new(pattern.as_str()).unwrap();
-    re.replace(script, replacement.replace("BIN_NAME", &bin_name))
+    re.replace(script, replacement.replace("BIN_NAME", bin_name).replace("CLAP_NANE", &clap_name))
 }
 
 /// Replace the parts of the zsh completion script that need different functionality.
@@ -117,7 +116,7 @@ fn replace_zsh_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";
-    let bin_name: String = pixi_consts::consts::PIXI_BIN_NAME.to_string();
+    let bin_name: &str = pixi_consts::consts::PIXI_BIN_NAME.as_str();
     let replacement = r#"$1
 local tasks
 tasks=("$${(@s/ /)$$(BIN_NAME task list --machine-readable 2> /dev/null)}")
@@ -130,12 +129,12 @@ fi
 $2::task"#;
 
     let re = Regex::new(pattern).unwrap();
-    re.replace(script, replacement.replace("BIN_NAME", &bin_name))
+    re.replace(script, replacement.replace("BIN_NAME", bin_name))
 }
 
 fn replace_fish_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
-    let bin_name = pixi_consts::consts::PIXI_BIN_NAME.to_string();
+    let bin_name = pixi_consts::consts::PIXI_BIN_NAME.as_str();
     let addition = format!("complete -c {} -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' ({} task list --machine-readable  2> /dev/null))\"", bin_name, bin_name);
     let new_script = format!("{}{}\n", script, addition);
     let pattern = r#"-n "__fish_seen_subcommand_from run""#;
@@ -149,7 +148,7 @@ fn replace_fish_completion(script: &str) -> Cow<str> {
 fn replace_nushell_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
-    let bin_name = pixi_consts::consts::PIXI_BIN_NAME.to_string();
+    let bin_name = pixi_consts::consts::PIXI_BIN_NAME.as_str();
     let pattern = format!(
         r#"(#.*\n  export extern "{} run".*\n.*...task: string)([^\]]*--environment\(-e\): string)"#,
         bin_name
@@ -213,7 +212,6 @@ _arguments "${_arguments_options[@]}" \
         "#;
         let result = replace_zsh_completion(script);
         let replacement = format!("{} task list", pixi_consts::consts::PIXI_BIN_NAME.as_str());
-        println!("{}", result);
         insta::with_settings!({filters => vec![
             (replacement.as_str(), "pixi task list"),
         ]}, {
@@ -270,7 +268,15 @@ _arguments "${_arguments_options[@]}" \
             ;;
         "#;
         let result = replace_bash_completion(script);
-        insta::assert_snapshot!(result);
+        let replacement = format!("{} task list", pixi_consts::consts::PIXI_BIN_NAME.as_str());
+        let zsh_arg_name = format!("{}__", pixi_consts::consts::PIXI_BIN_NAME.as_str().replace("-", "__"));
+        println!("{}", result);
+        insta::with_settings!({filters => vec![
+            (replacement.as_str(), "pixi task list"),
+            (zsh_arg_name.as_str(), "[PIXI COMMAND]"),
+        ]}, {
+            insta::assert_snapshot!(result);
+        });
     }
 
     #[test]
@@ -295,7 +301,15 @@ _arguments "${_arguments_options[@]}" \
     --help(-h)                # Print help (see more with '--help')
   ]"#;
         let result = replace_nushell_completion(script);
-        insta::assert_snapshot!(result);
+        let replacement = format!("{} run", pixi_consts::consts::PIXI_BIN_NAME.as_str());
+        let nu_complete_run = format!("nu-complete {} run", pixi_consts::consts::PIXI_BIN_NAME.as_str());
+        println!("{}", result);
+        insta::with_settings!({filters => vec![
+            (replacement.as_str(), "[PIXI RUN]"),
+            (nu_complete_run.as_str(), "[nu_complete_run PIXI COMMAND]"),
+        ]}, {
+            insta::assert_snapshot!(result);
+        });
     }
 
     #[test]

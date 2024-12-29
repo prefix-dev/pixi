@@ -229,7 +229,7 @@ impl Project {
             "could not find {} or {} which is configured to use {}",
             consts::PROJECT_MANIFEST,
             consts::PYPROJECT_MANIFEST,
-            consts::PIXI_BIN_NAME.to_string()
+            consts::PIXI_BIN_NAME.as_str()
         );
     }
 
