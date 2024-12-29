@@ -170,7 +170,7 @@ fn replace_nushell_completion(script: &str) -> Cow<str> {
   ${1}@"nu-complete BIN_NAME run"${2}@"nu-complete BIN_NAME run environment""#;
 
     let re = Regex::new(pattern.as_str()).unwrap();
-    re.replace(script, replacement.replace("BIN_NAME", &bin_name))
+    re.replace(script, replacement.replace("BIN_NAME", bin_name))
 }
 
 #[cfg(test)]
