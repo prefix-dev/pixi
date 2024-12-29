@@ -335,7 +335,7 @@ strip = false
 async-trait = { workspace = true }
 fake = "3.0.1"
 http = { workspace = true }
-insta = { workspace = true, features = ["yaml", "glob"] }
+insta = { workspace = true, features = ["yaml", "glob", "filters"] }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }

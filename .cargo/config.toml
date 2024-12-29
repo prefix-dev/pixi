@@ -12,8 +12,12 @@ rustflags = [
   "link-arg=/STACK:8000000",
 ]
 
-# Required for `dist` to work with linux arm targets: https://github.com/axodotdev/cargo-dist/issues/74#issuecomment-2053680080
 [env]
+PIXI_CONFIG_DIR = "pixi"
+PIXI_PROJECT_LOCK_FILE = "pixi.lock"
+PIXI_DEFAULT_CHANNELS = "conda-forge"
+PIXI_DIR = ".pixi"
+# Required for `dist` to work with linux arm targets: https://github.com/axodotdev/cargo-dist/issues/74#issuecomment-2053680080
 CC_aarch64_unknown_linux_musl = "aarch64-linux-gnu-gcc"
 
 [target.aarch64-unknown-linux-musl]
