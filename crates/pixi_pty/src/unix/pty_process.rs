@@ -132,13 +132,6 @@ impl PtyProcess {
         unsafe { Ok(File::from_raw_fd(fd)) }
     }
 
-    /// At the drop of PtyProcess the running process is killed. This is blocking forever if
-    /// the process does not react to a normal kill. If kill_timeout is set the process is
-    /// `kill -9`ed after duration
-    pub(crate) fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
-        self.kill_timeout = timeout_ms.map(time::Duration::from_millis);
-    }
-
     /// Get status of child process, non-blocking.
     ///
     /// This method runs waitpid on the process.
@@ -152,20 +145,9 @@ impl PtyProcess {
         }
     }
 
-    /// Wait until process has exited. This is a blocking call.
-    /// If the process doesn't terminate this will block forever.
-    pub(crate) fn wait(&self) -> nix::Result<wait::WaitStatus> {
-        wait::waitpid(self.child_pid, None)
-    }
-
     /// Regularly exit the process, this method is blocking until the process is dead
     pub(crate) fn exit(&mut self) -> nix::Result<wait::WaitStatus> {
         self.kill(signal::SIGTERM)
-    }
-
-    /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
-    pub(crate) fn signal(&mut self, sig: signal::Signal) -> nix::Result<()> {
-        signal::kill(self.child_pid, sig)
     }
 
     /// Kill the process with a specific signal. This method blocks, until the process is dead

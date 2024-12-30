@@ -123,11 +123,11 @@ impl Fetch {
         &self.git
     }
 
-    pub(crate) fn path(&self) -> &Path {
+    pub fn path(&self) -> &Path {
         &self.path
     }
 
-    pub(crate) fn into_git(self) -> GitUrl {
+    pub fn into_git(self) -> GitUrl {
         self.git
     }
 

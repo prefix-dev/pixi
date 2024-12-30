@@ -168,6 +168,7 @@ impl BuildContext {
     }
 
     /// Sets the input hash cache to use for caching input hashes.
+    #[allow(unused)]
     pub(crate) fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
         Self {
             glob_hash_cache,

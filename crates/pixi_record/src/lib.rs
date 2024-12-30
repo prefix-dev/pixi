@@ -37,6 +37,7 @@ impl PixiRecord {
     }
 
     /// Converts this instance into a binary record if it is a binary record.
+    #[allow(unused)]
     pub(crate) fn into_binary(self) -> Option<RepoDataRecord> {
         match self {
             PixiRecord::Binary(record) => Some(record),
@@ -55,23 +56,6 @@ impl PixiRecord {
 
     /// Returns the source record if it is a source record.
     pub fn as_source(&self) -> Option<&SourceRecord> {
-        match self {
-            PixiRecord::Binary(_) => None,
-            PixiRecord::Source(record) => Some(record),
-        }
-    }
-
-    /// Converts this instance into a source record if it is a source record.
-    pub(crate) fn into_source(self) -> Option<SourceRecord> {
-        match self {
-            PixiRecord::Binary(_) => None,
-            PixiRecord::Source(record) => Some(record),
-        }
-    }
-
-    /// Returns a mutable reference to the source record if it is a source
-    /// record.
-    pub(crate) fn as_source_mut(&mut self) -> Option<&mut SourceRecord> {
         match self {
             PixiRecord::Binary(_) => None,
             PixiRecord::Source(record) => Some(record),

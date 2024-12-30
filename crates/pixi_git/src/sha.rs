@@ -65,12 +65,6 @@ impl Display for GitOid {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GitSha(GitOid);
 
-impl GitSha {
-    /// Convert the SHA to a truncated representation, i.e., the first 16 characters of the SHA.
-    pub(crate) fn to_short_string(&self) -> String {
-        self.0.to_string()[0..16].to_string()
-    }
-}
 impl Display for GitSha {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

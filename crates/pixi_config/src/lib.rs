@@ -995,6 +995,7 @@ impl Config {
         &self.channel_config
     }
 
+    #[cfg(test)]
     pub(crate) fn repodata_config(&self) -> &RepodataConfig {
         &self.repodata_config
     }
