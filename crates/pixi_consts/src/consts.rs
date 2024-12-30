@@ -53,7 +53,7 @@ pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
 
 lazy_static! {
     /// The default channels to use for a new project.
-    pub static ref DEFAULT_CHANNELS: Vec<String> = match option_env!("PIXI_DEFAULT_CHANNELS") {
+    pub static ref DEFAULT_CHANNELS: Vec<NamedChannelOrUrl> = match option_env!("PIXI_DEFAULT_CHANNELS") {
         Some(channels) => channels.split(',').map(|s| s.to_string()).collect(),
         None => vec!["conda-forge".to_string()],
     };
