@@ -39,7 +39,7 @@ pub struct GitResolver(Arc<DashMap<RepositoryReference, GitSha>>);
 
 impl GitResolver {
     /// Inserts a new [`GitSha`] for the given [`RepositoryReference`].
-    pub fn insert(&self, reference: RepositoryReference, sha: GitSha) {
+    pub(crate) fn insert(&self, reference: RepositoryReference, sha: GitSha) {
         self.0.insert(reference, sha);
     }
 
@@ -109,14 +109,14 @@ impl GitResolver {
     /// This method will only return precise URLs for URLs that have already been resolved via
     /// `resolve_precise`, and will return `None` for URLs that have not been resolved _or_
     /// already have a precise reference.
-    pub fn precise(&self, url: GitUrl) -> Option<GitUrl> {
+    pub(crate) fn precise(&self, url: GitUrl) -> Option<GitUrl> {
         let reference = RepositoryReference::from(&url);
         let precise = self.get(&reference)?;
         Some(url.with_precise(*precise))
     }
 
     /// Returns `true` if the two Git URLs refer to the same precise commit.
-    pub fn same_ref(&self, a: &GitUrl, b: &GitUrl) -> bool {
+    pub(crate) fn same_ref(&self, a: &GitUrl, b: &GitUrl) -> bool {
         // Convert `a` to a repository URL.
         let a_ref = RepositoryReference::from(a);
 

@@ -5,7 +5,7 @@ use url::Url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp};
 use uv_distribution_types::InstalledDist;
 
-pub fn elapsed(duration: Duration) -> String {
+pub(crate) fn elapsed(duration: Duration) -> String {
     let secs = duration.as_secs();
 
     if secs >= 60 {
@@ -21,7 +21,7 @@ pub fn elapsed(duration: Duration) -> String {
 /// Files, git, are direct urls
 /// Direct urls to wheels or sdists are prefixed with a `direct` scheme
 /// by us when resolving the lock file
-pub fn is_direct_url(url_scheme: &str) -> bool {
+pub(crate) fn is_direct_url(url_scheme: &str) -> bool {
     url_scheme == "file"
         || url_scheme == "git+http"
         || url_scheme == "git+https"
@@ -30,7 +30,7 @@ pub fn is_direct_url(url_scheme: &str) -> bool {
 }
 
 /// Strip of the `direct` scheme from the url if it is there
-pub fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
+pub(crate) fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
     url.as_ref()
         .strip_prefix("direct+")
         .and_then(|str| Url::from_str(str).ok())
@@ -39,7 +39,7 @@ pub fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
 }
 
 /// Check freshness of a locked url against an installed dist
-pub fn check_url_freshness(
+pub(crate) fn check_url_freshness(
     locked_url: &Url,
     installed_dist: &InstalledDist,
 ) -> miette::Result<bool> {

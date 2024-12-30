@@ -20,12 +20,16 @@ pub struct GitStore(RwLock<HashMap<RepositoryUrl, Arc<Credentials>>>);
 
 impl GitStore {
     /// Insert [`Credentials`] for the given URL into the store.
-    pub fn insert(&self, url: RepositoryUrl, credentials: Credentials) -> Option<Arc<Credentials>> {
+    pub(crate) fn insert(
+        &self,
+        url: RepositoryUrl,
+        credentials: Credentials,
+    ) -> Option<Arc<Credentials>> {
         self.0.write().unwrap().insert(url, Arc::new(credentials))
     }
 
     /// Get the [`Credentials`] for the given URL, if they exist.
-    pub fn get(&self, url: &RepositoryUrl) -> Option<Arc<Credentials>> {
+    pub(crate) fn get(&self, url: &RepositoryUrl) -> Option<Arc<Credentials>> {
         self.0.read().unwrap().get(url).cloned()
     }
 }
@@ -89,18 +93,18 @@ impl From<Option<String>> for Username {
 }
 
 impl Credentials {
-    pub fn username(&self) -> Option<&str> {
+    pub(crate) fn username(&self) -> Option<&str> {
         self.username.as_deref()
     }
 
-    pub fn password(&self) -> Option<&str> {
+    pub(crate) fn password(&self) -> Option<&str> {
         self.password.as_deref()
     }
 
     /// Apply the credentials to the given URL.
     ///
     /// Any existing credentials will be overridden.
-    pub fn apply(&self, mut url: Url) -> Url {
+    pub(crate) fn apply(&self, mut url: Url) -> Url {
         if let Some(username) = self.username() {
             let _ = url.set_username(username);
         }
@@ -113,7 +117,7 @@ impl Credentials {
     /// Parse [`Credentials`] from a URL, if any.
     ///
     /// Returns [`None`] if both [`Url::username`] and [`Url::password`] are not populated.
-    pub fn from_url(url: &Url) -> Option<Self> {
+    pub(crate) fn from_url(url: &Url) -> Option<Self> {
         if url.username().is_empty() && url.password().is_none() {
             return None;
         }

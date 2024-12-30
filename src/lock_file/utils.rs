@@ -28,7 +28,7 @@ impl From<IoConcurrencyLimit> for Arc<Semaphore> {
 }
 
 /// Constructs a new lock-file where some of the packages have been removed
-pub fn filter_lock_file<
+pub(crate) fn filter_lock_file<
     'p,
     'lock,
     F: FnMut(&Environment<'p>, Platform, LockedPackageRef<'lock>) -> bool,

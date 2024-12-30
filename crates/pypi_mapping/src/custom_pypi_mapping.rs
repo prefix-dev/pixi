@@ -45,7 +45,7 @@ pub async fn fetch_mapping_from_url(
     Ok(mapping_by_name)
 }
 
-pub fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
+pub(crate) fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
     let file = fs_err::File::open(path)
         .into_diagnostic()
         .context(format!("failed to open file {}", path.display()))?;
@@ -181,7 +181,7 @@ fn amend_pypi_purls_for_record(
     Ok(())
 }
 
-pub fn _amend_only_custom_pypi_purls(
+pub(crate) fn _amend_only_custom_pypi_purls(
     conda_packages: &mut [RepoDataRecord],
     custom_mapping: &HashMap<String, CompressedMapping>,
 ) -> miette::Result<()> {

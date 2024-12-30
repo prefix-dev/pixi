@@ -45,7 +45,7 @@ pub fn default_progress_style() -> indicatif::ProgressStyle {
 }
 
 /// Returns the style to use for a progressbar that is in Deserializing state.
-pub fn deserializing_progress_style() -> indicatif::ProgressStyle {
+pub(crate) fn deserializing_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::default_bar()
         .template("  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {wide_msg}")
         .unwrap()
@@ -53,7 +53,7 @@ pub fn deserializing_progress_style() -> indicatif::ProgressStyle {
 }
 
 /// Returns the style to use for a progressbar that is finished.
-pub fn finished_progress_style() -> indicatif::ProgressStyle {
+pub(crate) fn finished_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::default_bar()
         .template(&format!(
             "  {} {{prefix:20!}} [{{elapsed_precise}}] {{msg:.bold}}",
@@ -64,7 +64,7 @@ pub fn finished_progress_style() -> indicatif::ProgressStyle {
 }
 
 /// Returns the style to use for a progressbar that is in error state.
-pub fn errored_progress_style() -> indicatif::ProgressStyle {
+pub(crate) fn errored_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::default_bar()
         .template(&format!(
             "  {} {{prefix:20!}} [{{elapsed_precise}}] {{msg:.bold.red}}",
@@ -159,7 +159,7 @@ impl ScopedTask {
 
 impl ProgressBarMessageFormatter {
     /// Construct a new instance that will update the given progress bar.
-    pub fn new(progress_bar: ProgressBar) -> Self {
+    pub(crate) fn new(progress_bar: ProgressBar) -> Self {
         Self::new_with_capacity(progress_bar, 50)
     }
 
@@ -198,7 +198,7 @@ impl ProgressBarMessageFormatter {
     }
 
     /// Returns the associated progress bar
-    pub fn progress_bar(&self) -> &ProgressBar {
+    pub(crate) fn progress_bar(&self) -> &ProgressBar {
         &self.pb
     }
 
@@ -241,7 +241,7 @@ impl ProgressBarMessageFormatter {
     }
 
     /// Convert this instance into the underlying progress bar.
-    pub fn into_progress_bar(self) -> ProgressBar {
+    pub(crate) fn into_progress_bar(self) -> ProgressBar {
         self.pb
     }
 }

@@ -64,7 +64,7 @@ pub struct PtyProcessOptions {
 
 impl PtyProcess {
     /// Start a process in a forked pty
-    pub fn new(mut command: Command, opts: PtyProcessOptions) -> nix::Result<Self> {
+    pub(crate) fn new(mut command: Command, opts: PtyProcessOptions) -> nix::Result<Self> {
         // Open a new PTY master
         let master_fd = posix_openpt(OFlag::O_RDWR)?;
 
@@ -126,7 +126,7 @@ impl PtyProcess {
     }
 
     /// Get handle to pty fork for reading/writing
-    pub fn get_file_handle(&self) -> nix::Result<File> {
+    pub(crate) fn get_file_handle(&self) -> nix::Result<File> {
         // needed because otherwise fd is closed both by dropping process and reader/writer
         let fd = dup(self.pty.as_raw_fd())?;
         unsafe { Ok(File::from_raw_fd(fd)) }
@@ -135,7 +135,7 @@ impl PtyProcess {
     /// At the drop of PtyProcess the running process is killed. This is blocking forever if
     /// the process does not react to a normal kill. If kill_timeout is set the process is
     /// `kill -9`ed after duration
-    pub fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
+    pub(crate) fn set_kill_timeout(&mut self, timeout_ms: Option<u64>) {
         self.kill_timeout = timeout_ms.map(time::Duration::from_millis);
     }
 
@@ -144,7 +144,7 @@ impl PtyProcess {
     /// This method runs waitpid on the process.
     /// This means: If you ran `exit()` before or `status()` this method will
     /// return `None`
-    pub fn status(&self) -> Option<wait::WaitStatus> {
+    pub(crate) fn status(&self) -> Option<wait::WaitStatus> {
         if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
             Some(status)
         } else {
@@ -154,17 +154,17 @@ impl PtyProcess {
 
     /// Wait until process has exited. This is a blocking call.
     /// If the process doesn't terminate this will block forever.
-    pub fn wait(&self) -> nix::Result<wait::WaitStatus> {
+    pub(crate) fn wait(&self) -> nix::Result<wait::WaitStatus> {
         wait::waitpid(self.child_pid, None)
     }
 
     /// Regularly exit the process, this method is blocking until the process is dead
-    pub fn exit(&mut self) -> nix::Result<wait::WaitStatus> {
+    pub(crate) fn exit(&mut self) -> nix::Result<wait::WaitStatus> {
         self.kill(signal::SIGTERM)
     }
 
     /// Non-blocking variant of `kill()` (doesn't wait for process to be killed)
-    pub fn signal(&mut self, sig: signal::Signal) -> nix::Result<()> {
+    pub(crate) fn signal(&mut self, sig: signal::Signal) -> nix::Result<()> {
         signal::kill(self.child_pid, sig)
     }
 
@@ -176,7 +176,7 @@ impl PtyProcess {
     ///
     /// if `kill_timeout` is set and a repeated sending of signal does not result in the process
     /// being killed, then `kill -9` is sent after the `kill_timeout` duration has elapsed.
-    pub fn kill(&mut self, sig: signal::Signal) -> nix::Result<wait::WaitStatus> {
+    pub(crate) fn kill(&mut self, sig: signal::Signal) -> nix::Result<wait::WaitStatus> {
         let start = time::Instant::now();
         loop {
             match signal::kill(self.child_pid, sig) {
@@ -202,7 +202,7 @@ impl PtyProcess {
     }
 
     /// Set raw mode on stdin and return the original mode
-    pub fn set_raw(&self) -> nix::Result<Termios> {
+    pub(crate) fn set_raw(&self) -> nix::Result<Termios> {
         let original_mode = termios::tcgetattr(io::stdin())?;
         let mut raw_mode = original_mode.clone();
         raw_mode.input_flags.remove(
@@ -232,22 +232,22 @@ impl PtyProcess {
         Ok(original_mode)
     }
 
-    pub fn set_mode(&self, original_mode: Termios) -> nix::Result<()> {
+    pub(crate) fn set_mode(&self, original_mode: Termios) -> nix::Result<()> {
         termios::tcsetattr(io::stdin(), termios::SetArg::TCSAFLUSH, &original_mode)?;
         Ok(())
     }
 
-    pub fn set_window_size(&self, window_size: Winsize) -> nix::Result<()> {
+    pub(crate) fn set_window_size(&self, window_size: Winsize) -> nix::Result<()> {
         set_window_size(self.pty.as_raw_fd(), window_size)
     }
 }
 
-pub fn set_window_size(raw_fd: i32, window_size: Winsize) -> nix::Result<()> {
+pub(crate) fn set_window_size(raw_fd: i32, window_size: Winsize) -> nix::Result<()> {
     unsafe { libc::ioctl(raw_fd, nix::libc::TIOCSWINSZ, &window_size) };
     Ok(())
 }
 
-pub fn set_echo<Fd: AsFd>(fd: Fd, echo: bool) -> nix::Result<()> {
+pub(crate) fn set_echo<Fd: AsFd>(fd: Fd, echo: bool) -> nix::Result<()> {
     let mut flags = termios::tcgetattr(&fd)?;
     if echo {
         flags.local_flags.insert(termios::LocalFlags::ECHO);

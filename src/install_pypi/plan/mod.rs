@@ -568,7 +568,7 @@ pub struct InstallPlanner {
 }
 
 impl InstallPlanner {
-    pub fn new(
+    pub(crate) fn new(
         uv_cache: Cache,
         python_version: &uv_pep440::Version,
         lock_file_dir: impl AsRef<Path>,
@@ -626,7 +626,11 @@ impl InstallPlanner {
     ///
     /// All the 'a lifetimes are to to make sure that the names provided to the CachedDistProvider
     /// are valid for the lifetime of the CachedDistProvider and what is passed to the method
-    pub fn plan<'a, Installed: InstalledDistProvider<'a>, Cached: CachedDistProvider<'a> + 'a>(
+    pub(crate) fn plan<
+        'a,
+        Installed: InstalledDistProvider<'a>,
+        Cached: CachedDistProvider<'a> + 'a,
+    >(
         &self,
         site_packages: &'a Installed,
         mut dist_cache: Cached,

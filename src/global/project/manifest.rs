@@ -38,14 +38,17 @@ pub struct Manifest {
 
 impl Manifest {
     /// Creates a new manifest from a path
-    pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
+    pub(crate) fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
         let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
         let contents = fs_err::read_to_string(path.as_ref()).into_diagnostic()?;
         Self::from_str(manifest_path.as_ref(), contents)
     }
 
     /// Creates a new manifest from a string
-    pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
+    pub(crate) fn from_str(
+        manifest_path: &Path,
+        contents: impl Into<String>,
+    ) -> miette::Result<Self> {
         let contents = contents.into();
         let parsed = ParsedManifest::from_toml_str(&contents);
 
@@ -70,7 +73,7 @@ impl Manifest {
     }
 
     /// Adds an environment to the manifest
-    pub fn add_environment(
+    pub(crate) fn add_environment(
         &mut self,
         env_name: &EnvironmentName,
         channels: Option<Vec<NamedChannelOrUrl>>,
@@ -104,7 +107,7 @@ impl Manifest {
     }
 
     /// Removes a specific environment from the manifest
-    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<()> {
+    pub(crate) fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<()> {
         // Update self.parsed
         self.parsed.envs.shift_remove(env_name).ok_or_else(|| {
             miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
@@ -126,7 +129,7 @@ impl Manifest {
     }
 
     /// Adds a dependency to the manifest
-    pub fn add_dependency(
+    pub(crate) fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,
         spec: &MatchSpec,
@@ -166,7 +169,7 @@ impl Manifest {
     }
 
     /// Removes a dependency from the manifest
-    pub fn remove_dependency(
+    pub(crate) fn remove_dependency(
         &mut self,
         env_name: &EnvironmentName,
         spec: &MatchSpec,
@@ -206,7 +209,7 @@ impl Manifest {
     }
 
     /// Sets the platform of a specific environment in the manifest
-    pub fn set_platform(
+    pub(crate) fn set_platform(
         &mut self,
         env_name: &EnvironmentName,
         platform: Platform,
@@ -244,7 +247,7 @@ impl Manifest {
 
     #[allow(dead_code)]
     /// Adds a channel to the manifest
-    pub fn add_channel(
+    pub(crate) fn add_channel(
         &mut self,
         env_name: &EnvironmentName,
         channel: &NamedChannelOrUrl,
@@ -289,7 +292,7 @@ impl Manifest {
     }
 
     /// Matches an exposed name to its corresponding environment name.
-    pub fn match_exposed_name_to_environment(
+    pub(crate) fn match_exposed_name_to_environment(
         &self,
         exposed_name: &ExposedName,
     ) -> miette::Result<EnvironmentName> {
@@ -307,7 +310,7 @@ impl Manifest {
     }
 
     /// Checks if an exposed name already exists in other environments
-    pub fn exposed_name_already_exists_in_other_envs(
+    pub(crate) fn exposed_name_already_exists_in_other_envs(
         &self,
         exposed_name: &ExposedName,
         env_name: &EnvironmentName,
@@ -321,7 +324,7 @@ impl Manifest {
     }
 
     /// Adds exposed mapping to the manifest
-    pub fn add_exposed_mapping(
+    pub(crate) fn add_exposed_mapping(
         &mut self,
         env_name: &EnvironmentName,
         mapping: &Mapping,
@@ -359,7 +362,7 @@ impl Manifest {
     }
 
     /// Removes exposed mapping from the manifest
-    pub fn remove_exposed_name(
+    pub(crate) fn remove_exposed_name(
         &mut self,
         env_name: &EnvironmentName,
         exposed_name: &ExposedName,
@@ -390,7 +393,7 @@ impl Manifest {
     }
 
     /// Removes all exposed mappings for a specific environment
-    pub fn remove_all_exposed_mappings(
+    pub(crate) fn remove_all_exposed_mappings(
         &mut self,
         env_name: &EnvironmentName,
     ) -> miette::Result<()> {
@@ -439,24 +442,24 @@ pub struct Mapping {
 }
 
 impl Mapping {
-    pub fn new(exposed_name: ExposedName, executable_relname: String) -> Self {
+    pub(crate) fn new(exposed_name: ExposedName, executable_relname: String) -> Self {
         Self {
             exposed_name,
             executable_relname: strip_executable_extension(executable_relname),
         }
     }
 
-    pub fn exposed_name(&self) -> &ExposedName {
+    pub(crate) fn exposed_name(&self) -> &ExposedName {
         &self.exposed_name
     }
 
-    pub fn executable_relname(&self) -> &str {
+    pub(crate) fn executable_relname(&self) -> &str {
         &self.executable_relname
     }
 
     // Splitting the executable_relname by the last '/' and taking the last part
     // e.g. 'nested/test_executable' -> 'test_executable'
-    pub fn executable_name(&self) -> &str {
+    pub(crate) fn executable_name(&self) -> &str {
         Path::new(&self.executable_relname)
             .file_name()
             .and_then(|name| name.to_str())
@@ -495,7 +498,7 @@ pub enum ExposedType {
 }
 
 impl ExposedType {
-    pub fn new(mappings: Vec<Mapping>, filter: Vec<PackageName>) -> Self {
+    pub(crate) fn new(mappings: Vec<Mapping>, filter: Vec<PackageName>) -> Self {
         if !mappings.is_empty() {
             return Self::Mappings(mappings);
         }
@@ -507,7 +510,7 @@ impl ExposedType {
         }
     }
 
-    pub fn subset() -> Self {
+    pub(crate) fn subset() -> Self {
         Self::Mappings(Default::default())
     }
 }

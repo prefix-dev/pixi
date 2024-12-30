@@ -79,7 +79,7 @@ impl GlobModificationTime {
     }
 
     /// Get the newest modification time, if any.
-    pub fn newest(&self) -> Option<SystemTime> {
+    pub(crate) fn newest(&self) -> Option<SystemTime> {
         match self {
             Self::MatchesFound { modified_at, .. } => Some(*modified_at),
             Self::NoMatches => None,
@@ -87,7 +87,7 @@ impl GlobModificationTime {
     }
 
     /// Get the designated file with the newest modification time, if any.
-    pub fn designated_file(&self) -> Option<&Path> {
+    pub(crate) fn designated_file(&self) -> Option<&Path> {
         match self {
             Self::MatchesFound {
                 designated_file, ..
@@ -97,7 +97,7 @@ impl GlobModificationTime {
     }
 
     /// Returns `true` if there have been any matches found.
-    pub fn has_matches(&self) -> bool {
+    pub(crate) fn has_matches(&self) -> bool {
         matches!(self, Self::MatchesFound { .. })
     }
 }

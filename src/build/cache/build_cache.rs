@@ -68,7 +68,7 @@ impl BuildInput {
     /// Computes a unique semi-human-readable hash for this key. Some parts of
     /// the input are hashes and others are included directly in the name this
     /// is to make it easier to identify the cache files.
-    pub fn hash_key(&self) -> String {
+    pub(crate) fn hash_key(&self) -> String {
         let BuildInput {
             channel_urls,
             target_platform,
@@ -99,7 +99,7 @@ impl BuildCache {
     /// An additional directory is created by this cache inside the passed root
     /// which includes a version number. This is to ensure that the cache is
     /// never corrupted if the format changes in the future.
-    pub fn new(root: PathBuf) -> Self {
+    pub(crate) fn new(root: PathBuf) -> Self {
         Self {
             root: root.join("source-builds-v0"),
         }

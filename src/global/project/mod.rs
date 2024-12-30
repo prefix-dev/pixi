@@ -455,7 +455,7 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
+    pub(crate) fn authenticated_client(&self) -> &ClientWithMiddleware {
         &self.client_and_authenticated_client().1
     }
 

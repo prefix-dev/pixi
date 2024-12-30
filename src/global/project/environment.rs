@@ -19,7 +19,7 @@ pub(crate) struct EnvironmentName(String);
 
 impl EnvironmentName {
     /// Returns the name of the environment.
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }

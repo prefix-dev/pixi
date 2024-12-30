@@ -52,7 +52,7 @@ pub enum ManifestParsingError {
 }
 
 impl ManifestParsingError {
-    pub fn to_fancy<T>(
+    pub(crate) fn to_fancy<T>(
         &self,
         file_name: &str,
         contents: impl Into<String>,

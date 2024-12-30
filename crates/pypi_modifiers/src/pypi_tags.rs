@@ -12,7 +12,7 @@ pub fn is_python_record(record: impl AsRef<PackageRecord>) -> bool {
 
 /// Returns true if the specified name refers to a version/variant of python.
 /// TODO: Add support for more variants.
-pub fn package_name_is_python(record: &rattler_conda_types::PackageName) -> bool {
+pub(crate) fn package_name_is_python(record: &rattler_conda_types::PackageName) -> bool {
     record.as_normalized() == "python"
 }
 

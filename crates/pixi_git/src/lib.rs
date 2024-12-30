@@ -27,7 +27,7 @@ pub struct GitUrl {
 
 impl GitUrl {
     /// Create a new [`GitUrl`] from a repository URL and a reference.
-    pub fn from_reference(repository: Url, reference: GitReference) -> Self {
+    pub(crate) fn from_reference(repository: Url, reference: GitReference) -> Self {
         let precise = reference.as_sha();
         Self {
             repository,
@@ -47,7 +47,7 @@ impl GitUrl {
 
     /// Set the precise [`GitSha`] to use for this Git URL.
     #[must_use]
-    pub fn with_precise(mut self, precise: GitSha) -> Self {
+    pub(crate) fn with_precise(mut self, precise: GitSha) -> Self {
         self.precise = Some(precise);
         self
     }
@@ -65,7 +65,7 @@ impl GitUrl {
     }
 
     /// Return the reference to the commit to use, which could be a branch, tag or revision.
-    pub fn reference(&self) -> &GitReference {
+    pub(crate) fn reference(&self) -> &GitReference {
         &self.reference
     }
 

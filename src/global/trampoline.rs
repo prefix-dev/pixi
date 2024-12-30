@@ -146,7 +146,7 @@ pub struct Configuration {
 
 impl Configuration {
     /// Create a new configuration of trampoline.
-    pub fn new(exe: PathBuf, path: PathBuf, env: Option<HashMap<String, String>>) -> Self {
+    pub(crate) fn new(exe: PathBuf, path: PathBuf, env: Option<HashMap<String, String>>) -> Self {
         Configuration {
             exe,
             path,
@@ -168,7 +168,7 @@ impl Configuration {
     }
 
     /// Return the configuration file for the trampoline.
-    pub fn path_from_trampoline(root_path: &Path, exposed_name: &ExposedName) -> PathBuf {
+    pub(crate) fn path_from_trampoline(root_path: &Path, exposed_name: &ExposedName) -> PathBuf {
         root_path
             .join(PathBuf::from(TRAMPOLINE_CONFIGURATION))
             .join(format!("{exposed_name}.json"))
@@ -193,7 +193,7 @@ impl GlobalExecutable {
     }
 
     /// Returns exposed name
-    pub fn exposed_name(&self) -> ExposedName {
+    pub(crate) fn exposed_name(&self) -> ExposedName {
         match self {
             GlobalExecutable::Trampoline(trampoline) => trampoline.exposed_name.clone(),
             GlobalExecutable::Script(script) => {
@@ -203,7 +203,7 @@ impl GlobalExecutable {
     }
 
     /// Returns the path to the exposed binary.
-    pub fn path(&self) -> PathBuf {
+    pub(crate) fn path(&self) -> PathBuf {
         match self {
             GlobalExecutable::Trampoline(trampoline) => trampoline.path(),
             GlobalExecutable::Script(script) => script.clone(),
@@ -211,7 +211,7 @@ impl GlobalExecutable {
     }
 
     /// Returns if the exposed global binary is trampoline.
-    pub fn is_trampoline(&self) -> bool {
+    pub(crate) fn is_trampoline(&self) -> bool {
         matches!(self, GlobalExecutable::Trampoline(_))
     }
 
@@ -250,7 +250,7 @@ pub struct Trampoline {
 
 impl Trampoline {
     /// Creates a new trampoline.
-    pub fn new(
+    pub(crate) fn new(
         exposed_name: ExposedName,
         root_path: PathBuf,
         configuration: Configuration,
@@ -281,16 +281,16 @@ impl Trampoline {
     }
 
     /// Returns the path to the trampoline
-    pub fn path(&self) -> PathBuf {
+    pub(crate) fn path(&self) -> PathBuf {
         self.root_path.join(file_name(&self.exposed_name))
     }
 
-    pub fn original_exe(&self) -> PathBuf {
+    pub(crate) fn original_exe(&self) -> PathBuf {
         self.configuration.exe.clone()
     }
 
     /// Returns the path to the trampoline configuration
-    pub fn configuration(&self) -> PathBuf {
+    pub(crate) fn configuration(&self) -> PathBuf {
         self.root_path
             .join(TRAMPOLINE_CONFIGURATION)
             .join(self.exposed_name.to_string() + ".json")
@@ -305,7 +305,7 @@ impl Trampoline {
     }
 
     /// Returns the name of the trampoline
-    pub fn name(trampoline: &Path) -> miette::Result<ExposedName> {
+    pub(crate) fn name(trampoline: &Path) -> miette::Result<ExposedName> {
         let trampoline_name = trampoline.file_name().ok_or_else(|| {
             miette::miette!(
                 "trampoline needs to have a file name {}",
@@ -335,7 +335,7 @@ impl Trampoline {
     }
 
     /// Returns the decompressed trampoline binary
-    pub fn decompressed_trampoline() -> &'static [u8] {
+    pub(crate) fn decompressed_trampoline() -> &'static [u8] {
         // A static variable to hold the cached decompressed trampoline binary
         static DECOMPRESSED_TRAMPOLINE_BIN: LazyLock<Vec<u8>> = LazyLock::new(|| {
             zstd::decode_all(TRAMPOLINE_BIN)

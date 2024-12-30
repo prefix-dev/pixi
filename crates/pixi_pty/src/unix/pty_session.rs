@@ -55,7 +55,7 @@ impl PtySession {
     /// need to call `flush()` after `send()` to make the process actually see your input.
     ///
     /// Returns number of written bytes
-    pub fn send<B: AsRef<[u8]>>(&mut self, s: B) -> io::Result<usize> {
+    pub(crate) fn send<B: AsRef<[u8]>>(&mut self, s: B) -> io::Result<usize> {
         self.process_stdin.write(s.as_ref())
     }
 
@@ -68,7 +68,7 @@ impl PtySession {
     }
 
     /// Make sure all bytes written via `send()` are sent to the process
-    pub fn flush(&mut self) -> io::Result<()> {
+    pub(crate) fn flush(&mut self) -> io::Result<()> {
         self.process_stdin.flush()
     }
 

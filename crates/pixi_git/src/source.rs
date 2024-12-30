@@ -30,7 +30,7 @@ pub struct GitSource {
 
 impl GitSource {
     /// Initialize a new Git source.
-    pub fn new(
+    pub(crate) fn new(
         git: GitUrl,
         client: impl Into<ClientWithMiddleware>,
         cache: impl Into<PathBuf>,
@@ -44,7 +44,7 @@ impl GitSource {
 
     /// Fetch the underlying Git repository at the given revision.
     #[instrument(skip(self), fields(repository = %self.git.repository, rev = ?self.git.precise))]
-    pub fn fetch(self) -> miette::Result<Fetch> {
+    pub(crate) fn fetch(self) -> miette::Result<Fetch> {
         // Compute the canonical URL for the repository.
         let canonical = RepositoryUrl::new(&self.git.repository);
 
@@ -123,11 +123,11 @@ impl Fetch {
         &self.git
     }
 
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.path
     }
 
-    pub fn into_git(self) -> GitUrl {
+    pub(crate) fn into_git(self) -> GitUrl {
         self.git
     }
 
@@ -136,7 +136,7 @@ impl Fetch {
     }
 }
 
-pub fn cache_digest(url: &RepositoryUrl) -> String {
+pub(crate) fn cache_digest(url: &RepositoryUrl) -> String {
     let mut hasher = DefaultHasher::new();
     url.hash(&mut hasher);
     let hash = hasher.finish();

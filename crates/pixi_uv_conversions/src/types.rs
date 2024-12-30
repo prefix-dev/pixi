@@ -215,7 +215,9 @@ pub fn to_extra_name(
 }
 
 /// Converts `uv_pep440::Version` to `pep440_rs::Version`
-pub fn to_version(version: &uv_pep440::Version) -> Result<pep440_rs::Version, ConversionError> {
+pub(crate) fn to_version(
+    version: &uv_pep440::Version,
+) -> Result<pep440_rs::Version, ConversionError> {
     Ok(pep440_rs::Version::from_str(version.to_string().as_str())
         .map_err(VersionError::PepError)?)
 }

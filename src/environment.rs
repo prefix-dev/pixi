@@ -331,7 +331,7 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
 
 /// Extract filtered requirements from the project based on a filter.
 /// The filter allows specifying which subset of requirements to extract.
-pub fn extract_requirements_from_project(project: &Project) -> Vec<PixiSpec> {
+pub(crate) fn extract_requirements_from_project(project: &Project) -> Vec<PixiSpec> {
     let mut requirements = Vec::new();
 
     for env in project.environments() {
@@ -351,7 +351,7 @@ pub fn extract_requirements_from_project(project: &Project) -> Vec<PixiSpec> {
 
 /// Store credentials from the filtered requirements.
 /// This method takes the requirements and processes only `PixiSpec::Git` variants.
-pub fn store_credentials_from_requirements(requirements: Vec<PixiSpec>) {
+pub(crate) fn store_credentials_from_requirements(requirements: Vec<PixiSpec>) {
     for spec in requirements {
         if let PixiSpec::Git(git_spec) = spec {
             store_credentials_from_url(&git_spec.git);
@@ -709,7 +709,7 @@ impl CondaBuildProgress {
 
 impl CondaBuildProgress {
     /// Associate a progress bar with a build identifier, and get a build id back
-    pub fn associate(&self, identifier: &str) -> usize {
+    pub(crate) fn associate(&self, identifier: &str) -> usize {
         let mut locked = self.build_progress.lock();
         let after = if locked.is_empty() {
             &self.main_progress
@@ -723,7 +723,7 @@ impl CondaBuildProgress {
         locked.len() - 1
     }
 
-    pub fn end_progress_for(&self, build_id: usize, alternative_message: Option<String>) {
+    pub(crate) fn end_progress_for(&self, build_id: usize, alternative_message: Option<String>) {
         self.main_progress.inc(1);
         if self.main_progress.position()
             == self

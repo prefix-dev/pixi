@@ -193,14 +193,16 @@ pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
 }
 
 /// Returns `true` if the specified url refers to a conda-forge channel.
-pub fn is_conda_forge_url(url: &Url) -> bool {
+pub(crate) fn is_conda_forge_url(url: &Url) -> bool {
     url.path().starts_with("/conda-forge")
 }
 
 /// Build a purl for a `PackageRecord`
 /// it will return a purl in this format
 /// `pkg:pypi/aiofiles`
-pub fn build_pypi_purl_from_package_record(package_record: &PackageRecord) -> Option<PackageUrl> {
+pub(crate) fn build_pypi_purl_from_package_record(
+    package_record: &PackageRecord,
+) -> Option<PackageUrl> {
     let name = pep508_rs::PackageName::from_str(package_record.name.as_source()).ok();
     let version = pep440_rs::Version::from_str(&package_record.version.as_str()).ok();
     if let (Some(name), Some(_)) = (name, version) {

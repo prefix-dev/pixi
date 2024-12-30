@@ -67,7 +67,7 @@ pub struct GitSha(GitOid);
 
 impl GitSha {
     /// Convert the SHA to a truncated representation, i.e., the first 16 characters of the SHA.
-    pub fn to_short_string(&self) -> String {
+    pub(crate) fn to_short_string(&self) -> String {
         self.0.to_string()[0..16].to_string()
     }
 }
