@@ -241,7 +241,7 @@ pub struct PinnedGitSpec {
 
 impl PinnedGitSpec {
     /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
-    pub(crate) fn into_locked_git_url(&self) -> LockedGitUrl {
+    pub(crate) fn to_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
 
         // // Redact the credentials.
@@ -339,7 +339,7 @@ impl From<PinnedPathSpec> for UrlOrPath {
 
 impl From<PinnedGitSpec> for UrlOrPath {
     fn from(value: PinnedGitSpec) -> Self {
-        let url = value.into_locked_git_url();
+        let url = value.to_locked_git_url();
         UrlOrPath::Url(url.into())
     }
 }
@@ -415,7 +415,7 @@ impl TryFrom<LockedGitUrl> for PinnedGitSpec {
 
 impl From<PinnedGitSpec> for LockedGitUrl {
     fn from(value: PinnedGitSpec) -> Self {
-        value.into_locked_git_url()
+        value.to_locked_git_url()
     }
 }
 
