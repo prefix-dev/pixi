@@ -964,11 +964,8 @@ impl Config {
             consts::DEFAULT_CHANNELS
                 .iter()
                 .map(|s| {
-                    if s.starts_with("http://") || s.starts_with("https://") {
-                        NamedChannelOrUrl::Url(Url::parse(s).unwrap())
-                    } else {
-                        NamedChannelOrUrl::Name(s.to_string())
-                    }
+                    NamedChannelOrUrl::from_str(s)
+                        .expect("The default channels should be valid channel names")
                 })
                 .collect()
         } else {
