@@ -62,7 +62,7 @@ lazy_static! {
     pub static ref PIXI_BIN_NAME: String = std::env::args().next()
         .as_ref()
         .map(Path::new)
-        .and_then(Path::file_name)
+        .and_then(Path::file_stem)
         .and_then(OsStr::to_str)
         .map(String::from).unwrap_or("pixi".to_string());
 }
