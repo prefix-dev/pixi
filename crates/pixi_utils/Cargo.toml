@@ -28,6 +28,7 @@ fd-lock = { workspace = true }
 fs-err = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
+lazy_static = { workspace = true }
 miette = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_config = { workspace = true }

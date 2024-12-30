@@ -16,6 +16,7 @@ indexmap = { workspace = true }
 itertools = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
+pixi_utils = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_spec = { workspace = true }
 regex = { workspace = true }

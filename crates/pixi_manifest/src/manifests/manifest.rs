@@ -380,7 +380,7 @@ impl Manifest {
         let (Some(name), spec) = spec.clone().into_nameless() else {
             miette::bail!(
                 "{} does not support wildcard dependencies",
-                consts::PIXI_BIN_NAME.as_str()
+                pixi_utils::executable_name()
             );
         };
         let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
