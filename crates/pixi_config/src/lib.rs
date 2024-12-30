@@ -961,13 +961,7 @@ impl Config {
     /// ["conda-forge"]).
     pub fn default_channels(&self) -> Vec<NamedChannelOrUrl> {
         if self.default_channels.is_empty() {
-            consts::DEFAULT_CHANNELS
-                .iter()
-                .map(|s| {
-                    NamedChannelOrUrl::from_str(s)
-                        .expect("The default channels should be valid channel names")
-                })
-                .collect()
+            consts::DEFAULT_CHANNELS.clone()
         } else {
             self.default_channels.clone()
         }

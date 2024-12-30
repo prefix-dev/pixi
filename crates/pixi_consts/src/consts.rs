@@ -1,9 +1,11 @@
 use console::Style;
 use lazy_static::lazy_static;
+use rattler_conda_types::NamedChannelOrUrl;
 use std::{
     ffi::OsStr,
     fmt::{Display, Formatter},
     path::Path,
+    str::FromStr,
 };
 use url::Url;
 
@@ -54,8 +56,8 @@ pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
 lazy_static! {
     /// The default channels to use for a new project.
     pub static ref DEFAULT_CHANNELS: Vec<NamedChannelOrUrl> = match option_env!("PIXI_DEFAULT_CHANNELS") {
-        Some(channels) => channels.split(',').map(|s| s.to_string()).collect(),
-        None => vec!["conda-forge".to_string()],
+        Some(channels) => channels.split(',').map(|s| NamedChannelOrUrl::from_str(s).expect("unable to parse default channel")).collect(),
+        None => vec![NamedChannelOrUrl::from_str("conda-forge").expect("unable to parse default channel")],
     };
 
     /// The name of the binary.

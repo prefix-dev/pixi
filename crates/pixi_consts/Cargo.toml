@@ -14,3 +14,4 @@ console = { workspace = true }
 lazy_static = { workspace = true }
 rattler_cache = { workspace = true }
 url = { workspace = true }
+rattler_conda_types = { workspace = true }
