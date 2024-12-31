@@ -3,32 +3,30 @@ repos:
   - repo: local
     hooks:
       - id: check-yaml
-        name: check-yaml
-        entry: pixi run -e lint check-yaml
+        name: Check YAML
+        entry: pixi run --environment=lint check-yaml
         language: system
         types: [yaml]
       - id: end-of-file
-        name: end-of-file
-        entry: pixi run -e lint end-of-file-fixer
+        name: Check end-of-file
+        entry: pixi run --environment=lint end-of-file-fixer
         language: system
         types: [text]
-        stages: [pre-commit, pre-push, manual]
       - id: trailing-whitespace
-        name: trailing-whitespace
-        entry: pixi run -e lint trailing-whitespace-fixer
+        name: Fix trailing whitespace
+        entry: pixi run --environment=lint trailing-whitespace-fixer
         language: system
         types: [text]
-        stages: [pre-commit, pre-push, manual]
       # Use ruff for python examples
       - id: ruff
-        name: ruff
-        entry: pixi run -e lint ruff check --fix --exit-non-zero-on-fix --force-exclude
+        name: Ruff lint
+        entry: pixi run --environment=lint ruff-lint
         language: system
         types_or: [python, pyi]
         require_serial: true
       - id: ruff-format
-        name: ruff-format
-        entry: pixi run -e lint ruff format --force-exclude
+        name: Ruff format
+        entry: pixi run --environment=lint ruff-format
         language: system
         types_or: [python, pyi]
         require_serial: true
@@ -36,48 +34,44 @@ repos:
       - id: actionlint
         name: Lint GitHub Actions workflow files
         language: system
-        entry: pixi run -e lint actionlint
+        entry: pixi run --environment=lint actionlint
         types: [yaml]
         files: ^\.github/workflows/
       # Typecheck python tests
       - id: typecheck-python
-        name: typecheck-python
-        entry: pixi run typecheck-python
+        name: Typecheck Python
+        entry: pixi run --environment=lint typecheck-python
         language: system
         types_or: [python, pyi]
         pass_filenames: false
       - id: check-openssl
-        name: check-openssl
-        entry: pixi run check-openssl
+        name: Check openssl
+        entry: pixi run --environment=lint check-openssl
         language: system
         types: [file, toml]
         pass_filenames: false
       # typos
       - id: typos
-        name: typos
-        entry: pixi run -e lint typos --write-changes --force-exclude
+        name: Typos
+        entry: pixi run --environment=lint typos
         language: system
         types: [text]
       # TOML format
-      - id: taplo
-        name: taplo
-        entry: pixi run -e lint toml-format
+      - id: toml-format
+        name: TOML format
+        entry: pixi run --environment=lint toml-format
         language: system
         types: [file, toml]
         exclude: "schema/examples/invalid"
-  - repo: local
-    hooks:
-      - id: fmt
-        name: fmt
+      - id: cargo-fmt
+        name: Cargo format
         language: system
-        stages: [pre-commit, pre-push, manual]
         types: [file, rust]
-        entry: cargo fmt
+        entry: pixi run --environment=lint cargo-fmt
         pass_filenames: false
-      - id: clippy
-        name: clippy
+      - id: cargo-clippy
+        name: Cargo clippy
         language: system
-        stages: [pre-push, manual]
         types: [file, rust]
-        entry: cargo clippy --all-targets --workspace -- -D warnings -Dclippy::dbg_macro # Use -D warnings option to ensure the job fails when encountering warnings
+        entry: pixi run --environment=lint cargo-clippy
         pass_filenames: false
