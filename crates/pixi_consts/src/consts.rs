@@ -1,11 +1,9 @@
 use console::Style;
-use lazy_static::lazy_static;
 use rattler_conda_types::NamedChannelOrUrl;
 use std::{
-    ffi::OsStr,
     fmt::{Display, Formatter},
-    path::Path,
     str::FromStr,
+    sync::LazyLock,
 };
 use url::Url;
 
@@ -53,21 +51,19 @@ pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
     None => ".pixi",
 };
 
-lazy_static! {
-    /// The default channels to use for a new project.
-    pub static ref DEFAULT_CHANNELS: Vec<NamedChannelOrUrl> = match option_env!("PIXI_DEFAULT_CHANNELS") {
-        Some(channels) => channels.split(',').map(|s| NamedChannelOrUrl::from_str(s).expect("unable to parse default channel")).collect(),
-        None => vec![NamedChannelOrUrl::from_str("conda-forge").expect("unable to parse default channel")],
-    };
-
-    /// The name of the binary.
-    pub static ref PIXI_BIN_NAME: String = std::env::args().next()
-        .as_ref()
-        .map(Path::new)
-        .and_then(Path::file_stem)
-        .and_then(OsStr::to_str)
-        .map(String::from).unwrap_or("pixi".to_string());
-}
+pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
+    LazyLock::new(|| match option_env!("PIXI_DEFAULT_CHANNELS") {
+        // Technically URLs are allowed to contain ','
+        // If that use case comes up, this code needs to be adapted
+        Some(channels) => channels
+            .split(',')
+            .map(|s| NamedChannelOrUrl::from_str(s).expect("unable to parse default channel"))
+            .collect(),
+        None => {
+            vec![NamedChannelOrUrl::from_str("conda-forge")
+                .expect("unable to parse default channel")]
+        }
+    });
 
 pub const CONDA_INSTALLER: &str = "conda";
 
@@ -75,15 +71,14 @@ pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
 
 pub const ENVIRONMENT_FILE_NAME: &str = "pixi";
 
-lazy_static! {
-    pub static ref TASK_STYLE: Style = Style::new().blue();
-    pub static ref PLATFORM_STYLE: Style = Style::new().yellow();
-    pub static ref ENVIRONMENT_STYLE: Style = Style::new().magenta();
-    pub static ref EXPOSED_NAME_STYLE: Style = Style::new().yellow();
-    pub static ref FEATURE_STYLE: Style = Style::new().cyan();
-    pub static ref SOLVE_GROUP_STYLE: Style = Style::new().cyan();
-    pub static ref DEFAULT_PYPI_INDEX_URL: Url = Url::parse("https://pypi.org/simple").unwrap();
-}
+pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
+pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
+pub static ENVIRONMENT_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().magenta());
+pub static EXPOSED_NAME_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
+pub static FEATURE_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
+pub static SOLVE_GROUP_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
+pub static DEFAULT_PYPI_INDEX_URL: LazyLock<Url> =
+    LazyLock::new(|| Url::parse("https://pypi.org/simple").unwrap());
 
 pub struct CondaEmoji;
 
