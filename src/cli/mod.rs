@@ -17,7 +17,7 @@ pub mod clean;
 pub mod cli_config;
 pub mod completion;
 pub mod config;
-mod exec;
+pub mod exec;
 pub mod global;
 pub mod has_specs;
 pub mod info;

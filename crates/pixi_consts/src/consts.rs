@@ -1,6 +1,12 @@
 use console::Style;
 use lazy_static::lazy_static;
-use std::fmt::{Display, Formatter};
+use rattler_conda_types::NamedChannelOrUrl;
+use std::{
+    ffi::OsStr,
+    fmt::{Display, Formatter},
+    path::Path,
+    str::FromStr,
+};
 use url::Url;
 
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
@@ -9,9 +15,7 @@ pub const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
 pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
-pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
 pub const CONFIG_FILE: &str = "config.toml";
-pub const PIXI_DIR: &str = ".pixi";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
     None => "0.39.4",
@@ -36,12 +40,38 @@ pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-cache-v0";
 
+pub const CONFIG_DIR: &str = match option_env!("PIXI_CONFIG_DIR") {
+    Some(dir) => dir,
+    None => "pixi",
+};
+pub const PROJECT_LOCK_FILE: &str = match option_env!("PIXI_PROJECT_LOCK_FILE") {
+    Some(file) => file,
+    None => "pixi.lock",
+};
+pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
+    Some(dir) => dir,
+    None => ".pixi",
+};
+
+lazy_static! {
+    /// The default channels to use for a new project.
+    pub static ref DEFAULT_CHANNELS: Vec<NamedChannelOrUrl> = match option_env!("PIXI_DEFAULT_CHANNELS") {
+        Some(channels) => channels.split(',').map(|s| NamedChannelOrUrl::from_str(s).expect("unable to parse default channel")).collect(),
+        None => vec![NamedChannelOrUrl::from_str("conda-forge").expect("unable to parse default channel")],
+    };
+
+    /// The name of the binary.
+    pub static ref PIXI_BIN_NAME: String = std::env::args().next()
+        .as_ref()
+        .map(Path::new)
+        .and_then(Path::file_stem)
+        .and_then(OsStr::to_str)
+        .map(String::from).unwrap_or("pixi".to_string());
+}
+
 pub const CONDA_INSTALLER: &str = "conda";
 
 pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
-
-/// The default channels to use for a new project.
-pub const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
 
 pub const ENVIRONMENT_FILE_NAME: &str = "pixi";
 
