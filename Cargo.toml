@@ -47,7 +47,6 @@ insta = "1.41.1"
 is_executable = "1.0.4"
 itertools = "0.13.0"
 jsonrpsee = "=0.24.2"
-lazy_static = "1.5.0"
 libc = { version = "0.2.169", default-features = false }
 memchr = "2.7.4"
 miette = { version = "7.4.0", features = ["fancy"] }

@@ -3813,7 +3813,6 @@ name = "pixi_consts"
 version = "0.1.0"
 dependencies = [
  "console",
- "lazy_static",
  "rattler_cache",
  "rattler_conda_types",
  "url",
@@ -3968,7 +3967,6 @@ dependencies = [
  "indicatif",
  "insta",
  "itertools 0.13.0",
- "lazy_static",
  "miette 7.4.0",
  "pep508_rs",
  "pixi_config",

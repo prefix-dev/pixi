@@ -1,19 +1,18 @@
-use lazy_static::lazy_static;
-use std::{ffi::OsStr, path::Path};
-
-lazy_static! {
-    /// The name of the binary.
-    pub static ref PIXI_BIN_NAME: String = std::env::args().next()
-        .as_ref()
-        .map(Path::new)
-        .and_then(Path::file_stem)
-        .and_then(OsStr::to_str)
-        .map(String::from).unwrap_or("pixi".to_string());
-}
+use std::{ffi::OsStr, path::Path, sync::LazyLock};
 
 /// Returns the name of the binary. Since this is used in errors, it resolves to "pixi" if it can't
 /// find the resolve name rather than return an error itself.
 pub fn executable_name() -> &'static str {
+    pub static PIXI_BIN_NAME: LazyLock<String> = LazyLock::new(|| {
+        std::env::args()
+            .next()
+            .as_ref()
+            .map(Path::new)
+            .and_then(Path::file_stem)
+            .and_then(OsStr::to_str)
+            .map(String::from)
+            .unwrap_or("pixi".to_string())
+    });
     PIXI_BIN_NAME.as_str()
 }
 

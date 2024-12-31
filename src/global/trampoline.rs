@@ -25,7 +25,6 @@ use std::{
 };
 
 use miette::IntoDiagnostic;
-use once_cell::sync::Lazy;
 use pixi_utils::executable_from_path;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -100,7 +99,8 @@ pub(crate) async fn extract_executable_from_script(script: &Path) -> miette::Res
     // The pattern includes `"?` to also find old pixi global installations.
     #[cfg(windows)]
     const PATTERN: &str = r#"@"?([^"]+)"? %/*"#;
-    static RE: Lazy<Regex> = Lazy::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
+    static RE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(PATTERN).expect("Failed to compile regex"));
 
     // Apply the regex to the script content
     if let Some(caps) = RE.captures(&script_content) {
