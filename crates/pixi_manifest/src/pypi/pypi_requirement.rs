@@ -1086,9 +1086,9 @@ mod tests {
             r#"pkg = { path = "~/.cache" } "#,
             r#"pkg = { url = "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }"#,
             r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock" }"#,
-            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }"#,
-            r#"pkg = { git = "ssh://github.com/conda-forge/21cmfast-feedstock", "tag": "v1.2.3" }"#,
-            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "rev": "123456" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", "branch" = "main" }"#,
+            r#"pkg = { git = "ssh://github.com/conda-forge/21cmfast-feedstock", "tag" = "v1.2.3" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "rev" = "123456" }"#,
         ];
 
         #[derive(Serialize)]
