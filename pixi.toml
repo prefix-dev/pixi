@@ -52,15 +52,15 @@ test-common-wheels = { cmd = "pytest --numprocesses=auto tests/wheel_tests/", de
   "build-release",
 ] }
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }
-test-integration-ci = "pytest --numprocesses=auto --durations=0 --timeout=100 --verbose tests/integration_python"
-test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python -m ''", depends-on = [
+test-integration-ci = "pytest --numprocesses=auto --durations=0 --timeout=100 --verbose -m 'not extra_slow' tests/integration_python"
+test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python", depends-on = [
   "build-release",
 ] }
-test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python -m 'extra_slow'"
-test-integration-fast = { cmd = "pytest -m 'not slow' --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 tests/integration_python", depends-on = [
+test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 -m 'extra_slow' tests/integration_python"
+test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ] }
-test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=100 tests/integration_python", depends-on = [
+test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=100 -m 'not extra_slow' tests/integration_python", depends-on = [
   "build-release",
 ] }
 # pass the file to run as an argument to the task
@@ -89,15 +89,18 @@ typos = ">=1.23.1,<2"
 
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
+cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings -Dclippy::dbg_macro"
+cargo-fmt = "cargo fmt"
 check-openssl = "python tests/scripts/check-openssl.py"
 lint = "pre-commit run --all-files --hook-stage=manual"
-pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
-pre-commit-install-minimal = "pre-commit install -t=pre-commit"
+pre-commit-install = "pre-commit install --install-hooks"
 pre-commit-run = "pre-commit run --all-files"
+ruff-format = "ruff format --force-exclude"
+ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "mypy"
-
+typos = "typos --write-changes --force-exclude"
 
 [feature.build.dependencies]
 # Needed for building
@@ -173,6 +176,7 @@ docs = { features = [
 lint = { features = [
   "lint",
   "pytest",
+  "build",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
 schema = { features = [

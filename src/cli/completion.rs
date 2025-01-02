@@ -58,7 +58,7 @@ impl Generator for Shell {
 }
 
 /// Generate completions for the pixi cli, and print those to the stdout
-pub(crate) fn execute(args: Args) -> miette::Result<()> {
+pub fn execute(args: Args) -> miette::Result<()> {
     // Generate the original completion script.
     let script = get_completion_script(args.shell);
 
@@ -82,7 +82,8 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
 /// Generate the completion script using clap_complete for a specified shell.
 fn get_completion_script(shell: Shell) -> String {
     let mut buf = vec![];
-    clap_complete::generate(shell, &mut CommandArgs::command(), "pixi", &mut buf);
+    let bin_name: &str = pixi_utils::executable_name();
+    clap_complete::generate(shell, &mut CommandArgs::command(), bin_name, &mut buf);
     String::from_utf8(buf).expect("clap_complete did not generate a valid UTF8 script")
 }
 
@@ -90,21 +91,29 @@ fn get_completion_script(shell: Shell) -> String {
 fn replace_bash_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
-    let pattern = r#"(?s)pixi__run\).*?opts="(.*?)".*?(if.*?fi)"#;
-    let replacement = r#"pixi__run)
+    // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
+    let bin_name: &str = pixi_utils::executable_name();
+    let clap_name = bin_name.replace("-", "__");
+    let pattern = format!(r#"(?s){}__run\).*?opts="(.*?)".*?(if.*?fi)"#, &clap_name);
+    let replacement = r#"CLAP_NAME__run)
             opts="$1"
             if [[ $${cur} == -* ]] ; then
                COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
                return 0
             elif [[ $${COMP_CWORD} -eq 2 ]]; then
-               local tasks=$$(pixi task list --machine-readable 2> /dev/null)
+               local tasks=$$(BIN_NAME task list --machine-readable 2> /dev/null)
                if [[ $$? -eq 0 ]]; then
                    COMPREPLY=( $$(compgen -W "$${tasks}" -- "$${cur}") )
                    return 0
                fi
             fi"#;
-    let re = Regex::new(pattern).unwrap();
-    re.replace(script, replacement)
+    let re = Regex::new(pattern.as_str()).unwrap();
+    re.replace(
+        script,
+        replacement
+            .replace("BIN_NAME", bin_name)
+            .replace("CLAP_NAME", &clap_name),
+    )
 }
 
 /// Replace the parts of the zsh completion script that need different functionality.
@@ -112,9 +121,10 @@ fn replace_zsh_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";
+    let bin_name: &str = pixi_utils::executable_name();
     let replacement = r#"$1
 local tasks
-tasks=("$${(@s/ /)$$(pixi task list --machine-readable 2> /dev/null)}")
+tasks=("$${(@s/ /)$$(BIN_NAME task list --machine-readable 2> /dev/null)}")
 
 if [[ -n "$$tasks" ]]; then
     _values 'task' "$${tasks[@]}"
@@ -124,12 +134,13 @@ fi
 $2::task"#;
 
     let re = Regex::new(pattern).unwrap();
-    re.replace(script, replacement)
+    re.replace(script, replacement.replace("BIN_NAME", bin_name))
 }
 
 fn replace_fish_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
-    let addition = "complete -c pixi -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' (pixi task list --machine-readable  2> /dev/null))\"";
+    let bin_name = pixi_utils::executable_name();
+    let addition = format!("complete -c {} -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' ({} task list --machine-readable  2> /dev/null))\"", bin_name, bin_name);
     let new_script = format!("{}{}\n", script, addition);
     let pattern = r#"-n "__fish_seen_subcommand_from run""#;
     let replacement = r#"-n "__fish_seen_subcommand_from run; or __fish_seen_subcommand_from r""#;
@@ -142,20 +153,24 @@ fn replace_fish_completion(script: &str) -> Cow<str> {
 fn replace_nushell_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
-    let pattern = r#"(#.*\n  export extern "pixi run".*\n.*...task: string)([^\]]*--environment\(-e\): string)"#;
+    let bin_name = pixi_utils::executable_name();
+    let pattern = format!(
+        r#"(#.*\n  export extern "{} run".*\n.*...task: string)([^\]]*--environment\(-e\): string)"#,
+        bin_name
+    );
     let replacement = r#"
-  def "nu-complete pixi run" [] {
-    ^pixi info --json | from json | get environments_info | get tasks | flatten | uniq
+  def "nu-complete BIN_NAME run" [] {
+    ^BIN_NAME info --json | from json | get environments_info | get tasks | flatten | uniq
   }
 
-  def "nu-complete pixi run environment" [] {
-    ^pixi info --json | from json | get environments_info | get name
+  def "nu-complete BIN_NAME run environment" [] {
+    ^BIN_NAME info --json | from json | get environments_info | get name
   }
 
-  ${1}@"nu-complete pixi run"${2}@"nu-complete pixi run environment""#;
+  ${1}@"nu-complete BIN_NAME run"${2}@"nu-complete BIN_NAME run environment""#;
 
-    let re = Regex::new(pattern).unwrap();
-    re.replace(script, replacement)
+    let re = Regex::new(pattern.as_str()).unwrap();
+    re.replace(script, replacement.replace("BIN_NAME", bin_name))
 }
 
 #[cfg(test)]
@@ -201,7 +216,12 @@ _arguments "${_arguments_options[@]}" \
 
         "#;
         let result = replace_zsh_completion(script);
-        insta::assert_snapshot!(result);
+        let replacement = format!("{} task list", pixi_utils::executable_name());
+        insta::with_settings!({filters => vec![
+            (replacement.as_str(), "pixi task list"),
+        ]}, {
+            insta::assert_snapshot!(result);
+        });
     }
 
     #[test]
@@ -215,9 +235,15 @@ _arguments "${_arguments_options[@]}" \
             ;;
         pixi__run)
             opts="-v -q -h --manifest-path --locked --frozen --verbose --quiet --color --help [TASK]..."
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
+            elif [[ ${COMP_CWORD} -eq 2 ]]; then
+               local tasks=$(pixi task list --machine-readable 2> /dev/null)
+               if [[ $? -eq 0 ]]; then
+                   COMPREPLY=( $(compgen -W "${tasks}" -- "${cur}") )
+                   return 0
+               fi
             fi
             case "${prev}" in
                 --manifest-path)
@@ -247,7 +273,15 @@ _arguments "${_arguments_options[@]}" \
             ;;
         "#;
         let result = replace_bash_completion(script);
-        insta::assert_snapshot!(result);
+        let replacement = format!("{} task list", pixi_utils::executable_name());
+        let zsh_arg_name = format!("{}__", pixi_utils::executable_name().replace("-", "__"));
+        println!("{}", result);
+        insta::with_settings!({filters => vec![
+            (replacement.as_str(), "pixi task list"),
+            (zsh_arg_name.as_str(), "[PIXI COMMAND]"),
+        ]}, {
+            insta::assert_snapshot!(result);
+        });
     }
 
     #[test]
@@ -256,23 +290,38 @@ _arguments "${_arguments_options[@]}" \
         let script = r#"
   # Runs task in project
   export extern "pixi run" [
-    ...task: string           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
+    ...task: string@"nu-complete pixi run"           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
     --manifest-path: string   # The path to `pixi.toml`, `pyproject.toml`, or the project directory
+    --no-lockfile-update      # Don't update lockfile, implies the no-install as well
     --frozen                  # Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
     --locked                  # Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-    --environment(-e): string # The environment to run the task in
+    --no-install              # Don't modify the environment, only modify the lock-file
     --tls-no-verify           # Do not verify the TLS certificate of the server
     --auth-file: string       # Path to the file containing the authentication token
     --pypi-keyring-provider: string@"nu-complete pixi run pypi_keyring_provider" # Specifies if we want to use uv keyring provider
+    --concurrent-solves: string # Max concurrent solves, default is the number of CPUs
+    --concurrent-downloads: string # Max concurrent network requests, default is 50
+    --revalidate              # Run the complete environment validation. This will reinstall a broken environment
+    --force-activate          # Do not use the environment activation cache. (default: true except in experimental mode)
+    --environment(-e): string@"nu-complete pixi run environment" # The environment to run the task in
     --clean-env               # Use a clean environment to run the task
+    --skip-deps               # Don't run the dependencies of the task ('depends-on' field in the task definition)
     --verbose(-v)             # Increase logging verbosity
     --quiet(-q)               # Decrease logging verbosity
     --color: string@"nu-complete pixi run color" # Whether the log needs to be colored
-    --no-progress             # Hide all progress bars
+    --no-progress             # Hide all progress bars, always turned on if stderr is not a terminal
     --help(-h)                # Print help (see more with '--help')
   ]"#;
         let result = replace_nushell_completion(script);
-        insta::assert_snapshot!(result);
+        let replacement = format!("{} run", pixi_utils::executable_name());
+        let nu_complete_run = format!("nu-complete {} run", pixi_utils::executable_name());
+        println!("{}", result);
+        insta::with_settings!({filters => vec![
+            (replacement.as_str(), "[PIXI RUN]"),
+            (nu_complete_run.as_str(), "[nu_complete_run PIXI COMMAND]"),
+        ]}, {
+            insta::assert_snapshot!(result);
+        });
     }
 
     #[test]
