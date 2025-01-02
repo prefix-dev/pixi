@@ -848,7 +848,7 @@ mod tests {
                 Some(
                     DEFAULT_CHANNELS
                         .iter()
-                        .map(|&name| NamedChannelOrUrl::Name(name.to_string()))
+                        .map(|name| NamedChannelOrUrl::Name(name.to_string()))
                         .collect(),
                 ),
             )

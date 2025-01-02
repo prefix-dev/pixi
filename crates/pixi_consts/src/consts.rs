@@ -1,6 +1,10 @@
 use console::Style;
-use lazy_static::lazy_static;
-use std::fmt::{Display, Formatter};
+use rattler_conda_types::NamedChannelOrUrl;
+use std::{
+    fmt::{Display, Formatter},
+    str::FromStr,
+    sync::LazyLock,
+};
 use url::Url;
 
 pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
@@ -9,12 +13,10 @@ pub const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
 pub const PROJECT_MANIFEST: &str = "pixi.toml";
 pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
-pub const PROJECT_LOCK_FILE: &str = "pixi.lock";
 pub const CONFIG_FILE: &str = "config.toml";
-pub const PIXI_DIR: &str = ".pixi";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.39.2",
+    None => "0.39.4",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -34,25 +36,49 @@ pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
 // TODO: CACHED_BUILD_ENVS_DIR was deprecated in favor of CACHED_BUILD_ENVS_DIR. This constant will be removed in a future release.
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
+pub const CACHED_GIT_DIR: &str = "git-cache-v0";
+
+pub const CONFIG_DIR: &str = match option_env!("PIXI_CONFIG_DIR") {
+    Some(dir) => dir,
+    None => "pixi",
+};
+pub const PROJECT_LOCK_FILE: &str = match option_env!("PIXI_PROJECT_LOCK_FILE") {
+    Some(file) => file,
+    None => "pixi.lock",
+};
+pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
+    Some(dir) => dir,
+    None => ".pixi",
+};
+
+pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
+    LazyLock::new(|| match option_env!("PIXI_DEFAULT_CHANNELS") {
+        // Technically URLs are allowed to contain ','
+        // If that use case comes up, this code needs to be adapted
+        Some(channels) => channels
+            .split(',')
+            .map(|s| NamedChannelOrUrl::from_str(s).expect("unable to parse default channel"))
+            .collect(),
+        None => {
+            vec![NamedChannelOrUrl::from_str("conda-forge")
+                .expect("unable to parse default channel")]
+        }
+    });
 
 pub const CONDA_INSTALLER: &str = "conda";
 
 pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
 
-/// The default channels to use for a new project.
-pub const DEFAULT_CHANNELS: &[&str] = &["conda-forge"];
-
 pub const ENVIRONMENT_FILE_NAME: &str = "pixi";
 
-lazy_static! {
-    pub static ref TASK_STYLE: Style = Style::new().blue();
-    pub static ref PLATFORM_STYLE: Style = Style::new().yellow();
-    pub static ref ENVIRONMENT_STYLE: Style = Style::new().magenta();
-    pub static ref EXPOSED_NAME_STYLE: Style = Style::new().yellow();
-    pub static ref FEATURE_STYLE: Style = Style::new().cyan();
-    pub static ref SOLVE_GROUP_STYLE: Style = Style::new().cyan();
-    pub static ref DEFAULT_PYPI_INDEX_URL: Url = Url::parse("https://pypi.org/simple").unwrap();
-}
+pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
+pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
+pub static ENVIRONMENT_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().magenta());
+pub static EXPOSED_NAME_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
+pub static FEATURE_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
+pub static SOLVE_GROUP_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
+pub static DEFAULT_PYPI_INDEX_URL: LazyLock<Url> =
+    LazyLock::new(|| Url::parse("https://pypi.org/simple").unwrap());
 
 pub struct CondaEmoji;
 

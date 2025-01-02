@@ -2,7 +2,6 @@
 source: src/cli/completion.rs
 expression: result
 ---
-
         pixi__project__help__help)
             opts=""
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -11,8 +10,8 @@ expression: result
         pixi__run)
             opts="-v -q -h --manifest-path --locked --frozen --verbose --quiet --color --help [TASK]..."
             if [[ ${cur} == -* ]] ; then
-               COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-               return 0
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
             elif [[ ${COMP_CWORD} -eq 2 ]]; then
                local tasks=$(pixi task list --machine-readable 2> /dev/null)
                if [[ $? -eq 0 ]]; then
@@ -46,4 +45,3 @@ expression: result
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
 
             ;;
-

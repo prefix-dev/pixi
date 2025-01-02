@@ -75,7 +75,7 @@ impl<'p> Environment<'p> {
     }
 
     /// Returns the name of this environment.
-    pub(crate) fn name(&self) -> &EnvironmentName {
+    pub fn name(&self) -> &EnvironmentName {
         &self.environment.name
     }
 

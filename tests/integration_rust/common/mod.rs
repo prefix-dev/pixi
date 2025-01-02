@@ -264,15 +264,15 @@ impl PixiControl {
     pub fn manifest_path(&self) -> PathBuf {
         // Either pixi.toml or pyproject.toml
         if self.project_path().join(consts::PROJECT_MANIFEST).exists() {
-            return self.project_path().join(consts::PROJECT_MANIFEST);
+            self.project_path().join(consts::PROJECT_MANIFEST)
         } else if self
             .project_path()
             .join(consts::PYPROJECT_MANIFEST)
             .exists()
         {
-            return self.project_path().join(consts::PYPROJECT_MANIFEST);
+            self.project_path().join(consts::PYPROJECT_MANIFEST)
         } else {
-            return self.project_path().join(consts::PROJECT_MANIFEST);
+            self.project_path().join(consts::PROJECT_MANIFEST)
         }
     }
 
@@ -478,7 +478,7 @@ impl PixiControl {
                 .map(|e| e.best_platform())
                 .or(Some(Platform::current())),
         );
-        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task)
+        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task, false)
             .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.

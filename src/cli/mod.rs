@@ -17,7 +17,7 @@ pub mod clean;
 pub mod cli_config;
 pub mod completion;
 pub mod config;
-mod exec;
+pub mod exec;
 pub mod global;
 pub mod has_specs;
 pub mod info;
@@ -189,22 +189,22 @@ pub async fn execute() -> miette::Result<()> {
     }
 
     let (low_level_filter, level_filter, pixi_level) = match args.verbose.log_level_filter() {
-        clap_verbosity_flag::LevelFilter::Off => {
+        clap_verbosity_flag::log::LevelFilter::Off => {
             (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF)
         }
-        clap_verbosity_flag::LevelFilter::Error => {
+        clap_verbosity_flag::log::LevelFilter::Error => {
             (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN)
         }
-        clap_verbosity_flag::LevelFilter::Warn => {
+        clap_verbosity_flag::log::LevelFilter::Warn => {
             (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO)
         }
-        clap_verbosity_flag::LevelFilter::Info => {
+        clap_verbosity_flag::log::LevelFilter::Info => {
             (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO)
         }
-        clap_verbosity_flag::LevelFilter::Debug => {
+        clap_verbosity_flag::log::LevelFilter::Debug => {
             (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG)
         }
-        clap_verbosity_flag::LevelFilter::Trace => {
+        clap_verbosity_flag::log::LevelFilter::Trace => {
             (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE)
         }
     };

@@ -381,15 +381,12 @@ impl<'p> LockFileDerivedData<'p> {
         let platform = environment.best_platform();
 
         // Determine the currently installed packages.
-        let installed_packages = prefix
-            .find_installed_packages(None)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to determine the currently installed packages for '{}'",
-                    environment.name(),
-                )
-            })?;
+        let installed_packages = prefix.find_installed_packages().with_context(|| {
+            format!(
+                "failed to determine the currently installed packages for '{}'",
+                environment.name(),
+            )
+        })?;
 
         // Get the locked environment from the lock-file.
         let records = self
@@ -468,12 +465,10 @@ pub struct UpdateContext<'p> {
     /// mapping contains a [`BarrierCell`] that will eventually contain the
     /// solved records computed by another task. This allows tasks to wait
     /// for the records to be solved before proceeding.
-    solved_repodata_records:
-        PerEnvironmentAndPlatform<'p, Arc<BarrierCell<Arc<PixiRecordsByName>>>>,
+    solved_repodata_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<PixiRecordsByName>>>,
 
     /// Keeps track of all pending grouped conda targets that are being solved.
-    grouped_solved_repodata_records:
-        PerGroupAndPlatform<'p, Arc<BarrierCell<Arc<PixiRecordsByName>>>>,
+    grouped_solved_repodata_records: PerGroupAndPlatform<'p, Arc<BarrierCell<PixiRecordsByName>>>,
 
     /// Keeps track of all pending prefix updates. This only tracks the conda
     /// updates to a prefix, not whether the pypi packages have also been
@@ -484,10 +479,10 @@ pub struct UpdateContext<'p> {
     /// mapping contains a [`BarrierCell`] that will eventually contain the
     /// solved records computed by another task. This allows tasks to wait
     /// for the records to be solved before proceeding.
-    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<Arc<PypiRecordsByName>>>>,
+    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<PypiRecordsByName>>>,
 
     /// Keeps track of all pending grouped pypi targets that are being solved.
-    grouped_solved_pypi_records: PerGroupAndPlatform<'p, Arc<BarrierCell<Arc<PypiRecordsByName>>>>,
+    grouped_solved_pypi_records: PerGroupAndPlatform<'p, Arc<BarrierCell<PypiRecordsByName>>>,
 
     /// The package cache to use when instantiating prefixes.
     package_cache: PackageCache,
@@ -630,7 +625,7 @@ impl<'p> UpdateContext<'p> {
                         .expect("prefixes must not be shared")
                         .into_inner()
                         .expect("prefix must be available");
-                    Some((env.name().clone(), prefix))
+                    Some((env.name().clone(), (prefix.0.clone(), prefix.1.clone())))
                 }
                 _ => None,
             })
@@ -645,7 +640,10 @@ impl<'p> UpdateContext<'p> {
         environment: &GroupedEnvironment<'p>,
     ) -> Option<impl Future<Output = (Prefix, PythonStatus)>> {
         let cell = self.instantiated_conda_prefixes.get(environment)?.clone();
-        Some(async move { cell.wait().await.clone() })
+        Some(async move {
+            let prefix = cell.wait().await;
+            (prefix.0.clone(), prefix.1.clone())
+        })
     }
 }
 
@@ -1427,7 +1425,7 @@ impl<'p> UpdateContext<'p> {
                     self.instantiated_conda_prefixes
                         .get_mut(&group)
                         .expect("the entry for this environment should exists")
-                        .set((prefix, *python_status))
+                        .set(Arc::new((prefix, *python_status)))
                         .expect("prefix should not be instantiated twice");
 
                     tracing::info!(
@@ -1686,11 +1684,21 @@ async fn spawn_solve_conda_environment_task(
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
-    // Get the virtual packages for this platform
-    let virtual_packages = group.virtual_packages(platform);
-
     // Get the environment name
     let group_name = group.name();
+
+    // Early out if there are no dependencies to solve.
+    if dependencies.is_empty() {
+        return Ok(TaskResult::CondaGroupSolved(
+            group_name,
+            platform,
+            PixiRecordsByName::default(),
+            Duration::default(),
+        ));
+    }
+
+    // Get the virtual packages for this platform
+    let virtual_packages = group.virtual_packages(platform);
 
     // The list of channels and platforms we need for this task
     let channels = group.channels().into_iter().cloned().collect_vec();
@@ -2221,7 +2229,7 @@ async fn spawn_create_prefix_task(
     // Spawn a task to determine the currently installed packages.
     let installed_packages_future = tokio::spawn({
         let prefix = prefix.clone();
-        async move { prefix.find_installed_packages(None).await }
+        async move { prefix.find_installed_packages() }
     })
     .unwrap_or_else(|e| match e.try_into_panic() {
         Ok(panic) => std::panic::resume_unwind(panic),

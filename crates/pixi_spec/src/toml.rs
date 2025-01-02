@@ -18,7 +18,7 @@ use toml_span::{
 };
 use url::Url;
 
-use crate::{BinarySpec, DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
+use crate::{BinarySpec, DetailedSpec, GitSpec, PathSpec, PixiSpec, Reference, UrlSpec};
 
 /// A TOML representation of a package specification.
 #[serde_as]
@@ -47,6 +47,9 @@ pub struct TomlSpec {
 
     /// The git revision of the package
     pub tag: Option<String>,
+
+    /// The git subdirectory of the package
+    pub subdirectory: Option<String>,
 
     /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
@@ -254,15 +257,20 @@ impl TomlSpec {
             (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
             (None, None, Some(git)) => {
                 let rev = match (self.branch, self.rev, self.tag) {
-                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
-                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
-                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
+                    (Some(branch), None, None) => Some(Reference::Branch(branch)),
+                    (None, Some(rev), None) => Some(Reference::Rev(rev)),
+                    (None, None, Some(tag)) => Some(Reference::Tag(tag)),
                     (None, None, None) => None,
                     _ => {
                         return Err(SpecError::MultipleGitRefs);
                     }
                 };
-                PixiSpec::Git(GitSpec { git, rev })
+                let subdirectory = self.subdirectory;
+                PixiSpec::Git(GitSpec {
+                    git,
+                    rev,
+                    subdirectory,
+                })
             }
             (None, None, None) => {
                 let is_detailed = self.version.is_some()
@@ -370,6 +378,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
         let branch = th.optional("branch");
         let rev = th.optional("rev");
         let tag = th.optional("tag");
+        let subdirectory = th.optional("subdirectory");
         let build = th
             .optional::<TomlFromStr<_>>("build")
             .map(TomlFromStr::into_inner);
@@ -396,6 +405,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
             branch,
             rev,
             tag,
+            subdirectory,
             build,
             build_number,
             file_name,

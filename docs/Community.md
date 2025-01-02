@@ -65,3 +65,5 @@ When you want to show your users and contributors that they can use pixi in your
 - [conda-auth](https://github.com/conda-incubator/conda-auth): a conda plugin providing more secure authentication support to conda.
 - [py-rattler](https://github.com/mamba-org/rattler/tree/main/py-rattler): Build your own conda environment manager using the python wrapper of our Rattler backend.
 - [array-api-extra](https://github.com/data-apis/array-api-extra): Extra array functions built on top of the Python array API standard.
+- [marray](https://github.com/mdhaber/marray):
+Masked versions of Python array API standard compatible arrays.

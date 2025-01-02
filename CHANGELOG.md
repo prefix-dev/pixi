@@ -5,6 +5,59 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.39.4] - 2024-12-23
+#### ✨ Highlights
+Last release got an additional speedup for macOS specifically! 🚀
+
+#### Performance
+- Speedup environment installation on macOS by @wolfv in [#2754](https://github.com/prefix-dev/pixi/pull/2701)
+
+#### Added
+- Add script to build trampolines by @Hofer-Julian in [#2752](https://github.com/prefix-dev/pixi/pull/2752)
+
+#### Changed
+- Serialize system requirements by @ruben-arts in [#2753](https://github.com/prefix-dev/pixi/pull/2753)
+
+#### Documentation
+- Add pytorch integration guide. by @ruben-arts in [#2711](https://github.com/prefix-dev/pixi/pull/2711)
+
+#### Fixed
+- Rename the ppc binary archive by @ruben-arts in [#2750](https://github.com/prefix-dev/pixi/pull/2750)
+- Retry on http failures by @Hofer-Julian in [#2755](https://github.com/prefix-dev/pixi/pull/2755)
+
+#### `pixi build` Preview work
+- Update reference for pixi build by @Hofer-Julian in [#2735](https://github.com/prefix-dev/pixi/pull/2735)
+- Add tutorial for pixi build workspace by @Hofer-Julian in [#2727](https://github.com/prefix-dev/pixi/pull/2727)
+- Add support for git source dependencies in pixi build by @nichmor in [#2680](https://github.com/prefix-dev/pixi/pull/2680)
+
+### [0.39.3] - 2024-12-18
+#### ✨ Highlights
+This release includes a little Christmas present, the environment installation got a huge speedup! 🚀
+
+#### Performance
+- Speedup environment installation by @baszalmstra and @wolfv in [#2701](https://github.com/prefix-dev/pixi/pull/2701)
+
+#### Fixed
+- `pixi global sync` reports after each handled environment by @Hofer-Julian in [#2698](https://github.com/prefix-dev/pixi/pull/2698)
+- Config search order by @Hofer-Julian in [#2702](https://github.com/prefix-dev/pixi/pull/2702)
+- Enforce rust-tls for reqwest by @Hofer-Julian in [#2719](https://github.com/prefix-dev/pixi/pull/2719)
+- Help user with lockfile update error by @ruben-arts in [#2684](https://github.com/prefix-dev/pixi/pull/2684)
+- Add broken curl version check in install.sh by @thewtex in [#2686](https://github.com/prefix-dev/pixi/pull/2686)
+- Avoid race condition on bariercell when future is instant by @baszalmstra in [#2736](https://github.com/prefix-dev/pixi/pull/2736)
+- Log config parsing errors as errors by @Hofer-Julian in [#2739](https://github.com/prefix-dev/pixi/pull/2739)
+
+#### `pixi build` Preview work
+- Introduction to pixi build by @tdejager in [#2685](https://github.com/prefix-dev/pixi/pull/2685)
+- Add community example to ROS2 tutorial by @Daviesss in [#2713](https://github.com/prefix-dev/pixi/pull/2713)
+- Add tutorial for Python and pixi-build by @Hofer-Julian in [#2715](https://github.com/prefix-dev/pixi/pull/2715)
+- C++ package pixi build example by @tdejager in [#2717](https://github.com/prefix-dev/pixi/pull/2717)
+- Add target to workspace by @wolfv in [#2655](https://github.com/prefix-dev/pixi/pull/2655)
+- Support editable install for `pixi build` by @Hofer-Julian in [#2661](https://github.com/prefix-dev/pixi/pull/2661)
+
+#### New Contributors
+* @Daviesss made their first contribution in [#2713](https://github.com/prefix-dev/pixi/pull/2713)
+* @thewtex made their first contribution in [#2686](https://github.com/prefix-dev/pixi/pull/2686)
+
 ### [0.39.2] - 2024-12-11
 Patch release to fix the binary generation in CI.
 

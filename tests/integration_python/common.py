@@ -4,7 +4,9 @@ import platform
 import subprocess
 import os
 
-PIXI_VERSION = "0.39.2"
+from rattler import Platform
+
+PIXI_VERSION = "0.39.4"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -116,3 +118,23 @@ def pixi_dir(project_root: Path) -> Path:
 
 def default_env_path(project_root: Path) -> Path:
     return pixi_dir(project_root).joinpath("envs", "default")
+
+
+def repo_root() -> Path:
+    return Path(__file__).parents[2]
+
+
+def current_platform() -> str:
+    return str(Platform.current())
+
+
+def get_manifest(directory: Path) -> Path:
+    pixi_toml = directory / "pixi.toml"
+    pyproject_toml = directory / "pyproject.toml"
+
+    if pixi_toml.exists():
+        return pixi_toml
+    elif pyproject_toml.exists():
+        return pyproject_toml
+    else:
+        raise ValueError("Neither pixi.toml nor pyproject.toml found")

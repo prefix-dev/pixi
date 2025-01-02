@@ -17,7 +17,7 @@ pub struct IoConcurrencyLimit(Arc<Semaphore>);
 
 impl Default for IoConcurrencyLimit {
     fn default() -> Self {
-        Self(Arc::new(Semaphore::new(100)))
+        Self(Arc::new(Semaphore::new(10)))
     }
 }
 

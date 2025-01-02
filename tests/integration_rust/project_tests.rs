@@ -109,7 +109,9 @@ async fn parse_valid_schema_projects() {
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
             let pixi_toml = fs_err::read_to_string(&path).unwrap();
-            let _project = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml).unwrap();
+            if let Err(e) = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml) {
+                panic!("Error parsing {}: {}", path.display(), e);
+            }
         }
     }
 }
@@ -123,7 +125,24 @@ fn parse_valid_docs_manifests() {
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
             let pixi_toml = fs_err::read_to_string(&path).unwrap();
-            let _project = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml).unwrap();
+            if let Err(e) = Project::from_str(&PathBuf::from("pixi.toml"), &pixi_toml) {
+                panic!("Error parsing {}: {}", path.display(), e);
+            }
+        }
+    }
+}
+#[test]
+fn parse_valid_docs_pyproject_manifests() {
+    // Test all files in the docs/source_files/pyproject_tomls directory
+    let schema_dir =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/source_files/pyproject_tomls");
+    for entry in fs_err::read_dir(schema_dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
+            let pyproject_toml = fs_err::read_to_string(&path).unwrap();
+            let _project =
+                Project::from_str(&PathBuf::from("pyproject.toml"), &pyproject_toml).unwrap();
         }
     }
 }

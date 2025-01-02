@@ -1,7 +1,4 @@
 #[tokio::main]
-pub async fn main() {
-    if let Err(err) = pixi::cli::execute().await {
-        eprintln!("{err:?}");
-        std::process::exit(1);
-    }
+pub async fn main() -> miette::Result<()> {
+    pixi::cli::execute().await
 }
