@@ -1112,15 +1112,15 @@ mod tests {
     #[test]
     fn test_deserialize_failing() {
         const EXAMPLES: &[&str] = &[
-            r#"pkg = { ver: "1.2.3" }"#,
-            r#"pkg = { path: "foobar", "version": "==1.2.3" }"#,
-            r#"pkg = { version: "//" }"#,
-            r#"pkg = { git: "https://github.com/conda-forge/21cmfast-feedstock", branch: "main", tag: "v1" }"#,
-            r#"pkg = { git: "https://github.com/conda-forge/21cmfast-feedstock", branch: "main", tag: "v1", "rev": "123456" }"#,
-            r#"pkg = { git: "https://github.com/conda-forge/21cmfast-feedstock", branch: "main", rev: "v1" }"#,
-            r#"pkg = { git: "https://github.com/conda-forge/21cmfast-feedstock", tag: "v1", rev: "123456" }"#,
-            r#"pkg = { git: "ssh://github.com:conda-forge/21cmfast-feedstock"}"#,
-            r#"pkg = { branch: "main", tag: "v1", rev: "123456"  }"#,
+            r#"pkg = { ver = "1.2.3" }"#,
+            r#"pkg = { path = "foobar", "version" = "==1.2.3" }"#,
+            r#"pkg = { version = "//" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", tag = "v1" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", tag = "v1", "rev" = "123456" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", rev = "v1" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", tag = "v1", rev = "123456" }"#,
+            r#"pkg = { git = "ssh://github.com:conda-forge/21cmfast-feedstock"}"#,
+            r#"pkg = { branch = "main", tag = "v1", rev = "123456"  }"#,
             r#"pkg = "/path/style""#,
             r#"pkg = "./path/style""#,
             r#"pkg = "\\path\\style""#,
@@ -1129,7 +1129,6 @@ mod tests {
             r#"pkg = "https://github.com/conda-forge/21cmfast-feedstock""#,
         ];
 
-        #[derive(Serialize)]
         struct Snapshot {
             input: &'static str,
             result: Value,
@@ -1148,6 +1147,18 @@ mod tests {
             snapshot.push(Snapshot { input, result });
         }
 
-        insta::assert_yaml_snapshot!(snapshot);
+        insta::assert_snapshot!(snapshot
+            .into_iter()
+            .map(|Snapshot { input, result }| format!(
+                "input: {input}\nresult: {} ",
+                result
+                    .as_object()
+                    .unwrap()
+                    .get("error")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+            ))
+            .join("\n"));
     }
 }
