@@ -25,6 +25,7 @@ use pixi_build_types::{
 };
 use pixi_config::get_cache_dir;
 use pixi_consts::consts::CACHED_GIT_DIR;
+use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl};
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_manifest::Targets;
@@ -35,8 +36,6 @@ use pixi_spec::{GitSpec, Reference, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
-
-use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl};
 use rattler_digest::Sha256;
 pub use reporters::{BuildMetadataReporter, BuildReporter};
 use thiserror::Error;
@@ -49,6 +48,11 @@ use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
     SourceMetadataInput,
 };
+
+/// A list of globs that should be ignored when calculating any input hash.
+/// These are typically used for build artifacts that should not be included in
+/// the input hash.
+const DEFAULT_BUILD_IGNORE_GLOBS: &'static [&'static str] = &["!.pixi/**"];
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Clone)]
@@ -680,7 +684,11 @@ impl BuildContext {
         if let Some(source_input) = cached_build.source {
             let glob_time = GlobModificationTime::from_patterns(
                 &source_checkout.path,
-                source_input.globs.iter().map(String::as_str),
+                source_input
+                    .globs
+                    .iter()
+                    .map(String::as_str)
+                    .chain(DEFAULT_BUILD_IGNORE_GLOBS.into_iter().copied()),
             )
             .map_err(BuildError::GlobModificationError)?;
             match glob_time {
