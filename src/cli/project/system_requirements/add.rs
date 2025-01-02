@@ -1,16 +1,21 @@
 use crate::Project;
 use clap::{Parser, ValueEnum};
-use miette::{Context, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use pixi_manifest::{FeatureName, LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
 
 /// Enum for valid system requirement names.
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum SystemRequirementEnum {
+    /// The version of the linux kernel (Find with `uname -r`)
     Linux,
+    /// The version of the CUDA driver (Find with `nvidia-smi`)
     Cuda,
+    /// The version of MacOS (Find with `sw_vers`)
     Macos,
+    /// The version of the glibc library (Find with `ldd --version`)
     Glibc,
-    Libc,
+    /// Non Glibc libc family and version (Find with `ldd --version`)
+    OtherLibc,
     ArchSpec,
 }
 
@@ -21,6 +26,10 @@ pub struct Args {
 
     /// The version of the requirement
     pub version: String,
+
+    /// The Libc family, this can only be specified for requirement `other-libc`
+    #[clap(long, required_if_eq("requirement", "other-libc"))]
+    pub family: Option<String>,
 
     /// The name of the feature to modify.
     #[clap(long, short)]
@@ -47,29 +56,27 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
             )),
             ..Default::default()
         },
-        SystemRequirementEnum::Libc => {
-            if let Some((version, family)) = args.version.split_once(' ') {
-                let version = version.parse().into_diagnostic().wrap_err(
-                    "Invalid version string, expected format: <version> <family>, e.g. '2.17 libc'",
-                )?;
+        SystemRequirementEnum::OtherLibc => {
+            if let Some(family) = args.family {
                 SystemRequirements {
                     libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
-                        family: Some(family.to_string()),
-                        version,
+                        family: Some(family),
+                        version: args.version.parse().into_diagnostic()?,
                     })),
                     ..Default::default()
                 }
             } else {
                 SystemRequirements {
-                    libc: Some(LibCSystemRequirement::GlibC(
-                        args.version.parse().into_diagnostic()?,
-                    )),
+                    libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                        family: None,
+                        version: args.version.parse().into_diagnostic()?,
+                    })),
                     ..Default::default()
                 }
             }
         }
         SystemRequirementEnum::ArchSpec => SystemRequirements {
-            archspec: Some(args.version.parse().into_diagnostic()?),
+            archspec: Some(args.version),
             ..Default::default()
         },
     };
