@@ -84,7 +84,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await
     {
-        Ok(update_deps) => update_deps,
+        Ok(update_deps) => {
+            if args.dry_run {
+                // Make sure we restore original manifest content
+                fs_err::write(project.manifest_path(), original_manifest_content)
+                    .into_diagnostic()?;
+            } else {
+                project.save().into_diagnostic()?;
+            }
+            update_deps
+        }
         Err(e) => {
             // Restore original manifest
             fs_err::write(project.manifest_path(), original_manifest_content).into_diagnostic()?;

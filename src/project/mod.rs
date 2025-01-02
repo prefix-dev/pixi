@@ -714,8 +714,9 @@ impl Project {
             }
         }
 
-        // TODO: Figure out if we really need this save here
-        if !dry_run {
+        // Only save the project if it is a pyproject.toml
+        // This is required to ensure that the changes are found by tools like `pixi build` and `uv`
+        if self.manifest.is_pyproject() {
             self.save()?;
         }
 
@@ -803,8 +804,9 @@ impl Project {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // TODO: figure out if we really need this save here.
-        if !dry_run {
+        // Only save the project if it is a pyproject.toml
+        // This is required to ensure that the changes are found by tools like `pixi build` and `uv`
+        if self.manifest.is_pyproject() {
             self.save()?;
         }
 
