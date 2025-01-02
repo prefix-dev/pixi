@@ -714,3 +714,90 @@ def test_concurrency_flags(
             "package3",
         ]
     )
+
+
+def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # Add system requirements
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "cuda",
+            "11.8",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "glibc",
+            "2.27",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "macos",
+            "15.4",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "linux",
+            "6.5",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "other-libc",
+            "1.2.3",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="--family",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "other-libc",
+            "1.2.3",
+            "--family",
+            "musl",
+        ],
+        ExitCode.SUCCESS,
+    )

@@ -688,7 +688,7 @@ impl Manifest {
 
         // Replace the system requirements with the new ones
         // All given requirements are replaced, all optional requirements are kept
-        let result = current.union(&system_requirements).into_diagnostic()?;
+        let result = current.merge(&system_requirements);
 
         *current = result.clone();
 
