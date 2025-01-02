@@ -90,7 +90,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 fs_err::write(project.manifest_path(), original_manifest_content)
                     .into_diagnostic()?;
             } else {
-                project.save().into_diagnostic()?;
+                project.save()?;
             }
             update_deps
         }
