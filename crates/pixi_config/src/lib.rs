@@ -84,8 +84,7 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
         .or_else(|| {
-            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join("pixi"));
-
+            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join(consts::PIXI_DIR));
             // Only use the xdg cache pixi directory when it exists
             pixi_cache_dir.and_then(|d| d.exists().then_some(d))
         })
@@ -962,10 +961,7 @@ impl Config {
     /// ["conda-forge"]).
     pub fn default_channels(&self) -> Vec<NamedChannelOrUrl> {
         if self.default_channels.is_empty() {
-            consts::DEFAULT_CHANNELS
-                .iter()
-                .map(|s| NamedChannelOrUrl::Name(s.to_string()))
-                .collect()
+            consts::DEFAULT_CHANNELS.clone()
         } else {
             self.default_channels.clone()
         }
@@ -1256,13 +1252,13 @@ pub fn config_path_system() -> PathBuf {
     #[cfg(not(target_os = "windows"))]
     let base_path = PathBuf::from("/etc");
 
-    base_path.join("pixi").join(consts::CONFIG_FILE)
+    base_path.join(consts::CONFIG_DIR).join(consts::CONFIG_FILE)
 }
 
 /// Returns the path(s) to the global pixi config file.
 pub fn config_path_global() -> Vec<PathBuf> {
     vec![
-        dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
+        dirs::config_dir().map(|d| d.join(consts::CONFIG_DIR).join(consts::CONFIG_FILE)),
         pixi_home().map(|d| d.join(consts::CONFIG_FILE)),
     ]
     .into_iter()

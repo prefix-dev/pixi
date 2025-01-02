@@ -226,9 +226,10 @@ impl Project {
         }
 
         miette::bail!(
-            "could not find {} or {} which is configured to use pixi",
+            "could not find {} or {} which is configured to use {}",
             consts::PROJECT_MANIFEST,
-            consts::PYPROJECT_MANIFEST
+            consts::PYPROJECT_MANIFEST,
+            pixi_utils::executable_name()
         );
     }
 
@@ -423,7 +424,7 @@ impl Project {
 
     /// Returns an environment in this project based on a name or an environment
     /// variable.
-    pub(crate) fn environment_from_name_or_env_var(
+    pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
     ) -> miette::Result<Environment> {
