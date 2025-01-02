@@ -48,23 +48,24 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
             ..Default::default()
         },
         SystemRequirementEnum::Libc => {
-            let (version, family) = args
-                .version
-                .split_once(' ')
-                .ok_or_else(|| {
-                    miette::miette!("Invalid version and family string. Expected format: <version> <family>, e.g. '2.17 libc'")
-                })?;
-
-            let version = version.parse().into_diagnostic().wrap_err(
-                "Invalid version string, expected format: <version> <family>, e.g. '2.17 libc'",
-            )?;
-
-            SystemRequirements {
-                libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
-                    family: Some(family.to_string()),
-                    version,
-                })),
-                ..Default::default()
+            if let Some((version, family)) = args.version.split_once(' ') {
+                let version = version.parse().into_diagnostic().wrap_err(
+                    "Invalid version string, expected format: <version> <family>, e.g. '2.17 libc'",
+                )?;
+                SystemRequirements {
+                    libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                        family: Some(family.to_string()),
+                        version,
+                    })),
+                    ..Default::default()
+                }
+            } else {
+                SystemRequirements {
+                    libc: Some(LibCSystemRequirement::GlibC(
+                        args.version.parse().into_diagnostic()?,
+                    )),
+                    ..Default::default()
+                }
             }
         }
         SystemRequirementEnum::ArchSpec => SystemRequirements {
