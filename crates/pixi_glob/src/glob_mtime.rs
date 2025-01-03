@@ -77,29 +77,6 @@ impl GlobModificationTime {
             None => Ok(Self::NoMatches),
         }
     }
-
-    /// Get the newest modification time, if any.
-    pub(crate) fn newest(&self) -> Option<SystemTime> {
-        match self {
-            Self::MatchesFound { modified_at, .. } => Some(*modified_at),
-            Self::NoMatches => None,
-        }
-    }
-
-    /// Get the designated file with the newest modification time, if any.
-    pub(crate) fn designated_file(&self) -> Option<&Path> {
-        match self {
-            Self::MatchesFound {
-                designated_file, ..
-            } => Some(designated_file.as_path()),
-            Self::NoMatches => None,
-        }
-    }
-
-    /// Returns `true` if there have been any matches found.
-    pub(crate) fn has_matches(&self) -> bool {
-        matches!(self, Self::MatchesFound { .. })
-    }
 }
 
 #[cfg(test)]
@@ -160,7 +137,5 @@ mod tests {
         let glob_mod_time = GlobModificationTime::from_patterns(dir_path, ["*.md"]).unwrap();
 
         assert!(matches!(glob_mod_time, GlobModificationTime::NoMatches));
-        assert_eq!(glob_mod_time.newest(), None);
-        assert_eq!(glob_mod_time.designated_file(), None);
     }
 }

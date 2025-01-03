@@ -3898,7 +3898,6 @@ dependencies = [
 name = "pixi_progress"
 version = "0.1.0"
 dependencies = [
- "console",
  "indicatif",
  "tokio",
 ]

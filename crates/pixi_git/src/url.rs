@@ -79,6 +79,7 @@ impl CanonicalUrl {
         Self(url)
     }
 
+    #[allow(unused)]
     pub(crate) fn parse(url: &str) -> Result<Self, url::ParseError> {
         Ok(Self::new(&Url::parse(url)?))
     }
@@ -123,7 +124,7 @@ impl RepositoryUrl {
         Self(url)
     }
 
-    pub(crate) fn parse(url: &str) -> Result<Self, url::ParseError> {
+    pub fn parse(url: &str) -> Result<Self, url::ParseError> {
         Ok(Self::new(&Url::parse(url)?))
     }
 }

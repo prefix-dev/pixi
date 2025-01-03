@@ -109,6 +109,7 @@ impl GitResolver {
     /// This method will only return precise URLs for URLs that have already been resolved via
     /// `resolve_precise`, and will return `None` for URLs that have not been resolved _or_
     /// already have a precise reference.
+    #[allow(unused)]
     pub(crate) fn precise(&self, url: GitUrl) -> Option<GitUrl> {
         let reference = RepositoryReference::from(&url);
         let precise = self.get(&reference)?;
@@ -116,6 +117,7 @@ impl GitResolver {
     }
 
     /// Returns `true` if the two Git URLs refer to the same precise commit.
+    #[allow(unused)]
     pub(crate) fn same_ref(&self, a: &GitUrl, b: &GitUrl) -> bool {
         // Convert `a` to a repository URL.
         let a_ref = RepositoryReference::from(a);

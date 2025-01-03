@@ -47,6 +47,7 @@ impl PinnedSourceSpec {
     }
 
     /// Returns the url spec if this instance is a url spec.
+    #[allow(unused)]
     pub(crate) fn as_url(&self) -> Option<&PinnedUrlSpec> {
         match self {
             PinnedSourceSpec::Url(spec) => Some(spec),
@@ -55,6 +56,7 @@ impl PinnedSourceSpec {
     }
 
     /// Returns the git spec if this instance is a git spec.
+    #[allow(unused)]
     pub(crate) fn as_git(&self) -> Option<&PinnedGitSpec> {
         match self {
             PinnedSourceSpec::Git(spec) => Some(spec),
@@ -63,6 +65,7 @@ impl PinnedSourceSpec {
     }
 
     /// Converts this instance into a [`PinnedPathSpec`] if it is a path spec.
+    #[allow(unused)]
     pub(crate) fn into_path(self) -> Option<PinnedPathSpec> {
         match self {
             PinnedSourceSpec::Path(spec) => Some(spec),
@@ -71,6 +74,7 @@ impl PinnedSourceSpec {
     }
 
     /// Converts this instance into a [`PinnedUrlSpec`] if it is a url spec.
+    #[allow(unused)]
     pub(crate) fn into_url(self) -> Option<PinnedUrlSpec> {
         match self {
             PinnedSourceSpec::Url(spec) => Some(spec),
@@ -79,6 +83,7 @@ impl PinnedSourceSpec {
     }
 
     /// Converts this instance into a [`PinnedGitSpec`] if it is a git spec.
+    #[allow(unused)]
     pub(crate) fn into_git(self) -> Option<PinnedGitSpec> {
         match self {
             PinnedSourceSpec::Git(spec) => Some(spec),
@@ -93,6 +98,7 @@ impl PinnedSourceSpec {
     /// A mutable source is a source that can change over time. For example, a
     /// local path.
     #[allow(clippy::result_large_err)]
+    #[allow(unused)]
     pub(crate) fn into_mutable(self) -> Result<MutablePinnedSourceSpec, PinnedSourceSpec> {
         match self {
             PinnedSourceSpec::Path(spec) => Ok(MutablePinnedSourceSpec::Path(spec)),
@@ -109,6 +115,7 @@ impl PinnedSourceSpec {
 
 impl MutablePinnedSourceSpec {
     /// Returns the path spec if this instance is a path spec.
+    #[allow(unused)]
     pub(crate) fn as_path(&self) -> Option<&PinnedPathSpec> {
         match self {
             MutablePinnedSourceSpec::Path(spec) => Some(spec),
@@ -116,6 +123,7 @@ impl MutablePinnedSourceSpec {
     }
 
     /// Returns the path spec if this instance is a path spec.
+    #[allow(unused)]
     pub(crate) fn into_path(self) -> Option<PinnedPathSpec> {
         match self {
             MutablePinnedSourceSpec::Path(spec) => Some(spec),
@@ -233,7 +241,7 @@ pub struct PinnedGitSpec {
 
 impl PinnedGitSpec {
     /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
-    pub(crate) fn into_locked_git_url(&self) -> LockedGitUrl {
+    pub(crate) fn to_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
 
         // // Redact the credentials.
@@ -331,7 +339,7 @@ impl From<PinnedPathSpec> for UrlOrPath {
 
 impl From<PinnedGitSpec> for UrlOrPath {
     fn from(value: PinnedGitSpec) -> Self {
-        let url = value.into_locked_git_url();
+        let url = value.to_locked_git_url();
         UrlOrPath::Url(url.into())
     }
 }
@@ -385,6 +393,7 @@ impl LockedGitUrl {
     }
 
     /// Parses a locked git URL from a string.
+    #[allow(unused)]
     pub(crate) fn parse(url: &str) -> miette::Result<Self> {
         let url = Url::parse(url).into_diagnostic()?;
         Ok(Self(url))
@@ -406,7 +415,7 @@ impl TryFrom<LockedGitUrl> for PinnedGitSpec {
 
 impl From<PinnedGitSpec> for LockedGitUrl {
     fn from(value: PinnedGitSpec) -> Self {
-        value.into_locked_git_url()
+        value.to_locked_git_url()
     }
 }
 

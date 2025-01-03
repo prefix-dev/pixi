@@ -44,36 +44,6 @@ pub fn default_progress_style() -> indicatif::ProgressStyle {
         .progress_chars("━━╾─")
 }
 
-/// Returns the style to use for a progressbar that is in Deserializing state.
-pub(crate) fn deserializing_progress_style() -> indicatif::ProgressStyle {
-    indicatif::ProgressStyle::default_bar()
-        .template("  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {wide_msg}")
-        .unwrap()
-        .progress_chars("━━╾─")
-}
-
-/// Returns the style to use for a progressbar that is finished.
-pub(crate) fn finished_progress_style() -> indicatif::ProgressStyle {
-    indicatif::ProgressStyle::default_bar()
-        .template(&format!(
-            "  {} {{prefix:20!}} [{{elapsed_precise}}] {{msg:.bold}}",
-            console::style(console::Emoji("✔", " ")).green()
-        ))
-        .unwrap()
-        .progress_chars("━━╾─")
-}
-
-/// Returns the style to use for a progressbar that is in error state.
-pub(crate) fn errored_progress_style() -> indicatif::ProgressStyle {
-    indicatif::ProgressStyle::default_bar()
-        .template(&format!(
-            "  {} {{prefix:20!}} [{{elapsed_precise}}] {{msg:.bold.red}}",
-            console::style(console::Emoji("❌", " ")).red()
-        ))
-        .unwrap()
-        .progress_chars("━━╾─")
-}
-
 /// Returns the style to use for a progressbar that is indeterminate and simply shows a spinner.
 pub fn long_running_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::with_template("{prefix}{spinner:.green} {msg}").unwrap()
@@ -159,11 +129,6 @@ impl ScopedTask {
 
 impl ProgressBarMessageFormatter {
     /// Construct a new instance that will update the given progress bar.
-    pub(crate) fn new(progress_bar: ProgressBar) -> Self {
-        Self::new_with_capacity(progress_bar, 50)
-    }
-
-    /// Construct a new instance that will update the given progress bar.
     /// Allows the user to specify a custom capacity for the internal channel.
     pub fn new_with_capacity(progress_bar: ProgressBar, capacity: usize) -> Self {
         let pb = progress_bar.clone();
@@ -195,11 +160,6 @@ impl ProgressBarMessageFormatter {
             }
         });
         Self { sender: tx, pb }
-    }
-
-    /// Returns the associated progress bar
-    pub(crate) fn progress_bar(&self) -> &ProgressBar {
-        &self.pb
     }
 
     /// Adds the start of another task to the progress bar and returns an object that is used to
@@ -238,10 +198,5 @@ impl ProgressBarMessageFormatter {
         let result = fut.await;
         task.finish().await;
         result
-    }
-
-    /// Convert this instance into the underlying progress bar.
-    pub(crate) fn into_progress_bar(self) -> ProgressBar {
-        self.pb
     }
 }
