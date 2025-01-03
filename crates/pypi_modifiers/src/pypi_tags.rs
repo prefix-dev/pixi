@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use miette::{Context, IntoDiagnostic};
 use pixi_default_versions::{default_glibc_version, default_mac_os_version};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
@@ -167,8 +169,11 @@ fn gil_disabled(python_record: &PackageRecord) -> miette::Result<bool> {
     // In order to detect if the python interpreter is free-threaded, we look at the depends
     // field of the record. If the record has a dependency on `python_abi`, then
     // look at the build string to detect cpXXXt (free-threaded python interpreter).
-    let regex =
-        Regex::new(r"cp\d{3}t").expect("regex for free-threaded python interpreter should compile");
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+
+    let regex = REGEX.get_or_init(|| {
+        Regex::new(r"cp\d{3}t").expect("regex for free-threaded python interpreter should compile")
+    });
 
     let deps = python_record
         .depends
