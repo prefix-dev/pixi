@@ -126,7 +126,7 @@ pub struct SourceMetadata {
 }
 
 impl BuildContext {
-    pub fn new(
+    pub(crate) fn new(
         cache_dir: PathBuf,
         dot_pixi_dir: PathBuf,
         channel_config: ChannelConfig,
@@ -146,7 +146,7 @@ impl BuildContext {
         })
     }
 
-    pub fn from_project(project: &crate::project::Project) -> miette::Result<Self> {
+    pub(crate) fn from_project(project: &crate::project::Project) -> miette::Result<Self> {
         let variant = project
             .manifest()
             .workspace
@@ -164,7 +164,7 @@ impl BuildContext {
         .into_diagnostic()
     }
 
-    pub fn with_tool_context(self, tool_context: Arc<ToolContext>) -> Self {
+    pub(crate) fn with_tool_context(self, tool_context: Arc<ToolContext>) -> Self {
         Self {
             tool_context,
             ..self
@@ -172,7 +172,8 @@ impl BuildContext {
     }
 
     /// Sets the input hash cache to use for caching input hashes.
-    pub fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
+    #[allow(unused)]
+    pub(crate) fn with_glob_hash_cache(self, glob_hash_cache: GlobHashCache) -> Self {
         Self {
             glob_hash_cache,
             ..self
@@ -843,7 +844,7 @@ struct WorkDirKey {
 }
 
 impl WorkDirKey {
-    pub fn key(&self) -> String {
+    pub(crate) fn key(&self) -> String {
         let mut hasher = Xxh3::new();
         self.source.pinned.to_string().hash(&mut hasher);
         self.host_platform.hash(&mut hasher);

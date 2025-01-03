@@ -377,7 +377,7 @@ pub struct LockFileJsonDiff {
 }
 
 impl LockFileJsonDiff {
-    pub fn new(project: &Project, value: LockFileDiff) -> Self {
+    pub(crate) fn new(project: &Project, value: LockFileDiff) -> Self {
         let mut environment = IndexMap::new();
 
         for (environment_name, environment_diff) in value.environment {

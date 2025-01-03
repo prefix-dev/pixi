@@ -38,7 +38,7 @@ pub enum GlobHashError {
 
 impl GlobHash {
     /// Calculate a hash of the files that match the given glob patterns.
-    pub fn from_patterns<'a>(
+    pub(crate) fn from_patterns<'a>(
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
     ) -> Result<Self, GlobHashError> {
@@ -168,7 +168,7 @@ mod test {
     use super::*;
 
     #[fixture]
-    pub fn testname() -> String {
+    pub(crate) fn testname() -> String {
         let thread_name = std::thread::current().name().unwrap().to_string();
         let test_name = thread_name.rsplit("::").next().unwrap_or(&thread_name);
         format!("glob_hash_{test_name}")

@@ -75,7 +75,7 @@ pub enum GitReference {
 impl GitReference {
     /// Creates a [`GitReference`] from an arbitrary revision string, which could represent a
     /// branch, tag, commit, or named ref.
-    pub fn from_rev(rev: String) -> Self {
+    pub(crate) fn from_rev(rev: String) -> Self {
         if rev.starts_with("refs/") {
             Self::NamedRef(rev)
         } else if GitReference::looks_like_commit_hash(&rev) {
@@ -90,7 +90,7 @@ impl GitReference {
     }
 
     /// Converts the [`GitReference`] to a `str`.
-    pub fn as_str(&self) -> Option<&str> {
+    pub(crate) fn as_str(&self) -> Option<&str> {
         match self {
             Self::Tag(rev) => Some(rev),
             Self::Branch(rev) => Some(rev),

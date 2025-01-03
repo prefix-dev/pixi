@@ -47,7 +47,8 @@ impl PinnedSourceSpec {
     }
 
     /// Returns the url spec if this instance is a url spec.
-    pub fn as_url(&self) -> Option<&PinnedUrlSpec> {
+    #[allow(unused)]
+    pub(crate) fn as_url(&self) -> Option<&PinnedUrlSpec> {
         match self {
             PinnedSourceSpec::Url(spec) => Some(spec),
             _ => None,
@@ -55,7 +56,8 @@ impl PinnedSourceSpec {
     }
 
     /// Returns the git spec if this instance is a git spec.
-    pub fn as_git(&self) -> Option<&PinnedGitSpec> {
+    #[allow(unused)]
+    pub(crate) fn as_git(&self) -> Option<&PinnedGitSpec> {
         match self {
             PinnedSourceSpec::Git(spec) => Some(spec),
             _ => None,
@@ -63,7 +65,8 @@ impl PinnedSourceSpec {
     }
 
     /// Converts this instance into a [`PinnedPathSpec`] if it is a path spec.
-    pub fn into_path(self) -> Option<PinnedPathSpec> {
+    #[allow(unused)]
+    pub(crate) fn into_path(self) -> Option<PinnedPathSpec> {
         match self {
             PinnedSourceSpec::Path(spec) => Some(spec),
             _ => None,
@@ -71,7 +74,8 @@ impl PinnedSourceSpec {
     }
 
     /// Converts this instance into a [`PinnedUrlSpec`] if it is a url spec.
-    pub fn into_url(self) -> Option<PinnedUrlSpec> {
+    #[allow(unused)]
+    pub(crate) fn into_url(self) -> Option<PinnedUrlSpec> {
         match self {
             PinnedSourceSpec::Url(spec) => Some(spec),
             _ => None,
@@ -79,7 +83,8 @@ impl PinnedSourceSpec {
     }
 
     /// Converts this instance into a [`PinnedGitSpec`] if it is a git spec.
-    pub fn into_git(self) -> Option<PinnedGitSpec> {
+    #[allow(unused)]
+    pub(crate) fn into_git(self) -> Option<PinnedGitSpec> {
         match self {
             PinnedSourceSpec::Git(spec) => Some(spec),
             _ => None,
@@ -93,7 +98,8 @@ impl PinnedSourceSpec {
     /// A mutable source is a source that can change over time. For example, a
     /// local path.
     #[allow(clippy::result_large_err)]
-    pub fn into_mutable(self) -> Result<MutablePinnedSourceSpec, PinnedSourceSpec> {
+    #[allow(unused)]
+    pub(crate) fn into_mutable(self) -> Result<MutablePinnedSourceSpec, PinnedSourceSpec> {
         match self {
             PinnedSourceSpec::Path(spec) => Ok(MutablePinnedSourceSpec::Path(spec)),
             _ => Err(self),
@@ -109,14 +115,16 @@ impl PinnedSourceSpec {
 
 impl MutablePinnedSourceSpec {
     /// Returns the path spec if this instance is a path spec.
-    pub fn as_path(&self) -> Option<&PinnedPathSpec> {
+    #[allow(unused)]
+    pub(crate) fn as_path(&self) -> Option<&PinnedPathSpec> {
         match self {
             MutablePinnedSourceSpec::Path(spec) => Some(spec),
         }
     }
 
     /// Returns the path spec if this instance is a path spec.
-    pub fn into_path(self) -> Option<PinnedPathSpec> {
+    #[allow(unused)]
+    pub(crate) fn into_path(self) -> Option<PinnedPathSpec> {
         match self {
             MutablePinnedSourceSpec::Path(spec) => Some(spec),
         }
@@ -233,7 +241,7 @@ pub struct PinnedGitSpec {
 
 impl PinnedGitSpec {
     /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
-    pub fn into_locked_git_url(&self) -> LockedGitUrl {
+    pub(crate) fn to_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
 
         // // Redact the credentials.
@@ -331,7 +339,7 @@ impl From<PinnedPathSpec> for UrlOrPath {
 
 impl From<PinnedGitSpec> for UrlOrPath {
     fn from(value: PinnedGitSpec) -> Self {
-        let url = value.into_locked_git_url();
+        let url = value.to_locked_git_url();
         UrlOrPath::Url(url.into())
     }
 }
@@ -360,12 +368,12 @@ impl LockedGitUrl {
     /// Returns true if the given URL is a locked git URL.
     /// This is used to differentiate between a regular Url and a [`LockedGitUrl`]
     /// that starts with `git+`.
-    pub fn is_locked_git_url(locked_url: &Url) -> bool {
+    pub(crate) fn is_locked_git_url(locked_url: &Url) -> bool {
         locked_url.scheme().starts_with("git+")
     }
 
     /// Converts this [`LockedGitUrl`] into a [`PinnedGitSpec`].
-    pub fn to_pinned_git_spec(&self) -> miette::Result<PinnedGitSpec> {
+    pub(crate) fn to_pinned_git_spec(&self) -> miette::Result<PinnedGitSpec> {
         let git_source = PinnedGitCheckout::from_locked_url(self)?;
 
         let git_url = GitUrl::try_from(self.0.clone()).into_diagnostic()?;
@@ -385,7 +393,8 @@ impl LockedGitUrl {
     }
 
     /// Parses a locked git URL from a string.
-    pub fn parse(url: &str) -> miette::Result<Self> {
+    #[allow(unused)]
+    pub(crate) fn parse(url: &str) -> miette::Result<Self> {
         let url = Url::parse(url).into_diagnostic()?;
         Ok(Self(url))
     }
@@ -406,7 +415,7 @@ impl TryFrom<LockedGitUrl> for PinnedGitSpec {
 
 impl From<PinnedGitSpec> for LockedGitUrl {
     fn from(value: PinnedGitSpec) -> Self {
-        value.into_locked_git_url()
+        value.to_locked_git_url()
     }
 }
 
@@ -499,7 +508,7 @@ pub enum SourceMismatchError {
 impl PinnedPathSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked path satisfies the requested path.
-    pub fn satisfies(&self, spec: &PathSourceSpec) -> Result<(), SourceMismatchError> {
+    pub(crate) fn satisfies(&self, spec: &PathSourceSpec) -> Result<(), SourceMismatchError> {
         if spec.path != self.path {
             return Err(SourceMismatchError::PathMismatch {
                 locked: self.path.clone(),
@@ -513,7 +522,7 @@ impl PinnedPathSpec {
 impl PinnedUrlSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked url satisfies the requested url.
-    pub fn satisfies(&self, spec: &UrlSourceSpec) -> Result<(), SourceMismatchError> {
+    pub(crate) fn satisfies(&self, spec: &UrlSourceSpec) -> Result<(), SourceMismatchError> {
         if spec.url != self.url {
             return Err(SourceMismatchError::UrlMismatch {
                 locked: self.url.clone(),
@@ -549,7 +558,7 @@ impl PinnedUrlSpec {
 impl PinnedGitSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked git url satisfies the requested git url.
-    pub fn satisfies(&self, spec: &GitSpec) -> Result<(), SourceMismatchError> {
+    pub(crate) fn satisfies(&self, spec: &GitSpec) -> Result<(), SourceMismatchError> {
         let mut to_be_redacted = spec.git.clone();
         redact_credentials(&mut to_be_redacted);
 

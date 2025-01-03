@@ -16,7 +16,7 @@ use url::Url;
 pub struct CanonicalUrl(Url);
 
 impl CanonicalUrl {
-    pub fn new(url: &Url) -> Self {
+    pub(crate) fn new(url: &Url) -> Self {
         let mut url = url.clone();
 
         // If the URL cannot be a base, then it's not a valid URL anyway.
@@ -79,7 +79,8 @@ impl CanonicalUrl {
         Self(url)
     }
 
-    pub fn parse(url: &str) -> Result<Self, url::ParseError> {
+    #[allow(unused)]
+    pub(crate) fn parse(url: &str) -> Result<Self, url::ParseError> {
         Ok(Self::new(&Url::parse(url)?))
     }
 }

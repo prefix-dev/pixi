@@ -148,14 +148,14 @@ pub struct RepodataConfig {
 }
 
 impl RepodataConfig {
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.default.is_empty() && self.per_channel.is_empty()
     }
 
     /// Merge the given RepodataConfig into the current one.
     /// `other` is mutable to allow for moving the values out of it.
     /// The given config will have higher priority
-    pub fn merge(&self, mut other: Self) -> Self {
+    pub(crate) fn merge(&self, mut other: Self) -> Self {
         let mut per_channel: HashMap<_, _> = self
             .per_channel
             .clone()
@@ -219,14 +219,14 @@ pub struct RepodataChannelConfig {
 }
 
 impl RepodataChannelConfig {
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.disable_jlap.is_none()
             && self.disable_bzip2.is_none()
             && self.disable_zstd.is_none()
             && self.disable_sharded.is_none()
     }
 
-    pub fn merge(&self, other: Self) -> Self {
+    pub(crate) fn merge(&self, other: Self) -> Self {
         Self {
             disable_jlap: self.disable_jlap.or(other.disable_jlap),
             disable_zstd: self.disable_zstd.or(other.disable_zstd),
@@ -318,18 +318,18 @@ pub struct ExperimentalConfig {
 }
 
 impl ExperimentalConfig {
-    pub fn merge(self, other: Self) -> Self {
+    pub(crate) fn merge(self, other: Self) -> Self {
         Self {
             use_environment_activation_cache: other
                 .use_environment_activation_cache
                 .or(self.use_environment_activation_cache),
         }
     }
-    pub fn use_environment_activation_cache(&self) -> bool {
+    pub(crate) fn use_environment_activation_cache(&self) -> bool {
         self.use_environment_activation_cache.unwrap_or(false)
     }
 
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         self.use_environment_activation_cache.is_none()
     }
 }
@@ -373,7 +373,7 @@ impl Default for ConcurrencyConfig {
 
 impl ConcurrencyConfig {
     /// Merge the given ConcurrencyConfig into the current one.
-    pub fn merge(self, other: Self) -> Self {
+    pub(crate) fn merge(self, other: Self) -> Self {
         // Merging means using the other value if they are none default.
         Self {
             solves: if other.solves != ConcurrencyConfig::default().solves {
@@ -389,14 +389,14 @@ impl ConcurrencyConfig {
         }
     }
 
-    pub fn is_default(&self) -> bool {
+    pub(crate) fn is_default(&self) -> bool {
         ConcurrencyConfig::default() == *self
     }
 }
 
 impl PyPIConfig {
     /// Merge the given PyPIConfig into the current one.
-    pub fn merge(self, other: Self) -> Self {
+    pub(crate) fn merge(self, other: Self) -> Self {
         let extra_index_urls = self
             .extra_index_urls
             .into_iter()
@@ -415,7 +415,7 @@ impl PyPIConfig {
         }
     }
 
-    pub fn with_keyring(mut self, keyring_provider: KeyringProvider) -> Self {
+    pub(crate) fn with_keyring(mut self, keyring_provider: KeyringProvider) -> Self {
         self.keyring_provider = Some(keyring_provider);
         self
     }
@@ -756,7 +756,7 @@ impl Config {
     /// # Errors
     ///
     /// I/O errors or parsing errors
-    pub fn from_path(path: &Path) -> Result<Config, ConfigError> {
+    pub(crate) fn from_path(path: &Path) -> Result<Config, ConfigError> {
         tracing::debug!("Loading config from {}", path.display());
         let s = match fs_err::read_to_string(path) {
             Ok(content) => content,
@@ -803,7 +803,7 @@ impl Config {
     /// # Errors
     ///
     /// I/O errors or parsing errors
-    pub fn try_load_system() -> Result<Config, ConfigError> {
+    pub(crate) fn try_load_system() -> Result<Config, ConfigError> {
         Self::from_path(&config_path_system())
     }
 
@@ -824,7 +824,7 @@ impl Config {
     }
 
     /// Validate the config file.
-    pub fn validate(&self) -> miette::Result<()> {
+    pub(crate) fn validate(&self) -> miette::Result<()> {
         // Validate the detached environments directory is set correctly
         if let Some(detached_environments) = self.detached_environments.clone() {
             match detached_environments {
@@ -901,7 +901,7 @@ impl Config {
     }
 
     // Get all possible keys of the configuration
-    pub fn get_keys(&self) -> &[&str] {
+    pub(crate) fn get_keys(&self) -> &[&str] {
         &[
             "default-channels",
             "change-ps1",
@@ -991,7 +991,8 @@ impl Config {
         &self.channel_config
     }
 
-    pub fn repodata_config(&self) -> &RepodataConfig {
+    #[cfg(test)]
+    pub(crate) fn repodata_config(&self) -> &RepodataConfig {
         &self.repodata_config
     }
 

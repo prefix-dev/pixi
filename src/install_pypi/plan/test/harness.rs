@@ -19,7 +19,7 @@ use uv_pypi_types::{ArchiveInfo, DirectUrl, VcsInfo, VcsKind};
 struct InstalledDistBuilder;
 
 impl InstalledDistBuilder {
-    pub fn registry<S: AsRef<str>>(name: S, version: S, path: PathBuf) -> InstalledDist {
+    pub(crate) fn registry<S: AsRef<str>>(name: S, version: S, path: PathBuf) -> InstalledDist {
         let name =
             uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
         let version =
@@ -34,7 +34,7 @@ impl InstalledDistBuilder {
         InstalledDist::Registry(registry)
     }
 
-    pub fn directory<S: AsRef<str>>(
+    pub(crate) fn directory<S: AsRef<str>>(
         name: S,
         version: S,
         install_path: PathBuf,
@@ -66,7 +66,7 @@ impl InstalledDistBuilder {
         (InstalledDist::Url(installed_direct_url), direct_url)
     }
 
-    pub fn archive<S: AsRef<str>>(
+    pub(crate) fn archive<S: AsRef<str>>(
         name: S,
         version: S,
         install_path: PathBuf,
@@ -98,7 +98,7 @@ impl InstalledDistBuilder {
         (InstalledDist::Url(installed_direct_url), direct_url)
     }
 
-    pub fn git<S: AsRef<str>>(
+    pub(crate) fn git<S: AsRef<str>>(
         name: S,
         version: S,
         install_path: PathBuf,
@@ -144,33 +144,33 @@ pub struct InstalledDistOptions {
 }
 
 impl InstalledDistOptions {
-    pub fn with_installer<S: AsRef<str>>(mut self, installer: S) -> Self {
+    pub(crate) fn with_installer<S: AsRef<str>>(mut self, installer: S) -> Self {
         self.installer = Some(installer.as_ref().to_owned());
         self
     }
 
-    pub fn with_requires_python<S: AsRef<str>>(mut self, requires_python: S) -> Self {
+    pub(crate) fn with_requires_python<S: AsRef<str>>(mut self, requires_python: S) -> Self {
         self.requires_python =
             uv_pep440::VersionSpecifiers::from_str(requires_python.as_ref()).ok();
         self
     }
 
-    pub fn with_metadata_mtime(mut self, metadata_mtime: std::time::SystemTime) -> Self {
+    pub(crate) fn with_metadata_mtime(mut self, metadata_mtime: std::time::SystemTime) -> Self {
         self.metadata_mtime = Some(metadata_mtime);
         self
     }
 
-    pub fn installer(&self) -> &str {
+    pub(crate) fn installer(&self) -> &str {
         self.installer
             .as_deref()
             .unwrap_or(consts::PIXI_UV_INSTALLER)
     }
 
-    pub fn requires_python(&self) -> Option<&uv_pep440::VersionSpecifiers> {
+    pub(crate) fn requires_python(&self) -> Option<&uv_pep440::VersionSpecifiers> {
         self.requires_python.as_ref()
     }
 
-    pub fn metadata_mtime(&self) -> Option<std::time::SystemTime> {
+    pub(crate) fn metadata_mtime(&self) -> Option<std::time::SystemTime> {
         self.metadata_mtime
     }
 }
@@ -183,7 +183,7 @@ pub struct MockedSitePackages {
 }
 
 impl MockedSitePackages {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             installed_dist: vec![],
             fake_site_packages: tempfile::tempdir().expect("should create temp dir"),
@@ -191,7 +191,7 @@ impl MockedSitePackages {
     }
 
     #[allow(dead_code)]
-    pub fn base_dir(&self) -> &Path {
+    pub(crate) fn base_dir(&self) -> &Path {
         self.fake_site_packages.path()
     }
 
@@ -248,7 +248,7 @@ impl MockedSitePackages {
     }
 
     /// Add a registry installed dist to the site packages
-    pub fn add_registry<S: AsRef<str>>(
+    pub(crate) fn add_registry<S: AsRef<str>>(
         mut self,
         name: S,
         version: S,
@@ -261,7 +261,7 @@ impl MockedSitePackages {
     }
 
     /// Add a local directory that serves as an installed dist to the site-packages
-    pub fn add_directory<S: AsRef<str>>(
+    pub(crate) fn add_directory<S: AsRef<str>>(
         mut self,
         name: S,
         version: S,
@@ -283,7 +283,7 @@ impl MockedSitePackages {
     }
 
     /// Add an archive installed dist to the site packages
-    pub fn add_archive<S: AsRef<str>>(
+    pub(crate) fn add_archive<S: AsRef<str>>(
         mut self,
         name: S,
         version: S,
@@ -299,7 +299,7 @@ impl MockedSitePackages {
     }
 
     /// Add a git installed dist to the site packages
-    pub fn add_git<S: AsRef<str>>(
+    pub(crate) fn add_git<S: AsRef<str>>(
         mut self,
         name: S,
         version: S,
@@ -429,12 +429,12 @@ pub struct RequiredPackages {
 }
 
 impl RequiredPackages {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
     /// Add a registry package to the required packages
-    pub fn add_registry<S: AsRef<str>>(mut self, name: S, version: S) -> Self {
+    pub(crate) fn add_registry<S: AsRef<str>>(mut self, name: S, version: S) -> Self {
         let package_name =
             uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
         let data = PyPIPackageDataBuilder::registry(name, version);
@@ -443,7 +443,7 @@ impl RequiredPackages {
     }
 
     /// Add a directory package to the required packages
-    pub fn add_directory<S: AsRef<str>>(
+    pub(crate) fn add_directory<S: AsRef<str>>(
         mut self,
         name: S,
         version: S,
@@ -457,7 +457,7 @@ impl RequiredPackages {
         self
     }
 
-    pub fn add_archive<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
+    pub(crate) fn add_archive<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
         let package_name =
             uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
         let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Direct);
@@ -465,7 +465,7 @@ impl RequiredPackages {
         self
     }
 
-    pub fn add_git<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
+    pub(crate) fn add_git<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
         let package_name =
             uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
         let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Other);
@@ -475,7 +475,7 @@ impl RequiredPackages {
 
     /// Convert the required packages where the data is borrowed
     /// this is needed to pass it into the [`InstallPlanner`]
-    pub fn to_borrowed(&self) -> HashMap<uv_normalize::PackageName, &PypiPackageData> {
+    pub(crate) fn to_borrowed(&self) -> HashMap<uv_normalize::PackageName, &PypiPackageData> {
         self.required.iter().map(|(k, v)| (k.clone(), v)).collect()
     }
 }
@@ -489,7 +489,7 @@ fn python_version() -> uv_pep440::Version {
 }
 
 /// Simple function to create an installation planner
-pub fn install_planner() -> InstallPlanner {
+pub(crate) fn install_planner() -> InstallPlanner {
     InstallPlanner::new(
         uv_cache::Cache::temp().unwrap(),
         &python_version(),
@@ -499,7 +499,7 @@ pub fn install_planner() -> InstallPlanner {
 
 /// Create a fake pyproject.toml file in a temp dir
 /// return the temp dir
-pub fn fake_pyproject_toml(
+pub(crate) fn fake_pyproject_toml(
     modification_time: Option<std::time::SystemTime>,
 ) -> (TempDir, std::fs::File) {
     let temp_dir = tempfile::tempdir().unwrap();

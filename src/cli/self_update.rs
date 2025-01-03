@@ -258,7 +258,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    pub fn test_unarchive_flat_structure() {
+    pub(crate) fn test_unarchive_flat_structure() {
         // This archive contains a single file named "a_file"
         // So we expect the file to be extracted to the target directory
 
@@ -281,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_unarchive_nested_structure() {
+    pub(crate) fn test_unarchive_nested_structure() {
         // This archive contains following nested structure
         // pixi_nested_archive.tar.gz
         // ├── some_pixi (directory)

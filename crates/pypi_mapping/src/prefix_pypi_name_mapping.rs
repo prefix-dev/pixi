@@ -252,7 +252,7 @@ pub fn amend_pypi_purls_for_record(
 
 /// Try to assume that the conda-forge package is a PyPI package and return a
 /// purl.
-pub fn assume_conda_is_pypi(
+pub(crate) fn assume_conda_is_pypi(
     purls: Option<&Vec<PackageUrl>>,
     record: &RepoDataRecord,
 ) -> Option<PackageUrl> {

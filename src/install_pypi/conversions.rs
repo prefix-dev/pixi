@@ -18,7 +18,7 @@ use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, Verbat
 use super::utils::{is_direct_url, strip_direct_scheme};
 
 /// Converts our locked data to a file
-pub fn locked_data_to_file(
+pub(crate) fn locked_data_to_file(
     url: &Url,
     hash: Option<&PackageHashes>,
     filename: &str,
@@ -84,7 +84,7 @@ pub enum ConvertToUvDistError {
 }
 
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
-pub fn convert_to_dist(
+pub(crate) fn convert_to_dist(
     pkg: &PypiPackageData,
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {

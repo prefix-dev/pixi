@@ -132,7 +132,7 @@ pub fn locked_indexes_to_index_locations(
     Ok(IndexLocations::new(indexes, flat_index, no_index))
 }
 
-pub fn to_git_reference(rev: &GitRev) -> GitReference {
+pub(crate) fn to_git_reference(rev: &GitRev) -> GitReference {
     match rev {
         GitRev::Full(rev) => GitReference::FullCommit(rev.clone()),
         GitRev::Short(rev) => GitReference::BranchOrTagOrCommit(rev.clone()),

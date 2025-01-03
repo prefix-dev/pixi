@@ -37,7 +37,7 @@ pub struct BinDir(PathBuf);
 impl BinDir {
     /// Create the binary executable directory from path
     #[cfg(test)]
-    pub fn new(root: PathBuf) -> miette::Result<Self> {
+    pub(crate) fn new(root: PathBuf) -> miette::Result<Self> {
         let path = root.join("bin");
         fs_err::create_dir_all(&path).into_diagnostic()?;
         Ok(Self(path))
@@ -77,7 +77,7 @@ impl BinDir {
     }
 
     /// Returns the path to the binary directory
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.0
     }
 
@@ -105,7 +105,7 @@ pub struct EnvRoot(PathBuf);
 impl EnvRoot {
     /// Create the environment root directory
     #[cfg(test)]
-    pub fn new(root: PathBuf) -> miette::Result<Self> {
+    pub(crate) fn new(root: PathBuf) -> miette::Result<Self> {
         let path = root.join("envs");
         fs_err::create_dir_all(&path).into_diagnostic()?;
         Ok(Self(path))
@@ -120,7 +120,7 @@ impl EnvRoot {
         Ok(Self(path))
     }
 
-    pub fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.0
     }
 
@@ -219,7 +219,7 @@ impl std::fmt::Display for NotChangedReason {
 
 impl NotChangedReason {
     /// Returns the name of the environment.
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             NotChangedReason::AlreadyInstalled => "already installed",
         }
@@ -239,7 +239,7 @@ pub(crate) enum EnvState {
 }
 
 impl EnvState {
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         match self {
             EnvState::Installed => "installed",
             EnvState::NotChanged(reason) => reason.as_str(),
@@ -271,14 +271,14 @@ pub enum InstallChange {
 }
 
 impl InstallChange {
-    pub fn is_transitive(&self) -> bool {
+    pub(crate) fn is_transitive(&self) -> bool {
         matches!(self, InstallChange::TransitiveUpgraded(_, _))
     }
-    pub fn is_removed(&self) -> bool {
+    pub(crate) fn is_removed(&self) -> bool {
         matches!(self, InstallChange::Removed)
     }
 
-    pub fn version_fancy_display(&self) -> Option<StyledObject<String>> {
+    pub(crate) fn version_fancy_display(&self) -> Option<StyledObject<String>> {
         let version_style = console::Style::new().blue();
         let default_style = console::Style::new();
 
@@ -313,7 +313,7 @@ pub(crate) struct EnvironmentUpdate {
 }
 
 impl EnvironmentUpdate {
-    pub fn new(
+    pub(crate) fn new(
         package_changes: HashMap<PackageName, InstallChange>,
         current_packages: Vec<PackageName>,
     ) -> Self {
@@ -323,19 +323,19 @@ impl EnvironmentUpdate {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.package_changes.is_empty()
     }
 
-    pub fn changes(&self) -> &HashMap<PackageName, InstallChange> {
+    pub(crate) fn changes(&self) -> &HashMap<PackageName, InstallChange> {
         &self.package_changes
     }
 
-    pub fn current_packages(&self) -> &Vec<PackageName> {
+    pub(crate) fn current_packages(&self) -> &Vec<PackageName> {
         &self.current_packages
     }
 
-    pub fn add_removed_packages(&mut self, packages: Vec<PackageName>) {
+    pub(crate) fn add_removed_packages(&mut self, packages: Vec<PackageName>) {
         self.current_packages.extend(packages);
     }
 }
@@ -393,7 +393,7 @@ impl StateChanges {
     }
 
     #[cfg(test)]
-    pub fn changes(self) -> HashMap<EnvironmentName, Vec<StateChange>> {
+    pub(crate) fn changes(self) -> HashMap<EnvironmentName, Vec<StateChange>> {
         self.changes
     }
 
@@ -767,7 +767,7 @@ pub(crate) async fn get_expose_scripts_sync_status(
 }
 
 /// Check if all binaries were exposed, or if the user selected a subset of them.
-pub fn check_all_exposed(
+pub(crate) fn check_all_exposed(
     env_binaries: &IndexMap<PackageName, Vec<Executable>>,
     exposed_mapping_binaries: &IndexSet<Mapping>,
 ) -> bool {

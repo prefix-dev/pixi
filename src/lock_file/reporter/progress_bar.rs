@@ -129,7 +129,7 @@ impl CondaMetadataProgress {
 impl CondaMetadataProgress {
     /// Use this method to increment the progress bar
     /// It will also check if the progress bar is finished
-    pub fn increment(&self) {
+    pub(crate) fn increment(&self) {
         self.progress_bar.inc(1);
         self.check_finish();
     }

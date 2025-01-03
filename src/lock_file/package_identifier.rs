@@ -29,7 +29,9 @@ impl PypiPackageIdentifier {
         Ok(result)
     }
 
-    pub fn from_package_record(record: &PackageRecord) -> Result<Vec<Self>, ConversionError> {
+    pub(crate) fn from_package_record(
+        record: &PackageRecord,
+    ) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         if let Some(purls) = &record.purls {
             for purl in purls.iter() {

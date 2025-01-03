@@ -214,12 +214,6 @@ pub fn to_extra_name(
     )
 }
 
-/// Converts `uv_pep440::Version` to `pep440_rs::Version`
-pub fn to_version(version: &uv_pep440::Version) -> Result<pep440_rs::Version, ConversionError> {
-    Ok(pep440_rs::Version::from_str(version.to_string().as_str())
-        .map_err(VersionError::PepError)?)
-}
-
 /// Converts `pep440_rs::Version` to `uv_pep440::Version`
 pub fn to_uv_version(version: &pep440_rs::Version) -> Result<uv_pep440::Version, ConversionError> {
     Ok(

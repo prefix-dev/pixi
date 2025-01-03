@@ -47,13 +47,13 @@ impl Prefix {
 
     /// Scans the `conda-meta` directory of an environment and returns all the
     /// [`PrefixRecord`]s found in there.
-    pub fn find_installed_packages(&self) -> miette::Result<Vec<PrefixRecord>> {
+    pub(crate) fn find_installed_packages(&self) -> miette::Result<Vec<PrefixRecord>> {
         PrefixRecord::collect_from_prefix(&self.root).into_diagnostic()
     }
 
     /// Processes prefix records (that you can get by using
     /// `find_installed_packages`) to filter and collect executable files.
-    pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
+    pub(crate) fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
         let executables = prefix_packages
             .iter()
             .flat_map(|record| {
@@ -122,7 +122,7 @@ pub struct Executable {
 }
 
 impl Executable {
-    pub fn new(name: String, path: PathBuf) -> Self {
+    pub(crate) fn new(name: String, path: PathBuf) -> Self {
         Self { name, path }
     }
 }

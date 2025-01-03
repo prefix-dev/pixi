@@ -25,13 +25,18 @@ pub enum GlobalSortBy {
 }
 
 /// Creating the ASCII art representation of a section.
-pub fn format_asciiart_section(label: &str, content: String, last: bool, more: bool) -> String {
+pub(crate) fn format_asciiart_section(
+    label: &str,
+    content: String,
+    last: bool,
+    more: bool,
+) -> String {
     let prefix = if last { " " } else { "│" };
     let symbol = if more { "├" } else { "└" };
     format!("\n{}   {}─ {}: {}", prefix, symbol, label, content)
 }
 
-pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
+pub(crate) fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
     if exposed.is_empty() {
         Some(format_asciiart_section(
             "exposes",

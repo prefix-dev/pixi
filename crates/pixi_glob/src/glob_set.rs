@@ -30,7 +30,9 @@ pub enum GlobSetError {
 }
 
 impl<'t> GlobSet<'t> {
-    pub fn create(globs: impl IntoIterator<Item = &'t str>) -> Result<GlobSet<'t>, GlobSetError> {
+    pub(crate) fn create(
+        globs: impl IntoIterator<Item = &'t str>,
+    ) -> Result<GlobSet<'t>, GlobSetError> {
         // Split the globs into inclusion and exclusion globs based on whether they
         // start with `!`.
         let (inclusion_globs, exclusion_globs): (Vec<_>, Vec<_>) =
@@ -57,7 +59,7 @@ impl<'t> GlobSet<'t> {
     }
 
     /// Create a function that filters out files that match the globs.
-    pub fn filter_directory(
+    pub(crate) fn filter_directory(
         &'t self,
         root_dir: &Path,
     ) -> impl Iterator<Item = Result<WalkEntry<'static>, GlobSetError>> + 't {

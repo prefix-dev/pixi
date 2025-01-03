@@ -18,7 +18,7 @@ use pixi_config::Config;
 
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.
-pub fn default_retry_policy() -> ExponentialBackoff {
+pub(crate) fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
@@ -41,7 +41,7 @@ fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStor
     Ok(AuthenticationMiddleware::default())
 }
 
-pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
+pub(crate) fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     let mut internal_map = HashMap::new();
     tracing::info!("Using mirrors: {:?}", config.mirror_map());
 
@@ -73,7 +73,7 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     MirrorMiddleware::from_map(internal_map)
 }
 
-pub fn oci_middleware() -> OciMiddleware {
+pub(crate) fn oci_middleware() -> OciMiddleware {
     OciMiddleware
 }
 

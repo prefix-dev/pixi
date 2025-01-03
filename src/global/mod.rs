@@ -25,7 +25,7 @@ fn find_executables(prefix: &Prefix, prefix_package: &PrefixRecord) -> Vec<PathB
 
 /// Processes prefix records (that you can get by using `find_installed_packages`)
 /// to filter and collect executable files.
-pub fn find_executables_for_many_records(
+pub(crate) fn find_executables_for_many_records(
     prefix: &Prefix,
     prefix_packages: &[PrefixRecord],
 ) -> Vec<Executable> {

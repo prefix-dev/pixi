@@ -56,7 +56,7 @@ pub struct SourceMetadataInput {
 
 impl SourceMetadataInput {
     /// Computes a unique semi-human-readable hash for this key.
-    pub fn hash_key(&self) -> String {
+    pub(crate) fn hash_key(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
         self.build_platform.hash(&mut hasher);
@@ -76,7 +76,7 @@ impl SourceMetadataCache {
     /// An additional directory is created by this cache inside the passed root
     /// which includes a version number. This is to ensure that the cache is
     /// never corrupted if the format changes in the future.
-    pub fn new(root: PathBuf) -> Self {
+    pub(crate) fn new(root: PathBuf) -> Self {
         Self {
             root: root.join("source-meta-v0"),
         }

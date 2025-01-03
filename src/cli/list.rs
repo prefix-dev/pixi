@@ -126,7 +126,7 @@ impl PackageExt {
     }
 
     /// Returns the name of the package.
-    pub fn name(&self) -> Cow<'_, str> {
+    pub(crate) fn name(&self) -> Cow<'_, str> {
         match self {
             Self::Conda(value) => value.record().name.as_normalized().into(),
             Self::PyPI(value, _) => value.name.as_dist_info_name(),
@@ -134,7 +134,7 @@ impl PackageExt {
     }
 
     /// Returns the version string of the package
-    pub fn version(&self) -> Cow<'_, str> {
+    pub(crate) fn version(&self) -> Cow<'_, str> {
         match self {
             Self::Conda(value) => value.record().version.as_str(),
             Self::PyPI(value, _) => value.version.to_string().into(),
