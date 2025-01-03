@@ -46,7 +46,7 @@ pub struct Args {
     pub config: ConfigCli,
 }
 
-/// CLI entry point for `pixi runx`
+/// CLI entry point for `pixi exec`
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;

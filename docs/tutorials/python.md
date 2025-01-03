@@ -215,6 +215,11 @@ xz               5.2.6         h57fd34a_0          230.2 KiB  conda  xz-5.2.6-h5
     This is used to determine the Python version to install in the environment.
     This way, pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
+!!! Free-threaded interpreters
+    If you want to use a free-threaded Python interpreter, you can add `python-freethreading = "*"` to the dependencies in your `pixi` configuration.
+    This ensures that a free-threaded version of Python is installed in the environment.
+    You can read more about free-threaded Python [here](https://docs.python.org/3/howto/free-threading-python.html).
+
 Here, you can see the different conda and Pypi packages listed.
 As you can see, the `pixi-py` package that we are working on is installed in editable mode.
 Every environment in pixi is isolated but reuses files that are hard-linked from a central cache directory.

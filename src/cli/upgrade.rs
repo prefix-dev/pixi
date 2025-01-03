@@ -68,7 +68,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (match_specs, pypi_deps) = parse_specs(feature, &args, &project)?;
 
-    let update_deps = project
+    // Save original manifest
+    let original_manifest_content =
+        fs_err::read_to_string(project.manifest_path()).into_diagnostic()?;
+
+    let update_deps = match project
         .update_dependencies(
             match_specs,
             pypi_deps,
@@ -78,7 +82,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             false,
             args.dry_run,
         )
-        .await?;
+        .await
+    {
+        Ok(update_deps) => {
+            if args.dry_run {
+                // Make sure we restore original manifest content
+                fs_err::write(project.manifest_path(), original_manifest_content)
+                    .into_diagnostic()?;
+            } else {
+                project.save()?;
+            }
+            update_deps
+        }
+        Err(e) => {
+            // Restore original manifest
+            fs_err::write(project.manifest_path(), original_manifest_content).into_diagnostic()?;
+            return Err(e);
+        }
+    };
 
     // Is there something to report?
     if let Some(update_deps) = update_deps {
