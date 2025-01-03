@@ -183,7 +183,6 @@ fn gil_disabled(python_record: &PackageRecord) -> miette::Result<bool> {
             .is_some_and(|name| name.as_source() == "python_abi")
             && spec.build.as_ref().is_some_and(|build| {
                 let raw_str = format!("{}", build);
-                dbg!(&raw_str);
                 regex.is_match(&raw_str)
             })
     }))
