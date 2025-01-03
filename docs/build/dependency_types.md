@@ -9,7 +9,7 @@ Here you can see the three types of dependencies for a simple C++ package.
 ```
 
 Each dependency is used at a different step of the package building process.
-`gxx` is used to build the package, `catch` will be linked into the package and `git` will be available during runtime.
+`cxx-compiler` is used to build the package, `catch` will be linked into the package and `git` will be available during runtime.
 
 Let's delve deeper into the various types of package dependencies and their specific roles in the build process.
 

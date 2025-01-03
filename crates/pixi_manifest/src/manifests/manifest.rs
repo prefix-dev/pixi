@@ -97,6 +97,11 @@ impl Manifest {
         }
     }
 
+    /// Return true if the manifest is a pyproject.toml
+    pub fn is_pyproject(&self) -> bool {
+        matches!(self.source, ManifestSource::PyProjectToml(_))
+    }
+
     /// Create a new manifest from a string
     pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
         let manifest_kind = ManifestKind::try_from_path(manifest_path).ok_or_else(|| {
@@ -378,7 +383,10 @@ impl Manifest {
     ) -> miette::Result<bool> {
         // Determine the name of the package to add
         let (Some(name), spec) = spec.clone().into_nameless() else {
-            miette::bail!("pixi does not support wildcard dependencies")
+            miette::bail!(
+                "{} does not support wildcard dependencies",
+                pixi_utils::executable_name()
+            );
         };
         let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
         let mut any_added = false;

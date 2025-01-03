@@ -226,9 +226,10 @@ impl Project {
         }
 
         miette::bail!(
-            "could not find {} or {} which is configured to use pixi",
+            "could not find {} or {} which is configured to use {}",
             consts::PROJECT_MANIFEST,
-            consts::PYPROJECT_MANIFEST
+            consts::PYPROJECT_MANIFEST,
+            pixi_utils::executable_name()
         );
     }
 
@@ -242,7 +243,24 @@ impl Project {
     /// or any of the parent
     pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
         let project = match manifest_path {
-            Some(path) => Project::from_path(path)?,
+            Some(path) => {
+                if !path.exists() {
+                    miette::bail!("manifest path does not exist at {}", path.to_string_lossy());
+                }
+                let path = if path.is_dir() {
+                    &find_project_manifest(path).ok_or_else(|| {
+                        miette::miette!(
+                            "could not find {} or {} at directory {}",
+                            consts::PROJECT_MANIFEST,
+                            consts::PYPROJECT_MANIFEST,
+                            path.to_string_lossy()
+                        )
+                    })?
+                } else {
+                    path
+                };
+                Project::from_path(path)?
+            }
             None => Project::discover()?,
         };
         Ok(project)
@@ -423,7 +441,7 @@ impl Project {
 
     /// Returns an environment in this project based on a name or an environment
     /// variable.
-    pub(crate) fn environment_from_name_or_env_var(
+    pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
     ) -> miette::Result<Environment> {
@@ -714,8 +732,9 @@ impl Project {
             }
         }
 
-        // Only save to disk if not a dry run
-        if !dry_run {
+        // Only save the project if it is a pyproject.toml
+        // This is required to ensure that the changes are found by tools like `pixi build` and `uv`
+        if self.manifest.is_pyproject() {
             self.save()?;
         }
 
@@ -803,8 +822,9 @@ impl Project {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // Only write to disk if not a dry run
-        if !dry_run {
+        // Only save the project if it is a pyproject.toml
+        // This is required to ensure that the changes are found by tools like `pixi build` and `uv`
+        if self.manifest.is_pyproject() {
             self.save()?;
         }
 
@@ -1030,10 +1050,10 @@ impl<'source> HasManifestRef<'source> for &'source Project {
 /// Iterates over the current directory and all its parent directories and
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
-pub(crate) fn find_project_manifest(current_dir: PathBuf) -> Option<PathBuf> {
+pub(crate) fn find_project_manifest(current_dir: impl AsRef<Path>) -> Option<PathBuf> {
     let manifests = [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST];
 
-    for dir in current_dir.ancestors() {
+    for dir in current_dir.as_ref().ancestors() {
         for manifest in &manifests {
             let path = dir.join(manifest);
             if !path.is_file() {

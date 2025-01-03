@@ -150,17 +150,11 @@ pixi completion --shell fish | source
 
 #### Nushell
 
-Add the following to the end of your Nushell env file (find it by running `$nu.env-path` in Nushell):
+Add the following to your Nushell config file (find it by running `$nu.config-path` in Nushell):
 
 ```nushell
-mkdir ~/.cache/pixi
-pixi completion --shell nushell | save -f ~/.cache/pixi/completions.nu
-```
-
-And add the following to the end of your Nushell configuration (find it by running `$nu.config-path`):
-
-```nushell
-use ~/.cache/pixi/completions.nu *
+mkdir $"($nu.data-dir)/vendor/autoload"
+pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
 ```
 
 #### Elvish

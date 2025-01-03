@@ -35,6 +35,7 @@ impl HasNameVersion for PypiRecord {
         &self.0.version
     }
 }
+
 impl HasNameVersion for RepoDataRecord {
     type N = rattler_conda_types::PackageName;
     type V = VersionWithSource;
