@@ -2115,6 +2115,12 @@ This is because the Python interpreter version is read from the <code>requires-p
 This is used to determine the Python version to install in the environment.
 This way, pixi automatically manages/bootstraps the Python interpreter for you, so no more <code>brew</code>, <code>apt</code> or other system install steps.</p>
 </div>
+<div class="admonition free-threaded interpreters">
+<p class="admonition-title">Free-threaded</p>
+<p>If you want to use a free-threaded Python interpreter, you can add <code>python-freethreading = "*"</code> to the dependencies in your <code>pixi</code> configuration.
+This ensures that a free-threaded version of Python is installed in the environment.
+You can read more about free-threaded Python <a href="https://docs.python.org/3/howto/free-threading-python.html">here</a>.</p>
+</div>
 <p>Here, you can see the different conda and Pypi packages listed.
 As you can see, the <code>pixi-py</code> package that we are working on is installed in editable mode.
 Every environment in pixi is isolated but reuses files that are hard-linked from a central cache directory.
