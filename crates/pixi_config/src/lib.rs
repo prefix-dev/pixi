@@ -277,6 +277,23 @@ pub struct PyPIConfig {
     pub allow_insecure_host: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct S3Config {
+    /// The default index URL for PyPI packages.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_file: Option<PathBuf>,
+    /// A list of extra index URLs for PyPI packages
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    /// Whether to use the `keyring` executable to look up credentials.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub force_path_style: Option<bool>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum DetachedEnvironments {
@@ -432,6 +449,34 @@ impl PyPIConfig {
         self.index_url.is_none()
             && self.extra_index_urls.is_empty()
             && self.keyring_provider.is_none()
+    }
+}
+
+impl S3Config {
+    /// Merge the given PyPIConfig into the current one.
+    pub fn merge(self, other: Self) -> Self {
+        let config_file = match other.config_file {
+            Some(path) => Some(path),
+            None => self.config_file,
+        };
+        let profile = match other.profile {
+            Some(profile) => Some(profile),
+            None => self.profile,
+        };
+        let force_path_style = match other.force_path_style {
+            Some(force_path_style) => Some(force_path_style),
+            None => self.force_path_style,
+        };
+
+        Self {
+            config_file,
+            profile,
+            force_path_style,
+        }
+    }
+
+    fn is_default(&self) -> bool {
+        self.config_file.is_none() && self.profile.is_none() && self.force_path_style.is_none()
     }
 }
 
@@ -597,6 +642,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "PyPIConfig::is_default")]
     pub pypi_config: PyPIConfig,
 
+    /// Configuration for S3.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "S3Config::is_default")]
+    pub s3_config: S3Config,
+
     /// The option to specify the directory where detached environments are
     /// stored. When using 'true', it defaults to the cache directory.
     /// When using a path, it uses the specified path.
@@ -633,6 +683,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
+            s3_config: S3Config::default(),
             detached_environments: Some(DetachedEnvironments::default()),
             pinning_strategy: None,
             force_activate: None,
@@ -948,6 +999,7 @@ impl Config {
             channel_config: other.channel_config,
             repodata_config: self.repodata_config.merge(other.repodata_config),
             pypi_config: self.pypi_config.merge(other.pypi_config),
+            s3_config: self.s3_config.merge(other.s3_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,

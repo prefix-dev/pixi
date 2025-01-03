@@ -14,6 +14,7 @@ use crate::{
     error::{FeatureNotEnabled, InvalidNonPackageDependencies},
     manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
+    s3::S3Options,
     toml::{
         environment::TomlEnvironmentList, ExternalPackageProperties, ExternalWorkspaceProperties,
         PackageError, TomlBuildSystem, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
@@ -84,6 +85,10 @@ pub struct TomlManifest {
     /// pypi-options
     #[serde(default)]
     pub pypi_options: Option<PypiOptions>,
+
+    /// S3 options
+    #[serde(default)]
+    pub s3: Option<S3Options>,
 
     /// The build section
     #[serde(default)]
