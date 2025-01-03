@@ -9,13 +9,15 @@ from rattler import Platform
 PIXI_VERSION = "0.39.4"
 
 
-ALL_PLATFORMS = '["linux-64", "osx-64", "win-64", "linux-ppc64le", "linux-aarch64"]'
+ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
+
+CURRENT_PLATFORM = str(Platform.current())
 
 EMPTY_BOILERPLATE_PROJECT = f"""
 [project]
 name = "test"
 channels = []
-platforms = {ALL_PLATFORMS}
+platforms = ["{CURRENT_PLATFORM}"]
 """
 
 
