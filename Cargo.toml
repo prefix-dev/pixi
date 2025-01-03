@@ -341,6 +341,17 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
+file_url = { path = "../pavelzw-rattler/crates/file_url" }
+rattler = { path = "../pavelzw-rattler/crates/rattler" }
+rattler_cache = { path = "../pavelzw-rattler/crates/rattler_cache" }
+rattler_conda_types = { path = "../pavelzw-rattler/crates/rattler_conda_types" }
+rattler_digest = { path = "../pavelzw-rattler/crates/rattler_digest" }
+rattler_lock = { path = "../pavelzw-rattler/crates/rattler_lock" }
+rattler_networking = { path = "../pavelzw-rattler/crates/rattler_networking" }
+rattler_repodata_gateway = { path = "../pavelzw-rattler/crates/rattler_repodata_gateway" }
+rattler_shell = { path = "../pavelzw-rattler/crates/rattler_shell" }
+rattler_solve = { path = "../pavelzw-rattler/crates/rattler_solve" }
+rattler_virtual_packages = { path = "../pavelzw-rattler/crates/rattler_virtual_packages" }
 
 # Config for 'dist'
 [workspace.metadata.dist]

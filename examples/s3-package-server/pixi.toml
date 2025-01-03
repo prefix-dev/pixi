@@ -1,0 +1,7 @@
+[project]
+channels = ["s3://s3-forge/channel", "conda-forge"]
+name = "s3-package-server"
+platforms = ["osx-arm64"]
+
+[dependencies]
+test-package = "*"

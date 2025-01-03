@@ -1,0 +1,18 @@
+version: 6
+environments:
+  default:
+    channels:
+    - url: s3://s3-forge/channel/
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      osx-arm64:
+      - conda: s3://s3-forge/channel/noarch/test-package-0.1-0.tar.bz2
+packages:
+- conda: s3://s3-forge/channel/noarch/test-package-0.1-0.tar.bz2
+  subdir: noarch
+  sha256: b908ffce2d26d94c58c968abf286568d4bcf87d1cfe6c994958351724a6f6988
+  md5: 2a8595f37faa2950e1b433acbe91d481
+  license: BSD
+  license_family: BSD
+  size: 5719
+  timestamp: 1613117294885
