@@ -571,7 +571,7 @@ test = ["pytest==6"]
 
 [tool.pixi.project]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = {CURRENT_PLATFORM}
+platforms = ["{CURRENT_PLATFORM}"]
 
 [tool.pixi.pypi-dependencies]
 polars = "==0.*"

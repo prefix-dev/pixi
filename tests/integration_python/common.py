@@ -17,7 +17,7 @@ EMPTY_BOILERPLATE_PROJECT = f"""
 [project]
 name = "test"
 channels = []
-platforms = {CURRENT_PLATFORM}
+platforms = ["{CURRENT_PLATFORM}"]
 """
 
 
