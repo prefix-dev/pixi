@@ -83,9 +83,6 @@ def test_source_change_trigger_rebuild(
     project = "simple-pyproject"
     test_data = build_data.joinpath(project)
 
-    # TODO: Setting the cache dir shouldn't be necessary!
-    env = {"PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache"))}
-
     target_dir = tmp_pixi_workspace.joinpath(project)
     shutil.copytree(test_data, target_dir)
     manifest_path = target_dir.joinpath("pyproject.toml")
@@ -99,7 +96,6 @@ def test_source_change_trigger_rebuild(
             "get-version",
         ],
         stdout_contains="The version of simple-pyproject is 1.0.0",
-        env=env,
     )
 
     # Bump version from 1.0.0 to 2.0.0
@@ -116,7 +112,6 @@ def test_source_change_trigger_rebuild(
             "get-version",
         ],
         stdout_contains="The version of simple-pyproject is 2.0.0",
-        env=env,
     )
 
 
@@ -124,11 +119,6 @@ def test_source_change_trigger_rebuild(
 def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "editable-pyproject"
     test_data = build_data.joinpath(project)
-
-    # TODO: Setting the cache dir shouldn't be necessary!
-    env = {
-        "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
-    }
 
     target_dir = tmp_pixi_workspace.joinpath(project)
     shutil.copytree(test_data, target_dir)
@@ -141,7 +131,6 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
             "--manifest-path",
             manifest_path,
         ],
-        env=env,
     )
 
     # Verify that package is installed as editable
@@ -153,6 +142,5 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
             manifest_path,
             "check-editable",
         ],
-        env=env,
         stdout_contains="The package is installed as editable.",
     )
