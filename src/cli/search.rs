@@ -19,7 +19,7 @@ use regex::Regex;
 use strsim::jaro;
 use url::Url;
 
-use super::cli_config::ChannelsConfig;
+use super::cli_config::{ChannelsConfig, S3Config};
 use crate::{cli::cli_config::ProjectConfig, Project};
 
 /// Search a conda package
@@ -34,6 +34,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub channels: ChannelsConfig,
+
+    #[clap(flatten)]
+    pub s3_config: S3Config,
 
     #[clap(flatten)]
     pub project_config: ProjectConfig,

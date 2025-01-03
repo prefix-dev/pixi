@@ -282,7 +282,7 @@ pub struct PyPIConfig {
 pub struct S3Config {
     /// S3 endpoint URL
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub endpoint_url: Option<String>,
+    pub endpoint_url: Option<Url>,
 
     /// The name of the S3 region
     #[serde(skip_serializing_if = "Option::is_none")]

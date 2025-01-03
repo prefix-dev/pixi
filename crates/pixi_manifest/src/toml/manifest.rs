@@ -88,7 +88,7 @@ pub struct TomlManifest {
 
     /// S3 options
     #[serde(default)]
-    pub s3: Option<S3Options>,
+    pub s3_options: Option<S3Options>,
 
     /// The build section
     #[serde(default)]
@@ -272,6 +272,9 @@ impl TomlManifest {
             // Use the pypi-options from the manifest for
             // the default feature
             pypi_options: self.pypi_options,
+
+            // Use the s3 options from the manifest for the default feature
+            s3_options: self.s3_options,
 
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(

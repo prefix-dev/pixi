@@ -3,5 +3,10 @@ channels = ["s3://s3-forge/channel", "conda-forge"]
 name = "s3-package-server"
 platforms = ["osx-arm64"]
 
+[s3]
+endpoint-url = "http://localhost:9000"
+region = ""
+force-path-style = true
+
 [dependencies]
 test-package = "*"

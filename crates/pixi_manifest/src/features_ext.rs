@@ -7,8 +7,7 @@ use rattler_conda_types::{
 use rattler_solve::ChannelPriority;
 
 use crate::{
-    has_features_iter::HasFeaturesIter, pypi::pypi_options::PypiOptions, CondaDependencies,
-    HasManifestRef, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+    has_features_iter::HasFeaturesIter, pypi::pypi_options::PypiOptions, CondaDependencies, HasManifestRef, PrioritizedChannel, PyPiDependencies, S3Options, SpecType, SystemRequirements
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
@@ -198,6 +197,33 @@ pub trait FeaturesExt<'source>: HasManifestRef<'source> + HasFeaturesIter<'sourc
         pypi_options
             .into_iter()
             .fold(PypiOptions::default(), |acc, opts| {
+                acc.union(opts)
+                    .expect("merging of pypi-options should already have been checked")
+            })
+    }
+
+    /// Returns the S3 options for this collection.
+    ///
+    /// The S3 options of all features are combined. They will be combined in
+    /// the order that they are defined in the manifest.
+    fn s3_options(&self) -> S3Options {
+        // Collect all the S3-options from the features in one set,
+        // deduplicate them and sort them on feature index, default feature comes last.
+        let s3_options: Vec<_> = self
+            .features()
+            .filter_map(|feature| {
+                if feature.s3_options.is_none() {
+                    self.manifest().workspace.workspace.s3_options.as_ref()
+                } else {
+                    feature.s3_options.as_ref()
+                }
+            })
+            .collect();
+
+        // Merge all the pypi options into one.
+        s3_options
+            .into_iter()
+            .fold(S3Options::default(), |acc, opts| {
                 acc.union(opts)
                     .expect("merging of pypi-options should already have been checked")
             })
