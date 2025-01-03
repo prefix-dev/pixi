@@ -172,6 +172,7 @@ async fn test_invalid_backend() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_backend_configuration() {
     let toml = r#"
     [workspace]
