@@ -4,8 +4,8 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"fo
 ---
   × Cannot use [build-system] without [package]
     ╭─[pixi.toml:8:9]
-  7 │     
+  7 │
   8 │ ╭─▶         [build-system]
   9 │ ╰─▶         build-backend = { name = "foobar", version = "*" }
- 10 │             
+ 10 │
     ╰────

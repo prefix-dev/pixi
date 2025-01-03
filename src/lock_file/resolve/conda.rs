@@ -1,10 +1,11 @@
 use ahash::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_manifest::ChannelPriority;
 use pixi_record::{PixiRecord, SourceRecord};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
-use rattler_solve::{resolvo, ChannelPriority, SolverImpl};
+use rattler_solve::{resolvo, SolverImpl};
 use url::Url;
 
 use crate::{
@@ -60,7 +61,7 @@ pub async fn resolve_conda(
             specs,
             locked_packages,
             virtual_packages,
-            channel_priority,
+            channel_priority: channel_priority.into(),
             ..rattler_solve::SolverTask::from_iter(solvable_records)
         };
 

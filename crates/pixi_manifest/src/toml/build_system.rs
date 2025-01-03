@@ -1,7 +1,8 @@
 use itertools::Either;
 use pixi_spec::TomlSpec;
+use pixi_toml::{TomlFromStr, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
-use serde::Deserialize;
+use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
 
 use crate::{
     build_system::BuildBackend,
@@ -9,32 +10,20 @@ use crate::{
     BuildSystem, TomlError,
 };
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug)]
 pub struct TomlBuildSystem {
     pub build_backend: PixiSpanned<TomlBuildBackend>,
-
-    #[serde(default)]
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
-
-    #[serde(default)]
     pub additional_dependencies: UniquePackageMap,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug)]
 pub struct TomlBuildBackend {
     pub name: PixiSpanned<rattler_conda_types::PackageName>,
-
-    #[serde(flatten)]
     pub spec: TomlSpec,
 }
 
 impl TomlBuildSystem {
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
-    }
-
     pub fn into_build_system(self) -> Result<BuildSystem, TomlError> {
         // Parse the build backend and ensure it is a binary spec.
         let build_backend_spec = self
@@ -90,6 +79,44 @@ impl TomlBuildSystem {
     }
 }
 
+impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let name = th.required_s::<TomlFromStr<rattler_conda_types::PackageName>>("name")?;
+        th.finalize(Some(value))?;
+
+        let spec = toml_span::Deserialize::deserialize(value)?;
+
+        Ok(TomlBuildBackend {
+            name: PixiSpanned::from(Spanned {
+                value: name.value.into_inner(),
+                span: name.span,
+            }),
+            spec,
+        })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlBuildSystem {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let build_backend = th.required_s("build-backend")?.into();
+        let channels = th
+            .optional_s::<TomlWith<_, Vec<TomlFromStr<_>>>>("channels")
+            .map(|s| PixiSpanned {
+                value: s.value.into_inner(),
+                span: Some(s.span.start..s.span.end),
+            });
+        let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
+        th.finalize(None)?;
+        Ok(Self {
+            build_backend,
+            channels,
+            additional_dependencies,
+        })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use insta::assert_snapshot;
@@ -98,7 +125,7 @@ mod test {
     use crate::utils::test_utils::format_parse_error;
 
     fn expect_parse_failure(pixi_toml: &str) -> String {
-        let parse_error = TomlBuildSystem::from_toml_str(pixi_toml)
+        let parse_error = <TomlBuildSystem as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)
             .and_then(TomlBuildSystem::into_build_system)
             .expect_err("parsing should fail");
 
@@ -151,7 +178,7 @@ mod test {
     fn test_additional_build_backend_keys() {
         assert_snapshot!(expect_parse_failure(
             r#"
-            build-backend = { name = "foobar", version = "*", foo = "bar" }
+            build-backend = { name = "foobar", version = "*", sub = "bar" }
         "#
         ));
     }

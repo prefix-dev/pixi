@@ -4,7 +4,7 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
 use pixi_manifest::{EnvironmentName, SystemRequirements};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -15,7 +15,7 @@ pub struct Args {
     pub environment: Option<EnvironmentName>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 pub struct EnvironmentDisplay {
     name: EnvironmentName,
     system_requirements: SystemRequirements,

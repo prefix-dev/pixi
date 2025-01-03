@@ -11,7 +11,7 @@
 mod detailed;
 mod git;
 mod path;
-mod serde;
+mod toml;
 mod url;
 
 use std::{path::PathBuf, str::FromStr};
@@ -23,8 +23,8 @@ pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
-pub use serde::TomlSpec;
 use thiserror::Error;
+pub use toml::TomlSpec;
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec

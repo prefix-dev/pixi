@@ -3670,6 +3670,7 @@ dependencies = [
  "pixi_pty",
  "pixi_record",
  "pixi_spec",
+ "pixi_toml",
  "pixi_utils",
  "pixi_uv_conversions",
  "pypi_mapping",
@@ -3702,6 +3703,7 @@ dependencies = [
  "thiserror 2.0.9",
  "tokio",
  "tokio-util",
+ "toml-span",
  "toml_edit",
  "tracing",
  "tracing-subscriber",
@@ -3883,6 +3885,7 @@ dependencies = [
  "pep508_rs",
  "pixi_consts",
  "pixi_spec",
+ "pixi_toml",
  "pixi_utils",
  "pyproject-toml",
  "rattler_conda_types",
@@ -3892,14 +3895,14 @@ dependencies = [
  "regex",
  "rstest",
  "serde",
- "serde-untagged",
  "serde-value",
  "serde_json",
- "serde_with",
  "spdx",
  "strsim",
+ "strum",
  "tempfile",
  "thiserror 2.0.9",
+ "toml-span",
  "toml_edit",
  "tracing",
  "url",
@@ -3949,6 +3952,7 @@ dependencies = [
  "insta",
  "itertools 0.13.0",
  "pixi_git",
+ "pixi_toml",
  "rattler_conda_types",
  "rattler_digest",
  "serde",
@@ -3956,9 +3960,23 @@ dependencies = [
  "serde_json",
  "serde_with",
  "thiserror 2.0.9",
+ "toml-span",
  "toml_edit",
  "typed-path",
  "url",
+]
+
+[[package]]
+name = "pixi_toml"
+version = "0.1.0"
+dependencies = [
+ "digest",
+ "hex",
+ "indexmap 2.7.0",
+ "insta",
+ "itertools 0.13.0",
+ "strum",
+ "toml-span",
 ]
 
 [[package]]
@@ -6249,6 +6267,16 @@ dependencies = [
  "serde_spanned",
  "toml_datetime",
  "toml_edit",
+]
+
+[[package]]
+name = "toml-span"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "757f36f490e7b3a25ed9fb692d7a0beb1424eabec3f7e8f40f576bece9a8cdc5"
+dependencies = [
+ "serde",
+ "smallvec",
 ]
 
 [[package]]

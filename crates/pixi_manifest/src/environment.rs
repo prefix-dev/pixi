@@ -7,8 +7,7 @@ use std::{
 
 use miette::Diagnostic;
 use regex::Regex;
-use serde::{self, Deserialize, Deserializer};
-use serde_with::SerializeDisplay;
+use serde::{self, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
@@ -22,11 +21,17 @@ pub struct ParseEnvironmentNameError {
 
 /// The name of an environment. This is either a string or default for the
 /// default environment.
-#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, SerializeDisplay)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum EnvironmentName {
     #[default]
     Default,
     Named(String),
+}
+
+impl Serialize for EnvironmentName {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.as_str().serialize(serializer)
+    }
 }
 
 impl Hash for EnvironmentName {

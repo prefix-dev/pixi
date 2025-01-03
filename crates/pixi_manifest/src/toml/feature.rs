@@ -1,52 +1,38 @@
 use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
+use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::Platform;
-use rattler_solve::ChannelPriority;
-use serde::Deserialize;
-use serde_with::serde_as;
+use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    toml::{TomlPrioritizedChannel, TomlTarget},
+    toml::{platform::TomlPlatform, TomlPrioritizedChannel, TomlTarget},
     utils::{package_map::UniquePackageMap, PixiSpanned},
+    workspace::ChannelPriority,
     Activation, Feature, FeatureName, Preview, PyPiRequirement, SystemRequirements, TargetSelector,
     Targets, Task, TaskName, TomlError,
 };
 
-#[serde_as]
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[derive(Debug)]
 pub struct TomlFeature {
-    #[serde(default)]
     pub platforms: Option<PixiSpanned<IndexSet<Platform>>>,
-    #[serde(default)]
     pub channels: Option<Vec<TomlPrioritizedChannel>>,
-    #[serde(default)]
     pub channel_priority: Option<ChannelPriority>,
-    #[serde(default)]
     pub system_requirements: SystemRequirements,
-    #[serde(default)]
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
-    #[serde(default)]
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    #[serde(default)]
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    #[serde(default)]
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    #[serde(default)]
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
-    #[serde(default)]
     pub activation: Option<Activation>,
 
     /// Target specific tasks to run in the environment
-    #[serde(default)]
     pub tasks: HashMap<TaskName, Task>,
 
     /// Additional options for PyPi dependencies.
-    #[serde(default)]
     pub pypi_options: Option<PypiOptions>,
 }
 
@@ -79,6 +65,52 @@ impl TomlFeature {
             system_requirements: self.system_requirements,
             pypi_options: self.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, targets),
+        })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlFeature {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let platforms = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexSet<TomlPlatform>>>>("platforms")
+            .map(TomlWith::into_inner);
+        let channels = th.optional("channels");
+        let channel_priority = th.optional("channel-priority");
+        let target = th
+            .optional::<TomlIndexMap<_, _>>("target")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
+        let dependencies = th.optional("dependencies");
+        let host_dependencies = th.optional("host-dependencies");
+        let build_dependencies = th.optional("build-dependencies");
+        let pypi_dependencies = th
+            .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
+            .map(TomlIndexMap::into_inner);
+        let activation = th.optional("activation");
+        let tasks = th
+            .optional::<TomlHashMap<_, _>>("tasks")
+            .map(TomlHashMap::into_inner)
+            .unwrap_or_default();
+        let pypi_options = th.optional("pypi-options");
+        let system_requirements = th.optional("system-requirements").unwrap_or_default();
+
+        th.finalize(None)?;
+
+        Ok(TomlFeature {
+            platforms,
+            channels,
+            channel_priority,
+            system_requirements,
+            target,
+            dependencies,
+            host_dependencies,
+            build_dependencies,
+            pypi_dependencies,
+            activation,
+            tasks,
+            pypi_options,
         })
     }
 }

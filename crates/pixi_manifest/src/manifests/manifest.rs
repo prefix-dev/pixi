@@ -15,6 +15,7 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use toml_edit::{DocumentMut, Value};
 
+use crate::toml::FromTomlStr;
 use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
@@ -817,12 +818,12 @@ mod tests {
         ParseStrictness::{Lenient, Strict},
         VersionSpec,
     };
-    use rattler_solve::ChannelPriority;
     use rstest::*;
     use tempfile::tempdir;
 
     use super::*;
     use crate::channel::PrioritizedChannel;
+    use crate::workspace::ChannelPriority;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]

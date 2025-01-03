@@ -1,6 +1,7 @@
 use std::{borrow::Cow, fmt::Display, path::PathBuf};
 
 use itertools::Either;
+use pixi_toml::{TomlDigest, TomlFromStr};
 use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec,
     ParseStrictness::{Lenient, Strict},
@@ -10,6 +11,11 @@ use rattler_digest::{Md5Hash, Sha256Hash};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::serde_as;
 use thiserror::Error;
+use toml_span::{
+    de_helpers::{expected, TableHelper},
+    value::ValueInner,
+    DeserError, ErrorKind, Value,
+};
 use url::Url;
 
 use crate::{BinarySpec, DetailedSpec, GitSpec, PathSpec, PixiSpec, Reference, UrlSpec};
@@ -352,6 +358,99 @@ impl TomlSpec {
         };
 
         Ok(spec)
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlSpec {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let version = th
+            .optional::<TomlFromStr<_>>("version")
+            .map(TomlFromStr::into_inner);
+        let url = th
+            .optional::<TomlFromStr<_>>("url")
+            .map(TomlFromStr::into_inner);
+        let git = th
+            .optional::<TomlFromStr<_>>("git")
+            .map(TomlFromStr::into_inner);
+        let path = th.optional("path");
+        let branch = th.optional("branch");
+        let rev = th.optional("rev");
+        let tag = th.optional("tag");
+        let subdirectory = th.optional("subdirectory");
+        let build = th
+            .optional::<TomlFromStr<_>>("build")
+            .map(TomlFromStr::into_inner);
+        let build_number = th
+            .optional::<TomlFromStr<_>>("build-number")
+            .map(TomlFromStr::into_inner);
+        let file_name = th.optional("file-name");
+        let channel = th.optional("channel").map(TomlFromStr::into_inner);
+        let subdir = th.optional("subdir");
+        let md5 = th
+            .optional::<TomlDigest<rattler_digest::Md5>>("md5")
+            .map(TomlDigest::into_inner);
+        let sha256 = th
+            .optional::<TomlDigest<rattler_digest::Sha256>>("sha256")
+            .map(TomlDigest::into_inner);
+
+        th.finalize(None)?;
+
+        Ok(TomlSpec {
+            version,
+            url,
+            git,
+            path,
+            branch,
+            rev,
+            tag,
+            subdirectory,
+            build,
+            build_number,
+            file_name,
+            channel,
+            subdir,
+            md5,
+            sha256,
+        })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for PixiSpec {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::String(str) => VersionSpec::from_str(&str, Strict)
+                .map_err(|_err| {
+                    let kind = if let Some(msg) = version_spec_error(str) {
+                        toml_span::ErrorKind::Custom(msg.to_string().into())
+                    } else {
+                        toml_span::ErrorKind::Custom("invalid version specifier".into())
+                    };
+                    toml_span::Error {
+                        kind,
+                        span: value.span,
+                        line_info: None,
+                    }
+                    .into()
+                })
+                .map(PixiSpec::Version),
+            inner @ ValueInner::Table(_) => {
+                let mut table_value = Value::with_span(inner, value.span);
+                Ok(
+                    <TomlSpec as toml_span::Deserialize>::deserialize(&mut table_value)?
+                        .into_spec()
+                        .map_err(|e| {
+                            DeserError::from(toml_span::Error {
+                                kind: ErrorKind::Custom(e.to_string().into()),
+                                span: table_value.span,
+                                line_info: None,
+                            })
+                        })?,
+                )
+            }
+            inner => Err(expected("a string or a table", inner, value.span).into()),
+        }
     }
 }
 

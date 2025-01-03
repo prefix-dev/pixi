@@ -24,6 +24,9 @@ toml_edit = { workspace = true, features = ["serde"] }
 typed-path = { workspace = true }
 url = { workspace = true }
 
+pixi_toml = { workspace = true }
+toml-span = { workspace = true }
+
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
