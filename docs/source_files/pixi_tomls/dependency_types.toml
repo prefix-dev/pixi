@@ -15,7 +15,7 @@ channels = [
 ]
 # --8<-- [start:dependencies]
 [build-dependencies]
-gxx = "*"
+cxx-compiler = "*"
 
 [host-dependencies]
 catch = "*"

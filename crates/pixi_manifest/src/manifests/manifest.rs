@@ -97,6 +97,11 @@ impl Manifest {
         }
     }
 
+    /// Return true if the manifest is a pyproject.toml
+    pub fn is_pyproject(&self) -> bool {
+        matches!(self.source, ManifestSource::PyProjectToml(_))
+    }
+
     /// Create a new manifest from a string
     pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
         let manifest_kind = ManifestKind::try_from_path(manifest_path).ok_or_else(|| {
