@@ -679,10 +679,9 @@ mod test {
     #[rstest]
     #[case::pixi_toml(ManifestSource::empty_pixi())]
     #[case::pyproject_toml(ManifestSource::empty_pyproject())]
-    fn test_add_system_requirement_environment(#[case] mut source: ManifestSource) {
+    fn test_add_empty_system_requirement_environment(#[case] mut source: ManifestSource) {
         let clean_source = source.clone();
 
-        // Add empty system requirements
         let empty_requirements = SystemRequirements::default();
         source
             .add_system_requirements(&empty_requirements, &FeatureName::Default)
@@ -696,8 +695,11 @@ mod test {
                 .system_requirements
         );
         assert_eq!(source.to_string(), clean_source.to_string());
-
-        // Add single system requirement
+    }
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_add_single_system_requirement_environment(#[case] mut source: ManifestSource) {
         let single_system_requirements = SystemRequirements {
             linux: Some("4.18".parse().unwrap()),
             ..SystemRequirements::default()
@@ -713,8 +715,11 @@ mod test {
                 .default_feature()
                 .system_requirements
         );
-
-        // Add full system requirements
+    }
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_add_full_system_requirement_environment(#[case] mut source: ManifestSource) {
         let full_system_requirements = SystemRequirements {
             linux: Some("4.18".parse().unwrap()),
             cuda: Some("11.1".parse().unwrap()),
@@ -741,8 +746,11 @@ mod test {
             ),
             source.to_string()
         );
-
-        // Add with libc family
+    }
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_add_libc_family_system_requirement_environment(#[case] mut source: ManifestSource) {
         let family_system_requirements = SystemRequirements {
             libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
                 family: Some("glibc".to_string()),
@@ -750,7 +758,6 @@ mod test {
             })),
             ..SystemRequirements::default()
         };
-        let mut source = clean_source.clone();
         source
             .add_system_requirements(&family_system_requirements, &FeatureName::Default)
             .unwrap();
