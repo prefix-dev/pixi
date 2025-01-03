@@ -1,10 +1,26 @@
 pub mod add;
 pub mod list;
-// pub mod remove;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::Project;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+
+/// Enum for valid system requirement names.
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum SystemRequirementEnum {
+    /// The version of the linux kernel (Find with `uname -r`)
+    Linux,
+    /// The version of the CUDA driver (Find with `nvidia-smi`)
+    Cuda,
+    /// The version of MacOS (Find with `sw_vers`)
+    Macos,
+    /// The version of the glibc library (Find with `ldd --version`)
+    Glibc,
+    /// Non Glibc libc family and version (Find with `ldd --version`)
+    OtherLibc,
+    // Not in use yet
+    // ArchSpec,
+}
 
 /// Commands to manage project environments.
 #[derive(Parser, Debug)]
@@ -25,9 +41,6 @@ pub enum Command {
     /// List the environments in the manifest file.
     #[clap(visible_alias = "ls")]
     List(list::Args),
-    // /// Remove an environment from the manifest file.
-    // #[clap(visible_alias = "rm")]
-    // Remove(remove::Args),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -36,6 +49,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Command::Add(args) => add::execute(project, args).await,
         Command::List(args) => list::execute(&project, args),
-        // Command::Remove(args) => remove::execute(project, args).await,
     }
 }

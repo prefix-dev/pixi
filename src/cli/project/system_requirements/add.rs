@@ -1,23 +1,7 @@
+use crate::cli::project::system_requirements::SystemRequirementEnum;
 use crate::Project;
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use pixi_manifest::{FeatureName, LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
-
-/// Enum for valid system requirement names.
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SystemRequirementEnum {
-    /// The version of the linux kernel (Find with `uname -r`)
-    Linux,
-    /// The version of the CUDA driver (Find with `nvidia-smi`)
-    Cuda,
-    /// The version of MacOS (Find with `sw_vers`)
-    Macos,
-    /// The version of the glibc library (Find with `ldd --version`)
-    Glibc,
-    /// Non Glibc libc family and version (Find with `ldd --version`)
-    OtherLibc,
-    // Not in use yet
-    // ArchSpec,
-}
 
 #[derive(Parser, Debug)]
 pub struct Args {
