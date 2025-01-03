@@ -8,6 +8,6 @@ expression: "expect_parse_failure(r#\"\n            build-backend = { name = \"f
  3 │             additional = "key"
    ·             ─────┬────
    ·                  ╰── 'additional' was not expected here
- 4 │         
+ 4 │
    ╰────
   help: Did you mean 'additional-dependencies'?

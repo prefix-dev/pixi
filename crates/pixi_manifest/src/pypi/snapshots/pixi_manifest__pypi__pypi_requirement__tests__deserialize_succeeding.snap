@@ -2,36 +2,31 @@
 source: crates/pixi_manifest/src/pypi/pypi_requirement.rs
 expression: snapshot
 ---
-- input: "==1.2.3"
+- input: "pkg = \"==1.2.3\""
   result: "==1.2.3"
-- input:
-    version: "==1.2.3"
+- input: "pkg = { version = \"==1.2.3\" } "
   result:
     version: "==1.2.3"
     extras: []
     index: ~
-- input: "*"
+- input: "pkg = \"*\""
   result: "*"
-- input:
-    path: foobar
+- input: "pkg = { path = \"foobar\" } "
   result:
     path: foobar
     editable: ~
     extras: []
-- input:
-    path: ~/.cache
+- input: "pkg = { path = \"~/.cache\" } "
   result:
     path: ~/.cache
     editable: ~
     extras: []
-- input:
-    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+- input: "pkg = { url = \"https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda\" }"
   result:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
     subdirectory: ~
     extras: []
-- input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
+- input: "pkg = { git = \"https://github.com/conda-forge/21cmfast-feedstock\" }"
   result:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: ~
@@ -39,9 +34,7 @@ expression: snapshot
     rev: ~
     subdirectory: ~
     extras: []
-- input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
-    branch: main
+- input: "pkg = { git = \"https://github.com/conda-forge/21cmfast-feedstock\", \"branch\" = \"main\" }"
   result:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
@@ -49,9 +42,7 @@ expression: snapshot
     rev: ~
     subdirectory: ~
     extras: []
-- input:
-    git: "ssh://github.com/conda-forge/21cmfast-feedstock"
-    tag: v1.2.3
+- input: "pkg = { git = \"ssh://github.com/conda-forge/21cmfast-feedstock\", \"tag\" = \"v1.2.3\" }"
   result:
     git: "ssh://github.com/conda-forge/21cmfast-feedstock"
     branch: ~
@@ -59,9 +50,7 @@ expression: snapshot
     rev: ~
     subdirectory: ~
     extras: []
-- input:
-    git: "https://github.com/prefix-dev/rattler-build"
-    rev: "123456"
+- input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"rev\" = \"123456\" }"
   result:
     git: "https://github.com/prefix-dev/rattler-build"
     branch: ~
