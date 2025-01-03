@@ -4249,6 +4249,7 @@ dependencies = [
  "pixi_default_versions",
  "pixi_manifest",
  "rattler_conda_types",
+ "regex",
  "uv-pep508",
  "uv-platform-tags",
 ]
