@@ -4,7 +4,7 @@ expression: "expect_parse_failure(&format!(\"{PROJECT_BOILERPLATE}\\n[target.win
 ---
   × Unexpected keys, expected only 'dependencies', 'host-dependencies', 'build-dependencies', 'run-dependencies', 'pypi-dependencies', 'activation', 'tasks'
    ╭─[pixi.toml:8:16]
- 7 │         
+ 7 │
  8 │ [target.win-64.hostdependencies]
    ·                ────────┬───────
    ·                        ╰── 'hostdependencies' was not expected here

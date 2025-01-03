@@ -4,8 +4,8 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = 
 ---
   × unexpected key
     ╭─[pixi.toml:16:24]
- 15 │ 
+ 15 │
  16 │         [build-backend.foobar2]
     ·                        ───────
- 17 │         
+ 17 │
     ╰────

@@ -4,9 +4,9 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = 
 ---
   × [run-dependencies] are only available when using the `pixi-build` feature.
    ╭─[pixi.toml:6:9]
- 5 │ 
+ 5 │
  6 │         [run-dependencies]
    ·         ───────────────────
- 7 │         
+ 7 │
    ╰────
   help: Add `preview = ["pixi-build"]` under [workspace] to enable the preview feature

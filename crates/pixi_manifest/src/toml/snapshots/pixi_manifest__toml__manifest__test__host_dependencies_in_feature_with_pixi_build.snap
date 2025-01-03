@@ -4,8 +4,8 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = 
 ---
   × [host-dependencies] in features are not supported when `pixi-build` is enabled.
     ╭─[pixi.toml:9:9]
-  8 │ 
+  8 │
   9 │         [feature.foobar.host-dependencies]
     ·         ───────────────────────────────────
- 10 │         
+ 10 │
     ╰────

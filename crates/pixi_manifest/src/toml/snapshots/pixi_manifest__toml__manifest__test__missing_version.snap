@@ -4,9 +4,9 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"fo
 ---
   × Missing field `version`
     ╭─[pixi.toml:8:9]
-  7 │ 
+  7 │
   8 │         [package]
     ·         ──────────
-  9 │ 
+  9 │
  10 │         [build-system]
     ╰────

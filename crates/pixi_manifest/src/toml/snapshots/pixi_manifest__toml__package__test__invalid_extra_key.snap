@@ -4,7 +4,7 @@ expression: "expect_parse_failure(r#\"\n        foo = \"bar\"\n        name = \"
 ---
   × Unexpected keys, expected only 'name', 'version', 'description', 'authors', 'license', 'license-file', 'readme', 'homepage', 'repository', 'documentation'
    ╭─[pixi.toml:2:9]
- 1 │ 
+ 1 │
  2 │         foo = "bar"
    ·         ─┬─
    ·          ╰── 'foo' was not expected here
@@ -12,5 +12,5 @@ expression: "expect_parse_failure(r#\"\n        foo = \"bar\"\n        name = \"
  4 │         extra = "key"
    ·         ──┬──
    ·           ╰── 'extra' was not expected here
- 5 │         
+ 5 │
    ╰────

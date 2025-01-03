@@ -4,16 +4,16 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = 
 ---
   × build-, host- and run-dependency sections are only valid for packages.
     ╭─[pixi.toml:7:9]
-  6 │ 
+  6 │
   7 │         [build-dependencies]
     ·         ─────────────────────
-  8 │ 
+  8 │
   9 │         [host-dependencies]
     ·         ────────────────────
- 10 │ 
+ 10 │
  11 │         [target.win.host-dependencies]
     ·         ───────────────────────────────
- 12 │         
+ 12 │
     ╰────
   help: These sections are only valid when the manifest describes a package instead of a workspace.
         Add a `[package]` section to the manifest to fix this error or remove the offending sections.
