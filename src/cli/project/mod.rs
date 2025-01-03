@@ -7,6 +7,7 @@ pub mod environment;
 pub mod export;
 pub mod name;
 pub mod platform;
+pub mod system_requirements;
 pub mod version;
 
 #[derive(Debug, Parser)]
@@ -18,6 +19,7 @@ pub enum Command {
     Environment(environment::Args),
     Export(export::Args),
     Name(name::Args),
+    SystemRequirements(system_requirements::Args),
 }
 
 /// Modify the project configuration file through the command line.
@@ -39,6 +41,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Environment(args) => environment::execute(args).await?,
         Command::Export(cmd) => export::execute(cmd).await?,
         Command::Name(args) => name::execute(args).await?,
+        Command::SystemRequirements(args) => system_requirements::execute(args).await?,
     };
     Ok(())
 }

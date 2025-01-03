@@ -127,6 +127,20 @@ impl SystemRequirements {
         })
     }
 
+    /// Returns the combination of two system requirements.
+    ///
+    /// If both system requirements specify the same virtual package, the incoming version is taken.
+    ///
+    pub fn merge(&self, other: &Self) -> Self {
+        Self {
+            linux: other.linux.clone().or(self.linux.clone()),
+            cuda: other.cuda.clone().or(self.cuda.clone()),
+            macos: other.macos.clone().or(self.macos.clone()),
+            libc: other.libc.clone().or(self.libc.clone()),
+            archspec: other.archspec.clone().or(self.archspec.clone()),
+        }
+    }
+
     /// Returns true if the system requirements are empty, meaning that no requirements were specified.
     pub fn is_empty(&self) -> bool {
         self.linux.is_none()
@@ -249,6 +263,66 @@ impl From<LibCFamilyAndVersion> for LibC {
             version: value.version,
             family: value.family.unwrap_or_else(|| String::from(GLIBC_FAMILY)),
         }
+    }
+}
+
+impl std::fmt::Display for LibCSystemRequirement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LibCSystemRequirement::GlibC(version) => {
+                write!(f, "GlibC version: {}", version)
+            }
+            LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion { family, version }) => {
+                match family {
+                    Some(fam) => write!(f, "{} version: {}", fam, version),
+                    None => write!(f, "No family, version: {}", version),
+                }
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for SystemRequirements {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("macOS:").cyan(),
+            self.macos
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("Linux:").cyan(),
+            self.linux
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("CUDA:").cyan(),
+            self.cuda
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("LibC:").cyan(),
+            self.libc
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("Archspec:").cyan(),
+            self.archspec.as_deref().unwrap_or("None")
+        )?;
+        Ok(())
     }
 }
 
@@ -540,5 +614,66 @@ mod tests {
 
         let serialized = to_string_pretty(&system_requirements).unwrap();
         assert_snapshot!(serialized);
+    }
+
+    #[test]
+    fn test_merge() {
+        let a = SystemRequirements {
+            macos: Some(Version::from_str("10.15").unwrap()),
+            linux: Some(Version::from_str("5.11").unwrap()),
+            cuda: Some(Version::from_str("12.2").unwrap()),
+            libc: Some(LibCSystemRequirement::GlibC(
+                Version::from_str("2.12").unwrap(),
+            )),
+            archspec: Some("x86_64".to_string()),
+        };
+
+        let b = SystemRequirements {
+            macos: Some(Version::from_str("10.16").unwrap()),
+            linux: Some(Version::from_str("5.12").unwrap()),
+            cuda: Some(Version::from_str("12.1").unwrap()),
+            libc: Some(LibCSystemRequirement::GlibC(
+                Version::from_str("2.13").unwrap(),
+            )),
+            archspec: Some("arm".to_string()),
+        };
+
+        let c = a.merge(&b);
+
+        assert_eq!(c.macos, Some(Version::from_str("10.16").unwrap()));
+        assert_eq!(c.linux, Some(Version::from_str("5.12").unwrap()));
+        assert_eq!(c.cuda, Some(Version::from_str("12.1").unwrap()));
+        assert_eq!(
+            c.libc,
+            Some(LibCSystemRequirement::GlibC(
+                Version::from_str("2.13").unwrap()
+            ))
+        );
+        assert_eq!(c.archspec, Some("arm".to_string()));
+
+        let d = SystemRequirements {
+            macos: None,
+            linux: None,
+            cuda: None,
+            libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                family: Some("musl".to_string()),
+                version: Version::from_str("2.13").unwrap(),
+            })),
+            archspec: None,
+        };
+
+        let e = a.merge(&d);
+
+        assert_eq!(e.macos, Some(Version::from_str("10.15").unwrap()));
+        assert_eq!(e.linux, Some(Version::from_str("5.11").unwrap()));
+        assert_eq!(e.cuda, Some(Version::from_str("12.2").unwrap()));
+        assert_eq!(
+            e.libc,
+            Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                family: Some("musl".to_string()),
+                version: Version::from_str("2.13").unwrap(),
+            }))
+        );
+        assert_eq!(e.archspec, Some("x86_64".to_string()));
     }
 }
