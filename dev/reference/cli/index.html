@@ -2124,6 +2124,24 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#project-system-requirement-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      project system-requirement add
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-system-requirement-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      project system-requirement list
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2893,6 +2911,24 @@
   <a href="#project-version-majorminorpatch" class="md-nav__link">
     <span class="md-ellipsis">
       project version {major|minor|patch}
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-system-requirement-add" class="md-nav__link">
+    <span class="md-ellipsis">
+      project system-requirement add
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-system-requirement-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      project system-requirement list
     </span>
   </a>
   
@@ -4189,6 +4225,34 @@ for an environment. The file can be then used to create a conda environment usin
 <div class="language-sh highlight"><pre><span></span><code><span id="__span-73-1"><a id="__codelineno-73-1" name="__codelineno-73-1" href="#__codelineno-73-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>major
 </span><span id="__span-73-2"><a id="__codelineno-73-2" name="__codelineno-73-2" href="#__codelineno-73-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>minor
 </span><span id="__span-73-3"><a id="__codelineno-73-3" name="__codelineno-73-3" href="#__codelineno-73-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>version<span class="w"> </span>patch
+</span></code></pre></div>
+<h3 id="project-system-requirement-add"><code>project system-requirement add</code><a class="headerlink" href="#project-system-requirement-add" title="Permanent link">#</a></h3>
+<p>Add a system requirement to the project configuration.</p>
+<h5 id="arguments_41">Arguments<a class="headerlink" href="#arguments_41" title="Permanent link">#</a></h5>
+<ol>
+<li><code>&lt;REQUIREMENT&gt;</code>: The name of the system requirement.</li>
+<li><code>&lt;VERSION&gt;</code>: The version of the system requirement.</li>
+</ol>
+<h5 id="options_39">Options<a class="headerlink" href="#options_39" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--family &lt;FAMILY&gt;</code>: The family of the system requirement. Only used for <code>other-libc</code>.</li>
+<li><code>--feature &lt;FEATURE&gt; (-f)</code>: The feature for which the system requirement is added.</li>
+</ul>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-74-1"><a id="__codelineno-74-1" name="__codelineno-74-1" href="#__codelineno-74-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>system-requirements<span class="w"> </span>add<span class="w"> </span>cuda<span class="w"> </span><span class="m">12</span>.6
+</span><span id="__span-74-2"><a id="__codelineno-74-2" name="__codelineno-74-2" href="#__codelineno-74-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>system-requirements<span class="w"> </span>add<span class="w"> </span>linux<span class="w"> </span><span class="m">5</span>.15.2
+</span><span id="__span-74-3"><a id="__codelineno-74-3" name="__codelineno-74-3" href="#__codelineno-74-3"></a>pixi<span class="w"> </span>project<span class="w"> </span>system-requirements<span class="w"> </span>add<span class="w"> </span>macos<span class="w"> </span><span class="m">15</span>.2
+</span><span id="__span-74-4"><a id="__codelineno-74-4" name="__codelineno-74-4" href="#__codelineno-74-4"></a>pixi<span class="w"> </span>project<span class="w"> </span>system-requirements<span class="w"> </span>add<span class="w"> </span>glibc<span class="w"> </span><span class="m">2</span>.34
+</span><span id="__span-74-5"><a id="__codelineno-74-5" name="__codelineno-74-5" href="#__codelineno-74-5"></a>pixi<span class="w"> </span>project<span class="w"> </span>system-requirements<span class="w"> </span>add<span class="w"> </span>other-libc<span class="w"> </span><span class="m">1</span>.2.3<span class="w"> </span>--family<span class="w"> </span>musl
+</span><span id="__span-74-6"><a id="__codelineno-74-6" name="__codelineno-74-6" href="#__codelineno-74-6"></a>pixi<span class="w"> </span>project<span class="w"> </span>system-requirements<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>cuda<span class="w"> </span>cuda<span class="w"> </span><span class="m">12</span>.0
+</span></code></pre></div>
+<h3 id="project-system-requirement-list"><code>project system-requirement list</code><a class="headerlink" href="#project-system-requirement-list" title="Permanent link">#</a></h3>
+<p>List the system requirements in the project configuration.</p>
+<h5 id="options_40">Options<a class="headerlink" href="#options_40" title="Permanent link">#</a></h5>
+<ul>
+<li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to list the system requirements for.</li>
+</ul>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-75-1"><a id="__codelineno-75-1" name="__codelineno-75-1" href="#__codelineno-75-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>system-requirements<span class="w"> </span>list
+</span><span id="__span-75-2"><a id="__codelineno-75-2" name="__codelineno-75-2" href="#__codelineno-75-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>system-requirements<span class="w"> </span>list<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span>
 </span></code></pre></div>
 <div class="footnote">
 <hr />
