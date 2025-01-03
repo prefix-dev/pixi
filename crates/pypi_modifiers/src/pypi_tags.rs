@@ -1,7 +1,9 @@
 use miette::{Context, IntoDiagnostic};
 use pixi_default_versions::{default_glibc_version, default_mac_os_version};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
+use rattler_conda_types::MatchSpec;
 use rattler_conda_types::{Arch, PackageRecord, Platform};
+use regex::Regex;
 use uv_platform_tags::Os;
 use uv_platform_tags::Tags;
 
@@ -161,12 +163,30 @@ fn get_implementation_name(python_record: &PackageRecord) -> miette::Result<&'st
 }
 
 /// Return whether the specified record has gil disabled (by being a free-threaded python interpreter)
-/// by looking into the build string of the record.
 fn gil_disabled(python_record: &PackageRecord) -> miette::Result<bool> {
-    match &python_record.build.ends_with("t") {
-        true => Ok(true),
-        false => Ok(false),
-    }
+    // In order to detect if the python interpreter is free-threaded, we look at the depends
+    // field of the record. If the record has a dependency on `python_abi`, then
+    // look at the build string to detect cpXXXt (free-threaded python interpreter).
+    let regex =
+        Regex::new(r"cp\d{3}t").expect("regex for free-threaded python interpreter should compile");
+
+    let deps = python_record
+        .depends
+        .iter()
+        .map(|dep| MatchSpec::from_str(dep, rattler_conda_types::ParseStrictness::Lenient))
+        .collect::<Result<Vec<MatchSpec>, _>>()
+        .into_diagnostic()?;
+
+    Ok(deps.iter().any(|spec| {
+        spec.name
+            .as_ref()
+            .is_some_and(|name| name.as_source() == "python_abi")
+            && spec.build.as_ref().is_some_and(|build| {
+                let raw_str = format!("{}", build);
+                dbg!(&raw_str);
+                regex.is_match(&raw_str)
+            })
+    }))
 }
 
 fn create_tags(
