@@ -12,8 +12,8 @@ use rattler_networking::{
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::RetryTransientMiddleware;
-use tracing::debug;
 use std::collections::HashMap;
+use tracing::debug;
 
 use pixi_config::Config;
 
@@ -118,15 +118,9 @@ pub fn build_reqwest_clients(
     // todo: same auth storage as above
     debug!("Using s3_config: {:?}", s3_config);
     let s3_middleware = if let Some(s3_config) = s3_config {
-        S3Middleware::new(
-            s3_config,
-            AuthenticationStorage::default(),
-        )
+        S3Middleware::new(s3_config, AuthenticationStorage::default())
     } else {
-        S3Middleware::new(
-            config.compute_s3_config(),
-            AuthenticationStorage::default(),
-        )
+        S3Middleware::new(config.compute_s3_config(), AuthenticationStorage::default())
     };
     debug!("s3_middleware: {:?}", s3_middleware);
     client_builder = client_builder.with(s3_middleware);

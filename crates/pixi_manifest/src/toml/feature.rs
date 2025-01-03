@@ -10,8 +10,8 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{TomlPrioritizedChannel, TomlTarget},
     utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, Feature, FeatureName, Preview, PyPiRequirement, SystemRequirements,
-    TargetSelector, Targets, Task, TaskName, TomlError,
+    Activation, Feature, FeatureName, Preview, PyPiRequirement, SystemRequirements, TargetSelector,
+    Targets, Task, TaskName, TomlError,
 };
 
 #[serde_as]

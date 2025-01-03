@@ -1215,9 +1215,10 @@ impl Config {
                         }
                         _ => return Err(err),
                     }
-
                 } else {
-                    return Err(miette!("Cannot set s3-config subkeys without s3-config being present"));
+                    return Err(miette!(
+                        "Cannot set s3-config subkeys without s3-config being present"
+                    ));
                 }
             }
             key if key.starts_with(EXPERIMENTAL) => {
@@ -1490,7 +1491,6 @@ UNUSED = "unused"
         assert_eq!(s3_config.force_path_style, false);
     }
 
-
     #[test]
     fn test_s3_config_invalid_config() {
         let toml = r#"
@@ -1501,7 +1501,11 @@ UNUSED = "unused"
         "#;
         let result = Config::from_toml(toml);
         assert!(result.is_err());
-        assert!(result.err().unwrap().to_string().contains("missing field `force-path-style`"));
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("missing field `force-path-style`"));
     }
 
     #[test]
@@ -1545,7 +1549,7 @@ UNUSED = "unused"
                 index_url: Some(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
                 keyring_provider: Some(KeyringProvider::Subprocess),
             },
-            s3_config: Some(S3Config{
+            s3_config: Some(S3Config {
                 endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                 region: "us-east-1".to_string(),
                 force_path_style: false,
@@ -1579,7 +1583,7 @@ UNUSED = "unused"
                 solves: 5,
                 ..ConcurrencyConfig::default()
             },
-            s3_config: Some(S3Config{
+            s3_config: Some(S3Config {
                 endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                 region: "us-east-1".to_string(),
                 force_path_style: false,
