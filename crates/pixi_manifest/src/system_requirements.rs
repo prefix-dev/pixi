@@ -266,6 +266,66 @@ impl From<LibCFamilyAndVersion> for LibC {
     }
 }
 
+impl std::fmt::Display for LibCSystemRequirement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LibCSystemRequirement::GlibC(version) => {
+                write!(f, "GlibC version: {}", version)
+            }
+            LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion { family, version }) => {
+                match family {
+                    Some(fam) => write!(f, "{} version: {}", fam, version),
+                    None => write!(f, "No family, version: {}", version),
+                }
+            }
+        }
+    }
+}
+
+impl std::fmt::Display for SystemRequirements {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("macOS:").cyan(),
+            self.macos
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("Linux:").cyan(),
+            self.linux
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("CUDA:").cyan(),
+            self.cuda
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("LibC:").cyan(),
+            self.libc
+                .as_ref()
+                .map_or("None".to_string(), |v| v.to_string())
+        )?;
+        writeln!(
+            f,
+            "- {} {}",
+            console::style("Archspec:").cyan(),
+            self.archspec.as_deref().unwrap_or("None")
+        )?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
