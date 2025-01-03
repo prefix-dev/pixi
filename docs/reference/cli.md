@@ -1526,6 +1526,39 @@ pixi project version minor
 pixi project version patch
 ```
 
+### `project system-requirement add`
+
+Add a system requirement to the project configuration.
+
+##### Arguments
+1. `<REQUIREMENT>`: The name of the system requirement.
+2. `<VERSION>`: The version of the system requirement.
+
+##### Options
+- `--family <FAMILY>`: The family of the system requirement. Only used for `other-libc`.
+- `--feature <FEATURE> (-f)`: The feature for which the system requirement is added.
+
+```shell
+pixi project system-requirements add cuda 12.6
+pixi project system-requirements add linux 5.15.2
+pixi project system-requirements add macos 15.2
+pixi project system-requirements add glibc 2.34
+pixi project system-requirements add other-libc 1.2.3 --family musl
+pixi project system-requirements add --feature cuda cuda 12.0
+```
+
+### `project system-requirement list`
+
+List the system requirements in the project configuration.
+
+##### Options
+- `--environment <ENVIRONMENT> (-e)`: The environment to list the system requirements for.
+
+```shell
+pixi project system-requirements list
+pixi project system-requirements list --environment test
+```
+
 [^1]:
     An **up-to-date** lock file means that the dependencies in the lock file are allowed by the dependencies in the manifest file.
     For example
