@@ -9,7 +9,7 @@ use std::{
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{context, Environment};
-use pixi_config::{get_default_author, Config};
+use pixi_config::{get_default_author, Config, S3Config};
 use pixi_consts::consts;
 use pixi_manifest::{
     pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
@@ -81,6 +81,22 @@ version = "{{ version }}"
 {% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
 {%- endif %}
 
+{%- if s3 %}
+
+[s3]
+{%- if s3["endpoint-url"] %}
+endpoint-url = "{{ s3["endpoint-url"] }}"
+{%- endif %}
+{%- if s3.region %}
+{%- endif %}
+{%- if s3.region %}
+region = "{{ s3.region }}"
+{%- endif %}
+{%- if s3["force-path-style"] %}
+force-path-style = {{ s3["force-path-style"] }}
+{%- endif %}
+{%- endif %}
+
 [tasks]
 
 [dependencies]
@@ -108,6 +124,22 @@ default = { solve-group = "default" }
 {%- endif %}
 {{env}} = { features = {{ features }}, solve-group = "default" }
 {%- endfor %}
+
+{%- if s3 %}
+
+[tool.pixi.s3]
+{%- if s3["endpoint-url"] %}
+endpoint-url = "{{ s3["endpoint-url"] }}"
+{%- endif %}
+{%- if s3.region %}
+{%- endif %}
+{%- if s3.region %}
+region = "{{ s3.region }}"
+{%- endif %}
+{%- if s3["force-path-style"] %}
+force-path-style = {{ s3["force-path-style"] }}
+{%- endif %}
+{%- endif %}
 
 [tool.pixi.tasks]
 
@@ -140,6 +172,22 @@ platforms = {{ platforms }}
 [tool.pixi.pypi-options]
 {% if index_url %}index-url = "{{ index_url }}"{% endif %}
 {% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
+
+{%- if s3 %}
+
+[tool.pixi.s3]
+{%- if s3["endpoint-url"] %}
+endpoint-url = "{{ s3["endpoint-url"] }}"
+{%- endif %}
+{%- if s3.region %}
+{%- endif %}
+{%- if s3.region %}
+region = "{{ s3.region }}"
+{%- endif %}
+{%- if s3["force-path-style"] %}
+force-path-style = {{ s3["force-path-style"] }}
+{%- endif %}
 {%- endif %}
 
 [tool.pixi.pypi-dependencies]
@@ -237,6 +285,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &platforms,
             None,
             &vec![],
+            config.s3_config,
         );
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
         let channel_config = project.channel_config();
@@ -327,6 +376,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         channels,
                         platforms,
                         environments,
+                        s3 => config.s3_config,
                     },
                 )
                 .unwrap();
@@ -382,6 +432,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         platforms,
                         index_url => index_url.as_ref(),
                         extra_index_urls => &extra_index_urls,
+                        s3 => config.s3_config,
                     },
                 )
                 .unwrap();
@@ -427,6 +478,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &platforms,
                 index_url.as_ref(),
                 &extra_index_urls,
+                config.s3_config,
             );
             save_manifest_file(&pixi_manifest_path, rv)?;
         };
@@ -465,6 +517,7 @@ fn render_project(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
+    s3_config: S3Config,
 ) -> String {
     env.render_named_str(
         consts::PROJECT_MANIFEST,
@@ -477,6 +530,7 @@ fn render_project(
             platforms,
             index_url,
             extra_index_urls,
+            s3 => s3_config,
         },
     )
     .unwrap()
