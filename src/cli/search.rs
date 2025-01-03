@@ -126,7 +126,7 @@ pub async fn execute_impl<W: Write>(
     let client = project
         .as_ref()
         .map(|p| p.authenticated_client().clone())
-        .unwrap_or_else(|| build_reqwest_clients(None).1);
+        .unwrap_or_else(|| build_reqwest_clients(None, None).1);
 
     let config = Config::load_global();
 

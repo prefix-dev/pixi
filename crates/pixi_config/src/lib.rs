@@ -1293,6 +1293,10 @@ impl Config {
             .with_max_concurrent_requests(self.max_concurrent_downloads())
             .finish()
     }
+
+    pub fn compute_s3_config(&self) -> Option<rattler_networking::s3_middleware::S3Config> {
+        panic!("todo");
+    }
 }
 
 /// Returns the path to the system-level pixi config file.

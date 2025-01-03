@@ -25,6 +25,7 @@ pub struct ProjectConfig {
     pub manifest_path: Option<PathBuf>,
 }
 
+// TODO: remove
 #[derive(Parser, Debug, Default)]
 pub struct S3Config {
     // inner: Option<rattler_networking::s3_middleware::S3Config>,
@@ -69,20 +70,6 @@ impl S3Config {
                 //     "All S3 options (s3-endpoint-url, s3-region, s3-force-path-style) must be specified together".to_string(),
                 // ))
             }
-        }
-    }
-
-    /// Parses the channels, getting channel config and default channels from project
-    pub(crate) fn resolve_from_project(
-        &self,
-        project: Option<&Project>,
-    ) -> miette::Result<rattler_networking::s3_middleware::S3Config> {
-        match project {
-            Some(project) => {
-                let s3_options = project.default_environment().s3_options();
-                self.resolve(s3_options.endpoint_url, s3_options.region, s3_options.force_path_style)
-            }
-            None => self.resolve_from_config(&Config::load_global()),
         }
     }
 

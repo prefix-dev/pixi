@@ -77,7 +77,10 @@ pub fn oci_middleware() -> OciMiddleware {
     OciMiddleware
 }
 
-pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
+pub fn build_reqwest_clients(
+    config: Option<&Config>,
+    s3_config: Option<Option<rattler_networking::s3_middleware::S3Config>>,
+) -> (Client, ClientWithMiddleware) {
     let app_user_agent = format!("pixi/{}", consts::PIXI_VERSION);
 
     // If we do not have a config, we will just load the global default.
@@ -111,7 +114,11 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
 
     client_builder = client_builder.with(GCSMiddleware);
 
-    client_builder = client_builder.with(S3Middleware::new(None));
+    client_builder = if let Some(s3_config) = s3_config {
+        client_builder.with(S3Middleware::new(s3_config))
+    } else {
+        client_builder.with(S3Middleware::new(config.compute_s3_config()))
+    };
 
     client_builder = client_builder.with_arc(Arc::new(
         auth_middleware(&config).expect("could not create auth middleware"),

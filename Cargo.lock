@@ -4407,6 +4407,7 @@ dependencies = [
  "pixi_consts",
  "rattler",
  "rattler_conda_types",
+ "rattler_networking",
  "rattler_repodata_gateway",
  "reqwest-middleware",
  "rstest",

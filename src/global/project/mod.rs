@@ -461,7 +461,7 @@ impl Project {
 
     fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
         self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
+            .get_or_init(|| build_reqwest_clients(Some(&self.config), None))
     }
 
     pub(crate) fn config(&self) -> &Config {
