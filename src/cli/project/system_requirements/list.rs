@@ -44,11 +44,15 @@ impl std::fmt::Display for EnvironmentDisplay {
 
 pub(crate) fn execute(project: &Project, args: Args) -> miette::Result<()> {
     let environments: Vec<EnvironmentDisplay> = if let Some(env_name) = args.environment {
-        project
+        let result: Vec<_> = project
             .environment(&env_name)
             .iter()
             .map(EnvironmentDisplay::from)
-            .collect()
+            .collect();
+        if result.is_empty() {
+            miette::bail!("Environment not found: {}", env_name);
+        }
+        result
     } else {
         project
             .environments()
