@@ -1783,7 +1783,7 @@
 The dependencies of a package that is being built are a bit more granular.
 Here you can see the three types of dependencies for a simple C++ package.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[build-dependencies]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">gxx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">cxx-compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">[host-dependencies]</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">catch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
@@ -1792,7 +1792,7 @@ Here you can see the three types of dependencies for a simple C++ package.</p>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">git</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
 <p>Each dependency is used at a different step of the package building process.
-<code>gxx</code> is used to build the package, <code>catch</code> will be linked into the package and <code>git</code> will be available during runtime.</p>
+<code>cxx-compiler</code> is used to build the package, <code>catch</code> will be linked into the package and <code>git</code> will be available during runtime.</p>
 <p>Let's delve deeper into the various types of package dependencies and their specific roles in the build process.</p>
 <h3 id="build-dependencies"><a href="../../reference/pixi_manifest/#build-dependencies">Build Dependencies</a><a class="headerlink" href="#build-dependencies" title="Permanent link">#</a></h3>
 <div class="admonition note">
