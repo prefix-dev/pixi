@@ -154,6 +154,9 @@ class Workspace(StrictBaseModel):
     pypi_options: PyPIOptions | None = Field(
         None, description="Options related to PyPI indexes for this project"
     )
+    s3_options: S3Options | None = Field(
+        None, description="Options related to S3 for this project"
+    )
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
     )
@@ -549,6 +552,22 @@ class FindLinksURL(StrictBaseModel):
         None,
         description="URL to html file with href-links to packages",
         examples=["https://simple-index-is-here.com"],
+    )
+
+
+class S3Options(StrictBaseModel):
+    """Options related to S3 for this project"""
+
+    endpoint_url: NonEmptyStr = Field(
+        description="The endpoint URL to use for the S3 client",
+        examples=["https://s3.eu-cental-1.amazonaws.com"],
+    )
+    region: NonEmptyStr = Field(
+        description="The region to use for the S3 client",
+        examples=["eu-central-1"],
+    )
+    force_path_style: bool = Field(
+        description="Whether to force path style for the S3 client",
     )
 
 

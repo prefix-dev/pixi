@@ -882,6 +882,9 @@ Store authentication information for given host.
 - `--username <USERNAME>`: The username to use for basic HTTP authentication
 - `--password <PASSWORD>`: The password to use for basic HTTP authentication.
 - `--conda-token <CONDA_TOKEN>`: The token to use on `anaconda.org` / `quetz` authentication.
+- `--aws-access-key-id` TODO
+- `--aws-secret-access-key` TODO
+- `--aws-session-token` TODO
 
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD

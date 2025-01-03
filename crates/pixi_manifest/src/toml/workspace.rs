@@ -10,7 +10,7 @@ use url::Url;
 
 use crate::{
     preview::Preview, pypi::pypi_options::PypiOptions, utils::PixiSpanned, PrioritizedChannel,
-    TargetSelector, Targets, Workspace,
+    S3Options, TargetSelector, Targets, Workspace,
 };
 
 #[derive(Debug, Clone, Deserialize)]
@@ -48,6 +48,7 @@ pub struct TomlWorkspace {
     pub documentation: Option<Url>,
     pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
     pub pypi_options: Option<PypiOptions>,
+    pub s3_options: Option<S3Options>,
 
     #[serde(default)]
     pub preview: Preview,
@@ -106,6 +107,7 @@ impl TomlWorkspace {
             platforms: self.platforms,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
+            s3_options: self.s3_options,
             preview: self.preview,
             build_variants: Targets::from_default_and_user_defined(
                 self.build_variants,

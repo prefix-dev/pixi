@@ -6,13 +6,14 @@ use rattler_networking::{
     mirror_middleware::Mirror,
     retry_policies::ExponentialBackoff,
     AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
-    OciMiddleware,
+    OciMiddleware, S3Middleware,
 };
 
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
+use tracing::debug;
 
 use pixi_config::Config;
 
@@ -77,7 +78,10 @@ pub fn oci_middleware() -> OciMiddleware {
     OciMiddleware
 }
 
-pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
+pub fn build_reqwest_clients(
+    config: Option<&Config>,
+    s3_config: Option<rattler_networking::s3_middleware::S3Config>,
+) -> (Client, ClientWithMiddleware) {
     let app_user_agent = format!("pixi/{}", consts::PIXI_VERSION);
 
     // If we do not have a config, we will just load the global default.
@@ -110,6 +114,16 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
     }
 
     client_builder = client_builder.with(GCSMiddleware);
+
+    // todo: same auth storage as above
+    debug!("Using s3_config: {:?}", s3_config);
+    let s3_middleware = if let Some(s3_config) = s3_config {
+        S3Middleware::new(s3_config, AuthenticationStorage::default())
+    } else {
+        S3Middleware::new(config.compute_s3_config(), AuthenticationStorage::default())
+    };
+    debug!("s3_middleware: {:?}", s3_middleware);
+    client_builder = client_builder.with(s3_middleware);
 
     client_builder = client_builder.with_arc(Arc::new(
         auth_middleware(&config).expect("could not create auth middleware"),

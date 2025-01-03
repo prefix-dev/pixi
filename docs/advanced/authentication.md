@@ -19,6 +19,7 @@ Options:
       --username <USERNAME>        The username to use (for basic HTTP authentication)
       --password <PASSWORD>        The password to use (for basic HTTP authentication)
       --conda-token <CONDA_TOKEN>  The token to use on anaconda.org / quetz authentication
+access key id: todo
   -v, --verbose...                 More output per occurrence
   -q, --quiet...                   Less output per occurrence
   -h, --help                       Print help
