@@ -766,3 +766,151 @@ def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ExitCode.SUCCESS,
         stdout_contains="blabla",
     )
+
+
+def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # Add system requirements
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "cuda",
+            "11.8",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "glibc",
+            "2.27",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "macos",
+            "15.4",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "linux",
+            "6.5",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "other-libc",
+            "1.2.3",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="--family",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "other-libc",
+            "1.2.3",
+            "--family",
+            "musl",
+        ],
+        ExitCode.SUCCESS,
+    )
+
+    # List system requirements
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "list",
+        ],
+        ExitCode.SUCCESS,
+        stdout_contains=["CUDA", "macOS", "Linux", "LibC", "musl"],
+    )
+
+    # Add extra environment
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "--feature",
+            "test",
+            "linux",
+            "10.1",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "environment",
+            "add",
+            "test",
+            "--feature",
+            "test",
+        ],
+        ExitCode.SUCCESS,
+    )
+
+    # List system requirements of environment
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "list",
+            "--environment",
+            "test",
+        ],
+        ExitCode.SUCCESS,
+        stdout_contains=["Linux: 10.1"],
+    )

@@ -41,7 +41,7 @@ pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 pub use pypi::pypi_requirement::PyPiRequirement;
 use rattler_conda_types::Platform;
 pub use spec_type::SpecType;
-pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
+pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
 pub use target::{TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;

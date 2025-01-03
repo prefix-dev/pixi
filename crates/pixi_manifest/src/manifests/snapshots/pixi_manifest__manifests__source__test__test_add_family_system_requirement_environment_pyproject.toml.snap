@@ -9,5 +9,5 @@ name = "test"
 channels = []
 platforms = []
 
-[tool.pixi.environments]
-bar = ["default"]
+[tool.pixi.system-requirements]
+libc = { family = "glibc", version = "1.2" }

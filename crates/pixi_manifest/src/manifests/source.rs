@@ -1,15 +1,17 @@
-use std::fmt;
-
+use crate::toml::TomlDocument;
+use crate::{
+    manifests::table_name::TableName, pypi::PyPiPackageName, FeatureName, LibCSystemRequirement,
+    PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements, Task, TomlError,
+};
 use pixi_consts::{consts, consts::PYPROJECT_PIXI_PREFIX};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
+use std::fmt;
+#[cfg(test)]
+use std::str::FromStr;
+#[cfg(test)]
+use toml_edit::DocumentMut;
 use toml_edit::{value, Array, Item, Table, Value};
-
-use crate::toml::TomlDocument;
-use crate::{
-    manifests::table_name::TableName, pypi::PyPiPackageName, FeatureName, PyPiRequirement,
-    PypiDependencyLocation, SpecType, Task, TomlError,
-};
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
 #[derive(Debug, Clone)]
@@ -17,7 +19,6 @@ pub enum ManifestSource {
     PyProjectToml(TomlDocument),
     PixiToml(TomlDocument),
 }
-
 impl fmt::Display for ManifestSource {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -31,13 +32,40 @@ impl ManifestSource {
     /// Returns a new empty pixi manifest.
     #[cfg(test)]
     fn empty_pixi() -> Self {
-        ManifestSource::PixiToml(TomlDocument::default())
+        let empty_content = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#
+        .lines()
+        .map(|line| line.trim_start())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+        ManifestSource::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(empty_content.as_str()).unwrap(),
+        ))
     }
 
     /// Returns a new empty pyproject manifest.
     #[cfg(test)]
     fn empty_pyproject() -> Self {
-        ManifestSource::PyProjectToml(TomlDocument::default())
+        let empty_content = r#"
+        [project]
+        name = "test"
+        [tool.pixi.project]
+        channels = []
+        platforms = []
+        "#
+        .lines()
+        .map(|line| line.trim_start())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+        ManifestSource::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(empty_content.as_str()).unwrap(),
+        ))
     }
 
     /// Returns the file name of the manifest
@@ -447,7 +475,7 @@ impl ManifestSource {
             .with_feature_name(Some(&FeatureName::Default))
             .with_table(Some("environments"));
 
-        // Get the environment table
+        // Insert into the environment table
         self.manifest_mut()
             .get_or_insert_nested_table(env_table.to_string().as_str())?
             .insert(&name.into(), item);
@@ -470,6 +498,98 @@ impl ManifestSource {
             .is_some())
     }
 
+    pub fn add_system_requirements(
+        &mut self,
+        system_requirements: &SystemRequirements,
+        feature_name: &FeatureName,
+    ) -> Result<bool, TomlError> {
+        let system_requirements_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(Some(feature_name))
+            .with_table(Some(consts::SYSTEM_REQUIREMENTS));
+
+        let mut inserted = false;
+
+        if let Some(linux) = &system_requirements.linux {
+            inserted |= self
+                .manifest_mut()
+                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .insert("linux", toml_edit::Item::from(linux.to_string()))
+                .is_some();
+        }
+
+        if let Some(cuda) = &system_requirements.cuda {
+            inserted |= self
+                .manifest_mut()
+                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .insert("cuda", toml_edit::Item::from(cuda.to_string()))
+                .is_some();
+        }
+
+        if let Some(macos) = &system_requirements.macos {
+            inserted |= self
+                .manifest_mut()
+                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .insert("macos", toml_edit::Item::from(macos.to_string()))
+                .is_some();
+        }
+
+        if let Some(libc) = &system_requirements.libc {
+            match libc {
+                LibCSystemRequirement::GlibC(version) => {
+                    inserted |= self
+                        .manifest_mut()
+                        .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                        .insert("libc", toml_edit::Item::from(version.to_string()))
+                        .is_some();
+                }
+                LibCSystemRequirement::OtherFamily(family_and_version) => {
+                    if let Some(family) = &family_and_version.family {
+                        let mut libc_table = Table::new();
+                        libc_table.insert("family", toml_edit::value(family));
+                        libc_table.insert(
+                            "version",
+                            toml_edit::Item::from(family_and_version.version.clone().to_string()),
+                        );
+                        inserted |= self
+                            .manifest_mut()
+                            .get_or_insert_nested_table(
+                                system_requirements_table.to_string().as_str(),
+                            )?
+                            .insert(
+                                "libc",
+                                toml_edit::Item::from(libc_table.into_inline_table()),
+                            )
+                            .is_some();
+                    } else {
+                        inserted |= self
+                            .manifest_mut()
+                            .get_or_insert_nested_table(
+                                system_requirements_table.to_string().as_str(),
+                            )?
+                            .insert(
+                                "libc",
+                                toml_edit::Item::from(
+                                    family_and_version.version.clone().to_string(),
+                                ),
+                            )
+                            .is_some();
+                    }
+                }
+            }
+        }
+
+        if let Some(archspec) = &system_requirements.archspec {
+            inserted |= self
+                .manifest_mut()
+                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .insert("archspec", archspec.into())
+                .is_some();
+        }
+
+        Ok(inserted)
+    }
+
     /// Sets the name of the project
     pub fn set_name(&mut self, name: &str) {
         self.as_table_mut()["project"]["name"] = value(name);
@@ -489,6 +609,7 @@ impl ManifestSource {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{LibCFamilyAndVersion, Manifest};
     use insta::assert_snapshot;
     use rstest::rstest;
 
@@ -551,6 +672,109 @@ mod test {
         assert!(source.remove_environment("foo").unwrap());
         assert_snapshot!(
             format!("test_remove_environment_{}", source.file_name()),
+            source.to_string()
+        );
+    }
+
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_add_empty_system_requirement_environment(#[case] mut source: ManifestSource) {
+        let clean_source = source.clone();
+
+        let empty_requirements = SystemRequirements::default();
+        source
+            .add_system_requirements(&empty_requirements, &FeatureName::Default)
+            .unwrap();
+        assert_eq!(
+            empty_requirements,
+            Manifest::from_str(source.file_name().as_ref(), source.to_string().as_str())
+                .unwrap()
+                .workspace
+                .default_feature()
+                .system_requirements
+        );
+        assert_eq!(source.to_string(), clean_source.to_string());
+    }
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_add_single_system_requirement_environment(#[case] mut source: ManifestSource) {
+        let single_system_requirements = SystemRequirements {
+            linux: Some("4.18".parse().unwrap()),
+            ..SystemRequirements::default()
+        };
+        source
+            .add_system_requirements(&single_system_requirements, &FeatureName::Default)
+            .unwrap();
+        assert_eq!(
+            single_system_requirements,
+            Manifest::from_str(source.file_name().as_ref(), source.to_string().as_str())
+                .unwrap()
+                .workspace
+                .default_feature()
+                .system_requirements
+        );
+    }
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_add_full_system_requirement_environment(#[case] mut source: ManifestSource) {
+        let full_system_requirements = SystemRequirements {
+            linux: Some("4.18".parse().unwrap()),
+            cuda: Some("11.1".parse().unwrap()),
+            macos: Some("13.0".parse().unwrap()),
+            libc: Some(LibCSystemRequirement::GlibC("2.28".parse().unwrap())),
+            archspec: Some("x86_64".to_string()),
+        };
+        source
+            .add_system_requirements(&full_system_requirements, &FeatureName::Default)
+            .unwrap();
+
+        assert_eq!(
+            full_system_requirements,
+            Manifest::from_str(source.file_name().as_ref(), source.to_string().as_str())
+                .unwrap()
+                .workspace
+                .default_feature()
+                .system_requirements
+        );
+        assert_snapshot!(
+            format!(
+                "test_add_full_system_requirement_environment_{}",
+                source.file_name()
+            ),
+            source.to_string()
+        );
+    }
+    #[rstest]
+    #[case::pixi_toml(ManifestSource::empty_pixi())]
+    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
+    fn test_add_libc_family_system_requirement_environment(#[case] mut source: ManifestSource) {
+        let family_system_requirements = SystemRequirements {
+            libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
+                family: Some("glibc".to_string()),
+                version: "1.2".parse().unwrap(),
+            })),
+            ..SystemRequirements::default()
+        };
+        source
+            .add_system_requirements(&family_system_requirements, &FeatureName::Default)
+            .unwrap();
+        assert_eq!(
+            family_system_requirements,
+            Manifest::from_str(source.file_name().as_ref(), source.to_string().as_str())
+                .unwrap()
+                .workspace
+                .default_feature()
+                .system_requirements
+        );
+
+        assert_snapshot!(
+            format!(
+                "test_add_family_system_requirement_environment_{}",
+                source.file_name()
+            ),
             source.to_string()
         );
     }
