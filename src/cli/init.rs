@@ -64,7 +64,7 @@ pub struct Args {
 /// The pixi.toml template
 ///
 /// This uses a template just to simplify the flexibility of emitting it.
-const PROJECT_TEMPLATE: &str = r#"[project]
+const PROJECT_TEMPLATE: &str = r#"[workspace]
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
@@ -91,7 +91,7 @@ version = "{{ version }}"
 ///
 /// This is injected into an existing pyproject.toml
 const PYROJECT_TEMPLATE_EXISTING: &str = r#"
-[tool.pixi.project]
+[tool.pixi.workspace]
 {%- if pixi_name %}
 name = "{{ name }}"
 {%- endif %}
@@ -116,7 +116,7 @@ default = { solve-group = "default" }
 /// The pyproject.toml template
 ///
 /// This is used to create a pyproject.toml from scratch
-const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
+const NEW_PYROJECT_TEMPLATE: &str = r#"[workspace]
 {%- if author %}
 authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
 {%- endif %}
