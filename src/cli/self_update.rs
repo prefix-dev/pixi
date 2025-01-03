@@ -40,8 +40,14 @@ fn default_archive_name() -> Option<String> {
         } else {
             Some("pixi-aarch64-apple-darwin.tar.gz".to_string())
         }
-    } else if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
-        Some("pixi-x86_64-pc-windows-msvc.zip".to_string())
+    } else if cfg!(target_os = "windows") {
+        if cfg!(target_arch = "x86_64") {
+            Some("pixi-x86_64-pc-windows-msvc.zip".to_string())
+        } else if cfg!(target_arch = "aarch64") {
+            Some("pixi-aarch64-pc-windows-msvc.zip".to_string())
+        } else {
+            None
+        }
     } else if cfg!(target_os = "linux") {
         if cfg!(target_arch = "x86_64") {
             Some("pixi-x86_64-unknown-linux-musl.tar.gz".to_string())
