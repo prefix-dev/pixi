@@ -13,7 +13,12 @@ use serde::{de::Error, Deserialize};
 use serde_with::SerializeDisplay;
 
 use crate::{
-    channel::PrioritizedChannel, consts, pypi::{pypi_options::PypiOptions, PyPiPackageName}, target::Targets, utils::PixiSpanned, PyPiRequirement, S3Options, SpecType, SystemRequirements, WorkspaceTarget
+    channel::PrioritizedChannel,
+    consts,
+    pypi::{pypi_options::PypiOptions, PyPiPackageName},
+    target::Targets,
+    utils::PixiSpanned,
+    PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
 };
 
 /// The name of a feature. This is either a string or default for the default
@@ -137,9 +142,6 @@ pub struct Feature {
     /// Pypi-related options
     pub pypi_options: Option<PypiOptions>,
 
-    /// S3-related options
-    pub s3_options: Option<S3Options>,
-
     /// Target specific configuration.
     pub targets: Targets<WorkspaceTarget>,
 }
@@ -154,8 +156,6 @@ impl Feature {
             channel_priority: None,
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
-            s3_options: None,
-
             targets: <Targets<WorkspaceTarget> as Default>::default(),
         }
     }

@@ -3,7 +3,6 @@ environments:
   default:
     channels:
     - url: s3://s3-forge/channel/
-    - url: https://conda.anaconda.org/conda-forge/
     packages:
       osx-arm64:
       - conda: s3://s3-forge/channel/noarch/test-package-0.1-0.tar.bz2

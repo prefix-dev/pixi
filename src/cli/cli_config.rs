@@ -13,7 +13,6 @@ use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
 use rattler_conda_types::ChannelConfig;
 use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
-use rattler_networking::AuthenticationStorage;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -23,75 +22,6 @@ pub struct ProjectConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the project directory
     #[arg(long, global = true)]
     pub manifest_path: Option<PathBuf>,
-}
-
-// TODO: remove
-#[derive(Parser, Debug, Default)]
-pub struct S3Config {
-    // inner: Option<rattler_networking::s3_middleware::S3Config>,
-    /// S3 endpoint URL
-    #[clap(long = "s3-endpoint-url", value_name = "ENDPOINT-URL")]
-    pub endpoint_url: Option<url::Url>,
-    /// Name of the region
-    #[clap(long = "s3-region", value_name = "REGION")]
-    pub region: Option<String>,
-    /// Force path style URLs instead of subdomain style
-    #[clap(long = "s3-force-path-style", value_name = "FORCE-PATH-STYLE")]
-    pub force_path_style: Option<bool>,
-}
-
-impl S3Config {
-    /// Parses the channels, getting channel config and default channels from config
-    pub(crate) fn resolve_from_config(
-        &self,
-        config: &Config,
-    ) -> miette::Result<rattler_networking::s3_middleware::S3Config> {
-        match (
-            self.endpoint_url.clone(),
-            self.region.clone(),
-            self.force_path_style,
-        ) {
-            (Some(endpoint_url), Some(region), Some(force_path_style)) => {
-                self.resolve(Some(endpoint_url), Some(region), Some(force_path_style))
-            }
-            (None, None, None) => {
-                let s3_config = config.s3_config.clone();
-
-                self.resolve(
-                    s3_config.endpoint_url,
-                    s3_config.region,
-                    s3_config.force_path_style,
-                )
-            }
-            _ => {
-                // TODO: nicer error message
-                panic!("All S3 options (s3-endpoint-url, s3-region, s3-force-path-style) must be specified together")
-                // return Err(miette::Diagnostic::from(
-                //     "All S3 options (s3-endpoint-url, s3-region, s3-force-path-style) must be specified together".to_string(),
-                // ))
-            }
-        }
-    }
-
-    /// Parses the channels from specified channel config and default channels
-    fn resolve(
-        &self,
-        endpoint_url: Option<url::Url>,
-        region: Option<String>,
-        force_path_style: Option<bool>,
-    ) -> miette::Result<rattler_networking::s3_middleware::S3Config> {
-        let region = region.unwrap_or("us-east-1".to_string());
-        let config = rattler_networking::s3_middleware::S3Config {
-            auth_storage: AuthenticationStorage::new(),
-            endpoint_url: endpoint_url.unwrap_or(
-                url::Url::parse(&format!("https://s3.{}.amazonaws.com", region)).unwrap(),
-            ),
-            region: region,
-            force_path_style: force_path_style.unwrap_or(false),
-        };
-
-        Ok(config)
-    }
 }
 
 /// Channel configuration

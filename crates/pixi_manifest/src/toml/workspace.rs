@@ -9,7 +9,8 @@ use thiserror::Error;
 use url::Url;
 
 use crate::{
-    preview::Preview, pypi::pypi_options::PypiOptions, utils::PixiSpanned, PrioritizedChannel, S3Options, TargetSelector, Targets, Workspace
+    preview::Preview, pypi::pypi_options::PypiOptions, utils::PixiSpanned, PrioritizedChannel,
+    S3Options, TargetSelector, Targets, Workspace,
 };
 
 #[derive(Debug, Clone, Deserialize)]

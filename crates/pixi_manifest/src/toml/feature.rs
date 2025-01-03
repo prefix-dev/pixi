@@ -10,7 +10,7 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{TomlPrioritizedChannel, TomlTarget},
     utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, Feature, FeatureName, Preview, PyPiRequirement, S3Options, SystemRequirements,
+    Activation, Feature, FeatureName, Preview, PyPiRequirement, SystemRequirements,
     TargetSelector, Targets, Task, TaskName, TomlError,
 };
 
@@ -48,9 +48,6 @@ pub struct TomlFeature {
     /// Additional options for PyPi dependencies.
     #[serde(default)]
     pub pypi_options: Option<PypiOptions>,
-
-    #[serde(default)]
-    pub s3_options: Option<S3Options>,
 }
 
 impl TomlFeature {
@@ -81,7 +78,6 @@ impl TomlFeature {
             channel_priority: self.channel_priority,
             system_requirements: self.system_requirements,
             pypi_options: self.pypi_options,
-            s3_options: self.s3_options,
             targets: Targets::from_default_and_user_defined(default_target, targets),
         })
     }

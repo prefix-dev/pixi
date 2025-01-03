@@ -9,7 +9,7 @@ use std::{
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{context, Environment};
-use pixi_config::{get_default_author, Config, S3Config};
+use pixi_config::{get_default_author, Config};
 use pixi_consts::consts;
 use pixi_manifest::{
     pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
@@ -83,7 +83,7 @@ version = "{{ version }}"
 
 {%- if s3 %}
 
-[s3]
+[project.s3-options]
 {%- if s3["endpoint-url"] %}
 endpoint-url = "{{ s3["endpoint-url"] }}"
 {%- endif %}
@@ -127,7 +127,7 @@ default = { solve-group = "default" }
 
 {%- if s3 %}
 
-[tool.pixi.s3]
+[tool.pixi.project.s3-options]
 {%- if s3["endpoint-url"] %}
 endpoint-url = "{{ s3["endpoint-url"] }}"
 {%- endif %}
@@ -176,7 +176,7 @@ platforms = {{ platforms }}
 
 {%- if s3 %}
 
-[tool.pixi.s3]
+[tool.pixi.project.s3-options]
 {%- if s3["endpoint-url"] %}
 endpoint-url = "{{ s3["endpoint-url"] }}"
 {%- endif %}
@@ -517,7 +517,7 @@ fn render_project(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
-    s3_config: S3Config,
+    s3_config: Option<pixi_config::S3Config>,
 ) -> String {
     env.render_named_str(
         consts::PROJECT_MANIFEST,

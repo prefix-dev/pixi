@@ -6,6 +6,7 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
+use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, SourceConfig};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
@@ -277,21 +278,17 @@ pub struct PyPIConfig {
     pub allow_insecure_host: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct S3Config {
     /// S3 endpoint URL
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub endpoint_url: Option<Url>,
+    pub endpoint_url: Url,
 
     /// The name of the S3 region
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub region: Option<String>,
+    pub region: String,
 
     /// Force path style URLs instead of subdomain style
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub force_path_style: Option<bool>,
+    pub force_path_style: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -449,34 +446,6 @@ impl PyPIConfig {
         self.index_url.is_none()
             && self.extra_index_urls.is_empty()
             && self.keyring_provider.is_none()
-    }
-}
-
-impl S3Config {
-    /// Merge the given S3Config into the current one.
-    pub fn merge(self, other: Self) -> Self {
-        let endpoint_url = match other.endpoint_url {
-            Some(path) => Some(path),
-            None => self.endpoint_url,
-        };
-        let region = match other.region {
-            Some(region) => Some(region),
-            None => self.region,
-        };
-        let force_path_style = match other.force_path_style {
-            Some(force_path_style) => Some(force_path_style),
-            None => self.force_path_style,
-        };
-
-        Self {
-            endpoint_url,
-            region,
-            force_path_style,
-        }
-    }
-
-    fn is_default(&self) -> bool {
-        self.endpoint_url.is_none() && self.region.is_none() && self.force_path_style.is_none()
     }
 }
 
@@ -644,8 +613,8 @@ pub struct Config {
 
     /// Configuration for S3.
     #[serde(default)]
-    #[serde(skip_serializing_if = "S3Config::is_default")]
-    pub s3_config: S3Config,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub s3_config: Option<S3Config>,
 
     /// The option to specify the directory where detached environments are
     /// stored. When using 'true', it defaults to the cache directory.
@@ -683,7 +652,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
-            s3_config: S3Config::default(),
+            s3_config: None,
             detached_environments: Some(DetachedEnvironments::default()),
             pinning_strategy: None,
             force_activate: None,
@@ -971,6 +940,10 @@ impl Config {
             "pypi-config.index-url",
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
+            "s3-config",
+            "s3-config.endpoint-url",
+            "s3-config.region",
+            "s3-config.force-path-style",
             "experimental.use-environment-activation-cache",
         ]
     }
@@ -999,7 +972,7 @@ impl Config {
             channel_config: other.channel_config,
             repodata_config: self.repodata_config.merge(other.repodata_config),
             pypi_config: self.pypi_config.merge(other.pypi_config),
-            s3_config: self.s3_config.merge(other.s3_config),
+            s3_config: other.s3_config.or(self.s3_config),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
@@ -1049,6 +1022,10 @@ impl Config {
 
     pub fn pypi_config(&self) -> &PyPIConfig {
         &self.pypi_config
+    }
+
+    pub fn s3_config(&self) -> &Option<S3Config> {
+        &self.s3_config
     }
 
     pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
@@ -1201,6 +1178,48 @@ impl Config {
                     _ => return Err(err),
                 }
             }
+            key if key.starts_with("s3-config") => {
+                if key == "s3-config" {
+                    if let Some(value) = value {
+                        self.s3_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        return Err(miette!("s3-config requires a value"));
+                    }
+                    return Ok(());
+                } else if !key.starts_with("s3-config.") {
+                    return Err(err);
+                }
+                let subkey = key.strip_prefix("s3-config.").unwrap();
+                if let Some(ref mut config) = self.s3_config {
+                    match subkey {
+                        "endpoint-url" => {
+                            if let Some(value) = value {
+                                config.endpoint_url = Url::parse(&value).into_diagnostic()?;
+                            } else {
+                                return Err(miette!("s3-config.endpoint-url requires a value"));
+                            }
+                        }
+                        "region" => {
+                            if let Some(value) = value {
+                                config.region = value;
+                            } else {
+                                return Err(miette!("s3-config.region requires a value"));
+                            }
+                        }
+                        "force-path-style" => {
+                            if let Some(value) = value {
+                                config.force_path_style = value.parse().into_diagnostic()?;
+                            } else {
+                                return Err(miette!("s3-config.force-path-style requires a value"));
+                            }
+                        }
+                        _ => return Err(err),
+                    }
+
+                } else {
+                    return Err(miette!("Cannot set s3-config subkeys without s3-config being present"));
+                }
+            }
             key if key.starts_with(EXPERIMENTAL) => {
                 if key == EXPERIMENTAL {
                     if let Some(value) = value {
@@ -1294,8 +1313,15 @@ impl Config {
             .finish()
     }
 
-    pub fn compute_s3_config(&self) -> Option<rattler_networking::s3_middleware::S3Config> {
-        panic!("todo");
+    pub fn compute_s3_config(&self) -> s3_middleware::S3Config {
+        match self.s3_config.clone() {
+            Some(config) => s3_middleware::S3Config::Custom {
+                endpoint_url: config.endpoint_url,
+                region: config.region,
+                force_path_style: config.force_path_style,
+            },
+            None => s3_middleware::S3Config::FromAWS,
+        }
     }
 }
 
@@ -1447,6 +1473,38 @@ UNUSED = "unused"
     }
 
     #[test]
+    fn test_s3_config_parse() {
+        let toml = r#"
+            [s3-config]
+            endpoint-url = "https://my-s3-host"
+            region = "us-east-1"
+            force-path-style = false
+        "#;
+        let (config, _) = Config::from_toml(toml).unwrap();
+        let s3_config = config.s3_config.unwrap();
+        assert_eq!(
+            s3_config.endpoint_url,
+            Url::parse("https://my-s3-host").unwrap()
+        );
+        assert_eq!(s3_config.region, "us-east-1");
+        assert_eq!(s3_config.force_path_style, false);
+    }
+
+
+    #[test]
+    fn test_s3_config_invalid_config() {
+        let toml = r#"
+            [s3-config]
+            endpoint-url = "https://my-s3-host"
+            region = "us-east-1"
+            # force-path-style = false
+        "#;
+        let result = Config::from_toml(toml);
+        assert!(result.is_err());
+        assert!(result.err().unwrap().to_string().contains("missing field `force-path-style`"));
+    }
+
+    #[test]
     fn test_default_config() {
         let config = Config::default();
         // This depends on the system so it's hard to test.
@@ -1487,6 +1545,11 @@ UNUSED = "unused"
                 index_url: Some(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
                 keyring_provider: Some(KeyringProvider::Subprocess),
             },
+            s3_config: Some(S3Config{
+                endpoint_url: Url::parse("https://my-s3-host").unwrap(),
+                region: "us-east-1".to_string(),
+                force_path_style: false,
+            }),
             repodata_config: RepodataConfig {
                 default: RepodataChannelConfig {
                     disable_bzip2: Some(true),
@@ -1516,6 +1579,11 @@ UNUSED = "unused"
                 solves: 5,
                 ..ConcurrencyConfig::default()
             },
+            s3_config: Some(S3Config{
+                endpoint_url: Url::parse("https://my-s3-host").unwrap(),
+                region: "us-east-1".to_string(),
+                force_path_style: false,
+            }),
             ..Default::default()
         };
         config = config.merge_config(other);
@@ -1528,6 +1596,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
+        assert!(config.s3_config.is_some());
 
         let other2 = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("channel").unwrap()],
@@ -1550,6 +1619,7 @@ UNUSED = "unused"
             Some(PathBuf::from("/path/to/envs2"))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
+        assert!(config.s3_config.is_some());
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
