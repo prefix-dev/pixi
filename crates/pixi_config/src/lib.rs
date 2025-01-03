@@ -280,15 +280,15 @@ pub struct PyPIConfig {
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct S3Config {
-    /// The default index URL for PyPI packages.
-    #[serde(default)]
+    /// S3 endpoint URL
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub config_file: Option<PathBuf>,
-    /// A list of extra index URLs for PyPI packages
-    #[serde(default)]
+    pub endpoint_url: Option<String>,
+
+    /// The name of the S3 region
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub profile: Option<String>,
-    /// Whether to use the `keyring` executable to look up credentials.
+    pub region: Option<String>,
+
+    /// Force path style URLs instead of subdomain style
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub force_path_style: Option<bool>,
@@ -453,15 +453,15 @@ impl PyPIConfig {
 }
 
 impl S3Config {
-    /// Merge the given PyPIConfig into the current one.
+    /// Merge the given S3Config into the current one.
     pub fn merge(self, other: Self) -> Self {
-        let config_file = match other.config_file {
+        let endpoint_url = match other.endpoint_url {
             Some(path) => Some(path),
-            None => self.config_file,
+            None => self.endpoint_url,
         };
-        let profile = match other.profile {
-            Some(profile) => Some(profile),
-            None => self.profile,
+        let region = match other.region {
+            Some(region) => Some(region),
+            None => self.region,
         };
         let force_path_style = match other.force_path_style {
             Some(force_path_style) => Some(force_path_style),
@@ -469,14 +469,14 @@ impl S3Config {
         };
 
         Self {
-            config_file,
-            profile,
+            endpoint_url,
+            region,
             force_path_style,
         }
     }
 
     fn is_default(&self) -> bool {
-        self.config_file.is_none() && self.profile.is_none() && self.force_path_style.is_none()
+        self.endpoint_url.is_none() && self.region.is_none() && self.force_path_style.is_none()
     }
 }
 

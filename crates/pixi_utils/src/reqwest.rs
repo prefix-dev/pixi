@@ -111,7 +111,7 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
 
     client_builder = client_builder.with(GCSMiddleware);
 
-    client_builder = client_builder.with(S3Middleware::new(None, None, Some(true)));
+    client_builder = client_builder.with(S3Middleware::new(None));
 
     client_builder = client_builder.with_arc(Arc::new(
         auth_middleware(&config).expect("could not create auth middleware"),
