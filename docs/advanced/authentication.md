@@ -8,6 +8,8 @@ You can authenticate pixi with a server like prefix.dev, a private quetz instanc
 Different servers use different authentication methods.
 In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.
 
+TODO: update --help string
+
 ```shell
 Usage: pixi auth login [OPTIONS] <HOST>
 
@@ -53,6 +55,17 @@ Login to a basic HTTP secured server:
 pixi auth login myserver.com --username user --password password
 ```
 
+Login to an S3 bucket:
+
+```shell
+pixi auth login s3://my-bucket --access-key-id <access-key-id> --secret-access-key <secret-access-key>
+# if your key uses a session token, you can also use:
+pixi auth login s3://my-bucket --access-key-id <access-key-id> --secret-access-key <secret-access-key> --session-token <session-token>
+```
+
+!!!note
+    S3 authentication is also supported through AWS's typical `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, see the [S3 section](../advanced/s3.md) for more details.
+
 ## Where does pixi store the authentication information?
 
 The storage location for the authentication information is system-dependent. By default, pixi tries to use the keychain to store this sensitive information securely on your machine.
@@ -96,6 +109,13 @@ The JSON should follow the following format:
     },
     "conda.anaconda.org": {
         "CondaToken": "your_token"
+    },
+    "s3://my-bucket": {
+        "S3Credentials": {
+            "access_key_id": "my-access-key-id",
+            "secret_access_key": "my-secret-access-key",
+            "session_token": null
+        }
     }
 }
 ```

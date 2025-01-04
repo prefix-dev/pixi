@@ -78,6 +78,8 @@ use-environment-activation-cache = true
   "https://conda.anaconda.org/bioconda",
   # OCI registries are also supported
   "oci://ghcr.io/channel-mirrors/bioconda",
+  # S3-compatible storage is also supported
+  "s3://my-s3-bucket/bioconda",
   "https://prefix.dev/bioconda",
 ]
 #  --8<-- [end:mirrors]
