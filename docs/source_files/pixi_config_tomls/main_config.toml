@@ -50,6 +50,13 @@ keyring-provider = "subprocess"
 allow-insecure-host = ["localhost:8080"]
 #  --8<-- [end:pypi-config]
 
+#  --8<-- [start:s3-config]
+[s3-config]
+endpoint-url = "https://my-s3-compatible-host.com"
+region = "us-east-1"
+force-path-style = true
+#  --8<-- [end:s3-config]
+
 #  --8<-- [start:concurrency]
 [concurrency]
 # The maximum number of concurrent downloads
