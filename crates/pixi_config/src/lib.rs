@@ -1186,10 +1186,10 @@ impl Config {
                         return Err(miette!("s3-config requires a value"));
                     }
                     return Ok(());
-                } else if !key.starts_with("s3-config.") {
-                    return Err(err);
                 }
-                let subkey = key.strip_prefix("s3-config.").unwrap();
+                let Some(subkey) = key.strip_prefix("s3-config.") else {
+                    return Err(err);
+                };
                 if let Some(ref mut config) = self.s3_config {
                     match subkey {
                         "endpoint-url" => {
@@ -1488,7 +1488,7 @@ UNUSED = "unused"
             Url::parse("https://my-s3-host").unwrap()
         );
         assert_eq!(s3_config.region, "us-east-1");
-        assert_eq!(s3_config.force_path_style, false);
+        assert!(!s3_config.force_path_style);
     }
 
     #[test]
