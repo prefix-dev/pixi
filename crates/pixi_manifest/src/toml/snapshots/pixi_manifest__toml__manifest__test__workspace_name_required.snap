@@ -4,10 +4,10 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = 
 ---
   × Missing field `name`
    ╭─[pixi.toml:2:9]
- 1 │     
+ 1 │
  2 │ ╭─▶         [workspace]
  3 │ │           channels = []
  4 │ │           platforms = []
  5 │ ╰─▶         preview = ["pixi-build"]
- 6 │             
+ 6 │
    ╰────

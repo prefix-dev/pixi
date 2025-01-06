@@ -1,0 +1,9 @@
+---
+source: crates/pixi_manifest/src/toml/package.rs
+expression: "expect_parse_failure(r#\"version = \"a!0\"\"#)"
+---
+  × malformed version string 'a!0': encountered more characters but expected none
+   ╭─[pixi.toml:1:12]
+ 1 │ version = "a!0"
+   ·            ───
+   ╰────
