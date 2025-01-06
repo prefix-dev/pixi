@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::capabilities::{BackendCapabilities, FrontendCapabilities};
-
 pub const METHOD_NAME: &str = "initialize";
 
 /// Parameters for the initialize request.
@@ -25,9 +23,6 @@ pub struct InitializeParams {
     /// The manifest that the build backend should use.
     pub manifest_path: PathBuf,
 
-    /// The capabilities that the frontend provides.
-    pub capabilities: FrontendCapabilities,
-
     /// Optionally the cache directory to use for any caching activity.
     pub cache_directory: Option<PathBuf>,
 }
@@ -35,7 +30,4 @@ pub struct InitializeParams {
 /// The result of the initialize request.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InitializeResult {
-    /// The capabilities that the backend provides.
-    pub capabilities: BackendCapabilities,
-}
+pub struct InitializeResult {}

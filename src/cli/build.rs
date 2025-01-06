@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use clap::{ArgAction, Parser};
+use clap::Parser;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
@@ -34,10 +34,6 @@ pub struct Args {
     /// The output directory to place the build artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
-
-    /// Use system backend installed tool
-    #[arg(long, action = ArgAction::SetTrue)]
-    pub with_system: bool,
 }
 
 struct ProgressReporter {

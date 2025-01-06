@@ -13,7 +13,15 @@ use jsonrpsee::{
     types::ErrorCode,
 };
 
+use crate::{
+    jsonrpc::{stdio_transport, RpcParams},
+    tool::Tool,
+    CondaBuildReporter, CondaMetadataReporter,
+};
 use miette::Diagnostic;
+use pixi_build_types::procedures::negotiate_capabilities::{
+    NegotiateCapabilitiesParams, NegotiateCapabilitiesResult,
+};
 use pixi_build_types::{
     procedures::{
         self,
@@ -29,12 +37,6 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::ChildStderr,
     sync::{oneshot, Mutex},
-};
-
-use crate::{
-    jsonrpc::{stdio_transport, RpcParams},
-    tool::Tool,
-    CondaBuildReporter, CondaMetadataReporter,
 };
 
 pub mod builders;
@@ -93,8 +95,8 @@ impl ProtocolError {
     }
 }
 
-/// Protocol trait that is responsible to setup and communicate with the backend.
-/// This allow us to hide the jsonrpc communication hidden in this protocol.
+/// Protocol trait that is responsible for setting up and communicate with the backend.
+/// This allows us to hide the JSON-RPC communication hidden in this protocol.
 /// This protocol is generic over the manifest what are passed to the build backends.
 /// This means that, for rattler-build, the manifest is a recipe.yaml file,
 /// and for pixi it's a pixi.toml or a pyproject.toml file.
@@ -140,7 +142,7 @@ impl JsonRPCBuildProtocol {
         }
     }
 
-    /// Setup a new protocol instance.
+    /// Set up a new protocol instance.
     /// This will spawn a new backend process and establish a JSON-RPC connection.
     async fn setup(
         source_dir: PathBuf,
@@ -186,7 +188,7 @@ impl JsonRPCBuildProtocol {
         .await
     }
 
-    /// Setup a new protocol instance with a given transport.
+    /// Set up a new protocol instance with a given transport.
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn setup_with_transport(
         backend_identifier: String,
@@ -204,13 +206,30 @@ impl JsonRPCBuildProtocol {
             .request_timeout(std::time::Duration::from_secs(86400))
             .build_with_tokio(sender, receiver);
 
+        // Negotiate the capabilities with the backend.
+        let negotiate_result: NegotiateCapabilitiesResult = client
+            .request(
+                procedures::negotiate_capabilities::METHOD_NAME,
+                RpcParams::from(NegotiateCapabilitiesParams {
+                    capabilities: FrontendCapabilities {},
+                }),
+            )
+            .await
+            .map_err(|err| {
+                ProtocolError::from_client_error(
+                    backend_identifier.clone(),
+                    err,
+                    procedures::negotiate_capabilities::METHOD_NAME,
+                )
+            })?;
+
+        // TODO: select the correct protocol version based on the capabilities
         // Invoke the initialize method on the backend to establish the connection.
-        let result: InitializeResult = client
+        let _result: InitializeResult = client
             .request(
                 procedures::initialize::METHOD_NAME,
                 RpcParams::from(InitializeParams {
                     manifest_path: manifest_path.clone(),
-                    capabilities: FrontendCapabilities {},
                     cache_directory: cache_dir,
                 }),
             )
@@ -228,7 +247,7 @@ impl JsonRPCBuildProtocol {
             backend_identifier,
             source_dir,
             manifest_path,
-            result.capabilities,
+            negotiate_result.capabilities,
             build_id,
             stderr.map(Mutex::new).map(Arc::new),
         ))
