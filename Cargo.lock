@@ -3483,7 +3483,7 @@ dependencies = [
  "serde",
  "unicode-width 0.2.0",
  "unscanny",
- "version-ranges 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -3505,7 +3505,7 @@ dependencies = [
  "unicode-width 0.2.0",
  "url",
  "urlencoding",
- "version-ranges 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -4198,7 +4198,7 @@ dependencies = [
  "priority-queue",
  "rustc-hash",
  "thiserror 2.0.9",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=57832d0588fbb7aab824813481104761dc1c7740)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -6828,7 +6828,7 @@ dependencies = [
  "uv-pep508",
  "uv-platform-tags",
  "uv-pypi-types",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=57832d0588fbb7aab824813481104761dc1c7740)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -7044,7 +7044,7 @@ dependencies = [
  "tracing",
  "unicode-width 0.1.14",
  "unscanny",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=57832d0588fbb7aab824813481104761dc1c7740)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -7066,7 +7066,7 @@ dependencies = [
  "uv-fs",
  "uv-normalize",
  "uv-pep440",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=57832d0588fbb7aab824813481104761dc1c7740)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -7419,15 +7419,6 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
-
-[[package]]
-name = "version-ranges"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8d079415ceb2be83fc355adbadafe401307d5c309c7e6ade6638e6f9f42f42d"
-dependencies = [
- "smallvec",
-]
 
 [[package]]
 name = "version-ranges"
