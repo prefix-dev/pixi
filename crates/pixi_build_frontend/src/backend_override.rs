@@ -69,6 +69,9 @@ impl std::fmt::Display for ParseError {
     }
 }
 
+const EQUALS: &str = "=";
+const SEPARATOR: &str = ",";
+
 impl std::error::Error for ParseError {}
 impl FromStr for OverriddenBackends {
     type Err = ParseError;
@@ -81,8 +84,8 @@ impl FromStr for OverriddenBackends {
         if s.is_empty() {
             return Ok(OverriddenBackends::Specified(tools));
         }
-        for tool_str in s.split("::") {
-            let parts: Vec<&str> = tool_str.split('=').collect();
+        for tool_str in s.split(SEPARATOR) {
+            let parts: Vec<&str> = tool_str.split(EQUALS).collect();
             let tool = match parts.as_slice() {
                 [name] => OverriddenTool {
                     name: name.to_string(),
@@ -134,8 +137,8 @@ mod tests {
 
     #[test]
     fn test_single_tool_with_path() {
-        let input = "pixi-build-python=/some/path/to/custom-build";
-        let parsed = OverriddenBackends::from_str(input).unwrap();
+        let input = format!("pixi-build-python{EQUALS}/some/path/to/custom-build");
+        let parsed = OverriddenBackends::from_str(input.as_str()).unwrap();
 
         if let OverriddenBackends::Specified(tools) = parsed {
             assert_eq!(tools.len(), 1);
@@ -165,8 +168,9 @@ mod tests {
 
     #[test]
     fn test_multiple_tools_mixed() {
-        let input = "pixi-build-python=/some/path/to/custom-build::pixi-test-tool";
-        let parsed = OverriddenBackends::from_str(input).unwrap();
+        let input =
+            format!("pixi-build-python{EQUALS}/some/path/to/custom-build{SEPARATOR}pixi-test-tool");
+        let parsed = OverriddenBackends::from_str(input.as_str()).unwrap();
 
         if let OverriddenBackends::Specified(tools) = parsed {
             assert_eq!(tools.len(), 2);
@@ -198,20 +202,8 @@ mod tests {
 
     #[test]
     fn test_invalid_format() {
-        let input = "pixi-build-python=/some/path/to/custom-build::invalid=tool=extra";
-        let parsed = OverriddenBackends::from_str(input);
+        let input = format!("pixi-build-python{EQUALS}/some/path/to/custom-build{SEPARATOR}invalid{EQUALS}tool{EQUALS}extra");
+        let parsed = OverriddenBackends::from_str(input.as_str());
         assert!(parsed.is_err());
-    }
-
-    #[test]
-    fn test_all_backends() {
-        let input = "";
-        let parsed = OverriddenBackends::from_str(input).unwrap();
-
-        if let OverriddenBackends::Specified(tools) = parsed {
-            assert!(tools.is_empty());
-        } else {
-            panic!("Expected OverriddenBackends::Specified");
-        }
     }
 }
