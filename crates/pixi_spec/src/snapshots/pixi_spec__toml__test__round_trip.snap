@@ -1,5 +1,5 @@
 ---
-source: crates/pixi_spec/src/serde.rs
+source: crates/pixi_spec/src/toml.rs
 expression: snapshot
 ---
 - input: 1.2.3

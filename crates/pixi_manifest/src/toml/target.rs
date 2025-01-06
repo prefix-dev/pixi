@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use pixi_spec::PixiSpec;
-use serde::Deserialize;
-use serde_with::serde_as;
+use pixi_toml::{TomlHashMap, TomlIndexMap};
+use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use crate::{
     error::FeatureNotEnabled,
@@ -14,32 +14,18 @@ use crate::{
     WorkspaceTarget,
 };
 
-#[serde_as]
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[serde(deny_unknown_fields)]
+#[derive(Debug, Default)]
 pub struct TomlTarget {
-    #[serde(default)]
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-
-    #[serde(default)]
     pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
 
     /// Additional information to activate an environment.
-    #[serde(default)]
     pub activation: Option<Activation>,
 
     /// Target specific tasks to run in the environment
-    #[serde(default)]
     pub tasks: HashMap<TaskName, Task>,
 }
 
@@ -162,4 +148,35 @@ pub(super) fn combine_target_dependencies(
     iter.into_iter()
         .filter_map(|(ty, deps)| deps.map(|deps| (ty, deps.value.into())))
         .collect()
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlTarget {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let dependencies = th.optional("dependencies");
+        let host_dependencies = th.optional("host-dependencies");
+        let build_dependencies = th.optional("build-dependencies");
+        let run_dependencies = th.optional("run-dependencies");
+        let pypi_dependencies = th
+            .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
+            .map(TomlIndexMap::into_inner);
+        let activation = th.optional("activation");
+        let tasks = th
+            .optional::<TomlHashMap<_, _>>("tasks")
+            .map(TomlHashMap::into_inner)
+            .unwrap_or_default();
+
+        th.finalize(None)?;
+
+        Ok(TomlTarget {
+            dependencies,
+            host_dependencies,
+            build_dependencies,
+            run_dependencies,
+            pypi_dependencies,
+            activation,
+            tasks,
+        })
+    }
 }

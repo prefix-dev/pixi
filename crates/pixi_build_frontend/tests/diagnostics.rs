@@ -6,7 +6,7 @@ use jsonrpsee::types::Request;
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest};
 use pixi_build_types::procedures::initialize::InitializeParams;
-use pixi_manifest::toml::{ExternalWorkspaceProperties, TomlManifest};
+use pixi_manifest::toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, BufReader};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::{

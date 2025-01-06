@@ -81,8 +81,7 @@ test1 = "*"
 
 [tasks]
 build = "conda build ."
-# deprecated depends_on
-test = { cmd = "pytest", cwd = "tests", depends_on = [
+test = { cmd = "pytest", cwd = "tests", depends-on = [
   "build",
 ], description = "Run tests using pytests after building." }
 test2 = { cmd = "pytest", cwd = "tests" }

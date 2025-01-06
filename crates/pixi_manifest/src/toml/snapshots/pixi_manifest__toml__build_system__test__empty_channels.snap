@@ -7,5 +7,5 @@ expression: "expect_parse_failure(r#\"\n            build-backend = { name = \"f
  2 │             build-backend = { name = "foobar", version = "*" }
  3 │             channels = []
    ·                        ──
- 4 │         
+ 4 │
    ╰────
