@@ -1070,27 +1070,6 @@
   
   
   
-    <li class="md-nav__item">
-      <a href="../../build/dependency_types/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Dependency Types
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
     
     
     
@@ -1101,10 +1080,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_2" >
         
           
-          <label class="md-nav__link" for="__nav_9_3" id="__nav_9_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_9_2" id="__nav_9_2_label" tabindex="0">
             
   
   <span class="md-ellipsis">
@@ -1115,8 +1094,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_3">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_2">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
           </label>
@@ -1188,6 +1167,48 @@
           </ul>
         </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../build/dependency_types/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Dependency Types
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../build/backends/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Build Backends
+  </span>
+  
+
+      </a>
     </li>
   
 
@@ -3141,11 +3162,8 @@ As shown in the example above, in the simplest of cases, it is possible to defin
 <h2 id="preview-features">Preview features<a class="headerlink" href="#preview-features" title="Permanent link">#</a></h2>
 <p>Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the <code>preview</code> field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value <code>true</code> to enable all preview features.</p>
 <p>An example of a preview feature in the project manifest:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span>
-</span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
-</span><span id="__span-45-4"><a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
-</span><span id="__span-45-5"><a id="__codelineno-45-5" name="__codelineno-45-5" href="#__codelineno-45-5"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>Preview features in the documentation will be marked as such on the relevant pages.</p>
 <h2 id="pixi-build">Pixi Build<a class="headerlink" href="#pixi-build" title="Permanent link">#</a></h2>
@@ -3158,7 +3176,8 @@ To use this keyword the preview feature <em>does not</em> need to be enabled, bu
 <p>The package section is used to define the package that is built by the project.
 Pixi only allows this table if <code>preview = ["pixi-build"]</code> is set in <code>[workspace]</code>.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="k">[package]</span>
-</span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span>
+</span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;simple_python&quot;</span>
+</span><span id="__span-46-3"><a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
 </span></code></pre></div>
 <h3 id="host-build-dependencies">Host, Build, dependencies<a class="headerlink" href="#host-build-dependencies" title="Permanent link">#</a></h3>
 <p>The package section re-uses the <code>host-dependencies</code> and <code>build-dependencies</code>,
@@ -3168,8 +3187,8 @@ If you have the <code>preview = ["pixi-build"]</code> enabled these are interpre
 <p>Run dependencies are dependencies that are required at runtime by your package.
 For Python packages, these are the most common dependency types.
 For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="k">[package.run-dependencies]</span>
-</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="k">[run-dependencies]</span>
+</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
 </span></code></pre></div>
 <h3 id="the-build-system">The <code>build-system</code><a class="headerlink" href="#the-build-system" title="Permanent link">#</a></h3>
 <p>The build system specifies how the package can be built.
@@ -3182,7 +3201,7 @@ The build system is a table that can contain the following fields:</p>
 </ul>
 </li>
 </ul>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="k">[build-system]</span><span class="w"> </span><span class="c1"># (5)!</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="k">[build-system]</span>
 </span><span id="__span-48-2"><a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-python&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-48-3"><a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
 </span><span id="__span-48-4"><a id="__codelineno-48-4" name="__codelineno-48-4" href="#__codelineno-48-4"></a><span class="w">  </span><span class="s2">&quot;https://prefix.dev/pixi-build-backends&quot;</span><span class="p">,</span>
@@ -3192,7 +3211,7 @@ The build system is a table that can contain the following fields:</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>We are currently not publishing the backends on conda-forge, but will do so in the future.
-For now the backends are published at "https://prefix.dev/pixi-build-backends".</p>
+For now the backends are published at <a href="https://prefix.dev/channels/pixi-build-backends">conda channel</a>.</p>
 </div>
 
 
