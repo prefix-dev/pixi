@@ -4,8 +4,8 @@ expression: "expect_parse_failure(r#\"\n        version = \"a!0\"\n\n        [bu
 ---
   × malformed version string 'a!0': encountered more characters but expected none
    ╭─[pixi.toml:2:20]
- 1 │ 
+ 1 │
  2 │         version = "a!0"
    ·                    ───
- 3 │ 
+ 3 │
    ╰────

@@ -35,14 +35,66 @@ pub enum RequirementConversionError {
     InvalidVersion(#[from] ParseVersionSpecError),
 }
 
+#[derive(Default, Debug)]
+pub struct GenericError {
+    pub message: Cow<'static, str>,
+    pub span: Option<Range<usize>>,
+    pub span_label: Option<Cow<'static, str>>,
+    pub labels: Vec<LabeledSpan>,
+    pub help: Option<Cow<'static, str>>,
+}
+
+impl GenericError {
+    pub fn new(message: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            message: message.into(),
+            ..Default::default()
+        }
+    }
+
+    pub fn with_span(mut self, span: Range<usize>) -> Self {
+        self.span = Some(span);
+        self
+    }
+
+    pub fn with_span_label(mut self, span: impl Into<Cow<'static, str>>) -> Self {
+        self.span_label = Some(span.into());
+        self
+    }
+
+    pub fn with_opt_span(mut self, span: Option<Range<usize>>) -> Self {
+        self.span = span;
+        self
+    }
+
+    pub fn with_label(mut self, label: LabeledSpan) -> Self {
+        self.labels.push(label);
+        self
+    }
+
+    pub fn with_opt_label(mut self, text: impl Into<String>, range: Option<Range<usize>>) -> Self {
+        if let Some(range) = range {
+            self.labels.push(LabeledSpan::new_with_span(
+                Some(text.into()),
+                SourceSpan::from(range),
+            ));
+        }
+        self
+    }
+
+    pub fn with_help(mut self, help: impl Into<Cow<'static, str>>) -> Self {
+        self.help = Some(help.into());
+        self
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum TomlError {
     Error(toml_edit::TomlError),
     TomlError(toml_span::Error),
     NoPixiTable,
     MissingField(Cow<'static, str>, Option<Range<usize>>),
-    Generic(Cow<'static, str>, Option<Range<usize>>),
-    GenericLabels(Cow<'static, str>, Vec<LabeledSpan>),
+    Generic(GenericError),
     #[error(transparent)]
     FeatureNotEnabled(#[from] FeatureNotEnabled),
     TableError {
@@ -62,6 +114,12 @@ pub enum TomlError {
 impl From<toml_span::Error> for TomlError {
     fn from(value: Error) -> Self {
         TomlError::TomlError(value)
+    }
+}
+
+impl From<GenericError> for TomlError {
+    fn from(value: GenericError) -> Self {
+        TomlError::Generic(value)
     }
 }
 
@@ -92,8 +150,7 @@ impl Display for TomlError {
             },
             TomlError::NoPixiTable => write!(f, "Missing table `[tool.pixi.project]`"),
             TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
-            TomlError::Generic(key, _) => write!(f, "{key}"),
-            TomlError::GenericLabels(key, _) => write!(f, "{key}"),
+            TomlError::Generic(err) => write!(f, "{}", &err.message),
             TomlError::FeatureNotEnabled(err) => write!(f, "{err}"),
             TomlError::TableError { part, table_name } => write!(
                 f,
@@ -170,8 +227,17 @@ impl Diagnostic for FeatureNotEnabled {
 
 impl Diagnostic for TomlError {
     fn labels(&self) -> Option<Box<dyn Iterator<Item = LabeledSpan> + '_>> {
+        let mut additional_spans = None;
         let span = match self {
             TomlError::Error(err) => err.span().map(SourceSpan::from),
+            TomlError::Generic(GenericError { span, labels, .. }) => {
+                additional_spans = Some(labels.clone());
+                if labels.iter().all(|label| !label.primary()) {
+                    span.clone().map(SourceSpan::from)
+                } else {
+                    None
+                }
+            }
             TomlError::TomlError(toml_span::Error { kind, span, .. }) => match kind {
                 toml_span::ErrorKind::UnexpectedKeys { keys, .. } => {
                     let mut labels = Vec::new();
@@ -199,10 +265,7 @@ impl Diagnostic for TomlError {
                 _ => Some(SourceSpan::new(span.start.into(), span.end - span.start)),
             },
             TomlError::NoPixiTable => Some(SourceSpan::new(SourceOffset::from(0), 1)),
-            TomlError::Generic(_, span) | TomlError::MissingField(_, span) => {
-                span.clone().map(SourceSpan::from)
-            }
-            TomlError::GenericLabels(_, spans) => return Some(Box::new(spans.clone().into_iter())),
+            TomlError::MissingField(_, span) => span.clone().map(SourceSpan::from),
             TomlError::FeatureNotEnabled(err) => return err.labels(),
             TomlError::InvalidNonPackageDependencies(err) => return err.labels(),
             _ => None,
@@ -215,13 +278,19 @@ impl Diagnostic for TomlError {
                 kind: toml_span::ErrorKind::Deprecated { new, .. },
                 ..
             }) => Some(format!("replace this with '{}'", new)),
+            TomlError::Generic(GenericError { span_label, .. }) => {
+                span_label.clone().map(Cow::into_owned)
+            }
             _ => None,
         };
 
         if let Some(span) = span {
-            Some(Box::new(std::iter::once(
-                LabeledSpan::new_primary_with_span(message, span),
-            )))
+            Some(Box::new(
+                std::iter::once(LabeledSpan::new_primary_with_span(message, span))
+                    .chain(additional_spans.into_iter().flatten()),
+            ))
+        } else if let Some(additional_spans) = additional_spans {
+            Some(Box::new(additional_spans.into_iter()))
         } else {
             None
         }
@@ -271,6 +340,9 @@ impl Diagnostic for TomlError {
             },
             TomlError::FeatureNotEnabled(err) => err.help(),
             TomlError::InvalidNonPackageDependencies(err) => err.help(),
+            TomlError::Generic(GenericError { help, .. }) => help
+                .as_deref()
+                .map(|str| Box::new(str.to_string()) as Box<dyn Display>),
             _ => None,
         }
     }

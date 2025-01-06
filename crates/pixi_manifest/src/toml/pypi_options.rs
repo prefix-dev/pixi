@@ -179,10 +179,10 @@ mod test {
             @r###"
          × Expected one of 'first-index', 'unsafe-first-match', 'unsafe-best-match'
           ╭─[pixi.toml:2:27]
-        1 │ 
+        1 │
         2 │         index-strategy = "firstindex"
           ·                           ──────────
-        3 │         
+        3 │
           ╰────
          help: Did you mean 'first-index'?
         "###
@@ -199,10 +199,10 @@ mod test {
             @r###"
          × Expected one of 'first-index', 'unsafe-first-match', 'unsafe-best-match'
           ╭─[pixi.toml:2:27]
-        1 │ 
+        1 │
         2 │         index-strategy = "UnsafeFirstMatch"
           ·                           ────────────────
-        3 │         
+        3 │
           ╰────
          help: Did you mean 'unsafe-first-match'?
         "###
@@ -219,10 +219,10 @@ mod test {
             @r###"
          × Expected one of 'first-index', 'unsafe-first-match', 'unsafe-best-match'
           ╭─[pixi.toml:2:27]
-        1 │ 
+        1 │
         2 │         index-strategy = "foobar"
           ·                           ──────
-        3 │         
+        3 │
           ╰────
         "###
         )

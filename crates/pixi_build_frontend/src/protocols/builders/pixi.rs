@@ -160,19 +160,16 @@ impl ProtocolBuilder {
             backend_spec
         } else {
             let build_system = &self.package_manifest.build;
-            let specs = [(
-                &build_system.backend.name,
-                &build_system.backend.spec,
-            )]
-            .into_iter()
-            .chain(build_system.additional_dependencies.iter())
-            .map(|(name, spec)| {
-                spec.clone()
-                    .try_into_nameless_match_spec(&channel_config)
-                    .map(|spec| MatchSpec::from_nameless(spec, Some(name.clone())))
-            })
-            .collect::<Result<_, _>>()
-            .map_err(FinishError::SpecConversionError)?;
+            let specs = [(&build_system.backend.name, &build_system.backend.spec)]
+                .into_iter()
+                .chain(build_system.additional_dependencies.iter())
+                .map(|(name, spec)| {
+                    spec.clone()
+                        .try_into_nameless_match_spec(&channel_config)
+                        .map(|spec| MatchSpec::from_nameless(spec, Some(name.clone())))
+                })
+                .collect::<Result<_, _>>()
+                .map_err(FinishError::SpecConversionError)?;
 
             // Figure out the channels to use
             let channels = build_system.channels.clone().unwrap_or_else(|| {

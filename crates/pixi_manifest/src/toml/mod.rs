@@ -7,6 +7,7 @@ mod manifest;
 mod package;
 mod package_target;
 mod platform;
+mod preview;
 mod pypi_options;
 mod pyproject;
 mod system_requirements;

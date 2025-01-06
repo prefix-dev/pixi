@@ -6,6 +6,7 @@ use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
 
 use crate::{
     build_system::BuildBackend,
+    error::GenericError,
     utils::{package_map::UniquePackageMap, PixiSpanned},
     PackageBuild, TomlError,
 };
@@ -26,14 +27,11 @@ pub struct TomlBuildBackend {
 impl TomlPackageBuild {
     pub fn into_build_system(self) -> Result<PackageBuild, TomlError> {
         // Parse the build backend and ensure it is a binary spec.
-        let build_backend_spec = self
-            .backend
-            .value
-            .spec
-            .into_binary_spec()
-            .map_err(|e| {
-                TomlError::Generic(e.to_string().into(), self.backend.span.clone())
-            })?;
+        let build_backend_spec = self.backend.value.spec.into_binary_spec().map_err(|e| {
+            TomlError::Generic(
+                GenericError::new(e.to_string()).with_opt_span(self.backend.span.clone()),
+            )
+        })?;
 
         // Convert the additional dependencies and make sure that they are binary.
         let additional_dependencies = self
@@ -50,8 +48,10 @@ impl TomlPackageBuild {
                         .or_else(|| self.additional_dependencies.name_spans.get(&name))
                         .cloned();
                     Err(TomlError::Generic(
-                        "Cannot use source dependencies for build backends dependencies".into(),
-                        spec_range,
+                        GenericError::new(
+                            "Cannot use source dependencies for build backends dependencies",
+                        )
+                        .with_opt_span(spec_range),
                     ))
                 }
             })
@@ -61,8 +61,8 @@ impl TomlPackageBuild {
         if let Some(channels) = &self.channels {
             if channels.value.is_empty() {
                 return Err(TomlError::Generic(
-                    "No channels specified for the build backend dependencies".into(),
-                    channels.span(),
+                    GenericError::new("No channels specified for the build backend dependencies")
+                        .with_opt_span(channels.span()),
                 ));
             }
         }

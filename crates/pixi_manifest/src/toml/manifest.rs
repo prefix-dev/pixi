@@ -139,10 +139,12 @@ impl TomlManifest {
             tasks: self.tasks,
         };
 
-        let default_workspace_target = default_top_level_target.into_workspace_target(preview)?;
+        let default_workspace_target =
+            default_top_level_target.into_workspace_target(None, preview)?;
         let mut workspace_targets = IndexMap::new();
         for (selector, target) in self.target {
-            let workspace_target = target.into_workspace_target(preview)?;
+            let workspace_target =
+                target.into_workspace_target(Some(selector.value.clone()), preview)?;
             workspace_targets.insert(selector, workspace_target);
         }
 
@@ -541,6 +543,25 @@ mod test {
         [workspace]
         channels = []
         platforms = []
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_target_workspace_dependencies() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [package]
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
+
+        [target.osx-64.build-dependencies]
         "#,
         ));
     }

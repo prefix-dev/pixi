@@ -6,10 +6,12 @@ use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use crate::{
+    error::GenericError,
     pypi::PyPiPackageName,
+    toml::preview::TomlPreview,
     utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, KnownPreviewFeature, Preview, PyPiRequirement, SpecType, Task, TaskName, TomlError,
-    WorkspaceTarget,
+    Activation, KnownPreviewFeature, PyPiRequirement, SpecType, TargetSelector, Task, TaskName,
+    TomlError, WorkspaceTarget,
 };
 
 #[derive(Debug, Default)]
@@ -28,23 +30,36 @@ pub struct TomlTarget {
 
 impl TomlTarget {
     /// Called to convert this instance into a workspace target of a feature.
-    pub fn into_workspace_target(self, preview: &Preview) -> Result<WorkspaceTarget, TomlError> {
+    pub fn into_workspace_target(
+        self,
+        target: Option<TargetSelector>,
+        preview: &TomlPreview,
+    ) -> Result<WorkspaceTarget, TomlError> {
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
         if pixi_build_enabled {
             if let Some(host_dependencies) = self.host_dependencies {
                 return Err(TomlError::Generic(
-                    "[host-dependencies] in features are not supported when `pixi-build` is enabled."
-                        .into(),
-                    host_dependencies.span,
-                ));
+                    GenericError::new("When `pixi-build` is enabled, host-dependencies can only be specified for a package.")
+                        .with_opt_span(host_dependencies.span)
+                        .with_span_label("host-dependencies specified here")
+                        .with_help(match target {
+                            None => "Did you mean [package.host-dependencies]?".to_string(),
+                            Some(selector) => format!("Did you mean [package.target.{}.host-dependencies]?", selector),
+                        })
+                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))));
             }
 
             if let Some(build_dependencies) = self.build_dependencies {
                 return Err(TomlError::Generic(
-                    "[build-dependencies] in features are not supported when `pixi-build` is enabled."
-                        .into(),
-                    build_dependencies.span,
+                    GenericError::new("When `pixi-build` is enabled, build-dependencies can only be specified for a package.")
+                        .with_opt_span(build_dependencies.span)
+                        .with_span_label("build-dependencies specified here")
+                        .with_help(match target {
+                            None => "Did you mean [package.build-dependencies]?".to_string(),
+                            Some(selector) => format!("Did you mean [package.target.{}.build-dependencies]?", selector),
+                        })
+                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))
                 ));
             }
         }

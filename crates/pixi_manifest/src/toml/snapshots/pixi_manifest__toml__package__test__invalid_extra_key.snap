@@ -1,8 +1,9 @@
 ---
 source: crates/pixi_manifest/src/toml/package.rs
-expression: "expect_parse_failure(r#\"\n        foo = \"bar\"\n        name = \"bla\"\n        extra = \"key\"\n        \"#,)"
+expression: "expect_parse_failure(r#\"\n        foo = \"bar\"\n        name = \"bla\"\n        extra = \"key\"\n\n        [build]\n        backend = { name = \"bla\", version = \"1.0\" }\n        \"#,)"
 ---
-  × Unexpected keys, expected only 'name', 'version', 'description', 'authors', 'license', 'license-file', 'readme', 'homepage', 'repository', 'documentation'
+  × Unexpected keys, expected only 'name', 'version', 'description', 'authors', 'license', 'license-file', 'readme', 'homepage', 'repository', 'documentation', 'host-dependencies', 'build-
+  │ dependencies', 'run-dependencies', 'build', 'target'
    ╭─[pixi.toml:2:9]
  1 │
  2 │         foo = "bar"

@@ -7,9 +7,11 @@ use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Val
 use url::Url;
 
 use crate::{
-    preview::Preview, pypi::pypi_options::PypiOptions, toml::platform::TomlPlatform,
-    utils::PixiSpanned, workspace::ChannelPriority, PrioritizedChannel, TargetSelector, Targets,
-    TomlError, Workspace,
+    pypi::pypi_options::PypiOptions,
+    toml::{platform::TomlPlatform, preview::TomlPreview},
+    utils::PixiSpanned,
+    workspace::ChannelPriority,
+    PrioritizedChannel, TargetSelector, Targets, TomlError, Workspace,
 };
 
 #[derive(Debug, Clone)]
@@ -38,7 +40,7 @@ pub struct TomlWorkspace {
     pub documentation: Option<Url>,
     pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
     pub pypi_options: Option<PypiOptions>,
-    pub preview: Preview,
+    pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
 
@@ -88,7 +90,7 @@ impl TomlWorkspace {
             platforms: self.platforms,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
-            preview: self.preview,
+            preview: self.preview.into(),
             build_variants: Targets::from_default_and_user_defined(
                 self.build_variants,
                 self.target

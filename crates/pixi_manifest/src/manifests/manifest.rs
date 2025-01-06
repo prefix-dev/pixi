@@ -25,9 +25,9 @@ use crate::{
     pyproject::{PyProjectManifest, PyProjectToManifestError},
     to_options,
     toml::{ExternalWorkspaceProperties, TomlDocument, TomlManifest},
-    PackageBuild, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, SystemRequirements,
-    TargetSelector, Task, TaskName, WorkspaceManifest, WorkspaceTarget,
+    DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
+    GetFeatureError, PackageBuild, PrioritizedChannel, PypiDependencyLocation, SpecType,
+    SystemRequirements, TargetSelector, Task, TaskName, WorkspaceManifest, WorkspaceTarget,
 };
 
 #[derive(Debug, Clone)]
@@ -809,7 +809,6 @@ impl Manifest {
 mod tests {
     use std::str::FromStr;
 
-    use glob::glob;
     use indexmap::IndexMap;
     use insta::assert_snapshot;
     use miette::NarratableReportHandler;
@@ -2351,22 +2350,12 @@ bar = "*"
         "###);
     }
 
-    #[test]
-    fn test_docs_pixi_manifests() {
-        let location = "../../docs/source_files/pixi_tomls/*.toml";
-
-        // Check that the glob is not empty
-        assert!(glob(location).unwrap().count() > 0);
-
-        for entry in glob(location).unwrap() {
-            match entry {
-                Ok(path) => {
-                    let contents = fs_err::read_to_string(path).unwrap();
-                    let _manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
-                }
-                Err(e) => println!("{:?}", e),
-            }
-        }
+    #[rstest]
+    fn test_docs_pixi_manifests(
+        #[files("../../docs/source_files/pixi_tomls/*.toml")] manifest_path: PathBuf,
+    ) {
+        let contents = fs_err::read_to_string(manifest_path).unwrap();
+        let _manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
     }
 
     #[test]

@@ -7,11 +7,11 @@ use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    toml::{platform::TomlPlatform, TomlPrioritizedChannel, TomlTarget},
+    toml::{platform::TomlPlatform, preview::TomlPreview, TomlPrioritizedChannel, TomlTarget},
     utils::{package_map::UniquePackageMap, PixiSpanned},
     workspace::ChannelPriority,
-    Activation, Feature, FeatureName, Preview, PyPiRequirement, SystemRequirements, TargetSelector,
-    Targets, Task, TaskName, TomlError,
+    Activation, Feature, FeatureName, PyPiRequirement, SystemRequirements, TargetSelector, Targets,
+    Task, TaskName, TomlError,
 };
 
 #[derive(Debug)]
@@ -37,7 +37,11 @@ pub struct TomlFeature {
 }
 
 impl TomlFeature {
-    pub fn into_feature(self, name: FeatureName, preview: &Preview) -> Result<Feature, TomlError> {
+    pub fn into_feature(
+        self,
+        name: FeatureName,
+        preview: &TomlPreview,
+    ) -> Result<Feature, TomlError> {
         let default_target = TomlTarget {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
@@ -46,11 +50,11 @@ impl TomlFeature {
             activation: self.activation,
             tasks: self.tasks,
         }
-        .into_workspace_target(preview)?;
+        .into_workspace_target(None, preview)?;
 
         let mut targets = IndexMap::new();
         for (selector, target) in self.target {
-            let target = target.into_workspace_target(preview)?;
+            let target = target.into_workspace_target(Some(selector.value.clone()), preview)?;
             targets.insert(selector, target);
         }
 

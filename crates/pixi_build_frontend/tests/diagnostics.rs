@@ -134,8 +134,8 @@ async fn test_invalid_backend() {
     version = "0.1.0"
     name = "project"
 
-    [build-system]
-    build-backend = { name = "ipc", version = "*" }
+    [package.build]
+    backend = { name = "ipc", version = "*" }
     "#;
 
     let (frontend_tx, backend_rx) = pipe();
