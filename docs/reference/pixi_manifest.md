@@ -797,12 +797,8 @@ Pixi sometimes introduces new features that are not yet stable, but that we woul
 
 An example of a preview feature in the project manifest:
 
-```toml title="pixi.toml"
-[workspace]
-name = "foo"
-channels = []
-platforms = []
-preview = ["pixi-build"]
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
 ```
 
 Preview features in the documentation will be marked as such on the relevant pages.
@@ -823,8 +819,7 @@ The package section is used to define the package that is built by the project.
 Pixi only allows this table if `preview = ["pixi-build"]` is set in `[workspace]`.
 
 ```toml
-[package]
-version = "1.0.0"
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:package"
 ```
 
 ### Host, Build, dependencies
@@ -840,8 +835,7 @@ For Python packages, these are the most common dependency types.
 For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.
 
 ```toml
-[package.run-dependencies]
-rich = "*"
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:run-dependencies"
 ```
 
 ### The `build-system`
@@ -855,14 +849,9 @@ The build system is a table that can contain the following fields:
   - `version`: the version of the build backend to use.
 
 ```toml
-[build-system] # (5)!
-build-backend = { name = "pixi-build-python", version = "*" }
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
 !!! note
     We are currently not publishing the backends on conda-forge, but will do so in the future.
-    For now the backends are published at "https://prefix.dev/pixi-build-backends".
+    For now the backends are published at [conda channel](https://prefix.dev/channels/pixi-build-backends).
