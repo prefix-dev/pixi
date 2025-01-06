@@ -13,10 +13,11 @@ use thiserror::Error;
 use which::Error;
 
 use crate::{
+    backend_override::BackendOverride,
     jsonrpc::{Receiver, Sender},
     protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
-    BackendOverride, InProcessBackend, ToolContext,
+    InProcessBackend, ToolContext,
 };
 // use super::{InitializeError, JsonRPCBuildProtocol};
 
@@ -27,7 +28,7 @@ pub struct ProtocolBuilder {
     manifest_path: PathBuf,
     workspace_manifest: WorkspaceManifest,
     package_manifest: PackageManifest,
-    override_backend_spec: Option<ToolSpec>,
+    backend_override: Option<BackendOverride>,
     channel_config: Option<ChannelConfig>,
     cache_dir: Option<PathBuf>,
 }
@@ -85,18 +86,16 @@ impl ProtocolBuilder {
             manifest_path,
             workspace_manifest,
             package_manifest,
-            override_backend_spec: None,
+            backend_override: None,
             channel_config: None,
             cache_dir: None,
         }
     }
 
     /// Sets an optional backend override.
-    pub fn with_backend_override(self, backend_override: Option<BackendOverride>) -> Self {
+    pub fn with_backend_override(self, backend_override: BackendOverride) -> Self {
         Self {
-            override_backend_spec: backend_override
-                .map(BackendOverride::into_spec)
-                .or(self.override_backend_spec),
+            backend_override: Some(backend_override),
             ..self
         }
     }
@@ -143,12 +142,59 @@ impl ProtocolBuilder {
         Ok(None)
     }
 
+    fn get_tool_spec(&self, channel_config: &ChannelConfig) -> Result<ToolSpec, FinishError> {
+        // The tool is either overridden or its not, with pixi the backend is specified in the toml
+        // so it's unclear if we need to override the tool until this point, lets check that now
+        if let Some(backend_override) = self.backend_override.as_ref() {
+            let tool_name = self
+                .package_manifest
+                .build_system
+                .build_backend
+                .name
+                .clone();
+            if let Some(tool) = backend_override.overridden_tool(tool_name.as_normalized()) {
+                return Ok(tool.as_spec());
+            }
+        }
+
+        // If we get here the tool is not overridden, so we use the isolated variant
+        let build_system = &self.package_manifest.build_system;
+        let specs = [(
+            &build_system.build_backend.name,
+            &build_system.build_backend.spec,
+        )]
+        .into_iter()
+        .chain(build_system.additional_dependencies.iter())
+        .map(|(name, spec)| {
+            spec.clone()
+                .try_into_nameless_match_spec(channel_config)
+                .map(|spec| MatchSpec::from_nameless(spec, Some(name.clone())))
+        })
+        .collect::<Result<_, _>>()
+        .map_err(FinishError::SpecConversionError)?;
+
+        // Figure out the channels to use
+        let channels = build_system.channels.clone().unwrap_or_else(|| {
+            PrioritizedChannel::sort_channels_by_priority(
+                self.workspace_manifest.workspace.channels.iter(),
+            )
+            .cloned()
+            .collect()
+        });
+
+        Ok(ToolSpec::Isolated(IsolatedToolSpec {
+            specs,
+            command: build_system.build_backend.name.as_source().to_string(),
+            channels,
+        }))
+    }
+
     pub async fn finish(
         self,
         tool: Arc<ToolContext>,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
-        let channel_config = self.channel_config.unwrap_or_else(|| {
+        let channel_config = self.channel_config.clone().unwrap_or_else(|| {
             ChannelConfig::default_with_root_dir(
                 self.manifest_path
                     .parent()
@@ -157,39 +203,7 @@ impl ProtocolBuilder {
             )
         });
 
-        let tool_spec = if let Some(backend_spec) = self.override_backend_spec {
-            backend_spec
-        } else {
-            let build_system = &self.package_manifest.build_system;
-            let specs = [(
-                &build_system.build_backend.name,
-                &build_system.build_backend.spec,
-            )]
-            .into_iter()
-            .chain(build_system.additional_dependencies.iter())
-            .map(|(name, spec)| {
-                spec.clone()
-                    .try_into_nameless_match_spec(&channel_config)
-                    .map(|spec| MatchSpec::from_nameless(spec, Some(name.clone())))
-            })
-            .collect::<Result<_, _>>()
-            .map_err(FinishError::SpecConversionError)?;
-
-            // Figure out the channels to use
-            let channels = build_system.channels.clone().unwrap_or_else(|| {
-                PrioritizedChannel::sort_channels_by_priority(
-                    self.workspace_manifest.workspace.channels.iter(),
-                )
-                .cloned()
-                .collect()
-            });
-
-            ToolSpec::Isolated(IsolatedToolSpec {
-                specs,
-                command: build_system.build_backend.name.as_source().to_string(),
-                channels,
-            })
-        };
+        let tool_spec = self.get_tool_spec(&channel_config)?;
 
         let tool = tool
             .instantiate(tool_spec, &channel_config)

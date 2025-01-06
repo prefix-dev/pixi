@@ -9,9 +9,10 @@ use thiserror::Error;
 
 use super::pixi::ProtocolBuildError as PixiProtocolBuildError;
 use crate::{
+    backend_override::BackendOverride,
     protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
-    BackendOverride, ToolContext,
+    ToolContext,
 };
 
 const DEFAULT_BUILD_TOOL: &str = "pixi-build-rattler-build";
@@ -86,13 +87,15 @@ impl ProtocolBuilder {
         }
     }
 
-    /// Sets an optional backend override.
-    pub fn with_backend_override(self, backend_override: Option<BackendOverride>) -> Self {
-        Self {
-            backend_spec: backend_override
-                .map(BackendOverride::into_spec)
-                .or(self.backend_spec),
-            ..self
+    /// Sets a backend override.
+    pub fn with_backend_override(self, backend_override: BackendOverride) -> Self {
+        if let Some(overridden_tool) = backend_override.overridden_tool(DEFAULT_BUILD_TOOL) {
+            Self {
+                backend_spec: Some(overridden_tool.as_spec()),
+                ..self
+            }
+        } else {
+            self
         }
     }
 
