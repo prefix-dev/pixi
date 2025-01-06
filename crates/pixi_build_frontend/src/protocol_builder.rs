@@ -7,9 +7,10 @@ use std::{
 use rattler_conda_types::ChannelConfig;
 
 use crate::{
+    backend_override::BackendOverride,
     conda_protocol, pixi_protocol,
     protocol::{DiscoveryError, FinishError},
-    rattler_build_protocol, BackendOverride, BuildFrontendError, Protocol, ToolContext,
+    rattler_build_protocol, BuildFrontendError, Protocol, ToolContext,
 };
 
 /// Configuration to enable or disable certain protocols discovery.
@@ -134,13 +135,21 @@ impl ProtocolBuilder {
         }
     }
 
-    pub(crate) fn with_backend_override(self, backend: Option<BackendOverride>) -> Self {
-        match self {
-            Self::Pixi(protocol) => Self::Pixi(protocol.with_backend_override(backend)),
-            Self::CondaBuild(protocol) => Self::CondaBuild(protocol.with_backend_override(backend)),
-            Self::RattlerBuild(protocol) => {
-                Self::RattlerBuild(protocol.with_backend_override(backend))
+    pub(crate) fn with_backend_override(self, backend_override: Option<BackendOverride>) -> Self {
+        if let Some(backend_override) = backend_override {
+            match self {
+                Self::Pixi(protocol) => {
+                    Self::Pixi(protocol.with_backend_override(backend_override))
+                }
+                Self::CondaBuild(protocol) => {
+                    Self::CondaBuild(protocol.with_backend_override(backend_override))
+                }
+                Self::RattlerBuild(protocol) => {
+                    Self::RattlerBuild(protocol.with_backend_override(backend_override))
+                }
             }
+        } else {
+            self
         }
     }
 
