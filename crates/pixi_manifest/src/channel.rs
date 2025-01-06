@@ -1,14 +1,11 @@
 use itertools::Itertools;
 use rattler_conda_types::NamedChannelOrUrl;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use toml_edit::{Table, Value};
 
 /// A channel with an optional priority.
 /// If the priority is not specified, it is assumed to be 0.
 /// The higher the priority, the more important the channel is.
-#[serde_as]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PrioritizedChannel {
     pub channel: NamedChannelOrUrl,
     pub priority: Option<i32>,

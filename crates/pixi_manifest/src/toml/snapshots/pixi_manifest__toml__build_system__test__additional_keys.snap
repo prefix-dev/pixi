@@ -2,10 +2,12 @@
 source: crates/pixi_manifest/src/toml/build_system.rs
 expression: "expect_parse_failure(r#\"\n            build-backend = { name = \"foobar\", version = \"*\" }\n            additional = \"key\"\n        \"#)"
 ---
-  × unknown field `additional`, expected one of `build-backend`, `channels`, `additional-dependencies`
+  × Unexpected keys, expected only 'build-backend', 'channels', 'additional-dependencies'
    ╭─[pixi.toml:3:13]
  2 │             build-backend = { name = "foobar", version = "*" }
  3 │             additional = "key"
-   ·             ──────────
- 4 │         
+   ·             ─────┬────
+   ·                  ╰── 'additional' was not expected here
+ 4 │
    ╰────
+  help: Did you mean 'additional-dependencies'?

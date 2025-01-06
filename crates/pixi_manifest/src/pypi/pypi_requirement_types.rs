@@ -6,7 +6,9 @@ use std::{
 
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{InvalidNameError, PackageName};
+use pixi_toml::TomlFromStr;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use toml_span::{DeserError, Value};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 /// A package name for PyPI that also stores the source version of the name.
@@ -18,18 +20,6 @@ pub struct PyPiPackageName {
 impl Borrow<PackageName> for PyPiPackageName {
     fn borrow(&self) -> &PackageName {
         &self.normalized
-    }
-}
-
-impl<'de> Deserialize<'de> for PyPiPackageName {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .string(|str| PyPiPackageName::from_str(str).map_err(serde::de::Error::custom))
-            .expecting("a string")
-            .deserialize(deserializer)
     }
 }
 
@@ -78,6 +68,12 @@ impl FromStr for VersionOrStar {
         } else {
             Ok(VersionOrStar::Version(VersionSpecifiers::from_str(s)?))
         }
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for VersionOrStar {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        TomlFromStr::deserialize(value).map(TomlFromStr::into_inner)
     }
 }
 

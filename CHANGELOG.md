@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.39.5] - 2025-01-06
+#### ✨ Highlights
+By updating [`resolvo`](https://github.com/mamba-org/resolvo/pull/91) to the latest version we now significantly lower the RAM usage during the solve process. 🚀
+As this improvement removes a huge set of data from the solve step it also speeds it up even more, especially for hard to solve environments.
+
+Some numbers from the `resolvo` PR, based on the resolve test dataset:
+```
+- Average Solve Time: 'pixi v0.39.5' was 1.68 times faster than 'pixi v0.39.4'
+- Median Solve Time: 'pixi v0.39.5' was 1.33 times faster than 'pixi v0.39.4'
+- 25th Percentile: 'pixi v0.39.5' was 1.22 times faster than 'pixi v0.39.4'
+- 75th Percentile: 'pixi v0.39.5' was 2.28 times faster than 'pixi v0.39.4'
+```
+
+#### Added
+- Add cli modifications of the system requirements by @ruben-arts in [#2765](https://github.com/prefix-dev/pixi/pull/2765)
+- Support `--manifest-path` to project directory by @blmaier in [#2716](https://github.com/prefix-dev/pixi/pull/2716)
+
+#### Changed
+- Make binary, config folder, and lock file names dynamic by @zbowling in [#2775](https://github.com/prefix-dev/pixi/pull/2775)
+
+#### Documentation
+- Add `marray` to community by @lucascolley in [#2774](https://github.com/prefix-dev/pixi/pull/2774)
+- Simplify nushell completion script by @Hofer-Julian in [#2782](https://github.com/prefix-dev/pixi/pull/2782)
+- Fix typo in PyCharm integration doc by @stevenschaerer in [#2766](https://github.com/prefix-dev/pixi/pull/2766)
+- Do not depend on gxx in pixi build docs by @traversaro in [#2815](https://github.com/prefix-dev/pixi/pull/2815)
+- Fix typo by @pavelzw in [#2833](https://github.com/prefix-dev/pixi/pull/2833)
+
+#### Fixed
+- Move away from lazy_static by @Hofer-Julian in [#2781](https://github.com/prefix-dev/pixi/pull/2781)
+- Don't modify manifest on failing `pixi add/upgrade` by @ruben-arts in [#2756](https://github.com/prefix-dev/pixi/pull/2756)
+- Ignore .pixi folder for build by @baszalmstra in [#2801](https://github.com/prefix-dev/pixi/pull/2801)
+- Use correct directory for build artifact cache by @baszalmstra in [#2830](https://github.com/prefix-dev/pixi/pull/2830)
+- Detect Freethreading Python by @nichmor in [#2762](https://github.com/prefix-dev/pixi/pull/2762)
+
+
+#### New Contributors
+* @stevenschaerer made their first contribution in [#2766](https://github.com/prefix-dev/pixi/pull/2766)
+* @zbowling made their first contribution in [#2775](https://github.com/prefix-dev/pixi/pull/2775)
+
 ### [0.39.4] - 2024-12-23
 #### ✨ Highlights
 Last release got an additional speedup for macOS specifically! 🚀

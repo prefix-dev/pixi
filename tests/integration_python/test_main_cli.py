@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from .common import verify_cli_command, ExitCode, PIXI_VERSION, ALL_PLATFORMS
+from .common import verify_cli_command, ExitCode, PIXI_VERSION, CURRENT_PLATFORM
 import tomllib
 import json
 import pytest
@@ -570,8 +570,8 @@ cli = ["rich==12"]
 test = ["pytest==6"]
 
 [tool.pixi.project]
-channels = ["conda-forge"]
-platforms = {ALL_PLATFORMS}
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{CURRENT_PLATFORM}"]
 
 [tool.pixi.pypi-dependencies]
 polars = "==0.*"
