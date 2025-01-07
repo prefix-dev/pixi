@@ -15,7 +15,7 @@ When looking at the following build-section:
 5. This will allow pixi to install desired backends from the `pixi-build-backends` channel, and any requirements from `conda-forge`. Backends are installed into isolated environments, and will be shared across pixi projects.
 
 ### Overriding the Build Backend
-Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[build-system]`](../reference/pixi_manifest.md#the-build-system). We currently have two environment variables that allow for this:
+Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[package.build]`](../reference/pixi_manifest.md#the-build-system). We currently have two environment variables that allow for this:
 
 1. `PIXI_BUILD_BACKEND_OVERRIDE`: This environment variable allows for overriding of one or multiple backends.  Use `{name}={path}` to specify a backend name mapped to a path and `,` to separate multiple backends.
 For example: `pixi-build-cmake=/path/to/bin,pixi-build-python` will:

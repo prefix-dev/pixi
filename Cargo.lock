@@ -3782,7 +3782,6 @@ version = "0.1.0"
 dependencies = [
  "rattler_conda_types",
  "serde",
- "serde_json",
  "serde_with",
  "url",
 ]

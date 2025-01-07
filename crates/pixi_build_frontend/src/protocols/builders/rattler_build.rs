@@ -145,7 +145,6 @@ impl ProtocolBuilder {
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.recipe_dir.join("recipe.yaml"),
-            serde_json::Value::Null,
             build_id,
             self.cache_dir,
             tool,
