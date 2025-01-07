@@ -5,12 +5,12 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_progress::global_multi_progress;
 use pixi_utils::indicatif::IndicatifWriter;
-use uv_configuration::RAYON_INITIALIZE;
 use std::{env, io::IsTerminal, sync::LazyLock};
 use tracing_subscriber::{
     filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
     EnvFilter,
 };
+use uv_configuration::RAYON_INITIALIZE;
 
 pub mod add;
 mod build;
