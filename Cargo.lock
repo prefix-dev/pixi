@@ -6548,7 +6548,7 @@ dependencies = [
 [[package]]
 name = "uv-auth"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6570,7 +6570,7 @@ dependencies = [
 [[package]]
 name = "uv-build-frontend"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anstream",
  "anyhow",
@@ -6603,7 +6603,7 @@ dependencies = [
 [[package]]
 name = "uv-cache"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "fs-err",
  "nanoid",
@@ -6627,7 +6627,7 @@ dependencies = [
 [[package]]
 name = "uv-cache-info"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "fs-err",
  "globwalk",
@@ -6640,7 +6640,7 @@ dependencies = [
 [[package]]
 name = "uv-cache-key"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "hex",
  "seahash",
@@ -6650,7 +6650,7 @@ dependencies = [
 [[package]]
 name = "uv-client"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6699,7 +6699,7 @@ dependencies = [
 [[package]]
 name = "uv-configuration"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "either",
  "fs-err",
@@ -6726,7 +6726,7 @@ dependencies = [
 [[package]]
 name = "uv-console"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "console",
  "ctrlc",
@@ -6735,7 +6735,7 @@ dependencies = [
 [[package]]
 name = "uv-dirs"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "etcetera",
  "uv-static",
@@ -6744,7 +6744,7 @@ dependencies = [
 [[package]]
 name = "uv-dispatch"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "futures",
@@ -6769,7 +6769,7 @@ dependencies = [
 [[package]]
 name = "uv-distribution"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "either",
@@ -6814,7 +6814,7 @@ dependencies = [
 [[package]]
 name = "uv-distribution-filename"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "rkyv",
  "serde",
@@ -6828,7 +6828,7 @@ dependencies = [
 [[package]]
 name = "uv-distribution-types"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "bitflags 2.6.0",
@@ -6861,7 +6861,7 @@ dependencies = [
 [[package]]
 name = "uv-extract"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "async-compression",
  "async_zip",
@@ -6887,7 +6887,7 @@ dependencies = [
 [[package]]
 name = "uv-fs"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "backoff",
  "cachedir",
@@ -6911,7 +6911,7 @@ dependencies = [
 [[package]]
 name = "uv-git"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "cargo-util",
@@ -6934,7 +6934,7 @@ dependencies = [
 [[package]]
 name = "uv-install-wheel"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "configparser",
  "csv",
@@ -6971,7 +6971,7 @@ dependencies = [
 [[package]]
 name = "uv-installer"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -7008,7 +7008,7 @@ dependencies = [
 [[package]]
 name = "uv-macros"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7019,7 +7019,7 @@ dependencies = [
 [[package]]
 name = "uv-metadata"
 version = "0.1.0"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "async_zip",
  "fs-err",
@@ -7036,7 +7036,7 @@ dependencies = [
 [[package]]
 name = "uv-normalize"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "rkyv",
  "schemars",
@@ -7046,7 +7046,7 @@ dependencies = [
 [[package]]
 name = "uv-once-map"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "dashmap",
  "futures",
@@ -7056,7 +7056,7 @@ dependencies = [
 [[package]]
 name = "uv-options-metadata"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "serde",
 ]
@@ -7064,7 +7064,7 @@ dependencies = [
 [[package]]
 name = "uv-pep440"
 version = "0.7.0"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "rkyv",
  "serde",
@@ -7077,7 +7077,7 @@ dependencies = [
 [[package]]
 name = "uv-pep508"
 version = "0.6.0"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "boxcar",
  "indexmap 2.7.0",
@@ -7099,7 +7099,7 @@ dependencies = [
 [[package]]
 name = "uv-platform-tags"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "rustc-hash",
  "serde",
@@ -7109,7 +7109,7 @@ dependencies = [
 [[package]]
 name = "uv-pypi-types"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "hashbrown 0.15.2",
  "indexmap 2.7.0",
@@ -7137,7 +7137,7 @@ dependencies = [
 [[package]]
 name = "uv-python"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "configparser",
@@ -7188,7 +7188,7 @@ dependencies = [
 [[package]]
 name = "uv-requirements"
 version = "0.1.0"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "configparser",
@@ -7223,7 +7223,7 @@ dependencies = [
 [[package]]
 name = "uv-requirements-txt"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "fs-err",
  "regex",
@@ -7245,7 +7245,7 @@ dependencies = [
 [[package]]
 name = "uv-resolver"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "clap",
@@ -7297,7 +7297,7 @@ dependencies = [
 [[package]]
 name = "uv-shell"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "home",
@@ -7311,7 +7311,7 @@ dependencies = [
 [[package]]
 name = "uv-state"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "fs-err",
  "tempfile",
@@ -7321,7 +7321,7 @@ dependencies = [
 [[package]]
 name = "uv-static"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "uv-macros",
 ]
@@ -7329,7 +7329,7 @@ dependencies = [
 [[package]]
 name = "uv-trampoline-builder"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "fs-err",
  "thiserror 2.0.9",
@@ -7340,7 +7340,7 @@ dependencies = [
 [[package]]
 name = "uv-types"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anyhow",
  "rustc-hash",
@@ -7361,12 +7361,12 @@ dependencies = [
 [[package]]
 name = "uv-version"
 version = "0.5.6"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 
 [[package]]
 name = "uv-virtualenv"
 version = "0.0.4"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "fs-err",
  "itertools 0.13.0",
@@ -7384,7 +7384,7 @@ dependencies = [
 [[package]]
 name = "uv-warnings"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "anstream",
  "owo-colors",
@@ -7394,7 +7394,7 @@ dependencies = [
 [[package]]
 name = "uv-workspace"
 version = "0.0.1"
-source = "git+https://github.com/wolfv/uv?branch=ignore-rayon-init#878234ba6b9a3b143e079ca9baa4bec99af93600"
+source = "git+https://github.com/astral-sh/uv?tag=0.5.6#b70c4f30eeb47c15fbabd54173f952877d5cfc43"
 dependencies = [
  "fs-err",
  "glob",
