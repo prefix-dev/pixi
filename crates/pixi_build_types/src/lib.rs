@@ -3,10 +3,15 @@ mod capabilities;
 mod channel_configuration;
 mod conda_package_metadata;
 pub mod procedures;
+mod project_model;
 
 pub use capabilities::{BackendCapabilities, FrontendCapabilities};
 pub use channel_configuration::ChannelConfiguration;
 pub use conda_package_metadata::CondaPackageMetadata;
+pub use project_model::{
+    GitReferenceV1, GitSpecV1, NamelessMatchSpecV1, PathSpecV1, PixiSpecV1, ProjectModelV1,
+    TargetSelectorV1, TargetV1, TargetsV1, UrlSpecV1, VersionedProjectModel,
+};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use serde::{Deserialize, Serialize};
 

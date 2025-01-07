@@ -3741,6 +3741,7 @@ dependencies = [
  "dashmap",
  "fs-err",
  "futures",
+ "indexmap 2.7.0",
  "insta",
  "itertools 0.13.0",
  "jsonrpsee",
@@ -3780,8 +3781,11 @@ dependencies = [
 name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
+ "indexmap 2.7.0",
  "rattler_conda_types",
+ "rattler_digest",
  "serde",
+ "serde_json",
  "serde_with",
  "url",
 ]
