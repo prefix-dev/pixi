@@ -13,17 +13,17 @@ start = "python -c 'import python_bindings as b; print(b.add(1, 2))'" # (3)!
 name = "python_bindings"
 version = "0.1.0"
 
-[build-system]
-build-backend = { name = "pixi-build-cmake", version = "*" } # (5)!
+[package.build]
+backend = { name = "pixi-build-cmake", version = "*" } # (5)!
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 
-[host-dependencies]
+[package.host-dependencies]
 cmake = ">=3.20, <3.27"      # (8)!
 nanobind = ">=2.4.0, <2.5.0" # (6)!
 python_abi = ">=3.12, <3.13" # (7)!
 
-[run-dependencies]
+[package.run-dependencies]
 python = ">=3.12, <3.13" # (9)!

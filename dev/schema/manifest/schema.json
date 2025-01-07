@@ -29,14 +29,9 @@
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
     },
-    "build-backend": {
-      "title": "Build-Backend",
-      "description": "Configuration for the build backend.",
-      "type": "object"
-    },
     "build-dependencies": {
       "title": "Build-Dependencies",
-      "description": "The build `conda` dependencies, used in the build process",
+      "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
       "type": "object",
       "additionalProperties": {
         "anyOf": [
@@ -49,10 +44,6 @@
           }
         ]
       }
-    },
-    "build-system": {
-      "$ref": "#/$defs/BuildSystem",
-      "description": "The build-system used to build the package."
     },
     "dependencies": {
       "title": "Dependencies",
@@ -101,7 +92,7 @@
     },
     "host-dependencies": {
       "title": "Host-Dependencies",
-      "description": "The host `conda` dependencies, used in the build process",
+      "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
       "type": "object",
       "additionalProperties": {
         "anyOf": [
@@ -267,6 +258,57 @@
         }
       }
     },
+    "Build": {
+      "title": "Build",
+      "type": "object",
+      "required": [
+        "backend"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "additional-dependencies": {
+          "title": "Additional-Dependencies",
+          "description": "Additional dependencies to install alongside the build backend",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          }
+        },
+        "backend": {
+          "$ref": "#/$defs/BuildBackend",
+          "description": "The build backend to instantiate"
+        },
+        "channels": {
+          "title": "Channels",
+          "description": "The `conda` channels that are used to fetch the build backend from",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ChannelInlineTable"
+              }
+            ]
+          }
+        }
+      }
+    },
     "BuildBackend": {
       "title": "BuildBackend",
       "type": "object",
@@ -375,57 +417,6 @@
         }
       }
     },
-    "BuildSystem": {
-      "title": "BuildSystem",
-      "type": "object",
-      "required": [
-        "build-backend"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "additional-dependencies": {
-          "title": "Additional-Dependencies",
-          "description": "Additional dependencies to install alongside the build backend",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
-          }
-        },
-        "build-backend": {
-          "$ref": "#/$defs/BuildBackend",
-          "description": "The build backend to instantiate"
-        },
-        "channels": {
-          "title": "Channels",
-          "description": "The `conda` channels that are used to fetch the build backend from",
-          "type": "array",
-          "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "string",
-                "format": "uri",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/ChannelInlineTable"
-              }
-            ]
-          }
-        }
-      }
-    },
     "ChannelInlineTable": {
       "title": "ChannelInlineTable",
       "description": "A precise description of a `conda` channel, with an optional priority.",
@@ -507,7 +498,7 @@
         },
         "build-dependencies": {
           "title": "Build-Dependencies",
-          "description": "The build `conda` dependencies, used in the build process",
+          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
             "anyOf": [
@@ -568,7 +559,7 @@
         },
         "host-dependencies": {
           "title": "Host-Dependencies",
-          "description": "The host `conda` dependencies, used in the build process",
+          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
             "anyOf": [
@@ -842,6 +833,9 @@
       "title": "Package",
       "description": "The package's metadata information.",
       "type": "object",
+      "required": [
+        "build"
+      ],
       "additionalProperties": false,
       "properties": {
         "authors": {
@@ -855,6 +849,26 @@
           "examples": [
             "John Doe <j.doe@prefix.dev>"
           ]
+        },
+        "build": {
+          "$ref": "#/$defs/Build",
+          "description": "The build configuration of the package"
+        },
+        "build-dependencies": {
+          "title": "Build-Dependencies",
+          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          }
         },
         "description": {
           "title": "Description",
@@ -875,6 +889,27 @@
           "type": "string",
           "format": "uri",
           "minLength": 1
+        },
+        "host-dependencies": {
+          "title": "Host-Dependencies",
+          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "examples": [
+            {
+              "python": ">=3.8"
+            }
+          ]
         },
         "license": {
           "title": "License",
@@ -906,6 +941,39 @@
           "type": "string",
           "format": "uri",
           "minLength": 1
+        },
+        "run-dependencies": {
+          "title": "Run-Dependencies",
+          "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          }
+        },
+        "target": {
+          "title": "Target",
+          "description": "Machine-specific aspects of the package",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Target"
+          },
+          "examples": [
+            {
+              "linux": {
+                "host-dependencies": {
+                  "python": "3.8"
+                }
+              }
+            }
+          ]
         },
         "version": {
           "title": "Version",
@@ -1314,7 +1382,7 @@
         },
         "build-dependencies": {
           "title": "Build-Dependencies",
-          "description": "The build `conda` dependencies, used in the build process",
+          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
             "anyOf": [
@@ -1346,7 +1414,7 @@
         },
         "host-dependencies": {
           "title": "Host-Dependencies",
-          "description": "The host `conda` dependencies, used in the build process",
+          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
             "anyOf": [
