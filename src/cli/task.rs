@@ -1,5 +1,4 @@
 use crate::cli::cli_config::ProjectConfig;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use crate::Project;
 use clap::Parser;
@@ -401,13 +400,7 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     project
                         .environments()
                         .iter()
-                        .filter_map(|env| {
-                            if verify_current_platform_has_required_virtual_packages(env).is_ok() {
-                                Some((env.clone(), env.get_filtered_tasks()))
-                            } else {
-                                None
-                            }
-                        })
+                        .map(|env| (env.clone(), env.get_filtered_tasks()))
                         .collect()
                 };
 
@@ -465,12 +458,7 @@ fn build_env_feature_task_map(project: &Project) -> Vec<EnvTasks> {
         .environments()
         .iter()
         .sorted_by_key(|env| env.name().to_string())
-        .filter_map(|env: &Environment<'_>| {
-            if verify_current_platform_has_required_virtual_packages(env).is_err() {
-                return None;
-            }
-            Some(EnvTasks::from(env))
-        })
+        .map(EnvTasks::from)
         .collect()
 }
 

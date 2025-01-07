@@ -12,7 +12,7 @@ use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::environment::verify_prefix_location_unchanged;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::project::errors::UnsupportedPlatformError;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
+// use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use crate::task::{
     get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
@@ -98,10 +98,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Verify that the current platform has the required virtual packages for the
     // environment.
-    if let Some(ref explicit_environment) = explicit_environment {
-        verify_current_platform_has_required_virtual_packages(explicit_environment)
-            .into_diagnostic()?;
-    }
+    // if let Some(ref explicit_environment) = explicit_environment {
+    //     verify_current_platform_has_required_virtual_packages(explicit_environment, &project.get_lock_file().await?)
+    //         .into_diagnostic()?;
+    // }
 
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = project
@@ -249,7 +249,6 @@ fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Envi
             project
                 .environments()
                 .into_iter()
-                .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
                 .flat_map(|env| env.get_filtered_tasks())
                 .collect()
         };

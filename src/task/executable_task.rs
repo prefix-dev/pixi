@@ -9,7 +9,7 @@ use deno_task_shell::{
     execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
 };
 use itertools::Itertools;
-use miette::{Context, Diagnostic, IntoDiagnostic};
+use miette::{Context, Diagnostic};
 use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -25,7 +25,6 @@ use fs_err::tokio as tokio_fs;
 use pixi_consts::consts;
 
 use crate::activation::CurrentEnvVarBehavior;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::HasProjectRef;
 use pixi_manifest::{Task, TaskName};
 use pixi_progress::await_in_progress;
@@ -361,9 +360,6 @@ pub async fn get_task_env<'p>(
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    // Make sure the system requirements are met
-    verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
-
     // Get environment variables from the activation
     let env_var_behavior = if clean_env {
         CurrentEnvVarBehavior::Clean

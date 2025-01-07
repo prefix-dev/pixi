@@ -1,18 +1,8 @@
-use crate::project::errors::UnsupportedPlatformError;
 use crate::project::Environment;
-use itertools::Itertools;
-use miette::Diagnostic;
 use pixi_default_versions::{default_glibc_version, default_linux_version, default_mac_os_version};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
-use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
-use rattler_virtual_packages::{
-    Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
-    VirtualPackageOverrides,
-};
-use std::collections::HashMap;
-use thiserror::Error;
-
-use pixi_manifest::FeaturesExt;
+use rattler_conda_types::Platform;
+use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 
 /// Returns a reasonable modern set of virtual packages that should be safe enough to assume.
 /// At the time of writing, this is in sync with the conda-lock set of minimal virtual packages.
@@ -80,108 +70,13 @@ impl Environment<'_> {
     }
 }
 
-/// An error that occurs when the current platform does not satisfy the minimal virtual package
-/// requirements.
-#[derive(Debug, Error, Diagnostic)]
-pub enum VerifyCurrentPlatformError {
-    #[error("The current platform does not satisfy the minimal virtual package requirements")]
-    UnsupportedPlatform(#[from] Box<UnsupportedPlatformError>),
-
-    #[error(transparent)]
-    DetectionVirtualPackagesError(#[from] DetectVirtualPackageError),
-
-    #[error("The current system has a mismatching virtual package. The project requires '{required}' to be on build '{required_build_string}' but the system has build '{local_build_string}'")]
-    MismatchingBuildString {
-        required: String,
-        required_build_string: String,
-        local_build_string: String,
-    },
-
-    #[error("The current system has a mismatching virtual package. The project requires '{required}' to be at least version '{required_version}' but the system has version '{local_version}'")]
-    MismatchingVersion {
-        required: String,
-        required_version: Box<Version>,
-        local_version: Box<Version>,
-    },
-
-    #[error("The platform you are running on should at least have the virtual package {required} on version {required_version}, build_string: {required_build_string}")]
-    MissingVirtualPackage {
-        required: String,
-        required_version: Box<Version>,
-        required_build_string: String,
-    },
-}
-
-/// Verifies if the current platform satisfies the minimal virtual package requirements.
-pub(crate) fn verify_current_platform_has_required_virtual_packages(
-    environment: &Environment<'_>,
-) -> Result<(), VerifyCurrentPlatformError> {
-    let current_platform = environment.best_platform();
-
-    // Is the current platform in the list of supported platforms?
-    if !environment.platforms().contains(&current_platform) {
-        return Err(VerifyCurrentPlatformError::from(Box::new(
-            UnsupportedPlatformError {
-                environments_platforms: environment.platforms().into_iter().collect_vec(),
-                platform: current_platform,
-                environment: environment.name().clone(),
-            },
-        )));
-    }
-
-    let system_virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())?
-        .iter()
-        .cloned()
-        .map(GenericVirtualPackage::from)
-        .map(|vpkg| (vpkg.name.clone(), vpkg))
-        .collect::<HashMap<_, _>>();
-    let required_pkgs = environment
-        .virtual_packages(current_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from);
-
-    // Check for every local minimum package if it is available and on the correct version.
-    for req_pkg in required_pkgs {
-        if req_pkg.name.as_normalized() == "__archspec" {
-            // Skip archspec packages completely for now.
-            continue;
-        }
-
-        if let Some(local_vpkg) = system_virtual_packages.get(&req_pkg.name) {
-            if req_pkg.build_string != local_vpkg.build_string {
-                return Err(VerifyCurrentPlatformError::MismatchingBuildString {
-                    required: req_pkg.name.as_source().to_string(),
-                    required_build_string: req_pkg.build_string.clone(),
-                    local_build_string: local_vpkg.build_string.clone(),
-                });
-            }
-
-            if req_pkg.version > local_vpkg.version {
-                // This case can simply happen because the default system requirements in get_minimal_virtual_packages() is higher than required.
-                return Err(VerifyCurrentPlatformError::MismatchingVersion {
-                    required: req_pkg.name.as_source().to_string(),
-                    required_version: Box::from(req_pkg.version),
-                    local_version: Box::from(local_vpkg.version.clone()),
-                });
-            }
-        } else {
-            return Err(VerifyCurrentPlatformError::MissingVirtualPackage {
-                required: req_pkg.name.as_source().to_string(),
-                required_version: Box::from(req_pkg.version),
-                required_build_string: req_pkg.build_string.clone(),
-            });
-        }
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::project::virtual_packages::get_minimal_virtual_packages;
     use insta::assert_debug_snapshot;
+    use itertools::Itertools;
     use pixi_manifest::SystemRequirements;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::{GenericVirtualPackage, Platform};
 
     // Regression test on the virtual packages so there is not accidental changes
     #[test]

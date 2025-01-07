@@ -11,8 +11,7 @@ use rattler_shell::{
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::UpdateMode;
 use crate::{
-    activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix,
-    project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
+    activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
     Project, UpdateLockFileOptions,
 };
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
@@ -235,8 +234,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config);
 
     let environment = project.environment_from_name_or_env_var(args.environment)?;
-
-    verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
 
     let prompt_name = match environment.name() {
         EnvironmentName::Default => project.name().to_string(),

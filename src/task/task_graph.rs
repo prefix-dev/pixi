@@ -15,12 +15,7 @@ use pixi_manifest::{
 use thiserror::Error;
 
 use crate::{
-    project::{
-        virtual_packages::{
-            verify_current_platform_has_required_virtual_packages, VerifyCurrentPlatformError,
-        },
-        Environment,
-    },
+    project::Environment,
     task::{
         error::{AmbiguousTaskError, MissingTaskError},
         task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
@@ -198,7 +193,6 @@ impl<'p> TaskGraph<'p> {
             .explicit_environment
             .clone()
             .unwrap_or_else(|| project.default_environment());
-        verify_current_platform_has_required_virtual_packages(&run_environment)?;
 
         // Depending on whether we are passing arguments verbatim or now we allow deno
         // to interpret them or not.
@@ -347,10 +341,6 @@ pub enum TaskGraphError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    UnsupportedPlatform(#[from] VerifyCurrentPlatformError),
 
     #[error("could not split task, assuming non valid task")]
     InvalidTask,

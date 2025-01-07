@@ -4,9 +4,7 @@ use rattler_conda_types::Platform;
 use thiserror::Error;
 
 use crate::{
-    project::{
-        virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
-    },
+    project::Environment,
     task::error::{AmbiguousTaskError, MissingTaskError},
     Project,
 };
@@ -150,11 +148,6 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                     .iter()
                     // Filter out default environment
                     .filter(|env| !env.name().is_default())
-                    // Filter out environments that can not run on this machine.
-                    .filter(|env| {
-                        self.ignore_system_requirements
-                            || verify_current_platform_has_required_virtual_packages(env).is_ok()
-                    })
                     .any(|env| {
                         if let Ok(task) = env.task(&name, self.platform) {
                             // If the task exists in the environment but it is not the reference to
