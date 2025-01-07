@@ -61,7 +61,11 @@ impl Manifest {
                 .map_err(ManifestParsingError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy(consts::GLOBAL_MANIFEST_DEFAULT_NAME, &contents, manifest_path)?,
+            Err(e) => e.to_fancy(
+                consts::GLOBAL_MANIFEST_DEFAULT_NAME,
+                &contents,
+                manifest_path,
+            )?,
         };
 
         let manifest = Self {
