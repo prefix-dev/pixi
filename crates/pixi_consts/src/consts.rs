@@ -51,6 +51,10 @@ pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
     Some(dir) => dir,
     None => ".pixi",
 };
+pub const MANIFEST_DEFAULT_NAME: &str = match option_env!("PIXI_MANIFEST_DEFAULT_NAME") {
+    Some(name) => name,
+    None => "pixi-global.toml",
+};
 
 pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
     LazyLock::new(|| match option_env!("PIXI_DEFAULT_CHANNELS") {

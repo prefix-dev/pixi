@@ -9,6 +9,7 @@ use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
+use pixi_consts::consts;
 use pixi_manifest::{toml::TomlDocument, PrioritizedChannel};
 use pixi_spec::PixiSpec;
 use pixi_toml::TomlIndexMap;
@@ -19,7 +20,7 @@ use toml_span::{DeserError, Value};
 
 use super::{
     parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
-    EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME,
+    EnvironmentName, ExposedName,
 };
 use crate::global::project::ParsedEnvironment;
 
@@ -60,7 +61,7 @@ impl Manifest {
                 .map_err(ManifestParsingError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents, manifest_path)?,
+            Err(e) => e.to_fancy(consts::MANIFEST_DEFAULT_NAME, &contents, manifest_path)?,
         };
 
         let manifest = Self {
