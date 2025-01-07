@@ -438,7 +438,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let global_info = Some(GlobalInfo {
         bin_dir: BinDir::from_env().await?.path().to_path_buf(),
         env_dir: EnvRoot::from_env().await?.path().to_path_buf(),
-        manifest: global::Project::manifest_dir()?.join(consts::MANIFEST_DEFAULT_NAME),
+        manifest: global::Project::manifest_dir()?.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
     });
 
     let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
