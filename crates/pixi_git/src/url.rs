@@ -126,10 +126,6 @@ impl RepositoryUrl {
     pub fn parse(url: &str) -> Result<Self, url::ParseError> {
         Ok(Self::new(&Url::parse(url)?))
     }
-
-    pub fn looks_like_git_url(url: &str) -> bool {
-        url.starts_with("git+") || url.ends_with(".git")
-    }
 }
 
 /// Remove the credentials from a URL, allowing the generic `git` username (without a password)

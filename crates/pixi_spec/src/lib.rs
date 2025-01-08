@@ -310,7 +310,6 @@ impl PixiSpec {
 
     /// Converts this instance into a [`toml_edit::Value`].
     pub fn to_toml_value(&self) -> toml_edit::Value {
-        eprintln!("to_toml_value: {:?}", self);
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
     }
