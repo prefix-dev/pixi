@@ -81,8 +81,11 @@ impl Serialize for Reference {
     {
         #[derive(Serialize)]
         struct RawReference<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
             tag: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             branch: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
             rev: Option<&'a str>,
         }
 

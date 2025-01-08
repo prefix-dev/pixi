@@ -8,19 +8,19 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     packages:
-      osx-arm64:
-      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.6-ha82da77_1.conda
+      [CURRENT_PLATFORM]:
+      - conda: https://prefix.dev/conda-forge/[CURRENT_PLATFORM]/libcxx-19.1.6-ha82da77_1.conda
       - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&rev=9de9e1b#[FULL_COMMIT]
 packages:
 - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&rev=9de9e1b#[FULL_COMMIT]
   name: boost-check
   version: 0.1.0
   build: hbf21a9e_0
-  subdir: osx-arm64
+  subdir: [CURRENT_PLATFORM]
   depends:
   - libcxx >=19
   channel: null
-- conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.6-ha82da77_1.conda
+- conda: https://prefix.dev/conda-forge/[CURRENT_PLATFORM]/libcxx-19.1.6-ha82da77_1.conda
   sha256: 2b2443404503cd862385fd2f2a2c73f9624686fd1e5a45050b4034cfc06904ec
   md5: ce5252d8db110cdb4ae4173d0a63c7c5
   depends:

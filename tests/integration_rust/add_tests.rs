@@ -674,6 +674,7 @@ preview = ['pixi-build']
     let lock = pixi.lock_file().await.unwrap();
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(lock.render_to_string().unwrap());
     });
@@ -711,6 +712,7 @@ preview = ['pixi-build']
     let lock = pixi.lock_file().await.unwrap();
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(lock.render_to_string().unwrap());
     });
@@ -745,6 +747,7 @@ preview = ['pixi-build']"#,
     let lock = pixi.lock_file().await.unwrap();
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(lock.render_to_string().unwrap());
     });
@@ -779,6 +782,7 @@ preview = ['pixi-build']"#,
     let lock = pixi.lock_file().await.unwrap();
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(lock.render_to_string().unwrap());
     });
