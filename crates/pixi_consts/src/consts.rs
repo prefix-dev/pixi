@@ -55,10 +55,11 @@ pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
     None => ".pixi",
 };
 /// The default manifest name for the global manifest file in the pixi config directory.
-pub const GLOBAL_MANIFEST_DEFAULT_NAME: &str = match option_env!("PIXI_GLOBAL_MANIFEST_DEFAULT_NAME") {
-    Some(name) => name,
-    None => "pixi-global.toml",
-};
+pub const GLOBAL_MANIFEST_DEFAULT_NAME: &str =
+    match option_env!("PIXI_GLOBAL_MANIFEST_DEFAULT_NAME") {
+        Some(name) => name,
+        None => "pixi-global.toml",
+    };
 
 pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
     LazyLock::new(|| match option_env!("PIXI_DEFAULT_CHANNELS") {
