@@ -73,6 +73,22 @@ impl GitUrl {
     pub fn precise(&self) -> Option<GitSha> {
         self.precise
     }
+
+    /// Determines if the given URL looks like a Git URL.
+    pub fn is_git_url(url: &Url) -> bool {
+        // Check if the scheme indicates it's a Git URL.
+        if url.scheme().starts_with("git+") {
+            // Check if the path ends with .git or has a Git-specific format.
+            return true;
+        } else if let Some(path) = url.path_segments() {
+            if path.clone().any(|segment| segment.ends_with(".git")) {
+                return true;
+            }
+        };
+
+        // If the URL doesn't match Git-specific patterns, return false.
+        false
+    }
 }
 
 impl TryFrom<Url> for GitUrl {

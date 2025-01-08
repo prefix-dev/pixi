@@ -11,10 +11,12 @@ use pixi_config::{Config, ConfigCli};
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
+use pixi_spec::Reference;
 use rattler_conda_types::ChannelConfig;
 use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use url::Url;
 
 /// Project configuration
 #[derive(Parser, Debug, Default, Clone)]
@@ -129,6 +131,57 @@ impl PrefixUpdateConfig {
         }
     }
 }
+
+#[derive(Parser, Debug, Default, Clone)]
+pub struct GitRev {
+    /// The git branch
+    #[clap(long, requires = "git")]
+    pub branch: Option<String>,
+
+    /// The git tag
+    #[clap(long, requires = "git")]
+    pub tag: Option<String>,
+
+    /// The git revision
+    #[clap(long, requires = "git")]
+    pub rev: Option<String>,
+}
+
+impl GitRev {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn with_branch(mut self, branch: String) -> GitRev {
+        self.branch = Some(branch);
+        self
+    }
+
+    pub fn with_rev(mut self, rev: String) -> GitRev {
+        self.rev = Some(rev);
+        self
+    }
+
+    pub fn with_tag(mut self, tag: String) -> GitRev {
+        self.tag = Some(tag);
+        self
+    }
+}
+
+impl From<GitRev> for Reference {
+    fn from(git_rev: GitRev) -> Self {
+        if let Some(branch) = git_rev.branch {
+            Reference::Branch(branch)
+        } else if let Some(tag) = git_rev.tag {
+            Reference::Tag(tag)
+        } else if let Some(rev) = git_rev.rev {
+            Reference::Rev(rev)
+        } else {
+            Reference::DefaultBranch
+        }
+    }
+}
+
 #[derive(Parser, Debug, Default)]
 pub struct DependencyConfig {
     /// The dependencies as names, conda MatchSpecs or PyPi requirements
@@ -157,6 +210,18 @@ pub struct DependencyConfig {
     /// The feature for which the dependency should be modified
     #[clap(long, short, default_value_t)]
     pub feature: FeatureName,
+
+    /// The git url to use when adding a git dependency
+    #[clap(long, short, conflicts_with_all = ["pypi"])]
+    pub git: Option<Url>,
+
+    #[clap(flatten)]
+    /// The git revisions to use when adding a git dependency
+    pub rev: Option<GitRev>,
+
+    /// The subdirectory of the git repository to use
+    #[clap(long, short, requires = "git")]
+    pub subdir: Option<String>,
 }
 
 impl DependencyConfig {

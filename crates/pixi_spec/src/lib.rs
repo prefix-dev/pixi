@@ -20,6 +20,7 @@ pub use detailed::DetailedSpec;
 pub use git::{GitSpec, Reference};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
+use pixi_git::GitUrl;
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
@@ -102,11 +103,21 @@ impl PixiSpec {
         channel_config: &ChannelConfig,
     ) -> Self {
         if let Some(url) = spec.url {
-            Self::Url(UrlSpec {
-                url,
-                md5: spec.md5,
-                sha256: spec.sha256,
-            })
+            // check if it is a git url
+            if GitUrl::is_git_url(&url) {
+                let git_url = GitUrl::try_from(url.clone()).unwrap();
+                Self::Git(GitSpec {
+                    git: git_url.repository().clone(),
+                    rev: Some(git_url.reference().clone().into()),
+                    subdirectory: spec.subdir,
+                })
+            } else {
+                Self::Url(UrlSpec {
+                    url,
+                    md5: spec.md5,
+                    sha256: spec.sha256,
+                })
+            }
         } else if spec.build.is_none()
             && spec.build_number.is_none()
             && spec.file_name.is_none()
@@ -310,6 +321,7 @@ impl PixiSpec {
 
     /// Converts this instance into a [`toml_edit::Value`].
     pub fn to_toml_value(&self) -> toml_edit::Value {
+        eprintln!("to_toml_value: {:?}", self);
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
     }

@@ -23,7 +23,7 @@
 //! }
 //! ```
 
-use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
+use pixi::cli::cli_config::{GitRev, PrefixUpdateConfig, ProjectConfig};
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -143,6 +143,9 @@ pub trait HasDependencyConfig: Sized {
             pypi: false,
             platforms: Default::default(),
             feature: Default::default(),
+            git: Default::default(),
+            rev: Default::default(),
+            subdir: Default::default(),
         }
     }
 
@@ -197,6 +200,26 @@ impl AddBuilder {
 
     pub fn with_feature(mut self, feature: impl ToString) -> Self {
         self.args.dependency_config.feature = FeatureName::Named(feature.to_string());
+        self
+    }
+
+    pub fn with_git_url(mut self, url: Url) -> Self {
+        self.args.dependency_config.git = Some(url);
+        self
+    }
+
+    pub fn with_git_rev(mut self, rev: GitRev) -> Self {
+        self.args.dependency_config.rev = Some(rev);
+        self
+    }
+
+    pub fn with_git_subdir(mut self, subdir: String) -> Self {
+        self.args.dependency_config.subdir = Some(subdir);
+        self
+    }
+
+    pub fn with_no_lockfile_update(mut self, no_lockfile_update: bool) -> Self {
+        self.args.prefix_update_config.no_lockfile_update = no_lockfile_update;
         self
     }
 }

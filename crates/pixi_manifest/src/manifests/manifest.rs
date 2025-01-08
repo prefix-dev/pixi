@@ -12,7 +12,7 @@ use indexmap::{Equivalent, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, Report, WrapErr};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{PackageName, Platform, Version};
 use toml_edit::{DocumentMut, Value};
 
 use crate::toml::FromTomlStr;
@@ -372,34 +372,26 @@ impl Manifest {
         Ok(())
     }
 
-    /// Add a matchspec to the manifest
+    /// Add a pixi spec to the manifest
     pub fn add_dependency(
         &mut self,
-        spec: &MatchSpec,
+        name: &PackageName,
+        spec: &PixiSpec,
         spec_type: SpecType,
         platforms: &[Platform],
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
-        channel_config: &ChannelConfig,
     ) -> miette::Result<bool> {
-        // Determine the name of the package to add
-        let (Some(name), spec) = spec.clone().into_nameless() else {
-            miette::bail!(
-                "{} does not support wildcard dependencies",
-                pixi_utils::executable_name()
-            );
-        };
-        let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
         let mut any_added = false;
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
             match self
                 .get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_dependency(&name, &spec, spec_type, overwrite_behavior)
+                .try_add_dependency(name, spec, spec_type, overwrite_behavior)
             {
                 Ok(true) => {
                     self.source
-                        .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
+                        .add_dependency(name, spec, spec_type, platform, feature_name)?;
                     any_added = true;
                 }
                 Ok(false) => {}
@@ -814,8 +806,8 @@ mod tests {
     use insta::assert_snapshot;
     use miette::NarratableReportHandler;
     use rattler_conda_types::{
-        NamedChannelOrUrl, ParseStrictness,
-        ParseStrictness::{Lenient, Strict},
+        MatchSpec, NamedChannelOrUrl,
+        ParseStrictness::{self, Lenient, Strict},
         VersionSpec,
     };
     use rstest::*;
@@ -2063,14 +2055,22 @@ bar = "*"
             "#;
         let channel_config = default_channel_config();
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        // Determine the name of the package to add
+        let spec = &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap();
+
+        let (name, spec) = spec.clone().into_nameless();
+        let name = name.unwrap();
+
+        let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
+
         manifest
             .add_dependency(
-                &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap(),
+                &name,
+                &spec,
                 SpecType::Run,
                 &[],
                 &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )
             .unwrap();
         assert_eq!(
@@ -2086,14 +2086,20 @@ bar = "*"
                 .as_version_spec(),
             Some(&VersionSpec::from_str(">=1.2.3", Strict).unwrap())
         );
+
+        let (name, spec) = MatchSpec::from_str("qux >=1.2.3", Strict)
+            .unwrap()
+            .into_nameless();
+        let pixi_spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
+
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" bal >=2.3", Strict).unwrap(),
+                &name.unwrap(),
+                &pixi_spec,
                 SpecType::Run,
                 &[],
                 &FeatureName::Named("test".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )
             .unwrap();
 
@@ -2114,14 +2120,19 @@ bar = "*"
             ">=2.3".to_string()
         );
 
+        let (package_name, nameless) = MatchSpec::from_str(" boef >=2.3", Strict)
+            .unwrap()
+            .into_nameless();
+        let pixi_spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" boef >=2.3", Strict).unwrap(),
+                &package_name.unwrap(),
+                &pixi_spec,
                 SpecType::Run,
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )
             .unwrap();
 
@@ -2143,14 +2154,19 @@ bar = "*"
             ">=2.3".to_string()
         );
 
+        let matchspec = MatchSpec::from_str(" cmake >=2.3", ParseStrictness::Strict).unwrap();
+        let (package_name, nameless) = matchspec.into_nameless();
+
+        let pixi_spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" cmake >=2.3", ParseStrictness::Strict).unwrap(),
+                &package_name.unwrap(),
+                &pixi_spec,
                 SpecType::Build,
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )
             .unwrap();
 

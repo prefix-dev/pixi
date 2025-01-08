@@ -1,0 +1,31 @@
+---
+source: tests/integration_rust/add_tests.rs
+expression: lock.render_to_string().unwrap()
+---
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://prefix.dev/conda-forge/
+    packages:
+      osx-arm64:
+      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.6-ha82da77_1.conda
+      - conda: git+https://github.com/wolfv/pixi-build-examples.git?subdirectory=boost-check&branch=main#[FULL_COMMIT]
+packages:
+- conda: git+https://github.com/wolfv/pixi-build-examples.git?subdirectory=boost-check&branch=main#[FULL_COMMIT]
+  name: boost-check
+  version: 0.1.0
+  build: hbf21a9e_0
+  subdir: osx-arm64
+  depends:
+  - libcxx >=19
+  channel: null
+- conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.6-ha82da77_1.conda
+  sha256: 2b2443404503cd862385fd2f2a2c73f9624686fd1e5a45050b4034cfc06904ec
+  md5: ce5252d8db110cdb4ae4173d0a63c7c5
+  depends:
+  - __osx >=11.0
+  license: Apache-2.0 WITH LLVM-exception
+  license_family: Apache
+  size: 520992
+  timestamp: 1734494699681
