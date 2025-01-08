@@ -1,13 +1,21 @@
 use itertools::Itertools;
-use miette::Diagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_manifest::EnvironmentName;
+use pypi_modifiers::pypi_tags::{
+    get_tags_from_machine, is_python_record, tags_from_wheel_filename,
+};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::Platform;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches};
 use rattler_lock::LockFile;
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use rattler_virtual_packages::{
+    DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
+};
 use std::collections::HashMap;
+use std::str::FromStr;
 use thiserror::Error;
+use uv_distribution_filename::WheelFilename;
+use uv_platform_tags::Tags;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum VirtualPackageError {
@@ -21,19 +29,23 @@ pub enum VirtualPackageError {
         generic_virtual_pkg: String,
         spec: String,
     },
+
+    #[error("Couldn't get the virtual packages from the system")]
+    VirtualPackageDetectionError(#[from] DetectVirtualPackageError),
 }
 
 /// Get the required virtual packages for the given environment based on the given lock file.
-pub(crate) fn get_required_virtual_packages(
+pub(crate) fn get_required_virtual_packages_from_conda_records(
     lock_file: &LockFile,
-    platform: &Platform,
+    platform: Platform,
     environment_name: &EnvironmentName,
 ) -> Vec<MatchSpec> {
     // Get the locked conda packages for the given platform and environment
-    let locked_records = lock_file
-        .environment(environment_name.as_str())
-        .and_then(|env| env.conda_repodata_records(*platform).unwrap())
-        .unwrap();
+    let locked_env = lock_file.environment(environment_name.as_str()).unwrap();
+    let locked_records = locked_env
+        .conda_repodata_records(platform)
+        .unwrap()
+        .collect_vec();
 
     locked_records
         .into_iter()
@@ -50,10 +62,36 @@ pub(crate) fn get_required_virtual_packages(
         .collect_vec()
 }
 
+fn all_wheel_tags(
+    lock_file: &LockFile,
+    platform: Platform,
+    environment_name: &EnvironmentName,
+) -> Vec<Tags> {
+    // Get the locked conda packages for the given platform and environment
+    let locked_pypi_data = lock_file
+        .environment(environment_name.as_str())
+        .and_then(|env| env.pypi_packages(platform))
+        .unwrap()
+        .cloned();
+
+    locked_pypi_data
+        .into_iter()
+        .map(|package| package.0.location.clone())
+        .flat_map(|location| {
+            if let Some(file_name) = location.file_name() {
+                let wheel = WheelFilename::from_str(file_name).unwrap();
+                let tags = tags_from_wheel_filename(&wheel).unwrap();
+                Some(tags)
+            } else {
+                None
+            }
+        })
+        .collect_vec()
+}
 /// Validate that current machine has all the required virtual packages for the given environment
 pub(crate) fn validate_virtual_packages(
     lock_file: &LockFile,
-    platform: &Platform,
+    platform: Platform,
     environment_name: &EnvironmentName,
     virtual_package_overrides: Option<VirtualPackageOverrides>,
 ) -> Result<bool, VirtualPackageError> {
@@ -62,7 +100,7 @@ pub(crate) fn validate_virtual_packages(
         virtual_package_overrides.unwrap_or(VirtualPackageOverrides::from_env());
 
     let required_virtual_packages =
-        get_required_virtual_packages(lock_file, platform, environment_name);
+        get_required_virtual_packages_from_conda_records(lock_file, platform, environment_name);
 
     // Get the virtual packages available on the system
     let system_virtual_packages = VirtualPackage::detect(&virtual_package_overrides)
@@ -73,7 +111,7 @@ pub(crate) fn validate_virtual_packages(
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
 
-    // Check if all the required virtual packages match the system virtual packages
+    // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
         if let Some(local_vpkg) = system_virtual_packages.get(
             &required
@@ -96,6 +134,23 @@ pub(crate) fn validate_virtual_packages(
         }
     }
 
+    // Get python record from conda packages
+    let binding = lock_file
+        .environment(environment_name.as_str())
+        .and_then(|env| env.conda_repodata_records(platform).unwrap())
+        .unwrap();
+    let locked_pypi_data = binding
+        .iter()
+        .find(|record| is_python_record(&record.package_record))
+        .unwrap();
+
+    // Check if all the wheel tags match the system virtual packages
+    let wheel_tags = all_wheel_tags(lock_file, platform, environment_name);
+    let vpkgs = VirtualPackage::detect(&VirtualPackageOverrides::from_env())?;
+
+    let system_tags =
+        get_tags_from_machine(&vpkgs, platform, &locked_pypi_data.package_record).unwrap();
+
     Ok(true)
 }
 
@@ -111,8 +166,11 @@ mod test {
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::Linux64;
 
-        let virtual_matchspecs =
-            get_required_virtual_packages(&lockfile, &platform, &EnvironmentName::default());
+        let virtual_matchspecs = get_required_virtual_packages_from_conda_records(
+            &lockfile,
+            platform,
+            &EnvironmentName::default(),
+        );
 
         assert!(virtual_matchspecs
             .iter()
@@ -134,7 +192,7 @@ mod test {
 
         let result = validate_virtual_packages(
             &lockfile,
-            &platform,
+            platform,
             &EnvironmentName::default(),
             Some(overrides),
         );
@@ -148,7 +206,7 @@ mod test {
 
         let result = validate_virtual_packages(
             &lockfile,
-            &platform,
+            platform,
             &EnvironmentName::default(),
             Some(overrides),
         );
