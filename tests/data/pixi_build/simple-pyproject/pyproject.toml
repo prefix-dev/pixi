@@ -8,12 +8,12 @@ version = "0.1.0"
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 preview = ["pixi-build"]
 
-[tool.pixi.host-dependencies]
+[tool.pixi.package.host-dependencies]
 # To be able to install this pyproject we need to install the dependencies of
 # the python build-system defined above. Note that different from the
 # pyproject build-system this refers to a conda package instead of a pypi
@@ -25,14 +25,14 @@ hatchling = "==1.26.3"
 # [build-system] section this section instructs pixi which build backend to
 # use. The build-backend is an executable that is installed and invoked by
 # pixi with the sole purpose to build the package.
-[tool.pixi.build-system]
+[tool.pixi.package.build]
 # The name of the build backend to use. This name refers both to the name of
 # the package that provides the build backend and the name of the executable
 # inside the package that is invoked.
 #
-# The `build-backend` key also functions as a dependency declaration. At least
+# The `backend` key also functions as a dependency declaration. At least
 # a version specifier must be added.
-build-backend = { name = "pixi-build-python", version = "*" }
+backend = { name = "pixi-build-python", version = "*" }
 # These are the conda channels that are used to resolve the dependencies of the
 # build backend package.
 channels = [

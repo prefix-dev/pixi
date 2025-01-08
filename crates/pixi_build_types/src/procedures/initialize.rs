@@ -23,10 +23,6 @@ pub struct InitializeParams {
     /// The manifest that the build backend should use.
     pub manifest_path: PathBuf,
 
-    /// Additional configuration to configure the backend. This configuration is
-    /// specific to the backend.
-    pub configuration: serde_json::Value,
-
     /// Optionally the cache directory to use for any caching activity.
     pub cache_directory: Option<PathBuf>,
 }

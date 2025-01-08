@@ -17,15 +17,15 @@ start = "rich-example-main"
 name = "rich_example"
 version = "0.1.0"
 
-[build-system]
-build-backend = { name = "pixi-build-python", version = "*" }
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 
-[host-dependencies]
+[package.host-dependencies]
 hatchling = "==1.26.3"
 
-[run-dependencies]
+[package.run-dependencies]
 rich = ">=13.9.4,<14"
