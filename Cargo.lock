@@ -3886,7 +3886,6 @@ dependencies = [
  "pixi_consts",
  "pixi_spec",
  "pixi_toml",
- "pixi_utils",
  "pyproject-toml",
  "rattler_conda_types",
  "rattler_lock",
