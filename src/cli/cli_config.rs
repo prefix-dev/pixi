@@ -148,20 +148,24 @@ pub struct GitRev {
 }
 
 impl GitRev {
+    /// Create a new `GitRev`
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Set the branch
     pub fn with_branch(mut self, branch: String) -> GitRev {
         self.branch = Some(branch);
         self
     }
 
+    /// Set the revision
     pub fn with_rev(mut self, rev: String) -> GitRev {
         self.rev = Some(rev);
         self
     }
 
+    /// Set the tag
     pub fn with_tag(mut self, tag: String) -> GitRev {
         self.tag = Some(tag);
         self

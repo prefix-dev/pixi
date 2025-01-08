@@ -102,8 +102,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (match_specs, source_specs, pypi_deps) = match dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
-            // now if user passed some git configuration
-            // we will use it to create pixi specs
+            // if user passed some git configuration
+            // we will use it to create pixi source specs
             let passed_specs: IndexMap<PackageName, (MatchSpec, SpecType)> = dependency_config
                 .specs()?
                 .into_iter()
