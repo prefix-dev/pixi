@@ -135,15 +135,15 @@ impl PrefixUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
-    #[clap(long, requires = "git")]
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"])]
     pub branch: Option<String>,
 
     /// The git tag
-    #[clap(long, requires = "git")]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"])]
     pub tag: Option<String>,
 
     /// The git revision
-    #[clap(long, requires = "git")]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"])]
     pub rev: Option<String>,
 }
 
