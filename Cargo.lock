@@ -3730,6 +3730,7 @@ dependencies = [
  "uv-normalize",
  "uv-pep440",
  "uv-pep508",
+ "uv-platform-tags",
  "uv-pypi-types",
  "uv-python",
  "uv-requirements",
@@ -4274,7 +4275,10 @@ dependencies = [
  "pixi_default_versions",
  "pixi_manifest",
  "rattler_conda_types",
+ "rattler_virtual_packages",
  "regex",
+ "thiserror 2.0.9",
+ "uv-distribution-filename",
  "uv-pep508",
  "uv-platform-tags",
 ]

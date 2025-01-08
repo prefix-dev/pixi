@@ -251,7 +251,7 @@ impl<'p> LockFileDerivedData<'p> {
         // Validate the virtual packages for the environment match the system
         validate_virtual_packages(
             &self.lock_file,
-            &environment.best_platform(),
+            environment.best_platform(),
             environment.name(),
             None,
         )
