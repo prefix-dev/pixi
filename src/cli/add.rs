@@ -133,11 +133,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         DependencyType::PypiDependency => {
             let match_specs = IndexMap::default();
             let source_specs = IndexMap::default();
-            let pypi_deps = dependency_config
-                .pypi_deps(&project)?
-                .into_iter()
-                .map(|(name, req)| (name, (req, None)))
-                .collect();
+            let pypi_deps = match dependency_config
+                .vcs_pep508_requirements(&project)
+                .transpose()?
+            {
+                Some(vcs_reqs) => vcs_reqs
+                    .into_iter()
+                    .map(|(name, req)| (name, (req, None)))
+                    .collect(),
+                None => dependency_config
+                    .pypi_deps(&project)?
+                    .into_iter()
+                    .map(|(name, req)| (name, (req, None)))
+                    .collect(),
+            };
+
             (match_specs, source_specs, pypi_deps)
         }
     };

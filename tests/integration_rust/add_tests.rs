@@ -815,3 +815,30 @@ preview = ['pixi-build']"#,
     // Check the manifest itself
     insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
 }
+
+/// Test adding a git dependency using ssh url
+#[tokio::test]
+async fn add_pypi_git() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform}"]
+
+"#,
+        platform = Platform::current(),
+    ))
+    .unwrap();
+
+    // Add a package
+    pixi.add("boltons")
+        .set_pypi(true)
+        .with_git_url(Url::parse("https://github.com/mahmoud/boltons.git").unwrap())
+        .with_no_lockfile_update(true)
+        .await
+        .unwrap();
+
+    // Check the manifest itself
+    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+}

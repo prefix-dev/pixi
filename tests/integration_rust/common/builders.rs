@@ -198,6 +198,11 @@ impl AddBuilder {
         self
     }
 
+    pub fn set_pypi(mut self, pypi: bool) -> Self {
+        self.args.dependency_config.pypi = pypi;
+        self
+    }
+
     pub fn with_feature(mut self, feature: impl ToString) -> Self {
         self.args.dependency_config.feature = FeatureName::Named(feature.to_string());
         self

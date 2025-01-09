@@ -4,11 +4,14 @@ use crate::lock_file::UpdateMode;
 use crate::DependencyType;
 use crate::Project;
 use clap::Parser;
+use indexmap::IndexMap;
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pep508_rs::Requirement;
 use pixi_config::{Config, ConfigCli};
 use pixi_consts::consts;
+use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::Reference;
@@ -135,15 +138,15 @@ impl PrefixUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
-    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev", "pypi"])]
     pub branch: Option<String>,
 
     /// The git tag
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev", "pypi"])]
     pub tag: Option<String>,
 
     /// The git revision
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag", "pypi"])]
     pub rev: Option<String>,
 }
 
@@ -169,6 +172,18 @@ impl GitRev {
     pub fn with_tag(mut self, tag: String) -> GitRev {
         self.tag = Some(tag);
         self
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        if let Some(branch) = &self.branch {
+            Some(branch)
+        } else if let Some(tag) = &self.tag {
+            Some(tag)
+        } else if let Some(rev) = &self.rev {
+            Some(rev)
+        } else {
+            None
+        }
     }
 }
 
@@ -216,7 +231,7 @@ pub struct DependencyConfig {
     pub feature: FeatureName,
 
     /// The git url to use when adding a git dependency
-    #[clap(long, short, conflicts_with_all = ["pypi"])]
+    #[clap(long, short)]
     pub git: Option<Url>,
 
     #[clap(flatten)]
@@ -286,6 +301,42 @@ impl DependencyConfig {
                     consts::FEATURE_STYLE.apply_to(feature)
                 )
             }
+        }
+    }
+
+    pub fn vcs_pep508_requirements(
+        &self,
+        project: &Project,
+    ) -> Option<miette::Result<IndexMap<PyPiPackageName, Requirement>>> {
+        match &self.git {
+            Some(git) => {
+                // pep 508 requirements with direct reference
+                // should be in this format
+                // name @ url@rev#subdirectory=subdir
+                // we need to construct it
+                let pep_reqs: miette::Result<IndexMap<PyPiPackageName, Requirement>> = self
+                    .specs
+                    .iter()
+                    .map(|package_name| {
+                        let mut vcs_req = format!("{} @ {}", package_name, git);
+                        if let Some(rev) = &self.rev {
+                            if let Some(rev_str) = rev.as_str() {
+                                vcs_req.push_str(&format!("@{}", rev_str));
+                            }
+                        }
+                        if let Some(subdir) = &self.subdir {
+                            vcs_req.push_str(&format!("#subdirectory={}", subdir));
+                        }
+
+                        let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
+                        let name = PyPiPackageName::from_normalized(dep.clone().name);
+
+                        Ok((name, dep))
+                    })
+                    .collect();
+                Some(pep_reqs)
+            }
+            None => None,
         }
     }
 }

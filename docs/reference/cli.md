@@ -98,15 +98,20 @@ pixi add --platform osx-64 clang # (7)!
 pixi add --no-install numpy # (8)!
 pixi add --no-lockfile-update numpy # (9)!
 pixi add --feature featurex numpy # (10)!
+pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (11)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (12)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --tag v0.1.0 boost-check # (13)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --rev e50d4a1 boost-check # (14)!
 
 # Add a pypi dependency
-pixi add --pypi requests[security] # (11)!
-pixi add --pypi Django==5.1rc1 # (12)!
-pixi add --pypi "boltons>=24.0.0" --feature lint # (13)!
-pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (14)!
-pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (15)!
-pixi add --pypi "project @ file:///absolute/path/to/project" # (16)!
-pixi add --pypi "project@file:///absolute/path/to/project" --editable # (17)!
+pixi add --pypi requests[security] # (15)!
+pixi add --pypi Django==5.1rc1 # (16)!
+pixi add --pypi "boltons>=24.0.0" --feature lint # (17)!
+pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (18)!
+pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (19)!
+pixi add --pypi "project @ file:///absolute/path/to/project" # (20)!
+pixi add --pypi "project@file:///absolute/path/to/project" --editable # (21)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (22)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
@@ -119,13 +124,18 @@ pixi add --pypi "project@file:///absolute/path/to/project" --editable # (17)!
 8. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
 9. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
 10. This will add the `numpy` package in the feature `featurex`.
-11. This will add the `requests` package as `pypi` dependency with the `security` extra.
-12. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
-13. This will add the `boltons` package in the feature `lint` as `pypi` dependency.
-14. This will add the `boltons` package with the given `url` as `pypi` dependency.
-15. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
-16. This will add the `project` package with the given `file` url as `pypi` dependency.
-17. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
+11. This will add the `boost-check` source package to the dependencies from the git repository.
+12. This will add the `boost-check` source package to the dependencies from the git repository using `main` branch and the `boost-check` folder in the repository.
+13. This will add the `boost-check` source package to the dependencies from the git repository using `v0.1.0` tag.
+14. This will add the `boost-check` source package to the dependencies from the git repository using `e50d4a1` revision.
+15. This will add the `requests` package as `pypi` dependency with the `security` extra.
+16. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
+17. This will add the `boltons` package in the feature `lint` as `pypi` dependency.
+18. This will add the `boltons` package with the given `url` as `pypi` dependency.
+19. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
+20. This will add the `project` package with the given `file` url as `pypi` dependency.
+21. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
+22. This will add the `boltons` package with the given `git` url as `pypi` dependency. `branch`, `tag`, and `rev` are not yet supported.
 
 !!! tip
     If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
