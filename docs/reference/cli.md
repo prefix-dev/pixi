@@ -79,6 +79,12 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
   Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
   See [configuration](pixi_manifest.md) for details.
+- `--git`: Specifies a git dependency, the package will be installed from the git repository.
+  The `--git` flag can be used with the following options:
+  - `--branch <BRANCH>`: The branch to use when installing the package.
+  - `--tag <TAG>`: The tag to use when installing the package.
+  - `--rev <REV>`: The revision to use when installing the package.
+  - `--subdir <SUBDIR>`: The subdirectory to use when installing the package.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
