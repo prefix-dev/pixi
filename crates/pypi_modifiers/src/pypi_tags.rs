@@ -7,9 +7,8 @@ use rattler_conda_types::MatchSpec;
 use rattler_conda_types::{Arch, PackageRecord, Platform};
 use rattler_virtual_packages::VirtualPackage;
 use regex::Regex;
-use uv_distribution_filename::WheelFilename;
+use uv_platform_tags::Os as UvOs;
 use uv_platform_tags::Tags;
-use uv_platform_tags::{Arch as UvArch, Os as UvOs, TagsError};
 
 /// Returns true if the specified record refers to a version/variant of python.
 pub fn is_python_record(record: impl AsRef<PackageRecord>) -> bool {
@@ -198,6 +197,7 @@ fn gil_disabled(python_record: &PackageRecord) -> miette::Result<bool> {
     }))
 }
 
+/// Create the pypi tags for the specified platform, python version, and implementation name
 fn create_tags(
     platform: uv_platform_tags::Platform,
     python_version: (u8, u8),
@@ -235,8 +235,11 @@ pub enum PlatformTagError {
     #[error(transparent)]
     ArchTagsError(#[from] ArchTagsError),
 }
-fn get_platform_from_virtual_packages(
-    virtual_packages: &Vec<VirtualPackage>,
+
+/// Get the pypi platform from the conda virtual packages
+/// Used to get the platform for the environment validation in the lock file.
+fn get_pypi_platform_from_virtual_packages(
+    virtual_packages: &[VirtualPackage],
     platform: Platform,
 ) -> Result<uv_platform_tags::Platform, PlatformTagError> {
     if platform.is_linux() {
@@ -316,15 +319,15 @@ fn get_platform_from_virtual_packages(
     Err(PlatformTagError::NoTagsForPlatform(platform.to_string()))
 }
 
-/// Get the tags for this machine and the given python record
+/// Get the pypi tags for this machine and the given python record
 /// Designed to work for the environment validation in the lock file with the current machine.
 pub fn get_tags_from_machine(
-    virtual_packages: &Vec<VirtualPackage>,
+    virtual_packages: &[VirtualPackage],
     platform: Platform,
     python_record: &PackageRecord,
 ) -> miette::Result<Tags> {
     let platform =
-        get_platform_from_virtual_packages(virtual_packages, platform).into_diagnostic()?;
+        get_pypi_platform_from_virtual_packages(virtual_packages, platform).into_diagnostic()?;
     create_tags(
         platform,
         get_python_version(python_record).into_diagnostic()?,
@@ -333,28 +336,14 @@ pub fn get_tags_from_machine(
     )
 }
 
-pub fn tags_from_wheel_filename(wheel: &WheelFilename) -> Result<Tags, TagsError> {
-    let py_tags = wheel.python_tag.clone();
-    let abi_tags = wheel.abi_tag.clone();
-    let platform_tags = wheel.platform_tag.clone();
-
-    // Generate all combinations of tags
-    let mut tags = Vec::new();
-    for py in &py_tags {
-        for abi in &abi_tags {
-            for plat in &platform_tags {
-                tags.push((py.clone(), abi.clone(), plat.clone()));
-            }
-        }
-    }
-    Ok(Tags::new(tags))
-}
-
+#[cfg(test)]
 mod tests {
     use super::*;
     use rattler_conda_types::VersionWithSource;
     use rattler_virtual_packages::{LibC, Osx};
     use std::str::FromStr;
+    use uv_distribution_filename::WheelFilename;
+    use uv_platform_tags::Arch as UvArch;
 
     #[test]
     fn test_get_platform_from_vpkgs_osx() {
@@ -362,7 +351,7 @@ mod tests {
             version: "15.1.0".parse().unwrap(),
         })];
         let platform = Platform::OsxArm64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -377,7 +366,7 @@ mod tests {
             version: "12.1.0".parse().unwrap(),
         })];
         let platform = Platform::Osx64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -396,7 +385,7 @@ mod tests {
             version: "2.33".parse().unwrap(),
         })];
         let platform = Platform::Linux64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -412,13 +401,13 @@ mod tests {
             version: "1.2".parse().unwrap(),
         })];
         let platform = Platform::Linux64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
         assert_eq!(platform.os(), &UvOs::Musllinux { major: 1, minor: 2 });
         assert_eq!(platform.arch(), UvArch::X86_64);
 
         let platform = Platform::LinuxAarch64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
         assert_eq!(platform.os(), &UvOs::Musllinux { major: 1, minor: 2 });
         assert_eq!(platform.arch(), UvArch::Aarch64);
@@ -428,7 +417,7 @@ mod tests {
             version: "1.2".parse().unwrap(),
         })];
         let platform = Platform::LinuxPpc64le;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
         assert_eq!(platform.os(), &UvOs::Musllinux { major: 1, minor: 2 });
         assert_eq!(platform.arch(), UvArch::Powerpc64Le);
@@ -438,13 +427,13 @@ mod tests {
     fn test_get_platform_from_vpkgs_windows() {
         let vpkgs = vec![];
         let platform = Platform::Win64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
         assert_eq!(platform.os(), &UvOs::Windows);
         assert_eq!(platform.arch(), UvArch::X86_64);
 
         let platform = Platform::WinArm64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
         assert_eq!(platform.os(), &UvOs::Windows);
         assert_eq!(platform.arch(), UvArch::Aarch64);
@@ -455,7 +444,7 @@ mod tests {
         // No virtual packages gives an error
         let vpkgs = vec![];
         let platform = Platform::Linux64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         assert!(res.is_err());
 
         // Unknown libc family gives an error
@@ -464,7 +453,7 @@ mod tests {
             version: "1.2".parse().unwrap(),
         })];
         let platform = Platform::Linux64;
-        let res = get_platform_from_virtual_packages(&vpkgs, platform);
+        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         assert!(res.is_err());
         assert!(matches!(
             res.unwrap_err(),
