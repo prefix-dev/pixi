@@ -1,3 +1,14 @@
+//! This module is a collection of types that represent a pixi package in a protocol
+//! format that can be sent over the wire.
+//!
+//! We need to vendor a lot of the types, and simplify them in some cases, so that
+//! we have a stable protocol that can be used to communicate in the build tasks.
+//!
+//! This is why we append a `V{version}`, to the type names, to indicate the version
+//! of the protocol.
+//!
+//! Only the Whole ProjectModel is versioned explicitly in a enum.
+//! When making a change to one of the types be sure to add another enum declaration, if it is breaking.
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -182,8 +193,7 @@ pub enum GitReferenceV1 {
     DefaultBranch,
 }
 
-/// Similar to a [`MatchSpec`] but does not include the package name. This is useful in places
-/// where the package name is already known (e.g. `foo = "3.4.1 *cuda"`)
+/// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
 #[derive(Serialize, Deserialize, Default)]
 pub struct NamelessMatchSpecV1 {
