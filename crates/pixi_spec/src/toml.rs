@@ -575,9 +575,7 @@ mod test {
             let result = match spec {
                 Ok(spec) => serde_json::to_value(&spec).unwrap(),
                 Err(e) => {
-                    json!({
-                        "error": format!("ERROR: {e}")
-                    })
+                    json!({ "error": format!("ERROR: {e}") })
                 }
             };
 
