@@ -791,7 +791,7 @@ async fn add_plain_ssh_url() {
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
+platforms = ["linux-64"]
 preview = ['pixi-build']"#,
     )
     .unwrap();
@@ -815,7 +815,7 @@ async fn add_pypi_git() {
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
+platforms = ["linux-64"]
 
 "#,
     )

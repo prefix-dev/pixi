@@ -5,7 +5,7 @@ expression: pixi.project().unwrap().manifest().source.to_string()
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["osx-arm64"]
+platforms = ["linux-64"]
 preview = ['pixi-build']
 
 [dependencies]

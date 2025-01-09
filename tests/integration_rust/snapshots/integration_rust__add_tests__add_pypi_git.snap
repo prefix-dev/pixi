@@ -5,7 +5,7 @@ expression: pixi.project().unwrap().manifest().source.to_string()
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["[CURRENT_PLATFORM]"]
+platforms = ["linux-64"]
 
 [pypi-dependencies]
 boltons = { git = "https://github.com/mahmoud/boltons.git" }
