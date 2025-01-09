@@ -646,3 +646,34 @@ async fn add_dependency_pinning_strategy() {
     // Package should be automatically pinned to a major version
     assert_eq!(bar_spec, r#"">=1,<2""#);
 }
+
+#[tokio::test]
+async fn add_dependency_dont_create_project() {
+    // Create a channel with two packages
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+    package_database.add_package(Package::build("python", "3.13").finish());
+
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "some-workspace"
+platforms = []
+channels = ['{local_channel}']
+preview = ['pixi-build']
+"#,
+        local_channel = local_channel.url()
+    ))
+    .unwrap();
+
+    // Add the `packages` to the project
+    pixi.add("foo").await.unwrap();
+
+    let project = pixi.project().unwrap();
+
+    insta::assert_snapshot!(project.manifest().source.to_string());
+}
