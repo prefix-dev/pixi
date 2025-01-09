@@ -840,7 +840,12 @@ platforms = ["{platform}"]
         .unwrap();
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    insta::with_settings!({filters => vec![
+        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
+    ]}, {
+        insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    });
 }
 
 #[tokio::test]
