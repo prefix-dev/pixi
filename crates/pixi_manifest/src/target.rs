@@ -576,6 +576,11 @@ impl<T> Targets<T> {
         self.targets.keys()
     }
 
+    /// Returns the user defined selectors and their targets
+    pub fn user_defined_targets(&self) -> impl Iterator<Item = (&TargetSelector, &T)> + '_ {
+        self.targets.iter()
+    }
+
     /// Returns the source location of the target selector in the manifest.
     pub fn source_loc(&self, selector: &TargetSelector) -> Option<std::ops::Range<usize>> {
         self.source_locs.get(selector).cloned()

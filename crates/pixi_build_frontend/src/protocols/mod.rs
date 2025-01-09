@@ -12,9 +12,11 @@ use jsonrpsee::{
     },
     types::ErrorCode,
 };
+use pixi_manifest::PackageManifest;
 
 use crate::{
     jsonrpc::{stdio_transport, RpcParams},
+    to_project_model_v1,
     tool::Tool,
     CondaBuildReporter, CondaMetadataReporter,
 };
@@ -29,7 +31,7 @@ use pixi_build_types::{
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         initialize::{InitializeParams, InitializeResult},
     },
-    BackendCapabilities, FrontendCapabilities,
+    BackendCapabilities, FrontendCapabilities, VersionedProjectModel,
 };
 use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
@@ -102,20 +104,19 @@ impl ProtocolError {
 /// and for pixi it's a pixi.toml or a pyproject.toml file.
 #[derive(Debug)]
 pub struct JsonRPCBuildProtocol {
+    /// The identifier of the backend.
     backend_identifier: String,
-
+    /// The JSON-RPC client to communicate with the backend.
     client: Client,
-
+    /// Couples the build to a specific pixi dispatched build.
     build_id: usize,
-
     /// The directory that contains the source files.
     source_dir: PathBuf,
-
     /// The directory that contains the `recipe.yaml` or `pixi.toml` in the source directory.
     manifest_path: PathBuf,
-
+    /// Record the capabilities supported by the backend
     _backend_capabilities: BackendCapabilities,
-
+    /// The stderr of the backend process.
     stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
 }
 
@@ -147,6 +148,7 @@ impl JsonRPCBuildProtocol {
     async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        package_manifest: Option<&'_ PackageManifest>,
         build_id: usize,
         cache_dir: Option<PathBuf>,
         tool: Tool,
@@ -179,6 +181,7 @@ impl JsonRPCBuildProtocol {
             backend_identifier,
             source_dir,
             manifest_path,
+            package_manifest,
             build_id,
             cache_dir,
             tx,
@@ -195,6 +198,7 @@ impl JsonRPCBuildProtocol {
         source_dir: PathBuf,
         // In case of rattler-build it's recipe.yaml
         manifest_path: PathBuf,
+        package_manifest: Option<&'_ PackageManifest>,
         build_id: usize,
         cache_dir: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
@@ -224,11 +228,14 @@ impl JsonRPCBuildProtocol {
             })?;
 
         // TODO: select the correct protocol version based on the capabilities
+        let project_model = package_manifest
+            .map(|manifest| VersionedProjectModel::V1(to_project_model_v1(manifest)));
         // Invoke the initialize method on the backend to establish the connection.
         let _result: InitializeResult = client
             .request(
                 procedures::initialize::METHOD_NAME,
                 RpcParams::from(InitializeParams {
+                    project_model,
                     manifest_path: manifest_path.clone(),
                     cache_directory: cache_dir,
                 }),

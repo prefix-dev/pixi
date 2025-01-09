@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::VersionedProjectModel;
 use serde::{Deserialize, Serialize};
 
 pub const METHOD_NAME: &str = "initialize";
@@ -25,6 +26,11 @@ pub struct InitializeParams {
 
     /// Optionally the cache directory to use for any caching activity.
     pub cache_directory: Option<PathBuf>,
+
+    /// Project model that the backend should use
+    /// even though it is an option it is highly recommended to use
+    /// this field. Otherwise it will be very easy to break backwards compatibility.
+    pub project_model: Option<VersionedProjectModel>,
 }
 
 /// The result of the initialize request.

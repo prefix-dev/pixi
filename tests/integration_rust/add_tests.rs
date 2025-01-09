@@ -842,3 +842,41 @@ platforms = ["{platform}"]
     // Check the manifest itself
     insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
 }
+
+#[tokio::test]
+async fn add_dependency_dont_create_project() {
+    // Create a channel with two packages
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foo", "1").finish());
+    package_database.add_package(Package::build("bar", "1").finish());
+    package_database.add_package(Package::build("python", "3.13").finish());
+
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    let local_channel_str = format!("{}", local_channel.url());
+
+    // Initialize a new pixi project using the above channel
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "some-workspace"
+platforms = []
+channels = ['{local_channel}']
+preview = ['pixi-build']
+"#,
+        local_channel = local_channel_str
+    ))
+    .unwrap();
+
+    // Add the `packages` to the project
+    pixi.add("foo").await.unwrap();
+
+    let project = pixi.project().unwrap();
+
+    // filter out local channels from the insta
+    insta::with_settings!({filters => vec![
+        (local_channel_str.as_str(), "file://<LOCAL_CHANNEL>/"),
+    ]}, {
+        insta::assert_snapshot!(project.manifest().source.to_string());
+    });
+}
