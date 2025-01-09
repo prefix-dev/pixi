@@ -1,0 +1,69 @@
+---
+source: crates/pixi_build_frontend/src/into_build_types.rs
+expression: project_model
+---
+name: python_bindings
+version: 0.1.0
+description: ~
+authors: ~
+license: ~
+license_file: ~
+readme: ~
+homepage: ~
+repository: ~
+documentation: ~
+configuration: ~
+targets:
+  default_target:
+    host_dependencies:
+      cmake:
+        detailedVersion:
+          version: ">=3.20,<3.27"
+          build: ~
+          build_number: ~
+          file_name: ~
+          channel: ~
+          subdir: ~
+          namespace: ~
+          md5: ~
+          sha256: ~
+          url: ~
+      nanobind:
+        detailedVersion:
+          version: ">=2.4.0,<2.5.0"
+          build: ~
+          build_number: ~
+          file_name: ~
+          channel: ~
+          subdir: ~
+          namespace: ~
+          md5: ~
+          sha256: ~
+          url: ~
+      python_abi:
+        detailedVersion:
+          version: ">=3.12,<3.13"
+          build: ~
+          build_number: ~
+          file_name: ~
+          channel: ~
+          subdir: ~
+          namespace: ~
+          md5: ~
+          sha256: ~
+          url: ~
+    build_dependencies: {}
+    run_dependencies:
+      python:
+        detailedVersion:
+          version: ">=3.12,<3.13"
+          build: ~
+          build_number: ~
+          file_name: ~
+          channel: ~
+          subdir: ~
+          namespace: ~
+          md5: ~
+          sha256: ~
+          url: ~
+  targets: {}

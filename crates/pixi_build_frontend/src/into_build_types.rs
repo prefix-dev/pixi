@@ -64,7 +64,7 @@ fn to_pbt_dependencies<'a>(
         .collect()
 }
 
-/// Converts a `PackageTarget` to a `pbt::TargetV1`.
+/// Converts a [`PackageTarget`] to a [`pbt::TargetV1`].
 fn to_target_v1(target: &PackageTarget) -> pbt::TargetV1 {
     // Difference for us is that [`pbt::TargetV1`] has split the host, run and build dependencies
     // into separate fields, so we need to split them up here
@@ -109,6 +109,7 @@ fn to_targets_v1(targets: &Targets<PackageTarget>) -> pbt::TargetsV1 {
     }
 }
 
+/// Converts a [`PackageManifest`] to a [`pbt::ProjectModelV1`].
 pub fn to_project_model_v1(manifest: &PackageManifest) -> pbt::ProjectModelV1 {
     pbt::ProjectModelV1 {
         name: manifest.package.name.clone(),
@@ -123,5 +124,57 @@ pub fn to_project_model_v1(manifest: &PackageManifest) -> pbt::ProjectModelV1 {
         documentation: manifest.package.documentation.clone(),
         configuration: serde_json::Value::Null,
         targets: to_targets_v1(&manifest.targets),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rstest::rstest;
+    use std::path::PathBuf;
+
+    /// Use a macro so that the snapshot test is inlined into the function
+    /// this makes insta use the name of the function as the snapshot name
+    /// instead of this generic name
+    macro_rules! snapshot_test {
+        ($manifest_path:expr) => {{
+            use std::ffi::OsStr;
+
+            let manifest = pixi_manifest::Manifest::from_path(&$manifest_path)
+                .expect("could not load manifest");
+            if let Some(package_manifest) = manifest.package {
+                // To create different snapshot files for the same function
+                let name = $manifest_path
+                    .parent()
+                    .unwrap()
+                    .file_name()
+                    .and_then(OsStr::to_str)
+                    .unwrap();
+
+                // Convert the manifest to the project model
+                let project_model = super::to_project_model_v1(&package_manifest);
+                let mut settings = insta::Settings::clone_current();
+                settings.set_snapshot_suffix(name);
+                settings.bind(|| {
+                    insta::assert_yaml_snapshot!(project_model);
+                });
+            }
+        }};
+    }
+
+    #[rstest]
+    #[test]
+    fn test_conversions_v1_examples(
+        #[files("../../examples/pixi-build/*/pixi.toml")] manifest_path: PathBuf,
+    ) {
+        snapshot_test!(manifest_path);
+    }
+
+    #[rstest]
+    #[test]
+    fn test_conversions_v1_docs(
+        #[files("../../docs/source_files/pixi_projects/pixi_build_*/pixi.toml")]
+        manifest_path: PathBuf,
+    ) {
+        snapshot_test!(manifest_path);
     }
 }
