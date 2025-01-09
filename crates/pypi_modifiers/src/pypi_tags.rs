@@ -1,15 +1,47 @@
-use std::sync::OnceLock;
-
-use miette::{Context, Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_default_versions::{default_glibc_version, default_mac_os_version};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::MatchSpec;
 use rattler_conda_types::{Arch, PackageRecord, Platform};
 use rattler_virtual_packages::VirtualPackage;
 use regex::Regex;
+use std::sync::OnceLock;
 use uv_platform_tags::Os as UvOs;
 use uv_platform_tags::Tags;
 
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("failed to determine pypi tags")]
+pub enum PyPITagError {
+    #[error("failed to determine the python wheel tags for the target platform")]
+    FailedToDetermineWheelTags(#[from] uv_platform_tags::TagsError),
+
+    #[error("failed to determine pypi tag for platform: {0}")]
+    FailedToDeterminePlatformTags(Platform),
+
+    #[error("failed to determine pypi arch tags for arch: {0}")]
+    FailedToDetermineArchTags(Arch),
+
+    #[error("failed to get major and minor version from '{0}' version: '{1}'")]
+    FailedToGetMajorMinorVersion(String, String),
+
+    #[error("unsupported libc family: '{0}'")]
+    UnsupportedLibCFamily(String),
+
+    #[error("unsupported python implementation: '{0}'")]
+    UnsupportedPythonImplementation(String),
+
+    #[error("expected virtual package {0} for {1}.")]
+    ExpectedVirtualPackage(String, String),
+
+    #[error("version {0} to high to cast down for platform tag creation")]
+    VersionCastError(u64),
+
+    #[error("no tags could be created for platform: {0}")]
+    NoTagsForPlatform(String),
+
+    #[error(transparent)]
+    ParseMatchSpecError(#[from] rattler_conda_types::ParseMatchSpecError),
+}
 /// Returns true if the specified record refers to a version/variant of python.
 pub fn is_python_record(record: impl AsRef<PackageRecord>) -> bool {
     package_name_is_python(&record.as_ref().name)
@@ -26,10 +58,10 @@ pub fn get_pypi_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
     python_record: &PackageRecord,
-) -> miette::Result<Tags> {
+) -> Result<Tags, PyPITagError> {
     let platform = get_platform_tags(platform, system_requirements)?;
-    let python_version = get_python_version(python_record).into_diagnostic()?;
-    let implementation_name = get_implementation_name(python_record).into_diagnostic()?;
+    let python_version = get_python_version(python_record)?;
+    let implementation_name = get_implementation_name(python_record)?;
     let gil_disabled = gil_disabled(python_record)?;
     create_tags(platform, python_version, implementation_name, gil_disabled)
 }
@@ -38,7 +70,7 @@ pub fn get_pypi_tags(
 fn get_platform_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
-) -> miette::Result<uv_platform_tags::Platform> {
+) -> Result<uv_platform_tags::Platform, PyPITagError> {
     if platform.is_linux() {
         get_linux_platform_tags(platform, system_requirements)
     } else if platform.is_windows() {
@@ -46,7 +78,7 @@ fn get_platform_tags(
     } else if platform.is_osx() {
         get_macos_platform_tags(platform, system_requirements)
     } else {
-        miette::bail!("unsupported platform for pypi packages {platform}")
+        Err(PyPITagError::FailedToDeterminePlatformTags(platform))
     }
 }
 
@@ -54,7 +86,7 @@ fn get_platform_tags(
 fn get_linux_platform_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
-) -> miette::Result<uv_platform_tags::Platform> {
+) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let arch = get_arch_tags(platform)?;
 
     // Find the glibc version
@@ -66,7 +98,7 @@ fn get_linux_platform_tags(
         None => {
             let (major, minor) = default_glibc_version()
                 .as_major_minor()
-                .expect("expected default glibc version to be a major.minor version");
+                .expect("default glibc version should be valid");
             Ok(uv_platform_tags::Platform::new(
                 UvOs::Manylinux {
                     major: major as _,
@@ -77,9 +109,10 @@ fn get_linux_platform_tags(
         }
         Some(("glibc", version)) => {
             let Some((major, minor)) = version.as_major_minor() else {
-                miette::bail!(
-                    "expected glibc version to be a major.minor version, but got '{version}'"
-                )
+                return Err(PyPITagError::FailedToGetMajorMinorVersion(
+                    "glibc".to_string(),
+                    version.to_string(),
+                ));
             };
             Ok(uv_platform_tags::Platform::new(
                 UvOs::Manylinux {
@@ -89,14 +122,29 @@ fn get_linux_platform_tags(
                 arch,
             ))
         }
-        Some((family, _)) => {
-            miette::bail!("unsupported libc family for pypi packages '{family}'");
+        Some(("musl", version)) => {
+            let Some((major, minor)) = version.as_major_minor() else {
+                return Err(PyPITagError::FailedToGetMajorMinorVersion(
+                    "musl".to_string(),
+                    version.to_string(),
+                ));
+            };
+            Ok(uv_platform_tags::Platform::new(
+                UvOs::Musllinux {
+                    major: major as _,
+                    minor: minor as _,
+                },
+                arch,
+            ))
         }
+        Some((family, _)) => Err(PyPITagError::UnsupportedLibCFamily(family.to_string())),
     }
 }
 
 /// Get windows specific platform tags
-fn get_windows_platform_tags(platform: Platform) -> miette::Result<uv_platform_tags::Platform> {
+fn get_windows_platform_tags(
+    platform: Platform,
+) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let arch = get_arch_tags(platform)?;
     Ok(uv_platform_tags::Platform::new(UvOs::Windows, arch))
 }
@@ -105,13 +153,16 @@ fn get_windows_platform_tags(platform: Platform) -> miette::Result<uv_platform_t
 fn get_macos_platform_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
-) -> miette::Result<uv_platform_tags::Platform> {
+) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let osx_version = system_requirements
         .macos
         .clone()
         .unwrap_or_else(|| default_mac_os_version(platform));
     let Some((major, minor)) = osx_version.as_major_minor() else {
-        miette::bail!("expected macos version to be a major.minor version, but got '{osx_version}'")
+        return Err(PyPITagError::FailedToGetMajorMinorVersion(
+            "macos".to_string(),
+            osx_version.to_string(),
+        ));
     };
 
     let arch = get_arch_tags(platform)?;
@@ -125,11 +176,8 @@ fn get_macos_platform_tags(
     ))
 }
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("unsupported architecture for pypi tags: {0}")]
-pub struct ArchTagsError(Arch);
 /// Get the arch tag for the specified platform
-fn get_arch_tags(platform: Platform) -> Result<uv_platform_tags::Arch, ArchTagsError> {
+fn get_arch_tags(platform: Platform) -> Result<uv_platform_tags::Arch, PyPITagError> {
     match platform.arch() {
         None => unreachable!("every platform we support has an arch"),
         Some(Arch::X86) => Ok(uv_platform_tags::Arch::X86),
@@ -139,37 +187,32 @@ fn get_arch_tags(platform: Platform) -> Result<uv_platform_tags::Arch, ArchTagsE
         Some(Arch::Ppc64le) => Ok(uv_platform_tags::Arch::Powerpc64Le),
         Some(Arch::Ppc64) => Ok(uv_platform_tags::Arch::Powerpc64),
         Some(Arch::S390X) => Ok(uv_platform_tags::Arch::S390X),
-        Some(unsupported_arch) => Err(ArchTagsError(unsupported_arch)),
+        Some(unsupported_arch) => Err(PyPITagError::FailedToDetermineArchTags(unsupported_arch)),
     }
 }
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("expected python version to be a major.minor version, but got '{0}'")]
-pub struct PythonVersionTagsError(String);
-fn get_python_version(python_record: &PackageRecord) -> Result<(u8, u8), PythonVersionTagsError> {
+fn get_python_version(python_record: &PackageRecord) -> Result<(u8, u8), PyPITagError> {
     let Some(python_version) = python_record.version.as_major_minor() else {
-        return Err(PythonVersionTagsError(python_record.version.to_string()));
+        return Err(PyPITagError::FailedToGetMajorMinorVersion(
+            python_record.name.as_normalized().to_string(),
+            python_record.version.to_string(),
+        ));
     };
     Ok((python_version.0 as u8, python_version.1 as u8))
 }
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("unsupported python implementation: '{0}'")]
-pub struct UnsupportedPythonImplementationError(String);
-fn get_implementation_name(
-    python_record: &PackageRecord,
-) -> Result<&'static str, UnsupportedPythonImplementationError> {
+fn get_implementation_name(python_record: &PackageRecord) -> Result<&'static str, PyPITagError> {
     match python_record.name.as_normalized() {
         "python" => Ok("cpython"),
         "pypy" => Ok("pypy"),
-        _ => Err(UnsupportedPythonImplementationError(
+        _ => Err(PyPITagError::UnsupportedPythonImplementation(
             python_record.name.as_normalized().to_string(),
         )),
     }
 }
 
 /// Return whether the specified record has gil disabled (by being a free-threaded python interpreter)
-fn gil_disabled(python_record: &PackageRecord) -> miette::Result<bool> {
+fn gil_disabled(python_record: &PackageRecord) -> Result<bool, PyPITagError> {
     // In order to detect if the python interpreter is free-threaded, we look at the depends
     // field of the record. If the record has a dependency on `python_abi`, then
     // look at the build string to detect cpXXXt (free-threaded python interpreter).
@@ -183,8 +226,7 @@ fn gil_disabled(python_record: &PackageRecord) -> miette::Result<bool> {
         .depends
         .iter()
         .map(|dep| MatchSpec::from_str(dep, rattler_conda_types::ParseStrictness::Lenient))
-        .collect::<Result<Vec<MatchSpec>, _>>()
-        .into_diagnostic()?;
+        .collect::<Result<Vec<MatchSpec>, _>>()?;
 
     Ok(deps.iter().any(|spec| {
         spec.name
@@ -203,9 +245,8 @@ fn create_tags(
     python_version: (u8, u8),
     implementation_name: &str,
     gil_disabled: bool,
-) -> miette::Result<Tags> {
-    // Build the wheel tags based on the interpreter, the target platform, and the python version.
-    let tags = Tags::from_env(
+) -> Result<Tags, PyPITagError> {
+    Tags::from_env(
         &platform,
         python_version,
         implementation_name,
@@ -214,26 +255,7 @@ fn create_tags(
         true,
         gil_disabled,
     )
-    .into_diagnostic()
-    .context("failed to determine the python wheel tags for the target platform")?;
-
-    Ok(tags)
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum PlatformTagError {
-    #[error("Unsupported platform {0} for pypi tags")]
-    UnsupportedVirtualPackage(String),
-    #[error("Version {0} to high to cast down for platform tag creation")]
-    VersionCastError(u64),
-    #[error("Expected virtual package {0} for {1}.")]
-    ExpectedVirtualPackage(String, String),
-    #[error("Expected virtual package with version for: {0} but got: {1}")]
-    ExpectedVirtualPackageWithVersion(String, String),
-    #[error("Can't find a pypi tags for the platform: {0}, this is not your fault, please report this issue.")]
-    NoTagsForPlatform(String),
-    #[error(transparent)]
-    ArchTagsError(#[from] ArchTagsError),
+    .map_err(PyPITagError::FailedToDetermineWheelTags)
 }
 
 /// Get the pypi platform from the conda virtual packages
@@ -241,7 +263,7 @@ pub enum PlatformTagError {
 fn get_pypi_platform_from_virtual_packages(
     virtual_packages: &[VirtualPackage],
     platform: Platform,
-) -> Result<uv_platform_tags::Platform, PlatformTagError> {
+) -> Result<uv_platform_tags::Platform, PyPITagError> {
     if platform.is_linux() {
         // The linux platform is mostly based on the libc version
         let libc = virtual_packages
@@ -250,20 +272,21 @@ fn get_pypi_platform_from_virtual_packages(
                 VirtualPackage::LibC(libc) => Some(libc),
                 _ => None,
             })
-            .ok_or(PlatformTagError::ExpectedVirtualPackage(
+            .ok_or(PyPITagError::ExpectedVirtualPackage(
                 "libc".to_string(),
                 platform.to_string(),
             ))?;
 
-        let (major, minor) = libc.version.as_major_minor().ok_or(
-            PlatformTagError::ExpectedVirtualPackageWithVersion(
-                platform.to_string(),
-                libc.version.to_string(),
-            ),
-        )?;
+        let (major, minor) =
+            libc.version
+                .as_major_minor()
+                .ok_or(PyPITagError::FailedToGetMajorMinorVersion(
+                    "libc".to_string(),
+                    libc.version.to_string(),
+                ))?;
         // Protect casting with an error to avoid hard to find bugs
-        let major = u64::try_into(major).map_err(|_| PlatformTagError::VersionCastError(major))?;
-        let minor = u64::try_into(minor).map_err(|_| PlatformTagError::VersionCastError(minor))?;
+        let major = u64::try_into(major).map_err(|_| PyPITagError::VersionCastError(major))?;
+        let minor = u64::try_into(minor).map_err(|_| PyPITagError::VersionCastError(minor))?;
 
         return match libc.family.to_lowercase().as_str() {
             "glibc" => Ok(uv_platform_tags::Platform::new(
@@ -275,9 +298,7 @@ fn get_pypi_platform_from_virtual_packages(
                 get_arch_tags(platform)?,
             )),
             // TODO: Add more libc families for support of other linux distributions
-            _ => Err(PlatformTagError::UnsupportedVirtualPackage(
-                libc.to_string(),
-            )),
+            _ => Err(PyPITagError::UnsupportedLibCFamily(libc.to_string())),
         };
     }
 
@@ -295,20 +316,21 @@ fn get_pypi_platform_from_virtual_packages(
                 VirtualPackage::Osx(osx) => Some(osx),
                 _ => None,
             })
-            .ok_or(PlatformTagError::ExpectedVirtualPackage(
+            .ok_or(PyPITagError::ExpectedVirtualPackage(
                 "osx".to_string(),
                 platform.to_string(),
             ))?;
 
-        let (major, minor) = osx.version.as_major_minor().ok_or(
-            PlatformTagError::ExpectedVirtualPackageWithVersion(
-                platform.to_string(),
-                osx.version.to_string(),
-            ),
-        )?;
+        let (major, minor) =
+            osx.version
+                .as_major_minor()
+                .ok_or(PyPITagError::FailedToGetMajorMinorVersion(
+                    platform.to_string(),
+                    osx.version.to_string(),
+                ))?;
         // Protect casting with an error to avoid hard to find bugs
-        let major = u64::try_into(major).map_err(|_| PlatformTagError::VersionCastError(major))?;
-        let minor = u64::try_into(minor).map_err(|_| PlatformTagError::VersionCastError(minor))?;
+        let major = u64::try_into(major).map_err(|_| PyPITagError::VersionCastError(major))?;
+        let minor = u64::try_into(minor).map_err(|_| PyPITagError::VersionCastError(minor))?;
 
         return Ok(uv_platform_tags::Platform::new(
             UvOs::Macos { major, minor },
@@ -316,7 +338,7 @@ fn get_pypi_platform_from_virtual_packages(
         ));
     }
 
-    Err(PlatformTagError::NoTagsForPlatform(platform.to_string()))
+    Err(PyPITagError::NoTagsForPlatform(platform.to_string()))
 }
 
 /// Get the pypi tags for this machine and the given python record
@@ -325,13 +347,12 @@ pub fn get_tags_from_machine(
     virtual_packages: &[VirtualPackage],
     platform: Platform,
     python_record: &PackageRecord,
-) -> miette::Result<Tags> {
-    let platform =
-        get_pypi_platform_from_virtual_packages(virtual_packages, platform).into_diagnostic()?;
+) -> Result<Tags, PyPITagError> {
+    let platform = get_pypi_platform_from_virtual_packages(virtual_packages, platform)?;
     create_tags(
         platform,
-        get_python_version(python_record).into_diagnostic()?,
-        get_implementation_name(python_record).into_diagnostic()?,
+        get_python_version(python_record)?,
+        get_implementation_name(python_record)?,
         gil_disabled(python_record)?,
     )
 }
@@ -457,7 +478,7 @@ mod tests {
         assert!(res.is_err());
         assert!(matches!(
             res.unwrap_err(),
-            PlatformTagError::UnsupportedVirtualPackage(_)
+            PyPITagError::UnsupportedLibCFamily(_)
         ));
     }
 
