@@ -3,6 +3,7 @@ use std::{borrow::Cow, fmt::Display, path::PathBuf};
 use itertools::Either;
 use pixi_toml::{TomlDigest, TomlFromStr};
 use rattler_conda_types::{
+    version_spec::{ParseConstraintError, ParseVersionSpecError},
     BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec,
     ParseStrictness::{Lenient, Strict},
     StringMatcher, VersionSpec,
@@ -361,13 +362,36 @@ impl TomlSpec {
     }
 }
 
+struct TomlVersionSpecStr(VersionSpec);
+
+impl TomlVersionSpecStr {
+    fn into_inner(self) -> VersionSpec {
+        self.0
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlVersionSpecStr {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let str = value.take_string("a version specifier string".into())?;
+        parse_version_string(&str)
+            .map(TomlVersionSpecStr)
+            .map_err(|msg| {
+                DeserError::from(toml_span::Error {
+                    kind: ErrorKind::Custom(msg.into()),
+                    span: value.span,
+                    line_info: None,
+                })
+            })
+    }
+}
+
 impl<'de> toml_span::Deserialize<'de> for TomlSpec {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
 
         let version = th
-            .optional::<TomlFromStr<_>>("version")
-            .map(TomlFromStr::into_inner);
+            .optional::<TomlVersionSpecStr>("version")
+            .map(TomlVersionSpecStr::into_inner);
         let url = th
             .optional::<TomlFromStr<_>>("url")
             .map(TomlFromStr::into_inner);
@@ -420,21 +444,17 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
 impl<'de> toml_span::Deserialize<'de> for PixiSpec {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
-            ValueInner::String(str) => VersionSpec::from_str(&str, Strict)
-                .map_err(|_err| {
-                    let kind = if let Some(msg) = version_spec_error(str) {
-                        toml_span::ErrorKind::Custom(msg.to_string().into())
-                    } else {
-                        toml_span::ErrorKind::Custom("invalid version specifier".into())
-                    };
-                    toml_span::Error {
-                        kind,
-                        span: value.span,
-                        line_info: None,
-                    }
-                    .into()
-                })
-                .map(PixiSpec::Version),
+            ValueInner::String(str) => {
+                parse_version_string(&str)
+                    .map(PixiSpec::Version)
+                    .map_err(|msg| {
+                        DeserError::from(toml_span::Error {
+                            kind: ErrorKind::Custom(msg.into()),
+                            span: value.span,
+                            line_info: None,
+                        })
+                    })
+            }
             inner @ ValueInner::Table(_) => {
                 let mut table_value = Value::with_span(inner, value.span);
                 Ok(
@@ -454,6 +474,37 @@ impl<'de> toml_span::Deserialize<'de> for PixiSpec {
     }
 }
 
+fn parse_version_string(input: &str) -> Result<VersionSpec, String> {
+    let err = match VersionSpec::from_str(input, Strict) {
+        Ok(ver) => return Ok(ver),
+        Err(ParseVersionSpecError::InvalidConstraint(ParseConstraintError::AmbiguousVersion(
+            ver,
+        ))) => {
+            // If we encounter an ambiguous version error, we try to parse it in lenient
+            // mode. If that fails, we return the original error.
+            match VersionSpec::from_str(input, Lenient) {
+                Ok(lenient_version_spec) => {
+                    tracing::warn!("Encountered ambiguous version specifier `{ver}`, could be `{ver}.*` but assuming you meant `=={ver}`. In the future this will result in an error.");
+                    return Ok(lenient_version_spec);
+                }
+                Err(_) => {
+                    // Return the original error.
+                    ParseVersionSpecError::InvalidConstraint(
+                        ParseConstraintError::AmbiguousVersion(ver),
+                    )
+                }
+            }
+        }
+        Err(e) => e,
+    };
+
+    Err(if let Some(msg) = version_spec_error(input) {
+        msg.to_string()
+    } else {
+        err.to_string()
+    })
+}
+
 impl<'de> Deserialize<'de> for PixiSpec {
     fn deserialize<D>(deserializer: D) -> Result<PixiSpec, D::Error>
     where
@@ -464,15 +515,9 @@ impl<'de> Deserialize<'de> for PixiSpec {
                 "a version string like \">=0.9.8\" or a detailed dependency like { version = \">=0.9.8\" }",
             )
             .string(|str| {
-                VersionSpec::from_str(str, Strict)
-                    .map_err(|_err| {
-                        if let Some(msg) = version_spec_error(str) {
-                            serde_untagged::de::Error::custom(msg)
-                        } else {
-                            serde_untagged::de::Error::custom("invalid version specifier")
-                        }
-                    })
+                parse_version_string(str)
                     .map(PixiSpec::Version)
+                    .map_err(serde_untagged::de::Error::custom)
             })
             .map(|map| {
                 let spec: TomlSpec = map.deserialize()?;

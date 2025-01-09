@@ -897,7 +897,7 @@ mod tests {
 
         // Add another dependency
         let build_match_spec = MatchSpec::from_str(
-            "python [version='3.11.0', build=he550d4f_1_cpython]",
+            "python [version='==3.11.0', build=he550d4f_1_cpython]",
             ParseStrictness::Strict,
         )
         .unwrap();
