@@ -96,12 +96,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let best_platform = environment.best_platform();
 
-    // Verify that the current platform has the required virtual packages for the
-    // environment.
-    // if let Some(ref explicit_environment) = explicit_environment {
-    //     verify_current_platform_has_required_virtual_packages(explicit_environment, &project.get_lock_file().await?)
-    //         .into_diagnostic()?;
-    // }
+    // TODO: figure out if we could do an early out here on the virtual packages check
 
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = project

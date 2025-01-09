@@ -108,6 +108,11 @@ pub(crate) fn validate_virtual_packages(
     environment_name: &EnvironmentName,
     virtual_package_overrides: Option<VirtualPackageOverrides>,
 ) -> Result<bool, VirtualPackageError> {
+    // Early out if there are no packages in the lockfile
+    if lock_file.is_empty() {
+        return Ok(true);
+    }
+
     // Default to the environment variable overrides, but allow for an override for testing
     let virtual_package_overrides =
         virtual_package_overrides.unwrap_or(VirtualPackageOverrides::from_env());

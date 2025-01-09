@@ -1,0 +1,7 @@
+---
+source: src/global/project/parsed_manifest.rs
+assertion_line: 417
+expression: remove_ansi_escape_sequences(&err)
+snapshot_kind: text
+---
+expected a version specifier but looks like a matchspec, did you mean "==3.10"?
