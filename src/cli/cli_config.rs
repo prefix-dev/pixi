@@ -318,15 +318,12 @@ impl DependencyConfig {
                     .specs
                     .iter()
                     .map(|package_name| {
-                        let mut vcs_req = format!("{} @ {}", package_name, git);
-                        if let Some(rev) = &self.rev {
-                            if let Some(rev_str) = rev.as_str() {
-                                vcs_req.push_str(&format!("@{}", rev_str));
-                            }
-                        }
-                        if let Some(subdir) = &self.subdir {
-                            vcs_req.push_str(&format!("#subdirectory={}", subdir));
-                        }
+                        let vcs_req = build_vcs_requirement(
+                            package_name,
+                            git,
+                            self.rev.as_ref(),
+                            self.subdir.clone(),
+                        );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
                         let name = PyPiPackageName::from_normalized(dep.clone().name);
@@ -344,5 +341,79 @@ impl DependencyConfig {
 impl HasSpecs for DependencyConfig {
     fn packages(&self) -> Vec<&str> {
         self.specs.iter().map(AsRef::as_ref).collect()
+    }
+}
+
+/// Builds a PEP 508 compliant VCS requirement string
+fn build_vcs_requirement(
+    package_name: &str,
+    git: &Url,
+    rev: Option<&GitRev>,
+    subdir: Option<String>,
+) -> String {
+    let mut vcs_req = format!("{} @ {}", package_name, git);
+    if let Some(rev_str) = rev.and_then(|rev| rev.as_str().map(|s| s.to_string())) {
+        vcs_req.push_str(&format!("@{}", rev_str));
+    }
+    if let Some(subdir) = subdir {
+        vcs_req.push_str(&format!("#subdirectory={}", subdir));
+    }
+    vcs_req
+}
+
+#[cfg(test)]
+mod tests {
+    use url::Url;
+
+    use crate::cli::cli_config::{build_vcs_requirement, GitRev};
+
+    #[test]
+    fn test_build_vcs_requirement_with_all_fields() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("https://github.com/user/repo").unwrap(),
+            Some(&GitRev::new().with_tag("v1.0.0".to_string())),
+            Some("subdir".to_string()),
+        );
+        assert_eq!(
+            result,
+            "mypackage @ https://github.com/user/repo@v1.0.0#subdirectory=subdir"
+        );
+    }
+
+    #[test]
+    fn test_build_vcs_requirement_with_no_rev() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("https://github.com/user/repo").unwrap(),
+            None,
+            Some("subdir".to_string()),
+        );
+        assert_eq!(
+            result,
+            "mypackage @ https://github.com/user/repo#subdirectory=subdir"
+        );
+    }
+
+    #[test]
+    fn test_build_vcs_requirement_with_no_subdir() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("https://github.com/user/repo").unwrap(),
+            Some(&GitRev::new().with_tag("v1.0.0".to_string())),
+            None,
+        );
+        assert_eq!(result, "mypackage @ https://github.com/user/repo@v1.0.0");
+    }
+
+    #[test]
+    fn test_build_vcs_requirement_with_only_git() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("https://github.com/user/repo").unwrap(),
+            None,
+            None,
+        );
+        assert_eq!(result, "mypackage @ https://github.com/user/repo");
     }
 }
