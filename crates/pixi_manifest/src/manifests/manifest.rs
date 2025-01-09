@@ -2086,7 +2086,7 @@ bar = "*"
             Some(&VersionSpec::from_str(">=1.2.3", Strict).unwrap())
         );
 
-        let (name, spec) = MatchSpec::from_str("qux >=1.2.3", Strict)
+        let (name, spec) = MatchSpec::from_str("bal >=2.3", Strict)
             .unwrap()
             .into_nameless();
         let pixi_spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);

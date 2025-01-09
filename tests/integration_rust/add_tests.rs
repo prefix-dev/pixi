@@ -651,16 +651,15 @@ async fn add_dependency_pinning_strategy() {
 /// Test adding a git dependency with a specific branch
 #[tokio::test]
 async fn add_git_deps() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
+platforms = ["linux-64"]
 preview = ['pixi-build']
 "#,
-        platform = Platform::current(),
-    ))
+    )
     .unwrap();
 
     // Add a package
@@ -674,7 +673,6 @@ preview = ['pixi-build']
     let lock = pixi.lock_file().await.unwrap();
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
-        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(lock.render_to_string().unwrap());
     });
@@ -686,16 +684,15 @@ preview = ['pixi-build']
 /// Test adding git dependencies with credentials
 #[tokio::test]
 async fn add_git_deps_with_creds() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
+platforms = ["linux-64"]
 preview = ['pixi-build']
 "#,
-        platform = Platform::current(),
-    ))
+    )
     .unwrap();
 
     // Add a package
@@ -712,7 +709,6 @@ preview = ['pixi-build']
     let lock = pixi.lock_file().await.unwrap();
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
-        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(lock.render_to_string().unwrap());
     });
@@ -724,15 +720,14 @@ preview = ['pixi-build']
 /// Test adding a git dependency with a specific commit
 #[tokio::test]
 async fn add_git_with_specific_commit() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
+platforms = ["linux-64"]
 preview = ['pixi-build']"#,
-        platform = Platform::current(),
-    ))
+    )
     .unwrap();
 
     // Add a package
@@ -747,7 +742,6 @@ preview = ['pixi-build']"#,
     let lock = pixi.lock_file().await.unwrap();
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
-        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(lock.render_to_string().unwrap());
     });
@@ -759,15 +753,14 @@ preview = ['pixi-build']"#,
 /// Test adding a git dependency with a specific tag
 #[tokio::test]
 async fn add_git_with_tag() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{platform}"]
+platforms = ["linux-64"]
 preview = ['pixi-build']"#,
-        platform = Platform::current(),
-    ))
+    )
     .unwrap();
 
     // Add a package
@@ -782,7 +775,6 @@ preview = ['pixi-build']"#,
     let lock = pixi.lock_file().await.unwrap();
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
-        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(lock.render_to_string().unwrap());
     });
@@ -794,15 +786,14 @@ preview = ['pixi-build']"#,
 /// Test adding a git dependency using ssh url
 #[tokio::test]
 async fn add_plain_ssh_url() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["{platform}"]
 preview = ['pixi-build']"#,
-        platform = Platform::current(),
-    ))
+    )
     .unwrap();
 
     // Add a package
@@ -819,7 +810,7 @@ preview = ['pixi-build']"#,
 /// Test adding a git dependency using ssh url
 #[tokio::test]
 async fn add_pypi_git() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
 [project]
 name = "test-channel-change"
@@ -827,8 +818,7 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["{platform}"]
 
 "#,
-        platform = Platform::current(),
-    ))
+    )
     .unwrap();
 
     // Add a package
@@ -842,7 +832,6 @@ platforms = ["{platform}"]
     // Check the manifest itself
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
-        (&format!("{}", Platform::current()), "[CURRENT_PLATFORM]")
     ]}, {
         insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
     });
