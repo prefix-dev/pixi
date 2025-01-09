@@ -31,7 +31,6 @@ fn to_pixi_spec_v1(spec: &PixiSpec) -> pbt::PixiSpecV1 {
                 subdir: detailed_spec.subdir.clone(),
                 md5: detailed_spec.md5.map(Into::into),
                 sha256: detailed_spec.sha256.map(Into::into),
-                url: None,
             })
         }
         PixiSpec::Url(url_spec) => pbt::PixiSpecV1::Url(pbt::UrlSpecV1 {

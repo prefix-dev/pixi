@@ -28,8 +28,7 @@ expression: project_model
             "channel": null,
             "subdir": null,
             "md5": null,
-            "sha256": null,
-            "url": null
+            "sha256": null
           }
         }
       },

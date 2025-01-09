@@ -26,8 +26,7 @@ expression: project_model
             "channel": null,
             "subdir": null,
             "md5": null,
-            "sha256": null,
-            "url": null
+            "sha256": null
           }
         },
         "nanobind": {
@@ -39,8 +38,7 @@ expression: project_model
             "channel": null,
             "subdir": null,
             "md5": null,
-            "sha256": null,
-            "url": null
+            "sha256": null
           }
         },
         "python_abi": {
@@ -52,8 +50,7 @@ expression: project_model
             "channel": null,
             "subdir": null,
             "md5": null,
-            "sha256": null,
-            "url": null
+            "sha256": null
           }
         }
       },
@@ -68,8 +65,7 @@ expression: project_model
             "channel": null,
             "subdir": null,
             "md5": null,
-            "sha256": null,
-            "url": null
+            "sha256": null
           }
         }
       }

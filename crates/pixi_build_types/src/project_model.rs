@@ -82,6 +82,8 @@ pub struct ProjectModelV1 {
     /// Configuration for this specific project model
     pub configuration: serde_json::Value,
 
+    /// The target of the project, this may contain
+    /// platform specific configurations.
     pub targets: TargetsV1,
 }
 
@@ -231,8 +233,6 @@ pub struct DependencySpecV1 {
     pub md5: Option<SerializableHash<Md5>>,
     /// The sha256 hash of the package
     pub sha256: Option<SerializableHash<Sha256>>,
-    /// The url of the package
-    pub url: Option<Url>,
 }
 
 impl From<VersionSpec> for DependencySpecV1 {
@@ -280,9 +280,6 @@ impl std::fmt::Debug for DependencySpecV1 {
         }
         if let Some(sha256) = &self.sha256 {
             debug_struct.field("sha256", &format!("{:x}", sha256.0));
-        }
-        if let Some(url) = &self.url {
-            debug_struct.field("url", url);
         }
 
         debug_struct.finish()
