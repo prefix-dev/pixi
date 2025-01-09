@@ -2,33 +2,40 @@
 source: crates/pixi_build_frontend/src/into_build_types.rs
 expression: project_model
 ---
-name: boltons
-version: 0.1.0
-description: Add a short description here
-authors:
-  - nichmor <nmorkotilo@gmail.com>
-license: ~
-license_file: ~
-readme: ~
-homepage: ~
-repository: ~
-documentation: ~
-configuration: ~
-targets:
-  default_target:
-    host_dependencies:
-      hatchling:
-        detailedVersion:
-          version: "*"
-          build: ~
-          build_number: ~
-          file_name: ~
-          channel: ~
-          subdir: ~
-          namespace: ~
-          md5: ~
-          sha256: ~
-          url: ~
-    build_dependencies: {}
-    run_dependencies: {}
-  targets: {}
+{
+  "name": "boltons",
+  "version": "0.1.0",
+  "description": "Add a short description here",
+  "authors": [
+    "nichmor <nmorkotilo@gmail.com>"
+  ],
+  "license": null,
+  "license_file": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "configuration": null,
+  "targets": {
+    "default_target": {
+      "host_dependencies": {
+        "hatchling": {
+          "detailedVersion": {
+            "version": "*",
+            "build": null,
+            "build_number": null,
+            "file_name": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null,
+            "url": null
+          }
+        }
+      },
+      "build_dependencies": {},
+      "run_dependencies": {}
+    },
+    "targets": {}
+  }
+}

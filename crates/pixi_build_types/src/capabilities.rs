@@ -10,6 +10,9 @@ pub struct BackendCapabilities {
 
     /// Whether the backend provides the ability to build conda packages.
     pub provides_conda_build: Option<bool>,
+
+    /// The highest supported project model version.
+    pub highest_supported_project_model: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

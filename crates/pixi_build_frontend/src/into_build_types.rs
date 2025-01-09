@@ -18,7 +18,7 @@ fn to_pixi_spec_v1(spec: &PixiSpec) -> pbt::PixiSpecV1 {
         // the NamelessMatchSpecV1 variant
         PixiSpec::Version(version_spec) => pbt::PixiSpecV1::DetailedVersion(version_spec.into()),
         PixiSpec::DetailedVersion(detailed_spec) => {
-            pbt::PixiSpecV1::DetailedVersion(pbt::NamelessMatchSpecV1 {
+            pbt::PixiSpecV1::DetailedVersion(pbt::DependencySpecV1 {
                 version: detailed_spec.version.clone(),
                 build: detailed_spec.build.clone(),
                 build_number: detailed_spec.build_number.clone(),
@@ -29,7 +29,6 @@ fn to_pixi_spec_v1(spec: &PixiSpec) -> pbt::PixiSpecV1 {
                     .map(|c| c.to_string())
                     .clone(),
                 subdir: detailed_spec.subdir.clone(),
-                namespace: None,
                 md5: detailed_spec.md5.map(Into::into),
                 sha256: detailed_spec.sha256.map(Into::into),
                 url: None,
@@ -59,7 +58,7 @@ fn to_pixi_spec_v1(spec: &PixiSpec) -> pbt::PixiSpecV1 {
 /// Converts an iterator of `PackageName` and `PixiSpec` to a `IndexMap<String, pbt::PixiSpecV1>`.
 fn to_pbt_dependencies<'a>(
     iter: impl Iterator<Item = (&'a PackageName, &'a PixiSpec)>,
-) -> IndexMap<String, pbt::PixiSpecV1> {
+) -> IndexMap<pbt::SourcePackageName, pbt::PixiSpecV1> {
     iter.map(|(k, v)| (k.as_source().to_string(), to_pixi_spec_v1(v)))
         .collect()
 }
@@ -155,7 +154,7 @@ mod tests {
                 let mut settings = insta::Settings::clone_current();
                 settings.set_snapshot_suffix(name);
                 settings.bind(|| {
-                    insta::assert_yaml_snapshot!(project_model);
+                    insta::assert_json_snapshot!(project_model);
                 });
             }
         }};

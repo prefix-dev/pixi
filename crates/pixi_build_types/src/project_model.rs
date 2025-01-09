@@ -1,8 +1,14 @@
 //! This module is a collection of types that represent a pixi package in a protocol
 //! format that can be sent over the wire.
-//!
 //! We need to vendor a lot of the types, and simplify them in some cases, so that
 //! we have a stable protocol that can be used to communicate in the build tasks.
+//!
+//! The Rationale is that we want to have a stable protocol to provide forwards and backwards compatibility.
+//! The idea is that for **backwards compatibility** is that we try to not to break this in pixi as much as possible.
+//! So as long as older pixi tomls keep loading we can send it to the backend.
+//!
+//! In regards to forwards compatibility, we want to be able to keep converting to all version os the `VersionedProjectModel`.
+//! as much as possible.
 //!
 //! This is why we append a `V{version}`, to the type names, to indicate the version
 //! of the protocol.
@@ -25,11 +31,21 @@ use url::Url;
 #[serde(tag = "version")]
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
+    /// Version 1 of the project model.
     V1(ProjectModelV1),
+    // When adding don't forget to update the highest_version function
+}
+
+impl VersionedProjectModel {
+    /// Highest version of the project model.
+    pub fn highest_version() -> u32 {
+        // increase this when adding a new version
+        1
+    }
 }
 
 /// The source package name of a package. Not normalized per se.
-type SourcePackageName = String;
+pub type SourcePackageName = String;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectModelV1 {
@@ -109,7 +125,7 @@ pub struct TargetV1 {
 pub enum PixiSpecV1 {
     /// The spec is represented by a detailed version spec. The package should
     /// be retrieved from a channel.
-    DetailedVersion(NamelessMatchSpecV1),
+    DetailedVersion(DependencySpecV1),
 
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
@@ -196,7 +212,7 @@ pub enum GitReferenceV1 {
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
 #[derive(Serialize, Deserialize, Default)]
-pub struct NamelessMatchSpecV1 {
+pub struct DependencySpecV1 {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub version: Option<VersionSpec>,
@@ -211,8 +227,6 @@ pub struct NamelessMatchSpecV1 {
     pub channel: Option<String>,
     /// The subdir of the channel
     pub subdir: Option<String>,
-    /// The namespace of the package (currently not used)
-    pub namespace: Option<String>,
     /// The md5 hash of the package
     pub md5: Option<SerializableHash<Md5>>,
     /// The sha256 hash of the package
@@ -221,7 +235,7 @@ pub struct NamelessMatchSpecV1 {
     pub url: Option<Url>,
 }
 
-impl From<VersionSpec> for NamelessMatchSpecV1 {
+impl From<VersionSpec> for DependencySpecV1 {
     fn from(value: VersionSpec) -> Self {
         Self {
             version: Some(value),
@@ -230,7 +244,7 @@ impl From<VersionSpec> for NamelessMatchSpecV1 {
     }
 }
 
-impl From<&VersionSpec> for NamelessMatchSpecV1 {
+impl From<&VersionSpec> for DependencySpecV1 {
     fn from(value: &VersionSpec) -> Self {
         Self {
             version: Some(value.clone()),
@@ -239,7 +253,7 @@ impl From<&VersionSpec> for NamelessMatchSpecV1 {
     }
 }
 
-impl std::fmt::Debug for NamelessMatchSpecV1 {
+impl std::fmt::Debug for DependencySpecV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("NamelessMatchSpecV1");
 
@@ -260,9 +274,6 @@ impl std::fmt::Debug for NamelessMatchSpecV1 {
         }
         if let Some(subdir) = &self.subdir {
             debug_struct.field("subdir", subdir);
-        }
-        if let Some(namespace) = &self.namespace {
-            debug_struct.field("namespace", namespace);
         }
         if let Some(md5) = &self.md5 {
             debug_struct.field("md5", &format!("{:x}", md5.0));
