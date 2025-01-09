@@ -5,7 +5,7 @@ expression: project.manifest().source.to_string()
 [workspace]
 name = "some-workspace"
 platforms = []
-channels = ['file:///var/folders/rf/kyk8v0zd3993kvjg2p373plm0000gn/T/.tmp38YpY6']
+channels = ['file://<LOCAL_CHANNEL>/']
 preview = ['pixi-build']
 
 [dependencies]

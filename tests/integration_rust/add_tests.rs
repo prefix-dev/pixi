@@ -657,6 +657,8 @@ async fn add_dependency_dont_create_project() {
 
     let local_channel = package_database.into_channel().await.unwrap();
 
+    let local_channel_str = format!("{}", local_channel.url());
+
     // Initialize a new pixi project using the above channel
     let pixi = PixiControl::from_manifest(&format!(
         r#"
@@ -666,7 +668,7 @@ platforms = []
 channels = ['{local_channel}']
 preview = ['pixi-build']
 "#,
-        local_channel = local_channel.url()
+        local_channel = local_channel_str
     ))
     .unwrap();
 
@@ -675,5 +677,10 @@ preview = ['pixi-build']
 
     let project = pixi.project().unwrap();
 
-    insta::assert_snapshot!(project.manifest().source.to_string());
+    // filter out local channels from the insta
+    insta::with_settings!({filters => vec![
+        (local_channel_str.as_str(), "file://<LOCAL_CHANNEL>/"),
+    ]}, {
+        insta::assert_snapshot!(project.manifest().source.to_string());
+    });
 }

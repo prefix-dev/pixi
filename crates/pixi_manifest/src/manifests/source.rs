@@ -104,6 +104,15 @@ impl ManifestSource {
         matches!(self, ManifestSource::PyProjectToml(_))
     }
 
+    /// Detect the table name to use when querying elements of the manifest.
+    fn detect_table_name(&self) -> &'static str {
+        if self.manifest().as_table().contains_key("workspace") {
+            "workspace"
+        } else {
+            "project"
+        }
+    }
+
     /// Returns a mutable reference to the specified array either in project or
     /// feature.
     pub fn get_array_mut(
@@ -116,7 +125,7 @@ impl ManifestSource {
         // The spec is described here:
         // https://github.com/prefix-dev/pixi/issues/2807#issuecomment-2577826553
         let table = match feature_name {
-            FeatureName::Default => Some("workspace"),
+            FeatureName::Default => Some(self.detect_table_name()),
             FeatureName::Named(_) => None,
         };
 
