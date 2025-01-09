@@ -3755,6 +3755,7 @@ dependencies = [
  "itertools 0.13.0",
  "jsonrpsee",
  "miette 7.4.0",
+ "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
  "pixi_consts",
@@ -3784,6 +3785,20 @@ dependencies = [
  "tracing",
  "url",
  "which",
+]
+
+[[package]]
+name = "pixi_build_type_conversions"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.7.0",
+ "insta",
+ "pixi_build_types",
+ "pixi_manifest",
+ "pixi_spec",
+ "rattler_conda_types",
+ "rstest",
+ "serde_json",
 ]
 
 [[package]]

@@ -17,6 +17,8 @@ indexmap = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }
 miette = { workspace = true, features = ["fancy", "serde"] }
+pixi_build_type_conversions = { workspace = true }
+pixi_build_types = { path = "../pixi_build_types" }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
@@ -42,9 +44,6 @@ tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
 url = "2.5.4"
 which = { workspace = true }
-
-
-pixi_build_types = { path = "../pixi_build_types" }
 
 
 [dev-dependencies]

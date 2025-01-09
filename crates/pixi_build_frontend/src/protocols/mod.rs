@@ -12,11 +12,11 @@ use jsonrpsee::{
     },
     types::ErrorCode,
 };
+use pixi_build_type_conversions::to_project_model_v1;
 use pixi_manifest::PackageManifest;
 
 use crate::{
     jsonrpc::{stdio_transport, RpcParams},
-    to_project_model_v1,
     tool::Tool,
     CondaBuildReporter, CondaMetadataReporter,
 };
