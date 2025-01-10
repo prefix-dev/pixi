@@ -31,7 +31,7 @@ use pixi_build_types::{
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         initialize::{InitializeParams, InitializeResult},
     },
-    BackendCapabilities, FrontendCapabilities, VersionedProjectModel,
+    BackendCapabilities, FrontendCapabilities,
 };
 use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
@@ -228,8 +228,7 @@ impl JsonRPCBuildProtocol {
             })?;
 
         // TODO: select the correct protocol version based on the capabilities
-        let project_model = package_manifest
-            .map(|manifest| VersionedProjectModel::V1(to_project_model_v1(manifest)));
+        let project_model = package_manifest.map(to_project_model_v1);
         // Invoke the initialize method on the backend to establish the connection.
         let _result: InitializeResult = client
             .request(
