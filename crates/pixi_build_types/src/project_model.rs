@@ -44,8 +44,17 @@ impl VersionedProjectModel {
         1
     }
 
-    /// Convert the versioned project model to a specific version.
-    pub fn v1(self) -> Option<ProjectModelV1> {
+    /// Move into the v1 type, returns None if the version is not v1.
+    pub fn into_v1(self) -> Option<ProjectModelV1> {
+        match self {
+            VersionedProjectModel::V1(v) => Some(v),
+            // Add this once we have more versions
+            //_ => None,
+        }
+    }
+
+    /// Returns a reference to the v1 type, returns None if the version is not v1.
+    pub fn as_v1(&self) -> Option<&ProjectModelV1> {
         match self {
             VersionedProjectModel::V1(v) => Some(v),
             // Add this once we have more versions
