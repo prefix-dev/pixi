@@ -190,11 +190,7 @@ impl BuildContext {
             }
         }
 
-        tracing::info!(
-            "resolved variant configuration for {}: {:?}",
-            platform,
-            result
-        );
+        tracing::info!("resolved variant configuration: {:?}", result);
 
         result
     }
@@ -554,6 +550,7 @@ impl BuildContext {
         build_id: usize,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let channel_urls = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
+        let variant_configuration = self.resolve_variant(host_platform);
 
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
@@ -565,6 +562,7 @@ impl BuildContext {
                     build_virtual_packages: build_virtual_packages.clone(),
                     host_platform,
                     host_virtual_packages: host_virtual_packages.clone(),
+                    build_variants: variant_configuration.clone().into_iter().collect(),
                 },
             )
             .await?;
@@ -636,7 +634,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
-                    variant_configuration: Some(self.resolve_variant(host_platform)),
+                    variant_configuration: Some(variant_configuration),
                 },
                 metadata_reporter.as_conda_metadata_reporter().clone(),
             )
