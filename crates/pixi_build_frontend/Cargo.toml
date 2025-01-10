@@ -13,7 +13,6 @@ version = "0.1.0"
 dashmap = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
-indexmap = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }
 miette = { workspace = true, features = ["fancy", "serde"] }

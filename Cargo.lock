@@ -3750,7 +3750,6 @@ dependencies = [
  "dashmap",
  "fs-err",
  "futures",
- "indexmap 2.7.0",
  "insta",
  "itertools 0.13.0",
  "jsonrpsee",
