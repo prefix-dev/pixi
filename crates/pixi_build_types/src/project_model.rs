@@ -43,6 +43,15 @@ impl VersionedProjectModel {
         // increase this when adding a new version
         1
     }
+
+    /// Convert the versioned project model to a specific version.
+    pub fn v1(self) -> Option<ProjectModelV1> {
+        match self {
+            VersionedProjectModel::V1(v) => Some(v),
+            // Add this once we have more versions
+            //_ => None,
+        }
+    }
 }
 
 /// The source package name of a package. Not normalized per se.
