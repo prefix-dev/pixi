@@ -108,8 +108,8 @@ fn to_targets_v1(targets: &Targets<PackageTarget>) -> pbt::TargetsV1 {
 }
 
 /// Converts a [`PackageManifest`] to a [`pbt::ProjectModelV1`].
-pub fn to_project_model_v1(manifest: &PackageManifest) -> pbt::ProjectModelV1 {
-    pbt::ProjectModelV1 {
+pub fn to_project_model_v1(manifest: &PackageManifest) -> pbt::VersionedProjectModel {
+    let project = pbt::ProjectModelV1 {
         name: manifest.package.name.clone(),
         version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
@@ -122,7 +122,8 @@ pub fn to_project_model_v1(manifest: &PackageManifest) -> pbt::ProjectModelV1 {
         documentation: manifest.package.documentation.clone(),
         configuration: serde_json::Value::Null,
         targets: to_targets_v1(&manifest.targets),
-    }
+    };
+    pbt::VersionedProjectModel::V1(project)
 }
 
 #[cfg(test)]

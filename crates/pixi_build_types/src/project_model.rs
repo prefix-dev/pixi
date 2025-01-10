@@ -32,6 +32,7 @@ use url::Url;
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
     /// Version 1 of the project model.
+    #[serde(rename = "1")]
     V1(ProjectModelV1),
     // When adding don't forget to update the highest_version function
 }
