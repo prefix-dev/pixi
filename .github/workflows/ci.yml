@@ -198,6 +198,10 @@ jobs:
     runs-on: 16core_windows_latest_runner
     steps:
       - uses: actions/checkout@v4
+      - name: Configure Git user
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
       - name: Create Dev Drive using ReFS
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - uses: prefix-dev/setup-pixi@v0.8.1
