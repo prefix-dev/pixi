@@ -3,6 +3,7 @@ source: crates/pixi_build_type_conversions/src/project_model.rs
 expression: project_model
 ---
 {
+  "version": "1",
   "name": "sdl_example",
   "version": "0.1.0",
   "description": "Showcases how to create a simple C++ executable with Pixi",

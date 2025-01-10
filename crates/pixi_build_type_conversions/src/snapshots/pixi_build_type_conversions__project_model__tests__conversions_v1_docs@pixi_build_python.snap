@@ -3,6 +3,7 @@ source: crates/pixi_build_type_conversions/src/project_model.rs
 expression: project_model
 ---
 {
+  "version": "1",
   "name": "rich_example",
   "version": "0.1.0",
   "description": null,
