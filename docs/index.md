@@ -27,7 +27,7 @@ To install `pixi` you can run the following command in your terminal:
 === "Windows"
     `PowerShell`:
     ```powershell
-    iwr -useb https://pixi.sh/install.ps1 | iex
+    powershell -ExecutionPolicy ByPass -c "iwr -useb https://pixi.sh/install.ps1 | iex"
     ```
     `winget`:
     ```
