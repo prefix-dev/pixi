@@ -3052,6 +3052,14 @@ arrays have no support for platform-specific or editable dependencies.</p>
 <li><code>--pypi</code>: Specifies a PyPI dependency, not a conda package.
   Parses dependencies as <a href="https://peps.python.org/pep-0508/">PEP508</a> requirements, supporting extras and versions.
   See <a href="../pixi_manifest/">configuration</a> for details.</li>
+<li><code>--git</code>: Specifies a git dependency, the package will be installed from the git repository.
+  The <code>--git</code> flag can be used with the following options:<ul>
+<li><code>--branch &lt;BRANCH&gt;</code>: The branch to use when installing the package.</li>
+<li><code>--tag &lt;TAG&gt;</code>: The tag to use when installing the package.</li>
+<li><code>--rev &lt;REV&gt;</code>: The revision to use when installing the package.</li>
+<li><code>--subdir &lt;SUBDIR&gt;</code>: The subdirectory to use when installing the package.</li>
+</ul>
+</li>
 <li><code>--no-install</code>: Don't install the package to the environment, only add the package to the lock-file.</li>
 <li><code>--no-lockfile-update</code>: Don't update the lock-file, implies the <code>--no-install</code> flag.</li>
 <li><code>--platform &lt;PLATFORM&gt; (-p)</code>: The platform for which the dependency should be added. (Allowed to be used more than once)</li>
@@ -3070,15 +3078,20 @@ arrays have no support for platform-specific or editable dependencies.</p>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-install<span class="w"> </span>numpy<span class="w"> </span><span class="c1"># (8)!</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>pixi<span class="w"> </span>add<span class="w"> </span>--no-lockfile-update<span class="w"> </span>numpy<span class="w"> </span><span class="c1"># (9)!</span>
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>featurex<span class="w"> </span>numpy<span class="w"> </span><span class="c1"># (10)!</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Add a pypi dependency</span>
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span>requests<span class="o">[</span>security<span class="o">]</span><span class="w"> </span><span class="c1"># (11)!</span>
-</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="nv">Django</span><span class="o">==</span><span class="m">5</span>.1rc1<span class="w"> </span><span class="c1"># (12)!</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;boltons&gt;=24.0.0&quot;</span><span class="w"> </span>--feature<span class="w"> </span>lint<span class="w"> </span><span class="c1"># (13)!</span>
-</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl&quot;</span><span class="w"> </span><span class="c1"># (14)!</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;exchangelib @ git+https://github.com/ecederstrand/exchangelib&quot;</span><span class="w"> </span><span class="c1"># (15)!</span>
-</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;project @ file:///absolute/path/to/project&quot;</span><span class="w"> </span><span class="c1"># (16)!</span>
-</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;project@file:///absolute/path/to/project&quot;</span><span class="w"> </span>--editable<span class="w"> </span><span class="c1"># (17)!</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>pixi<span class="w"> </span>add<span class="w"> </span>--git<span class="w"> </span>https://github.com/wolfv/pixi-build-examples<span class="w"> </span>boost-check<span class="w"> </span><span class="c1"># (11)!</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>pixi<span class="w"> </span>add<span class="w"> </span>--git<span class="w"> </span>https://github.com/wolfv/pixi-build-examples<span class="w"> </span>--branch<span class="w"> </span>main<span class="w"> </span>--subdir<span class="w"> </span>boost-check<span class="w"> </span>boost-check<span class="w"> </span><span class="c1"># (12)!</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>pixi<span class="w"> </span>add<span class="w"> </span>--git<span class="w"> </span>https://github.com/wolfv/pixi-build-examples<span class="w"> </span>--tag<span class="w"> </span>v0.1.0<span class="w"> </span>boost-check<span class="w"> </span><span class="c1"># (13)!</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>pixi<span class="w"> </span>add<span class="w"> </span>--git<span class="w"> </span>https://github.com/wolfv/pixi-build-examples<span class="w"> </span>--rev<span class="w"> </span>e50d4a1<span class="w"> </span>boost-check<span class="w"> </span><span class="c1"># (14)!</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># Add a pypi dependency</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span>requests<span class="o">[</span>security<span class="o">]</span><span class="w"> </span><span class="c1"># (15)!</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="nv">Django</span><span class="o">==</span><span class="m">5</span>.1rc1<span class="w"> </span><span class="c1"># (16)!</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;boltons&gt;=24.0.0&quot;</span><span class="w"> </span>--feature<span class="w"> </span>lint<span class="w"> </span><span class="c1"># (17)!</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl&quot;</span><span class="w"> </span><span class="c1"># (18)!</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;exchangelib @ git+https://github.com/ecederstrand/exchangelib&quot;</span><span class="w"> </span><span class="c1"># (19)!</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;project @ file:///absolute/path/to/project&quot;</span><span class="w"> </span><span class="c1"># (20)!</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span><span class="s2">&quot;project@file:///absolute/path/to/project&quot;</span><span class="w"> </span>--editable<span class="w"> </span><span class="c1"># (21)!</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>pixi<span class="w"> </span>add<span class="w"> </span>--git<span class="w"> </span>https://github.com/mahmoud/boltons.git<span class="w"> </span>boltons<span class="w"> </span>--pypi<span class="w"> </span><span class="c1"># (22)!</span>
 </span></code></pre></div>
 <ol>
 <li>This will add the <code>numpy</code> package to the project with the latest available for the solved environment.</li>
@@ -3091,6 +3104,10 @@ arrays have no support for platform-specific or editable dependencies.</p>
 <li>This will add the <code>numpy</code> package to the manifest and lockfile, without installing it in an environment.</li>
 <li>This will add the <code>numpy</code> package to the manifest without updating the lockfile or installing it in the environment.</li>
 <li>This will add the <code>numpy</code> package in the feature <code>featurex</code>.</li>
+<li>This will add the <code>boost-check</code> source package to the dependencies from the git repository.</li>
+<li>This will add the <code>boost-check</code> source package to the dependencies from the git repository using <code>main</code> branch and the <code>boost-check</code> folder in the repository.</li>
+<li>This will add the <code>boost-check</code> source package to the dependencies from the git repository using <code>v0.1.0</code> tag.</li>
+<li>This will add the <code>boost-check</code> source package to the dependencies from the git repository using <code>e50d4a1</code> revision.</li>
 <li>This will add the <code>requests</code> package as <code>pypi</code> dependency with the <code>security</code> extra.</li>
 <li>This will add the <code>pre-release</code> version of <code>Django</code> to the project as a <code>pypi</code> dependency.</li>
 <li>This will add the <code>boltons</code> package in the feature <code>lint</code> as <code>pypi</code> dependency.</li>
@@ -3098,6 +3115,7 @@ arrays have no support for platform-specific or editable dependencies.</p>
 <li>This will add the <code>exchangelib</code> package with the given <code>git</code> url as <code>pypi</code> dependency.</li>
 <li>This will add the <code>project</code> package with the given <code>file</code> url as <code>pypi</code> dependency.</li>
 <li>This will add the <code>project</code> package with the given <code>file</code> url as an <code>editable</code> package as <code>pypi</code> dependency.</li>
+<li>This will add the <code>boltons</code> package with the given <code>git</code> url as <code>pypi</code> dependency. <code>branch</code>, <code>tag</code>, and <code>rev</code> are not yet supported.</li>
 </ol>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
