@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
 use pixi_git::git::GitReference;
+use serde::{Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
 
@@ -12,7 +13,7 @@ pub struct GitSpec {
     pub git: Url,
 
     /// The git revision of the package
-    #[serde(skip_serializing_if = "Option::is_none", flatten)]
+    #[serde(skip_serializing_if = "Reference::is_default_branch", flatten)]
     pub rev: Option<Reference>,
 
     /// The git subdirectory of the package
@@ -21,9 +22,7 @@ pub struct GitSpec {
 }
 
 /// A reference to a specific commit in a git repository.
-#[derive(
-    Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, ::serde::Serialize, ::serde::Deserialize,
-)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Reference {
     /// The HEAD commit of a branch.
@@ -37,6 +36,16 @@ pub enum Reference {
 
     /// A default branch.
     DefaultBranch,
+}
+
+impl Reference {
+    /// Returns the reference as a string.
+    pub fn is_default_branch(reference: &Option<Reference>) -> bool {
+        reference.is_none()
+            || reference
+                .as_ref()
+                .is_some_and(|reference| matches!(reference, Reference::DefaultBranch))
+    }
 }
 
 impl Display for Reference {
@@ -62,6 +71,48 @@ impl From<GitReference> for Reference {
             GitReference::FullCommit(rev) => Reference::Rev(rev.to_string()),
             GitReference::DefaultBranch => Reference::DefaultBranch,
         }
+    }
+}
+
+impl Serialize for Reference {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        #[derive(Serialize)]
+        struct RawReference<'a> {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            tag: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            branch: Option<&'a str>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            rev: Option<&'a str>,
+        }
+
+        let ser = match self {
+            Reference::Branch(name) => RawReference {
+                branch: Some(name),
+                tag: None,
+                rev: None,
+            },
+            Reference::Tag(name) => RawReference {
+                branch: None,
+                tag: Some(name),
+                rev: None,
+            },
+            Reference::Rev(name) => RawReference {
+                branch: None,
+                tag: None,
+                rev: Some(name),
+            },
+            Reference::DefaultBranch => RawReference {
+                branch: None,
+                tag: None,
+                rev: None,
+            },
+        };
+
+        ser.serialize(serializer)
     }
 }
 

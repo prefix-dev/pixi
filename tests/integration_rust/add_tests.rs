@@ -5,12 +5,13 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use pixi::{DependencyType, Project};
+use pixi::{cli::cli_config::GitRev, DependencyType, Project};
 use pixi_consts::consts;
 use pixi_manifest::pypi::VersionOrStar;
 use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, PyPiRequirement, SpecType};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
+use url::Url;
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -645,6 +646,198 @@ async fn add_dependency_pinning_strategy() {
     // Testing to make sure bugfix did not regress
     // Package should be automatically pinned to a major version
     assert_eq!(bar_spec, r#"">=1,<2""#);
+}
+
+/// Test adding a git dependency with a specific branch
+#[tokio::test]
+async fn add_git_deps() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+preview = ['pixi-build']
+"#,
+    )
+    .unwrap();
+
+    // Add a package
+    pixi.add("boost-check")
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
+        .with_git_rev(GitRev::new().with_branch("main".to_string()))
+        .with_git_subdir("boost-check".to_string())
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    insta::with_settings!({filters => vec![
+        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+    ]}, {
+        insta::assert_snapshot!(lock.render_to_string().unwrap());
+    });
+
+    // Check the manifest itself
+    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+}
+
+/// Test adding git dependencies with credentials
+/// This tests is skipped on windows because it spawns a credential helper
+/// during the CI run
+#[cfg(not(windows))]
+#[tokio::test]
+async fn add_git_deps_with_creds() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+preview = ['pixi-build']
+"#,
+    )
+    .unwrap();
+
+    // Add a package
+    // we want to make sure that the credentials are not exposed in the lock file
+    pixi.add("boost-check")
+        .with_git_url(
+            Url::parse("https://user:token123@github.com/wolfv/pixi-build-examples.git").unwrap(),
+        )
+        .with_git_rev(GitRev::new().with_branch("main".to_string()))
+        .with_git_subdir("boost-check".to_string())
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    insta::with_settings!({filters => vec![
+        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+    ]}, {
+        insta::assert_snapshot!(lock.render_to_string().unwrap());
+    });
+
+    // Check the manifest itself
+    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+}
+
+/// Test adding a git dependency with a specific commit
+#[tokio::test]
+async fn add_git_with_specific_commit() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+preview = ['pixi-build']"#,
+    )
+    .unwrap();
+
+    // Add a package
+    pixi.add("boost-check")
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
+        .with_git_rev(GitRev::new().with_rev("9de9e1b".to_string()))
+        .with_git_subdir("boost-check".to_string())
+        .await
+        .unwrap();
+
+    // Check the lock file
+    let lock = pixi.lock_file().await.unwrap();
+    insta::with_settings!({filters => vec![
+        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+    ]}, {
+        insta::assert_snapshot!(lock.render_to_string().unwrap());
+    });
+
+    // Check the manifest itself
+    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+}
+
+/// Test adding a git dependency with a specific tag
+#[tokio::test]
+async fn add_git_with_tag() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+preview = ['pixi-build']"#,
+    )
+    .unwrap();
+
+    // Add a package
+    pixi.add("boost-check")
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
+        .with_git_rev(GitRev::new().with_tag("v0.1.0".to_string()))
+        .with_git_subdir("boost-check".to_string())
+        .await
+        .unwrap();
+
+    // Check the lock file
+    let lock = pixi.lock_file().await.unwrap();
+    insta::with_settings!({filters => vec![
+        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+    ]}, {
+        insta::assert_snapshot!(lock.render_to_string().unwrap());
+    });
+
+    // Check the manifest itself
+    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+}
+
+/// Test adding a git dependency using ssh url
+#[tokio::test]
+async fn add_plain_ssh_url() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+preview = ['pixi-build']"#,
+    )
+    .unwrap();
+
+    // Add a package
+    pixi.add("boost-check")
+        .with_git_url(Url::parse("git+ssh://git@github.com/wolfv/pixi-build-examples.git").unwrap())
+        .with_no_lockfile_update(true)
+        .await
+        .unwrap();
+
+    // Check the manifest itself
+    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+}
+
+/// Test adding a git dependency using ssh url
+#[tokio::test]
+async fn add_pypi_git() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+
+"#,
+    )
+    .unwrap();
+
+    // Add a package
+    pixi.add("boltons")
+        .set_pypi(true)
+        .with_git_url(Url::parse("https://github.com/mahmoud/boltons.git").unwrap())
+        .with_no_lockfile_update(true)
+        .await
+        .unwrap();
+
+    // Check the manifest itself
+    insta::with_settings!({filters => vec![
+        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+    ]}, {
+        insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    });
 }
 
 #[tokio::test]
