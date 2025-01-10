@@ -198,7 +198,7 @@ jobs:
     runs-on: 16core_windows_latest_runner
     steps:
       - uses: actions/checkout@v4
-      - name: Configure Git user
+      - name: Configure Git user that will be used in the tests
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
