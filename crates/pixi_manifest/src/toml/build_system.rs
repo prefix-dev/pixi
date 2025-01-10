@@ -6,13 +6,14 @@ use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
 
 use crate::{
     build_system::BuildBackend,
+    error::GenericError,
     utils::{package_map::UniquePackageMap, PixiSpanned},
-    BuildSystem, TomlError,
+    PackageBuild, TomlError,
 };
 
 #[derive(Debug)]
-pub struct TomlBuildSystem {
-    pub build_backend: PixiSpanned<TomlBuildBackend>,
+pub struct TomlPackageBuild {
+    pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
 }
@@ -23,17 +24,14 @@ pub struct TomlBuildBackend {
     pub spec: TomlSpec,
 }
 
-impl TomlBuildSystem {
-    pub fn into_build_system(self) -> Result<BuildSystem, TomlError> {
+impl TomlPackageBuild {
+    pub fn into_build_system(self) -> Result<PackageBuild, TomlError> {
         // Parse the build backend and ensure it is a binary spec.
-        let build_backend_spec = self
-            .build_backend
-            .value
-            .spec
-            .into_binary_spec()
-            .map_err(|e| {
-                TomlError::Generic(e.to_string().into(), self.build_backend.span.clone())
-            })?;
+        let build_backend_spec = self.backend.value.spec.into_binary_spec().map_err(|e| {
+            TomlError::Generic(
+                GenericError::new(e.to_string()).with_opt_span(self.backend.span.clone()),
+            )
+        })?;
 
         // Convert the additional dependencies and make sure that they are binary.
         let additional_dependencies = self
@@ -50,8 +48,10 @@ impl TomlBuildSystem {
                         .or_else(|| self.additional_dependencies.name_spans.get(&name))
                         .cloned();
                     Err(TomlError::Generic(
-                        "Cannot use source dependencies for build backends dependencies".into(),
-                        spec_range,
+                        GenericError::new(
+                            "Cannot use source dependencies for build backends dependencies",
+                        )
+                        .with_opt_span(spec_range),
                     ))
                 }
             })
@@ -61,17 +61,16 @@ impl TomlBuildSystem {
         if let Some(channels) = &self.channels {
             if channels.value.is_empty() {
                 return Err(TomlError::Generic(
-                    "No channels specified for the build backend dependencies".into(),
-                    channels.span(),
+                    GenericError::new("No channels specified for the build backend dependencies")
+                        .with_opt_span(channels.span()),
                 ));
             }
         }
 
-        Ok(BuildSystem {
-            build_backend: BuildBackend {
-                name: self.build_backend.value.name.value,
+        Ok(PackageBuild {
+            backend: BuildBackend {
+                name: self.backend.value.name.value,
                 spec: build_backend_spec,
-                additional_args: None,
             },
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
@@ -97,10 +96,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
     }
 }
 
-impl<'de> toml_span::Deserialize<'de> for TomlBuildSystem {
+impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
-        let build_backend = th.required_s("build-backend")?.into();
+        let build_backend = th.required_s("backend")?.into();
         let channels = th
             .optional_s::<TomlWith<_, Vec<TomlFromStr<_>>>>("channels")
             .map(|s| PixiSpanned {
@@ -110,7 +109,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildSystem {
         let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
         th.finalize(None)?;
         Ok(Self {
-            build_backend,
+            backend: build_backend,
             channels,
             additional_dependencies,
         })
@@ -125,8 +124,8 @@ mod test {
     use crate::utils::test_utils::format_parse_error;
 
     fn expect_parse_failure(pixi_toml: &str) -> String {
-        let parse_error = <TomlBuildSystem as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)
-            .and_then(TomlBuildSystem::into_build_system)
+        let parse_error = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)
+            .and_then(TomlPackageBuild::into_build_system)
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
@@ -136,7 +135,7 @@ mod test {
     fn test_disallow_source() {
         assert_snapshot!(expect_parse_failure(
             r#"
-            build-backend = { name = "foobar", git = "https://github.com/org/repo" }
+            backend = { name = "foobar", git = "https://github.com/org/repo" }
         "#
         ));
     }
@@ -145,7 +144,7 @@ mod test {
     fn test_missing_version_specifier() {
         assert_snapshot!(expect_parse_failure(
             r#"
-            build-backend = { name = "foobar" }
+            backend = { name = "foobar" }
         "#
         ));
     }
@@ -159,7 +158,7 @@ mod test {
     fn test_missing_name() {
         assert_snapshot!(expect_parse_failure(
             r#"
-            build-backend = { version = "12.*" }
+            backend = { version = "12.*" }
         "#
         ));
     }
@@ -168,7 +167,7 @@ mod test {
     fn test_empty_channels() {
         assert_snapshot!(expect_parse_failure(
             r#"
-            build-backend = { name = "foobar", version = "*" }
+            backend = { name = "foobar", version = "*" }
             channels = []
         "#
         ));
@@ -178,7 +177,7 @@ mod test {
     fn test_additional_build_backend_keys() {
         assert_snapshot!(expect_parse_failure(
             r#"
-            build-backend = { name = "foobar", version = "*", sub = "bar" }
+            backend = { name = "foobar", version = "*", sub = "bar" }
         "#
         ));
     }
@@ -187,7 +186,7 @@ mod test {
     fn test_additional_keys() {
         assert_snapshot!(expect_parse_failure(
             r#"
-            build-backend = { name = "foobar", version = "*" }
+            backend = { name = "foobar", version = "*" }
             additional = "key"
         "#
         ));

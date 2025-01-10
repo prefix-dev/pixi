@@ -1,4 +1,6 @@
+mod backend_override;
 mod build_frontend;
+mod into_build_types;
 mod jsonrpc;
 pub mod protocol;
 mod protocols;
@@ -14,7 +16,6 @@ pub mod tool;
 use std::path::PathBuf;
 
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl};
 pub use reporters::{CondaBuildReporter, CondaMetadataReporter};
 pub use reporters::{NoopCondaBuildReporter, NoopCondaMetadataReporter};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -23,28 +24,9 @@ use url::Url;
 
 pub use crate::protocol::Protocol;
 
+pub use backend_override::BackendOverride;
+pub use into_build_types::to_project_model_v1;
 pub use protocol_builder::EnabledProtocols;
-
-#[derive(Debug)]
-pub enum BackendOverride {
-    /// Override the backend with a specific tool.
-    Spec(MatchSpec, Option<Vec<NamedChannelOrUrl>>),
-
-    /// Overwrite the backend with a executable path.
-    System(String),
-}
-
-impl BackendOverride {
-    pub fn from_env() -> Option<Self> {
-        match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE") {
-            Ok(spec) => {
-                tracing::warn!("overriding build backend with: {}", spec);
-                Some(Self::System(spec))
-            }
-            Err(_) => None,
-        }
-    }
-}
 
 /// A backend communication protocol that can run in the same process.
 pub struct InProcessBackend {

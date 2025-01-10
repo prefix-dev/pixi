@@ -5,7 +5,9 @@ mod environment;
 mod feature;
 mod manifest;
 mod package;
+mod package_target;
 mod platform;
+mod preview;
 mod pypi_options;
 mod pyproject;
 mod system_requirements;
@@ -13,7 +15,7 @@ mod target;
 mod task;
 mod workspace;
 
-pub use build_system::TomlBuildSystem;
+pub use build_system::TomlPackageBuild;
 pub use channel::TomlPrioritizedChannel;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};
@@ -23,7 +25,7 @@ pub use package::{ExternalPackageProperties, PackageError, TomlPackage};
 pub use platform::TomlPlatform;
 pub use target::TomlTarget;
 use toml_span::DeserError;
-pub use workspace::{ExternalWorkspaceProperties, TomlWorkspace, WorkspaceError};
+pub use workspace::{ExternalWorkspaceProperties, TomlWorkspace};
 
 use crate::TomlError;
 

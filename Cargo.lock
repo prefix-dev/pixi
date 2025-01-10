@@ -3732,7 +3732,6 @@ dependencies = [
  "uv-normalize",
  "uv-pep440",
  "uv-pep508",
- "uv-platform-tags",
  "uv-pypi-types",
  "uv-python",
  "uv-requirements",
@@ -3751,6 +3750,7 @@ dependencies = [
  "dashmap",
  "fs-err",
  "futures",
+ "indexmap 2.7.0",
  "insta",
  "itertools 0.13.0",
  "jsonrpsee",
@@ -3790,7 +3790,9 @@ dependencies = [
 name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
+ "indexmap 2.7.0",
  "rattler_conda_types",
+ "rattler_digest",
  "serde",
  "serde_json",
  "serde_with",
@@ -3922,7 +3924,6 @@ dependencies = [
 name = "pixi_progress"
 version = "0.1.0"
 dependencies = [
- "console",
  "indicatif",
  "tokio",
 ]
@@ -3972,6 +3973,7 @@ dependencies = [
  "thiserror 2.0.10",
  "toml-span",
  "toml_edit",
+ "tracing",
  "typed-path",
  "url",
 ]

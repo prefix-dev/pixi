@@ -253,7 +253,6 @@ rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
-uv-platform-tags = { workspace = true }
 uv-pypi-types = { workspace = true }
 
 fs-err = { workspace = true, features = ["tokio"] }

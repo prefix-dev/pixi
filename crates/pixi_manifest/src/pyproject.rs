@@ -648,8 +648,7 @@ mod tests {
             assert_eq!(version_spec, &vspec);
         }
 
-        // Check that we remove leading `==` for the conda version spec
-        cmp("==3.12", "3.12");
+        cmp("==3.12", "==3.12");
         cmp("==3.12.*", "3.12.*");
         // rest should work just fine
         cmp(">=3.12", ">=3.12");
