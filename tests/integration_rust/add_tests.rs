@@ -681,41 +681,42 @@ preview = ['pixi-build']
     insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
 }
 
-// /// Test adding git dependencies with credentials
-// #[tokio::test]
-// async fn add_git_deps_with_creds() {
-//     let pixi = PixiControl::from_manifest(
-//         r#"
-// [project]
-// name = "test-channel-change"
-// channels = ["https://prefix.dev/conda-forge"]
-// platforms = ["linux-64"]
-// preview = ['pixi-build']
-// "#,
-//     )
-//     .unwrap();
+/// Test adding git dependencies with credentials
+#[tokio::test]
+async fn add_git_deps_with_creds() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+preview = ['pixi-build']
+"#,
+    )
+    .unwrap();
 
-//     // Add a package
-//     // we want to make sure that the credentials are not exposed in the lock file
-//     pixi.add("boost-check")
-//         .with_git_url(
-//             Url::parse("https://user:token123@github.com/wolfv/pixi-build-examples.git").unwrap(),
-//         )
-//         .with_git_rev(GitRev::new().with_branch("main".to_string()))
-//         .with_git_subdir("boost-check".to_string())
-//         .await
-//         .unwrap();
+    // Add a package
+    // we want to make sure that the credentials are not exposed in the lock file
+    pixi.add("boost-check")
+        .with_git_url(
+            Url::parse("https://user:token123@github.com/wolfv/pixi-build-examples.git").unwrap(),
+        )
+        .with_git_rev(GitRev::new().with_branch("main".to_string()))
+        .with_git_subdir("boost-check".to_string())
+        .with_no_lockfile_update(true)
+        .await
+        .unwrap();
 
-//     let lock = pixi.lock_file().await.unwrap();
-//     insta::with_settings!({filters => vec![
-//         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
-//     ]}, {
-//         insta::assert_snapshot!(lock.render_to_string().unwrap());
-//     });
+    // let lock = pixi.lock_file().await.unwrap();
+    // insta::with_settings!({filters => vec![
+    //     (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+    // ]}, {
+    //     insta::assert_snapshot!(lock.render_to_string().unwrap());
+    // });
 
-//     // Check the manifest itself
-//     insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
-// }
+    // Check the manifest itself
+    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+}
 
 /// Test adding a git dependency with a specific commit
 #[tokio::test]
