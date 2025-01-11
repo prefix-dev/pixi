@@ -174,7 +174,7 @@ repository.workspace = true
 version = "0.40.0"
 
 [features]
-default = ["rustls-tls"]
+default = ["online_tests", "rustls-tls"]
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
@@ -182,6 +182,8 @@ native-tls = [
   "rattler/native-tls",
   "pixi_utils/native-tls",
 ]
+# run tests connecting to remote Internet services
+online_tests = []
 rustls-tls = [
   "reqwest/rustls-tls",
   "reqwest/rustls-tls-native-roots",
