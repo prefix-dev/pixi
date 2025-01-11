@@ -650,6 +650,7 @@ async fn add_dependency_pinning_strategy() {
 
 /// Test adding a git dependency with a specific branch
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_deps() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -686,6 +687,7 @@ preview = ['pixi-build']
 /// during the CI run
 #[cfg(not(windows))]
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_deps_with_creds() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -722,6 +724,7 @@ preview = ['pixi-build']
 
 /// Test adding a git dependency with a specific commit
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_with_specific_commit() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -755,6 +758,7 @@ preview = ['pixi-build']"#,
 
 /// Test adding a git dependency with a specific tag
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_with_tag() {
     let pixi = PixiControl::from_manifest(
         r#"
