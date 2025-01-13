@@ -116,11 +116,15 @@ pub fn build_reqwest_clients(
     client_builder = client_builder.with(GCSMiddleware);
 
     // todo: same auth storage as above
+    // todo: is from_env correct?
     debug!("Using s3_config: {:?}", s3_config);
     let s3_middleware = if let Some(s3_config) = s3_config {
-        S3Middleware::new(s3_config, AuthenticationStorage::default())
+        S3Middleware::new(s3_config, AuthenticationStorage::from_env().unwrap())
     } else {
-        S3Middleware::new(config.compute_s3_config(), AuthenticationStorage::default())
+        S3Middleware::new(
+            config.compute_s3_config(),
+            AuthenticationStorage::from_env().unwrap(),
+        )
     };
     debug!("s3_middleware: {:?}", s3_middleware);
     client_builder = client_builder.with(s3_middleware);

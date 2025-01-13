@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-use tempfile::TempDir;
+use tempfile::{tempdir, TempDir};
 use uv_python::PythonEnvironment;
 
 /// Should add a python version to the environment and lock file that matches
@@ -760,4 +760,78 @@ async fn test_ensure_gitignore_file_creation() {
         contents, "*\n",
         ".pixi/.gitignore file does not contain the expected content"
     );
+}
+
+/// Should download a package from an S3 bucket and install it
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_s3() {
+    let r2_access_key_id = std::env::var("PIXI_TEST_R2_ACCESS_KEY_ID").ok();
+    let r2_secret_access_key = std::env::var("PIXI_TEST_R2_SECRET_ACCESS_KEY").ok();
+    if r2_access_key_id.is_none() || r2_secret_access_key.is_none() {
+        eprintln!(
+            "Skipping test as PIXI_TEST_R2_ACCESS_KEY_ID or PIXI_TEST_R2_ACCESS_KEY_ID is not set"
+        );
+        return;
+    }
+
+    let r2_access_key_id = r2_access_key_id.unwrap();
+    let r2_secret_access_key = r2_secret_access_key.unwrap();
+
+    let credentials = format!(
+        r#"
+    {{
+        "s3://rattler-s3-testing/channel": {{
+            "S3Credentials": {{
+                "access_key_id": "{}",
+                "secret_access_key": "{}"
+            }}
+        }}
+    }}
+    "#,
+        r2_access_key_id, r2_secret_access_key
+    );
+    eprintln!("{}", credentials);
+    let temp_dir = tempdir().unwrap();
+    let credentials_path = temp_dir.path().join("credentials.json");
+    std::fs::write(&credentials_path, credentials).unwrap();
+
+    let manifest = format!(
+        r#"
+    [project]
+    name = "s3-test"
+    channels = ["s3://rattler-s3-testing/channel", "conda-forge"]
+    platforms = ["{platform}"]
+
+    [project.s3-options]
+    endpoint-url = "https://e1a7cde76f1780ec06bac859036dbaf7.eu.r2.cloudflarestorage.com"
+    region = "auto"
+    force-path-style = true
+
+    [dependencies]
+    my-webserver = {{ version = "0.1.0", build = "pyh4616a5c_0" }}
+    "#,
+        platform = Platform::current(),
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    temp_env::async_with_vars(
+        [(
+            "RATTLER_AUTH_FILE",
+            Some(credentials_path.to_str().unwrap()),
+        )],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
+
+    // Test for existence of conda-meta/my-webserver-0.1.0-pyh4616a5c_0.json file
+    assert!(pixi
+        .default_env_path()
+        .unwrap()
+        .join("conda-meta")
+        .join("my-webserver-0.1.0-pyh4616a5c_0.json")
+        .exists())
 }

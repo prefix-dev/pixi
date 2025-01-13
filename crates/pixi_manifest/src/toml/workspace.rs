@@ -11,7 +11,7 @@ use crate::{
     toml::{platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
     workspace::ChannelPriority,
-    S3Options, PrioritizedChannel, TargetSelector, Targets, TomlError, Workspace,
+    PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, Workspace,
 };
 
 #[derive(Debug, Clone)]
