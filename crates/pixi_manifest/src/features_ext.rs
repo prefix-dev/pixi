@@ -4,8 +4,8 @@ use indexmap::IndexSet;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
 };
-use rattler_solve::ChannelPriority;
 
+use crate::workspace::ChannelPriority;
 use crate::{
     has_features_iter::HasFeaturesIter, pypi::pypi_options::PypiOptions, CondaDependencies,
     HasManifestRef, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,

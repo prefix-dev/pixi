@@ -18,15 +18,15 @@ pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_spec = { workspace = true }
-pixi_utils = { workspace = true }
+pixi_toml = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
-serde-untagged = { workspace = true }
 serde-value = { workspace = true }
-serde_with = { workspace = true }
 spdx = { workspace = true }
 strsim = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+toml-span = { workspace = true, features = ["serde"] }
 toml_edit = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
@@ -36,11 +36,11 @@ pyproject-toml = { workspace = true }
 
 # Rattler crates
 rattler_conda_types = { workspace = true }
-rattler_solve = { workspace = true, features = ["serde"] }
 rattler_virtual_packages = { workspace = true }
 
 # These rattler crates are optionally used in the build system
 rattler_lock = { workspace = true, optional = true }
+rattler_solve = { workspace = true, optional = true }
 
 # TODO: Remove these dependencies
 console = { workspace = true }

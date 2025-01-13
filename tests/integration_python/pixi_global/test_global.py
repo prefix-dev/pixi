@@ -18,7 +18,7 @@ def test_sync_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
     toml = """
     [envs.test]
     channels = ["https://prefix.dev/conda-forge"]
-    dependencies = { python = "3.13.0" }
+    dependencies = { python = "==3.13.0" }
     exposed = { "python-injected" = "python" }
     """
     parsed_toml = tomllib.loads(toml)
@@ -74,7 +74,7 @@ def test_sync_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
     [envs.test]
     channels = ["https://prefix.dev/conda-forge"]
     platform = "win-64"
-    dependencies = { binutils = "2.40" }\
+    dependencies = { binutils = "2.40.*" }\
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)

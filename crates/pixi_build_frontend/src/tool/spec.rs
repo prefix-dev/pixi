@@ -1,7 +1,5 @@
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl};
 
-use crate::BackendOverride;
-
 /// Describes the specification of the tool. This can be used to cache tool
 /// information.
 #[derive(Debug)]
@@ -64,13 +62,13 @@ impl From<SystemToolSpec> for ToolSpec {
     }
 }
 
-impl BackendOverride {
-    pub fn into_spec(self) -> ToolSpec {
-        match self {
-            BackendOverride::Spec(spec, channels) => ToolSpec::Isolated(
-                IsolatedToolSpec::from_specs(vec![spec], channels.into_iter().flatten()),
-            ),
-            BackendOverride::System(command) => ToolSpec::System(SystemToolSpec { command }),
-        }
-    }
-}
+// impl BackendOverride {
+//     pub fn into_spec(self) -> ToolSpec {
+//         match self {
+//             BackendOverride::Spec(spec, channels) => ToolSpec::Isolated(
+//                 IsolatedToolSpec::from_specs(vec![spec], channels.into_iter().flatten()),
+//             ),
+//             BackendOverride::System(command) => ToolSpec::System(SystemToolSpec { command }),
+//         }
+//     }
+// }

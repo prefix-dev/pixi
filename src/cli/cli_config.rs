@@ -4,17 +4,22 @@ use crate::lock_file::UpdateMode;
 use crate::DependencyType;
 use crate::Project;
 use clap::Parser;
+use indexmap::IndexMap;
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pep508_rs::Requirement;
 use pixi_config::{Config, ConfigCli};
 use pixi_consts::consts;
+use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
+use pixi_spec::Reference;
 use rattler_conda_types::ChannelConfig;
 use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use url::Url;
 
 /// Project configuration
 #[derive(Parser, Debug, Default, Clone)]
@@ -129,6 +134,73 @@ impl PrefixUpdateConfig {
         }
     }
 }
+
+#[derive(Parser, Debug, Default, Clone)]
+pub struct GitRev {
+    /// The git branch
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev", "pypi"])]
+    pub branch: Option<String>,
+
+    /// The git tag
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev", "pypi"])]
+    pub tag: Option<String>,
+
+    /// The git revision
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag", "pypi"])]
+    pub rev: Option<String>,
+}
+
+impl GitRev {
+    /// Create a new `GitRev`
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Set the branch
+    pub fn with_branch(mut self, branch: String) -> GitRev {
+        self.branch = Some(branch);
+        self
+    }
+
+    /// Set the revision
+    pub fn with_rev(mut self, rev: String) -> GitRev {
+        self.rev = Some(rev);
+        self
+    }
+
+    /// Set the tag
+    pub fn with_tag(mut self, tag: String) -> GitRev {
+        self.tag = Some(tag);
+        self
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        if let Some(branch) = &self.branch {
+            Some(branch)
+        } else if let Some(tag) = &self.tag {
+            Some(tag)
+        } else if let Some(rev) = &self.rev {
+            Some(rev)
+        } else {
+            None
+        }
+    }
+}
+
+impl From<GitRev> for Reference {
+    fn from(git_rev: GitRev) -> Self {
+        if let Some(branch) = git_rev.branch {
+            Reference::Branch(branch)
+        } else if let Some(tag) = git_rev.tag {
+            Reference::Tag(tag)
+        } else if let Some(rev) = git_rev.rev {
+            Reference::Rev(rev)
+        } else {
+            Reference::DefaultBranch
+        }
+    }
+}
+
 #[derive(Parser, Debug, Default)]
 pub struct DependencyConfig {
     /// The dependencies as names, conda MatchSpecs or PyPi requirements
@@ -157,6 +229,18 @@ pub struct DependencyConfig {
     /// The feature for which the dependency should be modified
     #[clap(long, short, default_value_t)]
     pub feature: FeatureName,
+
+    /// The git url to use when adding a git dependency
+    #[clap(long, short)]
+    pub git: Option<Url>,
+
+    #[clap(flatten)]
+    /// The git revisions to use when adding a git dependency
+    pub rev: Option<GitRev>,
+
+    /// The subdirectory of the git repository to use
+    #[clap(long, short, requires = "git")]
+    pub subdir: Option<String>,
 }
 
 impl DependencyConfig {
@@ -219,10 +303,117 @@ impl DependencyConfig {
             }
         }
     }
+
+    pub fn vcs_pep508_requirements(
+        &self,
+        project: &Project,
+    ) -> Option<miette::Result<IndexMap<PyPiPackageName, Requirement>>> {
+        match &self.git {
+            Some(git) => {
+                // pep 508 requirements with direct reference
+                // should be in this format
+                // name @ url@rev#subdirectory=subdir
+                // we need to construct it
+                let pep_reqs: miette::Result<IndexMap<PyPiPackageName, Requirement>> = self
+                    .specs
+                    .iter()
+                    .map(|package_name| {
+                        let vcs_req = build_vcs_requirement(
+                            package_name,
+                            git,
+                            self.rev.as_ref(),
+                            self.subdir.clone(),
+                        );
+
+                        let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
+                        let name = PyPiPackageName::from_normalized(dep.clone().name);
+
+                        Ok((name, dep))
+                    })
+                    .collect();
+                Some(pep_reqs)
+            }
+            None => None,
+        }
+    }
 }
 
 impl HasSpecs for DependencyConfig {
     fn packages(&self) -> Vec<&str> {
         self.specs.iter().map(AsRef::as_ref).collect()
+    }
+}
+
+/// Builds a PEP 508 compliant VCS requirement string
+fn build_vcs_requirement(
+    package_name: &str,
+    git: &Url,
+    rev: Option<&GitRev>,
+    subdir: Option<String>,
+) -> String {
+    let mut vcs_req = format!("{} @ {}", package_name, git);
+    if let Some(rev_str) = rev.and_then(|rev| rev.as_str().map(|s| s.to_string())) {
+        vcs_req.push_str(&format!("@{}", rev_str));
+    }
+    if let Some(subdir) = subdir {
+        vcs_req.push_str(&format!("#subdirectory={}", subdir));
+    }
+    vcs_req
+}
+
+#[cfg(test)]
+mod tests {
+    use url::Url;
+
+    use crate::cli::cli_config::{build_vcs_requirement, GitRev};
+
+    #[test]
+    fn test_build_vcs_requirement_with_all_fields() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("https://github.com/user/repo").unwrap(),
+            Some(&GitRev::new().with_tag("v1.0.0".to_string())),
+            Some("subdir".to_string()),
+        );
+        assert_eq!(
+            result,
+            "mypackage @ https://github.com/user/repo@v1.0.0#subdirectory=subdir"
+        );
+    }
+
+    #[test]
+    fn test_build_vcs_requirement_with_no_rev() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("https://github.com/user/repo").unwrap(),
+            None,
+            Some("subdir".to_string()),
+        );
+        assert_eq!(
+            result,
+            "mypackage @ https://github.com/user/repo#subdirectory=subdir"
+        );
+    }
+
+    #[test]
+    fn test_build_vcs_requirement_with_no_subdir() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("https://github.com/user/repo").unwrap(),
+            Some(&GitRev::new().with_tag("v1.0.0".to_string())),
+            None,
+        );
+        assert_eq!(result, "mypackage @ https://github.com/user/repo@v1.0.0");
+    }
+
+    #[test]
+    fn test_build_vcs_requirement_with_only_git() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("https://github.com/user/repo").unwrap(),
+            None,
+            None,
+        );
+        assert_eq!(result, "mypackage @ https://github.com/user/repo");
     }
 }

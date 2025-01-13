@@ -29,6 +29,7 @@ csv = "1.3.1"
 dashmap = "6.1.0"
 deno_task_shell = "0.20.2"
 dialoguer = "0.11.0"
+digest = "0.10"
 dirs = "5.0.1"
 dunce = "1.0.5"
 fd-lock = "4.0.2"
@@ -36,6 +37,7 @@ flate2 = "1.0.35"
 fs-err = { version = "3.0.0" }
 fs_extra = "1.3.0"
 futures = "0.3.31"
+hex = "0.4.3"
 http = "1.2.0"
 http-cache-reqwest = "0.15.0"
 human_bytes = "0.4.3"
@@ -78,6 +80,7 @@ shlex = "1.3.0"
 signal-hook = "0.3.17"
 spdx = "0.10.7"
 strsim = "0.11.1"
+strum = "0.26.3"
 tabwriter = "1.4.0"
 tar = "0.4.43"
 tempfile = "3.14.0"
@@ -85,6 +88,7 @@ thiserror = "2.0.9"
 tokio = "1.42.0"
 tokio-stream = "0.1.17"
 tokio-util = "0.7.13"
+toml-span = "0.4.1"
 toml_edit = "0.22.22"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
@@ -97,25 +101,26 @@ uv-pep508 = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" 
 uv-platform-tags = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
 uv-pypi-types = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
 uv-requirements-txt = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
+
 wax = "0.6.0"
 which = "7.0.1"
 
 # Rattler crates
-file_url = "0.2.1"
-rattler = { version = "0.28.9", default-features = false }
-rattler_cache = { version = "0.3.1", default-features = false }
-rattler_conda_types = { version = "0.29.7", default-features = false, features = [
+file_url = "0.2.2"
+rattler = { version = "0.28.11", default-features = false }
+rattler_cache = { version = "0.3.3", default-features = false }
+rattler_conda_types = { version = "0.29.9", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.0.4", default-features = false }
-rattler_lock = { version = "0.22.36", default-features = false }
-rattler_networking = { version = "0.21.9", default-features = false, features = [
+rattler_digest = { version = "1.0.5", default-features = false }
+rattler_lock = { version = "0.22.38", default-features = false }
+rattler_networking = { version = "0.21.10", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { version = "0.21.29", default-features = false }
-rattler_shell = { version = "0.22.12", default-features = false }
-rattler_solve = { version = "1.3.1", default-features = false }
-rattler_virtual_packages = { version = "1.1.15", default-features = false }
+rattler_repodata_gateway = { version = "0.21.31", default-features = false }
+rattler_shell = { version = "0.22.14", default-features = false }
+rattler_solve = { version = "1.3.3", default-features = false }
+rattler_virtual_packages = { version = "1.1.17", default-features = false }
 
 
 # Bumping this to a higher version breaks the Windows path handling.
@@ -140,6 +145,7 @@ zstd = { version = "0.13.2", default-features = false }
 
 fancy_display = { path = "crates/fancy_display" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
+pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
@@ -150,6 +156,7 @@ pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_record = { path = "crates/pixi_record" }
 pixi_spec = { path = "crates/pixi_spec" }
+pixi_toml = { path = "crates/pixi_toml" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
 pypi_mapping = { path = "crates/pypi_mapping" }
@@ -164,10 +171,10 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.39.4"
+version = "0.40.0"
 
 [features]
-default = ["rustls-tls"]
+default = ["online_tests", "rustls-tls"]
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
@@ -175,6 +182,8 @@ native-tls = [
   "rattler/native-tls",
   "pixi_utils/native-tls",
 ]
+# run tests connecting to remote Internet services
+online_tests = []
 rustls-tls = [
   "reqwest/rustls-tls",
   "reqwest/rustls-tls-native-roots",
@@ -258,10 +267,14 @@ pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
-pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_manifest = { workspace = true, features = [
+  "rattler_lock",
+  "rattler_solve",
+] }
 pixi_progress = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_toml = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
@@ -286,6 +299,7 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = { workspace = true }
+toml-span = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
@@ -341,6 +355,8 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
+# This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
+version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "57832d0588fbb7aab824813481104761dc1c7740" }
 
 # Config for 'dist'
 [workspace.metadata.dist]
