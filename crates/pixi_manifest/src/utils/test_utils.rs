@@ -1,10 +1,7 @@
 use itertools::Itertools;
 use miette::{GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
 
-use crate::{
-    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
-    TomlError,
-};
+use crate::toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest};
 
 /// A helper function that generates a snapshot of the error message when
 /// parsing a manifest TOML. The error is returned.
