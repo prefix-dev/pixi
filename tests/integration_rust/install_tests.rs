@@ -770,7 +770,7 @@ async fn install_s3() {
     let r2_secret_access_key = std::env::var("PIXI_TEST_R2_SECRET_ACCESS_KEY").ok();
     if r2_access_key_id.is_none() || r2_secret_access_key.is_none() {
         eprintln!(
-            "Skipping test as PIXI_TEST_R2_ACCESS_KEY_ID or PIXI_TEST_R2_ACCESS_KEY_ID is not set"
+            "Skipping test as PIXI_TEST_R2_ACCESS_KEY_ID or PIXI_TEST_R2_SECRET_ACCESS_KEY is not set"
         );
         return;
     }
@@ -791,7 +791,6 @@ async fn install_s3() {
     "#,
         r2_access_key_id, r2_secret_access_key
     );
-    eprintln!("{}", credentials);
     let temp_dir = tempdir().unwrap();
     let credentials_path = temp_dir.path().join("credentials.json");
     std::fs::write(&credentials_path, credentials).unwrap();
