@@ -29,22 +29,6 @@
       "$ref": "#/$defs/Activation",
       "description": "The scripts used on the activation of the project"
     },
-    "build-dependencies": {
-      "title": "Build-Dependencies",
-      "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
-      }
-    },
     "dependencies": {
       "title": "Dependencies",
       "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
@@ -153,22 +137,6 @@
     "pypi-options": {
       "$ref": "#/$defs/PyPIOptions",
       "description": "Options related to PyPI indexes, on the default feature"
-    },
-    "run-dependencies": {
-      "title": "Run-Dependencies",
-      "description": "The run-dependencies for the [package]",
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
-      }
     },
     "system-requirements": {
       "$ref": "#/$defs/SystemRequirements",
