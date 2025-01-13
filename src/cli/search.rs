@@ -134,8 +134,6 @@ pub async fn execute_impl<W: Write>(
         }
     };
 
-    println!("adwdwdd: {:?}", project);
-
     // Resolve channels from project / CLI args
     let channels = args.channels.resolve_from_project(project.as_ref())?;
     eprintln!(
