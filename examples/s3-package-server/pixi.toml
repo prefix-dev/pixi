@@ -1,13 +1,12 @@
 [project]
-channels = ["s3://s3-forge/channel", "conda-forge"]
+channels = ["s3://test-rattler-public/channel", "conda-forge"]
 name = "s3-package-server"
 platforms = ["osx-arm64"]
 
 [project.s3-options]
-endpoint-url = "http://localhost:9000"
+endpoint-url = "https://s3.eu-central-1.amazonaws.com"
 region = "eu-central-1"
-force-path-style = true
+force-path-style = false
 
 [dependencies]
-test-package = "*"
-# my-webserver = "*"
+my-webserver = "*"
