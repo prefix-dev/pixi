@@ -35,9 +35,12 @@ use pixi_manifest::{
     FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, PypiDependencyLocation, SpecType,
     WorkspaceManifest,
 };
+use pixi_spec::{PixiSpec, SourceSpec};
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{
+    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
+};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
@@ -160,6 +163,8 @@ pub type PypiDeps = indexmap::IndexMap<
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
+
+pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
@@ -687,6 +692,7 @@ impl Project {
         &mut self,
         match_specs: MatchSpecs,
         pypi_deps: PypiDeps,
+        source_specs: SourceSpecs,
         prefix_update_config: &PrefixUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
@@ -699,20 +705,38 @@ impl Project {
         let mut pypi_packages = HashSet::new();
         let channel_config = self.channel_config();
         for (name, (spec, spec_type)) in match_specs {
+            let (_, nameless_spec) = spec.into_nameless();
+            let pixi_spec =
+                PixiSpec::from_nameless_matchspec(nameless_spec.clone(), &channel_config);
+
             let added = self.manifest.add_dependency(
-                &spec,
+                &name,
+                &pixi_spec,
                 spec_type,
                 platforms,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )?;
             if added {
-                if spec.version.is_none() {
-                    conda_specs_to_add_constraints_for.insert(name.clone(), (spec_type, spec));
+                if nameless_spec.version.is_none() {
+                    conda_specs_to_add_constraints_for
+                        .insert(name.clone(), (spec_type, nameless_spec));
                 }
                 conda_packages.insert(name);
             }
+        }
+
+        for (name, (spec, spec_type)) in source_specs {
+            let pixi_spec = PixiSpec::from(spec);
+
+            self.manifest.add_dependency(
+                &name,
+                &pixi_spec,
+                spec_type,
+                platforms,
+                feature_name,
+                DependencyOverwriteBehavior::Overwrite,
+            )?;
         }
 
         for (name, (spec, location)) in pypi_deps {
@@ -889,7 +913,7 @@ impl Project {
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
-        conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, MatchSpec)>,
+        conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, NamelessMatchSpec)>,
         affect_environment_and_platforms: Vec<(String, Platform)>,
         feature_name: &FeatureName,
         platforms: &[Platform],
@@ -936,17 +960,20 @@ impl Project {
             if let Some(version_constraint) = version_constraint {
                 implicit_constraints
                     .insert(name.as_source().to_string(), version_constraint.to_string());
-                let spec = MatchSpec {
+                let spec = NamelessMatchSpec {
                     version: Some(version_constraint),
                     ..spec
                 };
+
+                let pixi_spec = PixiSpec::from_nameless_matchspec(spec.clone(), &channel_config);
+
                 self.manifest.add_dependency(
-                    &spec,
+                    &name,
+                    &pixi_spec,
                     spec_type,
                     platforms,
                     feature_name,
                     DependencyOverwriteBehavior::Overwrite,
-                    &channel_config,
                 )?;
             }
         }

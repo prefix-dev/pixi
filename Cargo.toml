@@ -151,6 +151,7 @@ zstd = { version = "0.13.2", default-features = false }
 fancy_display = { path = "crates/fancy_display" }
 pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
+pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
@@ -176,10 +177,10 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.39.5"
+version = "0.40.0"
 
 [features]
-default = ["rustls-tls"]
+default = ["online_tests", "rustls-tls"]
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
@@ -187,6 +188,8 @@ native-tls = [
   "rattler/native-tls",
   "pixi_utils/native-tls",
 ]
+# run tests connecting to remote Internet services
+online_tests = []
 rustls-tls = [
   "reqwest/rustls-tls",
   "reqwest/rustls-tls-native-roots",
