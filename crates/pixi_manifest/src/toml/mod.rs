@@ -9,6 +9,7 @@ mod package_target;
 mod platform;
 mod preview;
 mod pypi_options;
+mod s3_options;
 mod pyproject;
 mod system_requirements;
 mod target;

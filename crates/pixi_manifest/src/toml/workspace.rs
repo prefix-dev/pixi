@@ -7,13 +7,11 @@ use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Val
 use url::Url;
 
 use crate::{
-    preview::Preview, pypi::pypi_options::PypiOptions, utils::PixiSpanned, PrioritizedChannel,
-    S3Options, TargetSelector, Targets, Workspace,
     pypi::pypi_options::PypiOptions,
     toml::{platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
     workspace::ChannelPriority,
-    PrioritizedChannel, TargetSelector, Targets, TomlError, Workspace,
+    S3Options, PrioritizedChannel, TargetSelector, Targets, TomlError, Workspace,
 };
 
 #[derive(Debug, Clone)]
@@ -43,8 +41,6 @@ pub struct TomlWorkspace {
     pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
     pub pypi_options: Option<PypiOptions>,
     pub s3_options: Option<S3Options>,
-    #[serde(default)]
-    pub preview: Preview,
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
@@ -146,6 +142,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlHashMap<_, _>>("conda-pypi-map")
             .map(TomlHashMap::into_inner);
         let pypi_options = th.optional("pypi-options");
+        let s3_options = th.optional("s3-options");
         let preview = th.optional("preview").unwrap_or_default();
         let target = th
             .optional::<TomlIndexMap<_, _>>("target")
@@ -172,6 +169,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             documentation,
             conda_pypi_map,
             pypi_options,
+            s3_options,
             preview,
             target: target.unwrap_or_default(),
             build_variants,

@@ -1,9 +1,7 @@
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use url::Url;
 
 /// Custom S3 configuration
-#[serde_as]
 #[derive(Debug, Clone, PartialEq, Serialize, Eq, Deserialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct S3Options {
