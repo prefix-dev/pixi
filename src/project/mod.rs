@@ -169,9 +169,11 @@ pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 pub enum ProjectError {
     #[error("no file was found at {0}")]
     FileNotFound(PathBuf),
-    #[error("could not find {project_manifest} or {pyproject_manifest} at directory {0}",
-                            project_manifest = consts::PROJECT_MANIFEST,
-                            pyproject_manifest = consts::PYPROJECT_MANIFEST)]
+    #[error(
+        "could not find {project_manifest} or {pyproject_manifest} at directory {0}",
+        project_manifest = consts::PROJECT_MANIFEST,
+        pyproject_manifest = consts::PYPROJECT_MANIFEST
+    )]
     FileNotFoundInDirectory(PathBuf),
     #[error(
         "could not find {} or {} which is configured to use {}",
