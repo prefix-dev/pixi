@@ -17,10 +17,11 @@ use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
+use tracing::{debug, error};
 use url::Url;
 
 use super::cli_config::ChannelsConfig;
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{cli::cli_config::ProjectConfig, project::ProjectError, Project};
 
 /// Search a conda package
 ///
@@ -109,7 +110,31 @@ pub async fn execute_impl<W: Write>(
     args: Args,
     out: &mut W,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
+    let project = match Project::load_or_else_discover(args.project_config.manifest_path.as_deref())
+    {
+        Ok(project) => Some(project),
+        Err(e) => {
+            match e {
+                ProjectError::FileNotFound(_)
+                | ProjectError::FileNotFoundInDirectory(_)
+                | ProjectError::NoFileFound => {
+                    debug!(
+                        "No project file found, continuing without project configuration. {}",
+                        e
+                    );
+                }
+                _ => {
+                    error!(
+                        "Error loading project configuration, continuing without: {}",
+                        e
+                    );
+                }
+            };
+            None
+        }
+    };
+
+    println!("adwdwdd: {:?}", project);
 
     // Resolve channels from project / CLI args
     let channels = args.channels.resolve_from_project(project.as_ref())?;
