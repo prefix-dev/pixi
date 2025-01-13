@@ -653,7 +653,7 @@ impl Default for Config {
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
             s3_config: None,
-            detached_environments: Some(DetachedEnvironments::default()),
+            detached_environments: None,
             pinning_strategy: None,
             force_activate: None,
             experimental: ExperimentalConfig::default(),

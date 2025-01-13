@@ -16,13 +16,14 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.39.4",
+    None => "0.40.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
 pub const SOLVE_GROUP_ENVIRONMENTS_DIR: &str = "solve-group-envs";
 pub const PYPI_DEPENDENCIES: &str = "pypi-dependencies";
 pub const DEPENDENCIES: &str = "dependencies";
+pub const SYSTEM_REQUIREMENTS: &str = "system-requirements";
 pub const TASK_CACHE_DIR: &str = "task-cache-v0";
 pub const ACTIVATION_ENV_CACHE_DIR: &str = "activation-env-v0";
 pub const PIXI_UV_INSTALLER: &str = "uv-pixi";
@@ -38,18 +39,27 @@ pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-cache-v0";
 
+/// The default config directory for pixi, typically at $XDG_CONFIG_HOME/$PIXI_CONFIG_DIR or $HOME/.config/$PIXI_CONFIG_DIR.
 pub const CONFIG_DIR: &str = match option_env!("PIXI_CONFIG_DIR") {
     Some(dir) => dir,
     None => "pixi",
 };
+/// The default file name for the lock file in a project.
 pub const PROJECT_LOCK_FILE: &str = match option_env!("PIXI_PROJECT_LOCK_FILE") {
     Some(file) => file,
     None => "pixi.lock",
 };
+/// The default directory for the pixi files in a project.
 pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
     Some(dir) => dir,
     None => ".pixi",
 };
+/// The default manifest name for the global manifest file in the pixi config directory.
+pub const GLOBAL_MANIFEST_DEFAULT_NAME: &str =
+    match option_env!("PIXI_GLOBAL_MANIFEST_DEFAULT_NAME") {
+        Some(name) => name,
+        None => "pixi-global.toml",
+    };
 
 pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
     LazyLock::new(|| match option_env!("PIXI_DEFAULT_CHANNELS") {

@@ -165,38 +165,6 @@ class Workspace(StrictBaseModel):
     )
 
 
-class Package(StrictBaseModel):
-    """The package's metadata information."""
-
-    name: NonEmptyStr | None = Field(None, description="The name of the package")
-    version: NonEmptyStr | None = Field(
-        None,
-        description="The version of the project; we advise use of [SemVer](https://semver.org)",
-        examples=["1.2.3"],
-    )
-    description: NonEmptyStr | None = Field(None, description="A short description of the project")
-    authors: list[NonEmptyStr] | None = Field(
-        None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
-    )
-    license: NonEmptyStr | None = Field(
-        None,
-        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
-    )
-    license_file: PathNoBackslash | None = Field(
-        None, description="The path to the license file of the project"
-    )
-    readme: PathNoBackslash | None = Field(
-        None, description="The path to the readme file of the project"
-    )
-    homepage: AnyHttpUrl | None = Field(None, description="The URL of the homepage of the project")
-    repository: AnyHttpUrl | None = Field(
-        None, description="The URL of the repository of the project"
-    )
-    documentation: AnyHttpUrl | None = Field(
-        None, description="The URL of the documentation of the project"
-    )
-
-
 ########################
 # Dependencies section #
 ########################
@@ -239,23 +207,6 @@ class MatchspecTable(StrictBaseModel):
 
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
-
-
-#####################
-# The Build section #
-#####################
-class BuildSystem(StrictBaseModel):
-    build_backend: BuildBackend = Field(..., description="The build backend to instantiate")
-    channels: list[Channel] = Field(
-        None, description="The `conda` channels that are used to fetch the build backend from"
-    )
-    additional_dependencies: Dependencies = Field(
-        None, description="Additional dependencies to install alongside the build backend"
-    )
-
-
-class BuildBackend(MatchspecTable):
-    name: NonEmptyStr = Field(None, description="The name of the build backend package")
 
 
 class _PyPIRequirement(StrictBaseModel):
@@ -335,12 +286,16 @@ DependenciesField = Field(
 )
 HostDependenciesField = Field(
     None,
-    description="The host `conda` dependencies, used in the build process",
+    description="The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
     examples=[{"python": ">=3.8"}],
 )
 BuildDependenciesField = Field(
     None,
-    description="The build `conda` dependencies, used in the build process",
+    description="The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+)
+RunDependenciesField = Field(
+    None,
+    description="The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
 )
 Dependencies = dict[CondaPackageName, MatchSpec] | None
 
@@ -604,6 +559,75 @@ class PyPIOptions(StrictBaseModel):
 
 
 #######################
+# The Package section #
+#######################
+
+
+class Package(StrictBaseModel):
+    """The package's metadata information."""
+
+    name: NonEmptyStr | None = Field(None, description="The name of the package")
+    version: NonEmptyStr | None = Field(
+        None,
+        description="The version of the project; we advise use of [SemVer](https://semver.org)",
+        examples=["1.2.3"],
+    )
+    description: NonEmptyStr | None = Field(None, description="A short description of the project")
+    authors: list[NonEmptyStr] | None = Field(
+        None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
+    )
+    license: NonEmptyStr | None = Field(
+        None,
+        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
+    )
+    license_file: PathNoBackslash | None = Field(
+        None, description="The path to the license file of the project"
+    )
+    readme: PathNoBackslash | None = Field(
+        None, description="The path to the readme file of the project"
+    )
+    homepage: AnyHttpUrl | None = Field(None, description="The URL of the homepage of the project")
+    repository: AnyHttpUrl | None = Field(
+        None, description="The URL of the repository of the project"
+    )
+    documentation: AnyHttpUrl | None = Field(
+        None, description="The URL of the documentation of the project"
+    )
+
+    build: Build = Field(..., description="The build configuration of the package")
+
+    host_dependencies: Dependencies = HostDependenciesField
+    build_dependencies: Dependencies = BuildDependenciesField
+    run_dependencies: Dependencies = RunDependenciesField
+
+    target: dict[TargetName, Target] | None = Field(
+        None,
+        description="Machine-specific aspects of the package",
+        examples=[{"linux": {"host-dependencies": {"python": "3.8"}}}],
+    )
+
+
+class Build(StrictBaseModel):
+    backend: BuildBackend = Field(..., description="The build backend to instantiate")
+    channels: list[Channel] = Field(
+        None, description="The `conda` channels that are used to fetch the build backend from"
+    )
+    additional_dependencies: Dependencies = Field(
+        None, description="Additional dependencies to install alongside the build backend"
+    )
+
+
+class BuildBackend(MatchspecTable):
+    name: NonEmptyStr = Field(None, description="The name of the build backend package")
+
+
+class PackageTarget(StrictBaseModel):
+    run_dependencies: Dependencies = RunDependenciesField
+    host_dependencies: Dependencies = HostDependenciesField
+    build_dependencies: Dependencies = BuildDependenciesField
+
+
+#######################
 # The Manifest itself #
 #######################
 
@@ -667,12 +691,6 @@ class BaseManifest(StrictBaseModel):
     pypi_options: PyPIOptions | None = Field(
         None,
         description="Options related to PyPI indexes, on the default feature",
-    )
-    build_system: BuildSystem | None = Field(
-        None, description="The build-system used to build the package."
-    )
-    build_backend: dict[NonEmptyStr, Any] | None = Field(
-        None, description="Configuration for the build backend."
     )
 
 

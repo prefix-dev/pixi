@@ -32,12 +32,15 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest,
-    PypiDependencyLocation, SpecType, WorkspaceManifest,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, PypiDependencyLocation, SpecType,
+    WorkspaceManifest,
 };
+use pixi_spec::{PixiSpec, SourceSpec};
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{
+    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
+};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
@@ -163,6 +166,8 @@ pub type PypiDeps = indexmap::IndexMap<
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
+
+pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
@@ -702,6 +707,7 @@ impl Project {
         &mut self,
         match_specs: MatchSpecs,
         pypi_deps: PypiDeps,
+        source_specs: SourceSpecs,
         prefix_update_config: &PrefixUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
@@ -714,20 +720,38 @@ impl Project {
         let mut pypi_packages = HashSet::new();
         let channel_config = self.channel_config();
         for (name, (spec, spec_type)) in match_specs {
+            let (_, nameless_spec) = spec.into_nameless();
+            let pixi_spec =
+                PixiSpec::from_nameless_matchspec(nameless_spec.clone(), &channel_config);
+
             let added = self.manifest.add_dependency(
-                &spec,
+                &name,
+                &pixi_spec,
                 spec_type,
                 platforms,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )?;
             if added {
-                if spec.version.is_none() {
-                    conda_specs_to_add_constraints_for.insert(name.clone(), (spec_type, spec));
+                if nameless_spec.version.is_none() {
+                    conda_specs_to_add_constraints_for
+                        .insert(name.clone(), (spec_type, nameless_spec));
                 }
                 conda_packages.insert(name);
             }
+        }
+
+        for (name, (spec, spec_type)) in source_specs {
+            let pixi_spec = PixiSpec::from(spec);
+
+            self.manifest.add_dependency(
+                &name,
+                &pixi_spec,
+                spec_type,
+                platforms,
+                feature_name,
+                DependencyOverwriteBehavior::Overwrite,
+            )?;
         }
 
         for (name, (spec, location)) in pypi_deps {
@@ -904,7 +928,7 @@ impl Project {
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
-        conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, MatchSpec)>,
+        conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, NamelessMatchSpec)>,
         affect_environment_and_platforms: Vec<(String, Platform)>,
         feature_name: &FeatureName,
         platforms: &[Platform],
@@ -951,17 +975,20 @@ impl Project {
             if let Some(version_constraint) = version_constraint {
                 implicit_constraints
                     .insert(name.as_source().to_string(), version_constraint.to_string());
-                let spec = MatchSpec {
+                let spec = NamelessMatchSpec {
                     version: Some(version_constraint),
                     ..spec
                 };
+
+                let pixi_spec = PixiSpec::from_nameless_matchspec(spec.clone(), &channel_config);
+
                 self.manifest.add_dependency(
-                    &spec,
+                    &name,
+                    &pixi_spec,
                     spec_type,
                     platforms,
                     feature_name,
                     DependencyOverwriteBehavior::Overwrite,
-                    &channel_config,
                 )?;
             }
         }
@@ -1038,16 +1065,6 @@ impl Project {
         }
 
         Ok(implicit_constraints)
-    }
-
-    /// Returns true if all preview features are enabled
-    pub fn all_preview_features_enabled(&self) -> bool {
-        self.manifest.preview().all_enabled()
-    }
-
-    /// Returns true if the given preview feature is enabled
-    pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
-        self.manifest.preview().is_enabled(feature)
     }
 }
 
@@ -1142,7 +1159,7 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
     );
 
     // Create directory if it doesn't exist
-    if let Err(e) = std::fs::create_dir_all(default_envs_dir) {
+    if let Err(e) = fs_err::create_dir_all(default_envs_dir) {
         tracing::error!(
             "Failed to create directory '{}': {}",
             default_envs_dir.display(),
@@ -1152,7 +1169,7 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
     }
 
     // Write warning message to file
-    match std::fs::write(&warning_file, warning_message.clone()) {
+    match fs_err::write(&warning_file, warning_message.clone()) {
         Ok(_) => tracing::info!(
             "Symlink warning file written to '{}': {}",
             warning_file.display(),

@@ -22,7 +22,7 @@ To install `pixi` you can run the following command in your terminal:
     The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
     If this directory does not already exist, the script will create it.
 
-    The script will also update your `~/.bash_profile` to include `~/.pixi/bin` in your PATH, allowing you to invoke the `pixi` command from anywhere.
+    The script will also update your `~/.bashrc` to include `~/.pixi/bin` in your PATH, allowing you to invoke the `pixi` command from anywhere.
 
 === "Windows"
     `PowerShell`:

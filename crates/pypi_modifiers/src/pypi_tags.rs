@@ -1,7 +1,11 @@
+use std::sync::OnceLock;
+
 use miette::{Context, IntoDiagnostic};
 use pixi_default_versions::{default_glibc_version, default_mac_os_version};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
+use rattler_conda_types::MatchSpec;
 use rattler_conda_types::{Arch, PackageRecord, Platform};
+use regex::Regex;
 use uv_platform_tags::Os;
 use uv_platform_tags::Tags;
 
@@ -25,7 +29,8 @@ pub fn get_pypi_tags(
     let platform = get_platform_tags(platform, system_requirements)?;
     let python_version = get_python_version(python_record)?;
     let implementation_name = get_implementation_name(python_record)?;
-    create_tags(platform, python_version, implementation_name)
+    let gil_disabled = gil_disabled(python_record)?;
+    create_tags(platform, python_version, implementation_name, gil_disabled)
 }
 
 /// Create a uv platform tag for the specified platform
@@ -159,10 +164,40 @@ fn get_implementation_name(python_record: &PackageRecord) -> miette::Result<&'st
     }
 }
 
+/// Return whether the specified record has gil disabled (by being a free-threaded python interpreter)
+fn gil_disabled(python_record: &PackageRecord) -> miette::Result<bool> {
+    // In order to detect if the python interpreter is free-threaded, we look at the depends
+    // field of the record. If the record has a dependency on `python_abi`, then
+    // look at the build string to detect cpXXXt (free-threaded python interpreter).
+    static REGEX: OnceLock<Regex> = OnceLock::new();
+
+    let regex = REGEX.get_or_init(|| {
+        Regex::new(r"cp\d{3}t").expect("regex for free-threaded python interpreter should compile")
+    });
+
+    let deps = python_record
+        .depends
+        .iter()
+        .map(|dep| MatchSpec::from_str(dep, rattler_conda_types::ParseStrictness::Lenient))
+        .collect::<Result<Vec<MatchSpec>, _>>()
+        .into_diagnostic()?;
+
+    Ok(deps.iter().any(|spec| {
+        spec.name
+            .as_ref()
+            .is_some_and(|name| name.as_source() == "python_abi")
+            && spec.build.as_ref().is_some_and(|build| {
+                let raw_str = format!("{}", build);
+                regex.is_match(&raw_str)
+            })
+    }))
+}
+
 fn create_tags(
     platform: uv_platform_tags::Platform,
     python_version: (u8, u8),
     implementation_name: &str,
+    gil_disabled: bool,
 ) -> miette::Result<Tags> {
     // Build the wheel tags based on the interpreter, the target platform, and the python version.
     let tags = Tags::from_env(
@@ -172,8 +207,7 @@ fn create_tags(
         // TODO: This might not be entirely correct..
         python_version,
         true,
-        // Should revisit this when this lands: https://github.com/conda-forge/python-feedstock/pull/679
-        false,
+        gil_disabled,
     )
     .into_diagnostic()
     .context("failed to determine the python wheel tags for the target platform")?;

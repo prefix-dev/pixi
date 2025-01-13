@@ -21,8 +21,12 @@ serde-untagged = { workspace = true }
 serde_with = { workspace = true }
 thiserror = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
+
+pixi_toml = { workspace = true }
+toml-span = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }

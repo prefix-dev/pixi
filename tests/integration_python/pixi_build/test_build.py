@@ -6,6 +6,7 @@ import pytest
 from ..common import verify_cli_command
 
 
+@pytest.mark.slow
 def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path, build_data: Path) -> None:
     """
     This one tries to build the rich example project
@@ -28,6 +29,7 @@ def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path, build_data: P
     assert package_to_be_built.exists()
 
 
+@pytest.mark.extra_slow
 def test_build_using_rattler_build_backend(
     pixi: Path,
     tmp_pixi_workspace: Path,
@@ -53,6 +55,7 @@ def test_build_using_rattler_build_backend(
     assert package_to_be_built.exists()
 
 
+@pytest.mark.extra_slow
 def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     test_data = build_data.joinpath("rattler-build-backend")
     # copy the whole smokey project to the tmp_pixi_workspace
@@ -83,9 +86,6 @@ def test_source_change_trigger_rebuild(
     project = "simple-pyproject"
     test_data = build_data.joinpath(project)
 
-    # TODO: Setting the cache dir shouldn't be necessary!
-    env = {"PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache"))}
-
     target_dir = tmp_pixi_workspace.joinpath(project)
     shutil.copytree(test_data, target_dir)
     manifest_path = target_dir.joinpath("pyproject.toml")
@@ -99,7 +99,6 @@ def test_source_change_trigger_rebuild(
             "get-version",
         ],
         stdout_contains="The version of simple-pyproject is 1.0.0",
-        env=env,
     )
 
     # Bump version from 1.0.0 to 2.0.0
@@ -116,7 +115,6 @@ def test_source_change_trigger_rebuild(
             "get-version",
         ],
         stdout_contains="The version of simple-pyproject is 2.0.0",
-        env=env,
     )
 
 
@@ -124,11 +122,6 @@ def test_source_change_trigger_rebuild(
 def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "editable-pyproject"
     test_data = build_data.joinpath(project)
-
-    # TODO: Setting the cache dir shouldn't be necessary!
-    env = {
-        "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
-    }
 
     target_dir = tmp_pixi_workspace.joinpath(project)
     shutil.copytree(test_data, target_dir)
@@ -141,7 +134,6 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
             "--manifest-path",
             manifest_path,
         ],
-        env=env,
     )
 
     # Verify that package is installed as editable
@@ -153,6 +145,5 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
             manifest_path,
             "check-editable",
         ],
-        env=env,
         stdout_contains="The package is installed as editable.",
     )

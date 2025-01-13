@@ -126,11 +126,12 @@ nav:
       - Pytorch Installation: features/pytorch.md
   - Building Packages:
       - Getting started: build/getting_started.md
-      - Dependency Types: build/dependency_types.md
       - Tutorials:
           - Building a Python package: build/python.md
           - Building a C++ Package: build/cpp.md
           - Multiple Packages in Workspace: build/workspace.md
+      - Dependency Types: build/dependency_types.md
+      - Build Backends: build/backends.md
   - Advanced:
       - Authentication: advanced/authentication.md
       - Channel Logic: advanced/channel_priority.md

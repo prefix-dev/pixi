@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/manifests/source.rs
+expression: source.to_string()
+snapshot_kind: text
+---
+[project]
+name = "test"
+[tool.pixi.project]
+channels = []
+platforms = []
+
+[tool.pixi.system-requirements]
+libc = { family = "glibc", version = "1.2" }
