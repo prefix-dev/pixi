@@ -15,7 +15,6 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use toml_edit::{DocumentMut, Value};
 
-use crate::toml::FromTomlStr;
 use crate::{
     consts,
     error::{DependencyError, TomlError, UnknownFeature},
@@ -24,7 +23,7 @@ use crate::{
     pypi::PyPiPackageName,
     pyproject::{PyProjectManifest, PyProjectToManifestError},
     to_options,
-    toml::{ExternalWorkspaceProperties, TomlDocument, TomlManifest},
+    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlDocument, TomlManifest},
     DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
     GetFeatureError, PackageBuild, PrioritizedChannel, PypiDependencyLocation, SpecType,
     SystemRequirements, TargetSelector, Task, TaskName, WorkspaceManifest, WorkspaceTarget,
@@ -135,19 +134,19 @@ impl Manifest {
             }
         };
 
-        let ((workspace_manifest, package_manifest), document) = match parsed.and_then(|manifest| {
-            contents
-                .parse::<DocumentMut>()
-                .map(|doc| (manifest, doc))
-                .map_err(TomlError::from)
-        }) {
-            Ok(result) => result,
-            Err(e) => {
-                return Err(
-                    Report::from(e).with_source_code(NamedSource::new(file_name, contents.clone()))
-                );
-            }
-        };
+        let ((workspace_manifest, package_manifest, warnings), document) =
+            match parsed.and_then(|manifest| {
+                contents
+                    .parse::<DocumentMut>()
+                    .map(|doc| (manifest, doc))
+                    .map_err(TomlError::from)
+            }) {
+                Ok(result) => result,
+                Err(e) => {
+                    return Err(Report::from(e)
+                        .with_source_code(NamedSource::new(file_name, contents.clone())));
+                }
+            };
 
         // Validate the contents of the manifest
         workspace_manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
@@ -156,6 +155,20 @@ impl Manifest {
             ManifestKind::Pixi => ManifestSource::PixiToml(TomlDocument::new(document)),
             ManifestKind::Pyproject => ManifestSource::PyProjectToml(TomlDocument::new(document)),
         };
+
+        // Emit warnings
+        if !warnings.is_empty() {
+            tracing::warn!(
+                "Encountered {} warning{} while parsing the manifest:\n{}",
+                warnings.len(),
+                if warnings.len() == 1 { "" } else { "s" },
+                warnings
+                    .into_iter()
+                    .map(|warning| Report::from(warning)
+                        .with_source_code(NamedSource::new(file_name, contents.clone())))
+                    .format_with("\n", |w, f| f(&format_args!("{:?}", w)))
+            );
+        }
 
         Ok(Self {
             path: manifest_path.to_path_buf(),
@@ -821,8 +834,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::channel::PrioritizedChannel;
-    use crate::workspace::ChannelPriority;
+    use crate::{channel::PrioritizedChannel, workspace::ChannelPriority};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
