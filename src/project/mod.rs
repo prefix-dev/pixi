@@ -236,7 +236,7 @@ impl Project {
     /// project root.
     pub(crate) fn discover() -> Result<Self, ProjectError> {
         let project_toml =
-            find_project_manifest(std::env::current_dir().map_err(|e| ProjectError::IoError(e))?);
+            find_project_manifest(std::env::current_dir().map_err(ProjectError::IoError)?);
 
         if let Some(project_toml) = project_toml {
             if std::env::var("PIXI_IN_SHELL").is_ok() {
