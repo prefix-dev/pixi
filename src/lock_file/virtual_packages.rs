@@ -60,7 +60,7 @@ pub enum VirtualPackageError {
 
 /// Get the required virtual packages for the given environment based on the given lock file.
 pub(crate) fn get_required_virtual_packages_from_conda_records(
-    conda_records: &[PackageRecord],
+    conda_records: &[&PackageRecord],
 ) -> Result<Vec<MatchSpec>, VirtualPackageError> {
     // Collect all dependencies from the package records.
     let virtual_dependencies = conda_records
@@ -102,7 +102,7 @@ fn get_wheels_from_lockfile(
 }
 
 /// Validate that current machine has all the required virtual packages for the given environment
-pub(crate) fn validate_virtual_packages(
+pub(crate) fn validate_system_meets_environment_requirements(
     lock_file: &LockFile,
     platform: Platform,
     environment_name: &EnvironmentName,
@@ -123,13 +123,15 @@ pub(crate) fn validate_virtual_packages(
     )?;
 
     // Retrieve the conda package records for the specified platform.
-    let conda_records = environment
+    let conda_data = environment
         .conda_repodata_records(platform)
         .map_err(VirtualPackageError::RepodataConversionError)?
-        .ok_or(VirtualPackageError::NoCondaRecordsFound(platform))?
+        .ok_or(VirtualPackageError::NoCondaRecordsFound(platform))?;
+
+    let conda_records: Vec<&PackageRecord> = conda_data
         .iter()
-        .map(|binding| binding.package_record.clone())
-        .collect::<Vec<PackageRecord>>();
+        .map(|binding| &binding.package_record)
+        .collect();
 
     // Get the virtual packages required by the conda records
     let required_virtual_packages =
@@ -211,13 +213,17 @@ mod test {
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::Linux64;
         let env = lockfile.default_environment().unwrap();
-        let conda_records = env
+        let conda_data = env
             .conda_repodata_records(platform)
+            .map_err(VirtualPackageError::RepodataConversionError)
             .unwrap()
-            .unwrap()
+            .ok_or(VirtualPackageError::NoCondaRecordsFound(platform))
+            .unwrap();
+
+        let conda_records: Vec<&PackageRecord> = conda_data
             .iter()
-            .map(|binding| binding.package_record.clone())
-            .collect::<Vec<PackageRecord>>();
+            .map(|binding| &binding.package_record)
+            .collect();
 
         let virtual_matchspecs =
             get_required_virtual_packages_from_conda_records(&conda_records).unwrap();
@@ -240,7 +246,7 @@ mod test {
             ..VirtualPackageOverrides::default()
         };
 
-        let result = validate_virtual_packages(
+        let result = validate_system_meets_environment_requirements(
             &lockfile,
             platform,
             &EnvironmentName::default(),
@@ -254,7 +260,7 @@ mod test {
             ..VirtualPackageOverrides::default()
         };
 
-        let result = validate_virtual_packages(
+        let result = validate_system_meets_environment_requirements(
             &lockfile,
             platform,
             &EnvironmentName::default(),
@@ -275,7 +281,7 @@ mod test {
             ..VirtualPackageOverrides::default()
         };
 
-        let result = validate_virtual_packages(
+        let result = validate_system_meets_environment_requirements(
             &lockfile,
             platform,
             &EnvironmentName::default(),
@@ -289,7 +295,7 @@ mod test {
             ..VirtualPackageOverrides::default()
         };
 
-        let result = validate_virtual_packages(
+        let result = validate_system_meets_environment_requirements(
             &lockfile,
             platform,
             &EnvironmentName::default(),
