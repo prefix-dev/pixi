@@ -55,6 +55,7 @@ jobs:
               - "**/*"
               - "!assets/**"
               - "!docs/**"
+              - "docs/source_files/**"
               - "!install/**"
               - "!assets/**"
               - "!**/*.md"
