@@ -768,7 +768,11 @@ async fn test_ensure_gitignore_file_creation() {
 async fn install_s3() {
     let r2_access_key_id = std::env::var("PIXI_TEST_R2_ACCESS_KEY_ID").ok();
     let r2_secret_access_key = std::env::var("PIXI_TEST_R2_SECRET_ACCESS_KEY").ok();
-    if r2_access_key_id.is_none() || r2_secret_access_key.is_none() {
+    if r2_access_key_id.is_none()
+        || r2_access_key_id.clone().unwrap().is_empty()
+        || r2_secret_access_key.is_none()
+        || r2_secret_access_key.clone().unwrap().is_empty()
+    {
         eprintln!(
             "Skipping test as PIXI_TEST_R2_ACCESS_KEY_ID or PIXI_TEST_R2_SECRET_ACCESS_KEY is not set"
         );
