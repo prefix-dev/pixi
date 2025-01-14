@@ -6,5 +6,5 @@ concurrency.solves = 1
 
 [s3-config]
 endpoint-url = "https://my-s3-host"
-region = "us-east-1"
 force-path-style = false
+region = "us-east-1"
