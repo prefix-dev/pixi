@@ -19,7 +19,7 @@ expression: project_model
     "default_target": {
       "host_dependencies": {
         "cmake": {
-          "detailedVersion": {
+          "binary": {
             "version": ">=3.20,<3.27",
             "build": null,
             "build_number": null,
@@ -31,7 +31,7 @@ expression: project_model
           }
         },
         "nanobind": {
-          "detailedVersion": {
+          "binary": {
             "version": ">=2.4.0,<2.5.0",
             "build": null,
             "build_number": null,
@@ -43,7 +43,7 @@ expression: project_model
           }
         },
         "python_abi": {
-          "detailedVersion": {
+          "binary": {
             "version": ">=3.12,<3.13",
             "build": null,
             "build_number": null,
@@ -58,7 +58,7 @@ expression: project_model
       "build_dependencies": {},
       "run_dependencies": {
         "python": {
-          "detailedVersion": {
+          "binary": {
             "version": ">=3.12,<3.13",
             "build": null,
             "build_number": null,

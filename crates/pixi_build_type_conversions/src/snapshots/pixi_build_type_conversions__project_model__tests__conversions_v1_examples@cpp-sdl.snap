@@ -21,7 +21,7 @@ expression: project_model
     "default_target": {
       "host_dependencies": {
         "sdl2": {
-          "detailedVersion": {
+          "binary": {
             "version": ">=2.26.5,<3.0",
             "build": null,
             "build_number": null,

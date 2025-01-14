@@ -21,7 +21,7 @@ expression: project_model
     "default_target": {
       "host_dependencies": {
         "hatchling": {
-          "detailedVersion": {
+          "binary": {
             "version": "*",
             "build": null,
             "build_number": null,
