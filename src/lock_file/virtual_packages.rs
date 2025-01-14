@@ -15,7 +15,7 @@ use thiserror::Error;
 use uv_distribution_filename::WheelFilename;
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum VirtualPackageError {
+pub enum MachineValidationError {
     #[error("Virtual package: {spec} not found on the system")]
     #[diagnostic(help("You can mock a virtual package by setting the override environment variable, e.g.: `CONDA_OVERRIDE_GLIBC=2.17`"))]
     VirtualPackageNotFound { spec: String },
@@ -61,7 +61,7 @@ pub enum VirtualPackageError {
 /// Get the required virtual packages for the given environment based on the given lock file.
 pub(crate) fn get_required_virtual_packages_from_conda_records(
     conda_records: &[&PackageRecord],
-) -> Result<Vec<MatchSpec>, VirtualPackageError> {
+) -> Result<Vec<MatchSpec>, MachineValidationError> {
     // Collect all dependencies from the package records.
     let virtual_dependencies = conda_records
         .iter()
@@ -74,7 +74,7 @@ pub(crate) fn get_required_virtual_packages_from_conda_records(
         // Lenient parsing is used here because the dependencies to avoid issues with the parsing of the dependencies.
         .map(|dep| MatchSpec::from_str(dep.as_str(), Lenient))
         .collect::<Result<Vec<MatchSpec>, _>>()
-        .map_err(VirtualPackageError::DependencyParsingError)
+        .map_err(MachineValidationError::DependencyParsingError)
 }
 
 /// Wheel tags errors
@@ -107,7 +107,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
     platform: Platform,
     environment_name: &EnvironmentName,
     virtual_package_overrides: Option<VirtualPackageOverrides>,
-) -> Result<bool, VirtualPackageError> {
+) -> Result<bool, MachineValidationError> {
     // Early out if there are no packages in the lockfile
     if lock_file.is_empty() {
         return Ok(true);
@@ -119,14 +119,14 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
     // Get the environment from the lock file
     let environment = lock_file.environment(environment_name.as_str()).ok_or(
-        VirtualPackageError::EnvironmentNotFound(environment_name.as_str().to_string()),
+        MachineValidationError::EnvironmentNotFound(environment_name.as_str().to_string()),
     )?;
 
     // Retrieve the conda package records for the specified platform.
     let conda_data = environment
         .conda_repodata_records(platform)
-        .map_err(VirtualPackageError::RepodataConversionError)?
-        .ok_or(VirtualPackageError::NoCondaRecordsFound(platform))?;
+        .map_err(MachineValidationError::RepodataConversionError)?
+        .ok_or(MachineValidationError::NoCondaRecordsFound(platform))?;
 
     let conda_records: Vec<&PackageRecord> = conda_data
         .iter()
@@ -155,13 +155,13 @@ pub(crate) fn validate_system_meets_environment_requirements(
                 .expect("Virtual packages should have a name"),
         ) {
             if !required.matches(local_vpkg) {
-                return Err(VirtualPackageError::VirtualPackageVersionMismatch {
+                return Err(MachineValidationError::VirtualPackageVersionMismatch {
                     generic_virtual_pkg: local_vpkg.clone().to_string(),
                     spec: required.clone().to_string(),
                 });
             }
         } else {
-            return Err(VirtualPackageError::VirtualPackageNotFound {
+            return Err(MachineValidationError::VirtualPackageNotFound {
                 spec: required.clone().to_string(),
             });
         }
@@ -173,7 +173,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
         let python_record = conda_records
             .iter()
             .find(|record| is_python_record(record))
-            .ok_or(VirtualPackageError::NoPythonRecordFound(platform))?;
+            .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
 
         // Check if all the wheel tags match the system virtual packages
         let pypi_packages = environment
@@ -192,7 +192,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
                 // TODO: Handle errors
                 continue;
             } else {
-                return Err(VirtualPackageError::WheelTagsMismatch(wheel.to_string()));
+                return Err(MachineValidationError::WheelTagsMismatch(wheel.to_string()));
             }
         }
     }
@@ -215,9 +215,9 @@ mod test {
         let env = lockfile.default_environment().unwrap();
         let conda_data = env
             .conda_repodata_records(platform)
-            .map_err(VirtualPackageError::RepodataConversionError)
+            .map_err(MachineValidationError::RepodataConversionError)
             .unwrap()
-            .ok_or(VirtualPackageError::NoCondaRecordsFound(platform))
+            .ok_or(MachineValidationError::NoCondaRecordsFound(platform))
             .unwrap();
 
         let conda_records: Vec<&PackageRecord> = conda_data
@@ -302,7 +302,7 @@ mod test {
             Some(overrides),
         );
         assert!(
-            matches!(result, Err(VirtualPackageError::WheelTagsMismatch(_))),
+            matches!(result, Err(MachineValidationError::WheelTagsMismatch(_))),
             "{:?}",
             result
         );

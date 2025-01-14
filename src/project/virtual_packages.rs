@@ -1,8 +1,16 @@
+use crate::lock_file::virtual_packages::{
+    validate_system_meets_environment_requirements, MachineValidationError,
+};
+use crate::project::errors::UnsupportedPlatformError;
 use crate::project::Environment;
+use itertools::Itertools;
+use miette::Diagnostic;
 use pixi_default_versions::{default_glibc_version, default_linux_version, default_mac_os_version};
-use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
+use pixi_manifest::{FeaturesExt, LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::Platform;
+use rattler_lock::LockFile;
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
+use thiserror::Error;
 
 /// Returns a reasonable modern set of virtual packages that should be safe enough to assume.
 /// At the time of writing, this is in sync with the conda-lock set of minimal virtual packages.
@@ -62,6 +70,47 @@ pub(crate) fn get_minimal_virtual_packages(
     virtual_packages
 }
 
+/// An error that occurs when the current platform does not satisfy the minimal virtual package
+/// requirements.
+#[derive(Debug, Error, Diagnostic)]
+pub enum VerifyCurrentPlatformError {
+    #[error("The current platform does not satisfy the minimal virtual package requirements")]
+    UnsupportedPlatform(#[from] Box<UnsupportedPlatformError>),
+
+    #[error(transparent)]
+    MachineValidationError(#[from] MachineValidationError),
+}
+
+/// Verifies if the current platform satisfies the minimal virtual package requirements.
+pub(crate) fn verify_current_platform_can_run_environment(
+    environment: &Environment<'_>,
+    lockfile: Option<&LockFile>,
+) -> Result<(), VerifyCurrentPlatformError> {
+    let current_platform = environment.best_platform();
+
+    // Are there dependencies and is the current platform in the list of supported platforms?
+    if !environment.platforms().contains(&current_platform) {
+        return Err(VerifyCurrentPlatformError::from(Box::new(
+            UnsupportedPlatformError {
+                environments_platforms: environment.platforms().into_iter().collect_vec(),
+                platform: current_platform,
+                environment: environment.name().clone(),
+            },
+        )));
+    }
+
+    // If this function is given a lockfile we can also compute the ability to run in this environment on the current machine.
+    if let Some(lockfile) = lockfile {
+        validate_system_meets_environment_requirements(
+            lockfile,
+            current_platform,
+            environment.name(),
+            None,
+        )?;
+    }
+
+    Ok(())
+}
 impl Environment<'_> {
     /// Returns the set of virtual packages to use for the specified platform. This method
     /// takes into account the system requirements specified in the project manifest.
@@ -72,7 +121,7 @@ impl Environment<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::project::virtual_packages::get_minimal_virtual_packages;
+    use super::*;
     use insta::assert_debug_snapshot;
     use itertools::Itertools;
     use pixi_manifest::SystemRequirements;

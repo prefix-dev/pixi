@@ -1,4 +1,5 @@
 use crate::cli::cli_config::ProjectConfig;
+use crate::project::virtual_packages::verify_current_platform_can_run_environment;
 use crate::project::Environment;
 use crate::Project;
 use clap::Parser;
@@ -228,7 +229,7 @@ fn print_heading(value: &str) {
 }
 
 fn list_tasks(
-    task_map: HashMap<Environment, HashMap<TaskName, Task>>,
+    task_map: HashMap<Environment, HashMap<TaskName, &Task>>,
     summary: bool,
 ) -> io::Result<()> {
     if summary {
@@ -273,7 +274,7 @@ fn list_tasks(
     Ok(())
 }
 
-pub fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     match args.operation {
         Operation::Add(args) => {
@@ -390,6 +391,8 @@ pub fn execute(args: Args) -> miette::Result<()> {
                 })
                 .transpose()?;
 
+            let lockfile = project.get_lock_file().await.ok();
+
             let env_task_map: HashMap<Environment, HashSet<TaskName>> =
                 if let Some(explicit_environment) = explicit_environment {
                     HashMap::from([(
@@ -400,7 +403,15 @@ pub fn execute(args: Args) -> miette::Result<()> {
                     project
                         .environments()
                         .iter()
-                        .map(|env| (env.clone(), env.get_filtered_tasks()))
+                        .filter_map(|env: &Environment<'_>| {
+                            if verify_current_platform_can_run_environment(env, lockfile.as_ref())
+                                .is_ok()
+                            {
+                                Some((env.clone(), env.get_filtered_tasks()))
+                            } else {
+                                None
+                            }
+                        })
                         .collect()
                 };
 
@@ -425,15 +436,16 @@ pub fn execute(args: Args) -> miette::Result<()> {
             let tasks_per_env = env_task_map
                 .into_iter()
                 .map(|(env, task_names)| {
-                    let tasks: HashMap<TaskName, Task> = task_names
+                    let task_map = task_names
                         .into_iter()
-                        .filter_map(|task_name| {
-                            env.task(&task_name, Some(env.best_platform()))
-                                .ok()
-                                .map(|task| (task_name, task.clone()))
+                        .map(|task_name| {
+                            let task = env
+                                .task(&task_name, None)
+                                .expect("task should be available here");
+                            (task_name, task)
                         })
                         .collect();
-                    (env, tasks)
+                    (env, task_map)
                 })
                 .collect();
 

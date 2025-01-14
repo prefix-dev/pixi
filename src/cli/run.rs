@@ -84,18 +84,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    // Print all available tasks if no task is provided
-    if args.task.is_empty() {
-        command_not_found(&project, explicit_environment);
-        return Ok(());
-    }
-
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
 
     let best_platform = environment.best_platform();
-
-    // TODO: figure out if we could do an early out here on the virtual packages check
 
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = project

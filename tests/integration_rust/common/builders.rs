@@ -325,13 +325,14 @@ impl TaskAddBuilder {
     }
 
     /// Execute the CLI command
-    pub fn execute(self) -> miette::Result<()> {
+    pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Add(self.args),
             project_config: ProjectConfig {
                 manifest_path: self.manifest_path,
             },
         })
+        .await
     }
 }
 
@@ -348,13 +349,14 @@ impl TaskAliasBuilder {
     }
 
     /// Execute the CLI command
-    pub fn execute(self) -> miette::Result<()> {
+    pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Alias(self.args),
             project_config: ProjectConfig {
                 manifest_path: self.manifest_path,
             },
         })
+        .await
     }
 }
 
