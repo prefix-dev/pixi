@@ -3,14 +3,6 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 preview = ["pixi-build"]                                  # (1)!
 
-[workspace.build-variants]
-python = [
-  "3.10.*",
-  "3.11.*",
-  "3.12.*",
-  "3.13.*"
-]                             # (9)!
-
 [dependencies] # (2)!
 python_bindings = { path = "." }
 
