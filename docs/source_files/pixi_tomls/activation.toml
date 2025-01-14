@@ -14,7 +14,7 @@ R_LIBS = "$PIXI_R_LIBS"
 R_LIBS_USER = "$PIXI_R_LIBS"
 
 
-[activation]
+[target.unix.activation]
 # Use sh scripts on unix
 scripts = [
   # Common in the ROS workspaces
