@@ -42,6 +42,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -140,6 +141,8 @@ pub struct Project {
     mapping_source: OnceCell<MappingSource>,
     /// The global configuration as loaded from the config file(s)
     config: Config,
+    /// The S3 configuration
+    s3_config: s3_middleware::S3Config,
 }
 
 impl Debug for Project {
@@ -197,6 +200,17 @@ impl Project {
     pub(crate) fn from_manifest(manifest: Manifest) -> Self {
         let env_vars = Project::init_env_vars(&manifest.workspace.environments);
 
+        let s3_options = manifest.workspace.workspace.s3_options.clone();
+
+        let s3_config = match s3_options {
+            Some(s3_options) => s3_middleware::S3Config::Custom {
+                endpoint_url: s3_options.endpoint_url,
+                region: s3_options.region,
+                force_path_style: s3_options.force_path_style,
+            },
+            None => s3_middleware::S3Config::FromAWS,
+        };
+
         let root = manifest
             .path
             .parent()
@@ -212,6 +226,7 @@ impl Project {
             env_vars,
             mapping_source: Default::default(),
             config,
+            s3_config,
             repodata_gateway: Default::default(),
         }
     }
@@ -572,7 +587,7 @@ impl Project {
 
     fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
         self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
+            .get_or_init(|| build_reqwest_clients(Some(&self.config), Some(self.s3_config.clone())))
     }
 
     pub(crate) fn config(&self) -> &Config {

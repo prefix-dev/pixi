@@ -11,6 +11,7 @@ mod platform;
 mod preview;
 mod pypi_options;
 mod pyproject;
+mod s3_options;
 mod system_requirements;
 mod target;
 mod task;
