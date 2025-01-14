@@ -19,7 +19,7 @@ R_LIBS_USER = "$PIXI_R_LIBS"
 scripts = [
   # Common in the ROS workspaces
   "install/setup.sh",
-  # Want to add some personall scripts to the activation:
+  # Want to add some personal scripts to the activation:
   "activation.sh",
 ]
 
