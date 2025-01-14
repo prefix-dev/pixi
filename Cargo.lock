@@ -3635,7 +3635,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.40.0"
+version = "0.40.1"
 dependencies = [
  "ahash",
  "assert_matches",

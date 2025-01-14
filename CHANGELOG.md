@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.40.1] - 2025-01-14
+#### ✨ Highlights
+We've **reverted** the breaking change of the `depends_on` field from `0.40.0`, replacing it with a [warning](https://github.com/prefix-dev/pixi/pull/2891).
+
+This release also brings a [performance boost](https://github.com/prefix-dev/pixi/pull/2874) to our Windows and Linux-musl builds by using faster allocators.
+On the ([holoviews](https://github.com/holoviz/holoviews)) project, we measured a significant speedup:
+```shell
+# Linux musl
+Summary
+  pixi-0.40.1 list --no-install ran
+   12.65 ± 0.46 times faster than pixi-0.40.0 list --no-install
+
+# Windows
+  pixi-0.40.1 list --no-install ran
+    1.66 ± 0.07 times faster than pixi-0.40.0 list --no-install
+    1.67 ± 0.09 times faster than pixi-0.39.5 list --no-install
+    2.10 ± 0.09 times faster than pixi-0.39.4 list --no-install
+```
+
+#### Fixed
+- Pyproject `entry-points` by @atmorling in [#2886](https://github.com/prefix-dev/pixi/pull/2886)
+- Print warning when pixi manifest is not parsed in pixi search by @pavelzw in [#2889](https://github.com/prefix-dev/pixi/pull/2889)
+- Add deprecation notice for `depends_on` by @baszalmstra in [#2891](https://github.com/prefix-dev/pixi/pull/2891)
+
+#### Performance
+- Use faster allocators by @baszalmstra in [#2874](https://github.com/prefix-dev/pixi/pull/2874)
+
+#### Refactor
+- Add `online_tests` feature to control Internet use by @mgorny in [#2881](https://github.com/prefix-dev/pixi/pull/2881)
+- Simplify repodata_gateway function by @olivier-lacroix in [#1793](https://github.com/prefix-dev/pixi/pull/1793)
+- Spawn main entrypoint in box by @baszalmstra in [#2892](https://github.com/prefix-dev/pixi/pull/2892)
+
+#### New Contributors
+* @atmorling made their first contribution in [#2886](https://github.com/prefix-dev/pixi/pull/2886)
+* @mgorny made their first contribution in [#2881](https://github.com/prefix-dev/pixi/pull/2881)
+
 ### [0.40.0] - 2025-01-10
 #### ✨ Highlights
 Manifest file parsing has been significantly improved.
