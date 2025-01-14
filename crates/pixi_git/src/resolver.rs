@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use pixi_utils::PrefixGuard;
+use pixi_utils::AsyncPrefixGuard;
 use tracing::debug;
 
 use dashmap::mapref::one::Ref;
@@ -74,11 +74,11 @@ impl GitResolver {
         let repository_url = RepositoryUrl::new(url.repository());
 
         let write_guard_path = lock_dir.join(cache_digest(&repository_url));
-        let mut guard = PrefixGuard::new(&write_guard_path)?;
-        let mut write_guard = guard.write()?;
+        let guard = AsyncPrefixGuard::new(&write_guard_path).await?;
+        let mut write_guard = guard.write().await?;
 
         // Update the prefix to indicate that we are installing it.
-        write_guard.begin()?;
+        write_guard.begin().await?;
 
         // Fetch the Git repository.
         let source = GitSource::new(url.as_ref().clone(), client, cache);
@@ -92,7 +92,7 @@ impl GitResolver {
         if let Some(precise) = fetch.git().precise() {
             self.insert(reference, precise);
         }
-        let _ = write_guard.finish();
+        write_guard.finish().await?;
 
         Ok(fetch)
     }
