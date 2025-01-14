@@ -454,12 +454,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let auth_file = config
         .authentication_override_file()
-        .map(|x| x.to_owned())
-        .unwrap_or_else(|| {
-            authentication_storage::backends::file::FileStorage::default()
-                .path
-                .clone()
-        });
+        .map(|x| x.to_owned());
+    let auth_file = if let Some(auth_file) = auth_file {
+        auth_file
+    } else {
+        let file_storage = authentication_storage::backends::file::FileStorage::new().into_diagnostic()?;
+        file_storage
+            .path
+            .clone()
+    };
+    
 
     let info = Info {
         platform: Platform::current().to_string(),

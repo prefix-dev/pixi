@@ -1,3 +1,5 @@
+// TODO: replace this with rattler-build upload after it moved into the rattler crate
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -51,7 +53,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     );
 
     let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::default()))
+        .with_arc(Arc::new(AuthenticationMiddleware::new().into_diagnostic()?))
         .build();
 
     let sha256sum = format!(

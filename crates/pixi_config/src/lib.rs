@@ -98,7 +98,6 @@ pub struct ConfigCli {
     tls_no_verify: bool,
 
     /// Path to the file containing the authentication token.
-    #[arg(long, env = "RATTLER_AUTH_FILE")]
     auth_file: Option<PathBuf>,
 
     /// Specifies if we want to use uv keyring provider

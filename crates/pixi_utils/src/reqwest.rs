@@ -22,7 +22,8 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
-fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
+fn auth_store(config: &Config) -> Result<AuthenticationStorage, FileStorageError> {
+    let mut store = AuthenticationStorage::from_env_and_defaults()?;
     if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
 
@@ -30,15 +31,15 @@ fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStor
             tracing::warn!("Authentication file does not exist: {:?}", auth_file);
         }
 
-        let mut store = AuthenticationStorage::new();
         store.add_backend(Arc::from(
-            authentication_storage::backends::file::FileStorage::new(PathBuf::from(&auth_file))?,
+            authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(&auth_file))?,
         ));
-
-        return Ok(AuthenticationMiddleware::new(store));
     }
+    Ok(store)
+}
 
-    Ok(AuthenticationMiddleware::default())
+fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
+    Ok(AuthenticationMiddleware::from_auth_storage(auth_store(config)?))
 }
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
