@@ -244,10 +244,13 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         build_reporter: Arc<dyn BuildReporter>,
+        git_reporter: Option<Arc<dyn Reporter>>,
         build_id: usize,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
-            path: self.fetch_pinned_source(&source_spec.source).await?,
+            path: self
+                .fetch_pinned_source(&source_spec.source, git_reporter)
+                .await?,
             pinned: source_spec.source.clone(),
         };
 
@@ -450,6 +453,7 @@ impl BuildContext {
     pub async fn fetch_pinned_source(
         &self,
         source_spec: &PinnedSourceSpec,
+        git_reporter: Option<Arc<dyn Reporter>>,
     ) -> Result<PathBuf, BuildError> {
         match source_spec {
             PinnedSourceSpec::Url(_) => {
@@ -457,7 +461,7 @@ impl BuildContext {
             }
             PinnedSourceSpec::Git(pinned_git_spec) => {
                 let fetched = self
-                    .resolve_precise_git(pinned_git_spec.clone())
+                    .resolve_precise_git(pinned_git_spec.clone(), git_reporter)
                     .await
                     .unwrap();
                 let path = if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
@@ -534,11 +538,14 @@ impl BuildContext {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    async fn resolve_precise_git(&self, git: PinnedGitSpec) -> miette::Result<Fetch> {
+    async fn resolve_precise_git(
+        &self,
+        git: PinnedGitSpec,
+        reporter: Option<Arc<dyn Reporter>>,
+    ) -> miette::Result<Fetch> {
         let git_reference = git.source.reference.try_into().into_diagnostic()?;
 
         let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
-        // let data = GitReporter::new(global_multi_progress().add(ProgressBar::no_length()));
 
         let resolver = self
             .git
@@ -546,8 +553,7 @@ impl BuildContext {
                 &git_url,
                 self.tool_context.clone().client.clone(),
                 self.cache_dir.clone().join(CACHED_GIT_DIR),
-                None,
-                // Some(Arc::new(data)),
+                reporter,
             )
             .await
             .into_diagnostic()?;

@@ -125,7 +125,6 @@ impl GitSource {
         if let Some(task) = task {
             if let Some(reporter) = self.reporter.as_ref() {
                 reporter.on_checkout_complete(remote.url(), short_id.as_str(), task);
-                // sleep(Duration::from_secs(3));
             }
         }
 
