@@ -120,6 +120,12 @@ It sets the `PATH` and some more environment variables. But more importantly it 
 An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
 Thus, just adding the `bin` directory to the `PATH` is not enough.
 
+You can modify the activation with the `activation` table in the manifest, you can add more activation scripts or inject environment variables into the activation scripts.
+```toml
+--8<-- "docs/source_files/pixi_tomls/activation.toml:activation"
+```
+Find the reference for the `activation` table [here](../reference/pixi_manifest.md#the-activation-table).
+
 ## Traditional `conda activate`-like activation
 
 If you prefer to use the traditional `conda activate`-like activation, you could use the `pixi shell-hook` command.
