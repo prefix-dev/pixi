@@ -368,8 +368,7 @@ mod test {
         let project = Project::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
         let environment = environment_name.map(|name| project.environment(&name).unwrap());
-        let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform)
-            .with_ignore_system_requirements(true);
+        let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform);
 
         let graph = TaskGraph::from_cmd_args(
             &project,

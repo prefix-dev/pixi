@@ -3,6 +3,7 @@ use pixi_manifest::{Task, TaskName};
 use rattler_conda_types::Platform;
 use thiserror::Error;
 
+use crate::project::virtual_packages::verify_current_platform_can_run_environment;
 use crate::{
     project::Environment,
     task::error::{AmbiguousTaskError, MissingTaskError},
@@ -46,7 +47,6 @@ pub struct SearchEnvironments<'p, D: TaskDisambiguation<'p> = NoDisambiguation> 
     pub explicit_environment: Option<Environment<'p>>,
     pub platform: Option<Platform>,
     pub disambiguate: D,
-    pub ignore_system_requirements: bool,
 }
 
 /// Information about an task that was found when searching for a task
@@ -96,7 +96,6 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
             explicit_environment,
             platform,
             disambiguate: NoDisambiguation,
-            ignore_system_requirements: false,
         }
     }
 }
@@ -115,16 +114,6 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             explicit_environment: self.explicit_environment,
             platform: self.platform,
             disambiguate: DisambiguateFn(func),
-            ignore_system_requirements: false,
-        }
-    }
-
-    /// Ignore system requirements when looking for tasks.
-    #[cfg(test)]
-    pub(crate) fn with_ignore_system_requirements(self, ignore: bool) -> Self {
-        Self {
-            ignore_system_requirements: ignore,
-            ..self
         }
     }
 
@@ -148,6 +137,8 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                     .iter()
                     // Filter out default environment
                     .filter(|env| !env.name().is_default())
+                    // Filter out environments that can not run on this machine.
+                    .filter(|env| verify_current_platform_can_run_environment(env, None).is_ok())
                     .any(|env| {
                         if let Ok(task) = env.task(&name, self.platform) {
                             // If the task exists in the environment but it is not the reference to
@@ -287,8 +278,7 @@ mod tests {
             macos = "10.6"
         "#;
         let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None)
-            .with_ignore_system_requirements(true);
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
 
@@ -332,8 +322,7 @@ mod tests {
             &project,
             Some(project.environment("prod").unwrap()),
             None,
-        )
-        .with_ignore_system_requirements(true);
+        );
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::MissingTask(_))));
     }
@@ -356,8 +345,7 @@ mod tests {
             other = ["other"]
         "#;
         let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
-        let search = SearchEnvironments::from_opt_env(&project, None, None)
-            .with_ignore_system_requirements(true);
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("bla".into(), FindTaskSource::CmdArgs);
         // Ambiguous task because it is the same name and code but it is defined in
         // different environments
