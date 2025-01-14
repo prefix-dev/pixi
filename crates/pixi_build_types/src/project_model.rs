@@ -67,6 +67,7 @@ impl VersionedProjectModel {
 pub type SourcePackageName = String;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectModelV1 {
     /// The name of the project
     pub name: String,
@@ -109,6 +110,7 @@ pub struct ProjectModelV1 {
 /// Represents a target selector. Currently we only support explicit platform
 /// selection.
 #[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum TargetSelectorV1 {
     // Platform specific configuration
     Platform(String),
@@ -121,6 +123,7 @@ pub enum TargetSelectorV1 {
 
 /// A collect of targets including a default target.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TargetsV1 {
     pub default_target: TargetV1,
 
@@ -130,6 +133,7 @@ pub struct TargetsV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
     pub host_dependencies: IndexMap<SourcePackageName, PackageSpecV1>,
@@ -212,6 +216,7 @@ pub struct GitSpecV1 {
 
 /// A specification of a package from a git repository.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PathSpecV1 {
     /// The path to the package
     pub path: String,
@@ -237,6 +242,7 @@ pub enum GitReferenceV1 {
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
 #[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct BinaryPackageSpecV1 {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<DisplayFromStr>")]

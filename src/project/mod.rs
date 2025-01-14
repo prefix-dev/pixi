@@ -163,8 +163,34 @@ pub type PypiDeps = indexmap::IndexMap<
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
-
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
+
+#[derive(thiserror::Error, Debug, miette::Diagnostic)]
+pub enum ProjectError {
+    #[error("no file was found at {0}")]
+    FileNotFound(PathBuf),
+    #[error(
+        "could not find {project_manifest} or {pyproject_manifest} at directory {0}",
+        project_manifest = consts::PROJECT_MANIFEST,
+        pyproject_manifest = consts::PYPROJECT_MANIFEST
+    )]
+    FileNotFoundInDirectory(PathBuf),
+    #[error(
+        "could not find {} or {} which is configured to use {}",
+        consts::PROJECT_MANIFEST,
+        consts::PYPROJECT_MANIFEST,
+        pixi_utils::executable_name()
+    )]
+    NoFileFound,
+    #[error("failed to read project from '{0}'")]
+    ReadError(std::io::Error),
+    #[error("failed to parse project from {1}: {0}")]
+    ParseErrorWithPathBuf(miette::Report, PathBuf),
+    #[error("failed to parse project: {0}")]
+    ParseError(miette::Report),
+    #[error("io error: {0}")]
+    IoError(std::io::Error),
+}
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
@@ -208,8 +234,9 @@ impl Project {
     /// the parent directories, or use the manifest specified by the
     /// environment. This will also set the current working directory to the
     /// project root.
-    pub(crate) fn discover() -> miette::Result<Self> {
-        let project_toml = find_project_manifest(std::env::current_dir().into_diagnostic()?);
+    pub(crate) fn discover() -> Result<Self, ProjectError> {
+        let project_toml =
+            find_project_manifest(std::env::current_dir().map_err(ProjectError::IoError)?);
 
         if let Some(project_toml) = project_toml {
             if std::env::var("PIXI_IN_SHELL").is_ok() {
@@ -230,37 +257,27 @@ impl Project {
             return Self::from_path(Path::new(env_manifest_path.as_str()));
         }
 
-        miette::bail!(
-            "could not find {} or {} which is configured to use {}",
-            consts::PROJECT_MANIFEST,
-            consts::PYPROJECT_MANIFEST,
-            pixi_utils::executable_name()
-        );
+        Err(ProjectError::NoFileFound)
     }
 
     /// Loads a project from manifest file.
-    pub fn from_path(manifest_path: &Path) -> miette::Result<Self> {
-        let manifest = Manifest::from_path(manifest_path)?;
+    pub fn from_path(manifest_path: &Path) -> Result<Self, ProjectError> {
+        let manifest = Manifest::from_path(manifest_path)
+            .map_err(|e| ProjectError::ParseErrorWithPathBuf(e, manifest_path.into()))?;
         Ok(Project::from_manifest(manifest))
     }
 
     /// Loads a project manifest file or discovers it in the current directory
     /// or any of the parent
-    pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
+    pub fn load_or_else_discover(manifest_path: Option<&Path>) -> Result<Self, ProjectError> {
         let project = match manifest_path {
             Some(path) => {
                 if !path.exists() {
-                    miette::bail!("manifest path does not exist at {}", path.to_string_lossy());
+                    return Err(ProjectError::FileNotFound(path.to_owned()));
                 }
                 let path = if path.is_dir() {
-                    &find_project_manifest(path).ok_or_else(|| {
-                        miette::miette!(
-                            "could not find {} or {} at directory {}",
-                            consts::PROJECT_MANIFEST,
-                            consts::PYPROJECT_MANIFEST,
-                            path.to_string_lossy()
-                        )
-                    })?
+                    &find_project_manifest(path)
+                        .ok_or_else(|| ProjectError::FileNotFoundInDirectory(path.to_owned()))?
                 } else {
                     path
                 };

@@ -11,21 +11,21 @@ expression: project_model
     "Bas Zalmstra <bas@prefix.dev>"
   ],
   "license": null,
-  "license_file": null,
+  "licenseFile": null,
   "readme": null,
   "homepage": null,
   "repository": null,
   "documentation": null,
   "configuration": null,
   "targets": {
-    "default_target": {
-      "host_dependencies": {
+    "defaultTarget": {
+      "hostDependencies": {
         "sdl2": {
           "binary": {
             "version": ">=2.26.5,<3.0",
             "build": null,
-            "build_number": null,
-            "file_name": null,
+            "buildNumber": null,
+            "fileName": null,
             "channel": null,
             "subdir": null,
             "md5": null,
@@ -33,8 +33,8 @@ expression: project_model
           }
         }
       },
-      "build_dependencies": {},
-      "run_dependencies": {}
+      "buildDependencies": {},
+      "runDependencies": {}
     },
     "targets": {}
   }

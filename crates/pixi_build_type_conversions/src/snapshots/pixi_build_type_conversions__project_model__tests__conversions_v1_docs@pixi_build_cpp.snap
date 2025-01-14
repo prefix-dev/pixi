@@ -9,21 +9,21 @@ expression: project_model
   "description": null,
   "authors": null,
   "license": null,
-  "license_file": null,
+  "licenseFile": null,
   "readme": null,
   "homepage": null,
   "repository": null,
   "documentation": null,
   "configuration": null,
   "targets": {
-    "default_target": {
-      "host_dependencies": {
+    "defaultTarget": {
+      "hostDependencies": {
         "cmake": {
           "binary": {
             "version": ">=3.20,<3.27",
             "build": null,
-            "build_number": null,
-            "file_name": null,
+            "buildNumber": null,
+            "fileName": null,
             "channel": null,
             "subdir": null,
             "md5": null,
@@ -34,8 +34,8 @@ expression: project_model
           "binary": {
             "version": ">=2.4.0,<2.5.0",
             "build": null,
-            "build_number": null,
-            "file_name": null,
+            "buildNumber": null,
+            "fileName": null,
             "channel": null,
             "subdir": null,
             "md5": null,
@@ -46,8 +46,8 @@ expression: project_model
           "binary": {
             "version": ">=3.12,<3.13",
             "build": null,
-            "build_number": null,
-            "file_name": null,
+            "buildNumber": null,
+            "fileName": null,
             "channel": null,
             "subdir": null,
             "md5": null,
@@ -55,14 +55,14 @@ expression: project_model
           }
         }
       },
-      "build_dependencies": {},
-      "run_dependencies": {
+      "buildDependencies": {},
+      "runDependencies": {
         "python": {
           "binary": {
             "version": ">=3.12,<3.13",
             "build": null,
-            "build_number": null,
-            "file_name": null,
+            "buildNumber": null,
+            "fileName": null,
             "channel": null,
             "subdir": null,
             "md5": null,
