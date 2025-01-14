@@ -1753,7 +1753,7 @@ async fn spawn_solve_conda_environment_task(
                 .into_diagnostic()?;
 
             let mut metadata_progress = None;
-            let mut git_progress = None;
+            let mut source_progress = None;
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
@@ -1764,7 +1764,7 @@ async fn spawn_solve_conda_environment_task(
                         source_specs.len() as u64,
                     ))
                 });
-                let git_reporter = git_progress.get_or_insert_with(|| {
+                let source_reporter = source_progress.get_or_insert_with(|| {
                     Arc::new(SourceCheckoutReporter::new(global_multi_progress()))
                 });
 
@@ -1778,7 +1778,7 @@ async fn spawn_solve_conda_environment_task(
                             platform,
                             virtual_packages.clone(),
                             metadata_reporter.clone(),
-                            Some(git_reporter.clone()),
+                            Some(source_reporter.clone()),
                             build_id,
                         )
                         .map_err(|e| {

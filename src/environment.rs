@@ -818,7 +818,7 @@ pub async fn update_prefix_conda(
         });
 
     let mut progress_reporter = None;
-    let mut git_reporter = None;
+    let mut source_reporter = None;
     let source_records_length = source_records.len();
     // Build conda packages out of the source records
     let mut processed_source_packages = stream::iter(source_records)
@@ -832,7 +832,7 @@ pub async fn update_prefix_conda(
                 })
                 .clone();
 
-            let git_reporter = git_reporter
+            let source_reporter = source_reporter
                 .get_or_insert_with(|| {
                     Arc::new(SourceCheckoutReporter::new(global_multi_progress()))
                 })
@@ -850,7 +850,7 @@ pub async fn update_prefix_conda(
                         virtual_packages.clone(),
                         virtual_packages.clone(),
                         progress_reporter.clone(),
-                        Some(git_reporter),
+                        Some(source_reporter),
                         build_id,
                     )
                     .await
