@@ -793,7 +793,7 @@ async fn install_s3() {
     );
     let temp_dir = tempdir().unwrap();
     let credentials_path = temp_dir.path().join("credentials.json");
-    let mut file = File::create(credentials_path).unwrap();
+    let mut file = File::create(credentials_path.clone()).unwrap();
     file.write_all(credentials.as_bytes()).unwrap();
 
     let manifest = format!(
