@@ -33,17 +33,22 @@ fn auth_store(config: &Config) -> Result<AuthenticationStorage, FileStorageError
 
         // this should be the first place before the keyring authentication
         // i.e. either index 0 if RATTLER_AUTH_FILE is not set or index 1 if it is
-        let first_storage = store.backends.get(0).unwrap();
-        let index = if first_storage.type_id() == std::any::TypeId::of::<authentication_storage::backends::file::FileStorage>() {
+        let first_storage = store.backends.first().unwrap();
+        let index = if first_storage.type_id()
+            == std::any::TypeId::of::<authentication_storage::backends::file::FileStorage>()
+        {
             1
         } else {
             0
         };
-        store.insert_backend(index, Arc::from(
-            authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
-                &auth_file,
-            ))?,
-        ));
+        store.insert_backend(
+            index,
+            Arc::from(
+                authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
+                    &auth_file,
+                ))?,
+            ),
+        );
     }
     Ok(store)
 }
