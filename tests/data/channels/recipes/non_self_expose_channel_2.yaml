@@ -23,5 +23,5 @@ outputs:
       version: 0.1.0
 
     requirements:
-        run:
-            - jupyter-core
+      run:
+        - jupyter-core
