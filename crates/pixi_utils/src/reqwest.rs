@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{any::Any, path::PathBuf, sync::Arc, time::Duration};
 
 use pixi_consts::consts;
 use rattler_networking::{
@@ -31,7 +31,15 @@ fn auth_store(config: &Config) -> Result<AuthenticationStorage, FileStorageError
             tracing::warn!("Authentication file does not exist: {:?}", auth_file);
         }
 
-        store.add_backend(Arc::from(
+        // this should be the first place before the keyring authentication
+        // i.e. either index 0 if RATTLER_AUTH_FILE is not set or index 1 if it is
+        let first_storage = store.backends.get(0).unwrap();
+        let index = if first_storage.type_id() == std::any::TypeId::of::<authentication_storage::backends::file::FileStorage>() {
+            1
+        } else {
+            0
+        };
+        store.insert_backend(index, Arc::from(
             authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
                 &auth_file,
             ))?,
