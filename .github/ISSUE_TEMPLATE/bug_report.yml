@@ -1,7 +1,6 @@
-name: '🪲 Bug Report'
+name: "🪲 Bug Report"
 description: An issue with pixi
 labels: [bug]
-
 
 body:
   - type: checkboxes

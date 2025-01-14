@@ -64,7 +64,6 @@ outputs:
       run:
         - dummy-x # This comes from dummy_channel_2
 
-
     build:
       script:
         - mkdir -p $PREFIX/bin
