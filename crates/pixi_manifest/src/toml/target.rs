@@ -8,7 +8,7 @@ use toml_span::{de_helpers::TableHelper, DeserError, Value};
 use crate::{
     error::GenericError,
     pypi::PyPiPackageName,
-    toml::preview::TomlPreview,
+    toml::{preview::TomlPreview, task::TomlTask, warning::WithWarnings, Warning},
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, KnownPreviewFeature, PyPiRequirement, SpecType, TargetSelector, Task, TaskName,
     TomlError, WorkspaceTarget,
@@ -26,6 +26,9 @@ pub struct TomlTarget {
 
     /// Target specific tasks to run in the environment
     pub tasks: HashMap<TaskName, Task>,
+
+    /// Any warnings we encountered while parsing the target
+    pub warnings: Vec<Warning>,
 }
 
 impl TomlTarget {
@@ -34,7 +37,7 @@ impl TomlTarget {
         self,
         target: Option<TargetSelector>,
         preview: &TomlPreview,
-    ) -> Result<WorkspaceTarget, TomlError> {
+    ) -> Result<WithWarnings<WorkspaceTarget>, TomlError> {
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
         if pixi_build_enabled {
@@ -64,15 +67,18 @@ impl TomlTarget {
             }
         }
 
-        Ok(WorkspaceTarget {
-            dependencies: combine_target_dependencies([
-                (SpecType::Run, self.dependencies),
-                (SpecType::Host, self.host_dependencies),
-                (SpecType::Build, self.build_dependencies),
-            ]),
-            pypi_dependencies: self.pypi_dependencies,
-            activation: self.activation,
-            tasks: self.tasks,
+        Ok(WithWarnings {
+            value: WorkspaceTarget {
+                dependencies: combine_target_dependencies([
+                    (SpecType::Run, self.dependencies),
+                    (SpecType::Host, self.host_dependencies),
+                    (SpecType::Build, self.build_dependencies),
+                ]),
+                pypi_dependencies: self.pypi_dependencies,
+                activation: self.activation,
+                tasks: self.tasks,
+            },
+            warnings: self.warnings,
         })
     }
 }
@@ -89,6 +95,7 @@ pub(super) fn combine_target_dependencies(
 impl<'de> toml_span::Deserialize<'de> for TomlTarget {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
+        let mut warnings = Vec::new();
 
         let dependencies = th.optional("dependencies");
         let host_dependencies = th.optional("host-dependencies");
@@ -98,9 +105,19 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             .map(TomlIndexMap::into_inner);
         let activation = th.optional("activation");
         let tasks = th
-            .optional::<TomlHashMap<_, _>>("tasks")
+            .optional::<TomlHashMap<_, TomlTask>>("tasks")
             .map(TomlHashMap::into_inner)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| {
+                let TomlTask {
+                    value: task,
+                    warnings: mut task_warnings,
+                } = value;
+                warnings.append(&mut task_warnings);
+                (key, task)
+            })
+            .collect();
 
         th.finalize(None)?;
 
@@ -111,6 +128,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             pypi_dependencies,
             activation,
             tasks,
+            warnings,
         })
     }
 }

@@ -112,7 +112,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlProject {
             .map(TomlIndexMap::into_inner);
         let entry_points = th
             .optional::<TomlWith<_, TomlIndexMap<String, TomlIndexMap<String, Same>>>>(
-                "entry_points",
+                "entry-points",
             )
             .map(TomlWith::into_inner);
         let scripts = th

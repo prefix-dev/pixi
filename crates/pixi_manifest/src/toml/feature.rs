@@ -7,7 +7,10 @@ use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    toml::{platform::TomlPlatform, preview::TomlPreview, TomlPrioritizedChannel, TomlTarget},
+    toml::{
+        platform::TomlPlatform, preview::TomlPreview, task::TomlTask, warning::WithWarnings,
+        TomlPrioritizedChannel, TomlTarget, Warning,
+    },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     workspace::ChannelPriority,
     Activation, Feature, FeatureName, PyPiRequirement, SystemRequirements, TargetSelector, Targets,
@@ -34,6 +37,9 @@ pub struct TomlFeature {
 
     /// Additional options for PyPi dependencies.
     pub pypi_options: Option<PypiOptions>,
+
+    /// Any warnings we encountered while parsing the feature
+    pub warnings: Vec<Warning>,
 }
 
 impl TomlFeature {
@@ -41,24 +47,32 @@ impl TomlFeature {
         self,
         name: FeatureName,
         preview: &TomlPreview,
-    ) -> Result<Feature, TomlError> {
-        let default_target = TomlTarget {
+    ) -> Result<WithWarnings<Feature>, TomlError> {
+        let WithWarnings {
+            value: default_target,
+            mut warnings,
+        } = TomlTarget {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
             pypi_dependencies: self.pypi_dependencies,
             activation: self.activation,
             tasks: self.tasks,
+            warnings: self.warnings,
         }
         .into_workspace_target(None, preview)?;
 
         let mut targets = IndexMap::new();
         for (selector, target) in self.target {
-            let target = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            let WithWarnings {
+                value: target,
+                warnings: mut target_warnings,
+            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
             targets.insert(selector, target);
+            warnings.append(&mut target_warnings);
         }
 
-        Ok(Feature {
+        Ok(WithWarnings::from(Feature {
             name,
             platforms: self.platforms,
             channels: self
@@ -69,12 +83,14 @@ impl TomlFeature {
             pypi_options: self.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, targets),
         })
+        .with_warnings(warnings))
     }
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlFeature {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
+        let mut warnings = Vec::new();
 
         let platforms = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexSet<TomlPlatform>>>>("platforms")
@@ -93,9 +109,19 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             .map(TomlIndexMap::into_inner);
         let activation = th.optional("activation");
         let tasks = th
-            .optional::<TomlHashMap<_, _>>("tasks")
+            .optional::<TomlHashMap<_, TomlTask>>("tasks")
             .map(TomlHashMap::into_inner)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| {
+                let WithWarnings {
+                    value: task,
+                    warnings: mut task_warnings,
+                } = value;
+                warnings.append(&mut task_warnings);
+                (key, task)
+            })
+            .collect();
         let pypi_options = th.optional("pypi-options");
         let system_requirements = th.optional("system-requirements").unwrap_or_default();
 
@@ -114,6 +140,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             activation,
             tasks,
             pypi_options,
+            warnings,
         })
     }
 }

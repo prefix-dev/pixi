@@ -154,22 +154,6 @@
       "$ref": "#/$defs/PyPIOptions",
       "description": "Options related to PyPI indexes, on the default feature"
     },
-    "run-dependencies": {
-      "title": "Run-Dependencies",
-      "description": "The run-dependencies for the [package]",
-      "type": "object",
-      "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
-      }
-    },
     "system-requirements": {
       "$ref": "#/$defs/SystemRequirements",
       "description": "The system requirements of the project"
