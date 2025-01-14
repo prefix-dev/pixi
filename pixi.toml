@@ -96,6 +96,7 @@ check-openssl = "python tests/scripts/check-openssl.py"
 lint = "pre-commit run --all-files --hook-stage=manual"
 pre-commit-install = "pre-commit install --install-hooks"
 pre-commit-run = "pre-commit run --all-files"
+prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
@@ -108,6 +109,7 @@ typos = "typos --write-changes --force-exclude"
 git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
+prettier = ">=3.4.2,<4"
 rust = "~=1.81.0"
 
 [feature.build.target.linux-64.dependencies]

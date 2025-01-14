@@ -32,6 +32,7 @@ use url::Url;
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
     /// Version 1 of the project model.
+    #[serde(rename = "1")]
     V1(ProjectModelV1),
     // When adding don't forget to update the highest_version function
 }
@@ -41,6 +42,24 @@ impl VersionedProjectModel {
     pub fn highest_version() -> u32 {
         // increase this when adding a new version
         1
+    }
+
+    /// Move into the v1 type, returns None if the version is not v1.
+    pub fn into_v1(self) -> Option<ProjectModelV1> {
+        match self {
+            VersionedProjectModel::V1(v) => Some(v),
+            // Add this once we have more versions
+            //_ => None,
+        }
+    }
+
+    /// Returns a reference to the v1 type, returns None if the version is not v1.
+    pub fn as_v1(&self) -> Option<&ProjectModelV1> {
+        match self {
+            VersionedProjectModel::V1(v) => Some(v),
+            // Add this once we have more versions
+            //_ => None,
+        }
     }
 }
 

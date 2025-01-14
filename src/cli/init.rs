@@ -14,6 +14,7 @@ use pixi_consts::consts;
 use pixi_manifest::{
     pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
 };
+use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tokio::fs::OpenOptions;
@@ -241,14 +242,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
         let channel_config = project.channel_config();
         for spec in conda_deps {
+            // Determine the name of the package to add
+            let (Some(name), spec) = spec.clone().into_nameless() else {
+                miette::bail!(
+                    "{} does not support wildcard dependencies",
+                    pixi_utils::executable_name()
+                );
+            };
+            let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
             project.manifest.add_dependency(
+                &name,
                 &spec,
                 SpecType::Run,
                 // No platforms required as you can't define them in the yaml
                 &[],
                 &FeatureName::default(),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )?;
         }
         for requirement in pypi_deps {

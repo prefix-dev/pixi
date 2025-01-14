@@ -5,6 +5,97 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.40.1] - 2025-01-14
+#### ✨ Highlights
+We've **reverted** the breaking change of the `depends_on` field from `0.40.0`, replacing it with a [warning](https://github.com/prefix-dev/pixi/pull/2891).
+
+This release also brings a [performance boost](https://github.com/prefix-dev/pixi/pull/2874) to our Windows and Linux-musl builds by using faster allocators.
+On the ([holoviews](https://github.com/holoviz/holoviews)) project, we measured a significant speedup:
+```shell
+# Linux musl
+Summary
+  pixi-0.40.1 list --no-install ran
+   12.65 ± 0.46 times faster than pixi-0.40.0 list --no-install
+
+# Windows
+  pixi-0.40.1 list --no-install ran
+    1.66 ± 0.07 times faster than pixi-0.40.0 list --no-install
+    1.67 ± 0.09 times faster than pixi-0.39.5 list --no-install
+    2.10 ± 0.09 times faster than pixi-0.39.4 list --no-install
+```
+
+#### Fixed
+- Pyproject `entry-points` by @atmorling in [#2886](https://github.com/prefix-dev/pixi/pull/2886)
+- Print warning when pixi manifest is not parsed in pixi search by @pavelzw in [#2889](https://github.com/prefix-dev/pixi/pull/2889)
+- Add deprecation notice for `depends_on` by @baszalmstra in [#2891](https://github.com/prefix-dev/pixi/pull/2891)
+
+#### Performance
+- Use faster allocators by @baszalmstra in [#2874](https://github.com/prefix-dev/pixi/pull/2874)
+
+#### Refactor
+- Add `online_tests` feature to control Internet use by @mgorny in [#2881](https://github.com/prefix-dev/pixi/pull/2881)
+- Simplify repodata_gateway function by @olivier-lacroix in [#1793](https://github.com/prefix-dev/pixi/pull/1793)
+- Spawn main entrypoint in box by @baszalmstra in [#2892](https://github.com/prefix-dev/pixi/pull/2892)
+
+#### New Contributors
+* @atmorling made their first contribution in [#2886](https://github.com/prefix-dev/pixi/pull/2886)
+* @mgorny made their first contribution in [#2881](https://github.com/prefix-dev/pixi/pull/2881)
+
+### [0.40.0] - 2025-01-10
+#### ✨ Highlights
+Manifest file parsing has been significantly improved.
+Errors will now be clearer and more helpful, for example:
+```shell
+         × Expected one of 'first-index', 'unsafe-first-match', 'unsafe-best-match'
+          ╭─[pixi.toml:2:27]
+        1 │
+        2 │         index-strategy = "UnsafeFirstMatch"
+          ·                           ────────────────
+        3 │
+          ╰────
+         help: Did you mean 'unsafe-first-match'?
+```
+
+#### Breaking Change Alert:
+The `depends_on` field has been renamed to `depends-on` for better consistency.
+Using the old format without a dash (depends_on) will now result in an error.
+The new errors should help you find the location:
+```shell
+Error:
+  × field 'depends_on' is deprecated, 'depends-on' has replaced it
+    ╭─[pixi.toml:22:51]
+ 21 │ install = "cargo install --path . --locked"
+ 22 │ install-as = { cmd = "python scripts/install.py", depends_on = [
+    ·                                                   ─────┬────
+    ·                                                        ╰── replace this with 'depends-on'
+ 23 │   "build-release",
+    ╰────
+```
+
+#### Added
+- Pixi add git source dependency by @nichmor in [#2858](https://github.com/prefix-dev/pixi/pull/2858)
+
+#### Documentation
+- Fix installation docs mistake in index.md by @PanTheDev in [#2869](https://github.com/prefix-dev/pixi/pull/2869)
+
+#### Fixed
+- Create missing global manifest folder with pixi global edit by @zbowling in [#2847](https://github.com/prefix-dev/pixi/pull/2847)
+- Pixi add creates a project by @nichmor in [#2861](https://github.com/prefix-dev/pixi/pull/2861)
+- Initialized detached envs with None by @ruben-arts in [#2841](https://github.com/prefix-dev/pixi/pull/2841)
+
+#### `pixi build` Preview work
+- Build backend docs by @tdejager in [#2844](https://github.com/prefix-dev/pixi/pull/2844)
+- Move pixi build type conversions into its own crate by @tdejager in [#2866](https://github.com/prefix-dev/pixi/pull/2866)
+- Expose build type v1 function by @tdejager in [#2875](https://github.com/prefix-dev/pixi/pull/2875)
+- Use toml-span for deserialization by @baszalmstra in [#2718](https://github.com/prefix-dev/pixi/pull/2718)
+- Expands options for setting pixi-build override options by @tdejager in [#2843](https://github.com/prefix-dev/pixi/pull/2843)
+- Split capability retrieval from initialize by @tdejager in [#2831](https://github.com/prefix-dev/pixi/pull/2831)
+- Move package fields under `[package]`. by @baszalmstra in [#2731](https://github.com/prefix-dev/pixi/pull/2731)
+- Extract pixi manifest info into protocol by @tdejager in [#2850](https://github.com/prefix-dev/pixi/pull/2850)
+
+#### New Contributors
+* @PanTheDev made their first contribution in [#2869](https://github.com/prefix-dev/pixi/pull/2869)
+
 ### [0.39.5] - 2025-01-06
 #### ✨ Highlights
 By updating [`resolvo`](https://github.com/mamba-org/resolvo/pull/91) to the latest version we now significantly lower the RAM usage during the solve process. 🚀

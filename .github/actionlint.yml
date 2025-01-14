@@ -7,4 +7,4 @@ paths:
   .github/workflows/release.yml:
     # This file is auto-generated so just ignore any error
     ignore:
-    - .*
+      - .*

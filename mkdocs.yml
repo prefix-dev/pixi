@@ -98,23 +98,10 @@ extra:
 nav:
   - Installation: index.md
   - Basic Usage: basic_usage.md
-  - Switching from:
-      - Poetry: switching_from/poetry.md
-      - Conda/Mamba: switching_from/conda.md
-  - Changelog: CHANGELOG.md
-  - IDE Integration:
-      - JupyterLab: ide_integration/jupyterlab.md
-      - PyCharm: ide_integration/pycharm.md
-      - RStudio: ide_integration/r_studio.md
-      - VSCode Devcontainer: ide_integration/devcontainer.md
   - Tutorials:
       - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
-  - Examples:
-      - C++/Cmake: examples/cpp-sdl.md
-      - OpenCV: examples/opencv.md
-      - ROS 2: examples/ros2-nav2.md
   - Features:
       - Environments: features/environment.md
       - Tasks: features/advanced_tasks.md
@@ -124,6 +111,19 @@ nav:
       - System Requirements: features/system_requirements.md
       - Global Tools: features/global_tools.md
       - Pytorch Installation: features/pytorch.md
+  - Examples:
+      - C++/Cmake: examples/cpp-sdl.md
+      - OpenCV: examples/opencv.md
+      - ROS 2: examples/ros2-nav2.md
+  - Switching from:
+      - Poetry: switching_from/poetry.md
+      - Conda/Mamba: switching_from/conda.md
+      - Changelog: CHANGELOG.md
+  - IDE Integration:
+      - JupyterLab: ide_integration/jupyterlab.md
+      - PyCharm: ide_integration/pycharm.md
+      - RStudio: ide_integration/r_studio.md
+      - VSCode Devcontainer: ide_integration/devcontainer.md
   - Building Packages:
       - Getting started: build/getting_started.md
       - Tutorials:
