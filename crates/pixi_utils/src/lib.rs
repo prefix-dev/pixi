@@ -10,4 +10,4 @@ pub use executable_utils::{
 };
 
 pub use cache::EnvironmentHash;
-pub use prefix_guard::{AsyncPrefixGuard, AsyncWriteGuard};
+pub use prefix_guard::{PrefixGuard, WriteGuard};

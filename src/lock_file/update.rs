@@ -42,7 +42,7 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::{BuildContext, GitReporter, GlobHashCache},
+    build::{BuildContext, GlobHashCache, SourceCheckoutReporter},
     environment::{
         self, read_environment_file, write_environment_file, EnvironmentFile, LockFileUsage,
         LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
@@ -1754,7 +1754,6 @@ async fn spawn_solve_conda_environment_task(
 
             let mut metadata_progress = None;
             let mut git_progress = None;
-            let git_number = source_specs.iter().filter(|(_, s)| s.is_git()).count();
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
@@ -1766,7 +1765,7 @@ async fn spawn_solve_conda_environment_task(
                     ))
                 });
                 let git_reporter = git_progress.get_or_insert_with(|| {
-                    Arc::new(GitReporter::new(&pb.pb, Some(git_number as u64)))
+                    Arc::new(SourceCheckoutReporter::new(global_multi_progress()))
                 });
 
                 source_futures.push(

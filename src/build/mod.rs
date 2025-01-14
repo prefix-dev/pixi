@@ -37,7 +37,8 @@ use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_digest::Sha256;
-pub use reporters::{BuildMetadataReporter, BuildReporter, GitReporter};
+use reporters::SourceReporter;
+pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -213,10 +214,10 @@ impl BuildContext {
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
-        git_reporter: Option<Arc<dyn Reporter>>,
+        source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
-        let source = self.fetch_source(source_spec, git_reporter).await?;
+        let source = self.fetch_source(source_spec, source_reporter).await?;
         let records = self
             .extract_records(
                 &source,
@@ -244,12 +245,12 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         build_reporter: Arc<dyn BuildReporter>,
-        git_reporter: Option<Arc<dyn Reporter>>,
+        source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self
-                .fetch_pinned_source(&source_spec.source, git_reporter)
+                .fetch_pinned_source(&source_spec.source, source_reporter)
                 .await?,
             pinned: source_spec.source.clone(),
         };
@@ -402,13 +403,16 @@ impl BuildContext {
     pub async fn fetch_source(
         &self,
         source_spec: &SourceSpec,
-        git_reporter: Option<Arc<dyn Reporter>>,
+        source_reporter: Option<Arc<dyn SourceReporter>>,
     ) -> Result<SourceCheckout, BuildError> {
         match source_spec {
             SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
             SourceSpec::Git(git_spec) => {
                 let fetched = self
-                    .resolve_git(git_spec.clone(), git_reporter)
+                    .resolve_git(
+                        git_spec.clone(),
+                        source_reporter.map(|sr| sr.as_git_reporter()),
+                    )
                     .await
                     .map_err(|err| BuildError::FetchError(err.into()))?;
                 //TODO: will be removed when manifest will be merged in pixi-build-backend
@@ -453,7 +457,7 @@ impl BuildContext {
     pub async fn fetch_pinned_source(
         &self,
         source_spec: &PinnedSourceSpec,
-        git_reporter: Option<Arc<dyn Reporter>>,
+        source_reporter: Option<Arc<dyn SourceReporter>>,
     ) -> Result<PathBuf, BuildError> {
         match source_spec {
             PinnedSourceSpec::Url(_) => {
@@ -461,7 +465,10 @@ impl BuildContext {
             }
             PinnedSourceSpec::Git(pinned_git_spec) => {
                 let fetched = self
-                    .resolve_precise_git(pinned_git_spec.clone(), git_reporter)
+                    .resolve_precise_git(
+                        pinned_git_spec.clone(),
+                        source_reporter.map(|sr| sr.as_git_reporter()),
+                    )
                     .await
                     .unwrap();
                 let path = if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
@@ -519,7 +526,6 @@ impl BuildContext {
             .into_diagnostic()?
             .with_reference(git_reference);
 
-        // let data = GitReporter::new(global_multi_progress().add(ProgressBar::hidden()));
         let resolver = self
             .git
             .fetch(

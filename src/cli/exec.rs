@@ -4,7 +4,7 @@ use clap::{Parser, ValueHint};
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{reqwest::build_reqwest_clients, AsyncPrefixGuard, EnvironmentHash};
+use pixi_utils::{reqwest::build_reqwest_clients, EnvironmentHash, PrefixGuard};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -100,13 +100,11 @@ pub async fn create_exec_prefix(
             .join(environment_hash.name()),
     );
 
-    let guard = AsyncPrefixGuard::new(prefix.root())
-        .await
+    let mut guard = PrefixGuard::new(prefix.root())
         .into_diagnostic()
         .context("failed to create prefix guard")?;
 
-    let mut write_guard = await_in_progress("acquiring write lock on prefix", |_| guard.write())
-        .await
+    let mut write_guard = wrap_in_progress("acquiring write lock on prefix", || guard.write())
         .into_diagnostic()
         .context("failed to acquire write lock to prefix guard")?;
 
@@ -117,14 +115,13 @@ pub async fn create_exec_prefix(
             "reusing existing environment in {}",
             prefix.root().display()
         );
-        let _ = write_guard.finish().await;
+        let _ = write_guard.finish();
         return Ok(prefix);
     }
 
     // Update the prefix to indicate that we are installing it.
     write_guard
         .begin()
-        .await
         .into_diagnostic()
         .context("failed to write lock status to prefix guard")?;
 
@@ -205,7 +202,7 @@ pub async fn create_exec_prefix(
         .into_diagnostic()
         .context("failed to create environment")?;
 
-    let _ = write_guard.finish().await;
+    let _ = write_guard.finish();
     Ok(prefix)
 }
 

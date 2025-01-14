@@ -1,5 +1,5 @@
 use crate::{
-    build::{BuildReporter, GitReporter},
+    build::{BuildReporter, SourceCheckoutReporter},
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
@@ -819,10 +819,6 @@ pub async fn update_prefix_conda(
 
     let mut progress_reporter = None;
     let mut git_reporter = None;
-    let nr_git = source_records
-        .iter()
-        .filter(|s| s.source.as_git().is_some())
-        .count();
     let source_records_length = source_records.len();
     // Build conda packages out of the source records
     let mut processed_source_packages = stream::iter(source_records)
@@ -838,10 +834,7 @@ pub async fn update_prefix_conda(
 
             let git_reporter = git_reporter
                 .get_or_insert_with(|| {
-                    Arc::new(GitReporter::new(
-                        &progress_reporter.main_progress,
-                        Some(nr_git as u64),
-                    ))
+                    Arc::new(SourceCheckoutReporter::new(global_multi_progress()))
                 })
                 .clone();
             let build_id = progress_reporter.associate(record.package_record.name.as_source());

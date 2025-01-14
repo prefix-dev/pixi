@@ -1,6 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use indicatif::ProgressBar;
+use indicatif::{MultiProgress, ProgressBar};
+use parking_lot::Mutex;
 use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter};
 
 pub trait BuildMetadataReporter: CondaMetadataReporter {
@@ -55,57 +56,78 @@ impl BuildReporter for NoopBuildReporter {
     }
 }
 
-pub struct GitReporter {
-    pb: ProgressBar,
+/// A reporter trait that it is responsible for reporting the progress of some source checkout.
+pub trait SourceReporter: pixi_git::Reporter {
+    /// Cast upwards
+    fn as_git_reporter(self: Arc<Self>) -> Arc<dyn pixi_git::Reporter>;
 }
 
-impl GitReporter {
-    pub fn new(original_progress: &ProgressBar, num_repositories: Option<u64>) -> Self {
-        let pb = pixi_progress::global_multi_progress()
-            .insert_after(original_progress, ProgressBar::hidden());
+#[derive(Default, Debug)]
+struct ProgressState {
+    /// A map of progress bars, by ID.
+    bars: HashMap<usize, ProgressBar>,
+    /// A monotonic counter for bar IDs.
+    id: usize,
+}
 
-        pb.set_style(pixi_progress::default_progress_style());
-
-        pb.set_prefix("fetching git deps");
-        pb.enable_steady_tick(Duration::from_millis(100));
-        if let Some(num_repositories) = num_repositories {
-            pb.set_length(num_repositories);
-        }
-
-        Self { pb }
-    }
-
-    /// Use this method to increment the progress bar
-    /// It will also check if the progress bar is finished
-    pub fn increment(&self) {
-        self.pb.inc(1);
-        self.check_finish();
-    }
-
-    /// Check if the progress bar is finished
-    /// and clears it
-    fn check_finish(&self) {
-        if self.pb.position()
-            == self
-                .pb
-                .length()
-                .expect("expected length to be set for progress")
-        {
-            self.pb.set_message("");
-            self.pb.finish_and_clear();
-        }
+impl ProgressState {
+    /// Returns a unique ID for a new progress bar.
+    fn id(&mut self) -> usize {
+        self.id += 1;
+        self.id
     }
 }
 
-impl pixi_git::Reporter for GitReporter {
+pub struct SourceCheckoutReporter {
+    multi_progress: MultiProgress,
+    progress_state: Arc<Mutex<ProgressState>>,
+}
+
+impl SourceCheckoutReporter {
+    pub fn new(multi_progress: MultiProgress) -> Self {
+        Self {
+            multi_progress,
+            progress_state: Default::default(),
+        }
+    }
+
+    /// Similar to the default pixi_progress::default_progress_style, but with a spinner in front.
+    pub fn spinner_style() -> indicatif::ProgressStyle {
+        indicatif::ProgressStyle::with_template("{spinner:.green} {prefix} {wide_msg:.dim}")
+            .unwrap()
+    }
+}
+
+impl pixi_git::Reporter for SourceCheckoutReporter {
     fn on_checkout_start(&self, url: &url::Url, rev: &str) -> usize {
-        self.pb.set_message(format!("checking out {}@{}", url, rev));
-        0
+        let mut state = self.progress_state.lock();
+        let id = state.id();
+
+        let pb = self.multi_progress.add(ProgressBar::hidden());
+
+        pb.set_style(SourceCheckoutReporter::spinner_style());
+
+        pb.set_prefix("fetching git dependencies");
+
+        pb.set_message(format!("checking out {}@{}", url, rev));
+        pb.enable_steady_tick(Duration::from_millis(100));
+
+        state.bars.insert(id, pb);
+
+        id
     }
 
-    fn on_checkout_complete(&self, url: &url::Url, rev: &str, _index: usize) {
-        self.pb
-            .set_message(format!("checkout complete {}@{}", url, rev));
-        self.increment();
+    fn on_checkout_complete(&self, url: &url::Url, rev: &str, index: usize) {
+        let mut state = self.progress_state.lock();
+        let removed_pb = state.bars.remove(&index).unwrap();
+
+        removed_pb.finish_with_message(format!("checkout complete {}@{}", url, rev));
+        removed_pb.finish_and_clear();
+    }
+}
+
+impl SourceReporter for SourceCheckoutReporter {
+    fn as_git_reporter(self: Arc<Self>) -> Arc<dyn pixi_git::Reporter> {
+        self
     }
 }
