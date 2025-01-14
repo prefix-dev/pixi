@@ -12,7 +12,6 @@ use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::environment::verify_prefix_location_unchanged;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::project::errors::UnsupportedPlatformError;
-// use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
 use crate::task::{
     get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
