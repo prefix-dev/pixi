@@ -1,7 +1,7 @@
 [project]
 channels = []
 name = "activation"
-platforms = ["linux-64"]
+platforms = ["linux-64", "win-64"]
 
 # --8<-- [start:activation]
 [activation.env]
@@ -14,12 +14,12 @@ R_LIBS = "$PIXI_R_LIBS"
 R_LIBS_USER = "$PIXI_R_LIBS"
 
 
-[activation]
+[target.unix.activation]
 # Use sh scripts on unix
 scripts = [
   # Common in the ROS workspaces
   "install/setup.sh",
-  # Want to add some personall scripts to the activation:
+  # Want to add some personal scripts to the activation:
   "activation.sh",
 ]
 
