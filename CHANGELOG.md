@@ -9,12 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### ✨ Highlights
 We've **reverted** the breaking change of the `depends_on` field from `0.40.0`, replacing it with a [warning](https://github.com/prefix-dev/pixi/pull/2891).
 
-This release also brings a [performance boost](https://github.com/prefix-dev/pixi/pull/2874) by using faster allocators.
+This release also brings a [performance boost](https://github.com/prefix-dev/pixi/pull/2874) to our Windows and Linux-musl builds by using faster allocators.
 On the ([holoviews](https://github.com/holoviz/holoviews)) project, we measured a significant speedup:
 ```shell
+# Linux musl
 Summary
   pixi-0.40.1 list --no-install ran
    12.65 ± 0.46 times faster than pixi-0.40.0 list --no-install
+
+# Windows
+  pixi-0.40.1 list --no-install ran
+    1.66 ± 0.07 times faster than pixi-0.40.0 list --no-install
+    1.67 ± 0.09 times faster than pixi-0.39.5 list --no-install
+    2.10 ± 0.09 times faster than pixi-0.39.4 list --no-install
 ```
 
 #### Fixed
