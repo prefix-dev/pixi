@@ -81,7 +81,7 @@ impl AsyncPrefixGuard {
         // Ensure that the directory exists
         fs_err::tokio::create_dir_all(guard_path.parent().unwrap()).await?;
 
-        let something = tokio::fs::File::options()
+        let file = tokio::fs::File::options()
             .write(true)
             .read(true)
             .create(true)
@@ -90,10 +90,7 @@ impl AsyncPrefixGuard {
             .await?;
 
         // Open the file
-        Ok(Self {
-            guard: something,
-            // ),
-        })
+        Ok(Self { guard: file })
     }
 
     /// Locks the guard for writing and returns a write guard which can be used
