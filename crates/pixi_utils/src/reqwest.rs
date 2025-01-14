@@ -32,14 +32,18 @@ fn auth_store(config: &Config) -> Result<AuthenticationStorage, FileStorageError
         }
 
         store.add_backend(Arc::from(
-            authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(&auth_file))?,
+            authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
+                &auth_file,
+            ))?,
         ));
     }
     Ok(store)
 }
 
 fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
-    Ok(AuthenticationMiddleware::from_auth_storage(auth_store(config)?))
+    Ok(AuthenticationMiddleware::from_auth_storage(auth_store(
+        config,
+    )?))
 }
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
