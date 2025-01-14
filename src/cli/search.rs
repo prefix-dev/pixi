@@ -548,7 +548,7 @@ fn print_matching_packages<W: Write>(
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
-        // https://github.com/mamba-org/rattler/issues/146
+        // https://github.com/conda/rattler/issues/146
 
         let channel_name = package
             .channel
