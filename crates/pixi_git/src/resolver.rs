@@ -87,11 +87,10 @@ impl GitResolver {
             GitSource::new(url.as_ref().clone(), client, cache)
         };
 
-        let fetch = tokio::task::spawn_blocking(move || source.fetch()).await;
+        let fetch = tokio::task::spawn_blocking(move || source.fetch())
+            .await?
+            .map_err(|err| GitResolverError::Git(err.to_string()))?;
 
-        let awaited_fetch = fetch?.map_err(|err| GitResolverError::Git(err.to_string()))?;
-
-        let fetch = awaited_fetch;
         // Insert the resolved URL into the in-memory cache. This ensures that subsequent fetches
         // resolve to the same precise commit.
         if let Some(precise) = fetch.git().precise() {

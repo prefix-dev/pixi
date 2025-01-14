@@ -78,12 +78,16 @@ impl ProgressState {
     }
 }
 
+/// A reporter implementation for source checkouts.
 pub struct SourceCheckoutReporter {
+    /// The multi-progress bar. Usually, this is the global multi-progress bar.
     multi_progress: MultiProgress,
+    /// The state of the progress bars for each source checkout.
     progress_state: Arc<Mutex<ProgressState>>,
 }
 
 impl SourceCheckoutReporter {
+    /// Creates a new source checkout reporter.
     pub fn new(multi_progress: MultiProgress) -> Self {
         Self {
             multi_progress,
@@ -104,11 +108,8 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
         let id = state.id();
 
         let pb = self.multi_progress.add(ProgressBar::hidden());
-
         pb.set_style(SourceCheckoutReporter::spinner_style());
-
         pb.set_prefix("fetching git dependencies");
-
         pb.set_message(format!("checking out {}@{}", url, rev));
         pb.enable_steady_tick(Duration::from_millis(100));
 
@@ -127,6 +128,7 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
 }
 
 impl SourceReporter for SourceCheckoutReporter {
+    /// Cast upwards
     fn as_git_reporter(self: Arc<Self>) -> Arc<dyn pixi_git::Reporter> {
         self
     }
