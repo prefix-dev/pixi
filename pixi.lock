@@ -531,7 +531,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mergedeep-1.3.4-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mike-2.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-1.5.3-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/mkdocs-exclude-1.0.2-pyhd8ed1ab_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-9.5.20-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_0.conda
@@ -645,7 +644,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mergedeep-1.3.4-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mike-2.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-1.5.3-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/mkdocs-exclude-1.0.2-pyhd8ed1ab_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-9.5.20-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_0.conda
@@ -754,7 +752,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mergedeep-1.3.4-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mike-2.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-1.5.3-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/mkdocs-exclude-1.0.2-pyhd8ed1ab_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-9.5.20-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_0.conda
@@ -866,7 +863,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mergedeep-1.3.4-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mike-2.0.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-1.5.3-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/mkdocs-exclude-1.0.2-pyhd8ed1ab_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-9.5.20-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-extensions-1.3.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/mkdocs-redirects-1.2.1-pyhd8ed1ab_0.conda
@@ -4548,16 +4544,6 @@ packages:
   license_family: BSD
   size: 2862150
   timestamp: 1695086687269
-- conda: https://prefix.dev/conda-forge/noarch/mkdocs-exclude-1.0.2-pyhd8ed1ab_0.tar.bz2
-  sha256: 6484f5a7cf4c54cee4b72d9c35342ff59f7ceae2a69fd688941a0f407a71c144
-  md5: 4a0af4399e9b3e4142f3dcabd35b7553
-  depends:
-  - mkdocs
-  - python >=3.6
-  license: Apache-2.0
-  license_family: APACHE
-  size: 12397
-  timestamp: 1645635160763
 - conda: https://prefix.dev/conda-forge/noarch/mkdocs-material-9.5.20-pyhd8ed1ab_0.conda
   sha256: 38f61b17fa334d20a60c5a37eefa836e05c4e4b0a3cff763591c941be90de348
   md5: 5f09758905bfaf7d5c748196f63aba35

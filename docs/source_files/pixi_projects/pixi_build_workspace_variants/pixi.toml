@@ -3,9 +3,11 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 preview = ["pixi-build"]
 
+# --8<-- [start:dependencies]
 [dependencies]
 python_bindings = { path = "packages/python_bindings" }
 rich_example = { path = "." }
+# --8<-- [end:dependencies]
 
 # --8<-- [start:environments]
 [feature.py311.dependencies]
@@ -15,7 +17,7 @@ python = "3.11.*"
 python = "3.12.*"
 
 [environments]
-default = ["py311"]
+py311 = ["py311"]
 py312 = ["py312"]
 # --8<-- [end:environments]
 
