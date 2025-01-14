@@ -1,5 +1,6 @@
 mod build_system;
 mod channel;
+mod deprecation;
 mod document;
 mod environment;
 mod feature;
@@ -14,10 +15,12 @@ mod s3_options;
 mod system_requirements;
 mod target;
 mod task;
+mod warning;
 mod workspace;
 
 pub use build_system::TomlPackageBuild;
 pub use channel::TomlPrioritizedChannel;
+pub use deprecation::Deprecation;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};
 pub use feature::TomlFeature;
@@ -26,6 +29,7 @@ pub use package::{ExternalPackageProperties, PackageError, TomlPackage};
 pub use platform::TomlPlatform;
 pub use target::TomlTarget;
 use toml_span::DeserError;
+pub use warning::Warning;
 pub use workspace::{ExternalWorkspaceProperties, TomlWorkspace};
 
 use crate::TomlError;

@@ -3,7 +3,6 @@
 context:
   version: "23.0.0"
 
-
 package:
   name: boltons-with-extra
   version: ${{ version }}

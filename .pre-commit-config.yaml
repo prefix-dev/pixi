@@ -80,6 +80,12 @@ repos:
         types: [file, toml]
         exclude: "schema/examples/invalid"
         stages: [pre-commit, manual]
+      - id: yaml-format
+        name: YAML format
+        entry: pixi run --environment=lint prettier-fmt
+        language: system
+        types: [file, yaml]
+        stages: [pre-commit, manual]
       - id: cargo-fmt
         name: Cargo format
         language: system

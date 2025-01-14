@@ -150,7 +150,7 @@ async fn test_invalid_backend() {
     drop(backend_rx);
     drop(backend_tx);
 
-    let (workspace, package) = TomlManifest::from_toml_str(toml)
+    let (workspace, package, _) = TomlManifest::from_toml_str(toml)
         .unwrap()
         .into_manifests(ExternalWorkspaceProperties::default())
         .unwrap();

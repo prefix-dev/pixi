@@ -245,7 +245,7 @@ impl PixiControl {
 
     /// Loads the project manifest and returns it.
     pub fn project(&self) -> miette::Result<Project> {
-        Project::load_or_else_discover(Some(&self.manifest_path()))
+        Project::load_or_else_discover(Some(&self.manifest_path())).into_diagnostic()
     }
 
     /// Get the path to the project

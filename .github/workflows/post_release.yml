@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Specific tag name'
+        description: "Specific tag name"
         required: true
         type: string
 jobs:

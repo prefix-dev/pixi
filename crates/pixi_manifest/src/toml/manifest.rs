@@ -15,8 +15,9 @@ use crate::{
     manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
-        environment::TomlEnvironmentList, ExternalPackageProperties, ExternalWorkspaceProperties,
-        TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
+        environment::TomlEnvironmentList, task::TomlTask, warning::WithWarnings,
+        ExternalPackageProperties, ExternalWorkspaceProperties, TomlFeature, TomlPackage,
+        TomlTarget, TomlWorkspace, Warning,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
@@ -51,6 +52,9 @@ pub struct TomlManifest {
 
     /// pypi-options
     pub pypi_options: Option<PypiOptions>,
+
+    /// Any warnings we encountered while parsing the manifest
+    pub warnings: Vec<Warning>,
 }
 
 impl TomlManifest {
@@ -124,28 +128,34 @@ impl TomlManifest {
     pub fn into_manifests(
         self,
         external: ExternalWorkspaceProperties,
-    ) -> Result<(WorkspaceManifest, Option<PackageManifest>), TomlError> {
+    ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         self.check_dependency_usage()?;
 
         let preview = &self.workspace.value.preview;
         let pixi_build_enabled = self.is_pixi_build_enabled();
 
-        let default_top_level_target = TomlTarget {
+        let WithWarnings {
+            value: default_workspace_target,
+            mut warnings,
+        } = TomlTarget {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
             pypi_dependencies: self.pypi_dependencies,
             activation: self.activation,
             tasks: self.tasks,
-        };
+            warnings: self.warnings,
+        }
+        .into_workspace_target(None, preview)?;
 
-        let default_workspace_target =
-            default_top_level_target.into_workspace_target(None, preview)?;
         let mut workspace_targets = IndexMap::new();
         for (selector, target) in self.target {
-            let workspace_target =
-                target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            let WithWarnings {
+                value: workspace_target,
+                warnings: mut target_warnings,
+            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
             workspace_targets.insert(selector, workspace_target);
+            warnings.append(&mut target_warnings);
         }
 
         // Construct a default feature
@@ -179,7 +189,11 @@ impl TomlManifest {
             .feature
             .into_iter()
             .map(|(name, feature)| {
-                let feature = feature.into_feature(name.clone(), preview)?;
+                let WithWarnings {
+                    value: feature,
+                    warnings: mut feature_warnings,
+                } = feature.into_feature(name.clone(), preview)?;
+                warnings.append(&mut feature_warnings);
                 Ok((name, feature))
             })
             .collect::<Result<IndexMap<FeatureName, Feature>, TomlError>>()?;
@@ -284,13 +298,14 @@ impl TomlManifest {
             solve_groups,
         };
 
-        Ok((workspace_manifest, package_manifest))
+        Ok((workspace_manifest, package_manifest, warnings))
     }
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlManifest {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
+        let mut warnings = Vec::new();
 
         let workspace_s = if th.contains("workspace") {
             th.required_s("workspace")?
@@ -311,9 +326,19 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             .map(TomlIndexMap::into_inner);
         let activation = th.optional("activation");
         let tasks = th
-            .optional::<TomlHashMap<_, _>>("tasks")
+            .optional::<TomlHashMap<_, TomlTask>>("tasks")
             .map(TomlHashMap::into_inner)
-            .unwrap_or_default();
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| {
+                let WithWarnings {
+                    value: task,
+                    warnings: mut task_warnings,
+                } = value;
+                warnings.append(&mut task_warnings);
+                (key, task)
+            })
+            .collect();
         let feature = th
             .optional::<TomlIndexMap<_, _>>("feature")
             .map(TomlIndexMap::into_inner)
@@ -361,6 +386,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             feature,
             environments,
             pypi_options,
+            warnings,
         })
     }
 }

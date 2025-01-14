@@ -7,26 +7,49 @@ use toml_span::{
 
 use crate::{
     task::{Alias, CmdArgs, Execute},
+    toml::{deprecation::Deprecation, warning::WithWarnings},
     Task, TaskName,
 };
 
-impl<'de> toml_span::Deserialize<'de> for Task {
+/// A task defined in the manifest.
+pub type TomlTask = WithWarnings<Task>;
+
+impl<'de> toml_span::Deserialize<'de> for TomlTask {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         let mut th = match value.take() {
-            ValueInner::String(str) => return Ok(Task::Plain(str.into_owned())),
+            ValueInner::String(str) => return Ok(Task::Plain(str.into_owned()).into()),
             ValueInner::Table(table) => TableHelper::from((table, value.span)),
             inner => return Err(expected("string or table", inner, value.span).into()),
         };
 
         let cmd = th.optional("cmd");
+        let mut warnings = Vec::new();
 
-        if let Some(cmd) = cmd {
+        let mut depends_on = |th: &mut TableHelper| {
+            let depends_on = th.optional::<TomlWith<_, OneOrMany<TomlFromStr<_>>>>("depends-on");
+            if let Some(depends_on) = depends_on {
+                return Some(depends_on.into_inner());
+            }
+
+            if let Some((key, mut value)) = th.table.remove_entry("depends_on") {
+                warnings
+                    .push(Deprecation::renamed_field("depends_on", "depends-on", key.span).into());
+                return match TomlWith::<_, OneOrMany<TomlFromStr<_>>>::deserialize(&mut value) {
+                    Ok(depends_on) => Some(depends_on.into_inner()),
+                    Err(err) => {
+                        th.errors.extend(err.errors);
+                        None
+                    }
+                };
+            }
+
+            None
+        };
+
+        let task = if let Some(cmd) = cmd {
             let inputs = th.optional("inputs");
             let outputs = th.optional("outputs");
-            let depends_on = th
-                .optional::<TomlWith<_, OneOrMany<TomlFromStr<_>>>>("depends-on")
-                .map(TomlWith::into_inner)
-                .unwrap_or_default();
+            let depends_on = depends_on(&mut th).unwrap_or_default();
             let cwd = th
                 .optional::<TomlFromStr<_>>("cwd")
                 .map(TomlFromStr::into_inner);
@@ -36,23 +59,9 @@ impl<'de> toml_span::Deserialize<'de> for Task {
             let description = th.optional("description");
             let clean_env = th.optional("clean-env").unwrap_or(false);
 
-            // Deprecated fields
-            let deprecated_depends_on = th.table.remove_entry("depends_on");
-
             th.finalize(None)?;
 
-            if let Some((depends_on, _)) = deprecated_depends_on {
-                return Err(DeserError::from(toml_span::Error {
-                    kind: toml_span::ErrorKind::Deprecated {
-                        old: "depends_on",
-                        new: "depends-on",
-                    },
-                    span: depends_on.span,
-                    line_info: None,
-                }));
-            }
-
-            Ok(Self::Execute(Execute {
+            Task::Execute(Execute {
                 cmd,
                 inputs,
                 outputs,
@@ -61,20 +70,19 @@ impl<'de> toml_span::Deserialize<'de> for Task {
                 env,
                 description,
                 clean_env,
-            }))
+            })
         } else {
-            let depends_on = th
-                .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("depends-on")
-                .map(TomlWith::into_inner)
-                .unwrap_or_default();
+            let depends_on = depends_on(&mut th).unwrap_or_default();
             let description = th.optional("description");
             th.finalize(None)?;
 
-            Ok(Self::Alias(Alias {
+            Task::Alias(Alias {
                 depends_on,
                 description,
-            }))
-        }
+            })
+        };
+
+        Ok(WithWarnings::from(task).with_warnings(warnings))
     }
 }
 
@@ -102,8 +110,6 @@ impl<'de> toml_span::Deserialize<'de> for TaskName {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-
     use super::*;
     use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
 
@@ -114,7 +120,8 @@ mod test {
         depends_on = ["a", "b"]
         "#;
 
-        let result = Task::from_toml_str(input).unwrap_err();
-        assert_snapshot!(format_parse_error(input, result));
+        let mut parsed = TomlTask::from_toml_str(input).unwrap();
+        assert_eq!(parsed.warnings.len(), 1);
+        insta::assert_snapshot!(format_parse_error(input, parsed.warnings.remove(0)));
     }
 }
