@@ -25,7 +25,7 @@ use pixi_build_types::{
 };
 use pixi_config::get_cache_dir;
 use pixi_consts::consts::CACHED_GIT_DIR;
-use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl};
+use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl, Reporter};
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_manifest::Targets;
@@ -37,7 +37,7 @@ use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_digest::Sha256;
-pub use reporters::{BuildMetadataReporter, BuildReporter};
+pub use reporters::{BuildMetadataReporter, BuildReporter, GitReporter};
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -101,6 +101,9 @@ pub enum BuildError {
 
     #[error(transparent)]
     BuildFolderNotWritable(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FetchError(Box<dyn Diagnostic + Send + Sync + 'static>),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -210,9 +213,10 @@ impl BuildContext {
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
+        git_reporter: Option<Arc<dyn Reporter>>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
-        let source = self.fetch_source(source_spec).await?;
+        let source = self.fetch_source(source_spec, git_reporter).await?;
         let records = self
             .extract_records(
                 &source,
@@ -395,11 +399,15 @@ impl BuildContext {
     pub async fn fetch_source(
         &self,
         source_spec: &SourceSpec,
+        git_reporter: Option<Arc<dyn Reporter>>,
     ) -> Result<SourceCheckout, BuildError> {
         match source_spec {
             SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
             SourceSpec::Git(git_spec) => {
-                let fetched = self.resolve_git(git_spec.clone()).await.unwrap();
+                let fetched = self
+                    .resolve_git(git_spec.clone(), git_reporter)
+                    .await
+                    .map_err(|err| BuildError::FetchError(err.into()))?;
                 //TODO: will be removed when manifest will be merged in pixi-build-backend
                 let path = if let Some(subdir) = git_spec.subdirectory.as_ref() {
                     fetched.clone().into_path().join(subdir)
@@ -493,7 +501,11 @@ impl BuildContext {
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    async fn resolve_git(&self, git: GitSpec) -> miette::Result<Fetch> {
+    async fn resolve_git(
+        &self,
+        git: GitSpec,
+        reporter: Option<Arc<dyn Reporter>>,
+    ) -> miette::Result<Fetch> {
         let git_reference = git
             .rev
             .map(|rev| rev.try_into().into_diagnostic())
@@ -503,12 +515,14 @@ impl BuildContext {
             .into_diagnostic()?
             .with_reference(git_reference);
 
+        // let data = GitReporter::new(global_multi_progress().add(ProgressBar::hidden()));
         let resolver = self
             .git
             .fetch(
                 &git_url,
                 self.tool_context.clone().client.clone(),
                 self.cache_dir.clone().join(CACHED_GIT_DIR),
+                reporter,
             )
             .await
             .into_diagnostic()?;
@@ -524,6 +538,7 @@ impl BuildContext {
         let git_reference = git.source.reference.try_into().into_diagnostic()?;
 
         let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
+        // let data = GitReporter::new(global_multi_progress().add(ProgressBar::no_length()));
 
         let resolver = self
             .git
@@ -531,6 +546,8 @@ impl BuildContext {
                 &git_url,
                 self.tool_context.clone().client.clone(),
                 self.cache_dir.clone().join(CACHED_GIT_DIR),
+                None,
+                // Some(Arc::new(data)),
             )
             .await
             .into_diagnostic()?;

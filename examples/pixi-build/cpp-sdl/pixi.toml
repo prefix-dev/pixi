@@ -1,11 +1,14 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+# platforms = ["osx-arm64"]
 preview = ["pixi-build"]
 
 [dependencies]
 # Define a dependency on ourselves. This will invoke the build backend to build
 # the C++ code and install the executable in an environment ready to be used.
+boost-check = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "boost-check" }
+bzip2 = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "build-recipe/recipes/bzip2" }
 sdl_example = { path = "." }
 
 [tasks.start]
