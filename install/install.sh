@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Version: v0.40.0
+# Version: v0.40.1
 
 __wrap__() {
 
