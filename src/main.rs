@@ -1,3 +1,8 @@
+// This forces the crate to be compiled even though the crate is not used in the project.
+// https://github.com/rust-lang/rust/issues/64402
+#[cfg(feature = "pixi_allocator")]
+extern crate pixi_allocator;
+
 pub fn main() -> miette::Result<()> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
