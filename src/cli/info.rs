@@ -452,7 +452,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|p| p.config().clone())
         .unwrap_or_else(pixi_config::Config::load_global);
 
-    let auth_file: PathBuf = if let Some(auth_file) = std::env::var("RATTLER_AUTH_FILE").ok() {
+    let auth_file: PathBuf = if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {
         auth_file.into()
     } else if let Some(auth_file) = config.authentication_override_file() {
         auth_file.to_owned()
