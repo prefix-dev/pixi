@@ -3,7 +3,8 @@
 In this tutorial, we will show you how to use variants in order to build a pixi package against different versions of a dependency.
 
 !!! warning
-    Variants are currently not stable and the format is likely to change in future releases. Please keep this in mind while using them in your projects.
+    `pixi-build` is a preview feature, and will change until it is stabilized.
+    Please keep that in mind when you use it for your projects.
 
 ## Why is this useful?
 

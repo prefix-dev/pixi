@@ -7,6 +7,10 @@ We'll start off by creating a project that use [nanobind](https://github.com/wja
 That we can also test using pixi.
 We'll later combine this example together with a Python package.
 
+!!! warning
+    `pixi-build` is a preview feature, and will change until it is stabilized.
+    Please keep that in mind when you use it for your projects.
+
 ## Creating a new project
 
 To get started, create a new project with pixi:
