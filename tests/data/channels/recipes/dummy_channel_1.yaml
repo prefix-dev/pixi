@@ -100,6 +100,6 @@ outputs:
             - echo "@echo off" > $PREFIX/bin/dummy-f.bat
             - echo "echo dummy-f on windows" >> $PREFIX/bin/dummy-f.bat
           else:
-            - echo "#!/usr/bin/env sh" > $PREFIX/bin/dummy-f
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-f
             - echo "echo dummy-f on unix" >> $PREFIX/bin/dummy-f
             - chmod +x $PREFIX/bin/dummy-f
