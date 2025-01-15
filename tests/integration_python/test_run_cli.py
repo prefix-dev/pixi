@@ -323,3 +323,25 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
         [pixi, "run", "--manifest-path", manifest, "echo $CONDA_PREFIX"],
         stdout_contains=f"{detached_envs_tmp}",
     )
+
+
+def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(EMPTY_BOILERPLATE_PROJECT)
+
+    help_long = verify_cli_command(
+        [pixi, "run", "--help"],
+        stdout_contains="pixi run [OPTIONS]",
+    ).stdout
+
+    help_short = verify_cli_command(
+        [pixi, "run", "-h"],
+        stdout_contains="pixi run [OPTIONS]",
+    ).stdout
+
+    assert len(help_long) > len(help_short)
+
+    verify_cli_command(
+        [pixi, "run", "python", "--help"],
+        stdout_contains="python [option]",
+    )
