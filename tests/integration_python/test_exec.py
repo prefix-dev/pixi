@@ -1,10 +1,10 @@
 from pathlib import Path
 from .common import verify_cli_command
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
-def test_run_in_shell_environment(pixi: Path, dummy_channel_1: str) -> None:
-    with ThreadPoolExecutor(max_workers=2) as executor:
+def test_concurrent_exec(pixi: Path, dummy_channel_1: str) -> None:
+    with ProcessPoolExecutor(max_workers=2) as executor:
         # Run the two exact same tasks in parallel
         futures = [
             executor.submit(
