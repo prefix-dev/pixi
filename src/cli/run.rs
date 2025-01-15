@@ -26,8 +26,7 @@ use tracing::Level;
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
-#[clap(trailing_var_arg = true)]
-#[clap(disable_help_flag = true)]
+#[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
     /// The pixi task or a task shell command you want to run in the project's
     /// environment, which can be an executable in the environment's PATH.
