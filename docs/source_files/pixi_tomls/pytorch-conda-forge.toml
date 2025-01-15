@@ -11,5 +11,5 @@ cuda = "12.0"
 [dependencies]
 pytorch-gpu = "*"
 # --8<-- [end:minimal]
-cuda-version = "12.6"
+cuda-version = "12.6.*"
 # --8<-- [end:cuda-version]
