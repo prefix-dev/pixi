@@ -8,17 +8,17 @@ In this tutorial, we will show you how to use variants in order to build a pixi 
 
 ## Why is this useful?
 
-When we depend on a pixi package, all the dependencies match specs of that pixi package are already set.
-For example, the [`pixi_build_cpp` example](cpp.md) was depending on Python 3.12.
-Therefore, we cannot depend on `pixi_build_cpp` and use a different Python version.
-By using variants, we can add a set of allowed matchspecs for a specific dependency.
+When we depend on a pixi package, the dependency versions of the package itself are already set.
+For example, in the [C++ tutorial](cpp.md) the `python_bindings` package we built depended on Python 3.12.
+Pixi would report a version conflict, if we'd add use both Python 3.11 and `python_bindings` to our workspace.
+By using variants, we can add a set of allowed versions for a specific dependency.
 Pixi will then resolve the package with all the different variants.
 
 ## Let's get started
 
-In this tutorial we will extend the [workspace example](workspace.md) so we can test it against multiple Python versions.
+In this tutorial we will continue with the result of the [workspace tutorial](workspace.md) so we can test it against multiple Python versions.
 As a reminder, we ended up with a top-level `pixi.toml` containing the workspace and the Python package `rich_example`.
-Our workspace then depended on `rich_example` as well as a C++ package with exposed Python bindings called `python_binding`.
+Our workspace then depended on `rich_example` and `python_bindings`.
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_projects/pixi_build_workspace_variants/pixi.toml:dependencies"
@@ -42,8 +42,7 @@ The file tree looks like this:
         └── __init__.py
 ```
 
-The problem is that our Python version is bound to 3.12 as this is what we specified in the `host-dependencies` of `python_bindings`.
-In order to allow multiple Python versions we first have to change the version requirement to `*`.
+In order to allow multiple Python versions we first have to change the Python version requirement of `python_bindings` from `3.12.*` to `*`.
 
 ```toml title="packages/python_bindings/pixi.toml" hl_lines="4"
 --8<-- "docs/source_files/pixi_projects/pixi_build_workspace_variants/packages/python_bindings/pixi.toml:host-dependencies"
@@ -59,7 +58,7 @@ We do that in `workspace.build-variants`:
 ```
 
 If we'd run `pixi install` now, we'd leave it up to pixi whether to use Python 3.11 or 3.12.
-In practice, you will want to create multiple environments specifying a different dependency match spec.
+In practice, you'll want to create multiple environments specifying a different dependency version.
 In our case this allows us to test our setup against both Python 3.11 and 3.12.
 
 
@@ -68,9 +67,10 @@ In our case this allows us to test our setup against both Python 3.11 and 3.12.
 ```
 
 By running `pixi list` we can see the Python version used in each environment.
-You can also see that the `Build` value of `python_bindings` differ between `py311` and `py312`.
+You can also see that the `Build` string of `python_bindings` differ between `py311` and `py312`.
 That means that a different package has been built for each variant.
-Since `rich_example` only contains Python source code, the package itself doesn't depend on the Python version, it is `noarch`.
+Since `rich_example` only contains Python source code, a single build can be used for multiple Python versions.
+The package is `noarch`.
 Therefore, the build string is the same.
 
 
