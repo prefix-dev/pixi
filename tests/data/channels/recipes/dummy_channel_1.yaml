@@ -87,3 +87,17 @@ outputs:
           else:
             - echo "dummy_e on unix" > $PREFIX/bin/dummy_e
             - chmod +x $PREFIX/bin/dummy_e
+
+  - package:
+      name: dummy-f
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "echo dummy-f on windows" > $PREFIX/bin/dummy-f.bat
+          else:
+            - echo "echo dummy-f on unix" > $PREFIX/bin/dummy-f
+            - chmod +x $PREFIX/bin/dummy-f
