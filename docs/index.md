@@ -145,7 +145,7 @@ cargo test
 ```
 
 If you have any issues building because of the dependency on `rattler` checkout
-its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try).
+its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
 ### Installer script options
 

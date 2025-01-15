@@ -1,6 +1,6 @@
 All logic regarding the decision which dependencies can be installed from which channel is done by the instruction we give the solver.
 
-The actual code regarding this is in the [`rattler_solve`](https://github.com/mamba-org/rattler/blob/02e68c9539c6009cc1370fbf46dc69ca5361d12d/crates/rattler_solve/src/resolvo/mod.rs) crate.
+The actual code regarding this is in the [`rattler_solve`](https://github.com/conda/rattler/blob/02e68c9539c6009cc1370fbf46dc69ca5361d12d/crates/rattler_solve/src/resolvo/mod.rs) crate.
 This might however be hard to read.
 Therefore, this document will continue with simplified flow charts.
 
