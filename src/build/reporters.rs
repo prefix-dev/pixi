@@ -80,6 +80,8 @@ impl ProgressState {
 
 /// A reporter implementation for source checkouts.
 pub struct SourceCheckoutReporter {
+    /// The original progress bar.
+    original_progress: ProgressBar,
     /// The multi-progress bar. Usually, this is the global multi-progress bar.
     multi_progress: MultiProgress,
     /// The state of the progress bars for each source checkout.
@@ -88,8 +90,9 @@ pub struct SourceCheckoutReporter {
 
 impl SourceCheckoutReporter {
     /// Creates a new source checkout reporter.
-    pub fn new(multi_progress: MultiProgress) -> Self {
+    pub fn new(original_progress: ProgressBar, multi_progress: MultiProgress) -> Self {
         Self {
+            original_progress,
             multi_progress,
             progress_state: Default::default(),
         }
@@ -97,7 +100,7 @@ impl SourceCheckoutReporter {
 
     /// Similar to the default pixi_progress::default_progress_style, but with a spinner in front.
     pub fn spinner_style() -> indicatif::ProgressStyle {
-        indicatif::ProgressStyle::with_template("{spinner:.green} {prefix} {wide_msg:.dim}")
+        indicatif::ProgressStyle::with_template("  {spinner:.green} {prefix:30!} {wide_msg:.dim}")
             .unwrap()
     }
 }
@@ -107,8 +110,11 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
         let mut state = self.progress_state.lock();
         let id = state.id();
 
-        let pb = self.multi_progress.add(ProgressBar::hidden());
+        let pb = self
+            .multi_progress
+            .insert_before(&self.original_progress, ProgressBar::hidden());
         pb.set_style(SourceCheckoutReporter::spinner_style());
+        // pb.set_style(pixi_progress::default_progress_style());
         pb.set_prefix("fetching git dependencies");
         pb.set_message(format!("checking out {}@{}", url, rev));
         pb.enable_steady_tick(Duration::from_millis(100));

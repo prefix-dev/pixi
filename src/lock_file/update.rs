@@ -1712,6 +1712,10 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.project().channel_config();
 
+    // A root progress bar for the task. It is used to attach sub-progress bars to,
+    // that doesn't need to be split up between multiple platforms.
+    let root_pb = global_multi_progress().add(ProgressBar::hidden());
+
     tokio::spawn(
         async move {
             // Acquire a permit before we are allowed to solve the environment.
@@ -1765,7 +1769,10 @@ async fn spawn_solve_conda_environment_task(
                     ))
                 });
                 let source_reporter = source_progress.get_or_insert_with(|| {
-                    Arc::new(SourceCheckoutReporter::new(global_multi_progress()))
+                    Arc::new(SourceCheckoutReporter::new(
+                        root_pb.clone(),
+                        global_multi_progress(),
+                    ))
                 });
 
                 source_futures.push(
