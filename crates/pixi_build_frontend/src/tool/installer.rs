@@ -3,8 +3,8 @@ use std::future::Future;
 use std::path::PathBuf;
 
 use pixi_consts::consts::CACHED_BUILD_TOOL_ENVS_DIR;
-use pixi_progress::wrap_in_progress;
-use pixi_utils::{EnvironmentHash, PrefixGuard};
+use pixi_progress::await_in_progress;
+use pixi_utils::{AsyncPrefixGuard, EnvironmentHash};
 use rattler::{install::Installer, package_cache::PackageCache};
 use rattler_conda_types::{Channel, ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::Gateway;
@@ -261,16 +261,18 @@ impl ToolInstaller for ToolContext {
             .join(CACHED_BUILD_TOOL_ENVS_DIR)
             .join(cache.name());
 
-        let mut prefix_guard = PrefixGuard::new(&cached_dir).into_diagnostic()?;
+        let prefix_guard = AsyncPrefixGuard::new(&cached_dir).await.into_diagnostic()?;
 
         let mut write_guard =
-            wrap_in_progress("acquiring write lock on prefix", || prefix_guard.write())
+            await_in_progress("acquiring write lock on prefix", |_| prefix_guard.write())
+                .await
                 .into_diagnostic()?;
 
         // If the environment already exists, we can return early.
         if write_guard.is_ready() {
             tracing::info!("reusing existing environment in {}", cached_dir.display());
-            write_guard.finish().into_diagnostic()?;
+
+            write_guard.finish().await.into_diagnostic()?;
 
             // Get the activation scripts
             let activator =
@@ -289,7 +291,7 @@ impl ToolInstaller for ToolContext {
         }
 
         // Update the prefix to indicate that we are installing it.
-        write_guard.begin().into_diagnostic()?;
+        write_guard.begin().await.into_diagnostic()?;
 
         // Install the environment
         Installer::new()
@@ -311,7 +313,7 @@ impl ToolInstaller for ToolContext {
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
             .unwrap();
 
-        write_guard.finish().into_diagnostic()?;
+        write_guard.finish().await.into_diagnostic()?;
 
         Ok(IsolatedTool::new(
             spec.command.clone(),

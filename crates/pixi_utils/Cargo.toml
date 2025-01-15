@@ -24,7 +24,7 @@ rustls-tls = [
 
 
 [dependencies]
-fd-lock = { workspace = true }
+async-fd-lock = { workspace = true }
 fs-err = { workspace = true }
 indicatif = { workspace = true }
 itertools = { workspace = true }
@@ -42,6 +42,7 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
