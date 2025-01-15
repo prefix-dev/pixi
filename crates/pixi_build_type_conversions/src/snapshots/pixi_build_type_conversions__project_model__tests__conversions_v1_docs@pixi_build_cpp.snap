@@ -56,20 +56,7 @@ expression: project_model
         }
       },
       "buildDependencies": {},
-      "runDependencies": {
-        "python": {
-          "detailedVersion": {
-            "version": ">=3.12,<3.13",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
-          }
-        }
-      }
+      "runDependencies": {}
     },
     "targets": {}
   }
