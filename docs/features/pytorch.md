@@ -31,10 +31,6 @@ You can install PyTorch using the `conda-forge` channel.
 These are the conda-forge community maintained builds of PyTorch.
 You can make direct use of the Nvidia provided packages to make sure the packages can work together.
 
-!!! note "Windows"
-    Currently not well-supported for Windows, but there is lots of work being done to get this working.
-    Follow the work on the [feedstock](https://github.com/conda-forge/pytorch-cpu-feedstock)
-
 === "`pixi.toml`"
     ```toml title="Bare minimum conda-forge pytorch with cuda installation"
     --8<-- "docs/source_files/pixi_tomls/pytorch-conda-forge.toml:minimal"

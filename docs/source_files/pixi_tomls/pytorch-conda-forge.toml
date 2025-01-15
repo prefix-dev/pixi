@@ -2,7 +2,7 @@
 [project]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pytorch-conda-forge"
-platforms = ["linux-64"]
+platforms = ["linux-64", "win-64"]
 
 [system-requirements]
 cuda = "12.0"
