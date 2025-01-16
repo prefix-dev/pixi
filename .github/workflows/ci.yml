@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
   pull_request:
+    types:
+      - labeled
+      - synchronize
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}

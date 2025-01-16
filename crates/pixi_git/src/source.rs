@@ -5,6 +5,7 @@ use std::{
     borrow::Cow,
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use reqwest_middleware::ClientWithMiddleware;
@@ -15,7 +16,7 @@ use crate::{
     git::GitRemote,
     sha::{GitOid, GitSha},
     url::RepositoryUrl,
-    GitUrl,
+    GitUrl, Reporter,
 };
 
 /// A remote Git source that can be checked out locally.
@@ -26,6 +27,8 @@ pub struct GitSource {
     client: ClientWithMiddleware,
     /// The path to the Git source database.
     cache: PathBuf,
+    /// The reporter to use for this source.
+    reporter: Option<Arc<dyn Reporter>>,
 }
 
 impl GitSource {
@@ -39,6 +42,16 @@ impl GitSource {
             git,
             client: client.into(),
             cache: cache.into(),
+            reporter: None,
+        }
+    }
+
+    /// Set the [`Reporter`] to use for the [`GitSource`].
+    #[must_use]
+    pub fn with_reporter(self, reporter: Arc<dyn Reporter>) -> Self {
+        Self {
+            reporter: Some(reporter),
+            ..self
         }
     }
 
@@ -60,12 +73,12 @@ impl GitSource {
         };
 
         let remote = GitRemote::new(&remote);
-        let (db, actual_rev) = match (self.git.precise, remote.db_at(&db_path).ok()) {
+        let (db, actual_rev, task) = match (self.git.precise, remote.db_at(&db_path).ok()) {
             // If we have a locked revision, and we have a preexisting database
             // which has that revision, then no update needs to happen.
             (Some(rev), Some(db)) if db.contains(rev.into()) => {
                 debug!("Using existing Git source `{}`", self.git.repository);
-                (db, rev)
+                (db, rev, None)
             }
 
             // ... otherwise we use this state to update the git database. Note
@@ -75,6 +88,11 @@ impl GitSource {
             (locked_rev, db) => {
                 debug!("Updating Git source `{}`", self.git.repository);
 
+                // Report the checkout operation to the reporter.
+                let task = self.reporter.as_ref().map(|reporter| {
+                    reporter.on_checkout_start(remote.url(), self.git.reference.as_rev())
+                });
+
                 let (db, actual_rev) = remote.checkout(
                     &db_path,
                     db,
@@ -83,7 +101,7 @@ impl GitSource {
                     &self.client,
                 )?;
 
-                (db, GitSha::from(actual_rev))
+                (db, GitSha::from(actual_rev), task)
             }
         };
 
@@ -102,6 +120,15 @@ impl GitSource {
 
         debug!(" I will copy from {:?} to {:?}", actual_rev, checkout_path);
         db.copy_to(actual_rev.into(), &checkout_path)?;
+
+        // Report the checkout operation to the reporter.
+        if let Some(task) = task {
+            if let Some(reporter) = self.reporter.as_ref() {
+                reporter.on_checkout_complete(remote.url(), short_id.as_str(), task);
+            }
+        }
+
+        debug!("Finished fetching Git source `{}`", self.git.repository);
 
         Ok(Fetch {
             git: self.git.with_precise(actual_rev),
