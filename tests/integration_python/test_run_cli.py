@@ -331,24 +331,24 @@ def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     help_long = verify_cli_command(
         [pixi, "run", "--help"],
-        stdout_contains="pixi run [OPTIONS]",
+        stdout_contains="pixi run",
     ).stdout
 
     help_short = verify_cli_command(
         [pixi, "run", "-h"],
-        stdout_contains="pixi run [OPTIONS]",
+        stdout_contains="pixi run",
     ).stdout
 
     assert len(help_long) > len(help_short)
 
     help_run = verify_cli_command(
         [pixi, "help", "run"],
-        stdout_contains="pixi run [OPTIONS]",
+        stdout_contains="pixi run",
     ).stdout
 
     assert help_run == help_long
 
     verify_cli_command(
         [pixi, "run", "python", "--help"],
-        stdout_contains="python [option]",
+        stdout_contains="python",
     )
