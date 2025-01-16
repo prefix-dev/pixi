@@ -81,7 +81,7 @@ impl GitResolver {
         write_guard.begin().await?;
 
         // Fetch the Git repository.
-        let source =GitSource::new(url.as_ref().clone(), client, cache);
+        let source = GitSource::new(url.as_ref().clone(), client, cache);
         let source = if let Some(reporter) = reporter {
             source.with_reporter(reporter)
         } else {
