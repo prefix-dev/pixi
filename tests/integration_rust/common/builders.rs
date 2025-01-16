@@ -495,7 +495,7 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     }
 }
 
-/// Contains the arguments to pass to [`update::exeecute()`]. Call `.await` to
+/// Contains the arguments to pass to [`update::execute()`]. Call `.await` to
 /// call the CLI execute method and await the result at the same time.
 pub struct UpdateBuilder {
     pub args: update::Args,
