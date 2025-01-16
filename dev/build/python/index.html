@@ -1249,6 +1249,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../variants/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Variants
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1834,6 +1855,11 @@
 
 <h1 id="tutorial-building-a-python-package">Tutorial: Building a Python package<a class="headerlink" href="#tutorial-building-a-python-package" title="Permanent link">#</a></h1>
 <p>In this tutorial, we will show you how to create a simple Python package with pixi.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><code>pixi-build</code> is a preview feature, and will change until it is stabilized.
+Please keep that in mind when you use it for your projects.</p>
+</div>
 <h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
 <p>Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
 Unlike PyPI, the conda ecosystem is cross-language and also offers packages written in Rust, R, C, C++ and many other languages.</p>
@@ -1953,7 +1979,7 @@ If you want everything integrated in <code>pyproject.toml</code> just copy the c
 </span><span id="__span-5-24"><a id="__codelineno-5-24" name="__codelineno-5-24" href="#__codelineno-5-24"></a><span class="n">hatchling</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==1.26.3&quot;</span>
 </span><span id="__span-5-25"><a id="__codelineno-5-25" name="__codelineno-5-25" href="#__codelineno-5-25"></a>
 </span><span id="__span-5-26"><a id="__codelineno-5-26" name="__codelineno-5-26" href="#__codelineno-5-26"></a><span class="k">[package.run-dependencies]</span><span class="w"> </span><span class="c1"># (7)!</span>
-</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
+</span><span id="__span-5-27"><a id="__codelineno-5-27" name="__codelineno-5-27" href="#__codelineno-5-27"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;13.9.*&quot;</span>
 </span></code></pre></div>
 <ol>
 <li>In <code>workspace</code> information is set that is shared across all packages in the workspace.</li>
