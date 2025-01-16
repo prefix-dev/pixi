@@ -271,6 +271,7 @@ impl ToolInstaller for ToolContext {
         // If the environment already exists, we can return early.
         if write_guard.is_ready() {
             tracing::info!("reusing existing environment in {}", cached_dir.display());
+
             write_guard.finish().await.into_diagnostic()?;
 
             // Get the activation scripts

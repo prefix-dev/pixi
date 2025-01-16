@@ -45,6 +45,7 @@ def test_doc_pixi_projects(
 
 
 @pytest.mark.extra_slow
+@pytest.mark.timeout(200)
 @pytest.mark.parametrize(
     "manifest",
     [
