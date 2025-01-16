@@ -136,22 +136,26 @@ pub struct TargetsV1 {
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
-    pub host_dependencies: IndexMap<SourcePackageName, PixiSpecV1>,
+    pub host_dependencies: IndexMap<SourcePackageName, PackageSpecV1>,
 
     /// Build dependencies of the project
-    pub build_dependencies: IndexMap<SourcePackageName, PixiSpecV1>,
+    pub build_dependencies: IndexMap<SourcePackageName, PackageSpecV1>,
 
     /// Run dependencies of the project
-    pub run_dependencies: IndexMap<SourcePackageName, PixiSpecV1>,
+    pub run_dependencies: IndexMap<SourcePackageName, PackageSpecV1>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum PixiSpecV1 {
-    /// The spec is represented by a detailed version spec. The package should
-    /// be retrieved from a channel.
-    DetailedVersion(DependencySpecV1),
+pub enum PackageSpecV1 {
+    /// This is a binary dependency
+    Binary(BinaryPackageSpecV1),
+    /// This is a dependency on a source package
+    Source(SourcePackageSpecV1),
+}
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SourcePackageSpecV1 {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
     /// either represent a source or binary package depending on the archive
@@ -239,7 +243,7 @@ pub enum GitReferenceV1 {
 #[serde_as]
 #[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct DependencySpecV1 {
+pub struct BinaryPackageSpecV1 {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub version: Option<VersionSpec>,
@@ -251,7 +255,7 @@ pub struct DependencySpecV1 {
     /// Match the specific filename of the package
     pub file_name: Option<String>,
     /// The channel of the package
-    pub channel: Option<String>,
+    pub channel: Option<Url>,
     /// The subdir of the channel
     pub subdir: Option<String>,
     /// The md5 hash of the package
@@ -260,7 +264,7 @@ pub struct DependencySpecV1 {
     pub sha256: Option<SerializableHash<Sha256>>,
 }
 
-impl From<VersionSpec> for DependencySpecV1 {
+impl From<VersionSpec> for BinaryPackageSpecV1 {
     fn from(value: VersionSpec) -> Self {
         Self {
             version: Some(value),
@@ -269,7 +273,7 @@ impl From<VersionSpec> for DependencySpecV1 {
     }
 }
 
-impl From<&VersionSpec> for DependencySpecV1 {
+impl From<&VersionSpec> for BinaryPackageSpecV1 {
     fn from(value: &VersionSpec) -> Self {
         Self {
             version: Some(value.clone()),
@@ -278,7 +282,7 @@ impl From<&VersionSpec> for DependencySpecV1 {
     }
 }
 
-impl std::fmt::Debug for DependencySpecV1 {
+impl std::fmt::Debug for BinaryPackageSpecV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("NamelessMatchSpecV1");
 
