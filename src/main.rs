@@ -45,13 +45,11 @@ pub fn main() -> miette::Result<()> {
         result
     };
 
-    let result = std::thread::Builder::new()
+    std::thread::Builder::new()
         .name("main2".to_string())
         .stack_size(main_stack_size)
         .spawn(main2)
         .expect("Tokio executor failed, was there a panic?")
         .join()
-        .expect("Tokio executor failed, was there a panic?");
-
-    result
+        .expect("Tokio executor failed, was there a panic?")
 }
