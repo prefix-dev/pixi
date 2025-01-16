@@ -92,7 +92,12 @@ The script will also update your ~/.zshrc to include ~/.pixi/bin in your PATH, a
 To install Pixi on Windows, open a PowerShell terminal (you may need to run it as an administrator) and run the following command:
 
 ```powershell
-iwr -useb https://pixi.sh/install.ps1 | iex
+powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+```
+Changing the [execution policy](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4#powershell-execution-policies) allows running a script from the internet.
+Check the script you would be running with:
+```powershell
+powershell -c "irm -useb https://pixi.sh/install.ps1 | more"
 ```
 
 The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
