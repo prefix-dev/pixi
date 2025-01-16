@@ -81,10 +81,11 @@ impl GitResolver {
         write_guard.begin().await?;
 
         // Fetch the Git repository.
+        let source =GitSource::new(url.as_ref().clone(), client, cache);
         let source = if let Some(reporter) = reporter {
-            GitSource::new(url.as_ref().clone(), client, cache).with_reporter(reporter)
+            source.with_reporter(reporter)
         } else {
-            GitSource::new(url.as_ref().clone(), client, cache)
+            source
         };
 
         let fetch = tokio::task::spawn_blocking(move || source.fetch())
