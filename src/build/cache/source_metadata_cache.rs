@@ -1,9 +1,3 @@
-use std::{
-    hash::{DefaultHasher, Hash, Hasher},
-    io::SeekFrom,
-    path::PathBuf,
-};
-
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use pixi_build_types::CondaPackageMetadata;
@@ -11,6 +5,12 @@ use pixi_record::InputHash;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use serde::Deserialize;
 use serde_with::serde_derive::Serialize;
+use std::collections::BTreeMap;
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    io::SeekFrom,
+    path::PathBuf,
+};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use url::Url;
@@ -52,6 +52,9 @@ pub struct SourceMetadataInput {
     /// The platform on which the package will run
     pub host_platform: Platform,
     pub host_virtual_packages: Vec<GenericVirtualPackage>,
+
+    /// The variants of the build
+    pub build_variants: BTreeMap<String, Vec<String>>,
 }
 
 impl SourceMetadataInput {
@@ -62,6 +65,7 @@ impl SourceMetadataInput {
         self.build_platform.hash(&mut hasher);
         self.build_virtual_packages.hash(&mut hasher);
         self.host_virtual_packages.hash(&mut hasher);
+        self.build_variants.hash(&mut hasher);
         format!(
             "{}-{}",
             self.host_platform,
