@@ -4,7 +4,7 @@ expression: project_model
 ---
 {
   "version": "1",
-  "name": "python_bindings",
+  "name": "rich_example",
   "version": "0.1.0",
   "description": null,
   "authors": null,
@@ -18,33 +18,9 @@ expression: project_model
   "targets": {
     "defaultTarget": {
       "hostDependencies": {
-        "cmake": {
+        "hatchling": {
           "detailedVersion": {
-            "version": "3.20.*",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
-          }
-        },
-        "nanobind": {
-          "detailedVersion": {
-            "version": "2.4.*",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
-          }
-        },
-        "python": {
-          "detailedVersion": {
-            "version": "3.12.*",
+            "version": "==1.26.3",
             "build": null,
             "buildNumber": null,
             "fileName": null,
@@ -56,7 +32,20 @@ expression: project_model
         }
       },
       "buildDependencies": {},
-      "runDependencies": {}
+      "runDependencies": {
+        "rich": {
+          "detailedVersion": {
+            "version": ">=13.9.4,<14",
+            "build": null,
+            "buildNumber": null,
+            "fileName": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        }
+      }
     },
     "targets": {}
   }

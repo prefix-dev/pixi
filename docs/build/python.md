@@ -2,6 +2,10 @@
 
 In this tutorial, we will show you how to create a simple Python package with pixi.
 
+!!! warning
+    `pixi-build` is a preview feature, and will change until it is stabilized.
+    Please keep that in mind when you use it for your projects.
+
 ## Why is this useful?
 
 Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.

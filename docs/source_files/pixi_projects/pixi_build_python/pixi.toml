@@ -24,4 +24,4 @@ channels = [
 hatchling = "==1.26.3"
 
 [package.run-dependencies] # (7)!
-rich = ">=13.9.4,<14"
+rich = "13.9.*"
