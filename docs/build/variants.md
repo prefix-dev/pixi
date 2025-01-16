@@ -1,6 +1,7 @@
 # Tutorial: Adding variants
 
 In this tutorial, we will show you how to use variants in order to build a pixi package against different versions of a dependency.
+Some might call this functionality, build matrix, build configurations or parameterized builds, in the conda ecosystem this is refered to as a variant.
 
 !!! warning
     `pixi-build` is a preview feature, and will change until it is stabilized.
