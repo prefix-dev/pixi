@@ -223,6 +223,7 @@ async fn install_locked_with_config() {
         .add("which_python".into(), None, FeatureName::Default)
         .with_commands([which_command])
         .execute()
+        .await
         .unwrap();
 
     let result = pixi

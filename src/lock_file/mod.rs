@@ -6,6 +6,7 @@ mod resolve;
 mod satisfiability;
 mod update;
 mod utils;
+pub mod virtual_packages;
 
 use crate::Project;
 use miette::{IntoDiagnostic, WrapErr};

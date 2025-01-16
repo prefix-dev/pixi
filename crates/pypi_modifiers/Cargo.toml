@@ -14,6 +14,9 @@ miette = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
+thiserror = { workspace = true }
+uv-distribution-filename = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-platform-tags = { workspace = true }

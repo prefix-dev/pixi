@@ -53,6 +53,7 @@ use crate::{
         self,
         records_by_name::HasNameVersion,
         reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
+        virtual_packages::validate_system_meets_environment_requirements,
         PypiRecord,
     },
     prefix::Prefix,
@@ -246,6 +247,15 @@ impl<'p> LockFileDerivedData<'p> {
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
         }
+
+        // Validate the virtual packages for the environment match the system
+        validate_system_meets_environment_requirements(
+            &self.lock_file,
+            environment.best_platform(),
+            environment.name(),
+            None,
+        )
+        .into_diagnostic()?;
 
         tracing::info!("Updating prefix");
         // Get the prefix with the conda packages installed.

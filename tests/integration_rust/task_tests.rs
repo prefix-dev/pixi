@@ -17,6 +17,7 @@ pub async fn add_remove_task() {
         .add("test".into(), None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
+        .await
         .unwrap();
 
     let project = pixi.project().unwrap();
@@ -50,12 +51,14 @@ pub async fn add_command_types() {
         .add("test".into(), None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
+        .await
         .unwrap();
     pixi.tasks()
         .add("test2".into(), None, FeatureName::Default)
         .with_commands(["echo hello", "echo bonjour"])
         .with_depends_on(vec!["test".into()])
         .execute()
+        .await
         .unwrap();
 
     let project = pixi.project().unwrap();
@@ -76,6 +79,7 @@ pub async fn add_command_types() {
         .alias("testing".into(), None)
         .with_depends_on(vec!["test".into(), "test3".into()])
         .execute()
+        .await
         .unwrap();
     let project = pixi.project().unwrap();
     let tasks = project.default_environment().tasks(None).unwrap();
@@ -92,18 +96,21 @@ async fn test_alias() {
         .add("hello".into(), None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
+        .await
         .unwrap();
 
     pixi.tasks()
         .add("world".into(), None, FeatureName::Default)
         .with_commands(["echo world"])
         .execute()
+        .await
         .unwrap();
 
     pixi.tasks()
         .add("helloworld".into(), None, FeatureName::Default)
         .with_depends_on(vec!["hello".into(), "world".into()])
         .execute()
+        .await
         .unwrap();
 
     let result = pixi
@@ -133,6 +140,7 @@ pub async fn add_remove_target_specific_task() {
         .add("test".into(), Some(Platform::Win64), FeatureName::Default)
         .with_commands(["echo only_on_windows"])
         .execute()
+        .await
         .unwrap();
 
     let project = pixi.project().unwrap();
@@ -149,6 +157,7 @@ pub async fn add_remove_target_specific_task() {
         .add("test".into(), None, FeatureName::Default)
         .with_commands(["echo hello"])
         .execute()
+        .await
         .unwrap();
 
     // Remove the task
@@ -180,6 +189,7 @@ async fn test_cwd() {
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("test"))
         .execute()
+        .await
         .unwrap();
 
     let result = pixi
@@ -202,6 +212,7 @@ async fn test_cwd() {
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("tests"))
         .execute()
+        .await
         .unwrap();
 
     assert!(pixi
@@ -229,6 +240,7 @@ async fn test_task_with_env() {
             String::from("world with spaces"),
         )])
         .execute()
+        .await
         .unwrap();
 
     let result = pixi
@@ -256,6 +268,7 @@ async fn test_clean_env() {
         .add("env-test".into(), None, FeatureName::Default)
         .with_commands(["echo Hello is: $HELLO"])
         .execute()
+        .await
         .unwrap();
 
     let run = pixi.run(Args {

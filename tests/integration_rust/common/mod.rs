@@ -620,6 +620,7 @@ impl TasksControl<'_> {
                 feature: feature_name,
             }),
         })
+        .await
     }
 
     /// Alias one or multiple tasks
