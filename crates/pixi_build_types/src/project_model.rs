@@ -3,18 +3,18 @@
 //! We need to vendor a lot of the types, and simplify them in some cases, so that
 //! we have a stable protocol that can be used to communicate in the build tasks.
 //!
-//! The Rationale is that we want to have a stable protocol to provide forwards and backwards compatibility.
-//! The idea is that for **backwards compatibility** is that we try to not to break this in pixi as much as possible.
-//! So as long as older pixi tomls keep loading we can send it to the backend.
+//! The rationale is that we want to have a stable protocol to provide forwards and backwards compatibility.
+//! The idea for **backwards compatibility** is that we try not to break this in pixi as much as possible.
+//! So as long as older pixi TOMLs keep loading, we can send them to the backend.
 //!
-//! In regards to forwards compatibility, we want to be able to keep converting to all version os the `VersionedProjectModel`.
+//! In regards to forwards compatibility, we want to be able to keep converting to all versions of the `VersionedProjectModel`
 //! as much as possible.
 //!
-//! This is why we append a `V{version}`, to the type names, to indicate the version
+//! This is why we append a `V{version}` to the type names, to indicate the version
 //! of the protocol.
 //!
-//! Only the Whole ProjectModel is versioned explicitly in a enum.
-//! When making a change to one of the types be sure to add another enum declaration, if it is breaking.
+//! Only the whole ProjectModel is versioned explicitly in an enum.
+//! When making a change to one of the types, be sure to add another enum declaration if it is breaking.
 use std::collections::HashMap;
 use std::path::PathBuf;
 
