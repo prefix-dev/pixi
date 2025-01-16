@@ -1,13 +1,31 @@
-# --8<-- [start:workspace]
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 preview = ["pixi-build"]
 
+# --8<-- [start:dependencies]
 [dependencies]
 python_bindings = { path = "packages/python_bindings" }
 rich_example = { path = "." }
-# --8<-- [end:workspace]
+# --8<-- [end:dependencies]
+
+# --8<-- [start:environments]
+[feature.py311.dependencies]
+python = "3.11.*"
+
+[feature.py312.dependencies]
+python = "3.12.*"
+
+[environments]
+py311 = ["py311"]
+py312 = ["py312"]
+# --8<-- [end:environments]
+
+
+# --8<-- [start:variants]
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+# --8<-- [end:variants]
 
 
 [tasks]
@@ -28,4 +46,4 @@ channels = [
 hatchling = "==1.26.3"
 
 [package.run-dependencies]
-rich = "13.9.*"
+rich = ">=13.9.4,<14"

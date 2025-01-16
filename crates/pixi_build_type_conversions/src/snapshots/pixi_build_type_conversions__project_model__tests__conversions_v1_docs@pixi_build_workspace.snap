@@ -35,7 +35,7 @@ expression: project_model
       "runDependencies": {
         "rich": {
           "detailedVersion": {
-            "version": ">=13.9.4,<14",
+            "version": "13.9.*",
             "build": null,
             "buildNumber": null,
             "fileName": null,
