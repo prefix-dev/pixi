@@ -1,11 +1,10 @@
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
+use parking_lot::Mutex;
 use std::borrow::Cow;
-use std::collections::VecDeque;
 use std::fmt::Write;
 use std::future::Future;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
-use tokio::sync::mpsc::{channel, Sender};
 
 /// Returns a global instance of [`indicatif::MultiProgress`].
 ///
@@ -86,116 +85,107 @@ pub async fn await_in_progress<T, F: FnOnce(ProgressBar) -> Fut, Fut: Future<Out
 /// It's primary usecase is when you have a single progress bar but multiple tasks that are running
 /// and which you want to communicate to the user. This struct will set the message part of the
 /// passed progress bar to the oldest unfinished task and include a the number of pending tasks.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ProgressBarMessageFormatter {
-    sender: Sender<Operation>,
-    pb: ProgressBar,
+    state: Arc<Mutex<State>>,
 }
 
+/// Internal state kept by the [`ProgressBarMessageFormatter`] and derived state.
+///
+/// This contains the state of the formatter and allows updating the progress bar.
+#[derive(Debug)]
+struct State {
+    pb: ProgressBar,
+    pending: Vec<String>,
+}
+
+impl State {
+    /// Notify the state that a certain operation happened.
+    fn notify(&mut self, msg: Operation) {
+        match msg {
+            Operation::Started(op) => self.pending.push(op),
+            Operation::Finished(op) => {
+                let Some(idx) = self.pending.iter().position(|p| p == &op) else {
+                    panic!("operation {op} was never started");
+                };
+                self.pending.remove(idx);
+            }
+        }
+
+        if self.pending.is_empty() {
+            self.pb.set_message("");
+        } else if self.pending.len() == 1 {
+            self.pb.set_message(self.pending[0].clone());
+        } else {
+            self.pb.set_message(format!(
+                "{} (+{})",
+                self.pending.last().unwrap(),
+                self.pending.len() - 1
+            ));
+        }
+    }
+}
+
+#[derive(Debug)]
 enum Operation {
     Started(String),
     Finished(String),
 }
 
 pub struct ScopedTask {
+    state: Option<Arc<Mutex<State>>>,
     name: String,
-    sender: Option<Sender<Operation>>,
-    pb: ProgressBar,
 }
 
 impl ScopedTask {
-    /// Finishes the execution of the task.
-    pub async fn finish(mut self) -> ProgressBar {
-        // Send the finished operation. If this fails the receiving end was most likely already
-        // closed and we can just ignore the error.
-        if let Some(sender) = self.sender.take() {
-            let _ = sender
-                .send(Operation::Finished(std::mem::take(&mut self.name)))
-                .await;
+    fn start(name: String, state: Arc<Mutex<State>>) -> Self {
+        state.lock().notify(Operation::Started(name.clone()));
+        Self {
+            state: Some(state),
+            name,
         }
-        self.pb.clone()
     }
 
     /// Finishes the execution of the task.
-    pub fn finish_sync(mut self) -> ProgressBar {
-        // Send the finished operation. If this fails the receiving end was most likely already
-        // closed and we can just ignore the error.
-        if let Some(sender) = self.sender.take() {
-            let _ = sender.try_send(Operation::Finished(std::mem::take(&mut self.name)));
+    pub fn finish(self) {
+        drop(self)
+    }
+}
+
+impl Drop for ScopedTask {
+    fn drop(&mut self) {
+        if let Some(state) = self.state.take() {
+            state
+                .lock()
+                .notify(Operation::Finished(std::mem::take(&mut self.name)));
         }
-        self.pb.clone()
     }
 }
 
 impl ProgressBarMessageFormatter {
     /// Allows the user to specify a custom capacity for the internal channel.
-    pub fn new_with_capacity(progress_bar: ProgressBar, capacity: usize) -> Self {
-        let pb = progress_bar.clone();
-        let (tx, mut rx) = channel::<Operation>(capacity);
-        tokio::spawn(async move {
-            let mut pending = VecDeque::with_capacity(capacity);
-            while let Some(msg) = rx.recv().await {
-                match msg {
-                    Operation::Started(op) => pending.push_back(op),
-                    Operation::Finished(op) => {
-                        let Some(idx) = pending.iter().position(|p| p == &op) else {
-                            panic!("operation {op} was never started");
-                        };
-                        pending.remove(idx);
-                    }
-                }
-
-                if pending.is_empty() {
-                    progress_bar.set_message("");
-                } else if pending.len() == 1 {
-                    progress_bar.set_message(pending[0].clone());
-                } else {
-                    progress_bar.set_message(format!(
-                        "{} (+{})",
-                        pending.back().unwrap(),
-                        pending.len() - 1
-                    ));
-                }
-            }
-        });
-        Self { sender: tx, pb }
-    }
-
-    /// Adds the start of another task to the progress bar and returns an object that is used to
-    /// mark the lifetime of the task. If the object is dropped the task is considered finished.
-    #[must_use]
-    pub async fn start(&self, op: String) -> ScopedTask {
-        self.sender
-            .send(Operation::Started(op.clone()))
-            .await
-            .unwrap();
-        ScopedTask {
-            name: op,
-            sender: Some(self.sender.clone()),
-            pb: self.pb.clone(),
+    pub fn new(pb: ProgressBar) -> Self {
+        Self {
+            state: Arc::new(Mutex::new(State {
+                pb,
+                pending: Vec::new(),
+            })),
         }
     }
 
     /// Adds the start of another task to the progress bar and returns an object that is used to
     /// mark the lifetime of the task. If the object is dropped the task is considered finished.
     #[must_use]
-    pub fn start_sync(&self, op: String) -> ScopedTask {
-        self.sender
-            .try_send(Operation::Started(op.clone()))
-            .expect("could not send operation, channel full or closed");
-        ScopedTask {
-            name: op,
-            sender: Some(self.sender.clone()),
-            pb: self.pb.clone(),
-        }
+    pub fn start(&self, op: String) -> ScopedTask {
+        ScopedTask::start(op, self.state.clone())
     }
 
     /// Wraps an future into a task which starts when the task starts and ends when the future
     /// returns.
     pub async fn wrap<T, F: Future<Output = T>>(&self, name: impl Into<String>, fut: F) -> T {
-        let task = self.start(name.into()).await;
+        let task = self.start(name.into());
         let result = fut.await;
-        task.finish().await;
+        task.finish();
         result
     }
 }

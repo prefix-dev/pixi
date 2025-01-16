@@ -3949,7 +3949,7 @@ name = "pixi_progress"
 version = "0.1.0"
 dependencies = [
  "indicatif",
- "tokio",
+ "parking_lot 0.12.3",
 ]
 
 [[package]]

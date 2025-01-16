@@ -11,4 +11,4 @@ version = "0.1.0"
 
 [dependencies]
 indicatif = { workspace = true }
-tokio = { workspace = true, features = ["sync", "rt"] }
+parking_lot = { workspace = true }
