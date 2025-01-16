@@ -1051,13 +1051,8 @@ impl Project {
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
     fn repodata_gateway(&self) -> &Gateway {
-        self.repodata_gateway.get_or_init(|| {
-            Self::repodata_gateway_init(
-                self.authenticated_client().clone(),
-                self.config().clone().into(),
-                self.config().max_concurrent_downloads(),
-            )
-        })
+        self.repodata_gateway
+            .get_or_init(|| self.config().gateway(self.authenticated_client().clone()))
     }
 }
 

@@ -35,6 +35,13 @@ repos:
         types_or: [python, pyi]
         require_serial: true
         stages: [pre-commit, manual]
+      # Shellcheck
+      - id: shellcheck
+        name: Check shell scripts
+        entry: pixi run --environment=lint shellcheck
+        language: system
+        types: [shell]
+        stages: [pre-commit, manual]
       # GitHub Actions
       - id: actionlint
         name: Lint GitHub Actions workflow files
@@ -72,6 +79,12 @@ repos:
         language: system
         types: [file, toml]
         exclude: "schema/examples/invalid"
+        stages: [pre-commit, manual]
+      - id: yaml-format
+        name: YAML format
+        entry: pixi run --environment=lint prettier-fmt
+        language: system
+        types: [file, yaml]
         stages: [pre-commit, manual]
       - id: cargo-fmt
         name: Cargo format

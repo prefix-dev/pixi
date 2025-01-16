@@ -32,6 +32,7 @@ use url::Url;
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
     /// Version 1 of the project model.
+    #[serde(rename = "1")]
     V1(ProjectModelV1),
     // When adding don't forget to update the highest_version function
 }
@@ -42,12 +43,31 @@ impl VersionedProjectModel {
         // increase this when adding a new version
         1
     }
+
+    /// Move into the v1 type, returns None if the version is not v1.
+    pub fn into_v1(self) -> Option<ProjectModelV1> {
+        match self {
+            VersionedProjectModel::V1(v) => Some(v),
+            // Add this once we have more versions
+            //_ => None,
+        }
+    }
+
+    /// Returns a reference to the v1 type, returns None if the version is not v1.
+    pub fn as_v1(&self) -> Option<&ProjectModelV1> {
+        match self {
+            VersionedProjectModel::V1(v) => Some(v),
+            // Add this once we have more versions
+            //_ => None,
+        }
+    }
 }
 
 /// The source package name of a package. Not normalized per se.
 pub type SourcePackageName = String;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectModelV1 {
     /// The name of the project
     pub name: String,
@@ -90,6 +110,7 @@ pub struct ProjectModelV1 {
 /// Represents a target selector. Currently we only support explicit platform
 /// selection.
 #[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum TargetSelectorV1 {
     // Platform specific configuration
     Platform(String),
@@ -102,6 +123,7 @@ pub enum TargetSelectorV1 {
 
 /// A collect of targets including a default target.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TargetsV1 {
     pub default_target: TargetV1,
 
@@ -111,6 +133,7 @@ pub struct TargetsV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
     pub host_dependencies: IndexMap<SourcePackageName, PixiSpecV1>,
@@ -189,6 +212,7 @@ pub struct GitSpecV1 {
 
 /// A specification of a package from a git repository.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PathSpecV1 {
     /// The path to the package
     pub path: String,
@@ -214,6 +238,7 @@ pub enum GitReferenceV1 {
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
 #[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct DependencySpecV1 {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<DisplayFromStr>")]

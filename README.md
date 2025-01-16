@@ -39,7 +39,7 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 - Always includes an up-to-date **lock file**.
 - Provides a clean and simple Cargo-like **command-line interface**.
 - Allows you to install tools **per-project** or **system-wide**.
-- Entirely written in **Rust** and built on top of the **[rattler](https://github.com/mamba-org/rattler)** library.
+- Entirely written in **Rust** and built on top of the **[rattler](https://github.com/conda/rattler)** library.
 
 ## Getting Started
 
@@ -212,7 +212,7 @@ cargo test
 ```
 
 If you have any issues building because of the dependency on `rattler` checkout
-it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
+it's [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try)
 
 ## Uninstall
 

@@ -1,6 +1,5 @@
 mod backend_override;
 mod build_frontend;
-mod into_build_types;
 mod jsonrpc;
 pub mod protocol;
 mod protocols;
@@ -25,7 +24,6 @@ use url::Url;
 pub use crate::protocol::Protocol;
 
 pub use backend_override::BackendOverride;
-pub use into_build_types::to_project_model_v1;
 pub use protocol_builder::EnabledProtocols;
 
 /// A backend communication protocol that can run in the same process.

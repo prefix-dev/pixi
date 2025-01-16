@@ -1,9 +1,11 @@
 from pathlib import Path
 import shutil
+import pytest
 
 from ..common import verify_cli_command
 
 
+@pytest.mark.extra_slow
 def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data: Path) -> None:
     """
     This one tries to build the rich example project
@@ -52,6 +54,7 @@ def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data:
     assert f"conda: git+{target_git_url}#{commit_hash}" in pixi_lock_file.read_text()
 
 
+@pytest.mark.extra_slow
 def test_build_git_source_deps_from_branch(
     pixi: Path, tmp_pixi_workspace: Path, build_data: Path
 ) -> None:
@@ -112,6 +115,7 @@ def test_build_git_source_deps_from_branch(
     )
 
 
+@pytest.mark.extra_slow
 def test_build_git_source_deps_from_rev(
     pixi: Path, tmp_pixi_workspace: Path, build_data: Path
 ) -> None:
@@ -175,6 +179,7 @@ def test_build_git_source_deps_from_rev(
     )
 
 
+@pytest.mark.slow
 def test_build_git_source_deps_from_tag(
     pixi: Path, tmp_pixi_workspace: Path, build_data: Path
 ) -> None:
