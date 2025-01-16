@@ -329,7 +329,10 @@ impl FancyDisplay for ExposedName {
 
 #[derive(Error, Diagnostic, Debug, PartialEq)]
 pub(crate) enum ExposedNameError {
-    #[error("'pixi' is not allowed as exposed name in the map")]
+    #[error(
+        "'{0}' is not allowed as exposed name in the map",
+        pixi_utils::executable_name()
+    )]
     PixiBinParseError,
 }
 
@@ -337,7 +340,7 @@ impl FromStr for ExposedName {
     type Err = ExposedNameError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        if value == "pixi" {
+        if value == pixi_utils::executable_name() {
             Err(ExposedNameError::PixiBinParseError)
         } else {
             Ok(ExposedName(value.to_string()))
@@ -442,12 +445,19 @@ mod tests {
         [envs.test.dependencies]
         python = "*"
         [envs.test.exposed]
-        pixi = "python"
+        pixi-bin-name = "python"
         "#;
-        let manifest = ParsedManifest::from_toml_str(contents);
+
+        // Replace the pixi-bin-name with the actual executable name that can be variable at runtime in tests
+        let contents = contents.replace("pixi-bin-name", pixi_utils::executable_name());
+        let manifest = ParsedManifest::from_toml_str(contents.as_str());
 
         assert!(manifest.is_err());
-        assert_snapshot!(manifest.unwrap_err());
+        // Replace back the executable name with "pixi" to satisfy the snapshot
+        assert_snapshot!(manifest
+            .unwrap_err()
+            .to_string()
+            .replace(pixi_utils::executable_name(), "pixi"));
     }
 
     #[test]

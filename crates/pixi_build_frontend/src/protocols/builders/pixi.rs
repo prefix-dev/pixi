@@ -205,6 +205,7 @@ impl ProtocolBuilder {
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.manifest_path,
+            Some(&self.package_manifest),
             build_id,
             self.cache_dir,
             tool,
@@ -223,6 +224,7 @@ impl ProtocolBuilder {
             "<IPC>".to_string(),
             self.source_dir,
             self.manifest_path,
+            Some(&self.package_manifest),
             build_id,
             self.cache_dir,
             Sender::from(ipc.rpc_out),

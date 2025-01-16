@@ -13,7 +13,7 @@ use super::{
     error::{RequirementConversionError, TomlError},
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
 };
-use crate::toml::FromTomlStr;
+use crate::toml::{FromTomlStr, Warning};
 use crate::{
     error::DependencyError,
     manifests::PackageManifest,
@@ -219,7 +219,8 @@ impl PyProjectManifest {
     #[allow(clippy::result_large_err)]
     pub fn into_manifests(
         self,
-    ) -> Result<(WorkspaceManifest, Option<PackageManifest>), PyProjectToManifestError> {
+    ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), PyProjectToManifestError>
+    {
         // Load the data nested under '[tool.pixi]' as pixi manifest
         let Some(Tool {
             pixi: Some(pixi),
@@ -246,7 +247,7 @@ impl PyProjectManifest {
         // different than we expect, so the conversion is not straightforward we
         // could change these types or we can convert. Let's decide when we make it.
         // etc.
-        let (mut workspace_manifest, package_manifest) =
+        let (mut workspace_manifest, package_manifest, warnings) =
             pixi.into_manifests(ExternalWorkspaceProperties {
                 name: project.name,
                 version: project
@@ -345,7 +346,7 @@ impl PyProjectManifest {
             }
         }
 
-        Ok((workspace_manifest, package_manifest))
+        Ok((workspace_manifest, package_manifest, warnings))
     }
 }
 
@@ -648,8 +649,7 @@ mod tests {
             assert_eq!(version_spec, &vspec);
         }
 
-        // Check that we remove leading `==` for the conda version spec
-        cmp("==3.12", "3.12");
+        cmp("==3.12", "==3.12");
         cmp("==3.12.*", "3.12.*");
         // rest should work just fine
         cmp(">=3.12", ">=3.12");

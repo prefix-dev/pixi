@@ -9,6 +9,7 @@ use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
+use pixi_consts::consts;
 use pixi_manifest::{toml::TomlDocument, PrioritizedChannel};
 use pixi_spec::PixiSpec;
 use pixi_toml::TomlIndexMap;
@@ -19,7 +20,7 @@ use toml_span::{DeserError, Value};
 
 use super::{
     parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
-    EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME,
+    EnvironmentName, ExposedName,
 };
 use crate::global::project::ParsedEnvironment;
 
@@ -60,7 +61,11 @@ impl Manifest {
                 .map_err(ManifestParsingError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents, manifest_path)?,
+            Err(e) => e.to_fancy(
+                consts::GLOBAL_MANIFEST_DEFAULT_NAME,
+                &contents,
+                manifest_path,
+            )?,
         };
 
         let manifest = Self {
@@ -892,7 +897,7 @@ mod tests {
 
         // Add another dependency
         let build_match_spec = MatchSpec::from_str(
-            "python [version='3.11.0', build=he550d4f_1_cpython]",
+            "python [version='==3.11.0', build=he550d4f_1_cpython]",
             ParseStrictness::Strict,
         )
         .unwrap();

@@ -19,7 +19,6 @@ pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_toml = { workspace = true }
-pixi_utils = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-value = { workspace = true }

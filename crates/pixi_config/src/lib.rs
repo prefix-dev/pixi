@@ -633,7 +633,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
-            detached_environments: Some(DetachedEnvironments::default()),
+            detached_environments: None,
             pinning_strategy: None,
             force_activate: None,
             experimental: ExperimentalConfig::default(),
