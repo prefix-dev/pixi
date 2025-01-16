@@ -46,7 +46,7 @@ Use the following `pixi.toml` file, you can hover over the annotations to see wh
 ```
 
 1. Add the **preview** feature `pixi-build` that enables pixi to build the package.
-2. These are the workspace dependencies, and we add a reference to our own package.
+2. These are the workspace dependencies. We add our own package as well as Python so that we can later run our package.
 3. Let's add a task that will run our test
 4. This is where we specify the package name and version.
    This section denotes that there is both a workspace and a package defined by this `pixi.toml` file.
