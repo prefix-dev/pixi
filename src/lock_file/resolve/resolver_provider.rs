@@ -1,3 +1,7 @@
+use futures::{Future, FutureExt};
+use pixi_consts::consts;
+use pixi_record::PixiRecord;
+use std::sync::Arc;
 use std::{
     cell::RefCell,
     collections::{BTreeMap, HashMap},
@@ -5,15 +9,11 @@ use std::{
     rc::Rc,
     str::FromStr,
 };
-
-use futures::{Future, FutureExt};
-use pixi_consts::consts;
-use pixi_record::PixiRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_distribution_filename::SourceDistExtension;
 use uv_distribution_types::{
-    Dist, File, FileLocation, HashComparison, IndexUrl, PrioritizedDist, RegistrySourceDist,
-    SourceDist, SourceDistCompatibility, UrlString,
+    Dist, File, FileLocation, HashComparison, IndexUrl, InstalledDist, PrioritizedDist,
+    RegistrySourceDist, SourceDist, SourceDistCompatibility, UrlString,
 };
 use uv_resolver::{
     DefaultResolverProvider, FlatDistributions, MetadataResponse, ResolverProvider, VersionMap,
@@ -145,6 +145,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                         requires_python: None,
                         provides_extras: iden.extras.iter().cloned().collect(),
                         dependency_groups: Default::default(),
+                        dynamic: Default::default(),
                     },
                     hashes: vec![],
                 })))
@@ -158,7 +159,15 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
             .right_future()
     }
 
-    fn with_reporter(self, reporter: impl uv_distribution::Reporter + 'static) -> Self {
+    // TODO: Actually implement this....
+    fn get_installed_metadata<'io>(
+        &'io self,
+        dist: &'io InstalledDist,
+    ) -> impl Future<Output = WheelMetadataResult> + 'io {
+        self.fallback.get_installed_metadata(dist)
+    }
+
+    fn with_reporter(self, reporter: Arc<dyn uv_distribution::Reporter>) -> Self {
         Self {
             fallback: self.fallback.with_reporter(reporter),
             ..self

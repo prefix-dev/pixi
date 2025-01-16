@@ -188,6 +188,8 @@ pub fn as_uv_req(
             .iter()
             .map(|e| uv_pep508::ExtraName::new(e.to_string()).expect("conversion failed"))
             .collect(),
+        // TODO: implement groups
+        groups: vec![],
         marker: Default::default(),
         source,
         origin: None,

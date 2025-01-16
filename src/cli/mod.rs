@@ -5,7 +5,8 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_progress::global_multi_progress;
 use pixi_utils::indicatif::IndicatifWriter;
-use std::{env, io::IsTerminal, sync::LazyLock};
+use std::sync::LazyLock;
+use std::{env, io::IsTerminal};
 use tracing_subscriber::{
     filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
     EnvFilter,

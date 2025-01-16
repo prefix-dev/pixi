@@ -20,6 +20,7 @@ use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
 use rattler_lock::{CondaPackageData, LockedPackageRef, PypiPackageData, UrlOrPath};
 use serde::Serialize;
+use uv_configuration::ConfigSettings;
 use uv_distribution::RegistryWheelIndex;
 
 // an enum to sort by size or name
@@ -184,6 +185,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let tags;
     let uv_context;
     let index_locations;
+    let config_settings = ConfigSettings::default();
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
             uv_context = UvResolutionContext::from_project(&project)?;
@@ -200,6 +202,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &tags,
                 &index_locations,
                 &uv_types::HashStrategy::None,
+                &config_settings,
             ))
         } else {
             None

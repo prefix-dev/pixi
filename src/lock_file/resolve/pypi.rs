@@ -1,14 +1,3 @@
-use std::{
-    cell::RefCell,
-    collections::HashMap,
-    iter::once,
-    ops::Deref,
-    path::{Path, PathBuf},
-    rc::Rc,
-    str::FromStr,
-    sync::Arc,
-};
-
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -28,15 +17,29 @@ use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
+use std::collections::BTreeSet;
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    iter::once,
+    ops::Deref,
+    path::{Path, PathBuf},
+    rc::Rc,
+    str::FromStr,
+    sync::Arc,
+};
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound, Overrides};
+use uv_configuration::{
+    ConfigSettings, Constraints, IndexStrategy, LowerBound, Overrides, PreviewMode,
+};
 use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
     IndexUrl, InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
+    ToUrlError,
 };
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
@@ -44,8 +47,8 @@ use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
-    AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    Preferences, PythonRequirement, Resolver, ResolverEnvironment,
+    AllowedYanks, DefaultResolverProvider, Exclusions, FlatIndex, InMemoryIndex, Manifest, Options,
+    Preference, Preferences, PythonRequirement, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -365,6 +368,7 @@ pub async fn resolve_pypi(
         LowerBound::default(),
         context.source_strategy,
         context.concurrency,
+        PreviewMode::default(),
     )
     .with_build_extra_env_vars(env_variables.iter());
 
@@ -388,6 +392,7 @@ pub async fn resolve_pypi(
             Ok::<_, ConversionError>(uv_pypi_types::Requirement {
                 name: to_uv_normalize(p.name.as_normalized())?,
                 extras: vec![],
+                groups: vec![],
                 marker: Default::default(),
                 source,
                 origin: None,
@@ -426,7 +431,6 @@ pub async fn resolve_pypi(
         &requirements,
         &constraints,
         &Overrides::default(),
-        &[],
         &context.hash_strategy,
         &lookahead_index,
         DistributionDatabase::new(
@@ -435,9 +439,9 @@ pub async fn resolve_pypi(
             context.concurrency.downloads,
         ),
     )
-    .with_reporter(UvReporter::new(
+    .with_reporter(Arc::new(UvReporter::new(
         UvReporterOptions::new().with_existing(pb.clone()),
-    ))
+    )))
     .resolve(&resolver_env)
     .await
     .into_diagnostic()?;
@@ -446,11 +450,10 @@ pub async fn resolve_pypi(
         requirements,
         constraints,
         Overrides::default(),
-        Default::default(),
         Preferences::from_iter(preferences, &resolver_env),
         None,
-        None,
-        uv_resolver::Exclusions::None,
+        BTreeSet::new(),
+        Exclusions::default(),
         lookaheads,
     );
 
@@ -484,6 +487,8 @@ pub async fn resolve_pypi(
         options,
         &context.hash_strategy,
         resolver_env,
+        // TODO: This can contain tags. Which might improve the solver results on request.
+        None,
         &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
         Conflicts::default(),
         &resolver_in_memory_index,
@@ -495,9 +500,9 @@ pub async fn resolve_pypi(
     )
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?
-    .with_reporter(UvReporter::new(
+    .with_reporter(Arc::new(UvReporter::new(
         UvReporterOptions::new().with_existing(pb.clone()),
-    ))
+    )))
     .resolve()
     .await
     .into_diagnostic()
@@ -535,6 +540,8 @@ enum GetUrlOrPathError {
     CannotJoin(String, String),
     #[error("expected path found: {0}")]
     ExpectedPath(String),
+    #[error(transparent)]
+    ToUrlError(#[from] ToUrlError),
 }
 
 /// Get the UrlOrPath from the index url and file location
@@ -580,7 +587,7 @@ fn get_url_or_path(
                 FileLocation::AbsoluteUrl(url) => {
                     // Convert to a relative path from the base path
                     let absolute = url
-                        .to_url()
+                        .to_url()?
                         .to_file_path()
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(url.to_string()))?;
                     // !IMPORTANT! We need to strip the base path from the absolute path
