@@ -28,7 +28,7 @@ use url::Url;
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "version")]
+#[serde(tag = "version", content = "data")]
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
     /// Version 1 of the project model.
@@ -73,7 +73,7 @@ pub struct ProjectModelV1 {
     pub name: String,
 
     /// The version of the project
-    pub version: Version,
+    pub version: Option<Version>,
 
     /// An optional project description
     pub description: Option<String>,
