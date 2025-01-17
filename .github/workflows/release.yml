@@ -163,6 +163,7 @@ jobs:
           # See https://github.com/prefix-dev/pixi/issues/2936
           if [[ "${{ toJson(matrix.targets) }}" == *"linux-aarch64"* || "${{ toJson(matrix.targets) }}" == *"linux-ppc64le"* ]]; then
             export JEMALLOC_SYS_WITH_LG_PAGE=16
+            echo "setting JEMALLOC_SYS_WITH_LG_PAGE=$JEMALLOC_SYS_WITH_LG_PAGE"
           fi
 
           # Actually do builds and make zips and whatnot
