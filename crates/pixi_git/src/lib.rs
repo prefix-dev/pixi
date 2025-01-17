@@ -132,3 +132,11 @@ impl std::fmt::Display for GitUrl {
         write!(f, "{}", self.repository)
     }
 }
+
+pub trait Reporter: Send + Sync {
+    /// Callback to invoke when a repository checkout begins.
+    fn on_checkout_start(&self, url: &Url, rev: &str) -> usize;
+
+    /// Callback to invoke when a repository checkout completes.
+    fn on_checkout_complete(&self, url: &Url, rev: &str, index: usize);
+}

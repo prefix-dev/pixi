@@ -130,6 +130,7 @@ nav:
           - Building a Python package: build/python.md
           - Building a C++ Package: build/cpp.md
           - Multiple Packages in Workspace: build/workspace.md
+          - Variants: build/variants.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
   - Advanced:
