@@ -1904,18 +1904,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
-<<<<<<< HEAD
-name = "fd-lock"
-version = "4.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e5768da2206272c81ef0b5e951a41862938a6070da63bcea197899942d3b947"
-dependencies = [
- "cfg-if",
- "rustix",
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "ff"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1926,20 +1914,6 @@ dependencies = [
 ]
 
 [[package]]
-||||||| 2cac3e8e
-name = "fd-lock"
-version = "4.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e5768da2206272c81ef0b5e951a41862938a6070da63bcea197899942d3b947"
-dependencies = [
- "cfg-if",
- "rustix",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-=======
->>>>>>> upstream/main
 name = "file_url"
 version = "0.2.2"
 source = "git+https://github.com/pavelzw/rattler?branch=s3#73eed8a7d50de3e5e766d555052bfe2ba1225049"
@@ -4713,14 +4687,8 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tempfile",
-<<<<<<< HEAD
  "thiserror 2.0.11",
-||||||| 2cac3e8e
- "thiserror 2.0.10",
-=======
- "thiserror 2.0.10",
  "tokio",
->>>>>>> upstream/main
  "tracing",
  "tracing-subscriber",
  "url",
