@@ -155,7 +155,7 @@ fn replace_nushell_completion(script: &str) -> Cow<str> {
     // NOTE THIS IS FORMATTED BY HAND
     let bin_name = pixi_utils::executable_name();
     let pattern = format!(
-        r#"(#.*\n  export extern "{} run".*\n.*...task: string)([^\]]*--environment\(-e\): string)"#,
+        r#"(#.*\n  export extern "{} run".*\n.*...task: string)([^\]]*--environment\(-e\): string)([^\]]*\n  \])"#,
         bin_name
     );
     let replacement = r#"
@@ -167,7 +167,9 @@ fn replace_nushell_completion(script: &str) -> Cow<str> {
     ^BIN_NAME info --json | from json | get environments_info | get name
   }
 
-  ${1}@"nu-complete BIN_NAME run"${2}@"nu-complete BIN_NAME run environment""#;
+  ${1}@"nu-complete BIN_NAME run"${2}@"nu-complete BIN_NAME run environment"${3}
+
+  export alias "BIN_NAME r" = BIN_NAME run"#;
 
     let re = Regex::new(pattern.as_str()).unwrap();
     re.replace(script, replacement.replace("BIN_NAME", bin_name))
