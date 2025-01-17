@@ -1,9 +1,9 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use rattler_networking::{
-    authentication_storage::{self, backends::file::FileStorageError},
+    authentication_storage::backends::file::FileStorageError,
     mirror_middleware::Mirror,
     retry_policies::ExponentialBackoff,
     AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,

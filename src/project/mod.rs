@@ -42,7 +42,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use rattler_lock::{LockFile, LockedPackageRef};
-use rattler_networking::{authentication_storage::backends::file::FileStorageError, s3_middleware};
+use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
