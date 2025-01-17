@@ -158,6 +158,12 @@ jobs:
           ${{ matrix.packages_install }}
       - name: Build artifacts
         run: |
+          # Use jemalloc on specific platforms
+          # See https://github.com/prefix-dev/pixi/issues/2936
+          if [[ "${{ toJson(matrix.targets) }}" == *"linux-aarch64"* || "${{ toJson(matrix.targets) }}" == *"linux-ppc64le"* ]]; then
+            export JEMALLOC_SYS_WITH_LG_PAGE=16
+          fi
+
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
