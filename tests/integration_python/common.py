@@ -1,8 +1,10 @@
+from contextlib import contextmanager
 from enum import IntEnum
 from pathlib import Path
 import platform
 import subprocess
 import os
+from typing import Generator
 
 from rattler import Platform
 
@@ -140,3 +142,13 @@ def get_manifest(directory: Path) -> Path:
         return pyproject_toml
     else:
         raise ValueError("Neither pixi.toml nor pyproject.toml found")
+
+
+@contextmanager
+def cwd(path: str | Path) -> Generator[None, None, None]:
+    oldpwd = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(oldpwd)
