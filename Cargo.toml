@@ -367,17 +367,17 @@ tokio = { workspace = true, features = ["rt"] }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
-file_url = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_cache = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_conda_types = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_digest = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_lock = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_networking = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_repodata_gateway = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_shell = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_solve = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
-rattler_virtual_packages = { git = "https://github.com/pavelzw/rattler", branch = "authentication-storage" }
+file_url = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_cache = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_digest = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_lock = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_networking = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_shell = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_solve = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", rev = "7591044f931ef49e7bc57489bb77532e006ee915" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "57832d0588fbb7aab824813481104761dc1c7740" }
 
 # Config for 'dist'
