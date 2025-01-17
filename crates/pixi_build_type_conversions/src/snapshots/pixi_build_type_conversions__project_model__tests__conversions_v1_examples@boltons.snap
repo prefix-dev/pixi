@@ -3,7 +3,6 @@ source: crates/pixi_build_type_conversions/src/project_model.rs
 expression: project_model
 ---
 {
-  "version": "1",
   "name": "boltons",
   "version": "0.1.0",
   "description": "Add a short description here",
@@ -16,12 +15,11 @@ expression: project_model
   "homepage": null,
   "repository": null,
   "documentation": null,
-  "configuration": null,
   "targets": {
     "defaultTarget": {
       "hostDependencies": {
         "hatchling": {
-          "detailedVersion": {
+          "binary": {
             "version": "*",
             "build": null,
             "buildNumber": null,
