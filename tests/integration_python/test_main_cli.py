@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from .common import verify_cli_command, ExitCode, PIXI_VERSION, CURRENT_PLATFORM
+from .common import cwd, verify_cli_command, ExitCode, PIXI_VERSION, CURRENT_PLATFORM
 import tomllib
 import json
 import pytest
@@ -311,6 +311,37 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ExitCode.SUCCESS,
         stderr_contains=["osx-arm64", "test", "Removed"],
     )
+
+
+def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    # Change directory to workspace
+    with cwd(tmp_pixi_workspace):
+        # Create a new project
+        verify_cli_command([pixi, "init", "."], ExitCode.SUCCESS)
+
+        # Verify that the manifest file is created
+        manifest_path = tmp_pixi_workspace / "pixi.toml"
+        assert manifest_path.exists()
+
+        # Verify that the manifest file contains expected content
+        manifest_content = manifest_path.read_text()
+        assert "[project]" in manifest_content
+
+
+def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    # Specify project dir
+    project_dir = tmp_pixi_workspace / "project_dir"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", project_dir], ExitCode.SUCCESS)
+
+    # Verify that the manifest file is created
+    manifest_path = project_dir / "pixi.toml"
+    assert manifest_path.exists()
+
+    # Verify that the manifest file contains expected content
+    manifest_content = manifest_path.read_text()
+    assert "[project]" in manifest_content
 
 
 @pytest.mark.slow

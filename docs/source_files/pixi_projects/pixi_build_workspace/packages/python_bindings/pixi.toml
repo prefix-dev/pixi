@@ -21,9 +21,6 @@ channels = [
 ]
 
 [package.host-dependencies]
-cmake = ">=3.20, <3.27"      # (8)!
-nanobind = ">=2.4.0, <2.5.0" # (6)!
-python_abi = ">=3.12, <3.13" # (7)!
-
-[package.run-dependencies]
-python = ">=3.12, <3.13"
+cmake = "3.20.*"   # (8)!
+nanobind = "2.4.*" # (6)!
+python = "3.12.*"  # (7)!

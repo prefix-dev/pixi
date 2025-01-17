@@ -541,7 +541,7 @@ Use `git` in combination with `rev` or `subdirectory`:
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
-py-rattler = { git = "ssh://git@github.com/mamba-org/rattler.git", subdirectory = "py-rattler" }
+py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
 ```
 
 ##### `path`

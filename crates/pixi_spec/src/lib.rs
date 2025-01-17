@@ -332,6 +332,13 @@ pub enum SourceSpec {
     Path(PathSourceSpec),
 }
 
+impl SourceSpec {
+    /// Returns true if this spec represents a git repository.
+    pub fn is_git(&self) -> bool {
+        matches!(self, Self::Git(_))
+    }
+}
+
 impl From<SourceSpec> for PixiSpec {
     fn from(value: SourceSpec) -> Self {
         match value {

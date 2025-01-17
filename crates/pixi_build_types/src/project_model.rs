@@ -3,18 +3,18 @@
 //! We need to vendor a lot of the types, and simplify them in some cases, so that
 //! we have a stable protocol that can be used to communicate in the build tasks.
 //!
-//! The Rationale is that we want to have a stable protocol to provide forwards and backwards compatibility.
-//! The idea is that for **backwards compatibility** is that we try to not to break this in pixi as much as possible.
-//! So as long as older pixi tomls keep loading we can send it to the backend.
+//! The rationale is that we want to have a stable protocol to provide forwards and backwards compatibility.
+//! The idea for **backwards compatibility** is that we try not to break this in pixi as much as possible.
+//! So as long as older pixi TOMLs keep loading, we can send them to the backend.
 //!
-//! In regards to forwards compatibility, we want to be able to keep converting to all version os the `VersionedProjectModel`.
+//! In regards to forwards compatibility, we want to be able to keep converting to all versions of the `VersionedProjectModel`
 //! as much as possible.
 //!
-//! This is why we append a `V{version}`, to the type names, to indicate the version
+//! This is why we append a `V{version}` to the type names, to indicate the version
 //! of the protocol.
 //!
-//! Only the Whole ProjectModel is versioned explicitly in a enum.
-//! When making a change to one of the types be sure to add another enum declaration, if it is breaking.
+//! Only the whole ProjectModel is versioned explicitly in an enum.
+//! When making a change to one of the types, be sure to add another enum declaration if it is breaking.
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -28,7 +28,7 @@ use url::Url;
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "version")]
+#[serde(tag = "version", content = "data")]
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
     /// Version 1 of the project model.
@@ -67,12 +67,13 @@ impl VersionedProjectModel {
 pub type SourcePackageName = String;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectModelV1 {
     /// The name of the project
     pub name: String,
 
     /// The version of the project
-    pub version: Version,
+    pub version: Option<Version>,
 
     /// An optional project description
     pub description: Option<String>,
@@ -98,17 +99,21 @@ pub struct ProjectModelV1 {
     /// URL of the project documentation
     pub documentation: Option<Url>,
 
-    /// Configuration for this specific project model
-    pub configuration: serde_json::Value,
-
     /// The target of the project, this may contain
     /// platform specific configurations.
-    pub targets: TargetsV1,
+    pub targets: Option<TargetsV1>,
+}
+
+impl From<ProjectModelV1> for VersionedProjectModel {
+    fn from(value: ProjectModelV1) -> Self {
+        VersionedProjectModel::V1(value)
+    }
 }
 
 /// Represents a target selector. Currently we only support explicit platform
 /// selection.
 #[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub enum TargetSelectorV1 {
     // Platform specific configuration
     Platform(String),
@@ -120,34 +125,40 @@ pub enum TargetSelectorV1 {
 }
 
 /// A collect of targets including a default target.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TargetsV1 {
-    pub default_target: TargetV1,
+    pub default_target: Option<TargetV1>,
 
     /// We use an [`IndexMap`] to preserve the order in which the items where
     /// defined in the manifest.
-    pub targets: HashMap<TargetSelectorV1, TargetV1>,
+    pub targets: Option<HashMap<TargetSelectorV1, TargetV1>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
-    pub host_dependencies: IndexMap<SourcePackageName, PixiSpecV1>,
+    pub host_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
 
     /// Build dependencies of the project
-    pub build_dependencies: IndexMap<SourcePackageName, PixiSpecV1>,
+    pub build_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
 
     /// Run dependencies of the project
-    pub run_dependencies: IndexMap<SourcePackageName, PixiSpecV1>,
+    pub run_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum PixiSpecV1 {
-    /// The spec is represented by a detailed version spec. The package should
-    /// be retrieved from a channel.
-    DetailedVersion(DependencySpecV1),
+pub enum PackageSpecV1 {
+    /// This is a binary dependency
+    Binary(BinaryPackageSpecV1),
+    /// This is a dependency on a source package
+    Source(SourcePackageSpecV1),
+}
 
+#[derive(Debug, Serialize, Deserialize)]
+pub enum SourcePackageSpecV1 {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
     /// either represent a source or binary package depending on the archive
@@ -208,6 +219,7 @@ pub struct GitSpecV1 {
 
 /// A specification of a package from a git repository.
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PathSpecV1 {
     /// The path to the package
     pub path: String,
@@ -233,7 +245,8 @@ pub enum GitReferenceV1 {
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
 #[derive(Serialize, Deserialize, Default)]
-pub struct DependencySpecV1 {
+#[serde(rename_all = "camelCase")]
+pub struct BinaryPackageSpecV1 {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<DisplayFromStr>")]
     pub version: Option<VersionSpec>,
@@ -245,7 +258,7 @@ pub struct DependencySpecV1 {
     /// Match the specific filename of the package
     pub file_name: Option<String>,
     /// The channel of the package
-    pub channel: Option<String>,
+    pub channel: Option<Url>,
     /// The subdir of the channel
     pub subdir: Option<String>,
     /// The md5 hash of the package
@@ -254,7 +267,7 @@ pub struct DependencySpecV1 {
     pub sha256: Option<SerializableHash<Sha256>>,
 }
 
-impl From<VersionSpec> for DependencySpecV1 {
+impl From<VersionSpec> for BinaryPackageSpecV1 {
     fn from(value: VersionSpec) -> Self {
         Self {
             version: Some(value),
@@ -263,7 +276,7 @@ impl From<VersionSpec> for DependencySpecV1 {
     }
 }
 
-impl From<&VersionSpec> for DependencySpecV1 {
+impl From<&VersionSpec> for BinaryPackageSpecV1 {
     fn from(value: &VersionSpec) -> Self {
         Self {
             version: Some(value.clone()),
@@ -272,7 +285,7 @@ impl From<&VersionSpec> for DependencySpecV1 {
     }
 }
 
-impl std::fmt::Debug for DependencySpecV1 {
+impl std::fmt::Debug for BinaryPackageSpecV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut debug_struct = f.debug_struct("NamelessMatchSpecV1");
 

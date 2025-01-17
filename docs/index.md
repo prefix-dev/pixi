@@ -27,7 +27,12 @@ To install `pixi` you can run the following command in your terminal:
 === "Windows"
     `PowerShell`:
     ```powershell
-    iwr -useb https://pixi.sh/install.ps1 | iex
+    powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+    ```
+    Changing the [execution policy](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4#powershell-execution-policies) allows running a script from the internet.
+    Check the script you would be running with:
+    ```powershell
+    powershell -c "irm -useb https://pixi.sh/install.ps1 | more"
     ```
     `winget`:
     ```
@@ -145,7 +150,7 @@ cargo test
 ```
 
 If you have any issues building because of the dependency on `rattler` checkout
-its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try).
+its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
 ### Installer script options
 
