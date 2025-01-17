@@ -26,6 +26,7 @@ pub struct ProtocolBuilder {
     manifest_path: PathBuf,
     workspace_manifest: WorkspaceManifest,
     package_manifest: PackageManifest,
+    configuration: Option<serde_json::Value>,
     backend_override: Option<BackendOverride>,
     channel_config: Option<ChannelConfig>,
     cache_dir: Option<PathBuf>,
@@ -84,9 +85,18 @@ impl ProtocolBuilder {
             manifest_path,
             workspace_manifest,
             package_manifest,
+            configuration: None,
             backend_override: None,
             channel_config: None,
             cache_dir: None,
+        }
+    }
+
+    /// Sets the configuration of the build backend
+    pub fn with_configuration(self, config: serde_json::Value) -> Self {
+        Self {
+            configuration: Some(config),
+            ..self
         }
     }
 
@@ -210,6 +220,7 @@ impl ProtocolBuilder {
             self.source_dir,
             self.manifest_path,
             Some(&self.package_manifest),
+            self.configuration,
             &channel_config,
             build_id,
             self.cache_dir,
@@ -235,6 +246,7 @@ impl ProtocolBuilder {
             self.source_dir,
             self.manifest_path,
             Some(&self.package_manifest),
+            self.configuration,
             &channel_config,
             build_id,
             self.cache_dir,

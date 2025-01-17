@@ -88,21 +88,27 @@ fn to_target_v1(
     // Difference for us is that [`pbt::TargetV1`] has split the host, run and build dependencies
     // into separate fields, so we need to split them up here
     Ok(pbt::TargetV1 {
-        host_dependencies: target
-            .host_dependencies()
-            .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
-            .transpose()?
-            .unwrap_or_default(),
-        build_dependencies: target
-            .build_dependencies()
-            .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
-            .transpose()?
-            .unwrap_or_default(),
-        run_dependencies: target
-            .run_dependencies()
-            .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
-            .transpose()?
-            .unwrap_or_default(),
+        host_dependencies: Some(
+            target
+                .host_dependencies()
+                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .transpose()?
+                .unwrap_or_default(),
+        ),
+        build_dependencies: Some(
+            target
+                .build_dependencies()
+                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .transpose()?
+                .unwrap_or_default(),
+        ),
+        run_dependencies: Some(
+            target
+                .run_dependencies()
+                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .transpose()?
+                .unwrap_or_default(),
+        ),
     })
 }
 
@@ -131,8 +137,8 @@ fn to_targets_v1(
         .collect::<Result<HashMap<pbt::TargetSelectorV1, pbt::TargetV1>, _>>()?;
 
     Ok(pbt::TargetsV1 {
-        default_target: to_target_v1(targets.default(), channel_config)?,
-        targets: selected_targets,
+        default_target: Some(to_target_v1(targets.default(), channel_config)?),
+        targets: Some(selected_targets),
     })
 }
 
@@ -140,7 +146,7 @@ fn to_targets_v1(
 pub fn to_project_model_v1(
     manifest: &PackageManifest,
     channel_config: &ChannelConfig,
-) -> Result<pbt::VersionedProjectModel, SpecConversionError> {
+) -> Result<pbt::ProjectModelV1, SpecConversionError> {
     let project = pbt::ProjectModelV1 {
         name: manifest.package.name.clone(),
         version: manifest.package.version.clone(),
@@ -152,10 +158,9 @@ pub fn to_project_model_v1(
         homepage: manifest.package.homepage.clone(),
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
-        configuration: serde_json::Value::Null,
-        targets: to_targets_v1(&manifest.targets, channel_config)?,
+        targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
     };
-    Ok(pbt::VersionedProjectModel::V1(project))
+    Ok(project)
 }
 
 #[cfg(test)]
