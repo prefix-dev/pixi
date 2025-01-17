@@ -457,7 +457,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .authentication_override_file()
         .map(|x| x.to_owned())
         .unwrap_or_else(|| {
-            authentication_storage::backends::file::FileStorage::new().into_diagnostic().unwrap()
+            authentication_storage::backends::file::FileStorage::new()
+                .into_diagnostic()
+                .unwrap()
                 .path
                 .clone()
         });

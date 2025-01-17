@@ -585,10 +585,13 @@ impl Project {
         Ok(&self.client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(&self) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+    fn client_and_authenticated_client(
+        &self,
+    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
         // todo unwrap
-        Ok(self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config), Some(self.s3_config.clone())).unwrap()))
+        Ok(self.client.get_or_init(|| {
+            build_reqwest_clients(Some(&self.config), Some(self.s3_config.clone())).unwrap()
+        }))
     }
 
     pub(crate) fn config(&self) -> &Config {

@@ -461,9 +461,12 @@ impl Project {
         Ok(&self.client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(&self) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+    fn client_and_authenticated_client(
+        &self,
+    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
         // todo: unwrap
-        Ok(self.client
+        Ok(self
+            .client
             .get_or_init(|| build_reqwest_clients(Some(&self.config), None).unwrap()))
     }
 
@@ -1054,7 +1057,10 @@ impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
     fn repodata_gateway(&self) -> miette::Result<&Gateway> {
         // todo: fix unwrap
-        Ok(self.repodata_gateway.get_or_init(|| self.config().gateway(self.authenticated_client().unwrap().clone())))
+        Ok(self.repodata_gateway.get_or_init(|| {
+            self.config()
+                .gateway(self.authenticated_client().unwrap().clone())
+        }))
     }
 }
 

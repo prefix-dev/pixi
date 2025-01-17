@@ -3,11 +3,9 @@ use std::{sync::Arc, time::Duration};
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use rattler_networking::{
-    authentication_storage::backends::file::FileStorageError,
-    mirror_middleware::Mirror,
-    retry_policies::ExponentialBackoff,
-    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
-    OciMiddleware, S3Middleware,
+    authentication_storage::backends::file::FileStorageError, mirror_middleware::Mirror,
+    retry_policies::ExponentialBackoff, AuthenticationMiddleware, AuthenticationStorage,
+    GCSMiddleware, MirrorMiddleware, OciMiddleware, S3Middleware,
 };
 
 use reqwest::Client;
@@ -124,10 +122,7 @@ pub fn build_reqwest_clients(
     let s3_middleware = if let Some(s3_config) = s3_config {
         S3Middleware::new(s3_config, store)
     } else {
-        S3Middleware::new(
-            config.compute_s3_config(),
-            store,
-        )
+        S3Middleware::new(config.compute_s3_config(), store)
     };
     debug!("s3_middleware: {:?}", s3_middleware);
     client_builder = client_builder.with(s3_middleware);
