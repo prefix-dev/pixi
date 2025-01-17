@@ -531,7 +531,7 @@ fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
 }
 
 fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
-    dunce::canonicalize(&path).map_err(|e| match e.kind() {
+    path.canonicalize().map_err(|e| match e.kind() {
         ErrorKind::NotFound => Error::new(
             ErrorKind::NotFound,
             format!(
