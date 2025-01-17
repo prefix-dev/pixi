@@ -99,12 +99,15 @@ pub struct ProjectModelV1 {
     /// URL of the project documentation
     pub documentation: Option<Url>,
 
-    /// Configuration for this specific project model
-    pub configuration: serde_json::Value,
-
     /// The target of the project, this may contain
     /// platform specific configurations.
-    pub targets: TargetsV1,
+    pub targets: Option<TargetsV1>,
+}
+
+impl From<ProjectModelV1> for VersionedProjectModel {
+    fn from(value: ProjectModelV1) -> Self {
+        VersionedProjectModel::V1(value)
+    }
 }
 
 /// Represents a target selector. Currently we only support explicit platform
@@ -122,27 +125,27 @@ pub enum TargetSelectorV1 {
 }
 
 /// A collect of targets including a default target.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetsV1 {
-    pub default_target: TargetV1,
+    pub default_target: Option<TargetV1>,
 
     /// We use an [`IndexMap`] to preserve the order in which the items where
     /// defined in the manifest.
-    pub targets: HashMap<TargetSelectorV1, TargetV1>,
+    pub targets: Option<HashMap<TargetSelectorV1, TargetV1>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
-    pub host_dependencies: IndexMap<SourcePackageName, PackageSpecV1>,
+    pub host_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
 
     /// Build dependencies of the project
-    pub build_dependencies: IndexMap<SourcePackageName, PackageSpecV1>,
+    pub build_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
 
     /// Run dependencies of the project
-    pub run_dependencies: IndexMap<SourcePackageName, PackageSpecV1>,
+    pub run_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

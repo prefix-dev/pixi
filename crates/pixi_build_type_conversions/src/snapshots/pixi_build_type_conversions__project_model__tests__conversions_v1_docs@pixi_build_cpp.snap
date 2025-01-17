@@ -3,7 +3,6 @@ source: crates/pixi_build_type_conversions/src/project_model.rs
 expression: project_model
 ---
 {
-  "version": "1",
   "name": "python_bindings",
   "version": "0.1.0",
   "description": null,
@@ -14,7 +13,6 @@ expression: project_model
   "homepage": null,
   "repository": null,
   "documentation": null,
-  "configuration": null,
   "targets": {
     "defaultTarget": {
       "hostDependencies": {

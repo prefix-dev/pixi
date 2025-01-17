@@ -146,6 +146,7 @@ impl ProtocolBuilder {
             self.source_dir,
             self.recipe_dir.join("recipe.yaml"),
             None,
+            None,
             &channel_config,
             build_id,
             self.cache_dir,

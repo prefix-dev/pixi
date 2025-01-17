@@ -3809,7 +3809,6 @@ dependencies = [
  "pixi_spec",
  "rattler_conda_types",
  "rstest",
- "serde_json",
 ]
 
 [[package]]
