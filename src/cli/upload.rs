@@ -53,7 +53,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     );
 
     let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(AuthenticationMiddleware::new().into_diagnostic()?))
+        .with_arc(Arc::new(AuthenticationMiddleware::from_env_and_defaults().into_diagnostic()?))
         .build();
 
     let sha256sum = format!(

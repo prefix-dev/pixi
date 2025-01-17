@@ -41,7 +41,7 @@ fn auth_store(config: &Config) -> Result<AuthenticationStorage, FileStorageError
         } else {
             0
         };
-        store.insert_backend(
+        store.backends.insert(
             index,
             Arc::from(
                 authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
