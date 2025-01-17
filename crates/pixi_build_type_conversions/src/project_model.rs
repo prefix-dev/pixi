@@ -165,10 +165,10 @@ pub fn to_project_model_v1(
 
 #[cfg(test)]
 mod tests {
+    use pixi_build_types::VersionedProjectModel;
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
     use std::path::PathBuf;
-    use pixi_build_types::VersionedProjectModel;
 
     fn some_channel_config() -> ChannelConfig {
         ChannelConfig {
@@ -197,7 +197,9 @@ mod tests {
 
                 // Convert the manifest to the project model
                 let project_model: VersionedProjectModel =
-                    super::to_project_model_v1(&package_manifest, &some_channel_config()).unwrap().into();
+                    super::to_project_model_v1(&package_manifest, &some_channel_config())
+                        .unwrap()
+                        .into();
                 let mut settings = insta::Settings::clone_current();
                 settings.set_snapshot_suffix(name);
                 settings.bind(|| {

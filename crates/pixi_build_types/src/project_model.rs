@@ -28,7 +28,7 @@ use url::Url;
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "version", content="data")]
+#[serde(tag = "version", content = "data")]
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
     /// Version 1 of the project model.
