@@ -223,7 +223,7 @@ impl<'p> LockFileDerivedData<'p> {
         if environment_file.environment_lock_file_hash == *hash {
             let contains_source_packages = self.lock_file.environments().any(|(_, env)| {
                 env.conda_packages(Platform::current())
-                    .map_or(false, |mut packages| {
+                    .is_some_and(|mut packages| {
                         packages.any(|package| package.as_source().is_some())
                     })
             });
