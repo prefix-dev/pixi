@@ -157,6 +157,7 @@ jobs:
         run: |
           ${{ matrix.packages_install }}
       - name: Build artifacts
+        shell: bash
         run: |
           # Use jemalloc on specific platforms
           # See https://github.com/prefix-dev/pixi/issues/2936
