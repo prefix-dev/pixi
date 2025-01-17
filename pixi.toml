@@ -9,7 +9,7 @@ description = "Package management made easy!"
 name = "pixi"
 # Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 
 [dependencies]
 python = "3.12.*"
@@ -56,7 +56,7 @@ test-integration-ci = "pytest --numprocesses=auto --durations=0 --timeout=100 --
 test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python", depends-on = [
   "build-release",
 ] }
-test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 -m 'extra_slow' tests/integration_python"
+test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python"
 test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ] }
@@ -106,6 +106,7 @@ typos = "typos --write-changes --force-exclude"
 
 [feature.build.dependencies]
 # Needed for building
+compilers = ">=1.9.0,<2"
 git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"

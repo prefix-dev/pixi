@@ -308,7 +308,6 @@ pub async fn update_python_distributions(
 
         let options = UvReporterOptions::new()
             .with_length(remote.len() as u64)
-            .with_capacity(remote.len() + 30)
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
@@ -465,7 +464,6 @@ pub async fn update_python_distributions(
 
     let options = UvReporterOptions::new()
         .with_length(all_dists.len() as u64)
-        .with_capacity(all_dists.len() + 30)
         .with_starting_tasks(all_dists.iter().map(|d| format!("{}", d.name())))
         .with_top_level_message("Installing distributions");
 

@@ -3,12 +3,10 @@ source: crates/pixi_build_type_conversions/src/project_model.rs
 expression: project_model
 ---
 {
-  "name": "boltons",
+  "name": "rich_example",
   "version": "0.1.0",
-  "description": "Add a short description here",
-  "authors": [
-    "nichmor <nmorkotilo@gmail.com>"
-  ],
+  "description": null,
+  "authors": null,
   "license": null,
   "licenseFile": null,
   "readme": null,
@@ -20,7 +18,7 @@ expression: project_model
       "hostDependencies": {
         "hatchling": {
           "binary": {
-            "version": "*",
+            "version": "==1.26.3",
             "build": null,
             "buildNumber": null,
             "fileName": null,
@@ -32,7 +30,20 @@ expression: project_model
         }
       },
       "buildDependencies": {},
-      "runDependencies": {}
+      "runDependencies": {
+        "rich": {
+          "binary": {
+            "version": ">=13.9.4,<14",
+            "build": null,
+            "buildNumber": null,
+            "fileName": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        }
+      }
     },
     "targets": {}
   }
