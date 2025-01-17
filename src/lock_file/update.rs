@@ -403,7 +403,7 @@ impl<'p> LockFileDerivedData<'p> {
         let python_status = environment::update_prefix_conda(
             &prefix,
             self.package_cache.clone(),
-            environment.project().authenticated_client().clone(),
+            environment.project().authenticated_client()?.clone(),
             installed_packages,
             records,
             environment
@@ -1008,8 +1008,8 @@ impl<'p> UpdateContextBuilder<'p> {
             })
             .collect();
 
-        let gateway = project.repodata_gateway().clone();
-        let client = project.authenticated_client().clone();
+        let gateway = project.repodata_gateway()?.clone();
+        let client = project.authenticated_client()?.clone();
 
         // tool context
         let tool_context = ToolContext::builder()
@@ -1132,10 +1132,10 @@ impl<'p> UpdateContext<'p> {
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source.clone(),
                     locked_group_records,
-                    project.repodata_gateway().clone(),
+                    project.repodata_gateway()?.clone(),
                     platform,
                     self.conda_solve_semaphore.clone(),
-                    project.authenticated_client().clone(),
+                    project.authenticated_client()?.clone(),
                     channel_priority,
                     self.build_context.clone(),
                 )
@@ -2127,7 +2127,7 @@ async fn spawn_solve_pypi_task(
     let locked_pypi_records = locked_pypi_packages.records.clone();
 
     pypi_mapping::amend_pypi_purls(
-        environment.project().client().clone().into(),
+        environment.project().client()?.clone().into(),
         pypi_name_mapping_location,
         pixi_records
             .iter_mut()
@@ -2221,7 +2221,7 @@ async fn spawn_create_prefix_task(
 ) -> miette::Result<TaskResult> {
     let group_name = group.name().clone();
     let prefix = group.prefix();
-    let client = group.project().authenticated_client().clone();
+    let client = group.project().authenticated_client()?.clone();
     let channels = group
         .channel_urls(&group.project().channel_config())
         .into_diagnostic()?;

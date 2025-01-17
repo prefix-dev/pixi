@@ -457,13 +457,14 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
-        &self.client_and_authenticated_client().1
+    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
+        Ok(&self.client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
-        self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config), None))
+    fn client_and_authenticated_client(&self) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+        // todo: unwrap
+        Ok(self.client
+            .get_or_init(|| build_reqwest_clients(Some(&self.config), None).unwrap()))
     }
 
     pub(crate) fn config(&self) -> &Config {
@@ -516,7 +517,7 @@ impl Project {
                 env_name.fancy_display()
             ),
             |_| async {
-                self.repodata_gateway()
+                self.repodata_gateway()?
                     .query(channels, [platform, Platform::NoArch], match_specs.clone())
                     .recursive(true)
                     .await
@@ -573,9 +574,10 @@ impl Project {
                 "Creating virtual environment for {}",
                 env_name.fancy_display()
             ),
+            // todo: unwrap
             |pb| {
                 Installer::new()
-                    .with_download_client(self.authenticated_client().clone())
+                    .with_download_client(self.authenticated_client().unwrap().clone())
                     .with_execute_link_scripts(false)
                     .with_package_cache(package_cache)
                     .with_target_platform(platform)
@@ -1050,9 +1052,9 @@ impl Project {
 
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
-    fn repodata_gateway(&self) -> &Gateway {
-        self.repodata_gateway
-            .get_or_init(|| self.config().gateway(self.authenticated_client().clone()))
+    fn repodata_gateway(&self) -> miette::Result<&Gateway> {
+        // todo: fix unwrap
+        Ok(self.repodata_gateway.get_or_init(|| self.config().gateway(self.authenticated_client().unwrap().clone())))
     }
 }
 

@@ -109,7 +109,7 @@ git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
 prettier = ">=3.4.2,<4"
-rust = "~=1.81.0"
+rust = "~=1.83.0"
 
 [feature.build.target.linux-64.dependencies]
 clang = ">=18.1.8,<19.0"

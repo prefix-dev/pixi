@@ -42,7 +42,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
 };
 use rattler_lock::{LockFile, LockedPackageRef};
-use rattler_networking::s3_middleware;
+use rattler_networking::{authentication_storage::backends::file::FileStorageError, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -575,19 +575,20 @@ impl Project {
     }
 
     /// Returns the reqwest client used for http networking
-    pub(crate) fn client(&self) -> &reqwest::Client {
-        &self.client_and_authenticated_client().0
+    pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
+        Ok(&self.client_and_authenticated_client()?.0)
     }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
-        &self.client_and_authenticated_client().1
+    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
+        Ok(&self.client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
-        self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config), Some(self.s3_config.clone())))
+    fn client_and_authenticated_client(&self) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+        // todo unwrap
+        Ok(self.client
+            .get_or_init(|| build_reqwest_clients(Some(&self.config), Some(self.s3_config.clone())).unwrap()))
     }
 
     pub(crate) fn config(&self) -> &Config {
