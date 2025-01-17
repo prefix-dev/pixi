@@ -19,7 +19,7 @@ expression: project_model
     "defaultTarget": {
       "hostDependencies": {
         "hatchling": {
-          "detailedVersion": {
+          "binary": {
             "version": "==1.26.3",
             "build": null,
             "buildNumber": null,
@@ -34,7 +34,7 @@ expression: project_model
       "buildDependencies": {},
       "runDependencies": {
         "rich": {
-          "detailedVersion": {
+          "binary": {
             "version": "13.9.*",
             "build": null,
             "buildNumber": null,

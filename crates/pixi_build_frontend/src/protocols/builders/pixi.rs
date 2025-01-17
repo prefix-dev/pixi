@@ -18,7 +18,6 @@ use crate::{
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
     InProcessBackend, ToolContext,
 };
-// use super::{InitializeError, JsonRPCBuildProtocol};
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
 #[derive(Debug)]
@@ -202,10 +201,16 @@ impl ProtocolBuilder {
             .await
             .map_err(FinishError::Tool)?;
 
+        let channel_config = self
+            .channel_config
+            .clone()
+            .unwrap_or_else(|| ChannelConfig::default_with_root_dir(self.source_dir.clone()));
+
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.manifest_path,
             Some(&self.package_manifest),
+            &channel_config,
             build_id,
             self.cache_dir,
             tool,
@@ -220,11 +225,17 @@ impl ProtocolBuilder {
         ipc: InProcessBackend,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
+        let channel_config = self
+            .channel_config
+            .clone()
+            .unwrap_or_else(|| ChannelConfig::default_with_root_dir(self.source_dir.clone()));
+
         Ok(JsonRPCBuildProtocol::setup_with_transport(
             "<IPC>".to_string(),
             self.source_dir,
             self.manifest_path,
             Some(&self.package_manifest),
+            &channel_config,
             build_id,
             self.cache_dir,
             Sender::from(ipc.rpc_out),

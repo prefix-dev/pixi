@@ -14,6 +14,7 @@ use jsonrpsee::{
 };
 use pixi_build_type_conversions::to_project_model_v1;
 use pixi_manifest::PackageManifest;
+use rattler_conda_types::ChannelConfig;
 
 use crate::{
     jsonrpc::{stdio_transport, RpcParams},
@@ -74,6 +75,9 @@ pub enum ProtocolError {
         #[diagnostic_source]
         BackendError,
     ),
+    #[error("failed to convert dependencies for transfer to backend")]
+    #[diagnostic(help("ensure all dependencies can be correctly parsed by pixi"))]
+    ProjectModelConversion(#[from] pixi_spec::SpecConversionError),
     #[error("the build backend ({0}) does not implement the method '{1}'")]
     #[diagnostic(help(
         "This is often caused by the build backend incorrectly reporting certain capabilities. Consider contacting the build backend maintainers for a fix."
@@ -149,6 +153,7 @@ impl JsonRPCBuildProtocol {
         source_dir: PathBuf,
         manifest_path: PathBuf,
         package_manifest: Option<&'_ PackageManifest>,
+        channel_config: &ChannelConfig,
         build_id: usize,
         cache_dir: Option<PathBuf>,
         tool: Tool,
@@ -182,6 +187,7 @@ impl JsonRPCBuildProtocol {
             source_dir,
             manifest_path,
             package_manifest,
+            channel_config,
             build_id,
             cache_dir,
             tx,
@@ -199,6 +205,7 @@ impl JsonRPCBuildProtocol {
         // In case of rattler-build it's recipe.yaml
         manifest_path: PathBuf,
         package_manifest: Option<&'_ PackageManifest>,
+        channel_config: &ChannelConfig,
         build_id: usize,
         cache_dir: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
@@ -228,7 +235,10 @@ impl JsonRPCBuildProtocol {
             })?;
 
         // TODO: select the correct protocol version based on the capabilities
-        let project_model = package_manifest.map(to_project_model_v1);
+        let project_model = package_manifest
+            .map(|p| to_project_model_v1(p, channel_config))
+            .transpose()
+            .map_err(ProtocolError::from)?;
         // Invoke the initialize method on the backend to establish the connection.
         let _result: InitializeResult = client
             .request(

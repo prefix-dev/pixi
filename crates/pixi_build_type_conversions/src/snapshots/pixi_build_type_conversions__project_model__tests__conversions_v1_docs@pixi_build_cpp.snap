@@ -19,7 +19,7 @@ expression: project_model
     "defaultTarget": {
       "hostDependencies": {
         "cmake": {
-          "detailedVersion": {
+          "binary": {
             "version": "3.20.*",
             "build": null,
             "buildNumber": null,
@@ -31,7 +31,7 @@ expression: project_model
           }
         },
         "nanobind": {
-          "detailedVersion": {
+          "binary": {
             "version": "2.4.*",
             "build": null,
             "buildNumber": null,
@@ -43,7 +43,7 @@ expression: project_model
           }
         },
         "python": {
-          "detailedVersion": {
+          "binary": {
             "version": "3.12.*",
             "build": null,
             "buildNumber": null,

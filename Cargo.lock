@@ -3803,6 +3803,7 @@ version = "0.1.0"
 dependencies = [
  "indexmap 2.7.0",
  "insta",
+ "itertools 0.13.0",
  "pixi_build_types",
  "pixi_manifest",
  "pixi_spec",
