@@ -20,7 +20,7 @@ expression: project_model
       "hostDependencies": {
         "cmake": {
           "binary": {
-            "version": ">=3.20,<3.27",
+            "version": "3.20.*",
             "build": null,
             "buildNumber": null,
             "fileName": null,
@@ -32,7 +32,7 @@ expression: project_model
         },
         "nanobind": {
           "binary": {
-            "version": ">=2.4.0,<2.5.0",
+            "version": "2.4.*",
             "build": null,
             "buildNumber": null,
             "fileName": null,
@@ -42,9 +42,9 @@ expression: project_model
             "sha256": null
           }
         },
-        "python_abi": {
+        "python": {
           "binary": {
-            "version": ">=3.12,<3.13",
+            "version": "3.12.*",
             "build": null,
             "buildNumber": null,
             "fileName": null,
@@ -56,20 +56,7 @@ expression: project_model
         }
       },
       "buildDependencies": {},
-      "runDependencies": {
-        "python": {
-          "binary": {
-            "version": ">=3.12,<3.13",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
-          }
-        }
-      }
+      "runDependencies": {}
     },
     "targets": {}
   }
