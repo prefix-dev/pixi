@@ -1,7 +1,7 @@
 use std::{
     cmp::PartialEq,
     fs,
-    io::{Error, ErrorKind, Write},
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -184,7 +184,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
     // Fail silently if the directory already exists or cannot be created.
     fs_err::create_dir_all(&args.path).ok();
-    let dir = get_dir(args.path).into_diagnostic()?;
+    let dir = args.path.canonicalize().into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
@@ -530,45 +530,13 @@ fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
-    path.canonicalize().map_err(|e| match e.kind() {
-        ErrorKind::NotFound => Error::new(
-            ErrorKind::NotFound,
-            format!(
-                "Cannot find '{}' please make sure the folder is reachable",
-                path.to_string_lossy()
-            ),
-        ),
-        _ => Error::new(
-            ErrorKind::InvalidInput,
-            "Cannot canonicalize the given path",
-        ),
-    })
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::Read,
-        path::{Path, PathBuf},
-    };
+    use std::{io::Read, path::Path};
 
     use tempfile::tempdir;
 
     use super::*;
-    use crate::cli::init::get_dir;
-
-    #[test]
-    fn test_get_name() {
-        assert_eq!(
-            get_dir(PathBuf::from(".")).unwrap(),
-            std::env::current_dir().unwrap()
-        );
-        assert_eq!(
-            get_dir(std::env::current_dir().unwrap()).unwrap(),
-            std::env::current_dir().unwrap().canonicalize().unwrap()
-        );
-    }
 
     #[test]
     fn test_create_or_append_file() {
