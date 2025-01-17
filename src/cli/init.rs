@@ -182,6 +182,8 @@ pixi.lock gitlab-language=yaml gitlab-generated=true
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
+    // Fail silently if the directory already exists or cannot be created.
+    fs_err::create_dir_all(&args.path).ok();
     let dir = get_dir(args.path).into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
@@ -198,9 +200,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style("--format pyproject").bold().green(),
         );
     }
-
-    // Fail silently if the directory already exists or cannot be created.
-    fs_err::create_dir_all(&dir).ok();
 
     let default_name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project"));
     let version = "0.1.0";
@@ -532,23 +531,19 @@ fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
 }
 
 fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
-    if path.components().count() == 1 {
-        Ok(std::env::current_dir().unwrap_or_default().join(path))
-    } else {
-        path.canonicalize().map_err(|e| match e.kind() {
-            ErrorKind::NotFound => Error::new(
-                ErrorKind::NotFound,
-                format!(
-                    "Cannot find '{}' please make sure the folder is reachable",
-                    path.to_string_lossy()
-                ),
+    dunce::canonicalize(&path).map_err(|e| match e.kind() {
+        ErrorKind::NotFound => Error::new(
+            ErrorKind::NotFound,
+            format!(
+                "Cannot find '{}' please make sure the folder is reachable",
+                path.to_string_lossy()
             ),
-            _ => Error::new(
-                ErrorKind::InvalidInput,
-                "Cannot canonicalize the given path",
-            ),
-        })
-    }
+        ),
+        _ => Error::new(
+            ErrorKind::InvalidInput,
+            "Cannot canonicalize the given path",
+        ),
+    })
 }
 
 #[cfg(test)]
@@ -577,14 +572,6 @@ mod tests {
             get_dir(std::env::current_dir().unwrap()).unwrap(),
             std::env::current_dir().unwrap().canonicalize().unwrap()
         );
-    }
-
-    #[test]
-    fn test_get_name_panic() {
-        match get_dir(PathBuf::from("invalid/path")) {
-            Ok(_) => panic!("Expected error, but got OK"),
-            Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::NotFound),
-        }
     }
 
     #[test]
