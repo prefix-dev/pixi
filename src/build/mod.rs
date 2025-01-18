@@ -80,12 +80,15 @@ pub enum BuildError {
     CalculateSha(PathBuf, #[source] std::io::Error),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     BuildFrontendSetup(pixi_build_frontend::BuildFrontendError),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     BackendError(Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FrontendError(Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
