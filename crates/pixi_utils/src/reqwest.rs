@@ -1,18 +1,18 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use rattler_networking::{
-    authentication_storage::{self, backends::file::FileStorageError},
-    mirror_middleware::Mirror,
-    retry_policies::ExponentialBackoff,
-    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
-    OciMiddleware,
+    authentication_storage::backends::file::FileStorageError, mirror_middleware::Mirror,
+    retry_policies::ExponentialBackoff, AuthenticationMiddleware, AuthenticationStorage,
+    GCSMiddleware, MirrorMiddleware, OciMiddleware, S3Middleware,
 };
 
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
+use tracing::debug;
 
 use pixi_config::Config;
 
@@ -22,7 +22,13 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
+fn auth_storage() -> Result<AuthenticationStorage, FileStorageError> {
+    // todo get stuff from other PR here as well
+    AuthenticationStorage::from_env_and_defaults()
+}
+
 fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
+    // todo get stuff from other PR here as well
     if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
 
@@ -30,15 +36,12 @@ fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStor
             tracing::warn!("Authentication file does not exist: {:?}", auth_file);
         }
 
-        let mut store = AuthenticationStorage::new();
-        store.add_backend(Arc::from(
-            authentication_storage::backends::file::FileStorage::new(PathBuf::from(&auth_file))?,
-        ));
+        let store = auth_storage()?;
 
-        return Ok(AuthenticationMiddleware::new(store));
+        return Ok(AuthenticationMiddleware::from_auth_storage(store));
     }
 
-    Ok(AuthenticationMiddleware::default())
+    AuthenticationMiddleware::from_env_and_defaults()
 }
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
@@ -77,7 +80,10 @@ pub fn oci_middleware() -> OciMiddleware {
     OciMiddleware
 }
 
-pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
+pub fn build_reqwest_clients(
+    config: Option<&Config>,
+    s3_config: Option<rattler_networking::s3_middleware::S3Config>,
+) -> miette::Result<(Client, ClientWithMiddleware)> {
     let app_user_agent = format!("pixi/{}", consts::PIXI_VERSION);
 
     // If we do not have a config, we will just load the global default.
@@ -111,6 +117,16 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
 
     client_builder = client_builder.with(GCSMiddleware);
 
+    debug!("Using s3_config: {:?}", s3_config);
+    let store = auth_storage().into_diagnostic()?;
+    let s3_middleware = if let Some(s3_config) = s3_config {
+        S3Middleware::new(s3_config, store)
+    } else {
+        S3Middleware::new(config.compute_s3_config(), store)
+    };
+    debug!("s3_middleware: {:?}", s3_middleware);
+    client_builder = client_builder.with(s3_middleware);
+
     client_builder = client_builder.with_arc(Arc::new(
         auth_middleware(&config).expect("could not create auth middleware"),
     ));
@@ -121,5 +137,5 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
 
     let authenticated_client = client_builder.build();
 
-    (client, authenticated_client)
+    Ok((client, authenticated_client))
 }
