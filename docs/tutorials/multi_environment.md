@@ -245,5 +245,5 @@ mkdocs   1.6.1    pyhd8ed1ab_1  3.4 MiB  conda  mkdocs
 
 ## Conclusion
 The multiple environment feature is extremely powerful and can be used in many different ways.
-There is much more to explore in the [reference](../reference/pixi_manifest.md#the-feature-and-environments-tables) and [advanced](../advanced/multi_environment.md) sections.
+There is much more to explore in the [reference](../reference/pixi_manifest.md#the-feature-and-environments-tables) and [advanced](../features/multi_environment.md) sections.
 If there is any questions, or you know how to improve this tutorial, feel free to reach out to us on [GitHub](https://github.com/prefix-dev/pixi).
