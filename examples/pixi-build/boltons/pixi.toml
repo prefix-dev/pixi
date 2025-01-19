@@ -10,9 +10,7 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-# boltons-source = { path = "." }
 boltons-with-extra = { path = "." }
-# hatchling = "==1.26.3"
 
 
 [package]
