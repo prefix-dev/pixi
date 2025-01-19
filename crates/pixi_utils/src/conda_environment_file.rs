@@ -94,6 +94,15 @@ impl CondaEnvFile {
             .into_diagnostic()?;
         let mut s = String::new();
         for line in lines {
+            if line.contains("- -r ") {
+                let line_parts: Vec<&str> = line.splitn(2, "- -r ").collect();
+                let base_path = path.parent().unwrap_or_else(|| Path::new(""));
+                let requirements_file_path = base_path.join(line_parts[1]);
+                let requirements_txt_pip_deps =
+                    get_deps_from_requirements_txt(line_parts[0], requirements_file_path);
+                s.push_str(&requirements_txt_pip_deps.unwrap());
+                continue;
+            }
             if line.contains("- sel(") {
                 tracing::warn!("Skipping micromamba sel(...) in line: \"{}\"", line.trim());
                 tracing::warn!("Please add the dependencies manually");
@@ -133,6 +142,26 @@ impl CondaEnvFile {
 
         Ok((conda_deps, pip_deps, channels))
     }
+}
+
+fn get_deps_from_requirements_txt(indentation: &str, file_path: PathBuf) -> miette::Result<String> {
+    let file = fs_err::File::open(file_path).into_diagnostic()?;
+    let reader = std::io::BufReader::new(file);
+    let lines = reader
+        .lines()
+        .collect::<Result<Vec<String>, _>>()
+        .into_diagnostic()?;
+
+    let mut requirements_txt_dependencies = String::new();
+    for line in lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let formatted_req = format!("{}- {}\n", indentation, line);
+        requirements_txt_dependencies.push_str(&formatted_req);
+    }
+
+    Ok(requirements_txt_dependencies)
 }
 
 fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependencies> {
@@ -332,6 +361,60 @@ mod tests {
         assert_eq!(
             pip_deps,
             vec![pep508_rs::Requirement::from_str("requests").unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_parse_conda_env_file_with_requirements_txt_file() {
+        let file_for_pip = tempfile::NamedTempFile::new().unwrap();
+        let file_for_pip_path = file_for_pip.path();
+
+        let example_pip_requirements_content = r#"pandas==2.0.0
+        polars"#;
+
+        let mut pip_requirements_file = fs_err::File::create(file_for_pip_path).unwrap();
+        pip_requirements_file
+            .write_all(example_pip_requirements_content.as_bytes())
+            .unwrap();
+
+        let example_conda_env_file = format!(
+            r#"
+            name: example_project_with_external_pip_requirements
+            channels:
+            - conda-forge
+            dependencies:
+            - pip==24.0
+            - pip:
+                - -r {}
+                - matplotlib
+            "#,
+            file_for_pip_path.display()
+        );
+
+        let file_for_conda = tempfile::NamedTempFile::new().unwrap();
+        let file_for_conda_path = file_for_conda.path();
+
+        let mut conda_env_file = fs_err::File::create(file_for_conda_path).unwrap();
+        conda_env_file
+            .write_all(example_conda_env_file.as_bytes())
+            .unwrap();
+
+        let conda_env_file_data = CondaEnvFile::from_path(file_for_conda_path).unwrap();
+        let (conda_deps, pip_deps, _) =
+            parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
+
+        assert_eq!(
+            conda_deps,
+            vec![MatchSpec::from_str("pip==24.0", Strict).unwrap(),]
+        );
+
+        assert_eq!(
+            pip_deps,
+            vec![
+                pep508_rs::Requirement::from_str("pandas==2.0.0").unwrap(),
+                pep508_rs::Requirement::from_str("polars").unwrap(),
+                pep508_rs::Requirement::from_str("matplotlib").unwrap()
+            ]
         );
     }
 }
