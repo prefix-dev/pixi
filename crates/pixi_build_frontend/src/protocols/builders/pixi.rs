@@ -34,7 +34,7 @@ pub struct ProtocolBuilder {
 
 #[derive(thiserror::Error, Debug, Diagnostic)]
 pub enum ProtocolBuildError {
-    #[error("failed to setup a build backend, the {0} could not be parsed")]
+    #[error("failed to setup a build backend, failed to parse {0}")]
     #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()
     ))]
     FailedToParseManifest(PathBuf, #[diagnostic_source] miette::Report),
