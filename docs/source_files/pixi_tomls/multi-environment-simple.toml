@@ -1,0 +1,19 @@
+[project]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi"
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+
+# --8<-- [start:test-feat-dep]
+[feature.test.dependencies]
+pytest = "*"
+# --8<-- [end:test-feat-dep]
+
+# --8<-- [start:test-env]
+[environments]
+test = ["test"]
+# --8<-- [end:test-env]
+
+# --8<-- [start:test-tasks]
+[feature.test.tasks]
+test = "pytest"
+# --8<-- [end:test-tasks]

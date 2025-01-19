@@ -102,6 +102,7 @@ nav:
       - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
+      - Multi Environment: tutorials/multi_environment.md
   - Features:
       - Environments: features/environment.md
       - Tasks: features/advanced_tasks.md
