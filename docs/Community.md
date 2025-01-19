@@ -67,3 +67,4 @@ When you want to show your users and contributors that they can use pixi in your
 - [array-api-extra](https://github.com/data-apis/array-api-extra): Extra array functions built on top of the Python array API standard.
 - [marray](https://github.com/mdhaber/marray):
 Masked versions of Python array API standard compatible arrays.
+- [quantity-array](https://github.com/quantity-dev/quantity-array): Quantities with Python array API standard arrays.
