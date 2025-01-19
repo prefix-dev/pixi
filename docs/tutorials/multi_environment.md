@@ -10,7 +10,7 @@ A developer often needs all the tools they can get, whereas your testing infrast
 Setting up different environments for these different use cases can be a hassle, but with pixi it's easy.
 
 ## Dictionary
-This tutorial uses possibly some new terms, here is a quick overview:
+This tutorial possibly uses some new terms, here is a quick overview:
 #### **Feature**
 A feature defines a part of an environment, but are not useful without being part of an environment.
 You can define multiple features in one project.
