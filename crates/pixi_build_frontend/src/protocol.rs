@@ -6,9 +6,13 @@ use pixi_build_types::procedures::{
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
 
-use crate::protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
-
-use crate::{protocols::JsonRPCBuildProtocol, CondaBuildReporter, CondaMetadataReporter};
+use crate::{
+    protocols::{
+        builders::{conda_protocol, pixi_protocol, rattler_build_protocol},
+        JsonRPCBuildProtocol,
+    },
+    CondaBuildReporter, CondaMetadataReporter,
+};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -113,10 +117,9 @@ impl Protocol {
         reporter: Arc<dyn CondaMetadataReporter>,
     ) -> miette::Result<CondaMetadataResult> {
         match self {
-            Self::PixiBuild(protocol) => protocol
+            Self::PixiBuild(protocol) => Ok(protocol
                 .get_conda_metadata(request, reporter.as_ref())
-                .await
-                .into_diagnostic(),
+                .await?),
             Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
         }
     }
