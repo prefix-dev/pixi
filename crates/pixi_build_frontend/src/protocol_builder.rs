@@ -36,6 +36,7 @@ impl Default for EnabledProtocols {
 }
 
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum ProtocolBuilder {
     /// A pixi project.
     Pixi(pixi_protocol::ProtocolBuilder),

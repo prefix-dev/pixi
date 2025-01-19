@@ -124,6 +124,7 @@ impl Display for SourceTreeHashMismatch {
 }
 
 #[derive(Debug, Error, Diagnostic)]
+#[allow(clippy::large_enum_variant)]
 pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableMatchSpec(MatchSpec, String),
@@ -1418,6 +1419,7 @@ mod tests {
     use crate::Project;
 
     #[derive(Error, Debug, Diagnostic)]
+    #[allow(clippy::large_enum_variant)]
     enum LockfileUnsat {
         #[error("environment '{0}' is missing")]
         EnvironmentMissing(String),

@@ -37,7 +37,6 @@ impl PixiRecord {
     }
 
     /// Converts this instance into a binary record if it is a binary record.
-
     pub fn into_binary(self) -> Option<RepoDataRecord> {
         match self {
             PixiRecord::Binary(record) => Some(record),

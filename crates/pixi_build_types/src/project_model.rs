@@ -150,6 +150,7 @@ pub struct TargetV1 {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::large_enum_variant)]
 pub enum PackageSpecV1 {
     /// This is a binary dependency
     Binary(BinaryPackageSpecV1),

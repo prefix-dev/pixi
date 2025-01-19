@@ -307,7 +307,7 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
     task: &'t ExecutableTask<'p>,
 }
 
-impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
+impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let command = self.task.task.as_single_command();
         write!(
@@ -354,8 +354,8 @@ fn get_export_specific_task_env(task: &Task) -> String {
 
 /// Determine the environment variables to use when executing a command. The method combines the
 /// activation environment with the system environment variables.
-pub async fn get_task_env<'p>(
-    environment: &Environment<'p>,
+pub async fn get_task_env(
+    environment: &Environment<'_>,
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,

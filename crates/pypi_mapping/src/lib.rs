@@ -189,7 +189,7 @@ pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
         .channel
         .as_ref()
         .and_then(|channel| Url::from_str(channel).ok())
-        .map_or(false, |u| is_conda_forge_url(&u))
+        .is_some_and(|u| is_conda_forge_url(&u))
 }
 
 /// Returns `true` if the specified url refers to a conda-forge channel.

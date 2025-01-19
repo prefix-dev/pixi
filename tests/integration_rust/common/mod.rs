@@ -4,12 +4,11 @@ pub mod builders;
 pub mod client;
 pub mod package_database;
 
-use std::{
-    path::{Path, PathBuf},
-    process::Output,
-    str::FromStr,
+use self::builders::{HasDependencyConfig, RemoveBuilder};
+use crate::common::builders::{
+    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
+    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
-
 use builders::SearchBuilder;
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
@@ -35,14 +34,15 @@ use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
+use std::sync::LazyLock;
+use std::{
+    path::{Path, PathBuf},
+    process::Output,
+    str::FromStr,
+};
 use tempfile::TempDir;
 use thiserror::Error;
-
-use self::builders::{HasDependencyConfig, RemoveBuilder};
-use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
-};
+use uv_configuration::RAYON_INITIALIZE;
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
 [repodata-config."https://prefix.dev"]
@@ -213,6 +213,9 @@ impl LockFileExt for LockFile {
 impl PixiControl {
     /// Create a new PixiControl instance
     pub fn new() -> miette::Result<PixiControl> {
+        // Initialize rayon using the `uv` initializer
+        LazyLock::force(&RAYON_INITIALIZE);
+
         let tempdir = tempfile::tempdir().into_diagnostic()?;
 
         // Add default project config

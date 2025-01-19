@@ -51,14 +51,14 @@ impl Debug for Environment<'_> {
     }
 }
 
-impl<'p> PartialEq for Environment<'p> {
+impl PartialEq for Environment<'_> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.project, other.project)
             && std::ptr::eq(self.environment, other.environment)
     }
 }
 
-impl<'p> Eq for Environment<'p> {}
+impl Eq for Environment<'_> {}
 
 impl<'p> Environment<'p> {
     /// Return new instance of Environment
@@ -351,7 +351,7 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
     }
 }
 
-impl<'p> Hash for Environment<'p> {
+impl Hash for Environment<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.environment.name.hash(state);
     }

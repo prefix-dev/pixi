@@ -5,11 +5,13 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_progress::global_multi_progress;
 use pixi_utils::indicatif::IndicatifWriter;
+use std::sync::LazyLock;
 use std::{env, io::IsTerminal};
 use tracing_subscriber::{
     filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
     EnvFilter,
 };
+use uv_configuration::RAYON_INITIALIZE;
 
 pub mod add;
 mod build;
@@ -173,6 +175,9 @@ pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     set_console_colors(&args);
     let use_colors = console::colors_enabled_stderr();
+
+    // initialize rayon in uv so it doesn't crash later
+    LazyLock::force(&RAYON_INITIALIZE);
 
     // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
