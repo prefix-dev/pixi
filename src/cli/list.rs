@@ -345,6 +345,17 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     println!("{}", json_string);
 }
 
+// Helper function to handle PyPI location logic
+fn handle_pypi_location(location: &UrlOrPath) -> (Option<u64>, Option<String>) {
+    match location {
+        UrlOrPath::Url(url) => (None, Some(url.to_string())),
+        UrlOrPath::Path(path) => (
+            get_dir_size(std::path::Path::new(path.as_str())).ok(),
+            Some(path.to_string()),
+        ),
+    }
+}
+
 fn create_package_to_output<'a, 'b>(
     package: &'b PackageExt,
     project_dependency_names: &'a [String],
@@ -368,21 +379,22 @@ fn create_package_to_output<'a, 'b>(
             Some(pkg.record().name.as_source().to_owned()),
         ),
         PackageExt::PyPI(p, name) => {
-            if let Some(registry_index) = registry_index {
-                let entry = registry_index.get(name).find(|i| {
-                    i.dist.filename.version == to_uv_version(&p.version).expect("invalid version")
-                });
-                let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
-                let name = entry.map(|e| e.dist.filename.to_string());
-                (size, name)
-            } else {
-                match &p.location {
-                    UrlOrPath::Url(url) => (None, Some(url.to_string())),
-                    UrlOrPath::Path(path) => (
-                        get_dir_size(std::path::Path::new(path.as_str())).ok(),
-                        Some(path.to_string()),
-                    ),
+            // Check the hash to avoid non index packages to be handled by the registry index as wheels
+            if p.hash.is_some() {
+                if let Some(registry_index) = registry_index {
+                    // Handle case where the registry index is present
+                    let entry = registry_index.get(name).find(|i| {
+                        i.dist.filename.version
+                            == to_uv_version(&p.version).expect("invalid version")
+                    });
+                    let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
+                    let name = entry.map(|e| e.dist.filename.to_string());
+                    (size, name)
+                } else {
+                    handle_pypi_location(&p.location)
                 }
+            } else {
+                handle_pypi_location(&p.location)
             }
         }
     };
