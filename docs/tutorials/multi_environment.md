@@ -9,7 +9,7 @@ With pixi you can define multiple environments in one project and switch between
 A developer often needs all the tools they can get, whereas your testing infrastructure might not require all those tools, and your production environment might require even less.
 Setting up different environments for these different use cases can be a hassle, but with pixi it's easy.
 
-## Dictionary
+## Glossary
 This tutorial possibly uses some new terms, here is a quick overview:
 #### **Feature**
 A feature defines a part of an environment, but are not useful without being part of an environment.
