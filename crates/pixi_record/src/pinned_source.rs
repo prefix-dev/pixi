@@ -280,7 +280,6 @@ impl PinnedGitSpec {
             Reference::DefaultBranch => {}
         }
 
-        eprintln!("precise commit hash: {}", self.source.commit);
         // Put the precise commit in the fragment.
         url.set_fragment(self.source.commit.to_string().as_str().into());
 
