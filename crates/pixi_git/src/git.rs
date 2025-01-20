@@ -16,7 +16,6 @@ use std::{
 use miette::{Context, IntoDiagnostic};
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
-use tracing::debug;
 use url::Url;
 
 use crate::sha::{GitOid, GitSha};
@@ -158,11 +157,8 @@ impl GitReference {
                 .rev_parse(&format!("origin/{s}^0"))
                 .or_else(|_| repo.rev_parse(&format!("refs/remotes/origin/tags/{s}^0"))),
 
-            // Attempt to resolve the branch, then the tag, then the commit.
+            // Attempt to resolve the commit, the tag then the branch.
             Self::BranchOrTagOrCommit(s) => repo
-                // .rev_parse(&format!("origin/{s}^0"))
-                // .or_else(|_| repo.rev_parse(&format!("refs/remotes/origin/tags/{s}^0")))
-                // .or_else(|_| repo.rev_parse(&format!("{s}^0"))),
                 .rev_parse(&format!("{s}^0"))
                 .or_else(|_| repo.rev_parse(&format!("refs/remotes/origin/tags/{s}^0")))
                 .or_else(|_| repo.rev_parse(&format!("origin/{s}^0"))),
@@ -366,8 +362,6 @@ impl GitRepository {
 
         let mut result = String::from_utf8(result.stdout).into_diagnostic()?;
 
-        eprintln!("rev parse result {:?}", result);
-
         result.truncate(result.trim_end().len());
         result.parse().into_diagnostic()
     }
@@ -510,7 +504,6 @@ pub(crate) fn fetch(
     // The `+` symbol on the refspec means to allow a forced (fast-forward)
     // update which is needed if there is ever a force push that requires a
     // fast-forward.
-    debug!("reference is {:?}", reference);
     match reference {
         // For branches and tags we can fetch simply one reference and copy it
         // locally, no need to fetch other branches/tags.

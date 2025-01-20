@@ -448,8 +448,6 @@ pub enum Pep508ToPyPiRequirementError {
     #[error(transparent)]
     ParseUrl(#[from] url::ParseError),
 
-    // #[error(transparent)]
-    // ParseGitRev(#[from] GitRevParseError),
     #[error("could not convert '{0}' to a file path")]
     PathUrlIntoPath(Url),
 
