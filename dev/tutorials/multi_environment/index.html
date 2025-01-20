@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/tutorials/rust/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/tutorials/multi_environment/">
       
       
-        <link rel="prev" href="../ros2/">
+        <link rel="prev" href="../rust/">
       
       
-        <link rel="next" href="../multi_environment/">
+        <link rel="next" href="../../features/environment/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>Rust - Pixi by prefix.dev</title>
+        <title>Multi Environment - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Rust - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Multi Environment - Pixi by prefix.dev" >
       
         <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/rust.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/multi_environment.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/tutorials/rust/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/tutorials/multi_environment/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Rust - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Multi Environment - Pixi by prefix.dev" >
       
         <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/rust.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/multi_environment.png" >
       
     
     
@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-develop-a-rust-package-using-pixi" class="md-skip">
+        <a href="#tutorial-using-multiple-environments" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Rust
+              Multi Environment
             
           </span>
         </div>
@@ -414,6 +414,27 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../rust/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Rust
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -430,7 +451,7 @@
           
   
   <span class="md-ellipsis">
-    Rust
+    Multi Environment
   </span>
   
 
@@ -441,7 +462,7 @@
         
   
   <span class="md-ellipsis">
-    Rust
+    Multi Environment
   </span>
   
 
@@ -463,56 +484,95 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#why-is-this-useful" class="md-nav__link">
     <span class="md-ellipsis">
-      Prerequisites
+      Why is this useful?
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
+  <a href="#glossary" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi project.
+      Glossary
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#add-rust-dependencies" class="md-nav__link">
+  <a href="#lets-get-started" class="md-nav__link">
     <span class="md-ellipsis">
-      Add Rust dependencies
+      Let's get started
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Let's get started">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      Adding a feature
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-an-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Adding an environment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-a-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running a task
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-multiple-environments-to-test-multiple-versions-of-a-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using multiple environments to test multiple versions of a package
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#add-a-cargo-project" class="md-nav__link">
+  <a href="#development-testing-production-environments" class="md-nav__link">
     <span class="md-ellipsis">
-      Add a cargo project
+      Development, Testing, Production environments
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Development, Testing, Production environments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#non-default-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      Non default environments
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps-why-is-this-useful-when-there-is-rustup" class="md-nav__link">
-    <span class="md-ellipsis">
-      Next steps, why is this useful when there is rustup?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#extra-add-more-tasks" class="md-nav__link">
-    <span class="md-ellipsis">
-      Extra: Add more tasks
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -525,40 +585,10 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#show-off-your-work" class="md-nav__link">
-    <span class="md-ellipsis">
-      Show Off Your Work!
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../multi_environment/" class="md-nav__link">
-        
-  
-  <span class="md-ellipsis">
-    Multi Environment
-  </span>
-  
-
-      </a>
     </li>
   
 
@@ -1838,56 +1868,95 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#why-is-this-useful" class="md-nav__link">
     <span class="md-ellipsis">
-      Prerequisites
+      Why is this useful?
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
+  <a href="#glossary" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi project.
+      Glossary
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#add-rust-dependencies" class="md-nav__link">
+  <a href="#lets-get-started" class="md-nav__link">
     <span class="md-ellipsis">
-      Add Rust dependencies
+      Let's get started
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Let's get started">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      Adding a feature
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-an-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Adding an environment
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-a-task" class="md-nav__link">
+    <span class="md-ellipsis">
+      Running a task
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-multiple-environments-to-test-multiple-versions-of-a-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using multiple environments to test multiple versions of a package
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#add-a-cargo-project" class="md-nav__link">
+  <a href="#development-testing-production-environments" class="md-nav__link">
     <span class="md-ellipsis">
-      Add a cargo project
+      Development, Testing, Production environments
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Development, Testing, Production environments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#non-default-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      Non default environments
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#next-steps-why-is-this-useful-when-there-is-rustup" class="md-nav__link">
-    <span class="md-ellipsis">
-      Next steps, why is this useful when there is rustup?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#extra-add-more-tasks" class="md-nav__link">
-    <span class="md-ellipsis">
-      Extra: Add more tasks
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1895,15 +1964,6 @@
   <a href="#conclusion" class="md-nav__link">
     <span class="md-ellipsis">
       Conclusion
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#show-off-your-work" class="md-nav__link">
-    <span class="md-ellipsis">
-      Show Off Your Work!
     </span>
   </a>
   
@@ -1924,7 +1984,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/tutorials/rust.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/tutorials/multi_environment.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -1932,152 +1992,203 @@
   
 
 
-<h1 id="tutorial-develop-a-rust-package-using-pixi">Tutorial: Develop a Rust package using <code>pixi</code><a class="headerlink" href="#tutorial-develop-a-rust-package-using-pixi" title="Permanent link">#</a></h1>
-<p>In this tutorial, we will show you how to develop a Rust package using <code>pixi</code>.
-The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
-<p>The audience for this tutorial is developers who are familiar with Rust and <code>cargo</code> and how are interested to try pixi for their development workflow.
-The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. E.g tokio users will almost most definitely use <code>openssl</code>.</p>
-<div class="admonition note">
-<p>If you're new to pixi, you can check out the <a href="../../basic_usage/">basic usage</a> guide.
-This will teach you the basics of pixi project within 3 minutes.</p>
-</div>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
+<h1 id="tutorial-using-multiple-environments">Tutorial: Using multiple environments<a class="headerlink" href="#tutorial-using-multiple-environments" title="Permanent link">#</a></h1>
+<p>In this tutorial we will show you how to use multiple environments in one pixi project.</p>
+<h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
+<p>When developing a project you often need different tools, libraries or test environments.
+With pixi you can define multiple environments in one project and switch between them easily.
+A developer often needs all the tools they can get, whereas your testing infrastructure might not require all those tools, and your production environment might require even less.
+Setting up different environments for these different use cases can be a hassle, but with pixi it's easy.</p>
+<h2 id="glossary">Glossary<a class="headerlink" href="#glossary" title="Permanent link">#</a></h2>
+<p>This tutorial possibly uses some new terms, here is a quick overview:</p>
+<h4 id="feature"><strong>Feature</strong><a class="headerlink" href="#feature" title="Permanent link">#</a></h4>
+<p>A feature defines a part of an environment, but are not useful without being part of an environment.
+You can define multiple features in one project.
+A feature can contain <code>tasks</code>, <code>dependencies</code>, <code>platforms</code>, <code>channels</code> and <a href="../../reference/pixi_manifest/#the-feature-table">more</a>.
+You can mix multiple features to create an environment.
+Features are defined by adding <code>[feature.&lt;name&gt;.*]</code> to a table in the manifest file.</p>
+<h4 id="environment"><strong>Environment</strong><a class="headerlink" href="#environment" title="Permanent link">#</a></h4>
+<p>An environment is a collection of features.
+Environments can actually be installed and activated to run tasks in.
+You can define multiple environments in one project.
+Defining environments is done by adding them to the <code>[environments]</code> table in the manifest file.</p>
+<h4 id="default"><strong>Default</strong><a class="headerlink" href="#default" title="Permanent link">#</a></h4>
+<p>Instead of specifying <code>[feature.&lt;name&gt;.dependencies]</code>, one can populate <code>[dependencies]</code> directly.
+These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.</p>
+<h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
+<p>We'll simply start with a new project, you can skip this step if you already have a pixi project.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>project
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>project
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>python
+</span></code></pre></div>
+<p>Now we have a new pixi project with the following structure:
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>├── .pixi
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>│   └── envs
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│       └── default
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>├── pixi.lock
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>└── pixi.toml
+</span></code></pre></div></p>
+<p>Note the <code>.pixi/envs/default</code> directory, this is where the default environment is stored.
+If no environment is specified, pixi will create or use the <code>default</code> environment.</p>
+<h3 id="adding-a-feature">Adding a feature<a class="headerlink" href="#adding-a-feature" title="Permanent link">#</a></h3>
+<p>Let's start adding a simple <code>test</code> feature to our project.
+We can do this through the command line, or by editing the <code>pixi.toml</code> file.
+Here we will use the command line, and add a <code>pytest</code> dependency to the <code>test</code> feature in our project.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
+</span></code></pre></div>
+This will add the following to our <code>pixi.toml</code> file:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[feature.test.dependencies]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span></code></pre></div>
+This table acts exactly the same as a normal <code>dependencies</code> table, but it is only used when the <code>test</code> feature is part of an environment.</p>
+<h3 id="adding-an-environment">Adding an environment<a class="headerlink" href="#adding-an-environment" title="Permanent link">#</a></h3>
+<p>We will add the <code>test</code> environment to our project to add some testing tools.
+We can do this through the command line, or by editing the <code>pixi.toml</code> file.
+Here we will use the command line:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span>
+</span></code></pre></div>
+This will add the following to our <code>pixi.toml</code> file:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[environments]</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
+</span></code></pre></div></p>
+<h3 id="running-a-task">Running a task<a class="headerlink" href="#running-a-task" title="Permanent link">#</a></h3>
+<p>We can now run a task in our new environment.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest<span class="w"> </span>--version
+</span></code></pre></div>
+This has created the test environment, and run the <code>pytest --version</code> command in it.
+You can see the environment will be added to the <code>.pixi/envs</code> directory.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>├──<span class="w"> </span>.pixi
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>│<span class="w">   </span>└──<span class="w"> </span>envs
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>│<span class="w">       </span>├──<span class="w"> </span>default
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>│<span class="w">       </span>└──<span class="w"> </span><span class="nb">test</span>
+</span></code></pre></div>
+If you want to see the environment, you can use the <code>pixi list</code> command.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>list<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span>
+</span></code></pre></div></p>
+<p>If you have special test commands that always fit with the test environment you can add them to the <code>test</code> feature.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Adding the &#39;test&#39; task to the &#39;test&#39; feature and setting it to run `pytest`</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
+</span></code></pre></div>
+This will add the following to our <code>pixi.toml</code> file:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[feature.test.tasks]</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
+</span></code></pre></div>
+Now you don't have to specify the environment when running the test command.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span>
+</span></code></pre></div>
+In this example similar to running <code>pixi run --environment test pytest</code></p>
+<p>This works as long as there is only one of the environments that has the <code>test</code> task.</p>
+<h2 id="using-multiple-environments-to-test-multiple-versions-of-a-package">Using multiple environments to test multiple versions of a package<a class="headerlink" href="#using-multiple-environments-to-test-multiple-versions-of-a-package" title="Permanent link">#</a></h2>
+<p>In this example we will use multiple environments to test a package against multiple versions of Python.
+This is a common use-case when developing a python library.
+This workflow can be translated to any setup where you want to have multiple environments to test against a different dependency setups.</p>
+<p>For this example we assume you have run the commands in the previous example, and have a project with a <code>test</code> environment.
+To allow python being flexible in the new environments we need to set it to a more flexible version e.g. <code>*</code>.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;python=*&quot;</span>
+</span></code></pre></div>
+<p>We will start by setting up two features, <code>py311</code> and <code>py312</code>.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>py311<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>py312<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
+</span></code></pre></div></p>
+<p>We'll add the <code>test</code> and Python features to the corresponding environments.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>test-py311<span class="w"> </span>--feature<span class="w"> </span>py311<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>test-py312<span class="w"> </span>--feature<span class="w"> </span>py312<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span>
+</span></code></pre></div></p>
+<p>This should result in adding the following to the <code>pixi.toml</code>:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[feature.py311.dependencies]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.11.*&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">[feature.py312.dependencies]</span>
+</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span>
+</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
+</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="k">[environments]</span>
+</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="n">test-py311</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;py311&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
+</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="n">test-py312</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;py312&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
+</span></code></pre></div></p>
+<p>Now we can run the test command in both environments.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span>test-py311<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span>test-py312<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Or using the task directly, which will spawn a dialog to select the environment of choice</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span>
+</span></code></pre></div></p>
+<p>These could now run in CI to test separate environments:
+<div class="language-yaml highlight"><span class="filename">.github/workflows/test.yml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">test</span><span class="p">:</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="nt">strategy</span><span class="p">:</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">matrix</span><span class="p">:</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">      </span><span class="nt">environment</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">test-py311</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">test-py312</span><span class="p p-Indicator">]</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="nt">steps</span><span class="p">:</span>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0</span>
+</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">    </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">      </span><span class="nt">environments</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ matrix.environment }}</span>
+</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi run -e ${{ matrix.environment }} test</span>
+</span></code></pre></div>
+More info on that in the GitHub actions <a href="../../advanced/github_actions/">documentation</a>.</p>
+<h2 id="development-testing-production-environments">Development, Testing, Production environments<a class="headerlink" href="#development-testing-production-environments" title="Permanent link">#</a></h2>
+<p>This assumes a clean project, so if you have been following along, you might want to start a new project.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>production_project
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nb">cd</span><span class="w"> </span>production_project
+</span></code></pre></div></p>
+<p>Like before we'll start with creating multiple features.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span>python<span class="w"> </span><span class="c1"># default feature</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>dev<span class="w"> </span>jupyterlab
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
+</span></code></pre></div></p>
+<p>Now we'll add the environments.
+To accommodate the different use-cases we'll add a <code>production</code>, <code>test</code> and <code>default</code> environment.</p>
 <ul>
-<li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
-  The crux of this tutorial is to show you only need pixi!</li>
+<li>The <code>production</code> environment will only have the <code>default</code> feature, as that is the bare minimum for the project to run.</li>
+<li>The <code>test</code> environment will have the <code>test</code> and the <code>default</code> features, as we want to test the project and require the testing tools.</li>
+<li>The <code>default</code> environment will have the <code>dev</code> and <code>test</code> features.</li>
 </ul>
-<h2 id="create-a-pixi-project">Create a pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_rust_project
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_rust_project
+<p>We make this the default environment as it will be the easiest to run locally, as it avoids the need to specify the environment when running tasks.</p>
+<p>We'll also add the <code>solve-group</code> <code>prod</code> to the environments, this will make sure that the dependencies are solved as if they were in the same environment.
+This will result in the <code>production</code> environment having the exact same versions of the dependencies as the <code>default</code> and <code>test</code> environment.
+This way we can be sure that the project will run in the same way in all environments.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>production<span class="w"> </span>--solve-group<span class="w"> </span>prod
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--solve-group<span class="w"> </span>prod
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># --force is used to overwrite the default environment</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>default<span class="w"> </span>--feature<span class="w"> </span>dev<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--solve-group<span class="w"> </span>prod<span class="w"> </span>--force
 </span></code></pre></div>
-<p>It should have created a directory structure like this:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>my_rust_project
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>.gitattributes
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>.gitignore
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>└──<span class="w"> </span>pixi.toml
-</span></code></pre></div>
-<p>The <code>pixi.toml</code> file is the manifest file for your project. It should look like this:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_rust_project&quot;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Add a short description here&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;User Name &lt;user.name@email.url&gt;&quot;</span><span class="p">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># (1)!</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">[tasks]</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="k">[dependencies]</span>
-</span></code></pre></div>
-<ol>
-<li>The <code>platforms</code> is set to your system's platform by default. You can change it to any platform you want to support. e.g. <code>["linux-64", "osx-64", "osx-arm64", "win-64"]</code>.</li>
-</ol>
-<h2 id="add-rust-dependencies">Add Rust dependencies<a class="headerlink" href="#add-rust-dependencies" title="Permanent link">#</a></h2>
-<p>To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>rust
+<p>If we run <code>pixi list -x</code> for the environments we can see that the different environments have the exact same dependency versions.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Default environment</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>Package<span class="w">     </span>Version<span class="w">  </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>jupyterlab<span class="w">  </span><span class="m">4</span>.3.4<span class="w">    </span>pyhd8ed1ab_0<span class="w">        </span><span class="m">6</span>.9<span class="w"> </span>MiB<span class="w">    </span>conda<span class="w">  </span>jupyterlab
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>numpy<span class="w">       </span><span class="m">2</span>.2.1<span class="w">    </span>py313ha4a2180_0<span class="w">     </span><span class="m">6</span>.2<span class="w"> </span>MiB<span class="w">    </span>conda<span class="w">  </span>numpy
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>pytest<span class="w">      </span><span class="m">8</span>.3.4<span class="w">    </span>pyhd8ed1ab_1<span class="w">        </span><span class="m">253</span>.1<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>pytest
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>python<span class="w">      </span><span class="m">3</span>.13.1<span class="w">   </span>h4f43103_105_cp313<span class="w">  </span><span class="m">12</span>.3<span class="w"> </span>MiB<span class="w">   </span>conda<span class="w">  </span>python
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>
+</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>Environment:<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>Package<span class="w">  </span>Version<span class="w">  </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
+</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>numpy<span class="w">    </span><span class="m">2</span>.2.1<span class="w">    </span>py313ha4a2180_0<span class="w">     </span><span class="m">6</span>.2<span class="w"> </span>MiB<span class="w">    </span>conda<span class="w">  </span>numpy
+</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>pytest<span class="w">   </span><span class="m">8</span>.3.4<span class="w">    </span>pyhd8ed1ab_1<span class="w">        </span><span class="m">253</span>.1<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>pytest
+</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>python<span class="w">   </span><span class="m">3</span>.13.1<span class="w">   </span>h4f43103_105_cp313<span class="w">  </span><span class="m">12</span>.3<span class="w"> </span>MiB<span class="w">   </span>conda<span class="w">  </span>python
+</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a>
+</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>Environment:<span class="w"> </span>production
+</span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>Package<span class="w">  </span>Version<span class="w">  </span>Build<span class="w">               </span>Size<span class="w">      </span>Kind<span class="w">   </span>Source
+</span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a>numpy<span class="w">    </span><span class="m">2</span>.2.1<span class="w">    </span>py313ha4a2180_0<span class="w">     </span><span class="m">6</span>.2<span class="w"> </span>MiB<span class="w">   </span>conda<span class="w">  </span>numpy
+</span><span id="__span-21-17"><a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>python<span class="w">   </span><span class="m">3</span>.13.1<span class="w">   </span>h4f43103_105_cp313<span class="w">  </span><span class="m">12</span>.3<span class="w"> </span>MiB<span class="w">  </span>conda<span class="w">  </span>python
 </span></code></pre></div></p>
-<p>This will add the <code>rust</code> package to your <code>pixi.toml</code> file under <code>[dependencies]</code>.
-Which includes the <code>rust</code> toolchain, and <code>cargo</code>.</p>
-<h2 id="add-a-cargo-project">Add a <code>cargo</code> project<a class="headerlink" href="#add-a-cargo-project" title="Permanent link">#</a></h2>
-<p>Now that you have rust installed, you can create a <code>cargo</code> project in your <code>pixi</code> project.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>init
+<h3 id="non-default-environments">Non default environments<a class="headerlink" href="#non-default-environments" title="Permanent link">#</a></h3>
+<p>When you want to have an environment that doesn't have the <code>default</code> feature, you can use the <code>--no-default-feature</code> flag.
+This will result in the environment not having the <code>default</code> feature, and only the features you specify.</p>
+<p>A common use-case of this would be having an environment that can generate your documentation.</p>
+<p>Let's add the <code>mkdocs</code> dependency to the <code>docs</code> feature.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>docs<span class="w"> </span>mkdocs
 </span></code></pre></div></p>
-<p><code>pixi run</code> is pixi's way to run commands in the <code>pixi</code> environment, it will make sure that the environment is set up correctly for the command to run.
-It runs its own cross-platform shell, if you want more information checkout the <a href="../../features/advanced_tasks/"><code>tasks</code> documentation</a>.
-You can also activate the environment in your own shell by running <code>pixi shell</code>, after that you don't need <code>pixi run ...</code> anymore.</p>
-<p>Now we can build a <code>cargo</code> project using <code>pixi</code>.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>build
-</span></code></pre></div>
-To simplify the build process, you can add a <code>build</code> task to your <code>pixi.toml</code> file using the following command:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>build<span class="w"> </span><span class="s2">&quot;cargo build&quot;</span>
-</span></code></pre></div>
-Which creates this field in the <code>pixi.toml</code> file:
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cargo build&quot;</span>
+<p>Now we can add the <code>docs</code> environment without the <code>default</code> feature.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>docs<span class="w"> </span>--feature<span class="w"> </span>docs<span class="w"> </span>--no-default-feature
 </span></code></pre></div></p>
-<p>And now you can build your project using:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
-</span></code></pre></div></p>
-<p>You can also run your project using:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>run
-</span></code></pre></div>
-Which you can simplify with a task again.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>start<span class="w"> </span><span class="s2">&quot;cargo run&quot;</span>
-</span></code></pre></div></p>
-<p>So you should get the following output:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>start
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>Hello,<span class="w"> </span>world!
-</span></code></pre></div></p>
-<p>Congratulations, you have a Rust project running on your machine with pixi!</p>
-<h2 id="next-steps-why-is-this-useful-when-there-is-rustup">Next steps, why is this useful when there is <code>rustup</code>?<a class="headerlink" href="#next-steps-why-is-this-useful-when-there-is-rustup" title="Permanent link">#</a></h2>
-<p>Cargo is not a binary package manager, but a source-based package manager.
-This means that you need to have the Rust compiler installed on your system to use it.
-And possibly other dependencies that are not included in the <code>cargo</code> package manager.
-For example, you might need to install <code>openssl</code> or <code>libssl-dev</code> on your system to build a package.
-This is the case for <code>pixi</code> as well, but <code>pixi</code> will install these dependencies in your project folder, so you don't have to worry about them.</p>
-<p>Add the following dependencies to your cargo project:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>add<span class="w"> </span>git2
-</span></code></pre></div></p>
-<p>If your system is not preconfigured to build C and have the <code>libssl-dev</code> package installed you will not be able to build the project:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>...
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>Could<span class="w"> </span>not<span class="w"> </span>find<span class="w"> </span>directory<span class="w"> </span>of<span class="w"> </span>OpenSSL<span class="w"> </span>installation,<span class="w"> </span>and<span class="w"> </span>this<span class="w"> </span><span class="sb">`</span>-sys<span class="sb">`</span><span class="w"> </span>crate<span class="w"> </span>cannot
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>proceed<span class="w"> </span>without<span class="w"> </span>this<span class="w"> </span>knowledge.<span class="w"> </span>If<span class="w"> </span>OpenSSL<span class="w"> </span>is<span class="w"> </span>installed<span class="w"> </span>and<span class="w"> </span>this<span class="w"> </span>crate<span class="w"> </span>had
-</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>trouble<span class="w"> </span>finding<span class="w"> </span>it,<span class="w">  </span>you<span class="w"> </span>can<span class="w"> </span><span class="nb">set</span><span class="w"> </span>the<span class="w"> </span><span class="sb">`</span>OPENSSL_DIR<span class="sb">`</span><span class="w"> </span>environment<span class="w"> </span>variable<span class="w"> </span><span class="k">for</span><span class="w"> </span>the
-</span><span id="__span-13-6"><a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>compilation<span class="w"> </span>process.
-</span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
-</span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>Make<span class="w"> </span>sure<span class="w"> </span>you<span class="w"> </span>also<span class="w"> </span>have<span class="w"> </span>the<span class="w"> </span>development<span class="w"> </span>packages<span class="w"> </span>of<span class="w"> </span>openssl<span class="w"> </span>installed.
-</span><span id="__span-13-9"><a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>For<span class="w"> </span>example,<span class="w"> </span><span class="sb">`</span>libssl-dev<span class="sb">`</span><span class="w"> </span>on<span class="w"> </span>Ubuntu<span class="w"> </span>or<span class="w"> </span><span class="sb">`</span>openssl-devel<span class="sb">`</span><span class="w"> </span>on<span class="w"> </span>Fedora.
-</span><span id="__span-13-10"><a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>
-</span><span id="__span-13-11"><a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>If<span class="w"> </span>you<span class="s1">&#39;re in a situation where you think the directory *should* be found</span>
-</span><span id="__span-13-12"><a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a><span class="s1">automatically, please open a bug at https://github.com/sfackler/rust-openssl</span>
-</span><span id="__span-13-13"><a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a><span class="s1">and include information about your system as well as this message.</span>
-</span><span id="__span-13-14"><a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>
-</span><span id="__span-13-15"><a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a><span class="s1">$HOST = x86_64-unknown-linux-gnu</span>
-</span><span id="__span-13-16"><a id="__codelineno-13-16" name="__codelineno-13-16" href="#__codelineno-13-16"></a><span class="s1">$TARGET = x86_64-unknown-linux-gnu</span>
-</span><span id="__span-13-17"><a id="__codelineno-13-17" name="__codelineno-13-17" href="#__codelineno-13-17"></a><span class="s1">openssl-sys = 0.9.102</span>
-</span><span id="__span-13-18"><a id="__codelineno-13-18" name="__codelineno-13-18" href="#__codelineno-13-18"></a>
-</span><span id="__span-13-19"><a id="__codelineno-13-19" name="__codelineno-13-19" href="#__codelineno-13-19"></a>
-</span><span id="__span-13-20"><a id="__codelineno-13-20" name="__codelineno-13-20" href="#__codelineno-13-20"></a><span class="s1">It looks like you&#39;</span>re<span class="w"> </span>compiling<span class="w"> </span>on<span class="w"> </span>Linux<span class="w"> </span>and<span class="w"> </span>also<span class="w"> </span>targeting<span class="w"> </span>Linux.<span class="w"> </span>Currently<span class="w"> </span>this
-</span><span id="__span-13-21"><a id="__codelineno-13-21" name="__codelineno-13-21" href="#__codelineno-13-21"></a>requires<span class="w"> </span>the<span class="w"> </span><span class="sb">`</span>pkg-config<span class="sb">`</span><span class="w"> </span>utility<span class="w"> </span>to<span class="w"> </span>find<span class="w"> </span>OpenSSL<span class="w"> </span>but<span class="w"> </span>unfortunately<span class="w"> </span><span class="sb">`</span>pkg-config<span class="sb">`</span>
-</span><span id="__span-13-22"><a id="__codelineno-13-22" name="__codelineno-13-22" href="#__codelineno-13-22"></a>could<span class="w"> </span>not<span class="w"> </span>be<span class="w"> </span>found.<span class="w"> </span>If<span class="w"> </span>you<span class="w"> </span>have<span class="w"> </span>OpenSSL<span class="w"> </span>installed<span class="w"> </span>you<span class="w"> </span>can<span class="w"> </span>likely<span class="w"> </span>fix<span class="w"> </span>this<span class="w"> </span>by
-</span><span id="__span-13-23"><a id="__codelineno-13-23" name="__codelineno-13-23" href="#__codelineno-13-23"></a>installing<span class="w"> </span><span class="sb">`</span>pkg-config<span class="sb">`</span>.
-</span><span id="__span-13-24"><a id="__codelineno-13-24" name="__codelineno-13-24" href="#__codelineno-13-24"></a>...
-</span></code></pre></div>
-You can fix this, by adding the necessary dependencies for building git2, with pixi:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>openssl<span class="w"> </span>pkg-config<span class="w"> </span>compilers
-</span></code></pre></div></p>
-<p>Now you should be able to build your project again:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>...
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">   </span>Compiling<span class="w"> </span>git2<span class="w"> </span>v0.18.3
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">   </span>Compiling<span class="w"> </span>my_rust_project<span class="w"> </span>v0.1.0<span class="w"> </span><span class="o">(</span>/my_rust_project<span class="o">)</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span>Finished<span class="w"> </span>dev<span class="w"> </span><span class="o">[</span>unoptimized<span class="w"> </span>+<span class="w"> </span>debuginfo<span class="o">]</span><span class="w"> </span>target<span class="o">(</span>s<span class="o">)</span><span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">7</span>.44s
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">     </span>Running<span class="w"> </span><span class="sb">`</span>target/debug/my_rust_project<span class="sb">`</span>
-</span></code></pre></div></p>
-<h2 id="extra-add-more-tasks">Extra: Add more tasks<a class="headerlink" href="#extra-add-more-tasks" title="Permanent link">#</a></h2>
-<p>You can add more tasks to your <code>pixi.toml</code> file to simplify your workflow.</p>
-<p>For example, you can add a <code>test</code> task to run your tests:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;cargo test&quot;</span>
-</span></code></pre></div></p>
-<p>And you can add a <code>clean</code> task to clean your project:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>clean<span class="w"> </span><span class="s2">&quot;cargo clean&quot;</span>
-</span></code></pre></div></p>
-<p>You can add a formatting task to your project:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>fmt<span class="w"> </span><span class="s2">&quot;cargo fmt&quot;</span>
-</span></code></pre></div></p>
-<p>You can extend these tasks to run multiple commands with the use of the <code>depends-on</code> field.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>lint<span class="w"> </span><span class="s2">&quot;cargo clippy&quot;</span><span class="w"> </span>--depends-on<span class="w"> </span>fmt
+<p>If we run <code>pixi list -x -e docs</code> we can see that it only has the <code>mkdocs</code> dependency.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>Environment:<span class="w"> </span>docs
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>Package<span class="w">  </span>Version<span class="w">  </span>Build<span class="w">         </span>Size<span class="w">     </span>Kind<span class="w">   </span>Source
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>mkdocs<span class="w">   </span><span class="m">1</span>.6.1<span class="w">    </span>pyhd8ed1ab_1<span class="w">  </span><span class="m">3</span>.4<span class="w"> </span>MiB<span class="w">  </span>conda<span class="w">  </span>mkdocs
 </span></code></pre></div></p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we showed you how to create a Rust project using <code>pixi</code>.
-We also showed you how to <strong>add dependencies</strong> to your project using <code>pixi</code>.
-This way you can make sure that your project is <strong>reproducible</strong> on <strong>any system</strong> that has <code>pixi</code> installed.</p>
-<h2 id="show-off-your-work">Show Off Your Work!<a class="headerlink" href="#show-off-your-work" title="Permanent link">#</a></h2>
-<p>Finished with your project?
-We'd love to see what you've created!
-Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
-Let's inspire the community together!</p>
+<p>The multiple environment feature is extremely powerful and can be used in many different ways.
+There is much more to explore in the <a href="../../reference/pixi_manifest/#the-feature-and-environments-tables">reference</a> and <a href="../../features/multi_environment/">advanced</a> sections.
+If there are any questions, or you know how to improve this tutorial, feel free to reach out to us on <a href="https://github.com/prefix-dev/pixi">GitHub</a>.</p>
 
 
 
@@ -2149,9 +2260,9 @@ Let's inspire the community together!</p>
           
             
             <a
-              href="../ros2/"
+              href="../rust/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: ROS 2"
+              aria-label="Previous: Rust"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2162,7 +2273,7 @@ Let's inspire the community together!</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  ROS 2
+                  Rust
                 </div>
               </div>
             </a>
@@ -2172,16 +2283,16 @@ Let's inspire the community together!</p>
           
             
             <a
-              href="../multi_environment/"
+              href="../../features/environment/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Multi Environment"
+              aria-label="Next: Environments"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Multi Environment
+                  Environments
                 </div>
               </div>
               <div class="md-footer__button md-icon">
