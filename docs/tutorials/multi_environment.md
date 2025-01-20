@@ -185,7 +185,7 @@ To accommodate the different use-cases we'll add a `production`, `test` and `def
 - The `production` environment will only have the `default` feature, as that is the bare minimum for the project to run.
 - The `test` environment will have the `test` and the `default` features, as we want to test the project and require the testing tools.
 - The `default` environment will have the `dev` and `test` features.
--
+
 We make this the default environment as it will be the easiest to run locally, as it avoids the need to specify the environment when running tasks.
 
 We'll also add the `solve-group` `prod` to the environments, this will make sure that the dependencies are solved as if they were in the same environment.
@@ -246,4 +246,4 @@ mkdocs   1.6.1    pyhd8ed1ab_1  3.4 MiB  conda  mkdocs
 ## Conclusion
 The multiple environment feature is extremely powerful and can be used in many different ways.
 There is much more to explore in the [reference](../reference/pixi_manifest.md#the-feature-and-environments-tables) and [advanced](../features/multi_environment.md) sections.
-If there is any questions, or you know how to improve this tutorial, feel free to reach out to us on [GitHub](https://github.com/prefix-dev/pixi).
+If there are any questions, or you know how to improve this tutorial, feel free to reach out to us on [GitHub](https://github.com/prefix-dev/pixi).
