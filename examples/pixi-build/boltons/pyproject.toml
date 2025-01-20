@@ -1,7 +1,7 @@
 [project]
 dependencies = ["rich"]
 description = "Example how to use pixi to build bolton."
-name = "boltons"
+name = "boltons-with-extra"
 readme = "README.md"
 requires-python = ">=3.11"
 version = "0.1.0"
