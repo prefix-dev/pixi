@@ -23,10 +23,8 @@ Environments can actually be installed and activated to run tasks in.
 You can define multiple environments in one project.
 Defining environments is done by adding them to the `[environments]` table in the manifest file.
 #### **Default**
-To keep pixi simple you will define a default environment if not specified otherwise.
-This is the environment build by the non `[feature.<name>` prefixed tables in the manifest file.
-All these tables are merged to create the `default` environment.
-Thus, in theory you can read the `[dependencies]` table as `[feature.default.dependencies]`.
+Instead of specifying `[feature.<name>.dependencies]`, one can populate `[dependencies]` directly.
+These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.
 
 ## Let's get started
 
