@@ -14,7 +14,7 @@ name = "python_bindings"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
+backend = { name = "pixi-build-cmake", version = "0.1.0" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",

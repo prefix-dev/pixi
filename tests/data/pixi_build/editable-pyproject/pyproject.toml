@@ -32,7 +32,7 @@ hatchling = "==1.26.3"
 #
 # The `build-backend` key also functions as a dependency declaration. At least
 # a version specifier must be added.
-backend = { name = "pixi-build-python", version = "*" }
+backend = { name = "pixi-build-python", version = "0.1.0" }
 # These are the conda channels that are used to resolve the dependencies of the
 # build backend package.
 channels = [
