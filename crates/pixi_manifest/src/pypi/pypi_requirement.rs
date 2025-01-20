@@ -24,7 +24,6 @@ use crate::utils::extract_directory_from_url;
 #[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
 pub enum PyPiRequirement {
     Git {
-        // #[serde(flatten)]
         url: GitSpec,
         #[serde(default)]
         extras: Vec<ExtraName>,
