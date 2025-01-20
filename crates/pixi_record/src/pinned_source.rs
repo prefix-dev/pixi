@@ -292,8 +292,6 @@ impl PinnedGitSpec {
 
         let url = Url::parse(&git_prefix).unwrap();
 
-        eprintln!("locked git url: {}", url);
-
         LockedGitUrl(url)
     }
 }
