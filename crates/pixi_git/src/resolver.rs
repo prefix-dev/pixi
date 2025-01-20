@@ -92,6 +92,7 @@ impl GitResolver {
         if let Some(precise) = fetch.git().precise() {
             self.insert(reference, precise);
         }
+
         write_guard.finish().await?;
 
         Ok(fetch)

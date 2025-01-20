@@ -16,6 +16,7 @@ use std::{
 use miette::{Context, IntoDiagnostic};
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
+use tracing::debug;
 use url::Url;
 
 use crate::sha::{GitOid, GitSha};
@@ -159,9 +160,12 @@ impl GitReference {
 
             // Attempt to resolve the branch, then the tag, then the commit.
             Self::BranchOrTagOrCommit(s) => repo
-                .rev_parse(&format!("origin/{s}^0"))
+                // .rev_parse(&format!("origin/{s}^0"))
+                // .or_else(|_| repo.rev_parse(&format!("refs/remotes/origin/tags/{s}^0")))
+                // .or_else(|_| repo.rev_parse(&format!("{s}^0"))),
+                .rev_parse(&format!("{s}^0"))
                 .or_else(|_| repo.rev_parse(&format!("refs/remotes/origin/tags/{s}^0")))
-                .or_else(|_| repo.rev_parse(&format!("{s}^0"))),
+                .or_else(|_| repo.rev_parse(&format!("origin/{s}^0"))),
 
             // We'll be using the HEAD commit.
             Self::DefaultBranch => repo.rev_parse("refs/remotes/origin/HEAD"),
@@ -178,6 +182,11 @@ impl GitReference {
     /// Whether a `rev` looks like a commit hash (ASCII hex digits).
     pub fn looks_like_commit_hash(rev: &str) -> bool {
         rev.len() >= 7 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
+    }
+
+    /// Whether a `rev` looks like a commit hash (ASCII hex digits).
+    pub fn looks_like_full_commit_hash(rev: &str) -> bool {
+        rev.len() == 40 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
     }
 }
 
@@ -357,6 +366,8 @@ impl GitRepository {
 
         let mut result = String::from_utf8(result.stdout).into_diagnostic()?;
 
+        eprintln!("rev parse result {:?}", result);
+
         result.truncate(result.trim_end().len());
         result.parse().into_diagnostic()
     }
@@ -499,6 +510,7 @@ pub(crate) fn fetch(
     // The `+` symbol on the refspec means to allow a forced (fast-forward)
     // update which is needed if there is ever a force push that requires a
     // fast-forward.
+    debug!("reference is {:?}", reference);
     match reference {
         // For branches and tags we can fetch simply one reference and copy it
         // locally, no need to fetch other branches/tags.

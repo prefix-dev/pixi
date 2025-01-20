@@ -126,6 +126,15 @@ impl RepositoryUrl {
     pub fn parse(url: &str) -> Result<Self, url::ParseError> {
         Ok(Self::new(&Url::parse(url)?))
     }
+
+    pub fn strip_git_prefix(url: Url) -> Url {
+        if url.scheme().starts_with("git+") {
+            let url_as_str = &url.as_str()[4..];
+            Url::parse(url_as_str).expect("url should be valid")
+        } else {
+            url
+        }
+    }
 }
 
 /// Remove the credentials from a URL, allowing the generic `git` username (without a password)
@@ -138,6 +147,12 @@ pub fn redact_credentials(url: &mut Url) {
     }
     let _ = url.set_password(None);
     let _ = url.set_username("");
+}
+
+impl From<RepositoryUrl> for Url {
+    fn from(url: RepositoryUrl) -> Self {
+        url.0
+    }
 }
 
 #[cfg(test)]

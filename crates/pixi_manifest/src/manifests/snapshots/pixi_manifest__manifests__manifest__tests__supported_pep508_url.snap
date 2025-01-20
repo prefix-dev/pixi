@@ -1,0 +1,5 @@
+---
+source: crates/pixi_manifest/src/manifests/manifest.rs
+expression: "pypi_reqs[0]"
+---
+{ git = "git+ssh://git@github.com/python-attrs/attrs.git", rev = "main" }

@@ -10,12 +10,14 @@ use std::{
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
+use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::FeaturesExt;
-use pixi_record::{ParseLockFileError, PixiRecord, SourceMismatchError};
+use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{
-    as_uv_req, to_normalize, to_uv_marker_tree, to_uv_version_specifiers, AsPep508Error,
+    as_uv_req, into_pixi_reference, to_normalize, to_uv_marker_tree, to_uv_version_specifiers,
+    AsPep508Error,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
@@ -31,7 +33,7 @@ use url::Url;
 use uv_distribution_filename::DistExtension;
 use uv_git::GitReference;
 use uv_pypi_types::{
-    ParsedGitUrl, ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
+    ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
 
 use super::{
@@ -251,6 +253,15 @@ pub enum PlatformUnsat {
         name: String,
         spec_url: String,
         lock_url: String,
+    },
+
+    #[error(
+        "'{name}' has mismatching git subdirectory: '{spec_subdirectory} != {lock_subdirectory}'"
+    )]
+    LockedPyPIGitSubdirectoryMismatch {
+        name: String,
+        spec_subdirectory: String,
+        lock_subdirectory: String,
     },
 
     #[error("'{name}' has mismatching git ref: '{expected_ref} != {found_ref}'")]
@@ -598,11 +609,6 @@ pub(crate) fn pypi_satifisfies_editable(
     }
 }
 
-/// Checks if the string seems like a git commit sha
-fn seems_like_commit_sha(s: &str) -> bool {
-    s.len() >= 4 && s.chars().all(|c| c.is_ascii_hexdigit())
-}
-
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
@@ -668,17 +674,22 @@ pub(crate) fn pypi_satifisfies_requirement(
             repository,
             reference,
             precise: _precise,
+            subdirectory,
             ..
         } => {
             match &locked_data.location {
                 UrlOrPath::Url(url) => {
-                    if let Ok(locked_git_url) = ParsedGitUrl::try_from(url.clone()) {
-                        let repo_is_same = locked_git_url.url.repository() == repository;
+                    if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
+                    {
+                        let pinned_repository = RepositoryUrl::new(&pinned_git_spec.git);
+                        let specified_repository = RepositoryUrl::new(repository);
+
+                        let repo_is_same = pinned_repository == specified_repository;
                         if !repo_is_same {
                             return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
                                 name: spec.name.clone().to_string(),
                                 spec_url: repository.to_string(),
-                                lock_url: locked_git_url.url.repository().to_string(),
+                                lock_url: pinned_git_spec.git.to_string(),
                             }
                             .into());
                         }
@@ -687,38 +698,37 @@ pub(crate) fn pypi_satifisfies_requirement(
                         if *reference == GitReference::DefaultBranch {
                             return Ok(());
                         }
-                        // If the spec has a short commit than we can do a partial match
-                        // E.g `git.com/user/repo@adbdd` is the same as `git.com/user/repo@adbdd123`
-                        // Currently this resolves to BranchOrTag
-                        if let GitReference::BranchOrTag(ref branch_or_tag) = reference {
-                            if seems_like_commit_sha(branch_or_tag) {
-                                // We expect the lock file to have a long commit hash
-                                // in this case
-                                if let GitReference::FullCommit(sha) =
-                                    locked_git_url.url.reference()
-                                {
-                                    if sha.starts_with(branch_or_tag) {
-                                        return Ok(());
-                                    } else {
-                                        return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
-                                            name: spec.name.clone().to_string(),
-                                            expected_ref: branch_or_tag.to_string(),
-                                            found_ref: sha.to_string(),
-                                        }
-                                        .into());
-                                    }
-                                }
-                            }
-                        }
 
+                        if pinned_git_spec.source.subdirectory
+                            != subdirectory
+                                .as_ref()
+                                .map(|s| s.to_string_lossy().to_string())
+                        {
+                            return Err(PlatformUnsat::LockedPyPIGitSubdirectoryMismatch {
+                                name: spec.name.clone().to_string(),
+                                spec_subdirectory: subdirectory
+                                    .as_ref()
+                                    .map_or_else(String::default, |s| {
+                                        s.to_string_lossy().to_string()
+                                    }),
+                                lock_subdirectory: pinned_git_spec
+                                    .source
+                                    .subdirectory
+                                    .unwrap_or_default(),
+                            }
+                            .into());
+                        }
                         // If the spec does specify a revision than the revision must match
-                        if locked_git_url.url.reference() == reference {
+                        // convert first to the same type
+                        let pixi_reference = into_pixi_reference(reference.clone());
+
+                        if pinned_git_spec.source.reference == pixi_reference {
                             return Ok(());
                         } else {
                             return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
                                 name: spec.name.clone().to_string(),
                                 expected_ref: reference.to_string(),
-                                found_ref: locked_git_url.url.reference().to_string(),
+                                found_ref: pinned_git_spec.source.reference.to_string(),
                             }
                             .into());
                         }
@@ -1539,11 +1549,11 @@ mod tests {
 
     #[test]
     fn test_pypi_git_check_with_rev() {
-        // Mock locked datga
+        // Mock locked data
         let locked_data = PypiPackageData {
             name: "mypkg".parse().unwrap(),
             version: Version::from_str("0.1.0").unwrap(),
-            location: "git+https://github.com/mypkg@29932f3915935d773dc8d52c292cadd81c81071d"
+            location: "git+https://github.com/mypkg@rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
             hash: None,
@@ -1556,7 +1566,28 @@ mod tests {
             .into_uv_requirement()
             .unwrap();
         let project_root = PathBuf::from_str("/").unwrap();
-        // This should satisfy:
+        // This will not satisfy because the rev length is different, even being resolved to the same one
+        pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
+
+        let locked_data = PypiPackageData {
+            name: "mypkg".parse().unwrap(),
+            version: Version::from_str("0.1.0").unwrap(),
+            location: "git+https://github.com/mypkg.git?rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            hash: None,
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+        let spec = pep508_rs::Requirement::from_str(
+            "mypkg @ git+https://github.com/mypkg.git@29932f3915935d773dc8d52c292cadd81c81071d",
+        )
+        .unwrap()
+        .into_uv_requirement()
+        .unwrap();
+        let project_root = PathBuf::from_str("/").unwrap();
+        // This will satisfy
         pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap();
         let non_matching_spec =
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd")

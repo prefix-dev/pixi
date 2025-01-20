@@ -39,12 +39,37 @@ pub enum Reference {
 }
 
 impl Reference {
+    /// Return the inner value
+    pub fn reference(&self) -> Option<String> {
+        match self {
+            Reference::Branch(branch) => Some(branch.to_string()),
+            Reference::Tag(tag) => Some(tag.to_string()),
+            Reference::Rev(rev) => Some(rev.to_string()),
+            Reference::DefaultBranch => None,
+        }
+    }
+
+    /// Return if the reference is the default branch.
+    pub fn is_default(&self) -> bool {
+        matches!(self, Reference::DefaultBranch)
+    }
+
     /// Returns the reference as a string.
     pub fn is_default_branch(reference: &Option<Reference>) -> bool {
         reference.is_none()
             || reference
                 .as_ref()
                 .is_some_and(|reference| matches!(reference, Reference::DefaultBranch))
+    }
+
+    /// Returns the full commit hash if possible.
+    pub fn as_full_commit(&self) -> Option<&str> {
+        match self {
+            Reference::Rev(rev) => {
+                GitReference::looks_like_full_commit_hash(rev).then_some(rev.as_str())
+            }
+            _ => None,
+        }
     }
 }
 
@@ -117,30 +142,20 @@ impl Serialize for Reference {
 }
 
 #[derive(Error, Debug)]
+/// An error that can occur when converting a `Reference` to a `GitReference`.
 pub enum GitReferenceError {
     #[error("The commit string is invalid: \"{0}\"")]
+    /// The commit string is invalid.
     InvalidCommit(String),
 }
 
-impl TryFrom<Reference> for GitReference {
-    type Error = GitReferenceError;
-
-    fn try_from(value: Reference) -> Result<Self, Self::Error> {
+impl From<Reference> for GitReference {
+    fn from(value: Reference) -> Self {
         match value {
-            Reference::Branch(branch) => Ok(GitReference::Branch(branch)),
-            Reference::Tag(tag) => Ok(GitReference::Tag(tag)),
-            Reference::Rev(rev) => {
-                if GitReference::looks_like_commit_hash(&rev) {
-                    if rev.len() == 40 {
-                        Ok(GitReference::FullCommit(rev))
-                    } else {
-                        Ok(GitReference::ShortCommit(rev))
-                    }
-                } else {
-                    Err(GitReferenceError::InvalidCommit(rev))
-                }
-            }
-            Reference::DefaultBranch => Ok(GitReference::DefaultBranch),
+            Reference::Branch(branch) => GitReference::Branch(branch),
+            Reference::Tag(tag) => GitReference::Tag(tag),
+            Reference::Rev(rev) => GitReference::from_rev(rev),
+            Reference::DefaultBranch => GitReference::DefaultBranch,
         }
     }
 }

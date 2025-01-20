@@ -28,33 +28,24 @@ expression: snapshot
     extras: []
 - input: "pkg = { git = \"https://github.com/conda-forge/21cmfast-feedstock\" }"
   result:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
-    branch: ~
-    tag: ~
-    rev: ~
-    subdirectory: ~
+    url:
+      git: "https://github.com/conda-forge/21cmfast-feedstock"
     extras: []
 - input: "pkg = { git = \"https://github.com/conda-forge/21cmfast-feedstock\", \"branch\" = \"main\" }"
   result:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
-    branch: main
-    tag: ~
-    rev: ~
-    subdirectory: ~
+    url:
+      git: "https://github.com/conda-forge/21cmfast-feedstock"
+      branch: main
     extras: []
 - input: "pkg = { git = \"ssh://github.com/conda-forge/21cmfast-feedstock\", \"tag\" = \"v1.2.3\" }"
   result:
-    git: "ssh://github.com/conda-forge/21cmfast-feedstock"
-    branch: ~
-    tag: v1.2.3
-    rev: ~
-    subdirectory: ~
+    url:
+      git: "ssh://github.com/conda-forge/21cmfast-feedstock"
+      tag: v1.2.3
     extras: []
 - input: "pkg = { git = \"https://github.com/prefix-dev/rattler-build\", \"rev\" = \"123456\" }"
   result:
-    git: "https://github.com/prefix-dev/rattler-build"
-    branch: ~
-    tag: ~
-    rev: "123456"
-    subdirectory: ~
+    url:
+      git: "https://github.com/prefix-dev/rattler-build"
+      rev: "123456"
     extras: []

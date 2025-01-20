@@ -496,8 +496,8 @@ impl BuildContext {
     async fn resolve_git(&self, git: GitSpec) -> miette::Result<Fetch> {
         let git_reference = git
             .rev
-            .map(|rev| rev.try_into().into_diagnostic())
-            .unwrap_or(Ok(GitReference::DefaultBranch))?;
+            .map(|rev| rev.into())
+            .unwrap_or(GitReference::DefaultBranch);
 
         let git_url = GitUrl::try_from(git.git)
             .into_diagnostic()?
@@ -521,7 +521,7 @@ impl BuildContext {
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
     async fn resolve_precise_git(&self, git: PinnedGitSpec) -> miette::Result<Fetch> {
-        let git_reference = git.source.reference.try_into().into_diagnostic()?;
+        let git_reference = git.source.reference.into();
 
         let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
 

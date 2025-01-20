@@ -160,9 +160,18 @@ pub struct PinnedGitCheckout {
 }
 
 impl PinnedGitCheckout {
+    /// Creates a new pinned git checkout.
+    pub fn new(commit: GitSha, subdirectory: Option<String>, reference: Reference) -> Self {
+        Self {
+            commit,
+            subdirectory,
+            reference,
+        }
+    }
+
     /// Extracts a pinned git checkout from the query pairs and the hash
     /// fragment in the given URL.
-    fn from_locked_url(locked_url: &LockedGitUrl) -> miette::Result<PinnedGitCheckout> {
+    pub fn from_locked_url(locked_url: &LockedGitUrl) -> miette::Result<PinnedGitCheckout> {
         let url = &locked_url.0;
         let mut reference = None;
         let mut subdirectory = None;
@@ -232,6 +241,11 @@ pub struct PinnedGitSpec {
 }
 
 impl PinnedGitSpec {
+    /// Creates a new pinned git spec.
+    pub fn new(git: Url, source: PinnedGitCheckout) -> Self {
+        Self { git, source }
+    }
+
     /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
     pub fn into_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
@@ -266,6 +280,7 @@ impl PinnedGitSpec {
             Reference::DefaultBranch => {}
         }
 
+        eprintln!("precise commit hash: {}", self.source.commit);
         // Put the precise commit in the fragment.
         url.set_fragment(self.source.commit.to_string().as_str().into());
 
@@ -277,6 +292,8 @@ impl PinnedGitSpec {
         let git_prefix = format!("git+{}", url_str);
 
         let url = Url::parse(&git_prefix).unwrap();
+
+        eprintln!("locked git url: {}", url);
 
         LockedGitUrl(url)
     }
@@ -357,6 +374,11 @@ impl From<PinnedUrlSpec> for UrlOrPath {
 pub struct LockedGitUrl(Url);
 
 impl LockedGitUrl {
+    /// Creates a new [`LockedGitUrl`] from a [`Url`].
+    pub fn new(url: Url) -> Self {
+        Self(url)
+    }
+
     /// Returns true if the given URL is a locked git URL.
     /// This is used to differentiate between a regular Url and a [`LockedGitUrl`]
     /// that starts with `git+`.
@@ -388,6 +410,11 @@ impl LockedGitUrl {
     pub fn parse(url: &str) -> miette::Result<Self> {
         let url = Url::parse(url).into_diagnostic()?;
         Ok(Self(url))
+    }
+
+    /// Converts this [`LockedGitUrl`] into a [`Url`].
+    pub fn to_url(&self) -> Url {
+        self.0.clone()
     }
 }
 

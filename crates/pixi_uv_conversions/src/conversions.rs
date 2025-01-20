@@ -1,11 +1,15 @@
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
+use pixi_git::sha::GitSha;
 use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
-use pixi_manifest::pypi::{
-    pypi_options::{IndexStrategy, PypiOptions},
-    GitRev,
-};
-use uv_distribution_types::{Index, IndexLocations, IndexUrl};
+use pixi_manifest::pypi::pypi_options::{IndexStrategy, PypiOptions};
+use pixi_record::{PinnedGitCheckout, PinnedGitSpec};
+use pixi_spec::Reference as PixiReference;
+
+use pixi_git::git::GitReference as PixiGitReference;
+
+use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_git::GitReference;
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
@@ -132,12 +136,12 @@ pub fn locked_indexes_to_index_locations(
     Ok(IndexLocations::new(indexes, flat_index, no_index))
 }
 
-pub fn to_git_reference(rev: &GitRev) -> GitReference {
-    match rev {
-        GitRev::Full(rev) => GitReference::FullCommit(rev.clone()),
-        GitRev::Short(rev) => GitReference::BranchOrTagOrCommit(rev.clone()),
-    }
-}
+// pub fn to_git_reference(rev: &GitRev) -> GitReference {
+//     match rev {
+//         GitRev::Full(rev) => GitReference::FullCommit(rev.clone()),
+//         GitRev::Short(rev) => GitReference::BranchOrTagOrCommit(rev.clone()),
+//     }
+// }
 
 fn packages_to_build_isolation<'a>(
     names: Option<&'a [PackageName]>,
@@ -186,4 +190,53 @@ pub fn to_index_strategy(
     } else {
         uv_configuration::IndexStrategy::default()
     }
+}
+
+pub fn into_uv_git_reference(git_ref: PixiGitReference) -> GitReference {
+    match git_ref {
+        PixiGitReference::Branch(branch) => GitReference::Branch(branch),
+        PixiGitReference::Tag(tag) => GitReference::Tag(tag),
+        PixiGitReference::ShortCommit(rev) => GitReference::ShortCommit(rev),
+        PixiGitReference::BranchOrTag(rev) => GitReference::BranchOrTag(rev),
+        PixiGitReference::BranchOrTagOrCommit(rev) => GitReference::BranchOrTagOrCommit(rev),
+        PixiGitReference::NamedRef(rev) => GitReference::NamedRef(rev),
+        PixiGitReference::FullCommit(rev) => GitReference::FullCommit(rev),
+        PixiGitReference::DefaultBranch => GitReference::DefaultBranch,
+    }
+}
+
+pub fn into_pixi_reference(git_reference: GitReference) -> PixiReference {
+    match git_reference {
+        GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
+        GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
+        GitReference::ShortCommit(rev) => PixiReference::Rev(rev.to_string()),
+        GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
+        GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
+        GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
+        GitReference::FullCommit(rev) => PixiReference::Rev(rev.to_string()),
+        GitReference::DefaultBranch => PixiReference::DefaultBranch,
+    }
+}
+
+/// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
+pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
+    let reference = into_pixi_reference(dist.git.reference().clone());
+
+    // Necessary to convert between our gitsha and uv gitsha.
+    let git_sha = GitSha::from_str(
+        &dist
+            .git
+            .precise()
+            .expect("we expect it to be resolved")
+            .to_string(),
+    )
+    .expect("we expect it to be a valid sha");
+
+    let pinned_checkout = PinnedGitCheckout::new(
+        git_sha,
+        dist.subdirectory.map(|sd| sd.to_string_lossy().to_string()),
+        reference,
+    );
+
+    PinnedGitSpec::new(dist.git.repository().clone(), pinned_checkout)
 }
