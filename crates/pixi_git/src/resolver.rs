@@ -11,14 +11,13 @@ use tracing::debug;
 use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
 use reqwest_middleware::ClientWithMiddleware;
-use url::Url;
 
 use crate::{
     git::GitReference,
     sha::GitSha,
     source::{cache_digest, Fetch, GitSource},
     url::RepositoryUrl,
-    GitUrl,
+    GitUrl, Reporter,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -54,6 +53,7 @@ impl GitResolver {
         url: &GitUrl,
         client: ClientWithMiddleware,
         cache: PathBuf,
+        reporter: Option<Arc<dyn Reporter>>,
     ) -> Result<Fetch, GitResolverError> {
         debug!("Fetching source distribution from Git: {url}");
 
@@ -82,6 +82,11 @@ impl GitResolver {
 
         // Fetch the Git repository.
         let source = GitSource::new(url.as_ref().clone(), client, cache);
+        let source = if let Some(reporter) = reporter {
+            source.with_reporter(reporter)
+        } else {
+            source
+        };
 
         let fetch = tokio::task::spawn_blocking(move || source.fetch())
             .await?
@@ -95,6 +100,7 @@ impl GitResolver {
 
         write_guard.finish().await?;
 
+        debug!("Fetched source distribution from Git: {url}");
         Ok(fetch)
     }
 
@@ -171,13 +177,4 @@ impl From<&GitUrl> for RepositoryReference {
             reference: git.reference().clone(),
         }
     }
-}
-
-/// Reporter trait for reporting the progress of git operations.
-pub trait GitReporter: Send + Sync {
-    /// Callback to invoke when a repository checkout begins.
-    fn on_checkout_start(&self, url: &Url, rev: &str) -> usize;
-
-    /// Callback to invoke when a repository checkout completes.
-    fn on_checkout_complete(&self, url: &Url, rev: &str, index: usize);
 }

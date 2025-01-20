@@ -4,49 +4,50 @@ expression: project_model
 ---
 {
   "version": "1",
-  "name": "rich_example",
-  "version": "0.1.0",
-  "description": null,
-  "authors": null,
-  "license": null,
-  "licenseFile": null,
-  "readme": null,
-  "homepage": null,
-  "repository": null,
-  "documentation": null,
-  "configuration": null,
-  "targets": {
-    "defaultTarget": {
-      "hostDependencies": {
-        "hatchling": {
-          "detailedVersion": {
-            "version": "==1.26.3",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
+  "data": {
+    "name": "rich_example",
+    "version": "0.1.0",
+    "description": null,
+    "authors": null,
+    "license": null,
+    "licenseFile": null,
+    "readme": null,
+    "homepage": null,
+    "repository": null,
+    "documentation": null,
+    "targets": {
+      "defaultTarget": {
+        "hostDependencies": {
+          "hatchling": {
+            "binary": {
+              "version": "==1.26.3",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null
+            }
+          }
+        },
+        "buildDependencies": {},
+        "runDependencies": {
+          "rich": {
+            "binary": {
+              "version": "13.9.*",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null
+            }
           }
         }
       },
-      "buildDependencies": {},
-      "runDependencies": {
-        "rich": {
-          "detailedVersion": {
-            "version": ">=13.9.4,<14",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
-          }
-        }
-      }
-    },
-    "targets": {}
+      "targets": {}
+    }
   }
 }

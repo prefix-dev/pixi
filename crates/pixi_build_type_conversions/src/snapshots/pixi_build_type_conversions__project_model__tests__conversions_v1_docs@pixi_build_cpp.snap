@@ -4,73 +4,61 @@ expression: project_model
 ---
 {
   "version": "1",
-  "name": "python_bindings",
-  "version": "0.1.0",
-  "description": null,
-  "authors": null,
-  "license": null,
-  "licenseFile": null,
-  "readme": null,
-  "homepage": null,
-  "repository": null,
-  "documentation": null,
-  "configuration": null,
-  "targets": {
-    "defaultTarget": {
-      "hostDependencies": {
-        "cmake": {
-          "detailedVersion": {
-            "version": ">=3.20,<3.27",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
+  "data": {
+    "name": "python_bindings",
+    "version": "0.1.0",
+    "description": null,
+    "authors": null,
+    "license": null,
+    "licenseFile": null,
+    "readme": null,
+    "homepage": null,
+    "repository": null,
+    "documentation": null,
+    "targets": {
+      "defaultTarget": {
+        "hostDependencies": {
+          "cmake": {
+            "binary": {
+              "version": "3.20.*",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null
+            }
+          },
+          "nanobind": {
+            "binary": {
+              "version": "2.4.*",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null
+            }
+          },
+          "python": {
+            "binary": {
+              "version": "3.12.*",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null
+            }
           }
         },
-        "nanobind": {
-          "detailedVersion": {
-            "version": ">=2.4.0,<2.5.0",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
-          }
-        },
-        "python_abi": {
-          "detailedVersion": {
-            "version": ">=3.12,<3.13",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
-          }
-        }
+        "buildDependencies": {},
+        "runDependencies": {}
       },
-      "buildDependencies": {},
-      "runDependencies": {
-        "python": {
-          "detailedVersion": {
-            "version": ">=3.12,<3.13",
-            "build": null,
-            "buildNumber": null,
-            "fileName": null,
-            "channel": null,
-            "subdir": null,
-            "md5": null,
-            "sha256": null
-          }
-        }
-      }
-    },
-    "targets": {}
+      "targets": {}
+    }
   }
 }

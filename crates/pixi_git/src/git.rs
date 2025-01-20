@@ -266,6 +266,10 @@ impl GitRemote {
         let repo = GitRepository::open(db_path)?;
         Ok(GitDatabase { repo })
     }
+
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
 }
 
 /// A local clone of a remote repository's database. Multiple [`GitCheckout`]s
