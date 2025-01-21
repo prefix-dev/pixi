@@ -1047,21 +1047,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             }
                         }
                     }
-
-                    // Ensure that the record matches the currently selected interpreter.
-                    if let Some(python_version) = &record.0.requires_python {
-                        let marker_version = pep440_rs::Version::from_str(
-                            &marker_environment.python_full_version().version.to_string(),
-                        )
-                        .expect("cannot parse version");
-                        if !python_version.contains(&marker_version) {
-                            return Err(Box::new(PlatformUnsat::PythonVersionMismatch(
-                                record.0.name.clone(),
-                                python_version.clone(),
-                                marker_version.into(),
-                            )));
-                        }
-                    }
                 }
 
                 // Add all the requirements of the package to the queue.
