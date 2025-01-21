@@ -122,8 +122,6 @@ impl<'p> ExecutableTask<'p> {
         // Convert the task into an executable string
         let task = self.task.as_single_command()?;
 
-        eprintln!("task: {:?}", task);
-
         // Get the export specific environment variables
         let export = get_export_specific_task_env(self.task.as_ref());
 
