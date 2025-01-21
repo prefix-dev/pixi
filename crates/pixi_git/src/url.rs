@@ -126,6 +126,11 @@ impl RepositoryUrl {
     pub fn parse(url: &str) -> Result<Self, url::ParseError> {
         Ok(Self::new(&Url::parse(url)?))
     }
+
+    /// Return the underlying [`Url`] of this repository.
+    pub fn into_url(self) -> Url {
+        self.into()
+    }
 }
 
 /// Remove the credentials from a URL, allowing the generic `git` username (without a password)

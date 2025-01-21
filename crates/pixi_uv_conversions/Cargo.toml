@@ -12,6 +12,7 @@ version = "0.1.0"
 
 [dependencies]
 dunce = { workspace = true }
+miette = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_git = { workspace = true }

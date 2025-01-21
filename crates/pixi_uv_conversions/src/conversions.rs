@@ -2,9 +2,10 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use pixi_git::sha::GitSha as PixiGitSha;
+use pixi_git::url::RepositoryUrl;
 use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
 use pixi_manifest::pypi::pypi_options::{IndexStrategy, PypiOptions};
-use pixi_record::{PinnedGitCheckout, PinnedGitSpec};
+use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::Reference as PixiReference;
 
 use pixi_git::git::GitReference as PixiGitReference;
@@ -12,6 +13,7 @@ use pixi_git::git::GitReference as PixiGitReference;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_git::GitReference;
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
+use uv_pypi_types::ParsedGitUrl;
 use uv_python::PythonEnvironment;
 
 #[derive(thiserror::Error, Debug)]
@@ -236,4 +238,26 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
     );
 
     PinnedGitSpec::new(dist.git.repository().clone(), pinned_checkout)
+}
+
+/// Convert a locked git url into a parsed git url
+/// [`LockedGitUrl`] is always recorded in the lock file and looks like this:
+/// git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc
+///
+/// [`ParsedGitUrl`] looks like this:
+/// git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir
+///
+/// So we need to convert the locked git url into a parsed git url.
+/// which is used in the uv crate.
+pub fn into_parsed_git_url(locked_git_url: &LockedGitUrl) -> miette::Result<ParsedGitUrl> {
+    let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
+    // Construct manually [`ParsedGitUrl`] from locked url.
+    let parsed_git_url = ParsedGitUrl::from_source(
+        RepositoryUrl::new(&locked_git_url.to_url()).into(),
+        into_uv_git_reference(git_source.reference.into()),
+        Some(into_uv_git_sha(git_source.commit)),
+        git_source.subdirectory.map(|s| PathBuf::from(s.as_str())),
+    );
+
+    Ok(parsed_git_url)
 }

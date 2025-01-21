@@ -5,7 +5,9 @@ use std::{
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
-use pixi_uv_conversions::to_uv_version;
+use pixi_git::url::RepositoryUrl;
+use pixi_record::LockedGitUrl;
+use pixi_uv_conversions::{into_parsed_git_url, to_uv_version};
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use url::Url;
 use uv_cache::Cache;
@@ -406,10 +408,18 @@ fn need_reinstall(
                     let installed_git_url =
                         ParsedGitUrl::try_from(Url::parse(url.as_str()).into_diagnostic()?)
                             .into_diagnostic()?;
+
+                    eprintln!("installed git url {:?}", url);
+
+                    eprintln!("locked location {:?}", locked.location);
+
                     // Try to parse the locked git url, this can be any url, so this may fail
                     // in practice it always seems to succeed, even with a non-git url
                     let locked_git_url = match &locked.location {
-                        UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
+                        UrlOrPath::Url(url) => {
+                            let locked_git_url = LockedGitUrl::new(url.clone());
+                            into_parsed_git_url(&locked_git_url)
+                        }
                         UrlOrPath::Path(_path) => {
                             // Previously
                             return Ok(ValidateCurrentInstall::Reinstall(
@@ -420,7 +430,10 @@ fn need_reinstall(
                     match locked_git_url {
                         Ok(locked_git_url) => {
                             // Check the repository base url with the locked url
-                            if locked_git_url.url.repository() != installed_git_url.url.repository()
+                            let installed_repository_url =
+                                RepositoryUrl::new(installed_git_url.url.repository());
+                            if locked_git_url.url.repository()
+                                != &installed_repository_url.into_url()
                             {
                                 // This happens when this is not a git url
                                 return Ok(ValidateCurrentInstall::Reinstall(
@@ -433,6 +446,8 @@ fn need_reinstall(
                             if vcs_info.commit_id
                                 != locked_git_url.url.precise().map(|p| p.to_string())
                             {
+                                eprintln!("commit is different {:?}", locked_git_url);
+
                                 // The commit id is different, we need to reinstall
                                 return Ok(ValidateCurrentInstall::Reinstall(
                                     NeedReinstall::GitCommitsMismatch {

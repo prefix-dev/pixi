@@ -1,12 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 
 use pixi_consts::consts;
-use pixi_git::url::RepositoryUrl;
-use pixi_record::{LockedGitUrl, PinnedGitCheckout};
+use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
-    into_uv_git_reference, into_uv_git_sha, to_uv_normalize, to_uv_version,
-    to_uv_version_specifiers, ConversionError,
+    into_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
 };
 use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
 use url::Url;
@@ -16,9 +14,7 @@ use uv_distribution_types::{
     BuiltDist, Dist, IndexUrl, RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist,
     SourceDist, UrlString,
 };
-use uv_pypi_types::{
-    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedUrl, ParsedUrlError, VerbatimParsedUrl,
-};
+use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
 
 use super::utils::{is_direct_url, strip_direct_scheme};
 
@@ -83,6 +79,8 @@ pub enum ConvertToUvDistError {
     VerbatimUrl(#[from] uv_pep508::VerbatimUrlError),
     #[error("error extracting extension from {1}")]
     Extension(#[source] ExtensionError, String),
+    #[error("error parsing locked git url {0} {1}")]
+    LockedUrl(String, String),
 
     #[error(transparent)]
     UvPepTypes(#[from] ConversionError),
@@ -101,14 +99,13 @@ pub fn convert_to_dist(
 
             if LockedGitUrl::is_locked_git_url(&url_without_direct) {
                 let locked_git_url = LockedGitUrl::new(url_without_direct.clone().into_owned());
-                let git_source = PinnedGitCheckout::from_locked_url(&locked_git_url).unwrap();
-                // Construct manually [`ParsedGitUrl`] from locked url.
-                let parsed_git_url = ParsedGitUrl::from_source(
-                    RepositoryUrl::new(&url_without_direct).into(),
-                    into_uv_git_reference(git_source.reference.into()),
-                    Some(into_uv_git_sha(git_source.commit)),
-                    git_source.subdirectory.map(|s| PathBuf::from(s.as_str())),
-                );
+                let parsed_git_url = into_parsed_git_url(&locked_git_url).map_err(|err| {
+                    ConvertToUvDistError::LockedUrl(
+                        err.to_string(),
+                        locked_git_url.to_url().to_string(),
+                    )
+                })?;
+
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
