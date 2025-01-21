@@ -409,10 +409,6 @@ fn need_reinstall(
                         ParsedGitUrl::try_from(Url::parse(url.as_str()).into_diagnostic()?)
                             .into_diagnostic()?;
 
-                    eprintln!("installed git url {:?}", url);
-
-                    eprintln!("locked location {:?}", locked.location);
-
                     // Try to parse the locked git url, this can be any url, so this may fail
                     // in practice it always seems to succeed, even with a non-git url
                     let locked_git_url = match &locked.location {
@@ -640,8 +636,6 @@ impl InstallPlanner {
                 op_to_reason.missing(),
             ));
         }
-
-        eprintln!("Decided to install remote {:?}", remote);
 
         Ok(())
     }
