@@ -130,8 +130,6 @@ pub async fn update_python_distributions(
         uv_context.capabilities.clone(),
     );
 
-    eprintln!("constrains {:?}", constraints);
-
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,
@@ -189,7 +187,6 @@ pub async fn update_python_distributions(
             })
             .collect();
 
-    eprintln!("required_map {:?}", required_map);
     // Partition into those that should be linked from the cache (`local`), those
     // that need to be downloaded (`remote`), and those that should be removed
     // (`extraneous`).

@@ -1,6 +1,5 @@
 use crate::install_pypi::plan::{CachedDistProvider, InstallPlanner, InstalledDistProvider};
 use pixi_consts::consts;
-// use pixi_manifest::pypi::pypi_requirement::ParsedGitUrl;
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use std::collections::HashMap;
 use std::io::Write;

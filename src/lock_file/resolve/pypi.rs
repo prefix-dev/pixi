@@ -442,9 +442,6 @@ pub async fn resolve_pypi(
     .await
     .into_diagnostic()?;
 
-    eprintln!("resolving pypi dependencies");
-    eprintln!("requirements are {:?}", requirements);
-
     let manifest = Manifest::new(
         requirements,
         constraints,
