@@ -117,12 +117,12 @@ impl InstalledDistBuilder {
             subdirectory: None,
             vcs_info: VcsInfo {
                 vcs: VcsKind::Git,
-                commit_id: parsed_git_url
+                commit_id: parsed_git_url.url.precise().map(|s| s.to_string()),
+                requested_revision: parsed_git_url
                     .url
                     .reference()
                     .as_str()
-                    .map(|s| s.to_string()),
-                requested_revision: None,
+                    .map(ToString::to_string),
             },
         };
 
