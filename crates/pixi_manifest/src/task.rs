@@ -114,9 +114,9 @@ impl Task {
     }
 
     /// Returns the command to execute as a single string.
-    pub fn as_single_command(&self) -> Option<String> {
+    pub fn as_single_command(&self) -> Option<Cow<str>> {
         match self {
-            Task::Plain(str) => Some(str.split(" ").map(|t| quote(t)).join(" ")),
+            Task::Plain(str) => Some(Cow::Owned(str.split(" ").map(|t| quote(t)).join(" "))),
             Task::Custom(custom) => Some(custom.cmd.as_single()),
             Task::Execute(exe) => Some(exe.cmd.as_single()),
             Task::Alias(_) => None,
@@ -265,10 +265,10 @@ impl From<String> for CmdArgs {
 
 impl CmdArgs {
     /// Returns a single string representation of the command arguments.
-    pub fn as_single(&self) -> String {
+    pub fn as_single(&self) -> Cow<str> {
         match self {
-            CmdArgs::Single(cmd) => cmd.split(" ").map(|t| quote(t)).join(" "),
-            CmdArgs::Multiple(args) => args.iter().map(|arg| quote(arg)).join(" "),
+            CmdArgs::Single(cmd) => Cow::Borrowed(cmd),
+            CmdArgs::Multiple(args) => Cow::Owned(args.iter().map(|arg| quote(arg)).join(" ")),
         }
     }
 

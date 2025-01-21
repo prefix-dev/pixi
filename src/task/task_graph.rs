@@ -61,7 +61,7 @@ impl fmt::Display for TaskNode<'_> {
             "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends-on: `{}`",
             self.name.clone().unwrap_or("CUSTOM COMMAND".into()),
             self.run_environment.name(),
-            self.task.as_single_command().unwrap_or("".to_string()),
+            self.task.as_single_command().unwrap_or(Cow::Owned("".to_string())),
             self.format_additional_args(),
             self.dependencies
                 .iter()
