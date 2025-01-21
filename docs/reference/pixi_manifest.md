@@ -370,7 +370,7 @@ Some examples are:
 
 ```toml
 # Use this exact package version
-package0 = "1.2.3"
+package0 = "==1.2.3"
 # Use 1.2.3 up to 1.3.0
 package1 = "~=1.2.3"
 # Use larger than 1.2 lower and equal to 1.4
@@ -402,7 +402,7 @@ Even if the dependency defines a channel that channel should be added to the `pr
 ```toml
 [dependencies]
 python = ">3.9,<=3.11"
-rust = "1.72"
+rust = "==1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
