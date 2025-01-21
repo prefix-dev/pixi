@@ -480,21 +480,9 @@ impl RequiredPackages {
     }
 }
 
-/// Python version to use throughout the tests
-pub const TEST_PYTHON_VERSION: &str = "3.12";
-
-/// Some python version
-fn python_version() -> uv_pep440::Version {
-    uv_pep440::Version::from_str(TEST_PYTHON_VERSION).unwrap()
-}
-
 /// Simple function to create an installation planner
 pub fn install_planner() -> InstallPlanner {
-    InstallPlanner::new(
-        uv_cache::Cache::temp().unwrap(),
-        &python_version(),
-        PathBuf::new(),
-    )
+    InstallPlanner::new(uv_cache::Cache::temp().unwrap(), PathBuf::new())
 }
 
 /// Create a fake pyproject.toml file in a temp dir

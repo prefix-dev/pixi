@@ -141,10 +141,10 @@ pub(crate) enum NeedReinstall {
     UnableToParseGitUrl { url: String },
     /// Unable to get the installed dist metadata, something is definitely broken
     UnableToGetInstalledDistMetadata { cause: String },
-    /// The requires-python is different than the installed version
+    /// The to install requires-python is different from the installed version
     RequiredPythonChanged {
-        installed_python_require: uv_pep440::VersionSpecifiers,
-        locked_python_version: uv_pep440::Version,
+        installed_python_require: String,
+        locked_python_version: String,
     },
     /// Re-installing because of an installer mismatch, but we are managing the package
     InstallerMismatch { previous_installer: String },
@@ -248,7 +248,6 @@ enum ValidateCurrentInstall {
 fn need_reinstall(
     installed: &InstalledDist,
     locked: &PypiPackageData,
-    python_version: &uv_pep440::Version,
     lock_file_dir: &Path,
 ) -> miette::Result<ValidateCurrentInstall> {
     // Check if the installed version is the same as the required version
@@ -496,15 +495,35 @@ fn need_reinstall(
     };
 
     if let Some(requires_python) = metadata.requires_python {
-        // If the installed package requires a different python version
-        if !requires_python.contains(python_version) {
-            return Ok(ValidateCurrentInstall::Reinstall(
-                NeedReinstall::RequiredPythonChanged {
-                    installed_python_require: requires_python,
-                    locked_python_version: python_version.clone(),
-                },
-            ));
+        // If the installed package requires a different requires python version of the locked package,
+        // or if one of them is `Some` and the other is `None`.
+        match &locked.requires_python {
+            Some(locked_requires_python) => {
+                if requires_python.to_string() != locked_requires_python.to_string() {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::RequiredPythonChanged {
+                            installed_python_require: requires_python.to_string(),
+                            locked_python_version: locked_requires_python.to_string(),
+                        },
+                    ));
+                }
+            }
+            None => {
+                return Ok(ValidateCurrentInstall::Reinstall(
+                    NeedReinstall::RequiredPythonChanged {
+                        installed_python_require: requires_python.to_string(),
+                        locked_python_version: "None".to_string(),
+                    },
+                ));
+            }
         }
+    } else if locked.requires_python.is_some() {
+        return Ok(ValidateCurrentInstall::Reinstall(
+            NeedReinstall::RequiredPythonChanged {
+                installed_python_require: "None".to_string(),
+                locked_python_version: locked.clone().requires_python.unwrap().to_string(),
+            },
+        ));
     }
 
     Ok(ValidateCurrentInstall::Keep)
@@ -563,19 +582,13 @@ impl<'a> CachedDistProvider<'a> for RegistryWheelIndex<'a> {
 /// that uv would usually act on.
 pub struct InstallPlanner {
     uv_cache: Cache,
-    python_version: uv_pep440::Version,
     lock_file_dir: PathBuf,
 }
 
 impl InstallPlanner {
-    pub fn new(
-        uv_cache: Cache,
-        python_version: &uv_pep440::Version,
-        lock_file_dir: impl AsRef<Path>,
-    ) -> Self {
+    pub fn new(uv_cache: Cache, lock_file_dir: impl AsRef<Path>) -> Self {
         Self {
             uv_cache,
-            python_version: python_version.clone(),
             lock_file_dir: lock_file_dir.as_ref().to_path_buf(),
         }
     }
@@ -672,12 +685,7 @@ impl InstallPlanner {
                         ));
                     } else {
                         // Check if we need to reinstall
-                        match need_reinstall(
-                            dist,
-                            required_pkg,
-                            &self.python_version,
-                            &self.lock_file_dir,
-                        )? {
+                        match need_reinstall(dist, required_pkg, &self.lock_file_dir)? {
                             ValidateCurrentInstall::Keep => {
                                 // No need to reinstall
                                 continue;
