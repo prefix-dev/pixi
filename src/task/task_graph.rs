@@ -145,7 +145,6 @@ impl<'p> TaskGraph<'p> {
         // `"echo 'Hello World'"` This prevents shell interpretation of pixi run
         // inputs. Use as-is if 'task' already contains multiple elements.
         let (mut args, verbatim) = if args.len() == 1 {
-            eprintln!("splitting args");
             (
                 shlex::split(args[0].as_str()).ok_or(TaskGraphError::InvalidTask)?,
                 false,
@@ -153,8 +152,6 @@ impl<'p> TaskGraph<'p> {
         } else {
             (args, true)
         };
-
-        eprintln!("args: {:?} verbatim {}", args, verbatim);
 
         if let Some(name) = args.first() {
             match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs) {
