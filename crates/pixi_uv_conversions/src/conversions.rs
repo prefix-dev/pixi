@@ -242,10 +242,10 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
 
 /// Convert a locked git url into a parsed git url
 /// [`LockedGitUrl`] is always recorded in the lock file and looks like this:
-/// git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc
+/// <git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc>
 ///
 /// [`ParsedGitUrl`] looks like this:
-/// git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir
+/// <git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir>
 ///
 /// So we need to convert the locked git url into a parsed git url.
 /// which is used in the uv crate.
