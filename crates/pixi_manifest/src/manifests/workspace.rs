@@ -105,10 +105,10 @@ mod tests {
         {PROJECT_BOILERPLATE}
 
         [target.win-64.dependencies]
-        foo = "3.4.5"
+        foo = "==3.4.5"
 
         [target.osx-64.dependencies]
-        foo = "1.2.3"
+        foo = "==1.2.3"
         "#
         );
 
