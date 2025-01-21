@@ -9,7 +9,7 @@ use std::{
 
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
-use pep440_rs::VersionSpecifiers;
+use pep440_rs::{Operator, VersionSpecifiers};
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::FeaturesExt;
 use pixi_record::{ParseLockFileError, PixiRecord, SourceMismatchError};
@@ -1047,6 +1047,38 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             }
                         }
                     }
+
+                    // Ensure that the record matches the currently selected interpreter.
+                    if let Some(python_version) = &record.0.requires_python {
+                        // Strip upperbound as `uv` also does this in the solve step.
+                        // https://github.com/astral-sh/uv/issues/4022
+                        //
+                        // We do this to avoid the case where the locked version is `>=3.6, <3.7`.
+                        // While the python version is `3.10.0` as this is allowed by uv.
+                        let lower_bound_python_version = python_version
+                            // Clone so we can collect it into a new VersionSpecifiers
+                            .clone()
+                            .into_iter()
+                            .filter(|specifier| {
+                                matches!(
+                                    specifier.operator(),
+                                    Operator::GreaterThan | Operator::GreaterThanEqual
+                                )
+                            })
+                            .collect::<VersionSpecifiers>();
+
+                        let marker_version = pep440_rs::Version::from_str(
+                            &marker_environment.python_full_version().version.to_string(),
+                        )
+                        .expect("cannot parse version");
+                        if !lower_bound_python_version.contains(&marker_version) {
+                            return Err(Box::new(PlatformUnsat::PythonVersionMismatch(
+                                record.0.name.clone(),
+                                python_version.clone(),
+                                marker_version.into(),
+                            )));
+                        }
+                    }
                 }
 
                 // Add all the requirements of the package to the queue.
@@ -1395,7 +1427,7 @@ mod tests {
 
     use insta::Settings;
     use miette::{IntoDiagnostic, NarratableReportHandler};
-    use pep440_rs::Version;
+    use pep440_rs::{Operator, Version};
     use rattler_lock::LockFile;
     use rstest::rstest;
 
@@ -1581,5 +1613,20 @@ mod tests {
 
         // This should satisfy:
         pypi_satifisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    // Validate uv documentation to avoid breaking change in pixi
+    #[test]
+    fn test_version_specifiers_logic() {
+        let version = Version::from_str("1.19").unwrap();
+        let version_specifiers = VersionSpecifiers::from_str("<2.0, >=1.16").unwrap();
+        assert!(version_specifiers.contains(&version));
+        // VersionSpecifiers derefs into a list of specifiers
+        assert_eq!(
+            version_specifiers
+                .iter()
+                .position(|specifier| *specifier.operator() == Operator::LessThan),
+            Some(1)
+        );
     }
 }
