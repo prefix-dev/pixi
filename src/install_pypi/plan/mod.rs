@@ -617,6 +617,9 @@ impl InstallPlanner {
                 op_to_reason.missing(),
             ));
         }
+
+        eprintln!("Decided to install remote {:?}", remote);
+
         Ok(())
     }
 

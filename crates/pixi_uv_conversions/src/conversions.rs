@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use pixi_git::sha::GitSha;
+use pixi_git::sha::GitSha as PixiGitSha;
 use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
 use pixi_manifest::pypi::pypi_options::{IndexStrategy, PypiOptions};
 use pixi_record::{PinnedGitCheckout, PinnedGitSpec};
@@ -198,6 +198,10 @@ pub fn into_uv_git_reference(git_ref: PixiGitReference) -> GitReference {
     }
 }
 
+pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitSha {
+    uv_git::GitSha::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
+}
+
 pub fn into_pixi_reference(git_reference: GitReference) -> PixiReference {
     match git_reference {
         GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
@@ -216,7 +220,7 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
     let reference = into_pixi_reference(dist.git.reference().clone());
 
     // Necessary to convert between our gitsha and uv gitsha.
-    let git_sha = GitSha::from_str(
+    let git_sha = PixiGitSha::from_str(
         &dist
             .git
             .precise()

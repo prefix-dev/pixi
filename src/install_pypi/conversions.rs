@@ -1,9 +1,12 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use pixi_consts::consts;
+use pixi_git::url::RepositoryUrl;
+use pixi_record::{LockedGitUrl, PinnedGitCheckout};
 use pixi_uv_conversions::{
-    to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
+    into_uv_git_reference, into_uv_git_sha, to_uv_normalize, to_uv_version,
+    to_uv_version_specifiers, ConversionError,
 };
 use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
 use url::Url;
@@ -13,7 +16,9 @@ use uv_distribution_types::{
     BuiltDist, Dist, IndexUrl, RegistryBuiltDist, RegistryBuiltWheel, RegistrySourceDist,
     SourceDist, UrlString,
 };
-use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
+use uv_pypi_types::{
+    HashAlgorithm, HashDigest, ParsedGitUrl, ParsedUrl, ParsedUrlError, VerbatimParsedUrl,
+};
 
 use super::utils::{is_direct_url, strip_direct_scheme};
 
@@ -93,14 +98,34 @@ pub fn convert_to_dist(
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
             let pkg_name = to_uv_normalize(&pkg.name)?;
-            Dist::from_url(
-                pkg_name,
-                VerbatimParsedUrl {
-                    parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
-                        .map_err(Box::new)?,
-                    verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
-                },
-            )?
+
+            if LockedGitUrl::is_locked_git_url(&url_without_direct) {
+                let locked_git_url = LockedGitUrl::new(url_without_direct.clone().into_owned());
+                let git_source = PinnedGitCheckout::from_locked_url(&locked_git_url).unwrap();
+                // Construct manually [`ParsedGitUrl`] from locked url.
+                let parsed_git_url = ParsedGitUrl::from_source(
+                    RepositoryUrl::new(&url_without_direct).into(),
+                    into_uv_git_reference(git_source.reference.into()),
+                    Some(into_uv_git_sha(git_source.commit)),
+                    git_source.subdirectory.map(|s| PathBuf::from(s.as_str())),
+                );
+                Dist::from_url(
+                    pkg_name,
+                    VerbatimParsedUrl {
+                        parsed_url: ParsedUrl::Git(parsed_git_url),
+                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                    },
+                )?
+            } else {
+                Dist::from_url(
+                    pkg_name,
+                    VerbatimParsedUrl {
+                        parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
+                            .map_err(Box::new)?,
+                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                    },
+                )?
+            }
         }
         UrlOrPath::Url(url) => {
             // We consider it to be a registry url
