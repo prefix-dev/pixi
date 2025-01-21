@@ -61,7 +61,7 @@ impl fmt::Display for TaskNode<'_> {
             "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends-on: `{}`",
             self.name.clone().unwrap_or("CUSTOM COMMAND".into()),
             self.run_environment.name(),
-            self.task.as_single_command().unwrap_or(Cow::Owned("".to_string())),
+            self.task.as_single_command().unwrap_or("".to_string()),
             self.format_additional_args(),
             self.dependencies
                 .iter()
@@ -145,6 +145,7 @@ impl<'p> TaskGraph<'p> {
         // `"echo 'Hello World'"` This prevents shell interpretation of pixi run
         // inputs. Use as-is if 'task' already contains multiple elements.
         let (mut args, verbatim) = if args.len() == 1 {
+            eprintln!("splitting args");
             (
                 shlex::split(args[0].as_str()).ok_or(TaskGraphError::InvalidTask)?,
                 false,
@@ -152,6 +153,8 @@ impl<'p> TaskGraph<'p> {
         } else {
             (args, true)
         };
+
+        eprintln!("args: {:?} verbatim {}", args, verbatim);
 
         if let Some(name) = args.first() {
             match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs) {

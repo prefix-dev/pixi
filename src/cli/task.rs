@@ -152,6 +152,7 @@ impl From<AddArgs> for Task {
 
         // Convert the arguments into a single string representation
         let cmd_args = if value.commands.len() == 1 {
+            eprintln!("single string");
             value.commands.into_iter().next().unwrap()
         } else {
             // Simply concatenate all arguments

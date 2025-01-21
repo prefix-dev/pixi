@@ -114,9 +114,9 @@ impl Task {
     }
 
     /// Returns the command to execute as a single string.
-    pub fn as_single_command(&self) -> Option<Cow<str>> {
+    pub fn as_single_command(&self) -> Option<String> {
         match self {
-            Task::Plain(str) => Some(Cow::Borrowed(str)),
+            Task::Plain(str) => Some(str.split(" ").map(|t| quote(t)).join(" ")),
             Task::Custom(custom) => Some(custom.cmd.as_single()),
             Task::Execute(exe) => Some(exe.cmd.as_single()),
             Task::Alias(_) => None,
@@ -265,10 +265,10 @@ impl From<String> for CmdArgs {
 
 impl CmdArgs {
     /// Returns a single string representation of the command arguments.
-    pub fn as_single(&self) -> Cow<str> {
+    pub fn as_single(&self) -> String {
         match self {
-            CmdArgs::Single(cmd) => Cow::Borrowed(cmd),
-            CmdArgs::Multiple(args) => Cow::Owned(args.iter().map(|arg| quote(arg)).join(" ")),
+            CmdArgs::Single(cmd) => cmd.split(" ").map(|t| quote(t)).join(" "),
+            CmdArgs::Multiple(args) => args.iter().map(|arg| quote(arg)).join(" "),
         }
     }
 
@@ -332,7 +332,7 @@ impl Display for Task {
 pub fn quote(in_str: &str) -> Cow<str> {
     if in_str.is_empty() {
         "\"\"".into()
-    } else if in_str.contains(['\t', '\r', '\n', ' ', '[', ']']) {
+    } else if in_str.contains(['\t', '\r', '\n', ' ', '[', ']', '~']) {
         let mut out: String = String::with_capacity(in_str.len() + 2);
         out.push('"');
         for c in in_str.chars() {
@@ -422,5 +422,9 @@ mod tests {
             "PATH=\"$PATH;build/Debug\""
         );
         assert_eq!(quote("name=[64,64]"), "\"name=[64,64]\"");
+        assert_eq!(
+            quote("curl https://some.url/~kriz/bzz.tar.gz"),
+            "curl \"https://some.url/~kriz/bzz.tar.gz\""
+        );
     }
 }
