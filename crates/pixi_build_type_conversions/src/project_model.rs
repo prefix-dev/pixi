@@ -25,22 +25,28 @@ fn to_pixi_spec_v1(
         itertools::Either::Left(source) => {
             let source = match source {
                 pixi_spec::SourceSpec::Url(url_source_spec) => {
+                    let pixi_spec::UrlSourceSpec { url, md5, sha256 } = url_source_spec;
                     pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 {
-                        url: url_source_spec.url.clone(),
-                        md5: url_source_spec.md5.map(Into::into),
-                        sha256: url_source_spec.sha256.map(Into::into),
+                        url,
+                        md5: md5.map(Into::into),
+                        sha256: sha256.map(Into::into),
                     })
                 }
                 pixi_spec::SourceSpec::Git(git_spec) => {
+                    let pixi_spec::GitSpec {
+                        git,
+                        rev,
+                        subdirectory,
+                    } = git_spec;
                     pbt::SourcePackageSpecV1::Git(pbt::GitSpecV1 {
-                        git: git_spec.git.clone(),
-                        rev: git_spec.rev.clone().map(|r| match r {
-                            Reference::Branch(b) => pbt::GitReferenceV1::Branch(b.clone()),
-                            Reference::Tag(t) => pbt::GitReferenceV1::Tag(t.clone()),
-                            Reference::Rev(rev) => pbt::GitReferenceV1::Rev(rev.clone()),
+                        git,
+                        rev: rev.map(|r| match r {
+                            Reference::Branch(b) => pbt::GitReferenceV1::Branch(b),
+                            Reference::Tag(t) => pbt::GitReferenceV1::Tag(t),
+                            Reference::Rev(rev) => pbt::GitReferenceV1::Rev(rev),
                             Reference::DefaultBranch => pbt::GitReferenceV1::DefaultBranch,
                         }),
-                        subdirectory: git_spec.subdirectory.clone(),
+                        subdirectory,
                     })
                 }
                 pixi_spec::SourceSpec::Path(path_source_spec) => {
