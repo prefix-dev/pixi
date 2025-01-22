@@ -17,7 +17,7 @@ name = "python_bindings"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "~=0.1.0" }
+backend = { name = "pixi-build-cmake", version = "0.1.*" }
 
 # --8<-- [start:host-dependencies]
 [package.host-dependencies]
