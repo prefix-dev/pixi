@@ -12,6 +12,7 @@ use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Project;
 use fancy_display::FancyDisplay;
+use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
     pypi_options_to_index_locations, to_uv_normalize, to_uv_version, ConversionError,
@@ -259,9 +260,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if packages_to_output.is_empty() {
         eprintln!(
-            "{}No packages found.",
+            "{}No packages found in '{}' environment for '{}' platform.",
             console::style(console::Emoji("✘ ", "")).red(),
+            environment.name().fancy_display(),
+            consts::ENVIRONMENT_STYLE.apply_to(platform),
         );
+
         Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         return Ok(());
     }
