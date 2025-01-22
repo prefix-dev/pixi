@@ -423,8 +423,8 @@ mod tests {
         );
         assert_eq!(quote("name=[64,64]"), "\"name=[64,64]\"");
         assert_eq!(
-            quote("curl https://some.url/~kriz/bzz.tar.gz"),
-            "curl \"https://some.url/~kriz/bzz.tar.gz\""
+            quote("https://some.url/~kriz/bzz.tar.gz"),
+            "\"https://some.url/~kriz/bzz.tar.gz\""
         );
     }
 }
