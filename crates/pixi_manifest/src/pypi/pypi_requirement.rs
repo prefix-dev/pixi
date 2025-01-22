@@ -8,7 +8,7 @@ use std::{
 use itertools::Itertools;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::ExtraName;
-use pixi_spec::{GitSpec, Reference};
+use pixi_spec::{GitReference, GitSpec};
 use pixi_toml::{TomlFromStr, TomlWith};
 use serde::Serialize;
 use thiserror::Error;
@@ -162,9 +162,9 @@ impl RawPyPiRequirement {
             },
             (None, None, Some(git), extras, None) => {
                 let rev = match (self.branch, self.rev, self.tag) {
-                    (Some(branch), None, None) => Some(Reference::Branch(branch)),
-                    (None, Some(rev), None) => Some(Reference::Rev(rev)),
-                    (None, None, Some(tag)) => Some(Reference::Tag(tag)),
+                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
                     (None, None, None) => None,
                     _ => {
                         return Err(SpecConversion::MultipleGitSpecifiers);
@@ -360,25 +360,25 @@ impl From<PyPiRequirement> for toml_edit::Value {
 
                 if let Some(rev) = rev {
                     match rev {
-                        Reference::Branch(branch) => {
+                        GitReference::Branch(branch) => {
                             table.insert(
                                 "branch",
                                 toml_edit::Value::String(toml_edit::Formatted::new(branch.clone())),
                             );
                         }
-                        Reference::Tag(tag) => {
+                        GitReference::Tag(tag) => {
                             table.insert(
                                 "tag",
                                 toml_edit::Value::String(toml_edit::Formatted::new(tag.clone())),
                             );
                         }
-                        Reference::Rev(rev) => {
+                        GitReference::Rev(rev) => {
                             table.insert(
                                 "rev",
                                 toml_edit::Value::String(toml_edit::Formatted::new(rev.clone())),
                             );
                         }
-                        Reference::DefaultBranch => {}
+                        GitReference::DefaultBranch => {}
                     }
                 };
 
@@ -866,7 +866,7 @@ mod tests {
             &PyPiRequirement::Git {
                 url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    rev: Some(Reference::Branch("main".to_string())),
+                    rev: Some(GitReference::Branch("main".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -886,7 +886,7 @@ mod tests {
             &PyPiRequirement::Git {
                 url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    rev: Some(Reference::Tag("v.1.2.3".to_string())),
+                    rev: Some(GitReference::Tag("v.1.2.3".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -906,7 +906,7 @@ mod tests {
             &PyPiRequirement::Git {
                 url: GitSpec {
                     git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
-                    rev: Some(Reference::Tag("3.0.0".to_string())),
+                    rev: Some(GitReference::Tag("3.0.0".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -926,7 +926,7 @@ mod tests {
             &PyPiRequirement::Git {
                 url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    rev: Some(Reference::Rev("123456".to_string())),
+                    rev: Some(GitReference::Rev("123456".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -955,7 +955,7 @@ mod tests {
             PyPiRequirement::Git {
                 url: GitSpec {
                     git: Url::parse("git+https://github.com/ecederstrand/exchangelib").unwrap(),
-                    rev: Some(Reference::DefaultBranch),
+                    rev: Some(GitReference::DefaultBranch),
                     subdirectory: None,
                 },
                 extras: vec![]
@@ -969,7 +969,7 @@ mod tests {
             PyPiRequirement::Git {
                 url: GitSpec {
                     git: Url::parse("git+https://github.com/ecederstrand/exchangelib").unwrap(),
-                    rev: Some(Reference::Rev(
+                    rev: Some(GitReference::Rev(
                         "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
                     )),
                     subdirectory: None,
@@ -1024,7 +1024,7 @@ mod tests {
             PyPiRequirement::Git {
                 url: GitSpec {
                     git: Url::parse("git+ssh://git@github.com/python-attrs/attrs.git").unwrap(),
-                    rev: Some(Reference::Rev("main".to_string())),
+                    rev: Some(GitReference::Rev("main".to_string())),
                     subdirectory: None
                 },
 
@@ -1042,7 +1042,7 @@ mod tests {
             PyPiRequirement::Git {
                 url: GitSpec {
                     git: Url::parse("git+https://github.com/Deltares/Ribasim.git").unwrap(),
-                    rev: Some(Reference::DefaultBranch),
+                    rev: Some(GitReference::DefaultBranch),
                     subdirectory: Some("python/ribasim".to_string()),
                 },
                 extras: vec![],

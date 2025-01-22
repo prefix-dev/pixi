@@ -32,7 +32,7 @@ use pixi_manifest::Targets;
 use pixi_record::{
     InputHash, PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, SourceRecord,
 };
-use pixi_spec::{GitSpec, Reference, SourceSpec};
+use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
@@ -424,7 +424,10 @@ impl BuildContext {
                         git: fetched.git().repository().clone(),
                         source: PinnedGitCheckout {
                             commit: fetched.git().precise().expect("should be precies"),
-                            reference: git_spec.rev.clone().unwrap_or(Reference::DefaultBranch),
+                            reference: git_spec
+                                .rev
+                                .clone()
+                                .unwrap_or(pixi_spec::GitReference::DefaultBranch),
                             subdirectory: git_spec.subdirectory.clone(),
                         },
                     }),

@@ -14,7 +14,7 @@ use pixi_consts::consts;
 use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
-use pixi_spec::Reference;
+use pixi_spec::GitReference;
 use rattler_conda_types::ChannelConfig;
 use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
 use std::collections::HashMap;
@@ -187,16 +187,16 @@ impl GitRev {
     }
 }
 
-impl From<GitRev> for Reference {
+impl From<GitRev> for GitReference {
     fn from(git_rev: GitRev) -> Self {
         if let Some(branch) = git_rev.branch {
-            Reference::Branch(branch)
+            GitReference::Branch(branch)
         } else if let Some(tag) = git_rev.tag {
-            Reference::Tag(tag)
+            GitReference::Tag(tag)
         } else if let Some(rev) = git_rev.rev {
-            Reference::Rev(rev)
+            GitReference::Rev(rev)
         } else {
-            Reference::DefaultBranch
+            GitReference::DefaultBranch
         }
     }
 }

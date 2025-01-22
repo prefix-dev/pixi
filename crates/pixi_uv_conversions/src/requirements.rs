@@ -7,11 +7,10 @@ use std::{
 
 use pixi_git::url::RepositoryUrl;
 use pixi_manifest::{pypi::VersionOrStar, PyPiRequirement};
-use pixi_spec::{GitSpec, Reference};
+use pixi_spec::{GitReference, GitSpec};
 use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::DistExtension;
-use uv_git::{GitReference, GitSha};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
@@ -22,7 +21,7 @@ use crate::into_uv_git_reference;
 /// Create a url that uv can use to install a version
 fn create_uv_url(
     url: &Url,
-    rev: Option<&Reference>,
+    rev: Option<&GitReference>,
     subdir: Option<&str>,
 ) -> Result<Url, url::ParseError> {
     // Create the url.
@@ -115,13 +114,13 @@ pub fn as_uv_req(
             precise: rev
                 .as_ref()
                 .map(|s| s.as_full_commit())
-                .and_then(|s| s.map(GitSha::from_str))
+                .and_then(|s| s.map(uv_git::GitSha::from_str))
                 .transpose()
                 .expect("could not parse sha"),
             reference: rev
                 .as_ref()
                 .map(|rev| into_uv_git_reference(rev.clone().into()))
-                .unwrap_or(GitReference::DefaultBranch),
+                .unwrap_or(uv_git::GitReference::DefaultBranch),
             subdirectory: subdirectory.as_ref().and_then(|s| s.parse().ok()),
             url: VerbatimUrl::from_url(
                 create_uv_url(git, rev.as_ref(), subdirectory.as_deref()).map_err(|e| {

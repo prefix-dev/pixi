@@ -17,7 +17,7 @@ mod url;
 use std::{path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
-pub use git::{GitReferenceError, GitSpec, Reference};
+pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{

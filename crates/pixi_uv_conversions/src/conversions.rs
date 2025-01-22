@@ -6,7 +6,7 @@ use pixi_git::url::RepositoryUrl;
 use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
 use pixi_manifest::pypi::pypi_options::{IndexStrategy, PypiOptions};
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
-use pixi_spec::Reference as PixiReference;
+use pixi_spec::GitReference as PixiReference;
 
 use pixi_git::git::GitReference as PixiGitReference;
 
