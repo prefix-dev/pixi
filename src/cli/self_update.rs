@@ -3,10 +3,11 @@ use std::io::{Seek, Write};
 use flate2::read::GzDecoder;
 use tar::Archive;
 
-use miette::{Context, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use reqwest::Client;
-use serde::Deserialize;
+use reqwest::redirect::Policy;
+
 use tempfile::{NamedTempFile, TempDir};
 
 /// Update pixi to the latest version or a specific version.
@@ -15,18 +16,12 @@ pub struct Args {
     /// The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
     #[clap(long)]
     version: Option<String>,
-}
 
-#[derive(Debug, Deserialize)]
-struct GithubRelease {
-    tag_name: String,
-    assets: Vec<GithubReleaseAsset>,
-}
-
-#[derive(Debug, Deserialize)]
-struct GithubReleaseAsset {
-    name: String,
-    browser_download_url: String,
+    /// The URL where to find Pixi releases. Must provide a Github Releases-like HTTP API.
+    /// - Downloads must be available at ${base-url}/download/v{X.Y.Z}/pixi-unknown-linux-musl
+    /// - ${base-url}/latest must either redirect to ${base-url}/v{X.Y.Z} or serve the bytes for v{X.Y.Z}
+    #[clap(long, default_value = "https://github.com/prefix-dev/pixi/releases")]
+    base_url: Option<String>,
 }
 
 fn user_agent() -> String {
@@ -61,20 +56,49 @@ fn default_archive_name() -> Option<String> {
     }
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
-    // Retrieve the target version information from github.
-    let target_version_json = match retrieve_target_version(&args.version).await {
-        Ok(target_version_json) => target_version_json,
-        Err(err) => match args.version {
-            Some(version) => {
-                miette::bail!("The version you specified is not available: {}", version)
+async fn latest_version(base_url: &String) -> miette::Result<String> {
+    // Uses the public Github Releases /latest endpoint to get the latest tag from the URL
+    // If base_url doesn't offer redirects (e.g. static site), then /latest
+    // must be a file whose contents are the latest tag name.
+    let url = format!("{}/latest", base_url);
+    // Create a client with a redirect policy
+    let no_redirect_client = Client::builder()
+        .redirect(Policy::none()) // Prevent automatic redirects
+        .build().unwrap();
+    
+    match no_redirect_client.head(&url).header("User-Agent", user_agent()).send().await {
+        Ok(response) => {
+            if response.status().is_redirection() {
+                match response.headers().get("Location") {
+                    Some(location) => Ok(location.to_str().unwrap().split("/").last().unwrap().to_string()),
+                    None => Err(miette::miette!("URL: {}. Redirect detected, but no 'Location' header found.", url)),
+                }
+            } else if response.status().is_success() {
+                // No redirection, but response is ok, check contents
+                let client = Client::new();
+                match client.get(&url).header("User-Agent", user_agent()).send().await {
+                    Ok(res) => Ok(res.text().await.unwrap().trim().to_string()),
+                    Err(err) => Err(miette::miette!("URL: {}. Request failed: {}", url, err)),
+                }
+            } else {
+                Err(miette::miette!(
+                    "URL: {}. Request failed: {}. \
+                    Make sure /latest redirects to the latest version or serves \
+                    a text file whose contents are just the latest version tag name.",
+                    url, response.status()))
             }
-            None => miette::bail!("Failed to fetch latest version from github: {}", err),
         },
-    };
+        Err(err) => Err(miette::miette!("URL: {}. Request failed: {}", url, err)),
+    }
+}
 
+pub async fn execute(args: Args) -> miette::Result<()> {
+    let base_url = args.base_url.unwrap();
     // Get the target version
-    let target_version = target_version_json.tag_name.trim_start_matches('v');
+    let target_version = match args.version {
+        Some(version) => version,
+        None => latest_version(&base_url).await?,
+    };
 
     // Get the current version of the pixi binary
     let current_version = consts::PIXI_VERSION;
@@ -100,14 +124,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let archive_name = default_archive_name()
         .expect("Could not find the default archive name for the current platform");
 
-    let url = target_version_json
-        .assets
-        .iter()
-        .find(|asset| asset.name == archive_name)
-        .expect("Could not find the archive in the release")
-        .browser_download_url
-        .clone();
-
+    let url = format!("{}/download/{}/{}", base_url, target_version, archive_name);
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
 
@@ -119,12 +136,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await
         .expect("Failed to download the archive");
 
-    // Download the archive
-    while let Some(chunk) = res.chunk().await.into_diagnostic()? {
-        archived_tempfile
-            .as_file()
-            .write_all(&chunk)
-            .into_diagnostic()?;
+    if res.status() != reqwest::StatusCode::OK {
+        return Err(miette::miette!(format!("URL {} returned {}", url, res.status())));
+    } else {    
+        // Download the archive
+        while let Some(chunk) = res.chunk().await.into_diagnostic()? {
+            archived_tempfile
+                .as_file()
+                .write_all(&chunk)
+                .into_diagnostic()?;
+       }
     }
 
     eprintln!(
@@ -195,51 +216,6 @@ fn unpack_tar_gz(
         }
     }
     Ok(())
-}
-
-async fn retrieve_target_version(version: &Option<String>) -> miette::Result<GithubRelease> {
-    // Fetch the target version from github.
-    // The target version is:
-    // - the latest version if no version is specified
-    // - the specified version if a version is specified
-    let url = if let Some(version) = version {
-        format!(
-            "https://api.github.com/repos/prefix-dev/pixi/releases/tags/v{}",
-            version
-        )
-    } else {
-        "https://api.github.com/repos/prefix-dev/pixi/releases/latest".to_string()
-    };
-
-    let client = Client::new();
-
-    let res = client
-        .get(url)
-        .header("User-Agent", user_agent())
-        .send()
-        .await
-        .expect("Failed to fetch from GitHub, client panic.");
-
-    // Catch errors from the GitHub API
-    if !res.status().is_success() {
-        return Err(miette::miette!(
-            "Failed to fetch the release from github, status {}, body: {}",
-            res.status(),
-            res.text()
-                .await
-                .expect("Failed to fetch GitHub release body, body text panic.")
-        ));
-    }
-
-    let body = res
-        .text()
-        .await
-        .expect("Failed to fetch GitHub release body, body text panic.");
-
-    // compare target version with current version
-    serde_json::from_str::<GithubRelease>(&body)
-        .into_diagnostic()
-        .with_context(|| format!("Failed to parse the Release from github: {:#?}", body))
 }
 
 fn pixi_binary_name() -> String {
