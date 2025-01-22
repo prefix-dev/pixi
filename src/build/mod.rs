@@ -32,7 +32,7 @@ use pixi_manifest::Targets;
 use pixi_record::{
     InputHash, PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, SourceRecord,
 };
-use pixi_spec::{GitSpec, Reference, SourceSpec};
+use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
@@ -424,7 +424,10 @@ impl BuildContext {
                         git: fetched.git().repository().clone(),
                         source: PinnedGitCheckout {
                             commit: fetched.git().precise().expect("should be precies"),
-                            reference: git_spec.rev.clone().unwrap_or(Reference::DefaultBranch),
+                            reference: git_spec
+                                .rev
+                                .clone()
+                                .unwrap_or(pixi_spec::GitReference::DefaultBranch),
                             subdirectory: git_spec.subdirectory.clone(),
                         },
                     }),
@@ -515,8 +518,8 @@ impl BuildContext {
     ) -> miette::Result<Fetch> {
         let git_reference = git
             .rev
-            .map(|rev| rev.try_into().into_diagnostic())
-            .unwrap_or(Ok(GitReference::DefaultBranch))?;
+            .map(|rev| rev.into())
+            .unwrap_or(GitReference::DefaultBranch);
 
         let git_url = GitUrl::try_from(git.git)
             .into_diagnostic()?
@@ -545,7 +548,7 @@ impl BuildContext {
         git: PinnedGitSpec,
         reporter: Option<Arc<dyn Reporter>>,
     ) -> miette::Result<Fetch> {
-        let git_reference = git.source.reference.try_into().into_diagnostic()?;
+        let git_reference = git.source.reference.into();
 
         let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
 
