@@ -300,13 +300,11 @@ async fn execute_task<'p>(
     };
     let cwd = task.working_directory()?;
 
-    // Ignore CTRL+C
-    // Specifically so that the child is responsible for its own signal handling
-    // NOTE: once CTRL+C is registered it will always stay registered for the rest of
-    // the runtime of the program which is fine when using run in isolation,
-    // however if we start to use run in conjunction with some other command we
-    // might want to revaluate this.
-    let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
+    ctrlc::set_handler(move || {
+        let term = console::Term::stdout();
+        let _ = term.show_cursor();
+    })
+    .unwrap();
 
     let execute_future = deno_task_shell::execute(
         script,
@@ -316,9 +314,7 @@ async fn execute_task<'p>(
         Default::default(),
     );
     let status_code = tokio::select! {
-        code = execute_future => code,
-        // This should never exit
-        _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
+        code = execute_future => code
     };
 
     if status_code != 0 {
@@ -342,12 +338,19 @@ fn disambiguate_task_interactive<'p>(
         ..ColorfulTheme::default()
     };
 
-    // Ignore CTRL+C in the dialoguer prompt so that it shows the cursor again.
-    // Related: https://github.com/console-rs/dialoguer/issues/77
-    tokio::spawn(async {
-        let _ = tokio::signal::ctrl_c().await;
-        dialoguer_reset_cursor_hack();
-    });
+    ctrlc::set_handler(move || {
+        let term = console::Term::stdout();
+        let _ = term.show_cursor();
+
+        // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
+        #[cfg(target_os = "windows")]
+        std::process::exit(3);
+
+        // POSIX compliant OSs: 128 + SIGINT (2)
+        #[cfg(not(target_os = "windows"))]
+        std::process::exit(130);
+    })
+    .unwrap();
 
     dialoguer::Select::with_theme(&theme)
         .with_prompt(format!(
