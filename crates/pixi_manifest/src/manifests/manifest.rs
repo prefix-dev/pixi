@@ -2371,7 +2371,8 @@ bar = "*"
             .pypi_dependencies(Some(Platform::Win64))
             .unwrap();
 
-        insta::assert_snapshot!(pypi_reqs[0]);
+        // insta::assert_snapshot!(pypi_reqs[0]);
+        insta::assert_snapshot!(pypi_reqs[0], @r###"{ git = "git+ssh://git@github.com/python-attrs/attrs.git", rev = "main" }"###);
     }
 
     #[rstest]
