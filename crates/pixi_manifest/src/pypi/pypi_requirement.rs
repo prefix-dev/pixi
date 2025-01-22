@@ -1063,6 +1063,8 @@ mod tests {
             r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", "branch" = "main" }"#,
             r#"pkg = { git = "ssh://github.com/conda-forge/21cmfast-feedstock", "tag" = "v1.2.3" }"#,
             r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "rev" = "123456" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "subdirectory" = "pyrattler" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "extras" = ["test"] }"#,
         ];
 
         #[derive(Serialize)]
