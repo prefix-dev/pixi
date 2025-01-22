@@ -452,8 +452,6 @@ fn need_reinstall(
                                     .as_str()
                                     .map(|s| s.to_string())
                             {
-                                eprintln!("commit is different {:?}", locked_git_url);
-
                                 // The commit id is different, we need to reinstall
                                 return Ok(ValidateCurrentInstall::Reinstall(
                                     NeedReinstall::GitRevMismatch {
