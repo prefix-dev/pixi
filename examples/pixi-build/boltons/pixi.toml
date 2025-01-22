@@ -10,9 +10,7 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-# boltons = { path = "." }
-boltons = "*"
-hatchling = "==1.26.3"
+boltons-with-extra = { path = "." }
 
 
 [package]
@@ -25,7 +23,7 @@ version = "0.1.0"
 hatchling = "*"
 
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "*" }
+backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
 channels = [
   "https://repo.prefix.dev/pixi-build-backends",
   "https://fast.prefix.dev/conda-forge",

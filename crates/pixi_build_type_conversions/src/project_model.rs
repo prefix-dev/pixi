@@ -25,22 +25,28 @@ fn to_pixi_spec_v1(
         itertools::Either::Left(source) => {
             let source = match source {
                 pixi_spec::SourceSpec::Url(url_source_spec) => {
+                    let pixi_spec::UrlSourceSpec { url, md5, sha256 } = url_source_spec;
                     pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 {
-                        url: url_source_spec.url.clone(),
-                        md5: url_source_spec.md5.map(Into::into),
-                        sha256: url_source_spec.sha256.map(Into::into),
+                        url,
+                        md5: md5.map(Into::into),
+                        sha256: sha256.map(Into::into),
                     })
                 }
                 pixi_spec::SourceSpec::Git(git_spec) => {
+                    let pixi_spec::GitSpec {
+                        git,
+                        rev,
+                        subdirectory,
+                    } = git_spec;
                     pbt::SourcePackageSpecV1::Git(pbt::GitSpecV1 {
-                        git: git_spec.git.clone(),
-                        rev: git_spec.rev.clone().map(|r| match r {
-                            Reference::Branch(b) => pbt::GitReferenceV1::Branch(b.clone()),
-                            Reference::Tag(t) => pbt::GitReferenceV1::Tag(t.clone()),
-                            Reference::Rev(rev) => pbt::GitReferenceV1::Rev(rev.clone()),
+                        git,
+                        rev: rev.map(|r| match r {
+                            Reference::Branch(b) => pbt::GitReferenceV1::Branch(b),
+                            Reference::Tag(t) => pbt::GitReferenceV1::Tag(t),
+                            Reference::Rev(rev) => pbt::GitReferenceV1::Rev(rev),
                             Reference::DefaultBranch => pbt::GitReferenceV1::DefaultBranch,
                         }),
-                        subdirectory: git_spec.subdirectory.clone(),
+                        subdirectory,
                     })
                 }
                 pixi_spec::SourceSpec::Path(path_source_spec) => {
@@ -149,7 +155,7 @@ pub fn to_project_model_v1(
 ) -> Result<pbt::ProjectModelV1, SpecConversionError> {
     let project = pbt::ProjectModelV1 {
         name: manifest.package.name.clone(),
-        version: manifest.package.version.clone(),
+        version: Some(manifest.package.version.clone()),
         description: manifest.package.description.clone(),
         authors: manifest.package.authors.clone(),
         license: manifest.package.license.clone(),
@@ -165,6 +171,7 @@ pub fn to_project_model_v1(
 
 #[cfg(test)]
 mod tests {
+    use pixi_build_types::VersionedProjectModel;
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
     use std::path::PathBuf;
@@ -195,8 +202,10 @@ mod tests {
                     .unwrap();
 
                 // Convert the manifest to the project model
-                let project_model =
-                    super::to_project_model_v1(&package_manifest, &some_channel_config()).unwrap();
+                let project_model: VersionedProjectModel =
+                    super::to_project_model_v1(&package_manifest, &some_channel_config())
+                        .unwrap()
+                        .into();
                 let mut settings = insta::Settings::clone_current();
                 settings.set_snapshot_suffix(name);
                 settings.bind(|| {
