@@ -345,8 +345,8 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     println!("{}", json_string);
 }
 
-// Helper function to handle PyPI location logic
-fn handle_pypi_location(location: &UrlOrPath) -> (Option<u64>, Option<String>) {
+/// Return the size and source location of the pypi package
+fn get_pypi_location_information(location: &UrlOrPath) -> (Option<u64>, Option<String>) {
     match location {
         UrlOrPath::Url(url) => (None, Some(url.to_string())),
         UrlOrPath::Path(path) => (
@@ -391,10 +391,10 @@ fn create_package_to_output<'a, 'b>(
                     let name = entry.map(|e| e.dist.filename.to_string());
                     (size, name)
                 } else {
-                    handle_pypi_location(&p.location)
+                    get_pypi_location_information(&p.location)
                 }
             } else {
-                handle_pypi_location(&p.location)
+                get_pypi_location_information(&p.location)
             }
         }
     };
