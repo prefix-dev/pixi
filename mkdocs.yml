@@ -119,7 +119,6 @@ nav:
   - Switching from:
       - Poetry: switching_from/poetry.md
       - Conda/Mamba: switching_from/conda.md
-      - Changelog: CHANGELOG.md
   - IDE Integration:
       - JupyterLab: ide_integration/jupyterlab.md
       - PyCharm: ide_integration/pycharm.md
@@ -151,6 +150,7 @@ nav:
       - Packaging: packaging.md
       - Community: Community.md
       - FAQ: FAQ.md
+      - Changelog: CHANGELOG.md
 
 hooks:
   - schema/docs_hooks.py
