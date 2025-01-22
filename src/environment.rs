@@ -1,5 +1,5 @@
 use crate::{
-    build::BuildReporter,
+    build::{BuildReporter, SourceCheckoutReporter},
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
@@ -17,9 +17,11 @@ use miette::{IntoDiagnostic, WrapErr};
 use parking_lot::Mutex;
 use pixi_build_frontend::CondaBuildReporter;
 use pixi_consts::consts;
+use pixi_git::credentials::store_credentials_from_url;
 use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
+use pixi_spec::PixiSpec;
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -327,6 +329,57 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     Ok(())
 }
 
+/// Extract filtered requirements from the project based on a filter.
+/// The filter allows specifying which subset of requirements to extract.
+pub fn extract_requirements_from_project(project: &Project) -> Vec<PixiSpec> {
+    let mut requirements = Vec::new();
+
+    for env in project.environments() {
+        let env_platforms = env.platforms();
+        for platform in env_platforms {
+            let dependencies = env.combined_dependencies(Some(platform));
+            for (_, dep_spec) in dependencies {
+                for spec in dep_spec {
+                    requirements.push(spec.clone());
+                }
+            }
+        }
+    }
+
+    requirements
+}
+
+/// Store credentials from the filtered requirements.
+/// This method takes the requirements and processes only `PixiSpec::Git` variants.
+pub fn store_credentials_from_requirements(requirements: Vec<PixiSpec>) {
+    for spec in requirements {
+        if let PixiSpec::Git(git_spec) = spec {
+            store_credentials_from_url(&git_spec.git);
+        }
+    }
+}
+
+/// Extract any credentials that are defined on the project dependencies themselves.
+/// While we don't store plaintext credentials in the `pixi.lock`, we do respect credentials that are defined
+/// in the `pixi.toml` or `pyproject.toml`.
+pub async fn store_credentials_from_project(project: &Project) -> miette::Result<()> {
+    for env in project.environments() {
+        let env_platforms = env.platforms();
+        for platform in env_platforms {
+            let dependencies = env.combined_dependencies(Some(platform));
+            for (_, dep_spec) in dependencies {
+                for spec in dep_spec {
+                    if let PixiSpec::Git(spec) = spec {
+                        store_credentials_from_url(&spec.git);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
@@ -412,6 +465,10 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 
     // Make sure the project is in a sane state
     sanity_check_project(project).await?;
+
+    // Store the git credentials from the git requirements
+    let requirements = extract_requirements_from_project(project);
+    store_credentials_from_requirements(requirements);
 
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
@@ -761,6 +818,9 @@ pub async fn update_prefix_conda(
         });
 
     let mut progress_reporter = None;
+    let mut source_reporter = None;
+    let source_pb = global_multi_progress().add(ProgressBar::hidden());
+
     let source_records_length = source_records.len();
     // Build conda packages out of the source records
     let mut processed_source_packages = stream::iter(source_records)
@@ -771,6 +831,15 @@ pub async fn update_prefix_conda(
             let progress_reporter = progress_reporter
                 .get_or_insert_with(|| {
                     Arc::new(CondaBuildProgress::new(source_records_length as u64))
+                })
+                .clone();
+
+            let source_reporter = source_reporter
+                .get_or_insert_with(|| {
+                    Arc::new(SourceCheckoutReporter::new(
+                        source_pb.clone(),
+                        global_multi_progress(),
+                    ))
                 })
                 .clone();
             let build_id = progress_reporter.associate(record.package_record.name.as_source());
@@ -786,6 +855,7 @@ pub async fn update_prefix_conda(
                         virtual_packages.clone(),
                         virtual_packages.clone(),
                         progress_reporter.clone(),
+                        Some(source_reporter),
                         build_id,
                     )
                     .await

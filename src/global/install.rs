@@ -292,7 +292,7 @@ pub async fn find_binary_by_name(
     prefix: &Prefix,
     package_name: &PackageName,
 ) -> miette::Result<Option<Executable>> {
-    let installed_packages = prefix.find_installed_packages(None).await?;
+    let installed_packages = prefix.find_installed_packages()?;
     for package in &installed_packages {
         let executables = prefix.find_executables(&[package.clone()]);
 

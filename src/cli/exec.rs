@@ -4,7 +4,7 @@ use clap::{Parser, ValueHint};
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{reqwest::build_reqwest_clients, EnvironmentHash, PrefixGuard};
+use pixi_utils::{reqwest::build_reqwest_clients, AsyncPrefixGuard, EnvironmentHash};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -46,7 +46,7 @@ pub struct Args {
     pub config: ConfigCli,
 }
 
-/// CLI entry point for `pixi runx`
+/// CLI entry point for `pixi exec`
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
@@ -100,11 +100,13 @@ pub async fn create_exec_prefix(
             .join(environment_hash.name()),
     );
 
-    let mut guard = PrefixGuard::new(prefix.root())
+    let guard = AsyncPrefixGuard::new(prefix.root())
+        .await
         .into_diagnostic()
         .context("failed to create prefix guard")?;
 
-    let mut write_guard = wrap_in_progress("acquiring write lock on prefix", || guard.write())
+    let mut write_guard = await_in_progress("acquiring write lock on prefix", |_| guard.write())
+        .await
         .into_diagnostic()
         .context("failed to acquire write lock to prefix guard")?;
 
@@ -115,13 +117,14 @@ pub async fn create_exec_prefix(
             "reusing existing environment in {}",
             prefix.root().display()
         );
-        let _ = write_guard.finish();
+        write_guard.finish().await.into_diagnostic()?;
         return Ok(prefix);
     }
 
     // Update the prefix to indicate that we are installing it.
     write_guard
         .begin()
+        .await
         .into_diagnostic()
         .context("failed to write lock status to prefix guard")?;
 
@@ -202,7 +205,7 @@ pub async fn create_exec_prefix(
         .into_diagnostic()
         .context("failed to create environment")?;
 
-    let _ = write_guard.finish();
+    write_guard.finish().await.into_diagnostic()?;
     Ok(prefix)
 }
 

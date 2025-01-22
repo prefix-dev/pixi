@@ -26,7 +26,7 @@ use tracing::Level;
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
-#[clap(trailing_var_arg = true)]
+#[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
     /// The pixi task or a task shell command you want to run in the project's
     /// environment, which can be an executable in the environment's PATH.
@@ -51,6 +51,16 @@ pub struct Args {
     /// minimum environment to activate the pixi environment in.
     #[arg(long)]
     pub clean_env: bool,
+
+    /// Don't run the dependencies of the task ('depends-on' field in the task definition)
+    #[arg(long)]
+    pub skip_deps: bool,
+
+    #[clap(long, action = clap::ArgAction::HelpLong)]
+    pub help: Option<bool>,
+
+    #[clap(short, action = clap::ArgAction::HelpShort)]
+    pub h: Option<bool>,
 }
 
 /// CLI entry point for `pixi run`
@@ -116,7 +126,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
-    let task_graph = TaskGraph::from_cmd_args(&project, &search_environment, args.task)?;
+    let task_graph =
+        TaskGraph::from_cmd_args(&project, &search_environment, args.task, args.skip_deps)?;
 
     tracing::info!("Task graph: {}", task_graph);
 
@@ -297,8 +308,13 @@ async fn execute_task<'p>(
     // might want to revaluate this.
     let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
 
-    let execute_future =
-        deno_task_shell::execute(script, command_env.clone(), &cwd, Default::default());
+    let execute_future = deno_task_shell::execute(
+        script,
+        command_env.clone(),
+        &cwd,
+        Default::default(),
+        Default::default(),
+    );
     let status_code = tokio::select! {
         code = execute_future => code,
         // This should never exit

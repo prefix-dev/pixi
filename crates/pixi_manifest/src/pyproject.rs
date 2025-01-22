@@ -7,13 +7,13 @@ use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
 use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact, DependencyGroups, Project};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
-use serde::Deserialize;
 use thiserror::Error;
 
 use super::{
     error::{RequirementConversionError, TomlError},
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
 };
+use crate::toml::{FromTomlStr, Warning};
 use crate::{
     error::DependencyError,
     manifests::PackageManifest,
@@ -21,20 +21,19 @@ use crate::{
     FeatureName,
 };
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct PyProjectManifest {
-    #[serde(flatten)]
-    inner: pyproject_toml::PyProjectToml,
-    tool: Option<Tool>,
+    pub inner: pyproject_toml::PyProjectToml,
+    pub tool: Option<Tool>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct Tool {
     pub pixi: Option<TomlManifest>,
     pub poetry: Option<ToolPoetry>,
 }
 
-#[derive(Default, Deserialize, Debug)]
+#[derive(Default, Debug)]
 pub struct ToolPoetry {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -51,11 +50,6 @@ impl std::ops::Deref for PyProjectManifest {
 }
 
 impl PyProjectManifest {
-    /// Parses a toml string into a PyProjectManifest
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        toml_edit::de::from_str(source).map_err(TomlError::from)
-    }
-
     /// Parses a `pyproject.toml` file into a PyProjectManifest
     pub fn from_path(path: &PathBuf) -> Result<Self, Report> {
         let source = fs_err::read_to_string(path)
@@ -225,7 +219,8 @@ impl PyProjectManifest {
     #[allow(clippy::result_large_err)]
     pub fn into_manifests(
         self,
-    ) -> Result<(WorkspaceManifest, Option<PackageManifest>), PyProjectToManifestError> {
+    ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), PyProjectToManifestError>
+    {
         // Load the data nested under '[tool.pixi]' as pixi manifest
         let Some(Tool {
             pixi: Some(pixi),
@@ -252,7 +247,7 @@ impl PyProjectManifest {
         // different than we expect, so the conversion is not straightforward we
         // could change these types or we can convert. Let's decide when we make it.
         // etc.
-        let (mut workspace_manifest, package_manifest) =
+        let (mut workspace_manifest, package_manifest, warnings) =
             pixi.into_manifests(ExternalWorkspaceProperties {
                 name: project.name,
                 version: project
@@ -351,7 +346,7 @@ impl PyProjectManifest {
             }
         }
 
-        Ok((workspace_manifest, package_manifest))
+        Ok((workspace_manifest, package_manifest, warnings))
     }
 }
 
@@ -546,7 +541,6 @@ mod tests {
         version = "0.1.0"
         description = "Example how to get started with flask in a pixi environment."
         license = "MIT OR Apache-2.0"
-        homepage = "https://github.com/prefix/pixi"
         readme = "README.md"
         requires-python = ">=3.11"
         dependencies = ["flask==2.*"]
@@ -655,8 +649,7 @@ mod tests {
             assert_eq!(version_spec, &vspec);
         }
 
-        // Check that we remove leading `==` for the conda version spec
-        cmp("==3.12", "3.12");
+        cmp("==3.12", "==3.12");
         cmp("==3.12.*", "3.12.*");
         // rest should work just fine
         cmp(">=3.12", ">=3.12");

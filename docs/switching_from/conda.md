@@ -58,9 +58,9 @@ bat pixi.toml
 ```
 
 !!! warn "Never install `pip` with `pixi global`"
-Installations with `pixi global` get their own isolated environment.
-Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary.
-Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
+    Installations with `pixi global` get their own isolated environment.
+    Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary.
+    Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
 
 
 ## Automated switching
@@ -71,11 +71,11 @@ pixi init --import environment.yml
 This will create a new project with the dependencies from the `environment.yml` file.
 
 ??? tip "Exporting your environment"
-    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli.md#project-export-conda_environment) file to share them.
+    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli.md#project-export-conda-environment) file to share them.
     ```shell
     pixi project export conda-environment
     ```
-    Additionally you can export a [conda explicit specification](../reference/cli.md#project-export-conda_explicit_spec).
+    Additionally you can export a [conda explicit specification](../reference/cli.md#project-export-conda-explicit-spec).
 
 ## Troubleshooting
 Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:

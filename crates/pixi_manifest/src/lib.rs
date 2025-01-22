@@ -25,7 +25,7 @@ mod validation;
 mod workspace;
 
 pub use activation::Activation;
-pub use build_system::BuildSystem;
+pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 pub use environment::{Environment, EnvironmentName};
@@ -41,11 +41,11 @@ pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 pub use pypi::pypi_requirement::PyPiRequirement;
 use rattler_conda_types::Platform;
 pub use spec_type::SpecType;
-pub use system_requirements::{LibCSystemRequirement, SystemRequirements};
-pub use target::{TargetSelector, Targets, WorkspaceTarget};
+pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
+pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
-pub use workspace::Workspace;
+pub use workspace::{ChannelPriority, Workspace};
 
 pub use crate::{
     environments::Environments,

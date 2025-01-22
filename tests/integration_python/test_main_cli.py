@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from .common import verify_cli_command, ExitCode, PIXI_VERSION, ALL_PLATFORMS
+from .common import cwd, verify_cli_command, ExitCode, PIXI_VERSION, CURRENT_PLATFORM
 import tomllib
 import json
 import pytest
@@ -313,6 +313,37 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    # Change directory to workspace
+    with cwd(tmp_pixi_workspace):
+        # Create a new project
+        verify_cli_command([pixi, "init", "."], ExitCode.SUCCESS)
+
+        # Verify that the manifest file is created
+        manifest_path = tmp_pixi_workspace / "pixi.toml"
+        assert manifest_path.exists()
+
+        # Verify that the manifest file contains expected content
+        manifest_content = manifest_path.read_text()
+        assert "[project]" in manifest_content
+
+
+def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    # Specify project dir
+    project_dir = tmp_pixi_workspace / "project_dir"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", project_dir], ExitCode.SUCCESS)
+
+    # Verify that the manifest file is created
+    manifest_path = project_dir / "pixi.toml"
+    assert manifest_path.exists()
+
+    # Verify that the manifest file contains expected content
+    manifest_content = manifest_path.read_text()
+    assert "[project]" in manifest_content
+
+
 @pytest.mark.slow
 def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pyproject.toml"
@@ -570,8 +601,8 @@ cli = ["rich==12"]
 test = ["pytest==6"]
 
 [tool.pixi.project]
-channels = ["conda-forge"]
-platforms = {ALL_PLATFORMS}
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{CURRENT_PLATFORM}"]
 
 [tool.pixi.pypi-dependencies]
 polars = "==0.*"
@@ -713,4 +744,204 @@ def test_concurrency_flags(
             manifest_path,
             "package3",
         ]
+    )
+
+
+def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    manifest_content = tmp_pixi_workspace.joinpath("pixi.toml").read_text()
+
+    # Add a non existing package should error
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "dummy-a=1000000"],
+        ExitCode.FAILURE,
+    )
+
+    # It should not have modified the manifest on failure
+    assert manifest_content == tmp_pixi_workspace.joinpath("pixi.toml").read_text()
+
+
+def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+
+    # Modify project without manifest path
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "description",
+            "set",
+            "blabla",
+        ],
+        ExitCode.SUCCESS,
+        cwd=tmp_pixi_workspace,
+    )
+
+    # Verify project by manifest path to 'pixi.toml'
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "description", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="blabla",
+    )
+
+    # Verify project by manifest path to workspace
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", tmp_pixi_workspace, "description", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="blabla",
+    )
+
+
+def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # Add system requirements
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "cuda",
+            "11.8",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "glibc",
+            "2.27",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "macos",
+            "15.4",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "linux",
+            "6.5",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "other-libc",
+            "1.2.3",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="--family",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "other-libc",
+            "1.2.3",
+            "--family",
+            "musl",
+        ],
+        ExitCode.SUCCESS,
+    )
+
+    # List system requirements
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "list",
+        ],
+        ExitCode.SUCCESS,
+        stdout_contains=["CUDA", "macOS", "Linux", "LibC", "musl"],
+    )
+
+    # Add extra environment
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "--feature",
+            "test",
+            "linux",
+            "10.1",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "environment",
+            "add",
+            "test",
+            "--feature",
+            "test",
+        ],
+        ExitCode.SUCCESS,
+    )
+
+    # List system requirements of environment
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "list",
+            "--environment",
+            "test",
+        ],
+        ExitCode.SUCCESS,
+        stdout_contains=["Linux: 10.1"],
     )

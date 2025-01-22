@@ -2,6 +2,7 @@ use std::hash::Hash;
 
 use indexmap::{map::IndexMap, Equivalent};
 
+use crate::toml::FromTomlStr;
 use crate::{
     consts,
     environment::{Environment, EnvironmentName},
@@ -86,6 +87,7 @@ mod tests {
     use itertools::Itertools;
     use rattler_conda_types::{NamedChannelOrUrl, Platform};
 
+    use crate::utils::test_utils::format_parse_error;
     use crate::{utils::test_utils::expect_parse_failure, TargetSelector, WorkspaceManifest};
 
     const PROJECT_BOILERPLATE: &str = r#"
@@ -103,10 +105,10 @@ mod tests {
         {PROJECT_BOILERPLATE}
 
         [target.win-64.dependencies]
-        foo = "3.4.5"
+        foo = "==3.4.5"
 
         [target.osx-64.dependencies]
-        foo = "1.2.3"
+        foo = "==1.2.3"
         "#
         );
 
@@ -363,6 +365,7 @@ mod tests {
         );
 
         assert_snapshot!(WorkspaceManifest::from_toml_str(&contents)
+            .map_err(|e| format_parse_error(&contents, e))
             .expect("parsing should succeed!")
             .default_feature()
             .targets
@@ -414,46 +417,6 @@ mod tests {
         let manifest =
             WorkspaceManifest::from_toml_str(&contents).expect("parsing should succeed!");
         assert_yaml_snapshot!(manifest.workspace.pypi_options.clone().unwrap());
-    }
-
-    #[test]
-    fn test_duplicate_dependency() {
-        let contents = format!(
-            r#"
-        {PROJECT_BOILERPLATE}
-
-        [dependencies]
-        Flask = "2.*"
-        flask = "2.*"
-        "#
-        );
-        let manifest = WorkspaceManifest::from_toml_str(&contents);
-
-        assert!(manifest.is_err());
-        assert!(manifest
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate dependency"));
-    }
-
-    #[test]
-    fn test_duplicate_host_dependency() {
-        let contents = format!(
-            r#"
-        {PROJECT_BOILERPLATE}
-
-        [host-dependencies]
-        LibC = "2.12"
-        libc = "2.12"
-        "#
-        );
-        let manifest = WorkspaceManifest::from_toml_str(&contents);
-
-        assert!(manifest.is_err());
-        assert!(manifest
-            .unwrap_err()
-            .to_string()
-            .contains("duplicate dependency"));
     }
 
     #[test]

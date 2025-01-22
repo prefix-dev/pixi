@@ -1,7 +1,7 @@
 use std::{
     cmp::PartialEq,
     fs,
-    io::{Error, ErrorKind, Write},
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -14,6 +14,7 @@ use pixi_consts::consts;
 use pixi_manifest::{
     pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
 };
+use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tokio::fs::OpenOptions;
@@ -181,7 +182,9 @@ pixi.lock gitlab-language=yaml gitlab-generated=true
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
-    let dir = get_dir(args.path).into_diagnostic()?;
+    // Fail silently if the directory already exists or cannot be created.
+    fs_err::create_dir_all(&args.path).ok();
+    let dir = args.path.canonicalize().into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
@@ -197,9 +200,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style("--format pyproject").bold().green(),
         );
     }
-
-    // Fail silently if the directory already exists or cannot be created.
-    fs_err::create_dir_all(&dir).ok();
 
     let default_name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project"));
     let version = "0.1.0";
@@ -241,14 +241,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
         let channel_config = project.channel_config();
         for spec in conda_deps {
+            // Determine the name of the package to add
+            let (Some(name), spec) = spec.clone().into_nameless() else {
+                miette::bail!(
+                    "{} does not support wildcard dependencies",
+                    pixi_utils::executable_name()
+                );
+            };
+            let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
             project.manifest.add_dependency(
+                &name,
                 &spec,
                 SpecType::Run,
                 // No platforms required as you can't define them in the yaml
                 &[],
                 &FeatureName::default(),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )?;
         }
         for requirement in pypi_deps {
@@ -522,61 +530,13 @@ fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
-    if path.components().count() == 1 {
-        Ok(std::env::current_dir().unwrap_or_default().join(path))
-    } else {
-        path.canonicalize().map_err(|e| match e.kind() {
-            ErrorKind::NotFound => Error::new(
-                ErrorKind::NotFound,
-                format!(
-                    "Cannot find '{}' please make sure the folder is reachable",
-                    path.to_string_lossy()
-                ),
-            ),
-            _ => Error::new(
-                ErrorKind::InvalidInput,
-                "Cannot canonicalize the given path",
-            ),
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::Read,
-        path::{Path, PathBuf},
-    };
+    use std::{io::Read, path::Path};
 
     use tempfile::tempdir;
 
     use super::*;
-    use crate::cli::init::get_dir;
-
-    #[test]
-    fn test_get_name() {
-        assert_eq!(
-            get_dir(PathBuf::from(".")).unwrap(),
-            std::env::current_dir().unwrap()
-        );
-        assert_eq!(
-            get_dir(PathBuf::from("test_folder")).unwrap(),
-            std::env::current_dir().unwrap().join("test_folder")
-        );
-        assert_eq!(
-            get_dir(std::env::current_dir().unwrap()).unwrap(),
-            std::env::current_dir().unwrap().canonicalize().unwrap()
-        );
-    }
-
-    #[test]
-    fn test_get_name_panic() {
-        match get_dir(PathBuf::from("invalid/path")) {
-            Ok(_) => panic!("Expected error, but got OK"),
-            Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::NotFound),
-        }
-    }
 
     #[test]
     fn test_create_or_append_file() {

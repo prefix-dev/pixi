@@ -11,20 +11,20 @@
 mod detailed;
 mod git;
 mod path;
-mod serde;
+mod toml;
 mod url;
 
 use std::{path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
-pub use git::{GitReference, GitSpec};
+pub use git::{GitSpec, Reference};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
-pub use serde::TomlSpec;
 use thiserror::Error;
+pub use toml::TomlSpec;
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec
@@ -330,6 +330,13 @@ pub enum SourceSpec {
 
     /// The spec is represented as a local directory or local file archive.
     Path(PathSourceSpec),
+}
+
+impl SourceSpec {
+    /// Returns true if this spec represents a git repository.
+    pub fn is_git(&self) -> bool {
+        matches!(self, Self::Git(_))
+    }
 }
 
 impl From<SourceSpec> for PixiSpec {

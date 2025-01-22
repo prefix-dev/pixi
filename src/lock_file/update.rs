@@ -17,7 +17,7 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
@@ -30,7 +30,6 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -43,7 +42,7 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::{BuildContext, GlobHashCache},
+    build::{BuildContext, GlobHashCache, SourceCheckoutReporter},
     environment::{
         self, read_environment_file, write_environment_file, EnvironmentFile, LockFileUsage,
         LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
@@ -382,15 +381,12 @@ impl<'p> LockFileDerivedData<'p> {
         let platform = environment.best_platform();
 
         // Determine the currently installed packages.
-        let installed_packages = prefix
-            .find_installed_packages(None)
-            .await
-            .with_context(|| {
-                format!(
-                    "failed to determine the currently installed packages for '{}'",
-                    environment.name(),
-                )
-            })?;
+        let installed_packages = prefix.find_installed_packages().with_context(|| {
+            format!(
+                "failed to determine the currently installed packages for '{}'",
+                environment.name(),
+            )
+        })?;
 
         // Get the locked environment from the lock-file.
         let records = self
@@ -469,12 +465,10 @@ pub struct UpdateContext<'p> {
     /// mapping contains a [`BarrierCell`] that will eventually contain the
     /// solved records computed by another task. This allows tasks to wait
     /// for the records to be solved before proceeding.
-    solved_repodata_records:
-        PerEnvironmentAndPlatform<'p, Arc<BarrierCell<Arc<PixiRecordsByName>>>>,
+    solved_repodata_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<PixiRecordsByName>>>,
 
     /// Keeps track of all pending grouped conda targets that are being solved.
-    grouped_solved_repodata_records:
-        PerGroupAndPlatform<'p, Arc<BarrierCell<Arc<PixiRecordsByName>>>>,
+    grouped_solved_repodata_records: PerGroupAndPlatform<'p, Arc<BarrierCell<PixiRecordsByName>>>,
 
     /// Keeps track of all pending prefix updates. This only tracks the conda
     /// updates to a prefix, not whether the pypi packages have also been
@@ -485,10 +479,10 @@ pub struct UpdateContext<'p> {
     /// mapping contains a [`BarrierCell`] that will eventually contain the
     /// solved records computed by another task. This allows tasks to wait
     /// for the records to be solved before proceeding.
-    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<Arc<PypiRecordsByName>>>>,
+    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<PypiRecordsByName>>>,
 
     /// Keeps track of all pending grouped pypi targets that are being solved.
-    grouped_solved_pypi_records: PerGroupAndPlatform<'p, Arc<BarrierCell<Arc<PypiRecordsByName>>>>,
+    grouped_solved_pypi_records: PerGroupAndPlatform<'p, Arc<BarrierCell<PypiRecordsByName>>>,
 
     /// The package cache to use when instantiating prefixes.
     package_cache: PackageCache,
@@ -631,7 +625,7 @@ impl<'p> UpdateContext<'p> {
                         .expect("prefixes must not be shared")
                         .into_inner()
                         .expect("prefix must be available");
-                    Some((env.name().clone(), prefix))
+                    Some((env.name().clone(), (prefix.0.clone(), prefix.1.clone())))
                 }
                 _ => None,
             })
@@ -646,7 +640,10 @@ impl<'p> UpdateContext<'p> {
         environment: &GroupedEnvironment<'p>,
     ) -> Option<impl Future<Output = (Prefix, PythonStatus)>> {
         let cell = self.instantiated_conda_prefixes.get(environment)?.clone();
-        Some(async move { cell.wait().await.clone() })
+        Some(async move {
+            let prefix = cell.wait().await;
+            (prefix.0.clone(), prefix.1.clone())
+        })
     }
 }
 
@@ -1428,7 +1425,7 @@ impl<'p> UpdateContext<'p> {
                     self.instantiated_conda_prefixes
                         .get_mut(&group)
                         .expect("the entry for this environment should exists")
-                        .set((prefix, *python_status))
+                        .set(Arc::new((prefix, *python_status)))
                         .expect("prefix should not be instantiated twice");
 
                     tracing::info!(
@@ -1687,11 +1684,21 @@ async fn spawn_solve_conda_environment_task(
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
-    // Get the virtual packages for this platform
-    let virtual_packages = group.virtual_packages(platform);
-
     // Get the environment name
     let group_name = group.name();
+
+    // Early out if there are no dependencies to solve.
+    if dependencies.is_empty() {
+        return Ok(TaskResult::CondaGroupSolved(
+            group_name,
+            platform,
+            PixiRecordsByName::default(),
+            Duration::default(),
+        ));
+    }
+
+    // Get the virtual packages for this platform
+    let virtual_packages = group.virtual_packages(platform);
 
     // The list of channels and platforms we need for this task
     let channels = group.channels().into_iter().cloned().collect_vec();
@@ -1704,6 +1711,10 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the channel configuration
     let channel_config = group.project().channel_config();
+
+    // A root progress bar for the task. It is used to attach sub-progress bars to,
+    // that doesn't need to be split up between multiple platforms.
+    let root_pb = global_multi_progress().add(ProgressBar::hidden());
 
     tokio::spawn(
         async move {
@@ -1746,6 +1757,7 @@ async fn spawn_solve_conda_environment_task(
                 .into_diagnostic()?;
 
             let mut metadata_progress = None;
+            let mut source_progress = None;
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
@@ -1756,6 +1768,13 @@ async fn spawn_solve_conda_environment_task(
                         source_specs.len() as u64,
                     ))
                 });
+                let source_reporter = source_progress.get_or_insert_with(|| {
+                    Arc::new(SourceCheckoutReporter::new(
+                        root_pb.clone(),
+                        global_multi_progress(),
+                    ))
+                });
+
                 source_futures.push(
                     build_context
                         .extract_source_metadata(
@@ -1766,6 +1785,7 @@ async fn spawn_solve_conda_environment_task(
                             platform,
                             virtual_packages.clone(),
                             metadata_reporter.clone(),
+                            Some(source_reporter.clone()),
                             build_id,
                         )
                         .map_err(|e| {
@@ -2222,7 +2242,7 @@ async fn spawn_create_prefix_task(
     // Spawn a task to determine the currently installed packages.
     let installed_packages_future = tokio::spawn({
         let prefix = prefix.clone();
-        async move { prefix.find_installed_packages(None).await }
+        async move { prefix.find_installed_packages() }
     })
     .unwrap_or_else(|e| match e.try_into_panic() {
         Ok(panic) => std::panic::resume_unwind(panic),

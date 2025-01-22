@@ -1,5 +1,4 @@
 ---
-
 name: lets-plot-python-module
 channels:
   - conda-forge

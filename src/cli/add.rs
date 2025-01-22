@@ -1,6 +1,9 @@
 use clap::Parser;
 use indexmap::IndexMap;
-use pixi_manifest::FeatureName;
+use miette::IntoDiagnostic;
+use pixi_manifest::{FeatureName, SpecType};
+use pixi_spec::{GitSpec, SourceSpec};
+use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::has_specs::HasSpecs;
 use crate::{
@@ -97,40 +100,88 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .manifest
         .add_platforms(dependency_config.platforms.iter(), &FeatureName::Default)?;
 
-    let (match_specs, pypi_deps) = match dependency_config.dependency_type() {
+    let (match_specs, source_specs, pypi_deps) = match dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
-            let match_specs = dependency_config
+            // if user passed some git configuration
+            // we will use it to create pixi source specs
+            let passed_specs: IndexMap<PackageName, (MatchSpec, SpecType)> = dependency_config
                 .specs()?
                 .into_iter()
                 .map(|(name, spec)| (name, (spec, spec_type)))
                 .collect();
-            let pypi_deps = IndexMap::default();
-            (match_specs, pypi_deps)
+
+            if let Some(git) = &dependency_config.git {
+                let source_specs = passed_specs
+                    .iter()
+                    .map(|(name, (_spec, spec_type))| {
+                        let git_reference =
+                            dependency_config.rev.clone().unwrap_or_default().into();
+
+                        let git_spec = GitSpec {
+                            git: git.clone(),
+                            rev: Some(git_reference),
+                            subdirectory: dependency_config.subdir.clone(),
+                        };
+                        (name.clone(), (SourceSpec::Git(git_spec), *spec_type))
+                    })
+                    .collect();
+                (IndexMap::default(), source_specs, IndexMap::default())
+            } else {
+                (passed_specs, IndexMap::default(), IndexMap::default())
+            }
         }
         DependencyType::PypiDependency => {
             let match_specs = IndexMap::default();
-            let pypi_deps = dependency_config
-                .pypi_deps(&project)?
-                .into_iter()
-                .map(|(name, req)| (name, (req, None)))
-                .collect();
-            (match_specs, pypi_deps)
+            let source_specs = IndexMap::default();
+            let pypi_deps = match dependency_config
+                .vcs_pep508_requirements(&project)
+                .transpose()?
+            {
+                Some(vcs_reqs) => vcs_reqs
+                    .into_iter()
+                    .map(|(name, req)| (name, (req, None)))
+                    .collect(),
+                None => dependency_config
+                    .pypi_deps(&project)?
+                    .into_iter()
+                    .map(|(name, req)| (name, (req, None)))
+                    .collect(),
+            };
+
+            (match_specs, source_specs, pypi_deps)
         }
     };
     // TODO: add dry_run logic to add
     let dry_run = false;
 
-    let update_deps = project
+    // Save original manifest
+    let original_manifest_content =
+        fs_err::read_to_string(project.manifest_path()).into_diagnostic()?;
+
+    let update_deps = match project
         .update_dependencies(
             match_specs,
             pypi_deps,
+            source_specs,
             prefix_update_config,
             &args.dependency_config.feature,
             &args.dependency_config.platforms,
             args.editable,
             dry_run,
         )
-        .await?;
+        .await
+    {
+        Ok(update_deps) => {
+            // Write the updated manifest
+            project.save()?;
+            update_deps
+        }
+        Err(e) => {
+            // Restore original manifest
+            fs_err::write(project.manifest_path(), original_manifest_content).into_diagnostic()?;
+            return Err(e);
+        }
+    };
 
     if let Some(update_deps) = update_deps {
         // Notify the user we succeeded

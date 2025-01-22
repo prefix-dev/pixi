@@ -39,7 +39,7 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 - Always includes an up-to-date **lock file**.
 - Provides a clean and simple Cargo-like **command-line interface**.
 - Allows you to install tools **per-project** or **system-wide**.
-- Entirely written in **Rust** and built on top of the **[rattler](https://github.com/mamba-org/rattler)** library.
+- Entirely written in **Rust** and built on top of the **[rattler](https://github.com/conda/rattler)** library.
 
 ## Getting Started
 
@@ -92,7 +92,12 @@ The script will also update your ~/.zshrc to include ~/.pixi/bin in your PATH, a
 To install Pixi on Windows, open a PowerShell terminal (you may need to run it as an administrator) and run the following command:
 
 ```powershell
-iwr -useb https://pixi.sh/install.ps1 | iex
+powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+```
+Changing the [execution policy](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4#powershell-execution-policies) allows running a script from the internet.
+Check the script you would be running with:
+```powershell
+powershell -c "irm -useb https://pixi.sh/install.ps1 | more"
 ```
 
 The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
@@ -150,17 +155,11 @@ pixi completion --shell fish | source
 
 #### Nushell
 
-Add the following to the end of your Nushell env file (find it by running `$nu.env-path` in Nushell):
+Add the following to your Nushell config file (find it by running `$nu.config-path` in Nushell):
 
 ```nushell
-mkdir ~/.cache/pixi
-pixi completion --shell nushell | save -f ~/.cache/pixi/completions.nu
-```
-
-And add the following to the end of your Nushell configuration (find it by running `$nu.config-path`):
-
-```nushell
-use ~/.cache/pixi/completions.nu *
+mkdir $"($nu.data-dir)/vendor/autoload"
+pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
 ```
 
 #### Elvish
@@ -213,7 +212,7 @@ cargo test
 ```
 
 If you have any issues building because of the dependency on `rattler` checkout
-it's [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try)
+it's [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try)
 
 ## Uninstall
 

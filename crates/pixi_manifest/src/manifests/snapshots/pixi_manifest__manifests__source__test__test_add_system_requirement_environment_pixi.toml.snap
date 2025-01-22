@@ -1,0 +1,16 @@
+---
+source: crates/pixi_manifest/src/manifests/source.rs
+expression: source.to_string()
+snapshot_kind: text
+---
+[project]
+name = "test"
+channels = []
+platforms = []
+
+[system-requirements]
+linux = "4.18"
+cuda = "11.1"
+macos = "13.0"
+libc = { family = "glibc", version = "1.2" }
+archspec = "x86_64"

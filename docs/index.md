@@ -22,12 +22,17 @@ To install `pixi` you can run the following command in your terminal:
     The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
     If this directory does not already exist, the script will create it.
 
-    The script will also update your `~/.bash_profile` to include `~/.pixi/bin` in your PATH, allowing you to invoke the `pixi` command from anywhere.
+    The script will also update your `~/.bashrc` to include `~/.pixi/bin` in your PATH, allowing you to invoke the `pixi` command from anywhere.
 
 === "Windows"
     `PowerShell`:
     ```powershell
-    iwr -useb https://pixi.sh/install.ps1 | iex
+    powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+    ```
+    Changing the [execution policy](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4#powershell-execution-policies) allows running a script from the internet.
+    Check the script you would be running with:
+    ```powershell
+    powershell -c "irm -useb https://pixi.sh/install.ps1 | more"
     ```
     `winget`:
     ```
@@ -91,17 +96,11 @@ pixi completion --shell fish | source
 
 ### Nushell
 
-Add the following to the end of your Nushell env file (find it by running `$nu.env-path` in Nushell):
+Add the following to your Nushell config file (find it by running `$nu.config-path` in Nushell):
 
 ```nushell
-mkdir ~/.cache/pixi
-pixi completion --shell nushell | save -f ~/.cache/pixi/completions.nu
-```
-
-And add the following to the end of your Nushell configuration (find it by running `$nu.config-path`):
-
-```nushell
-use ~/.cache/pixi/completions.nu *
+mkdir $"($nu.data-dir)/vendor/autoload"
+pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
 ```
 
 ### Elvish
@@ -151,7 +150,7 @@ cargo test
 ```
 
 If you have any issues building because of the dependency on `rattler` checkout
-its [compile steps](https://github.com/mamba-org/rattler/tree/main#give-it-a-try).
+its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
 ### Installer script options
 

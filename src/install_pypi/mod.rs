@@ -203,15 +203,12 @@ pub async fn update_python_distributions(
     .plan(&site_packages, registry_index, &required_map)?;
 
     // Determine the currently installed conda packages.
-    let installed_packages = prefix
-        .find_installed_packages(None)
-        .await
-        .with_context(|| {
-            format!(
-                "failed to determine the currently installed packages for {}",
-                prefix.root().display()
-            )
-        })?;
+    let installed_packages = prefix.find_installed_packages().with_context(|| {
+        format!(
+            "failed to determine the currently installed packages for {}",
+            prefix.root().display()
+        )
+    })?;
 
     let pypi_conda_clobber = PypiCondaClobberRegistry::with_conda_packages(&installed_packages);
 
@@ -307,7 +304,6 @@ pub async fn update_python_distributions(
 
         let options = UvReporterOptions::new()
             .with_length(remote.len() as u64)
-            .with_capacity(remote.len() + 30)
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
@@ -462,7 +458,6 @@ pub async fn update_python_distributions(
 
     let options = UvReporterOptions::new()
         .with_length(all_dists.len() as u64)
-        .with_capacity(all_dists.len() + 30)
         .with_starting_tasks(all_dists.iter().map(|d| format!("{}", d.name())))
         .with_top_level_message("Installing distributions");
 

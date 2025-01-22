@@ -65,7 +65,6 @@ mod environment;
 mod manifest;
 mod parsed_manifest;
 
-pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
 /// The pixi global project, this main struct to interact with the pixi global
@@ -152,11 +151,11 @@ impl ExposedData {
 
         // Find all channels used to create the environment
         let all_channels = prefix
-            .find_installed_packages(None)
-            .await?
+            .find_installed_packages()?
             .iter()
             .map(|prefix_record| prefix_record.repodata_record.channel.clone())
             .collect::<HashSet<_>>();
+
         for channel in all_channels.into_iter().flatten() {
             tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
             channels.push(channel_url_to_prioritized_channel(
@@ -386,15 +385,18 @@ impl Project {
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         // Potential directories, with the highest priority coming first
-        let potential_dirs = [pixi_home(), dirs::config_dir().map(|dir| dir.join("pixi"))]
-            .into_iter()
-            .flatten()
-            .map(|dir| dir.join(MANIFESTS_DIR))
-            .collect_vec();
+        let potential_dirs = [
+            pixi_home(),
+            dirs::config_dir().map(|dir| dir.join(consts::CONFIG_DIR)),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|dir| dir.join(MANIFESTS_DIR))
+        .collect_vec();
 
         // First, check if a `pixi-global.toml` already exists
         for dir in &potential_dirs {
-            if dir.join(MANIFEST_DEFAULT_NAME).is_file() {
+            if dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME).is_file() {
                 return Ok(dir.clone());
             }
         }
@@ -408,7 +410,7 @@ impl Project {
 
     /// Get the default path to the global manifest file
     pub(crate) fn default_manifest_path() -> miette::Result<PathBuf> {
-        Self::manifest_dir().map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
+        Self::manifest_dir().map(|dir| dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME))
     }
 
     /// Loads a project from manifest file.
@@ -574,7 +576,6 @@ impl Project {
             |pb| {
                 Installer::new()
                     .with_download_client(self.authenticated_client().clone())
-                    .with_io_concurrency_limit(100)
                     .with_execute_link_scripts(false)
                     .with_package_cache(package_cache)
                     .with_target_platform(platform)
@@ -872,7 +873,7 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        let prefix_records = &prefix.find_installed_packages(None).await?;
+        let prefix_records = &prefix.find_installed_packages()?;
 
         let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
@@ -1037,8 +1038,7 @@ impl Project {
             env_name,
             self.environment_prefix(env_name)
                 .await?
-                .find_installed_packages(None)
-                .await?
+                .find_installed_packages()?
                 .into_iter()
                 .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
                 .map(|r| r.repodata_record.package_record)
@@ -1051,13 +1051,8 @@ impl Project {
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
     fn repodata_gateway(&self) -> &Gateway {
-        self.repodata_gateway.get_or_init(|| {
-            Self::repodata_gateway_init(
-                self.authenticated_client().clone(),
-                self.config().clone().into(),
-                self.config().max_concurrent_downloads(),
-            )
-        })
+        self.repodata_gateway
+            .get_or_init(|| self.config().gateway(self.authenticated_client().clone()))
     }
 }
 
@@ -1099,7 +1094,7 @@ mod tests {
     #[tokio::test]
     async fn test_project_from_path() {
         let tempdir = tempfile::tempdir().unwrap();
-        let manifest_path = tempdir.path().join(MANIFEST_DEFAULT_NAME);
+        let manifest_path = tempdir.path().join(consts::GLOBAL_MANIFEST_DEFAULT_NAME);
 
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();
@@ -1178,7 +1173,7 @@ mod tests {
             non_exposed_manifest,
         );
 
-        // write it's trampline and manifest
+        // write it's trampoline and manifest
         non_exposed_trampoline.save().await.unwrap();
 
         // Create exposed binary
@@ -1253,7 +1248,7 @@ mod tests {
 
         // Create project with env1 and env3
         let manifest = Manifest::from_str(
-            &env_root.path().join(MANIFEST_DEFAULT_NAME),
+            &env_root.path().join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
             r#"
             [envs.env1]
             channels = ["conda-forge"]

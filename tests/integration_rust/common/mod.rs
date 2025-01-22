@@ -245,7 +245,7 @@ impl PixiControl {
 
     /// Loads the project manifest and returns it.
     pub fn project(&self) -> miette::Result<Project> {
-        Project::load_or_else_discover(Some(&self.manifest_path()))
+        Project::load_or_else_discover(Some(&self.manifest_path())).into_diagnostic()
     }
 
     /// Get the path to the project
@@ -264,15 +264,15 @@ impl PixiControl {
     pub fn manifest_path(&self) -> PathBuf {
         // Either pixi.toml or pyproject.toml
         if self.project_path().join(consts::PROJECT_MANIFEST).exists() {
-            return self.project_path().join(consts::PROJECT_MANIFEST);
+            self.project_path().join(consts::PROJECT_MANIFEST)
         } else if self
             .project_path()
             .join(consts::PYPROJECT_MANIFEST)
             .exists()
         {
-            return self.project_path().join(consts::PYPROJECT_MANIFEST);
+            self.project_path().join(consts::PYPROJECT_MANIFEST)
         } else {
-            return self.project_path().join(consts::PROJECT_MANIFEST);
+            self.project_path().join(consts::PROJECT_MANIFEST)
         }
     }
 
@@ -478,7 +478,7 @@ impl PixiControl {
                 .map(|e| e.best_platform())
                 .or(Some(Platform::current())),
         );
-        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task)
+        let task_graph = TaskGraph::from_cmd_args(&project, &search_env, args.task, false)
             .map_err(RunError::TaskGraphError)?;
 
         // Iterate over all tasks in the graph and execute them.

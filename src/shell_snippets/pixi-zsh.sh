@@ -1,3 +1,4 @@
+# shellcheck disable=all
 pixi() {
     local first_arg="$1"
     local cmd="$PIXI_EXE $*"

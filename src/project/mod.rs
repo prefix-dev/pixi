@@ -32,12 +32,15 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, KnownPreviewFeature, Manifest,
-    PypiDependencyLocation, SpecType, WorkspaceManifest,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, PypiDependencyLocation, SpecType,
+    WorkspaceManifest,
 };
+use pixi_spec::{PixiSpec, SourceSpec};
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{
+    Channel, ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, Platform, Version,
+};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
@@ -160,6 +163,34 @@ pub type PypiDeps = indexmap::IndexMap<
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
+pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
+
+#[derive(thiserror::Error, Debug, miette::Diagnostic)]
+pub enum ProjectError {
+    #[error("no file was found at {0}")]
+    FileNotFound(PathBuf),
+    #[error(
+        "could not find {project_manifest} or {pyproject_manifest} at directory {0}",
+        project_manifest = consts::PROJECT_MANIFEST,
+        pyproject_manifest = consts::PYPROJECT_MANIFEST
+    )]
+    FileNotFoundInDirectory(PathBuf),
+    #[error(
+        "could not find {} or {} which is configured to use {}",
+        consts::PROJECT_MANIFEST,
+        consts::PYPROJECT_MANIFEST,
+        pixi_utils::executable_name()
+    )]
+    NoFileFound,
+    #[error("failed to read project from '{0}'")]
+    ReadError(std::io::Error),
+    #[error("failed to parse project from {1}: {0}")]
+    ParseErrorWithPathBuf(miette::Report, PathBuf),
+    #[error("failed to parse project: {0}")]
+    ParseError(miette::Report),
+    #[error("io error: {0}")]
+    IoError(std::io::Error),
+}
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
@@ -203,8 +234,9 @@ impl Project {
     /// the parent directories, or use the manifest specified by the
     /// environment. This will also set the current working directory to the
     /// project root.
-    pub(crate) fn discover() -> miette::Result<Self> {
-        let project_toml = find_project_manifest(std::env::current_dir().into_diagnostic()?);
+    pub(crate) fn discover() -> Result<Self, ProjectError> {
+        let project_toml =
+            find_project_manifest(std::env::current_dir().map_err(ProjectError::IoError)?);
 
         if let Some(project_toml) = project_toml {
             if std::env::var("PIXI_IN_SHELL").is_ok() {
@@ -225,24 +257,32 @@ impl Project {
             return Self::from_path(Path::new(env_manifest_path.as_str()));
         }
 
-        miette::bail!(
-            "could not find {} or {} which is configured to use pixi",
-            consts::PROJECT_MANIFEST,
-            consts::PYPROJECT_MANIFEST
-        );
+        Err(ProjectError::NoFileFound)
     }
 
     /// Loads a project from manifest file.
-    pub fn from_path(manifest_path: &Path) -> miette::Result<Self> {
-        let manifest = Manifest::from_path(manifest_path)?;
+    pub fn from_path(manifest_path: &Path) -> Result<Self, ProjectError> {
+        let manifest = Manifest::from_path(manifest_path)
+            .map_err(|e| ProjectError::ParseErrorWithPathBuf(e, manifest_path.into()))?;
         Ok(Project::from_manifest(manifest))
     }
 
     /// Loads a project manifest file or discovers it in the current directory
     /// or any of the parent
-    pub fn load_or_else_discover(manifest_path: Option<&Path>) -> miette::Result<Self> {
+    pub fn load_or_else_discover(manifest_path: Option<&Path>) -> Result<Self, ProjectError> {
         let project = match manifest_path {
-            Some(path) => Project::from_path(path)?,
+            Some(path) => {
+                if !path.exists() {
+                    return Err(ProjectError::FileNotFound(path.to_owned()));
+                }
+                let path = if path.is_dir() {
+                    &find_project_manifest(path)
+                        .ok_or_else(|| ProjectError::FileNotFoundInDirectory(path.to_owned()))?
+                } else {
+                    path
+                };
+                Project::from_path(path)?
+            }
             None => Project::discover()?,
         };
         Ok(project)
@@ -423,7 +463,7 @@ impl Project {
 
     /// Returns an environment in this project based on a name or an environment
     /// variable.
-    pub(crate) fn environment_from_name_or_env_var(
+    pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
     ) -> miette::Result<Environment> {
@@ -669,6 +709,7 @@ impl Project {
         &mut self,
         match_specs: MatchSpecs,
         pypi_deps: PypiDeps,
+        source_specs: SourceSpecs,
         prefix_update_config: &PrefixUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
@@ -681,20 +722,38 @@ impl Project {
         let mut pypi_packages = HashSet::new();
         let channel_config = self.channel_config();
         for (name, (spec, spec_type)) in match_specs {
+            let (_, nameless_spec) = spec.into_nameless();
+            let pixi_spec =
+                PixiSpec::from_nameless_matchspec(nameless_spec.clone(), &channel_config);
+
             let added = self.manifest.add_dependency(
-                &spec,
+                &name,
+                &pixi_spec,
                 spec_type,
                 platforms,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )?;
             if added {
-                if spec.version.is_none() {
-                    conda_specs_to_add_constraints_for.insert(name.clone(), (spec_type, spec));
+                if nameless_spec.version.is_none() {
+                    conda_specs_to_add_constraints_for
+                        .insert(name.clone(), (spec_type, nameless_spec));
                 }
                 conda_packages.insert(name);
             }
+        }
+
+        for (name, (spec, spec_type)) in source_specs {
+            let pixi_spec = PixiSpec::from(spec);
+
+            self.manifest.add_dependency(
+                &name,
+                &pixi_spec,
+                spec_type,
+                platforms,
+                feature_name,
+                DependencyOverwriteBehavior::Overwrite,
+            )?;
         }
 
         for (name, (spec, location)) in pypi_deps {
@@ -714,8 +773,9 @@ impl Project {
             }
         }
 
-        // Only save to disk if not a dry run
-        if !dry_run {
+        // Only save the project if it is a pyproject.toml
+        // This is required to ensure that the changes are found by tools like `pixi build` and `uv`
+        if self.manifest.is_pyproject() {
             self.save()?;
         }
 
@@ -803,8 +863,9 @@ impl Project {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // Only write to disk if not a dry run
-        if !dry_run {
+        // Only save the project if it is a pyproject.toml
+        // This is required to ensure that the changes are found by tools like `pixi build` and `uv`
+        if self.manifest.is_pyproject() {
             self.save()?;
         }
 
@@ -869,7 +930,7 @@ impl Project {
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
-        conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, MatchSpec)>,
+        conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, NamelessMatchSpec)>,
         affect_environment_and_platforms: Vec<(String, Platform)>,
         feature_name: &FeatureName,
         platforms: &[Platform],
@@ -916,17 +977,20 @@ impl Project {
             if let Some(version_constraint) = version_constraint {
                 implicit_constraints
                     .insert(name.as_source().to_string(), version_constraint.to_string());
-                let spec = MatchSpec {
+                let spec = NamelessMatchSpec {
                     version: Some(version_constraint),
                     ..spec
                 };
+
+                let pixi_spec = PixiSpec::from_nameless_matchspec(spec.clone(), &channel_config);
+
                 self.manifest.add_dependency(
-                    &spec,
+                    &name,
+                    &pixi_spec,
                     spec_type,
                     platforms,
                     feature_name,
                     DependencyOverwriteBehavior::Overwrite,
-                    &channel_config,
                 )?;
             }
         }
@@ -1004,16 +1068,6 @@ impl Project {
 
         Ok(implicit_constraints)
     }
-
-    /// Returns true if all preview features are enabled
-    pub fn all_preview_features_enabled(&self) -> bool {
-        self.manifest.preview().all_enabled()
-    }
-
-    /// Returns true if the given preview feature is enabled
-    pub fn is_preview_feature_enabled(&self, feature: KnownPreviewFeature) -> bool {
-        self.manifest.preview().is_enabled(feature)
-    }
 }
 
 pub struct UpdateDeps {
@@ -1030,10 +1084,10 @@ impl<'source> HasManifestRef<'source> for &'source Project {
 /// Iterates over the current directory and all its parent directories and
 /// returns the manifest path in the first directory path that contains the
 /// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
-pub(crate) fn find_project_manifest(current_dir: PathBuf) -> Option<PathBuf> {
+pub(crate) fn find_project_manifest(current_dir: impl AsRef<Path>) -> Option<PathBuf> {
     let manifests = [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST];
 
-    for dir in current_dir.ancestors() {
+    for dir in current_dir.as_ref().ancestors() {
         for manifest in &manifests {
             let path = dir.join(manifest);
             if !path.is_file() {
@@ -1107,7 +1161,7 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
     );
 
     // Create directory if it doesn't exist
-    if let Err(e) = std::fs::create_dir_all(default_envs_dir) {
+    if let Err(e) = fs_err::create_dir_all(default_envs_dir) {
         tracing::error!(
             "Failed to create directory '{}': {}",
             default_envs_dir.display(),
@@ -1117,7 +1171,7 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
     }
 
     // Write warning message to file
-    match std::fs::write(&warning_file, warning_message.clone()) {
+    match fs_err::write(&warning_file, warning_message.clone()) {
         Ok(_) => tracing::info!(
             "Symlink warning file written to '{}': {}",
             warning_file.display(),

@@ -42,7 +42,7 @@ pub struct CondaMetadataParams {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaMetadataResult {
-    /// Metadata of all the packages that can be build.
+    /// Metadata of all the packages that can be built.
     pub packages: Vec<CondaPackageMetadata>,
 
     /// The files that were read as part of the computation. These files are

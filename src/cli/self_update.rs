@@ -40,8 +40,14 @@ fn default_archive_name() -> Option<String> {
         } else {
             Some("pixi-aarch64-apple-darwin.tar.gz".to_string())
         }
-    } else if cfg!(target_os = "windows") && cfg!(target_arch = "x86_64") {
-        Some("pixi-x86_64-pc-windows-msvc.zip".to_string())
+    } else if cfg!(target_os = "windows") {
+        if cfg!(target_arch = "x86_64") {
+            Some("pixi-x86_64-pc-windows-msvc.zip".to_string())
+        } else if cfg!(target_arch = "aarch64") {
+            Some("pixi-aarch64-pc-windows-msvc.zip".to_string())
+        } else {
+            None
+        }
     } else if cfg!(target_os = "linux") {
         if cfg!(target_arch = "x86_64") {
             Some("pixi-x86_64-unknown-linux-musl.tar.gz".to_string())
@@ -257,7 +263,11 @@ mod tests {
         // So we expect the file to be extracted to the target directory
 
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let archive_path = manifest_dir.join("tests").join("pixi_flat_archive.tar.gz");
+        let archive_path = manifest_dir
+            .join("tests")
+            .join("data")
+            .join("archives")
+            .join("pixi_flat_archive.tar.gz");
 
         let named_tempfile = tempfile::NamedTempFile::new().unwrap();
         let binary_tempdir = tempfile::tempdir().unwrap();
@@ -281,6 +291,8 @@ mod tests {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let archive_path = manifest_dir
             .join("tests")
+            .join("data")
+            .join("archives")
             .join("pixi_nested_archive.tar.gz");
 
         let named_tempfile = tempfile::NamedTempFile::new().unwrap();
