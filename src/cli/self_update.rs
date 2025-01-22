@@ -5,8 +5,8 @@ use tar::Archive;
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
-use reqwest::Client;
 use reqwest::redirect::Policy;
+use reqwest::Client;
 
 use tempfile::{NamedTempFile, TempDir};
 
@@ -64,19 +64,39 @@ async fn latest_version(base_url: &String) -> miette::Result<String> {
     // Create a client with a redirect policy
     let no_redirect_client = Client::builder()
         .redirect(Policy::none()) // Prevent automatic redirects
-        .build().unwrap();
-    
-    match no_redirect_client.head(&url).header("User-Agent", user_agent()).send().await {
+        .build()
+        .unwrap();
+
+    match no_redirect_client
+        .head(&url)
+        .header("User-Agent", user_agent())
+        .send()
+        .await
+    {
         Ok(response) => {
             if response.status().is_redirection() {
                 match response.headers().get("Location") {
-                    Some(location) => Ok(location.to_str().unwrap().split("/").last().unwrap().to_string()),
-                    None => Err(miette::miette!("URL: {}. Redirect detected, but no 'Location' header found.", url)),
+                    Some(location) => Ok(location
+                        .to_str()
+                        .unwrap()
+                        .split("/")
+                        .last()
+                        .unwrap()
+                        .to_string()),
+                    None => Err(miette::miette!(
+                        "URL: {}. Redirect detected, but no 'Location' header found.",
+                        url
+                    )),
                 }
             } else if response.status().is_success() {
                 // No redirection, but response is ok, check contents
                 let client = Client::new();
-                match client.get(&url).header("User-Agent", user_agent()).send().await {
+                match client
+                    .get(&url)
+                    .header("User-Agent", user_agent())
+                    .send()
+                    .await
+                {
                     Ok(res) => Ok(res.text().await.unwrap().trim().to_string()),
                     Err(err) => Err(miette::miette!("URL: {}. Request failed: {}", url, err)),
                 }
@@ -85,9 +105,11 @@ async fn latest_version(base_url: &String) -> miette::Result<String> {
                     "URL: {}. Request failed: {}. \
                     Make sure /latest redirects to the latest version or serves \
                     a text file whose contents are just the latest version tag name.",
-                    url, response.status()))
+                    url,
+                    response.status()
+                ))
             }
-        },
+        }
         Err(err) => Err(miette::miette!("URL: {}. Request failed: {}", url, err)),
     }
 }
@@ -137,15 +159,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("Failed to download the archive");
 
     if res.status() != reqwest::StatusCode::OK {
-        return Err(miette::miette!(format!("URL {} returned {}", url, res.status())));
-    } else {    
+        return Err(miette::miette!(format!(
+            "URL {} returned {}",
+            url,
+            res.status()
+        )));
+    } else {
         // Download the archive
         while let Some(chunk) = res.chunk().await.into_diagnostic()? {
             archived_tempfile
                 .as_file()
                 .write_all(&chunk)
                 .into_diagnostic()?;
-       }
+        }
     }
 
     eprintln!(
