@@ -302,7 +302,7 @@ async fn execute_task<'p>(
 
     // Ignore CTRL+C
     // Specifically so that the child is responsible for its own signal handling
-    // NOTE: one CTRL+C is registered it will always stay registered for the rest of
+    // NOTE: once CTRL+C is registered it will always stay registered for the rest of
     // the runtime of the program which is fine when using run in isolation,
     // however if we start to use run in conjunction with some other command we
     // might want to revaluate this.
