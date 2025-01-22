@@ -510,6 +510,9 @@ jobs:
       TARGET_RELEASE: "${{ github.workspace }}/target/pixi/release"
     steps:
       - uses: actions/checkout@v4
+      - name: install missing stuff
+        run: sudo apt-get update && apt-get install -y g++ libjpeg8-dev zlib1g-dev
+
       - name: Download binary from build
         uses: actions/download-artifact@v4
         with:
