@@ -11,9 +11,7 @@ use pixi_spec::Reference as PixiReference;
 use pixi_git::git::GitReference as PixiGitReference;
 
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
-use uv_git::GitReference;
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
-use uv_pypi_types::ParsedGitUrl;
 use uv_python::PythonEnvironment;
 
 #[derive(thiserror::Error, Debug)]
@@ -187,16 +185,18 @@ pub fn to_index_strategy(
     }
 }
 
-pub fn into_uv_git_reference(git_ref: PixiGitReference) -> GitReference {
+pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git::GitReference {
     match git_ref {
-        PixiGitReference::Branch(branch) => GitReference::Branch(branch),
-        PixiGitReference::Tag(tag) => GitReference::Tag(tag),
-        PixiGitReference::ShortCommit(rev) => GitReference::ShortCommit(rev),
-        PixiGitReference::BranchOrTag(rev) => GitReference::BranchOrTag(rev),
-        PixiGitReference::BranchOrTagOrCommit(rev) => GitReference::BranchOrTagOrCommit(rev),
-        PixiGitReference::NamedRef(rev) => GitReference::NamedRef(rev),
-        PixiGitReference::FullCommit(rev) => GitReference::FullCommit(rev),
-        PixiGitReference::DefaultBranch => GitReference::DefaultBranch,
+        PixiGitReference::Branch(branch) => uv_git::GitReference::Branch(branch),
+        PixiGitReference::Tag(tag) => uv_git::GitReference::Tag(tag),
+        PixiGitReference::ShortCommit(rev) => uv_git::GitReference::ShortCommit(rev),
+        PixiGitReference::BranchOrTag(rev) => uv_git::GitReference::BranchOrTag(rev),
+        PixiGitReference::BranchOrTagOrCommit(rev) => {
+            uv_git::GitReference::BranchOrTagOrCommit(rev)
+        }
+        PixiGitReference::NamedRef(rev) => uv_git::GitReference::NamedRef(rev),
+        PixiGitReference::FullCommit(rev) => uv_git::GitReference::FullCommit(rev),
+        PixiGitReference::DefaultBranch => uv_git::GitReference::DefaultBranch,
     }
 }
 
@@ -204,16 +204,16 @@ pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitSha {
     uv_git::GitSha::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
 }
 
-pub fn into_pixi_reference(git_reference: GitReference) -> PixiReference {
+pub fn into_pixi_reference(git_reference: uv_git::GitReference) -> PixiReference {
     match git_reference {
-        GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
-        GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
-        GitReference::ShortCommit(rev) => PixiReference::Rev(rev.to_string()),
-        GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
-        GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
-        GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
-        GitReference::FullCommit(rev) => PixiReference::Rev(rev.to_string()),
-        GitReference::DefaultBranch => PixiReference::DefaultBranch,
+        uv_git::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
+        uv_git::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
+        uv_git::GitReference::ShortCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::FullCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::DefaultBranch => PixiReference::DefaultBranch,
     }
 }
 
@@ -249,10 +249,12 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
 ///
 /// So we need to convert the locked git url into a parsed git url.
 /// which is used in the uv crate.
-pub fn into_parsed_git_url(locked_git_url: &LockedGitUrl) -> miette::Result<ParsedGitUrl> {
+pub fn into_parsed_git_url(
+    locked_git_url: &LockedGitUrl,
+) -> miette::Result<uv_pypi_types::ParsedGitUrl> {
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
     // Construct manually [`ParsedGitUrl`] from locked url.
-    let parsed_git_url = ParsedGitUrl::from_source(
+    let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
         RepositoryUrl::new(&locked_git_url.to_url()).into(),
         into_uv_git_reference(git_source.reference.into()),
         Some(into_uv_git_sha(git_source.commit)),

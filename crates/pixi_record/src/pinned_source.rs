@@ -436,7 +436,11 @@ impl From<PinnedGitSpec> for LockedGitUrl {
 
 #[derive(Debug, Error)]
 /// An error that occurs when parsing a [`PinnedSourceSpec`].
-pub enum ParseError {}
+pub enum ParseError {
+    /// An error that occurs when parsing a locked git URL.
+    #[error("failed to parse locked git url {0}. Reason: {1}")]
+    LockedGitUrl(String, String),
+}
 
 impl TryFrom<UrlOrPath> for PinnedSourceSpec {
     type Error = ParseError;
@@ -447,8 +451,10 @@ impl TryFrom<UrlOrPath> for PinnedSourceSpec {
                 // for url we can have git+ and simple url's.
                 match LockedGitUrl::is_locked_git_url(&url) {
                     true => {
-                        let locked_url = LockedGitUrl(url);
-                        let pinned = locked_url.to_pinned_git_spec().unwrap();
+                        let locked_url = LockedGitUrl(url.clone());
+                        let pinned = locked_url.to_pinned_git_spec().map_err(|err| {
+                            ParseError::LockedGitUrl(url.to_string(), err.to_string())
+                        })?;
                         Ok(pinned.into())
                     }
                     false => unimplemented!("url not supported"),
