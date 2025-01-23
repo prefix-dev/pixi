@@ -11,12 +11,15 @@ use reqwest::Client;
 use tempfile::{NamedTempFile, TempDir};
 use url::Url;
 
+use rattler_conda_types::Version;
+use std::str::FromStr;
+
 /// Update pixi to the latest version or a specific version.
 #[derive(Debug, clap::Parser)]
 pub struct Args {
     /// The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
     #[clap(long)]
-    version: Option<String>,
+    version: Option<Version>,
 
     /// The URL where to find Pixi releases. Must provide a Github Releases-like HTTP API.
     /// - Downloads must be available at ${base-url}/download/v{X.Y.Z}/pixi-unknown-linux-musl
@@ -57,7 +60,7 @@ fn default_archive_name() -> Option<String> {
     }
 }
 
-async fn latest_version(base_url: Url) -> miette::Result<String> {
+async fn latest_version(base_url: Url) -> miette::Result<Version> {
     // Uses the public Github Releases /latest endpoint to get the latest tag from the URL
     // If base_url doesn't offer redirects (e.g. static site), then /latest
     // must be a file whose contents are the latest tag name.
@@ -111,11 +114,13 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
         }
         Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
     };
-
-    if !version.starts_with("v") {
-        miette::bail!("Version '{}' must start with v.", version)
+    if version == "releases" {
+        // /latest redirect took us back to /releases instead of /vX.Y.Z
+        miette::bail!("URL '{}' does not seem to contain any releases.", base_url)
+    } else if !version.starts_with("v") {
+        miette::bail!("Tag name '{}' must start with v.", version)
     } else {
-        Ok(version)
+        Ok(Version::from_str(&version[1..]).into_diagnostic()?)
     }
 }
 
@@ -128,16 +133,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Get the target version
-    let target_version = match args.version {
+    let target_version = match &args.version {
         Some(version) => version,
-        None => latest_version(base_url.clone()).await?,
+        None => &latest_version(base_url.clone()).await?,
     };
-
     // Get the current version of the pixi binary
-    let current_version = consts::PIXI_VERSION;
+    let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
     // Stop here if the target version is the same as the current version
-    if target_version == current_version {
+    if *target_version == current_version {
         eprintln!(
             "{}pixi is already up-to-date (version {})",
             console::style(console::Emoji("✔ ", "")).green(),
@@ -146,9 +150,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
+    let action = if *target_version < current_version {
+        if args.version.is_none() {
+            // Ask if --version was not passed
+            let confirmation = dialoguer::Confirm::new()
+                .with_prompt(format!(
+                    "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
+                    current_version, target_version
+                ))
+                .default(false)
+                .show_default(true)
+                .interact()
+                .into_diagnostic()?;
+            if !confirmation {
+                return Ok(());
+            };
+        };
+        "downgraded"
+    } else {
+        "updated"
+    };
+
     eprintln!(
-        "{}Pixi will be updated from {} to {}",
+        "{}Pixi will be {} from {} to {}",
         console::style(console::Emoji("✔ ", "")).green(),
+        action,
         current_version,
         target_version
     );
