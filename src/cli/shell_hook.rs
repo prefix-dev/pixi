@@ -17,9 +17,8 @@ use crate::environment::get_update_lock_file_and_prefix;
 use crate::{
     activation::get_activator,
     cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
-    prompt,
     project::{Environment, HasProjectRef},
-    Project, UpdateLockFileOptions,
+    prompt, Project, UpdateLockFileOptions,
 };
 
 /// Print the pixi environment activation script.
@@ -59,7 +58,6 @@ struct ShellEnv<'a> {
     environment_variables: &'a HashMap<String, String>,
 }
 
-
 fn get_shell(shell: Option<ShellEnum>) -> ShellEnum {
     // Get shell from the arguments or from the current process or use default if
     // all fails
@@ -74,7 +72,6 @@ async fn generate_activation_script(
     shell: ShellEnum,
     environment: &Environment<'_>,
 ) -> miette::Result<String> {
-
     let activator = get_activator(environment, shell).into_diagnostic()?;
 
     let path = std::env::var("PATH")
@@ -158,7 +155,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let shell = get_shell(args.shell);
             let script = generate_activation_script(shell.clone(), &environment).await?;
             let in_shell = match std::env::var("PIXI_IN_SHELL") {
-                Ok(val) => val != "0" && val != "",
+                Ok(val) => val != "0" && !val.is_empty(),
                 Err(_) => false,
             };
             if project.config().change_ps1() && !in_shell {
@@ -179,7 +176,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 script
             }
-        },
+        }
     };
 
     // Print the output - either a JSON object or a shell script
@@ -207,12 +204,10 @@ mod tests {
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 
-        let script = generate_activation_script(
-            ShellEnum::PowerShell(PowerShell::default()),
-            &environment,
-        )
-        .await
-        .unwrap();
+        let script =
+            generate_activation_script(ShellEnum::PowerShell(PowerShell::default()), &environment)
+                .await
+                .unwrap();
         assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
         assert!(script.contains("${Env:CONDA_PREFIX}"));
 
