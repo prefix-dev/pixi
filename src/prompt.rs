@@ -1,4 +1,4 @@
-/// Set default pixi prompt for the bash shell
+/// Set default pixi hook for the bash shell
 pub(crate) fn get_bash_hook(env_name: &str) -> String {
     format!(
         "export PS1=\"({}) $PS1\"\n{}",
@@ -7,12 +7,20 @@ pub(crate) fn get_bash_hook(env_name: &str) -> String {
     )
 }
 
-/// Set default pixi prompt for the zsh shell
+/// Set default pixi hook for the zsh shell
 pub(crate) fn get_zsh_hook(env_name: &str) -> String {
     format!(
         "export PS1=\"({}) $PS1\"\n{}",
         env_name,
         include_str!("shell_snippets/pixi-zsh.sh")
+    )
+}
+
+/// Set default pixi prompt for posix shells
+pub(crate) fn get_posix_prompt(env_name: &str) -> String {
+    format!(
+        "export PS1=\"({}) $PS1\"",
+        env_name,
     )
 }
 
