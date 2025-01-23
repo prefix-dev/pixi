@@ -25,7 +25,7 @@ use tracing::Level;
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
-#[clap(trailing_var_arg = true)]
+#[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
     /// The pixi task or a task shell command you want to run in the project's
     /// environment, which can be an executable in the environment's PATH.
@@ -54,6 +54,12 @@ pub struct Args {
     /// Don't run the dependencies of the task ('depends-on' field in the task definition)
     #[arg(long)]
     pub skip_deps: bool,
+
+    #[clap(long, action = clap::ArgAction::HelpLong)]
+    pub help: Option<bool>,
+
+    #[clap(short, action = clap::ArgAction::HelpShort)]
+    pub h: Option<bool>,
 }
 
 /// CLI entry point for `pixi run`

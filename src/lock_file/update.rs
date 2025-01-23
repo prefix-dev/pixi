@@ -42,7 +42,7 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::{BuildContext, GlobHashCache},
+    build::{BuildContext, GlobHashCache, SourceCheckoutReporter},
     environment::{
         self, read_environment_file, write_environment_file, EnvironmentFile, LockFileUsage,
         LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
@@ -1722,6 +1722,10 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.project().channel_config();
 
+    // A root progress bar for the task. It is used to attach sub-progress bars to,
+    // that doesn't need to be split up between multiple platforms.
+    let root_pb = global_multi_progress().add(ProgressBar::hidden());
+
     tokio::spawn(
         async move {
             // Acquire a permit before we are allowed to solve the environment.
@@ -1763,6 +1767,7 @@ async fn spawn_solve_conda_environment_task(
                 .into_diagnostic()?;
 
             let mut metadata_progress = None;
+            let mut source_progress = None;
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
@@ -1773,6 +1778,13 @@ async fn spawn_solve_conda_environment_task(
                         source_specs.len() as u64,
                     ))
                 });
+                let source_reporter = source_progress.get_or_insert_with(|| {
+                    Arc::new(SourceCheckoutReporter::new(
+                        root_pb.clone(),
+                        global_multi_progress(),
+                    ))
+                });
+
                 source_futures.push(
                     build_context
                         .extract_source_metadata(
@@ -1783,6 +1795,7 @@ async fn spawn_solve_conda_environment_task(
                             platform,
                             virtual_packages.clone(),
                             metadata_reporter.clone(),
+                            Some(source_reporter.clone()),
                             build_id,
                         )
                         .map_err(|e| {

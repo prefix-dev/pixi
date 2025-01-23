@@ -176,7 +176,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.40.1"
+version = "0.40.3"
 
 [features]
 default = ["online_tests", "rustls-tls"]

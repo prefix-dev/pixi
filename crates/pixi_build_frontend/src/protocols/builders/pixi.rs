@@ -18,7 +18,6 @@ use crate::{
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
     InProcessBackend, ToolContext,
 };
-// use super::{InitializeError, JsonRPCBuildProtocol};
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
 #[derive(Debug)]
@@ -27,6 +26,7 @@ pub struct ProtocolBuilder {
     manifest_path: PathBuf,
     workspace_manifest: WorkspaceManifest,
     package_manifest: PackageManifest,
+    configuration: Option<serde_json::Value>,
     backend_override: Option<BackendOverride>,
     channel_config: Option<ChannelConfig>,
     cache_dir: Option<PathBuf>,
@@ -34,8 +34,7 @@ pub struct ProtocolBuilder {
 
 #[derive(thiserror::Error, Debug, Diagnostic)]
 pub enum ProtocolBuildError {
-    #[error("failed to setup a build backend, the {} could not be parsed", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest")
-    )]
+    #[error("failed to setup a build backend, failed to parse {0}")]
     #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()
     ))]
     FailedToParseManifest(PathBuf, #[diagnostic_source] miette::Report),
@@ -85,9 +84,18 @@ impl ProtocolBuilder {
             manifest_path,
             workspace_manifest,
             package_manifest,
+            configuration: None,
             backend_override: None,
             channel_config: None,
             cache_dir: None,
+        }
+    }
+
+    /// Sets the configuration of the build backend
+    pub fn with_configuration(self, config: serde_json::Value) -> Self {
+        Self {
+            configuration: Some(config),
+            ..self
         }
     }
 
@@ -202,10 +210,17 @@ impl ProtocolBuilder {
             .await
             .map_err(FinishError::Tool)?;
 
+        let channel_config = self
+            .channel_config
+            .clone()
+            .unwrap_or_else(|| ChannelConfig::default_with_root_dir(self.source_dir.clone()));
+
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.manifest_path,
             Some(&self.package_manifest),
+            self.configuration,
+            &channel_config,
             build_id,
             self.cache_dir,
             tool,
@@ -220,11 +235,18 @@ impl ProtocolBuilder {
         ipc: InProcessBackend,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
+        let channel_config = self
+            .channel_config
+            .clone()
+            .unwrap_or_else(|| ChannelConfig::default_with_root_dir(self.source_dir.clone()));
+
         Ok(JsonRPCBuildProtocol::setup_with_transport(
             "<IPC>".to_string(),
             self.source_dir,
             self.manifest_path,
             Some(&self.package_manifest),
+            self.configuration,
+            &channel_config,
             build_id,
             self.cache_dir,
             Sender::from(ipc.rpc_out),

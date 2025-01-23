@@ -1373,17 +1373,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
-name = "fd-lock"
-version = "4.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e5768da2206272c81ef0b5e951a41862938a6070da63bcea197899942d3b947"
-dependencies = [
- "cfg-if",
- "rustix",
- "windows-sys 0.52.0",
-]
-
-[[package]]
 name = "file_url"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3635,7 +3624,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.40.1"
+version = "0.40.3"
 dependencies = [
  "ahash",
  "assert_matches",
@@ -3814,12 +3803,12 @@ version = "0.1.0"
 dependencies = [
  "indexmap 2.7.0",
  "insta",
+ "itertools 0.13.0",
  "pixi_build_types",
  "pixi_manifest",
  "pixi_spec",
  "rattler_conda_types",
  "rstest",
- "serde_json",
 ]
 
 [[package]]
@@ -3932,6 +3921,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
+ "pixi_git",
  "pixi_spec",
  "pixi_toml",
  "pyproject-toml",
@@ -3960,7 +3950,7 @@ name = "pixi_progress"
 version = "0.1.0"
 dependencies = [
  "indicatif",
- "tokio",
+ "parking_lot 0.12.3",
 ]
 
 [[package]]
@@ -4030,7 +4020,7 @@ dependencies = [
 name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
- "fd-lock",
+ "async-fd-lock",
  "fs-err",
  "indicatif",
  "insta",
@@ -4050,6 +4040,7 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "thiserror 2.0.10",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -4060,9 +4051,13 @@ name = "pixi_uv_conversions"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "miette 7.4.0",
  "pep440_rs",
  "pep508_rs",
+ "pixi_git",
  "pixi_manifest",
+ "pixi_record",
+ "pixi_spec",
  "rattler_lock",
  "serde_json",
  "thiserror 2.0.10",

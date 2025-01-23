@@ -17,7 +17,7 @@ mod url;
 use std::{path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
-pub use git::{GitSpec, Reference};
+pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
@@ -330,6 +330,13 @@ pub enum SourceSpec {
 
     /// The spec is represented as a local directory or local file archive.
     Path(PathSourceSpec),
+}
+
+impl SourceSpec {
+    /// Returns true if this spec represents a git repository.
+    pub fn is_git(&self) -> bool {
+        matches!(self, Self::Git(_))
+    }
 }
 
 impl From<SourceSpec> for PixiSpec {

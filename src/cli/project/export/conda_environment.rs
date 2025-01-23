@@ -58,11 +58,7 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
                 url = git_url.git,
             );
 
-            if let Some(ref branch) = git_url.branch {
-                git_string.push_str(&format!("@{branch}"));
-            } else if let Some(ref tag) = git_url.tag {
-                git_string.push_str(&format!("@{tag}"));
-            } else if let Some(ref rev) = git_url.rev {
+            if let Some(Some(rev)) = git_url.rev.as_ref().map(|rev| rev.reference()) {
                 git_string.push_str(&format!("@{rev}"));
             }
 

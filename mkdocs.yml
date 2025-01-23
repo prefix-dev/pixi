@@ -102,6 +102,7 @@ nav:
       - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
+      - Multi Environment: tutorials/multi_environment.md
   - Features:
       - Environments: features/environment.md
       - Tasks: features/advanced_tasks.md
@@ -118,7 +119,6 @@ nav:
   - Switching from:
       - Poetry: switching_from/poetry.md
       - Conda/Mamba: switching_from/conda.md
-      - Changelog: CHANGELOG.md
   - IDE Integration:
       - JupyterLab: ide_integration/jupyterlab.md
       - PyCharm: ide_integration/pycharm.md
@@ -130,6 +130,7 @@ nav:
           - Building a Python package: build/python.md
           - Building a C++ Package: build/cpp.md
           - Multiple Packages in Workspace: build/workspace.md
+          - Variants: build/variants.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
   - Advanced:
@@ -149,6 +150,7 @@ nav:
       - Packaging: packaging.md
       - Community: Community.md
       - FAQ: FAQ.md
+      - Changelog: CHANGELOG.md
 
 hooks:
   - schema/docs_hooks.py

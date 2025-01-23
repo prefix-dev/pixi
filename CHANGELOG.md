@@ -5,6 +5,58 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.40.3] - 2025-01-22
+#### ✨ Highlights
+This release will greatly improve the `git` dependency experience for PyPI packages.
+
+#### Added
+- Add nushell autocompletion for pixi r by @dennis-wey in [#2935](https://github.com/prefix-dev/pixi/pull/2935)
+
+#### Changed
+- Pin backend versions by @tdejager in [#2963](https://github.com/prefix-dev/pixi/pull/2963)
+
+#### Documentation
+- Add `quantity-array` to community by @lucascolley in [#2955](https://github.com/prefix-dev/pixi/pull/2955)
+- Add multiple environment tutorial by @ruben-arts in [#2949](https://github.com/prefix-dev/pixi/pull/2949)
+- Use workspace channels for build tutorials by @Hofer-Julian in [#2940](https://github.com/prefix-dev/pixi/pull/2940)
+- Fix ambiguous version specifiers by @Hofer-Julian in [#2967](https://github.com/prefix-dev/pixi/pull/2967)
+- Fix broken links to anchors by @Hofer-Julian in [#2941](https://github.com/prefix-dev/pixi/pull/2941)
+
+#### Fixed
+- Fix `branch`, `tag` and `rev` for `pypi-dependencies` by @nichmor in [#2960](https://github.com/prefix-dev/pixi/pull/2960)
+- `pixi list` should print the git location instead of the wheel by @ruben-arts in [#2962](https://github.com/prefix-dev/pixi/pull/2962)
+- Improve debuggability of the list output by @ruben-arts in [#2975](https://github.com/prefix-dev/pixi/pull/2975)
+- Also warn about detached environments on Windows by @Hofer-Julian in [#2985](https://github.com/prefix-dev/pixi/pull/2985)
+- Fix binaries for linux-aarch64 by @ruben-arts in [#2937](https://github.com/prefix-dev/pixi/pull/2937)
+
+#### Refactor
+- Use destructuring to remove clones in conversion by @KGrewal1 in [#2969](https://github.com/prefix-dev/pixi/pull/2969)
+
+### [0.40.2] - 2025-01-17
+#### Added
+- Add a progress bar for source ( git ) dependencies by @nichmor in [#2898](https://github.com/prefix-dev/pixi/pull/2898)
+
+#### Changed
+- Split into 'source' and 'binary' build types by @tdejager in [#2903](https://github.com/prefix-dev/pixi/pull/2903)
+
+#### Documentation
+- Update index.md - windows install command by @raybellwaves in [#2871](https://github.com/prefix-dev/pixi/pull/2871)
+- Fix `project_model` module docs by @Hofer-Julian in [#2928](https://github.com/prefix-dev/pixi/pull/2928)
+- Pixi build variants by @baszalmstra in [#2901](https://github.com/prefix-dev/pixi/pull/2901)
+
+#### Fixed
+- CamelCase project protocol types by @baszalmstra in [#2907](https://github.com/prefix-dev/pixi/pull/2907)
+- Rewrite prefix guard into async by @nichmor in [#2908](https://github.com/prefix-dev/pixi/pull/2908)
+- Double_lines in copy of docs by @ruben-arts in [#2913](https://github.com/prefix-dev/pixi/pull/2913)
+- Stackoverflow when running pixi in debug mode on windows by @baszalmstra in [#2922](https://github.com/prefix-dev/pixi/pull/2922)
+- `pixi run --help` by @Hofer-Julian in [#2918](https://github.com/prefix-dev/pixi/pull/2918)
+- Shell hang on progress bar by @baszalmstra in [#2929](https://github.com/prefix-dev/pixi/pull/2929)
+- Take into account the variants for the source cache by @baszalmstra in [#2877](https://github.com/prefix-dev/pixi/pull/2877)
+- Pixi init by @Hofer-Julian in [#2930](https://github.com/prefix-dev/pixi/pull/2930)
+
+#### New Contributors
+* @raybellwaves made their first contribution in [#2871](https://github.com/prefix-dev/pixi/pull/2871)
+
 ### [0.40.1] - 2025-01-14
 #### ✨ Highlights
 We've **reverted** the breaking change of the `depends_on` field from `0.40.0`, replacing it with a [warning](https://github.com/prefix-dev/pixi/pull/2891).

@@ -1173,7 +1173,7 @@ mod tests {
             non_exposed_manifest,
         );
 
-        // write it's trampline and manifest
+        // write it's trampoline and manifest
         non_exposed_trampoline.save().await.unwrap();
 
         // Create exposed binary
