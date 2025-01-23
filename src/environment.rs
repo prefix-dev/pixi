@@ -705,6 +705,7 @@ pub enum PartialPrefixStatus {
 }
 
 impl PartialPrefixStatus {
+    /// Returns true if the prefix is already up-to-date.
     pub fn is_full(&self) -> bool {
         matches!(self, Self::Full)
     }
@@ -843,7 +844,6 @@ pub async fn update_prefix_conda(
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
     pixi_records: Vec<PixiRecord>,
-    // filter_names: Option<Vec<PackageName>>,
     virtual_packages: Vec<GenericVirtualPackage>,
     channels: Vec<ChannelUrl>,
     host_platform: Platform,
