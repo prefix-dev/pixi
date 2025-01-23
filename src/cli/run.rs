@@ -6,6 +6,8 @@ use miette::{Diagnostic, IntoDiagnostic};
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use std::convert::identity;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::{collections::HashMap, string::String};
 
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
@@ -120,9 +122,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // dialoguer doesn't reset the cursor if it's aborted via e.g. SIGINT
     // So we do it ourselves.
-    ctrlc::set_handler(|| {
+
+    let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
+    let ctrlc_should_exit_process_clone = Arc::clone(&ctrlc_should_exit_process);
+
+    ctrlc::set_handler(move || {
         reset_cursor();
-        exit_process_on_sigint();
+        if ctrlc_should_exit_process_clone.load(Ordering::Relaxed) {
+            exit_process_on_sigint();
+        }
     })
     .into_diagnostic()?;
 
@@ -227,8 +235,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
-        // Let CTRL+C be handled by the task itself
-        ctrlc::set_handler(|| {}).into_diagnostic()?;
+        ctrlc_should_exit_process.store(false, Ordering::Relaxed);
 
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we exit this parent process with
@@ -247,7 +254,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Handle CTRL-C ourselves again
-        ctrlc::set_handler(exit_process_on_sigint).into_diagnostic()?;
+        ctrlc_should_exit_process.store(true, Ordering::Relaxed);
 
         // Update the task cache with the new hash
         executable_task
