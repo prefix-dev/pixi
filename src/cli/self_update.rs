@@ -78,8 +78,8 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
             if response.status().is_redirection() {
                 match response.headers().get("Location") {
                     Some(location) => {
-                        let url = Url::parse(location.to_str().into_diagnostic()?)
-                            .into_diagnostic()?;
+                        let url =
+                            Url::parse(location.to_str().into_diagnostic()?).into_diagnostic()?;
                         let version = url
                             .path_segments()
                             .ok_or_else(|| {
