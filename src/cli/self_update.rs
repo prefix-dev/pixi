@@ -79,17 +79,18 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
                 match response.headers().get("Location") {
                     Some(location) => {
                         let version = Url::parse(location.to_str().into_diagnostic()?)
-                        .into_diagnostic()?
-                        .path_segments()
-                        .ok_or_else(|| {
-                            miette::miette!("Could not get segments from Location header")
-                        })?
-                        .last()
-                        .ok_or_else(|| {
-                            miette::miette!("Could not get version from Location header")
-                        })?.to_string();
+                            .into_diagnostic()?
+                            .path_segments()
+                            .ok_or_else(|| {
+                                miette::miette!("Could not get segments from Location header")
+                            })?
+                            .last()
+                            .ok_or_else(|| {
+                                miette::miette!("Could not get version from Location header")
+                            })?
+                            .to_string();
                         Ok((version.strip_prefix("v").unwrap_or(&version)).to_string())
-                    },
+                    }
                     None => miette::bail!(
                         "URL: {}. Redirect detected, but no 'Location' header found.",
                         url
@@ -107,7 +108,7 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
                     Ok(res) => {
                         let version = res.text().await.into_diagnostic()?;
                         Ok((version.strip_prefix("v").unwrap_or(&version)).to_string())
-                    },
+                    }
                     Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
                 }
             } else {
@@ -157,7 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("Could not find the default archive name for the current platform");
 
     let url = base_url
-        .join(format!("download/{}/{}", target_version, archive_name).as_str())
+        .join(format!("download/v{}/{}", target_version, archive_name).as_str())
         .into_diagnostic()?;
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
