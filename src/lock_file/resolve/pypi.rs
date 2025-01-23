@@ -16,7 +16,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    as_uv_req, convert_uv_requirements_to_pep508, isolated_names_to_packages,
+    as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec, isolated_names_to_packages,
     names_to_build_isolation, pypi_options_to_index_locations, to_index_strategy, to_normalize,
     to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
 };
@@ -758,7 +758,15 @@ async fn lock_pypi_packages<'a>(
                             .context("could not create direct-url")?;
                         (direct_url.into(), hash, false)
                     }
-                    SourceDist::Git(git) => (git.url.to_url().into(), hash, false),
+                    SourceDist::Git(git) => {
+                        // convert resolved source dist into a pinned git spec
+                        let pinned_git_spec = into_pinned_git_spec(git.clone());
+                        (
+                            pinned_git_spec.into_locked_git_url().to_url().into(),
+                            hash,
+                            false,
+                        )
+                    }
                     SourceDist::Path(path) => {
                         // Compute the hash of the package based on the source tree.
                         let hash = if path.install_path.is_dir() {

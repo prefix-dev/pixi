@@ -8,65 +8,23 @@ use std::{
 use itertools::Itertools;
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::ExtraName;
+use pixi_spec::{GitReference, GitSpec};
 use pixi_toml::{TomlFromStr, TomlWith};
 use serde::Serialize;
 use thiserror::Error;
 use toml_span::{de_helpers::TableHelper, DeserError, Value};
 use url::Url;
 
-use super::{pypi_requirement_types::GitRevParseError, GitRev, VersionOrStar};
+use pixi_git::GitUrl;
+
+use super::VersionOrStar;
 use crate::utils::extract_directory_from_url;
-
-#[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct ParsedGitUrl {
-    pub git: Url,
-    pub branch: Option<String>,
-    pub tag: Option<String>,
-    pub rev: Option<GitRev>,
-    pub subdirectory: Option<String>,
-}
-
-impl TryFrom<Url> for ParsedGitUrl {
-    type Error = Pep508ToPyPiRequirementError;
-
-    fn try_from(url: Url) -> Result<Self, Self::Error> {
-        let subdirectory = extract_directory_from_url(&url);
-
-        // Strip the git+ from the url.
-        let url_without_git = url.as_str().strip_prefix("git+").unwrap_or(url.as_str());
-        let mut url = Url::parse(url_without_git)?;
-        url.set_fragment(None);
-
-        // Split the repository url and the rev.
-        let (repository_url, rev) = if let Some((prefix, suffix)) = url
-            .path()
-            .rsplit_once('@')
-            .map(|(prefix, suffix)| (prefix.to_string(), suffix.to_string()))
-        {
-            let mut repository_url = url.clone();
-            repository_url.set_path(&prefix);
-            (repository_url, Some(GitRev::from_str(&suffix)?))
-        } else {
-            (url, None)
-        };
-
-        Ok(ParsedGitUrl {
-            git: repository_url,
-            branch: None,
-            tag: None,
-            rev,
-            subdirectory,
-        })
-    }
-}
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
 pub enum PyPiRequirement {
     Git {
-        #[serde(flatten)]
-        url: ParsedGitUrl,
+        url: GitSpec,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
@@ -129,7 +87,7 @@ struct RawPyPiRequirement {
     pub git: Option<Url>,
     pub branch: Option<String>,
     pub tag: Option<String>,
-    pub rev: Option<GitRev>,
+    pub rev: Option<String>,
 
     // Url only
     pub url: Option<Url>,
@@ -202,16 +160,25 @@ impl RawPyPiRequirement {
                 editable: self.editable,
                 extras,
             },
-            (None, None, Some(git), extras, None) => PyPiRequirement::Git {
-                url: ParsedGitUrl {
-                    git,
-                    branch: self.branch,
-                    tag: self.tag,
-                    rev: self.rev,
-                    subdirectory: self.subdirectory,
-                },
-                extras,
-            },
+            (None, None, Some(git), extras, None) => {
+                let rev = match (self.branch, self.rev, self.tag) {
+                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
+                    (None, None, None) => None,
+                    _ => {
+                        return Err(SpecConversion::MultipleGitSpecifiers);
+                    }
+                };
+                PyPiRequirement::Git {
+                    url: GitSpec {
+                        git,
+                        rev,
+                        subdirectory: self.subdirectory,
+                    },
+                    extras,
+                }
+            }
             (None, None, None, extras, index) => PyPiRequirement::Version {
                 version: self.version.unwrap_or(VersionOrStar::Star),
                 extras,
@@ -378,10 +345,8 @@ impl From<PyPiRequirement> for toml_edit::Value {
             }
             PyPiRequirement::Git {
                 url:
-                    ParsedGitUrl {
+                    GitSpec {
                         git,
-                        branch,
-                        tag,
                         rev,
                         subdirectory,
                     },
@@ -392,24 +357,31 @@ impl From<PyPiRequirement> for toml_edit::Value {
                     "git",
                     toml_edit::Value::String(toml_edit::Formatted::new(git.to_string())),
                 );
-                if let Some(branch) = branch {
-                    table.insert(
-                        "branch",
-                        toml_edit::Value::String(toml_edit::Formatted::new(branch.clone())),
-                    );
-                }
-                if let Some(tag) = tag {
-                    table.insert(
-                        "tag",
-                        toml_edit::Value::String(toml_edit::Formatted::new(tag.clone())),
-                    );
-                }
+
                 if let Some(rev) = rev {
-                    table.insert(
-                        "rev",
-                        toml_edit::Value::String(toml_edit::Formatted::new(rev.to_string())),
-                    );
-                }
+                    match rev {
+                        GitReference::Branch(branch) => {
+                            table.insert(
+                                "branch",
+                                toml_edit::Value::String(toml_edit::Formatted::new(branch.clone())),
+                            );
+                        }
+                        GitReference::Tag(tag) => {
+                            table.insert(
+                                "tag",
+                                toml_edit::Value::String(toml_edit::Formatted::new(tag.clone())),
+                            );
+                        }
+                        GitReference::Rev(rev) => {
+                            table.insert(
+                                "rev",
+                                toml_edit::Value::String(toml_edit::Formatted::new(rev.clone())),
+                            );
+                        }
+                        GitReference::DefaultBranch => {}
+                    }
+                };
+
                 if let Some(subdirectory) = subdirectory {
                     table.insert(
                         "subdirectory",
@@ -475,9 +447,6 @@ pub enum Pep508ToPyPiRequirementError {
     #[error(transparent)]
     ParseUrl(#[from] url::ParseError),
 
-    #[error(transparent)]
-    ParseGitRev(#[from] GitRevParseError),
-
     #[error("could not convert '{0}' to a file path")]
     PathUrlIntoPath(Url),
 
@@ -514,10 +483,20 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
                     let url = u.to_url();
                     if let Some((prefix, ..)) = url.scheme().split_once('+') {
                         match prefix {
-                            "git" => Self::Git {
-                                url: ParsedGitUrl::try_from(url)?,
-                                extras: req.extras,
-                            },
+                            "git" => {
+                                let subdirectory = extract_directory_from_url(&url);
+                                let git_url = GitUrl::try_from(url).unwrap();
+                                let git_spec = GitSpec {
+                                    git: git_url.repository().clone(),
+                                    rev: Some(git_url.reference().clone().into()),
+                                    subdirectory,
+                                };
+
+                                Self::Git {
+                                    url: git_spec,
+                                    extras: req.extras,
+                                }
+                            }
                             "bzr" => {
                                 return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
                                     prefix: prefix.to_string(),
@@ -551,9 +530,15 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
                         .extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
                     {
-                        let parsed_url = ParsedGitUrl::try_from(url)?;
+                        let git_url = GitUrl::try_from(url).unwrap();
+                        let subdirectory = extract_directory_from_url(git_url.repository());
+                        let git_spec = GitSpec {
+                            git: git_url.repository().clone(),
+                            rev: Some(git_url.reference().clone().into()),
+                            subdirectory,
+                        };
                         Self::Git {
-                            url: parsed_url,
+                            url: git_spec,
                             extras: req.extras,
                         }
                     } else if url.scheme().eq_ignore_ascii_case("file") {
@@ -629,7 +614,6 @@ impl PyPiRequirement {
 mod tests {
     use std::str::FromStr;
 
-    use assert_matches::assert_matches;
     use insta::assert_snapshot;
     use pep508_rs::Requirement;
     use pixi_toml::TomlIndexMap;
@@ -860,10 +844,8 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    branch: None,
-                    tag: None,
                     rev: None,
                     subdirectory: None,
                 },
@@ -882,11 +864,9 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    branch: Some("main".to_string()),
-                    tag: None,
-                    rev: None,
+                    rev: Some(GitReference::Branch("main".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -904,11 +884,9 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    tag: Some("v.1.2.3".to_string()),
-                    branch: None,
-                    rev: None,
+                    rev: Some(GitReference::Tag("v.1.2.3".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -926,11 +904,9 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
-                    tag: Some("3.0.0".to_string()),
-                    branch: None,
-                    rev: None,
+                    rev: Some(GitReference::Tag("3.0.0".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -948,11 +924,9 @@ mod tests {
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    rev: Some(GitRev::Short("123456".to_string())),
-                    tag: None,
-                    branch: None,
+                    rev: Some(GitReference::Rev("123456".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -979,11 +953,9 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Git {
-                url: ParsedGitUrl {
-                    git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
-                    branch: None,
-                    tag: None,
-                    rev: None,
+                url: GitSpec {
+                    git: Url::parse("git+https://github.com/ecederstrand/exchangelib").unwrap(),
+                    rev: Some(GitReference::DefaultBranch),
                     subdirectory: None,
                 },
                 extras: vec![]
@@ -995,11 +967,9 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Git {
-                url: ParsedGitUrl {
-                    git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
-                    branch: None,
-                    tag: None,
-                    rev: Some(GitRev::Full(
+                url: GitSpec {
+                    git: Url::parse("git+https://github.com/ecederstrand/exchangelib").unwrap(),
+                    rev: Some(GitReference::Rev(
                         "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
                     )),
                     subdirectory: None,
@@ -1049,11 +1019,17 @@ mod tests {
             "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main",
         )
         .unwrap();
-        assert_matches!(
-            PyPiRequirement::try_from(parsed),
-            Err(Pep508ToPyPiRequirementError::ParseGitRev(
-                GitRevParseError::InvalidCharacters(characters)
-            )) if characters == "main"
+        assert_eq!(
+            PyPiRequirement::try_from(parsed).unwrap(),
+            PyPiRequirement::Git {
+                url: GitSpec {
+                    git: Url::parse("git+ssh://git@github.com/python-attrs/attrs.git").unwrap(),
+                    rev: Some(GitReference::Rev("main".to_string())),
+                    subdirectory: None
+                },
+
+                extras: vec![]
+            }
         );
 
         // With subdirectory
@@ -1064,11 +1040,9 @@ mod tests {
         assert_eq!(
             PyPiRequirement::try_from(parsed).unwrap(),
             PyPiRequirement::Git {
-                url: ParsedGitUrl {
-                    git: Url::parse("https://github.com/Deltares/Ribasim.git").unwrap(),
-                    branch: None,
-                    tag: None,
-                    rev: None,
+                url: GitSpec {
+                    git: Url::parse("git+https://github.com/Deltares/Ribasim.git").unwrap(),
+                    rev: Some(GitReference::DefaultBranch),
                     subdirectory: Some("python/ribasim".to_string()),
                 },
                 extras: vec![],
@@ -1089,6 +1063,8 @@ mod tests {
             r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", "branch" = "main" }"#,
             r#"pkg = { git = "ssh://github.com/conda-forge/21cmfast-feedstock", "tag" = "v1.2.3" }"#,
             r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "rev" = "123456" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "subdirectory" = "pyrattler" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "extras" = ["test"] }"#,
         ];
 
         #[derive(Serialize)]

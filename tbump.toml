@@ -1,7 +1,7 @@
 github_url = "https://github.com/prefix-dev/pixi"
 
 [version]
-current = "0.40.2"
+current = "0.40.3"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
@@ -19,18 +19,8 @@ regex = '''
 
 [git]
 # The current version will get updated when tbump is run
-message_template = "Bump version: 0.40.2 → {new_version}"
+message_template = "Bump version: {new_version}"
 tag_template = "v{new_version}"
-
-# For each file to patch, add a [[file]] config
-# section containing the path of the file, relative to the
-# tbump.toml location.
-[[file]]
-src = "tbump.toml"
-# Restrict search to make it explicit why tbump.toml
-# is even included as a file to bump, as it will get
-# its version.current attribute bumped anyway.
-search = "Bump version: {current_version} → "
 
 [[file]]
 src = "CITATION.cff"
