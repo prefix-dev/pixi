@@ -9,6 +9,7 @@ use reqwest::redirect::Policy;
 use reqwest::Client;
 
 use tempfile::{NamedTempFile, TempDir};
+use url::Url;
 
 /// Update pixi to the latest version or a specific version.
 #[derive(Debug, clap::Parser)]
@@ -20,8 +21,8 @@ pub struct Args {
     /// The URL where to find Pixi releases. Must provide a Github Releases-like HTTP API.
     /// - Downloads must be available at ${base-url}/download/v{X.Y.Z}/pixi-unknown-linux-musl
     /// - ${base-url}/latest must either redirect to ${base-url}/v{X.Y.Z} or serve the bytes for v{X.Y.Z}
-    #[clap(long, default_value = "https://github.com/prefix-dev/pixi/releases")]
-    base_url: Option<String>,
+    #[clap(long, default_value = "https://github.com/prefix-dev/pixi/releases/")]
+    base_url: Option<Url>,
 }
 
 fn user_agent() -> String {
@@ -56,19 +57,19 @@ fn default_archive_name() -> Option<String> {
     }
 }
 
-async fn latest_version(base_url: &String) -> miette::Result<String> {
+async fn latest_version(base_url: Url) -> miette::Result<String> {
     // Uses the public Github Releases /latest endpoint to get the latest tag from the URL
     // If base_url doesn't offer redirects (e.g. static site), then /latest
     // must be a file whose contents are the latest tag name.
-    let url = format!("{}/latest", base_url);
+    let url = base_url.join("latest").into_diagnostic()?;
     // Create a client with a redirect policy
     let no_redirect_client = Client::builder()
         .redirect(Policy::none()) // Prevent automatic redirects
         .build()
-        .unwrap();
+        .into_diagnostic()?;
 
     match no_redirect_client
-        .head(&url)
+        .head(url.clone())
         .header("User-Agent", user_agent())
         .send()
         .await
@@ -76,50 +77,54 @@ async fn latest_version(base_url: &String) -> miette::Result<String> {
         Ok(response) => {
             if response.status().is_redirection() {
                 match response.headers().get("Location") {
-                    Some(location) => Ok(location
-                        .to_str()
-                        .unwrap()
-                        .split("/")
+                    Some(location) => Ok(Url::parse(&location.to_str().into_diagnostic()?)
+                        .into_diagnostic()?
+                        .path_segments()
+                        .ok_or_else(|| {
+                            miette::miette!("Could not get segments from Location header")
+                        })?
                         .last()
-                        .unwrap()
+                        .ok_or_else(|| {
+                            miette::miette!("Could not get version from Location header")
+                        })?
                         .to_string()),
-                    None => Err(miette::miette!(
+                    None => miette::bail!(
                         "URL: {}. Redirect detected, but no 'Location' header found.",
                         url
-                    )),
+                    ),
                 }
             } else if response.status().is_success() {
                 // No redirection, but response is ok, check contents
                 let client = Client::new();
                 match client
-                    .get(&url)
+                    .get(url.clone())
                     .header("User-Agent", user_agent())
                     .send()
                     .await
                 {
-                    Ok(res) => Ok(res.text().await.unwrap().trim().to_string()),
-                    Err(err) => Err(miette::miette!("URL: {}. Request failed: {}", url, err)),
+                    Ok(res) => Ok(res.text().await.into_diagnostic()?.trim().to_string()),
+                    Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
                 }
             } else {
-                Err(miette::miette!(
-                    "URL: {}. Request failed: {}. \
-                    Make sure /latest redirects to the latest version or serves \
-                    a text file whose contents are just the latest version tag name.",
-                    url,
-                    response.status()
-                ))
+                miette::bail!("URL: {}. Request failed: {}.", url, response.status())
             }
         }
-        Err(err) => Err(miette::miette!("URL: {}. Request failed: {}", url, err)),
+        Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
     }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let base_url = args.base_url.unwrap();
+    let mut base_url = args
+        .base_url
+        .ok_or_else(|| miette::miette!("Bad value for --base-url"))?;
+    if !base_url.path().ends_with("/") {
+        base_url.set_path(format!("{}/", base_url.path()).as_str())
+    }
+
     // Get the target version
     let target_version = match args.version {
         Some(version) => version,
-        None => latest_version(&base_url).await?,
+        None => latest_version(base_url.clone()).await?,
     };
 
     // Get the current version of the pixi binary
@@ -146,13 +151,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let archive_name = default_archive_name()
         .expect("Could not find the default archive name for the current platform");
 
-    let url = format!("{}/download/{}/{}", base_url, target_version, archive_name);
+    let url = base_url
+        .join(&format!("download/{}/{}", target_version, archive_name).as_str())
+        .into_diagnostic()?;
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
 
     let client = Client::new();
     let mut res = client
-        .get(&url)
+        .get(url.clone())
         .header("User-Agent", user_agent())
         .send()
         .await
