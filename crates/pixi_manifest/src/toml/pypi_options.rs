@@ -26,6 +26,11 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             .optional::<TomlEnum<_>>("index-strategy")
             .map(TomlEnum::into_inner);
 
+        let no_build = th
+            .optional::<TomlEnum<_>>("no-build")
+            .map(TomlEnum::into_inner)
+            .unwrap_or_default();
+
         th.finalize(None)?;
 
         Ok(Self {
@@ -34,6 +39,7 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             find_links,
             no_build_isolation,
             index_strategy,
+            no_build,
         })
     }
 }
@@ -149,6 +155,7 @@ mod test {
                 ]),
                 no_build_isolation: Some(vec!["pkg1".to_string(), "pkg2".to_string()]),
                 index_strategy: None,
+                no_build: Default::default(),
             },
         );
     }

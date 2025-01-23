@@ -48,6 +48,47 @@ pub enum FindLinksUrlOrPath {
     Url(Url),
 }
 
+/// Don't build sdist for all or certain packages
+#[derive(
+    Default,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Serialize,
+    strum::Display,
+    strum::EnumString,
+    strum::VariantNames,
+)]
+pub enum NoBuild {
+    /// Build any sdist we come across
+    #[default]
+    None,
+    /// Don't build any sdist
+    All,
+    /// Don't build sdist for specific packages
+    Packages(Vec<String>),
+}
+
+impl NoBuild {
+    /// Merges two `NoBuild` together, according to the following rules
+    /// - If either is `All`, the result is `All`
+    /// - If either is `None`, the result is the other
+    /// - If both are `Packages`, the result is the union of the two
+    pub fn union(&self, other: &NoBuild) -> NoBuild {
+        match (self, other) {
+            (NoBuild::All, _) | (_, NoBuild::All) => NoBuild::All,
+            (NoBuild::None, _) => other.clone(),
+            (_, NoBuild::None) => self.clone(),
+            (NoBuild::Packages(packages), NoBuild::Packages(other_packages)) => {
+                let mut packages = packages.clone();
+                packages.extend(other_packages.iter().cloned());
+                NoBuild::Packages(packages)
+            }
+        }
+    }
+}
+
 /// Specific options for a PyPI registries
 #[derive(Debug, Clone, PartialEq, Serialize, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -63,6 +104,8 @@ pub struct PypiOptions {
     pub no_build_isolation: Option<Vec<String>>,
     /// The strategy to use when resolving against multiple index URLs.
     pub index_strategy: Option<IndexStrategy>,
+    /// Don't build sdist for all or certain packages
+    pub no_build: NoBuild,
 }
 
 /// Clones and deduplicates two iterators of values
@@ -85,6 +128,7 @@ impl PypiOptions {
         flat_indexes: Option<Vec<FindLinksUrlOrPath>>,
         no_build_isolation: Option<Vec<String>>,
         index_strategy: Option<IndexStrategy>,
+        no_build: Option<NoBuild>,
     ) -> Self {
         Self {
             index_url: index,
@@ -92,6 +136,7 @@ impl PypiOptions {
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
+            no_build: no_build.unwrap_or_default(),
         }
     }
 
@@ -190,12 +235,15 @@ impl PypiOptions {
             })
             .or_else(|| other.no_build_isolation.clone());
 
+        let no_build = self.no_build.union(&other.no_build);
+
         Ok(PypiOptions {
             index_url: index,
             extra_index_urls: extra_indexes,
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
+            no_build,
         })
     }
 }
@@ -278,6 +326,7 @@ mod tests {
             ]),
             no_build_isolation: Some(vec!["foo".to_string(), "bar".to_string()]),
             index_strategy: None,
+            no_build: NoBuild::All,
         };
 
         // Create the second set of options
@@ -290,6 +339,7 @@ mod tests {
             ]),
             no_build_isolation: Some(vec!["foo".to_string()]),
             index_strategy: None,
+            no_build: NoBuild::None,
         };
 
         // Merge the two options
@@ -307,6 +357,7 @@ mod tests {
             find_links: None,
             no_build_isolation: None,
             index_strategy: None,
+            no_build: Default::default(),
         };
 
         // Create the second set of options
@@ -316,6 +367,7 @@ mod tests {
             find_links: None,
             no_build_isolation: None,
             index_strategy: None,
+            no_build: Default::default(),
         };
 
         // Merge the two options
@@ -333,6 +385,7 @@ mod tests {
             find_links: None,
             no_build_isolation: None,
             index_strategy: Some(IndexStrategy::FirstIndex),
+            no_build: Default::default(),
         };
 
         // Create the second set of options
@@ -342,6 +395,7 @@ mod tests {
             find_links: None,
             no_build_isolation: None,
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
+            no_build: Default::default(),
         };
 
         // Merge the two options
