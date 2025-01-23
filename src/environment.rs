@@ -695,7 +695,9 @@ impl PythonStatus {
     }
 }
 
-/// Return the information what we have updated
+/// Return the information what we have installed.
+/// This is used to determine if we need to install the rest of packages
+/// or the prefix is already up-to-date.
 #[derive(Clone)]
 pub enum PartialPrefixStatus {
     Full,
