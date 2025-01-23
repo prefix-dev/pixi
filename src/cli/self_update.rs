@@ -68,7 +68,7 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
         .build()
         .into_diagnostic()?;
 
-    match no_redirect_client
+    let version: String = match no_redirect_client
         .head(url.clone())
         .header("User-Agent", user_agent())
         .send()
@@ -77,20 +77,17 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
         Ok(response) => {
             if response.status().is_redirection() {
                 match response.headers().get("Location") {
-                    Some(location) => {
-                        let url =
-                            Url::parse(location.to_str().into_diagnostic()?).into_diagnostic()?;
-                        let version = url
-                            .path_segments()
-                            .ok_or_else(|| {
-                                miette::miette!("Could not get segments from Location header")
-                            })?
-                            .last()
-                            .ok_or_else(|| {
-                                miette::miette!("Could not get version from Location header")
-                            })?;
-                        Ok((version.strip_prefix("v").unwrap_or(&version)).to_string())
-                    }
+                    Some(location) => Url::parse(location.to_str().into_diagnostic()?)
+                        .into_diagnostic()?
+                        .path_segments()
+                        .ok_or_else(|| {
+                            miette::miette!("Could not get segments from Location header")
+                        })?
+                        .last()
+                        .ok_or_else(|| {
+                            miette::miette!("Could not get version from Location header")
+                        })?
+                        .to_string(),
                     None => miette::bail!(
                         "URL: {}. Redirect detected, but no 'Location' header found.",
                         url
@@ -105,10 +102,7 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
                     .send()
                     .await
                 {
-                    Ok(res) => {
-                        let version = res.text().await.into_diagnostic()?;
-                        Ok((version.strip_prefix("v").unwrap_or(&version)).to_string())
-                    }
+                    Ok(res) => res.text().await.into_diagnostic()?,
                     Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
                 }
             } else {
@@ -116,6 +110,12 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
             }
         }
         Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
+    };
+
+    if !version.starts_with("v") {
+        miette::bail!("Version '{}' must start with v.", version)
+    } else {
+        Ok(version)
     }
 }
 
