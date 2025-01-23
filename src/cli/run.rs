@@ -118,6 +118,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .await?;
 
+    // dialoguer doesn't reset the cursor if it's aborted via e.g. SIGINT
+    // So we do it ourselves.
+    ctrlc::set_handler(|| {
+        reset_cursor();
+        exit_process_on_sigint();
+    })
+    .into_diagnostic()?;
+
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
         &project,
@@ -219,6 +227,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
+        // Let CTRL+C be handled by the task itself
+        ctrlc::set_handler(|| {}).into_diagnostic()?;
+
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we exit this parent process with
         // the same code.
@@ -234,6 +245,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => return Err(err.into()),
         }
+
+        // Handle CTRL-C ourselves again
+        ctrlc::set_handler(exit_process_on_sigint).into_diagnostic()?;
 
         // Update the task cache with the new hash
         executable_task
@@ -300,22 +314,14 @@ async fn execute_task<'p>(
     };
     let cwd = task.working_directory()?;
 
-    ctrlc::set_handler(move || {
-        let term = console::Term::stdout();
-        let _ = term.show_cursor();
-    })
-    .unwrap();
-
-    let execute_future = deno_task_shell::execute(
+    let status_code = deno_task_shell::execute(
         script,
         command_env.clone(),
         &cwd,
         Default::default(),
         Default::default(),
-    );
-    let status_code = tokio::select! {
-        code = execute_future => code
-    };
+    )
+    .await;
 
     if status_code != 0 {
         return Err(TaskExecutionError::NonZeroExitCode(status_code));
@@ -337,20 +343,6 @@ fn disambiguate_task_interactive<'p>(
         active_item_style: console::Style::new().for_stderr().magenta(),
         ..ColorfulTheme::default()
     };
-
-    ctrlc::set_handler(move || {
-        let term = console::Term::stdout();
-        let _ = term.show_cursor();
-
-        // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
-        #[cfg(target_os = "windows")]
-        std::process::exit(3);
-
-        // POSIX compliant OSs: 128 + SIGINT (2)
-        #[cfg(not(target_os = "windows"))]
-        std::process::exit(130);
-    })
-    .unwrap();
 
     dialoguer::Select::with_theme(&theme)
         .with_prompt(format!(
@@ -377,7 +369,18 @@ fn disambiguate_task_interactive<'p>(
 /// but we, as an application, are free to mess with signal handlers if we feel like it, since we
 /// own the process.
 /// This function was taken from https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119
-fn dialoguer_reset_cursor_hack() {
+fn reset_cursor() {
     let term = console::Term::stdout();
     let _ = term.show_cursor();
+}
+
+/// Exit the process with the appropriate exit code for a SIGINT.
+fn exit_process_on_sigint() {
+    // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
+    #[cfg(target_os = "windows")]
+    std::process::exit(3);
+
+    // POSIX compliant OSs: 128 + SIGINT (2)
+    #[cfg(not(target_os = "windows"))]
+    std::process::exit(130);
 }
