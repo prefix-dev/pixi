@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use ahash::{HashMap, HashSet};
 use pixi_manifest::FeaturesExt;
-use rattler_conda_types::Platform;
+use pixi_record::PixiRecord;
+use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform};
 use rattler_lock::{LockFile, LockFileBuilder, LockedPackageRef};
 use tokio::sync::Semaphore;
 
@@ -9,6 +11,8 @@ use crate::{
     project::{grouped_environment::GroupedEnvironment, Environment},
     Project,
 };
+
+use super::{records_by_name::HasNameVersion, PixiRecordsByName};
 
 /// Wraps a semaphore to limit the number of concurrent IO operations. The
 /// wrapper type provides a convenient default implementation.
@@ -67,4 +71,51 @@ pub fn filter_lock_file<
     }
 
     builder.finish()
+}
+
+/// Filter out the packages that are not in the filter names
+/// but also add all its dependencies iteratively
+pub fn filter_pixi_records(
+    pixi_records: Arc<PixiRecordsByName>,
+    filter_names: &Vec<PackageName>,
+) -> Vec<PixiRecord> {
+    let mut entire_map = HashMap::default();
+
+    // First save everything in the map
+    for record in pixi_records.records.iter() {
+        entire_map.insert(record.name().as_normalized(), record.clone());
+    }
+
+    let mut result = Vec::new();
+    let mut visited = HashSet::default();
+    let mut to_process = Vec::new();
+
+    // Add initial filter names to the processing queue
+    for name in filter_names {
+        to_process.push(name.as_normalized().to_string());
+    }
+
+    // Iteratively process the queue
+    while let Some(package_name) = to_process.pop() {
+        // Skip if already visited
+        if !visited.insert(package_name.clone()) {
+            continue;
+        }
+
+        // If the package exists in the map, process it
+        if let Some(record) = entire_map.get(package_name.as_str()) {
+            result.push(record.clone());
+
+            // Add dependencies to the processing queue
+            for dependency in &record.package_record().depends {
+                if let Ok(name) = MatchSpec::from_str(dependency, ParseStrictness::Lenient) {
+                    if let Some(dep_name) = name.name {
+                        to_process.push(dep_name.as_normalized().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    result
 }

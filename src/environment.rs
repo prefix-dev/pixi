@@ -7,6 +7,7 @@ use crate::{
     rlimit::try_increase_rlimit_to_sensible,
     Project,
 };
+use core::fmt;
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use fs_err as fs;
@@ -35,6 +36,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    fmt::{Display, Formatter},
     hash::{Hash, Hasher},
     io::{self, ErrorKind},
     path::{Path, PathBuf},
@@ -693,6 +695,30 @@ impl PythonStatus {
     }
 }
 
+/// Return the information what we have updated
+#[derive(Clone)]
+pub enum PartialPrefixStatus {
+    Full,
+    Partial(Vec<PixiRecord>),
+}
+
+impl PartialPrefixStatus {
+    pub fn is_full(&self) -> bool {
+        matches!(self, Self::Full)
+    }
+}
+
+impl Display for PartialPrefixStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Full => write!(f, "full"),
+            Self::Partial(records) => {
+                write!(f, "partial ({} packages)", records.len())
+            }
+        }
+    }
+}
+
 struct CondaBuildProgress {
     main_progress: ProgressBar,
     build_progress: Mutex<Vec<(String, ProgressBar)>>,
@@ -815,6 +841,7 @@ pub async fn update_prefix_conda(
     authenticated_client: ClientWithMiddleware,
     installed_packages: Vec<PrefixRecord>,
     pixi_records: Vec<PixiRecord>,
+    // filter_names: Option<Vec<PackageName>>,
     virtual_packages: Vec<GenericVirtualPackage>,
     channels: Vec<ChannelUrl>,
     host_platform: Platform,

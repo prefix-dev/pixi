@@ -4,7 +4,7 @@ use std::{
     future::{ready, Future},
     iter,
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
 
@@ -27,7 +27,9 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
+use rattler_conda_types::{
+    Arch, GenericVirtualPackage, MatchSpec, PackageName, ParseStrictness, Platform,
+};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use reqwest_middleware::ClientWithMiddleware;
@@ -45,14 +47,15 @@ use crate::{
     build::{BuildContext, GlobHashCache, SourceCheckoutReporter},
     environment::{
         self, read_environment_file, write_environment_file, EnvironmentFile, LockFileUsage,
-        LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
-        PythonStatus,
+        LockedEnvironmentHash, PartialPrefixStatus, PerEnvironmentAndPlatform, PerGroup,
+        PerGroupAndPlatform, PythonStatus,
     },
     load_lock_file,
     lock_file::{
         self,
         records_by_name::HasNameVersion,
         reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
+        utils::filter_pixi_records,
         PypiRecord,
     },
     prefix::Prefix,
@@ -63,6 +66,10 @@ use crate::{
     repodata::Repodata,
     Project,
 };
+
+static SUBSET_PREFIX_PACKAGES: LazyLock<Vec<PackageName>> = LazyLock::new(|| {
+    vec![PackageName::try_from("python").expect("python should be always a valid name")]
+});
 
 impl Project {
     /// Ensures that the lock-file is up-to-date with the project information.
@@ -116,8 +123,9 @@ pub struct LockFileDerivedData<'p> {
     /// The package cache
     pub package_cache: PackageCache,
 
-    /// A list of prefixes that are up-to-date with the latest conda packages.
-    pub updated_conda_prefixes: HashMap<EnvironmentName, (Prefix, PythonStatus)>,
+    /// A list of prefixes that are up-to-date or partial-up-to-date with the latest conda packages.
+    pub updated_conda_prefixes:
+        HashMap<EnvironmentName, (Prefix, PythonStatus, PartialPrefixStatus)>,
 
     /// A list of prefixes that have been updated while resolving all
     /// dependencies.
@@ -379,8 +387,16 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
     ) -> miette::Result<(Prefix, PythonStatus)> {
         // If we previously updated this environment, early out.
-        if let Some((prefix, python_status)) = self.updated_conda_prefixes.get(environment.name()) {
-            return Ok((prefix.clone(), python_status.clone()));
+        if let Some((prefix, python_status, prefix_status)) =
+            self.updated_conda_prefixes.get(environment.name())
+        {
+            tracing::debug!("prefix is initialized : {}", prefix_status);
+
+            // sometimes we can have a partial prefix update,
+            // so we need to check if we need to continue to instantiate it
+            if prefix_status.is_full() {
+                return Ok((prefix.clone(), python_status.clone()));
+            }
         }
 
         let prefix = Prefix::new(environment.dir());
@@ -435,9 +451,14 @@ impl<'p> LockFileDerivedData<'p> {
         .await?;
 
         // Store that we updated the environment, so we won't have to do it again.
+        tracing::debug!("we set update_status to UpdateStatus::Full");
         self.updated_conda_prefixes.insert(
             environment.name().clone(),
-            (prefix.clone(), python_status.clone()),
+            (
+                prefix.clone(),
+                python_status.clone(),
+                PartialPrefixStatus::Full,
+            ),
         );
 
         Ok((prefix, python_status))
@@ -479,7 +500,8 @@ pub struct UpdateContext<'p> {
     /// Keeps track of all pending prefix updates. This only tracks the conda
     /// updates to a prefix, not whether the pypi packages have also been
     /// updated.
-    instantiated_conda_prefixes: PerGroup<'p, Arc<BarrierCell<(Prefix, PythonStatus)>>>,
+    instantiated_conda_prefixes:
+        PerGroup<'p, Arc<BarrierCell<(Prefix, PythonStatus, PartialPrefixStatus)>>>,
 
     /// Keeps track of all pending conda targets that are being solved. The
     /// mapping contains a [`BarrierCell`] that will eventually contain the
@@ -622,7 +644,7 @@ impl<'p> UpdateContext<'p> {
     /// Get a list of conda prefixes that have been updated.
     pub(crate) fn take_instantiated_conda_prefixes(
         &mut self,
-    ) -> HashMap<EnvironmentName, (Prefix, PythonStatus)> {
+    ) -> HashMap<EnvironmentName, (Prefix, PythonStatus, PartialPrefixStatus)> {
         self.instantiated_conda_prefixes
             .drain()
             .filter_map(|(env, cell)| match env {
@@ -631,7 +653,10 @@ impl<'p> UpdateContext<'p> {
                         .expect("prefixes must not be shared")
                         .into_inner()
                         .expect("prefix must be available");
-                    Some((env.name().clone(), (prefix.0.clone(), prefix.1.clone())))
+                    Some((
+                        env.name().clone(),
+                        (prefix.0.clone(), prefix.1.clone(), prefix.2.clone()),
+                    ))
                 }
                 _ => None,
             })
@@ -1166,6 +1191,9 @@ impl<'p> UpdateContext<'p> {
         // Spawn tasks to instantiate prefixes that we need to be able to solve Pypi
         // packages.
         //
+        // TODO: In future this could be controlled by using --only-binary
+        // which will instantiate only a prefix with python
+        //
         // Solving Pypi packages requires a python interpreter to be present in the
         // prefix, therefore we first need to make sure we have conda packages
         // available, then we can instantiate the prefix with at least the required
@@ -1205,10 +1233,13 @@ impl<'p> UpdateContext<'p> {
 
             // Spawn a task to instantiate the environment
             let environment_name = environment.name().clone();
+            // so first we need to have only python here
+
             let pypi_env_task = spawn_create_prefix_task(
                 group.clone(),
                 self.package_cache.clone(),
                 records_future,
+                Some(SUBSET_PREFIX_PACKAGES.to_vec()),
                 self.io_concurrency_limit.clone(),
                 self.build_context.clone(),
             )
@@ -1425,14 +1456,20 @@ impl<'p> UpdateContext<'p> {
                         }
                     }
                 }
-                TaskResult::CondaPrefixUpdated(group_name, prefix, python_status, duration) => {
+                TaskResult::CondaPrefixUpdated(
+                    group_name,
+                    prefix,
+                    python_status,
+                    duration,
+                    status,
+                ) => {
                     let group = GroupedEnvironment::from_name(project, &group_name)
                         .expect("grouped environment should exist");
 
                     self.instantiated_conda_prefixes
                         .get_mut(&group)
                         .expect("the entry for this environment should exists")
-                        .set(Arc::new((prefix, *python_status)))
+                        .set(Arc::new((prefix, *python_status, status)))
                         .expect("prefix should not be instantiated twice");
 
                     tracing::info!(
@@ -1656,7 +1693,13 @@ enum TaskResult {
     ),
 
     /// A prefix was updated with the latest conda packages
-    CondaPrefixUpdated(GroupedEnvironmentName, Prefix, Box<PythonStatus>, Duration),
+    CondaPrefixUpdated(
+        GroupedEnvironmentName,
+        Prefix,
+        Box<PythonStatus>,
+        Duration,
+        PartialPrefixStatus,
+    ),
 
     /// The pypi dependencies for a grouped environment have been solved.
     PypiGroupSolved(
@@ -2236,6 +2279,7 @@ async fn spawn_create_prefix_task(
     group: GroupedEnvironment<'_>,
     package_cache: PackageCache,
     pixi_records: impl Future<Output = Arc<PixiRecordsByName>>,
+    subset_packages: Option<Vec<PackageName>>,
     io_concurrency_limit: IoConcurrencyLimit,
     build_context: BuildContext,
 ) -> miette::Result<TaskResult> {
@@ -2261,6 +2305,18 @@ async fn spawn_create_prefix_task(
     let (pixi_records, installed_packages) =
         tokio::try_join!(pixi_records.map(Ok), installed_packages_future)?;
 
+    // filter out that subset of records we need to install
+    let (pixi_records, status) = if let Some(ref subset_packages) = subset_packages {
+        let subset_records = filter_pixi_records(pixi_records.clone(), subset_packages);
+        let subset_records = PixiRecordsByName::from_iter(subset_records.iter().cloned());
+        (
+            Arc::new(subset_records.clone()),
+            PartialPrefixStatus::Partial(subset_records.records),
+        )
+    } else {
+        (pixi_records, PartialPrefixStatus::Full)
+    };
+
     let build_virtual_packages = group.virtual_packages(Platform::current());
 
     // Spawn a background task to update the prefix
@@ -2280,11 +2336,16 @@ async fn spawn_create_prefix_task(
                 channels,
                 Platform::current(),
                 &format!(
-                    "{} python environment to solve pypi packages for '{}'",
+                    "{} {} python environment to solve pypi packages for '{}'",
                     if has_existing_packages {
                         "updating"
                     } else {
                         "creating"
+                    },
+                    if subset_packages.is_some() {
+                        "partial"
+                    } else {
+                        ""
                     },
                     group_name.fancy_display()
                 ),
@@ -2308,5 +2369,6 @@ async fn spawn_create_prefix_task(
         prefix,
         Box::new(python_status),
         duration,
+        status,
     ))
 }
