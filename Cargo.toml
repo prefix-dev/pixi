@@ -335,7 +335,6 @@ xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
 
-
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
 nix = { workspace = true, features = ["poll", "term"] }
