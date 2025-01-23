@@ -77,7 +77,7 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
         Ok(response) => {
             if response.status().is_redirection() {
                 match response.headers().get("Location") {
-                    Some(location) => Ok(Url::parse(&location.to_str().into_diagnostic()?)
+                    Some(location) => Ok(Url::parse(location.to_str().into_diagnostic()?)
                         .into_diagnostic()?
                         .path_segments()
                         .ok_or_else(|| {
@@ -152,7 +152,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("Could not find the default archive name for the current platform");
 
     let url = base_url
-        .join(&format!("download/{}/{}", target_version, archive_name).as_str())
+        .join(format!("download/{}/{}", target_version, archive_name).as_str())
         .into_diagnostic()?;
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
