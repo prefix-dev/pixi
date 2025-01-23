@@ -113,10 +113,6 @@ pub(crate) fn validate_system_meets_environment_requirements(
         return Ok(true);
     }
 
-    // Default to the environment variable overrides, but allow for an override for testing
-    let virtual_package_overrides =
-        virtual_package_overrides.unwrap_or(VirtualPackageOverrides::from_env());
-
     // Get the environment from the lock file
     let environment = lock_file.environment(environment_name.as_str()).ok_or(
         MachineValidationError::EnvironmentNotFound(environment_name.as_str().to_string()),
@@ -136,6 +132,10 @@ pub(crate) fn validate_system_meets_environment_requirements(
     // Get the virtual packages required by the conda records
     let required_virtual_packages =
         get_required_virtual_packages_from_conda_records(&conda_records)?;
+
+    // Default to the environment variable overrides, but allow for an override for testing
+    let virtual_package_overrides =
+        virtual_package_overrides.unwrap_or(VirtualPackageOverrides::from_env());
 
     // Get the virtual packages available on the system
     let system_virtual_packages = VirtualPackage::detect(&virtual_package_overrides)?;
@@ -274,10 +274,12 @@ mod test {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let lockfile_path = root_dir.join("tests/data/lockfiles/pypi-numpy.lock");
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
-        let platform = Platform::OsxArm64;
+        let platform = Platform::current();
 
         let overrides = VirtualPackageOverrides {
+            // To high version for the wheel, which is fine as we assume backwards compatibility
             osx: Some(Override::String("15.1".to_string())),
+            libc: Some(Override::String("4.10".to_string())),
             ..VirtualPackageOverrides::default()
         };
 
@@ -292,6 +294,7 @@ mod test {
         let overrides = VirtualPackageOverrides {
             // To low version for the wheel
             osx: Some(Override::String("14.0".to_string())),
+            libc: Some(Override::String("2.10".to_string())),
             ..VirtualPackageOverrides::default()
         };
 
