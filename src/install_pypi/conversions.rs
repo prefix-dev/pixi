@@ -2,8 +2,9 @@ use std::path::Path;
 use std::str::FromStr;
 
 use pixi_consts::consts;
+use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
-    to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
+    into_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
 };
 use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
 use url::Url;
@@ -78,6 +79,8 @@ pub enum ConvertToUvDistError {
     VerbatimUrl(#[from] uv_pep508::VerbatimUrlError),
     #[error("error extracting extension from {1}")]
     Extension(#[source] ExtensionError, String),
+    #[error("error parsing locked git url {0} {1}")]
+    LockedUrl(String, String),
 
     #[error(transparent)]
     UvPepTypes(#[from] ConversionError),
@@ -93,14 +96,33 @@ pub fn convert_to_dist(
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
             let pkg_name = to_uv_normalize(&pkg.name)?;
-            Dist::from_url(
-                pkg_name,
-                VerbatimParsedUrl {
-                    parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
-                        .map_err(Box::new)?,
-                    verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
-                },
-            )?
+
+            if LockedGitUrl::is_locked_git_url(&url_without_direct) {
+                let locked_git_url = LockedGitUrl::new(url_without_direct.clone().into_owned());
+                let parsed_git_url = into_parsed_git_url(&locked_git_url).map_err(|err| {
+                    ConvertToUvDistError::LockedUrl(
+                        err.to_string(),
+                        locked_git_url.to_url().to_string(),
+                    )
+                })?;
+
+                Dist::from_url(
+                    pkg_name,
+                    VerbatimParsedUrl {
+                        parsed_url: ParsedUrl::Git(parsed_git_url),
+                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                    },
+                )?
+            } else {
+                Dist::from_url(
+                    pkg_name,
+                    VerbatimParsedUrl {
+                        parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
+                            .map_err(Box::new)?,
+                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                    },
+                )?
+            }
         }
         UrlOrPath::Url(url) => {
             // We consider it to be a registry url

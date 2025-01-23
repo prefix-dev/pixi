@@ -751,7 +751,7 @@ packages:
   - rich 13.9.*
   - python
   input:
-    hash: d4d1935eb46b3a9230c8567d6648c04cea71f3e1f5abb9cf89cec63130bde7a2
+    hash: 8d4c975cabc0c8c9ab19d3f844c15acee393be978ecb53bec877e63c0c73a55b
     globs:
     - pixi.toml
 - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda

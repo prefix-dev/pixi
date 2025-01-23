@@ -17,6 +17,7 @@ itertools = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_git = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_toml = { workspace = true }
 regex = { workspace = true }
@@ -44,7 +45,7 @@ rattler_solve = { workspace = true, optional = true }
 
 # TODO: Remove these dependencies
 console = { workspace = true }
-miette = { workspace = true }
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
 
 [dev-dependencies]
 assert_matches = { workspace = true }

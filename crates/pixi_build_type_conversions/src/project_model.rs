@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use pixi_build_types as pbt;
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
-use pixi_spec::{PixiSpec, Reference, SpecConversionError};
+use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, PackageName};
 
 /// Conversion from a `PixiSpec` to a `pbt::PixiSpecV1`.
@@ -41,10 +41,10 @@ fn to_pixi_spec_v1(
                     pbt::SourcePackageSpecV1::Git(pbt::GitSpecV1 {
                         git,
                         rev: rev.map(|r| match r {
-                            Reference::Branch(b) => pbt::GitReferenceV1::Branch(b),
-                            Reference::Tag(t) => pbt::GitReferenceV1::Tag(t),
-                            Reference::Rev(rev) => pbt::GitReferenceV1::Rev(rev),
-                            Reference::DefaultBranch => pbt::GitReferenceV1::DefaultBranch,
+                            GitReference::Branch(b) => pbt::GitReferenceV1::Branch(b),
+                            GitReference::Tag(t) => pbt::GitReferenceV1::Tag(t),
+                            GitReference::Rev(rev) => pbt::GitReferenceV1::Rev(rev),
+                            GitReference::DefaultBranch => pbt::GitReferenceV1::DefaultBranch,
                         }),
                         subdirectory,
                     })

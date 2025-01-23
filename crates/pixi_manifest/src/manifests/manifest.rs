@@ -2348,7 +2348,7 @@ bar = "*"
     }
 
     #[test]
-    pub fn test_unsupported_pep508_errors() {
+    pub fn test_supported_pep508_url() {
         let manifest_error = Manifest::from_str(
             Path::new("pyproject.toml"),
             r#"
@@ -2364,18 +2364,15 @@ bar = "*"
         platforms = ["win-64"]
         "#,
         )
-        .unwrap_err();
+        .unwrap();
 
-        let mut error = String::new();
-        let report_handler = NarratableReportHandler::new().with_cause_chain();
-        report_handler
-            .render_report(&mut error, manifest_error.as_ref())
+        let pypi_reqs = manifest_error
+            .default_feature()
+            .pypi_dependencies(Some(Platform::Win64))
             .unwrap();
-        insta::assert_snapshot!(error, @r###"
-        Unsupported pep508 requirement: 'attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main'
-            Diagnostic severity: error
-            Caused by: Found invalid characters for git revision 'main', branches and tags are not supported yet
-        "###);
+
+        // insta::assert_snapshot!(pypi_reqs[0]);
+        insta::assert_snapshot!(pypi_reqs[0], @r###"{ git = "git+ssh://git@github.com/python-attrs/attrs.git", rev = "main" }"###);
     }
 
     #[rstest]
