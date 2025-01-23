@@ -77,7 +77,8 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
         Ok(response) => {
             if response.status().is_redirection() {
                 match response.headers().get("Location") {
-                    Some(location) => Ok(Url::parse(location.to_str().into_diagnostic()?)
+                    Some(location) => {
+                        let version = Url::parse(location.to_str().into_diagnostic()?)
                         .into_diagnostic()?
                         .path_segments()
                         .ok_or_else(|| {
@@ -86,8 +87,9 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
                         .last()
                         .ok_or_else(|| {
                             miette::miette!("Could not get version from Location header")
-                        })?
-                        .to_string()),
+                        })?.to_string();
+                        Ok((version.strip_prefix("v").unwrap_or(&version)).to_string())
+                    },
                     None => miette::bail!(
                         "URL: {}. Redirect detected, but no 'Location' header found.",
                         url
@@ -102,7 +104,10 @@ async fn latest_version(base_url: Url) -> miette::Result<String> {
                     .send()
                     .await
                 {
-                    Ok(res) => Ok(res.text().await.into_diagnostic()?.trim().to_string()),
+                    Ok(res) => {
+                        let version = res.text().await.into_diagnostic()?;
+                        Ok((version.strip_prefix("v").unwrap_or(&version)).to_string())
+                    },
                     Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
                 }
             } else {
