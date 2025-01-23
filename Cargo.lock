@@ -3613,7 +3613,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.40.2"
+version = "0.40.3"
 dependencies = [
  "ahash",
  "assert_matches",
@@ -3910,6 +3910,7 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
+ "pixi_git",
  "pixi_spec",
  "pixi_toml",
  "pyproject-toml",
@@ -4039,9 +4040,13 @@ name = "pixi_uv_conversions"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "miette 7.4.0",
  "pep440_rs",
  "pep508_rs",
+ "pixi_git",
  "pixi_manifest",
+ "pixi_record",
+ "pixi_spec",
  "rattler_lock",
  "serde_json",
  "thiserror 2.0.11",

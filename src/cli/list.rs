@@ -12,6 +12,7 @@ use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Project;
 use fancy_display::FancyDisplay;
+use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
     pypi_options_to_index_locations, to_uv_normalize, to_uv_version, ConversionError,
@@ -259,9 +260,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if packages_to_output.is_empty() {
         eprintln!(
-            "{}No packages found.",
+            "{}No packages found in '{}' environment for '{}' platform.",
             console::style(console::Emoji("✘ ", "")).red(),
+            environment.name().fancy_display(),
+            consts::ENVIRONMENT_STYLE.apply_to(platform),
         );
+
         Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         return Ok(());
     }
@@ -345,6 +349,17 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     println!("{}", json_string);
 }
 
+/// Return the size and source location of the pypi package
+fn get_pypi_location_information(location: &UrlOrPath) -> (Option<u64>, Option<String>) {
+    match location {
+        UrlOrPath::Url(url) => (None, Some(url.to_string())),
+        UrlOrPath::Path(path) => (
+            get_dir_size(std::path::Path::new(path.as_str())).ok(),
+            Some(path.to_string()),
+        ),
+    }
+}
+
 fn create_package_to_output<'a, 'b>(
     package: &'b PackageExt,
     project_dependency_names: &'a [String],
@@ -368,21 +383,22 @@ fn create_package_to_output<'a, 'b>(
             Some(pkg.record().name.as_source().to_owned()),
         ),
         PackageExt::PyPI(p, name) => {
-            if let Some(registry_index) = registry_index {
-                let entry = registry_index.get(name).find(|i| {
-                    i.dist.filename.version == to_uv_version(&p.version).expect("invalid version")
-                });
-                let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
-                let name = entry.map(|e| e.dist.filename.to_string());
-                (size, name)
-            } else {
-                match &p.location {
-                    UrlOrPath::Url(url) => (None, Some(url.to_string())),
-                    UrlOrPath::Path(path) => (
-                        get_dir_size(std::path::Path::new(path.as_str())).ok(),
-                        Some(path.to_string()),
-                    ),
+            // Check the hash to avoid non index packages to be handled by the registry index as wheels
+            if p.hash.is_some() {
+                if let Some(registry_index) = registry_index {
+                    // Handle case where the registry index is present
+                    let entry = registry_index.get(name).find(|i| {
+                        i.dist.filename.version
+                            == to_uv_version(&p.version).expect("invalid version")
+                    });
+                    let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
+                    let name = entry.map(|e| e.dist.filename.to_string());
+                    (size, name)
+                } else {
+                    get_pypi_location_information(&p.location)
                 }
+            } else {
+                get_pypi_location_information(&p.location)
             }
         }
     };

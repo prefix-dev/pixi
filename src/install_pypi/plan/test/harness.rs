@@ -1,6 +1,5 @@
 use crate::install_pypi::plan::{CachedDistProvider, InstallPlanner, InstalledDistProvider};
 use pixi_consts::consts;
-use pixi_manifest::pypi::pypi_requirement::ParsedGitUrl;
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use std::collections::HashMap;
 use std::io::Write;
@@ -12,7 +11,7 @@ use url::Url;
 use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::{InstalledDirectUrlDist, InstalledDist, InstalledRegistryDist};
 use uv_pypi_types::DirectUrl::VcsUrl;
-use uv_pypi_types::{ArchiveInfo, DirectUrl, VcsInfo, VcsKind};
+use uv_pypi_types::{ArchiveInfo, DirectUrl, ParsedGitUrl, VcsInfo, VcsKind};
 
 #[derive(Default)]
 /// Builder to create installed dists
@@ -117,8 +116,12 @@ impl InstalledDistBuilder {
             subdirectory: None,
             vcs_info: VcsInfo {
                 vcs: VcsKind::Git,
-                commit_id: parsed_git_url.rev.map(|r| r.to_string()),
-                requested_revision: None,
+                commit_id: parsed_git_url.url.precise().map(|s| s.to_string()),
+                requested_revision: parsed_git_url
+                    .url
+                    .reference()
+                    .as_str()
+                    .map(ToString::to_string),
             },
         };
 

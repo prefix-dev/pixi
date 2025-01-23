@@ -8,7 +8,7 @@ use std::{
 use miette::IntoDiagnostic;
 use pixi_git::url::{redact_credentials, RepositoryUrl};
 use pixi_git::{sha::GitSha, GitUrl};
-use pixi_spec::{GitSpec, PathSourceSpec, Reference, SourceSpec, UrlSourceSpec};
+use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
@@ -156,13 +156,22 @@ pub struct PinnedGitCheckout {
     /// The subdirectory of the git checkout.
     pub subdirectory: Option<String>,
     /// The reference of the git checkout.
-    pub reference: Reference,
+    pub reference: GitReference,
 }
 
 impl PinnedGitCheckout {
+    /// Creates a new pinned git checkout.
+    pub fn new(commit: GitSha, subdirectory: Option<String>, reference: GitReference) -> Self {
+        Self {
+            commit,
+            subdirectory,
+            reference,
+        }
+    }
+
     /// Extracts a pinned git checkout from the query pairs and the hash
     /// fragment in the given URL.
-    fn from_locked_url(locked_url: &LockedGitUrl) -> miette::Result<PinnedGitCheckout> {
+    pub fn from_locked_url(locked_url: &LockedGitUrl) -> miette::Result<PinnedGitCheckout> {
         let url = &locked_url.0;
         let mut reference = None;
         let mut subdirectory = None;
@@ -171,7 +180,7 @@ impl PinnedGitCheckout {
             match &*key {
                 "tag" => {
                     if reference
-                        .replace(Reference::Tag(val.into_owned()))
+                        .replace(GitReference::Tag(val.into_owned()))
                         .is_some()
                     {
                         return Err(miette::miette!("multiple tags in URL"));
@@ -179,7 +188,7 @@ impl PinnedGitCheckout {
                 }
                 "branch" => {
                     if reference
-                        .replace(Reference::Branch(val.into_owned()))
+                        .replace(GitReference::Branch(val.into_owned()))
                         .is_some()
                     {
                         return Err(miette::miette!("multiple branches in URL"));
@@ -187,7 +196,7 @@ impl PinnedGitCheckout {
                 }
                 "rev" => {
                     if reference
-                        .replace(Reference::Rev(val.into_owned()))
+                        .replace(GitReference::Rev(val.into_owned()))
                         .is_some()
                     {
                         return Err(miette::miette!("multiple revs in URL"));
@@ -207,7 +216,7 @@ impl PinnedGitCheckout {
 
         // set the default reference if none is provided.
         if reference.is_none() {
-            reference.replace(Reference::DefaultBranch);
+            reference.replace(GitReference::DefaultBranch);
         }
 
         let commit = GitSha::from_str(url.fragment().ok_or(miette::miette!("missing sha"))?)
@@ -232,6 +241,11 @@ pub struct PinnedGitSpec {
 }
 
 impl PinnedGitSpec {
+    /// Creates a new pinned git spec.
+    pub fn new(git: Url, source: PinnedGitCheckout) -> Self {
+        Self { git, source }
+    }
+
     /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
     pub fn into_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
@@ -251,19 +265,19 @@ impl PinnedGitSpec {
 
         // Put the requested reference in the query.
         match &self.source.reference {
-            Reference::Branch(branch) => {
+            GitReference::Branch(branch) => {
                 url.query_pairs_mut()
                     .append_pair("branch", branch.to_string().as_str());
             }
-            Reference::Tag(tag) => {
+            GitReference::Tag(tag) => {
                 url.query_pairs_mut()
                     .append_pair("tag", tag.to_string().as_str());
             }
-            Reference::Rev(rev) => {
+            GitReference::Rev(rev) => {
                 url.query_pairs_mut()
                     .append_pair("rev", rev.to_string().as_str());
             }
-            Reference::DefaultBranch => {}
+            GitReference::DefaultBranch => {}
         }
 
         // Put the precise commit in the fragment.
@@ -357,6 +371,11 @@ impl From<PinnedUrlSpec> for UrlOrPath {
 pub struct LockedGitUrl(Url);
 
 impl LockedGitUrl {
+    /// Creates a new [`LockedGitUrl`] from a [`Url`].
+    pub fn new(url: Url) -> Self {
+        Self(url)
+    }
+
     /// Returns true if the given URL is a locked git URL.
     /// This is used to differentiate between a regular Url and a [`LockedGitUrl`]
     /// that starts with `git+`.
@@ -389,6 +408,11 @@ impl LockedGitUrl {
         let url = Url::parse(url).into_diagnostic()?;
         Ok(Self(url))
     }
+
+    /// Converts this [`LockedGitUrl`] into a [`Url`].
+    pub fn to_url(&self) -> Url {
+        self.0.clone()
+    }
 }
 
 impl From<LockedGitUrl> for Url {
@@ -412,7 +436,11 @@ impl From<PinnedGitSpec> for LockedGitUrl {
 
 #[derive(Debug, Error)]
 /// An error that occurs when parsing a [`PinnedSourceSpec`].
-pub enum ParseError {}
+pub enum ParseError {
+    /// An error that occurs when parsing a locked git URL.
+    #[error("failed to parse locked git url {0}. Reason: {1}")]
+    LockedGitUrl(String, String),
+}
 
 impl TryFrom<UrlOrPath> for PinnedSourceSpec {
     type Error = ParseError;
@@ -423,8 +451,10 @@ impl TryFrom<UrlOrPath> for PinnedSourceSpec {
                 // for url we can have git+ and simple url's.
                 match LockedGitUrl::is_locked_git_url(&url) {
                     true => {
-                        let locked_url = LockedGitUrl(url);
-                        let pinned = locked_url.to_pinned_git_spec().unwrap();
+                        let locked_url = LockedGitUrl(url.clone());
+                        let pinned = locked_url.to_pinned_git_spec().map_err(|err| {
+                            ParseError::LockedGitUrl(url.to_string(), err.to_string())
+                        })?;
                         Ok(pinned.into())
                     }
                     false => unimplemented!("url not supported"),
@@ -631,7 +661,7 @@ mod tests {
     use std::str::FromStr;
 
     use pixi_git::sha::GitSha;
-    use pixi_spec::{GitSpec, Reference};
+    use pixi_spec::{GitReference, GitSpec};
     use url::Url;
 
     use crate::{PinnedGitCheckout, PinnedGitSpec, SourceMismatchError};
@@ -643,14 +673,14 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: pixi_spec::Reference::Rev("9de9e1b".to_string()),
+                reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: None,
-            rev: Some(pixi_spec::Reference::Rev("9de9e1b".to_string())),
+            rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
@@ -662,14 +692,14 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: pixi_spec::Reference::Rev("9de9e1b".to_string()),
+                reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: None,
-            rev: Some(pixi_spec::Reference::Rev("9de9e1b".to_string())),
+            rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
         let result = locked_git_spec_without_git_suffix.satisfies(&requested_git_spec);
@@ -681,14 +711,14 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: pixi_spec::Reference::Rev("9de9e1b".to_string()),
+                reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec_without_suffix = GitSpec {
             git: Url::parse("https://github.com/example/repo").unwrap(),
             subdirectory: None,
-            rev: Some(pixi_spec::Reference::Rev("9de9e1b".to_string())),
+            rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec_without_suffix);
@@ -700,14 +730,14 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: pixi_spec::Reference::Rev("9de9e1b".to_string()),
+                reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: None,
-            rev: Some(pixi_spec::Reference::Rev("9de9e1b".to_string())),
+            rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
@@ -719,14 +749,14 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: pixi_spec::Reference::Rev("9de9e1b".to_string()),
+                reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec_with_prefix = GitSpec {
             git: Url::parse("git+https://github.com/example/repo.git").unwrap(),
             subdirectory: None,
-            rev: Some(pixi_spec::Reference::Rev("9de9e1b".to_string())),
+            rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec_with_prefix);
@@ -743,14 +773,14 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: pixi_spec::Reference::Rev("9de9e1b".to_string()),
+                reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: None,
-            rev: Some(pixi_spec::Reference::Rev("d2e32".to_string())),
+            rev: Some(pixi_spec::GitReference::Rev("d2e32".to_string())),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -764,14 +794,14 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: pixi_spec::Reference::Rev("9de9e1b".to_string()),
+                reference: pixi_spec::GitReference::Rev("9de9e1b".to_string()),
             },
         };
 
         let requested_git_spec = GitSpec {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: None,
-            rev: Some(pixi_spec::Reference::Rev("9de9e1b".to_string())),
+            rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -785,7 +815,7 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: Reference::DefaultBranch,
+                reference: GitReference::DefaultBranch,
             },
         };
 
@@ -808,7 +838,7 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: Some("some-subdir".to_string()),
-                reference: Reference::DefaultBranch,
+                reference: GitReference::DefaultBranch,
             },
         };
 
@@ -832,7 +862,7 @@ mod tests {
             source: PinnedGitCheckout {
                 commit: GitSha::from_str("9de9e1b48cc421f05fc6aa6918cade3033a38c32").unwrap(),
                 subdirectory: None,
-                reference: Reference::DefaultBranch,
+                reference: GitReference::DefaultBranch,
             },
         };
 
