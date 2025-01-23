@@ -3,7 +3,6 @@ use std::{collections::HashMap, default::Default};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
-use pixi_manifest::EnvironmentName;
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -91,20 +90,9 @@ async fn generate_activation_script(
     let script = result.script.contents().into_diagnostic();
 
     if project.config().change_ps1() {
-        let prompt_name = match environment.name() {
-            EnvironmentName::Default => project.name().to_string(),
-            EnvironmentName::Named(name) => format!("{}:{}", project.name(), name),
-        };
-        let prompt = match shell {
-            ShellEnum::NuShell(_) => prompt::get_nu_prompt(prompt_name.as_str()),
-            ShellEnum::PowerShell(_) => prompt::get_powershell_prompt(prompt_name.as_str()),
-            ShellEnum::Bash(_) => prompt::get_posix_prompt(prompt_name.as_str()),
-            ShellEnum::Zsh(_) => prompt::get_posix_prompt(prompt_name.as_str()),
-            ShellEnum::Fish(_) => prompt::get_fish_prompt(prompt_name.as_str()),
-            ShellEnum::Xonsh(_) => prompt::get_xonsh_prompt(),
-            ShellEnum::CmdExe(_) => prompt::get_cmd_prompt(prompt_name.as_str()),
-        };
-        Ok(format!("{}\n{}", script?, prompt))
+        let prompt_name = prompt::get_prompt_name(project.name(), environment.name());
+        let shell_prompt = prompt::get_prompt_for_shell(&shell, prompt_name.as_str());
+        Ok(format!("{}\n{}", script?, shell_prompt))
     } else {
         script
     }

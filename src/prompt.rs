@@ -1,24 +1,19 @@
+use pixi_manifest::EnvironmentName;
+use rattler_shell::shell::ShellEnum;
+
 /// Set default pixi hook for the bash shell
-pub(crate) fn get_bash_hook(env_name: &str) -> String {
-    format!(
-        "export PS1=\"({}) ${{PS1:-}}\"\n{}",
-        env_name,
-        include_str!("shell_snippets/pixi-bash.sh")
-    )
+pub(crate) fn get_bash_hook() -> &'static str {
+    include_str!("shell_snippets/pixi-bash.sh")
 }
 
 /// Set default pixi hook for the zsh shell
-pub(crate) fn get_zsh_hook(env_name: &str) -> String {
-    format!(
-        "export PS1=\"({}) ${{PS1:-}}\"\n{}",
-        env_name,
-        include_str!("shell_snippets/pixi-zsh.sh")
-    )
+pub(crate) fn get_zsh_hook() -> &'static str {
+    include_str!("shell_snippets/pixi-zsh.sh")
 }
 
 /// Set default pixi prompt for posix shells
 pub(crate) fn get_posix_prompt(env_name: &str) -> String {
-    format!("export PS1=\"({}) ${{PS1:-}}\"", env_name,)
+    format!("export PS1=\"({}) ${{PS1:-}}\"", env_name)
 }
 
 /// Set default pixi prompt for the fish shell
@@ -93,4 +88,34 @@ pub(crate) fn get_nu_prompt(env_name: &str) -> String {
 /// Set default pixi prompt for the cmd.exe command prompt
 pub(crate) fn get_cmd_prompt(env_name: &str) -> String {
     format!(r"@PROMPT ({}) $P$G", env_name)
+}
+
+/// Get appropriate hook function for configured shell
+pub(crate) fn get_hook_for_shell(shell: &ShellEnum) -> &str {
+    match shell {
+        ShellEnum::Bash(_) => get_bash_hook(),
+        ShellEnum::Zsh(_) => get_zsh_hook(),
+        _ => "",
+    }
+}
+
+/// Get appropriate prompt (without hook) for configured shell
+pub(crate) fn get_prompt_for_shell(shell: &ShellEnum, prompt_name: &str) -> String {
+    match shell {
+        ShellEnum::NuShell(_) => get_nu_prompt(prompt_name),
+        ShellEnum::PowerShell(_) => get_powershell_prompt(prompt_name),
+        ShellEnum::Bash(_) => get_posix_prompt(prompt_name),
+        ShellEnum::Zsh(_) => get_posix_prompt(prompt_name),
+        ShellEnum::Fish(_) => get_fish_prompt(prompt_name),
+        ShellEnum::Xonsh(_) => get_xonsh_prompt(),
+        ShellEnum::CmdExe(_) => get_cmd_prompt(prompt_name),
+    }
+}
+
+/// Get prompt name for given project and environment
+pub(crate) fn get_prompt_name(project_name: &str, environment_name: &EnvironmentName) -> String {
+    match environment_name {
+        EnvironmentName::Default => project_name.to_string(),
+        EnvironmentName::Named(name) => format!("{}:{}", project_name, name),
+    }
 }
