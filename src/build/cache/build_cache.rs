@@ -37,7 +37,7 @@ pub enum BuildCacheError {
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout.
 pub struct BuildInput {
-    /// TODO: I think this should also include the build backend used! Maybe?
+    // TODO: I think this should also include the build backend used! Maybe?
 
     /// The URL channels used in the build.
     pub channel_urls: Vec<Url>,
