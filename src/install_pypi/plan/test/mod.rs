@@ -1,5 +1,5 @@
 use self::harness::{InstalledDistOptions, MockedSitePackages, NoCache, RequiredPackages};
-use crate::install_pypi::plan::test::harness::{AllCached, TEST_PYTHON_VERSION};
+use crate::install_pypi::plan::test::harness::AllCached;
 use crate::install_pypi::NeedReinstall;
 use assert_matches::assert_matches;
 use url::Url;
@@ -202,8 +202,8 @@ fn test_install_required_python_mismatch() {
         NeedReinstall::RequiredPythonChanged {
             ref installed_python_require,
             ref locked_python_version
-        } if installed_python_require.to_string() == "<3.12"
-        && locked_python_version.to_string() == TEST_PYTHON_VERSION
+        } if installed_python_require == "<3.12"
+        && locked_python_version == "None"
     );
     assert!(install_plan.local.is_empty());
     // Not cached we get it from the remote
