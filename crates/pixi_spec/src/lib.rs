@@ -53,7 +53,6 @@ pub enum SpecConversionError {
 /// This type can represent both source and binary packages. Use the
 /// [`Self::try_into_nameless_match_spec`] method to convert this type into a
 /// type that only represents binary packages.
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Hash, ::serde::Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum PixiSpec {
@@ -66,7 +65,7 @@ pub enum PixiSpec {
 
     /// The spec is represented by a detailed version spec. The package should
     /// be retrieved from a channel.
-    DetailedVersion(DetailedSpec),
+    DetailedVersion(Box<DetailedSpec>),
 
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
@@ -118,7 +117,7 @@ impl PixiSpec {
         {
             Self::Version(spec.version.unwrap_or(VersionSpec::Any))
         } else {
-            Self::DetailedVersion(DetailedSpec {
+            Self::DetailedVersion(Box::new(DetailedSpec {
                 version: spec.version,
                 build: spec.build,
                 build_number: spec.build_number,
@@ -130,7 +129,7 @@ impl PixiSpec {
                 subdir: spec.subdir,
                 md5: spec.md5,
                 sha256: spec.sha256,
-            })
+            }))
         }
     }
 
@@ -190,9 +189,7 @@ impl PixiSpec {
     pub fn into_version(self) -> Option<VersionSpec> {
         match self {
             Self::Version(v) => Some(v),
-            Self::DetailedVersion(DetailedSpec {
-                version: Some(v), ..
-            }) => Some(v),
+            Self::DetailedVersion(v) => v.version,
             _ => None,
         }
     }
@@ -200,7 +197,7 @@ impl PixiSpec {
     /// Converts this instance into a [`DetailedSpec`] if possible.
     pub fn into_detailed(self) -> Option<DetailedSpec> {
         match self {
-            Self::DetailedVersion(v) => Some(v),
+            Self::DetailedVersion(v) => Some(*v),
             Self::Version(v) => Some(DetailedSpec {
                 version: Some(v),
                 ..DetailedSpec::default()
@@ -352,7 +349,7 @@ impl From<SourceSpec> for PixiSpec {
 
 impl From<DetailedSpec> for PixiSpec {
     fn from(value: DetailedSpec) -> Self {
-        Self::DetailedVersion(value)
+        Self::DetailedVersion(Box::new(value))
     }
 }
 
@@ -397,7 +394,6 @@ impl From<PixiSpec> for toml_edit::Value {
 ///
 /// This type only represents binary packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum BinarySpec {
     /// The spec is represented solely by a version string. The package should
@@ -409,7 +405,7 @@ pub enum BinarySpec {
 
     /// The spec is represented by a detailed version spec. The package should
     /// be retrieved from a channel.
-    DetailedVersion(DetailedSpec),
+    DetailedVersion(Box<DetailedSpec>),
 
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can

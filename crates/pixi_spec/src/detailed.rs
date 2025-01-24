@@ -75,6 +75,6 @@ impl DetailedSpec {
 
 impl From<DetailedSpec> for BinarySpec {
     fn from(value: DetailedSpec) -> Self {
-        Self::DetailedVersion(value)
+        Self::DetailedVersion(Box::new(value))
     }
 }
