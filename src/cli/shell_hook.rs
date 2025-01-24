@@ -87,14 +87,15 @@ async fn generate_activation_script(
         })
         .into_diagnostic()?;
 
-    let script = result.script.contents().into_diagnostic();
+    let script = result.script.contents().into_diagnostic()?;
+    let hook = prompt::shell_hook(&shell).unwrap_or_default().to_owned();
 
     if project.config().change_ps1() {
         let prompt_name = prompt::prompt_name(project.name(), environment.name());
         let shell_prompt = prompt::shell_prompt(&shell, prompt_name.as_str());
-        Ok(format!("{}\n{}", script?, shell_prompt))
+        Ok([script, hook, shell_prompt].join("\n"))
     } else {
-        script
+        Ok([script, hook].join("\n"))
     }
 }
 
