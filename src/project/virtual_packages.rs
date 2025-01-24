@@ -6,8 +6,8 @@ use pixi_default_versions::{default_glibc_version, default_linux_version, defaul
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{
-    Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
-    VirtualPackageOverrides,
+    win::windows_version, Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx,
+    VirtualPackage, VirtualPackageOverrides,
 };
 use std::collections::HashMap;
 use thiserror::Error;
@@ -47,7 +47,9 @@ pub(crate) fn get_minimal_virtual_packages(
     }
 
     if platform.is_windows() {
-        virtual_packages.push(VirtualPackage::Win);
+        virtual_packages.push(VirtualPackage::Win(rattler_virtual_packages::Windows {
+            version: windows_version(),
+        }));
     }
 
     // Add platform specific packages
