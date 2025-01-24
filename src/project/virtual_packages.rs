@@ -2,12 +2,14 @@ use crate::project::errors::UnsupportedPlatformError;
 use crate::project::Environment;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_default_versions::{default_glibc_version, default_linux_version, default_mac_os_version};
+use pixi_default_versions::{
+    default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
+};
 use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{
-    win::windows_version, Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx,
-    VirtualPackage, VirtualPackageOverrides,
+    Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
+    VirtualPackageOverrides,
 };
 use std::collections::HashMap;
 use thiserror::Error;
@@ -47,8 +49,10 @@ pub(crate) fn get_minimal_virtual_packages(
     }
 
     if platform.is_windows() {
+        // todo: add windows to system requirements
+        let version = Some(default_windows_version());
         virtual_packages.push(VirtualPackage::Win(rattler_virtual_packages::Windows {
-            version: windows_version(),
+            version,
         }));
     }
 
