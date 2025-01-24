@@ -91,7 +91,7 @@ impl<'de> Deserialize<'de> for UniquePackageMap {
 
 struct PackageMap<'a>(&'a IndexMap<rattler_conda_types::PackageName, PixiSpec>);
 
-impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
+impl<'de> DeserializeSeed<'de> for PackageMap<'a> {
     type Value = PixiSpanned<rattler_conda_types::PackageName>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
