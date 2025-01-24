@@ -163,7 +163,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let download_url = format!(
         "{}/download/v{}/{}",
-        consts::RELEASES_URL, target_version, archive_name
+        consts::RELEASES_URL,
+        target_version,
+        archive_name
     );
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
