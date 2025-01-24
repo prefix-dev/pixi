@@ -141,11 +141,11 @@ fn packages_to_build_isolation<'a>(
     names: Option<&'a [PackageName]>,
     python_environment: &'a PythonEnvironment,
 ) -> uv_types::BuildIsolation<'a> {
-    return if let Some(package_names) = names {
+    if let Some(package_names) = names {
         uv_types::BuildIsolation::SharedPackage(python_environment, package_names)
     } else {
         uv_types::BuildIsolation::default()
-    };
+    }
 }
 
 /// Convert optional list of strings to package names
