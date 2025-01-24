@@ -54,9 +54,9 @@ fn default_archive_name() -> Option<String> {
     }
 }
 
-async fn latest_version(releases_url: &str) -> miette::Result<Version> {
+async fn latest_version() -> miette::Result<Version> {
     // Uses the public Github Releases /latest endpoint to get the latest tag from the URL
-    let url = format!("{}/latest", releases_url);
+    let url = format!("{}/latest", consts::RELEASES_URL);
 
     // Create a client with a redirect policy
     let no_redirect_client = Client::builder()
@@ -110,12 +110,10 @@ async fn latest_version(releases_url: &str) -> miette::Result<Version> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let releases_url = "https://github.com/prefix-dev/pixi/releases";
-
     // Get the target version, without 'v' prefix
     let target_version = match &args.version {
         Some(version) => version,
-        None => &latest_version(releases_url).await?,
+        None => &latest_version().await?,
     };
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
@@ -165,7 +163,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let download_url = format!(
         "{}/download/v{}/{}",
-        releases_url, target_version, archive_name
+        consts::RELEASES_URL, target_version, archive_name
     );
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
