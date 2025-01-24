@@ -107,7 +107,7 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
                    return 0
                fi
             fi"#;
-    let re = Regex::new(pattern.as_str()).unwrap();
+    let re = Regex::new(pattern.as_str()).expect("should be able to compile the regex");
     re.replace(
         script,
         replacement
@@ -133,7 +133,7 @@ else
 fi
 $2::task"#;
 
-    let re = Regex::new(pattern).unwrap();
+    let re = Regex::new(pattern).expect("should be able to compile the regex");
     re.replace(script, replacement.replace("BIN_NAME", bin_name))
 }
 
@@ -144,7 +144,7 @@ fn replace_fish_completion(script: &str) -> Cow<str> {
     let new_script = format!("{}{}\n", script, addition);
     let pattern = r#"-n "__fish_seen_subcommand_from run""#;
     let replacement = r#"-n "__fish_seen_subcommand_from run; or __fish_seen_subcommand_from r""#;
-    let re = Regex::new(pattern).unwrap();
+    let re = Regex::new(pattern).expect("should be able to compile the regex");
     let result = re.replace_all(&new_script, replacement);
     Cow::Owned(result.into_owned())
 }
@@ -171,7 +171,7 @@ fn replace_nushell_completion(script: &str) -> Cow<str> {
 
   export alias "BIN_NAME r" = BIN_NAME run"#;
 
-    let re = Regex::new(pattern.as_str()).unwrap();
+    let re = Regex::new(pattern.as_str()).expect("should be able to compile the regex");
     re.replace(script, replacement.replace("BIN_NAME", bin_name))
 }
 

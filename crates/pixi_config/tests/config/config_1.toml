@@ -8,3 +8,6 @@ concurrency.solves = 1
 endpoint-url = "https://my-s3-host"
 force-path-style = false
 region = "us-east-1"
+
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = ["whatever://config_1"]

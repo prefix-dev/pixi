@@ -193,7 +193,8 @@ fn build_env_yaml(
         }
 
         env_yaml.dependencies.push(MatchSpecOrSubSection::MatchSpec(
-            MatchSpec::from_str("pip", ParseStrictness::Lenient).unwrap(),
+            MatchSpec::from_str("pip", ParseStrictness::Lenient)
+                .expect("'pip' should be a valid name"),
         ));
 
         env_yaml

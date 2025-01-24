@@ -387,7 +387,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         s3 => config.s3_config,
                     },
                 )
-                .unwrap();
+                .expect("should be able to render the template");
             if let Err(e) = {
                 fs::OpenOptions::new()
                     .append(true)
@@ -443,7 +443,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         s3 => config.s3_config,
                     },
                 )
-                .unwrap();
+                .expect("should be able to render the template");
             save_manifest_file(&pyproject_manifest_path, rv)?;
 
             let src_dir = dir.join("src").join(pypi_package_name);
@@ -541,7 +541,7 @@ fn render_project(
             s3 => s3_config,
         },
     )
-    .unwrap()
+    .expect("should be able to render the template")
 }
 
 /// Save the rendered template to a file, and print a message to the user.
