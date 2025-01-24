@@ -8,7 +8,41 @@ use toml_span::{
 };
 use url::Url;
 
-use crate::pypi::pypi_options::{FindLinksUrlOrPath, PypiOptions};
+use crate::pypi::pypi_options::{FindLinksUrlOrPath, NoBuild, PypiOptions};
+
+impl<'de> toml_span::Deserialize<'de> for NoBuild {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        // It can either be 'all' or 'none' or an array of strings
+        let str_value = value.as_str();
+        if let Some(v) = str_value {
+            return match v {
+                "all" => Ok(NoBuild::All),
+                "none" => Ok(NoBuild::None),
+                _ => Err(DeserError::from(toml_span::Error {
+                    kind: ErrorKind::UnexpectedValue {
+                        expected: &["all", "none"],
+                        value: Some(v.to_string()),
+                    },
+                    span: value.span,
+                    line_info: None,
+                })),
+            };
+        }
+        // We assume it's an array of strings
+        if value.as_array().is_some() {
+            Ok(NoBuild::Packages(toml_span::Deserialize::deserialize(
+                value,
+            )?))
+        } else {
+            Err(expected(
+                r#"either "all", "none" or an array of packages e.g. ["foo", "bar"] "#,
+                value.take(),
+                value.span,
+            )
+            .into())
+        }
+    }
+}
 
 impl<'de> toml_span::Deserialize<'de> for PypiOptions {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -26,10 +60,7 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             .optional::<TomlEnum<_>>("index-strategy")
             .map(TomlEnum::into_inner);
 
-        let no_build = th
-            .optional::<TomlEnum<_>>("no-build")
-            .map(TomlEnum::into_inner)
-            .unwrap_or_default();
+        let no_build = th.optional::<NoBuild>("no-build").unwrap_or_default();
 
         th.finalize(None)?;
 
@@ -171,6 +202,16 @@ mod test {
         ]
         no-build-isolation = ["sigma"]
         index-strategy = "first-index"
+        no-build = "all"
+        "#;
+        let options = PypiOptions::from_toml_str(input).unwrap();
+        assert_debug_snapshot!(options);
+    }
+
+    #[test]
+    fn test_no_build_packages() {
+        let input = r#"
+        no-build = ["package1"]
         "#;
         let options = PypiOptions::from_toml_str(input).unwrap();
         assert_debug_snapshot!(options);
@@ -263,5 +304,35 @@ mod test {
           ╰────
         "###
         )
+    }
+
+    #[test]
+    fn test_wrong_build_option_str() {
+        let input = r#"no-build = "foo""#;
+        assert_snapshot!(format_parse_error(
+            input,
+            PypiOptions::from_toml_str(input).unwrap_err()
+        ), @r###"
+         × Expected one of 'all', 'none'
+          ╭─[pixi.toml:1:13]
+        1 │ no-build = "foo"
+          ·             ───
+          ╰────
+        "###)
+    }
+
+    #[test]
+    fn test_wrong_build_option_type() {
+        let input = r#"no-build = 3"#;
+        assert_snapshot!(format_parse_error(
+            input,
+            PypiOptions::from_toml_str(input).unwrap_err()
+        ), @r###"
+         × expected either "all", "none" or an array of packages e.g. ["foo", "bar"] , found integer
+          ╭─[pixi.toml:1:12]
+        1 │ no-build = 3
+          ·            ─
+          ╰────
+        "###)
     }
 }

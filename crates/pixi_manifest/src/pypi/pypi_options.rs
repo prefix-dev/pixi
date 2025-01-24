@@ -60,6 +60,8 @@ pub enum FindLinksUrlOrPath {
     strum::EnumString,
     strum::VariantNames,
 )]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub enum NoBuild {
     /// Build any sdist we come across
     #[default]
