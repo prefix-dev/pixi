@@ -59,7 +59,7 @@ fn to_pixi_spec_v1(
         }
         itertools::Either::Right(binary) => {
             let nameless = binary.try_into_nameless_match_spec(channel_config)?;
-            pbt::PackageSpecV1::Binary(pbt::BinaryPackageSpecV1 {
+            pbt::PackageSpecV1::Binary(Box::new(pbt::BinaryPackageSpecV1 {
                 version: nameless.version,
                 build: nameless.build,
                 build_number: nameless.build_number,
@@ -68,7 +68,7 @@ fn to_pixi_spec_v1(
                 subdir: nameless.subdir,
                 md5: nameless.md5.map(Into::into),
                 sha256: nameless.sha256.map(Into::into),
-            })
+            }))
         }
     };
     Ok(pbt_spec)

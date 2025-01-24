@@ -128,7 +128,7 @@ impl Display for SourceTreeHashMismatch {
 #[derive(Debug, Error, Diagnostic)]
 pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableMatchSpec(MatchSpec, String),
+    UnsatisfiableMatchSpec(Box<MatchSpec>, String),
 
     #[error("no package named exists '{0}' (required by '{1}')")]
     SourcePackageMissing(String, String),
@@ -1222,7 +1222,7 @@ fn find_matching_package(
                 None => {
                     // No records match the spec.
                     return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                        spec,
+                        Box::new(spec),
                         source.into_owned(),
                     )));
                 }
@@ -1239,7 +1239,7 @@ fn find_matching_package(
                     // The record does not match the spec, the lock-file is
                     // inconsistent.
                     return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                        spec,
+                        Box::new(spec),
                         source.into_owned(),
                     )));
                 }
@@ -1254,7 +1254,7 @@ fn find_matching_package(
                             // The record does not match the spec, the lock-file is
                             // inconsistent.
                             return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                                spec,
+                                Box::new(spec),
                                 source.into_owned(),
                             )));
                         }
@@ -1262,7 +1262,7 @@ fn find_matching_package(
                         // The record does not match the spec, the lock-file is
                         // inconsistent.
                         return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                            spec,
+                            Box::new(spec),
                             source.into_owned(),
                         )));
                     }
