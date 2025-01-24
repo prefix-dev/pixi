@@ -197,7 +197,8 @@ impl GlobalExecutable {
         match self {
             GlobalExecutable::Trampoline(trampoline) => trampoline.exposed_name.clone(),
             GlobalExecutable::Script(script) => {
-                ExposedName::from_str(&executable_from_path(script)).unwrap()
+                ExposedName::from_str(&executable_from_path(script))
+                    .expect("It shouldn't be possible to expose `pixi` as a script")
             }
         }
     }

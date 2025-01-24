@@ -177,7 +177,11 @@ impl ParsedManifest {
         match ParsedManifest::deserialize(&mut toml_value) {
             Ok(manifest) => Ok(manifest),
             Err(e) => {
-                let error = e.errors.into_iter().next().unwrap();
+                let error = e
+                    .errors
+                    .into_iter()
+                    .next()
+                    .expect("there should be at least one error");
                 if let Some(version) = version {
                     // Check if the version is supported.
                     match version.cmp(&GLOBAL_MANIFEST_VERSION) {
