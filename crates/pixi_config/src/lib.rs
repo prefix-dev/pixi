@@ -928,7 +928,13 @@ impl Config {
     /// The given config will have higher priority
     #[must_use]
     pub fn merge_config(self, mut other: Config) -> Self {
-        other.mirrors.extend(self.mirrors);
+        // Using iter into to avoid having to make self mutable
+        // .extend would need to happen on a mutable reference otherwise
+        let mirrors = self
+            .mirrors
+            .into_iter()
+            .chain(other.mirrors)
+            .collect::<HashMap<_, _>>();
         other.loaded_from.extend(self.loaded_from);
 
         Self {
@@ -942,7 +948,7 @@ impl Config {
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
-            mirrors: other.mirrors,
+            mirrors,
             loaded_from: other.loaded_from,
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,

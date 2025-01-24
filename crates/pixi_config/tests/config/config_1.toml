@@ -3,3 +3,6 @@ tls_no_verify = true
 
 # Hardcode as we don't want this to depend on the system in the tests
 concurrency.solves = 1
+
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = ["whatever://config_1"]

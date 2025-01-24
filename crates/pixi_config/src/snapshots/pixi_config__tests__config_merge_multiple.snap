@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_config/src/lib.rs
 expression: debug
+snapshot_kind: text
 ---
 Config {
     default_channels: [
@@ -21,7 +22,39 @@ Config {
     tls_no_verify: Some(
         false,
     ),
-    mirrors: {},
+    mirrors: {
+        Url {
+            scheme: "https",
+            cannot_be_a_base: false,
+            username: "",
+            password: None,
+            host: Some(
+                Domain(
+                    "conda.anaconda.org",
+                ),
+            ),
+            port: None,
+            path: "/conda-forge",
+            query: None,
+            fragment: None,
+        }: [
+            Url {
+                scheme: "whatever",
+                cannot_be_a_base: false,
+                username: "",
+                password: None,
+                host: Some(
+                    Domain(
+                        "config_2",
+                    ),
+                ),
+                port: None,
+                path: "",
+                query: None,
+                fragment: None,
+            },
+        ],
+    },
     pinning_strategy: None,
     loaded_from: [
         "path/config_2.toml",
