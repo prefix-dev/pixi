@@ -1056,11 +1056,11 @@ impl Project {
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
     fn repodata_gateway(&self) -> miette::Result<&Gateway> {
-        // todo: fix unwrap
-        Ok(self.repodata_gateway.get_or_init(|| {
-            self.config()
-                .gateway(self.authenticated_client().unwrap().clone())
-        }))
+        self.repodata_gateway.get_or_try_init(|| {
+            let client = self.authenticated_client()?.clone();
+            Ok(self.config()
+                .gateway(client))
+        })
     }
 }
 

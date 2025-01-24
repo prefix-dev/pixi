@@ -1,3 +1,5 @@
+#![feature(once_cell_try)]
+
 pub mod activation;
 pub mod cli;
 mod diff;
