@@ -4,7 +4,7 @@ use std::sync::Arc;
 use clap::Parser;
 use futures::TryStreamExt;
 use indicatif::HumanBytes;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use reqwest::StatusCode;
 
 use rattler_digest::{compute_file_digest, Sha256};
@@ -37,7 +37,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let filename = args
         .package_file
         .file_name()
-        .unwrap()
+        .wrap_err_with(|| {
+            miette::miette!("{} should have a file name", args.package_file.display())
+        })?
         .to_string_lossy()
         .to_string();
 
@@ -99,21 +101,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         StatusCode::UNAUTHORIZED => {
             return Err(UploadError::Unauthorized {
                 host: args.host.clone(),
-                source: response.error_for_status().unwrap_err(), // Capture reqwest error
+                source: response
+                    .error_for_status()
+                    .expect_err("capture reqwest error"),
             }
             .into());
         }
         StatusCode::INTERNAL_SERVER_ERROR => {
             return Err(UploadError::ServerError {
                 host: args.host.clone(),
-                source: response.error_for_status().unwrap_err(), // Capture reqwest error
+                source: response
+                    .error_for_status()
+                    .expect_err("capture reqwest error"),
             }
             .into());
         }
         StatusCode::CONFLICT => {
             return Err(UploadError::Conflict {
                 host: args.host.clone(),
-                source: response.error_for_status().unwrap_err(), // Capture reqwest error
+                source: response
+                    .error_for_status()
+                    .expect_err("capture reqwest error"),
             }
             .into());
         }
@@ -121,7 +129,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             return Err(UploadError::UnexpectedStatus {
                 host: args.host.clone(),
                 status,
-                source: response.error_for_status().unwrap_err(), // Capture reqwest error
+                source: response
+                    .error_for_status()
+                    .expect_err("capture reqwest error"),
             }
             .into());
         }

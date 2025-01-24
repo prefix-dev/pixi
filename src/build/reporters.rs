@@ -101,7 +101,7 @@ impl SourceCheckoutReporter {
     /// Similar to the default pixi_progress::default_progress_style, but with a spinner in front.
     pub fn spinner_style() -> indicatif::ProgressStyle {
         indicatif::ProgressStyle::with_template("  {spinner:.green} {prefix:30!} {wide_msg:.dim}")
-            .unwrap()
+            .expect("should be able to create a progress bar style")
     }
 }
 
@@ -126,7 +126,10 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
 
     fn on_checkout_complete(&self, url: &url::Url, rev: &str, index: usize) {
         let mut state = self.progress_state.lock();
-        let removed_pb = state.bars.remove(&index).unwrap();
+        let removed_pb = state
+            .bars
+            .remove(&index)
+            .expect("the progress bar needs to be inserted for this checkout");
 
         removed_pb.finish_with_message(format!("checkout complete {}@{}", url, rev));
         removed_pb.finish_and_clear();

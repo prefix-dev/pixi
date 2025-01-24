@@ -1363,7 +1363,8 @@ impl<'p> UpdateContext<'p> {
         let top_level_progress =
             global_multi_progress().add(ProgressBar::new(pending_futures.len() as u64));
         top_level_progress.set_style(indicatif::ProgressStyle::default_bar()
-            .template("{spinner:.cyan} {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}").unwrap()
+            .template("{spinner:.cyan} {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}")
+            .expect("should be able to set style")
             .progress_chars("━━╾─"));
         top_level_progress.enable_steady_tick(Duration::from_millis(50));
         top_level_progress.set_prefix("updating lock-file");

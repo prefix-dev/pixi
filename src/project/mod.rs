@@ -297,7 +297,7 @@ impl Project {
                 let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
 
                 if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
-                    if env_path.as_str() != discover_path.to_str().unwrap() {
+                    if Some(env_path.as_str()) != discover_path.to_str() {
                         tracing::warn!(
                             "Used local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
                             discover_path.to_string_lossy(),
