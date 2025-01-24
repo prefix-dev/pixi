@@ -927,8 +927,8 @@ impl Config {
     /// Merge the given config into the current one.
     /// The given config will have higher priority
     #[must_use]
-    pub fn merge_config(self, mut other: Config) -> Self {
-        other.mirrors.extend(self.mirrors);
+    pub fn merge_config(mut self, mut other: Config) -> Self {
+        self.mirrors.extend(other.mirrors);
         other.loaded_from.extend(self.loaded_from);
 
         Self {
@@ -942,7 +942,8 @@ impl Config {
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
-            mirrors: other.mirrors,
+            // Extended self.mirrors with other.mirrors
+            mirrors: self.mirrors,
             loaded_from: other.loaded_from,
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,

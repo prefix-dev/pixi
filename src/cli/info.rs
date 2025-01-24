@@ -148,7 +148,8 @@ impl Display for EnvironmentInfo {
         }
 
         if !self.system_requirements.is_empty() {
-            let serialized = to_string(&self.system_requirements).unwrap();
+            let serialized = to_string(&self.system_requirements)
+                .expect("it should always be possible to convert system requirements to a string");
             let indented = serialized
                 .lines()
                 .enumerate()

@@ -10,6 +10,7 @@ use pixi_spec::GitReference as PixiReference;
 
 use pixi_git::git::GitReference as PixiGitReference;
 
+use pep440_rs::VersionSpecifiers;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
@@ -262,4 +263,18 @@ pub fn into_parsed_git_url(
     );
 
     Ok(parsed_git_url)
+}
+
+/// uv_pep440 and pep440 are very similar but not the same, this can convert to uv_pep440::VersionSpecifiers
+pub fn as_uv_specifiers(
+    specifiers: &VersionSpecifiers,
+) -> Result<uv_pep440::VersionSpecifiers, uv_pep440::VersionSpecifiersParseError> {
+    uv_pep440::VersionSpecifiers::from_str(specifiers.to_string().as_str())
+}
+
+/// uv_pep440 and pep440 are very similar but not the same, this can convert to uv_pep440::Version
+pub fn as_uv_version(
+    version: &pep440_rs::Version,
+) -> Result<uv_pep440::Version, uv_pep440::VersionParseError> {
+    uv_pep440::Version::from_str(version.to_string().as_str())
 }

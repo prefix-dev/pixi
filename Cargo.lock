@@ -3630,6 +3630,7 @@ dependencies = [
  "console",
  "crossbeam-channel",
  "csv",
+ "ctrlc",
  "deno_task_shell",
  "dialoguer",
  "dirs",

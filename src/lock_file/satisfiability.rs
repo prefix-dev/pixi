@@ -7,6 +7,10 @@ use std::{
     str::FromStr,
 };
 
+use super::{
+    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
+};
+use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -16,8 +20,8 @@ use pixi_manifest::FeaturesExt;
 use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{
-    as_uv_req, into_pixi_reference, to_normalize, to_uv_marker_tree, to_uv_version_specifiers,
-    AsPep508Error,
+    as_uv_req, as_uv_specifiers, as_uv_version, into_pixi_reference, to_normalize,
+    to_uv_marker_tree, to_uv_version_specifiers, AsPep508Error,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
@@ -35,11 +39,7 @@ use uv_git::GitReference;
 use uv_pypi_types::{
     ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
-
-use super::{
-    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
-};
-use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
+use uv_resolver::RequiresPython;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -177,7 +177,7 @@ pub enum PlatformUnsat {
     )]
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
-    #[error("{0} requires python version {1} but the python interpreter in the lock-file has version {2}")]
+    #[error("'{0}' requires python version {1} but the python interpreter in the lock-file has version {2}")]
     PythonVersionMismatch(
         pep508_rs::PackageName,
         VersionSpecifiers,
@@ -346,7 +346,9 @@ impl IntoUvRequirement for pep508_rs::Requirement {
                                 verbatim: uv_pep508::VerbatimUrl::from_url(
                                     verbatim_url.raw().clone(),
                                 )
-                                .with_given(verbatim_url.given().unwrap()),
+                                .with_given(
+                                    verbatim_url.given().expect("should have given string"),
+                                ),
                             }
                             // Can only be an archive
                         }
@@ -1059,15 +1061,25 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     }
 
                     // Ensure that the record matches the currently selected interpreter.
-                    if let Some(python_version) = &record.0.requires_python {
+                    if let Some(requires_python) = &record.0.requires_python {
+                        let uv_specifier_requires_python = as_uv_specifiers(requires_python)
+                            .expect("pep440 conversion should never fail");
+
                         let marker_version = pep440_rs::Version::from_str(
                             &marker_environment.python_full_version().version.to_string(),
                         )
                         .expect("cannot parse version");
-                        if !python_version.contains(&marker_version) {
+                        let uv_maker_version = as_uv_version(&marker_version)
+                            .expect("cannot convert python marker version to uv_pep440");
+
+                        let marker_requires_python =
+                            RequiresPython::greater_than_equal_version(&uv_maker_version);
+                        // Use the function of RequiresPython object as it implements the lower bound logic
+                        // Related issue https://github.com/astral-sh/uv/issues/4022
+                        if !marker_requires_python.is_contained_by(&uv_specifier_requires_python) {
                             return Err(Box::new(PlatformUnsat::PythonVersionMismatch(
                                 record.0.name.clone(),
-                                python_version.clone(),
+                                requires_python.clone(),
                                 marker_version.into(),
                             )));
                         }
@@ -1420,7 +1432,7 @@ mod tests {
 
     use insta::Settings;
     use miette::{IntoDiagnostic, NarratableReportHandler};
-    use pep440_rs::Version;
+    use pep440_rs::{Operator, Version};
     use rattler_lock::LockFile;
     use rstest::rstest;
 
@@ -1627,5 +1639,20 @@ mod tests {
 
         // This should satisfy:
         pypi_satifisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    // Validate uv documentation to avoid breaking change in pixi
+    #[test]
+    fn test_version_specifiers_logic() {
+        let version = Version::from_str("1.19").unwrap();
+        let version_specifiers = VersionSpecifiers::from_str("<2.0, >=1.16").unwrap();
+        assert!(version_specifiers.contains(&version));
+        // VersionSpecifiers derefs into a list of specifiers
+        assert_eq!(
+            version_specifiers
+                .iter()
+                .position(|specifier| *specifier.operator() == Operator::LessThan),
+            Some(1)
+        );
     }
 }

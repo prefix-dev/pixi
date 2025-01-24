@@ -44,7 +44,7 @@ impl ProgressReporter {
     fn new(source: &str) -> Self {
         let style = indicatif::ProgressStyle::default_bar()
             .template("{spinner:.dim} {elapsed} {prefix} {wide_msg:.dim}")
-            .unwrap();
+            .expect("should be able to create a progress bar style");
         let pb = ProgressBar::new(0);
         pb.set_style(style);
         let progress = pixi_progress::global_multi_progress().add(pb);
