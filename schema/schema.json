@@ -1168,6 +1168,29 @@
             "https://pypi.org/simple"
           ]
         },
+        "no-build": {
+          "title": "No-Build",
+          "description": "Packages that should NOT be built",
+          "anyOf": [
+            {
+              "const": "all"
+            },
+            {
+              "const": "none"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ],
+          "examples": [
+            "none",
+            "all"
+          ]
+        },
         "no-build-isolation": {
           "title": "No-Build-Isolation",
           "description": "Packages that should NOT be isolated during the build process",

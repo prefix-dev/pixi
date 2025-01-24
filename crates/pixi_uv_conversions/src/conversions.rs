@@ -10,6 +10,7 @@ use pixi_spec::GitReference as PixiReference;
 
 use pixi_git::git::GitReference as PixiGitReference;
 
+use uv_configuration::BuildOptions;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
@@ -20,6 +21,27 @@ pub enum ConvertFlatIndexLocationError {
     VerbatimUrlError(#[source] VerbatimUrlError, PathBuf),
     #[error("base path is not absolute: {path}", path = .0.display())]
     NotAbsolute(PathBuf),
+}
+
+/// Convert PyPI options to build options
+pub fn no_build_to_build_options(
+    no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
+) -> Result<BuildOptions, InvalidNameError> {
+    let uv_no_build = match no_build {
+        pixi_manifest::pypi::pypi_options::NoBuild::None => uv_configuration::NoBuild::None,
+        pixi_manifest::pypi::pypi_options::NoBuild::All => uv_configuration::NoBuild::All,
+        pixi_manifest::pypi::pypi_options::NoBuild::Packages(ref vec) => {
+            uv_configuration::NoBuild::Packages(
+                vec.iter()
+                    .map(|s| PackageName::new(s.clone()))
+                    .collect::<Result<Vec<_>, _>>()?,
+            )
+        }
+    };
+    Ok(BuildOptions::new(
+        uv_configuration::NoBinary::default(),
+        uv_no_build,
+    ))
 }
 
 /// Convert the subset of pypi-options to index locations

@@ -512,6 +512,7 @@ pub async fn update_prefix_pypi(
     lock_file_dir: &Path,
     platform: Platform,
     non_isolated_packages: Option<Vec<String>>,
+    no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
 ) -> miette::Result<()> {
     // If we have changed interpreter, we need to uninstall all site-packages from
     // the old interpreter We need to do this before the pypi prefix update,
@@ -577,6 +578,7 @@ pub async fn update_prefix_pypi(
                 environment_variables,
                 platform,
                 non_isolated_packages,
+                no_build,
             )
         },
     )

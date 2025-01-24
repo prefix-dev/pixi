@@ -281,6 +281,7 @@ The options that can be defined are:
 - `extra-index-urls`: adds an extra index url.
 - `find-links`: similar to `--find-links` option in `pip`.
 - `no-build-isolation`: disables build isolation, can only be set per package.
+- `no-build`: don't build source distributions.
 - `index-strategy`: allows for specifying the index strategy to use.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
@@ -334,6 +335,20 @@ detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev =
 
 !!! tip "Conda dependencies define the build environment"
     To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
+
+### No Build
+When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error.
+
+Can be either set per package or globally.
+```toml
+[pypi-options]
+no-build = "all" # default is "none"
+```
+or:
+```toml
+[pypi-options]
+no-build = ["package1", "package2"]
+```
 
 ### Index Strategy
 

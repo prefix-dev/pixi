@@ -17,8 +17,9 @@ use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequ
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec, isolated_names_to_packages,
-    names_to_build_isolation, pypi_options_to_index_locations, to_index_strategy, to_normalize,
-    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
+    names_to_build_isolation, no_build_to_build_options, pypi_options_to_index_locations,
+    to_index_strategy, to_normalize, to_requirements, to_uv_normalize, to_uv_version,
+    to_version_specifiers, ConversionError,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -293,6 +294,7 @@ pub async fn resolve_pypi(
             .connectivity(Connectivity::Online)
             .build(),
     );
+    let build_options = no_build_to_build_options(&pypi_options.no_build).into_diagnostic()?;
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
@@ -306,12 +308,7 @@ pub async fn resolve_pypi(
             .await
             .into_diagnostic()
             .wrap_err("failed to query find-links locations")?;
-        FlatIndex::from_entries(
-            entries,
-            Some(&tags),
-            &context.hash_strategy,
-            &context.build_options,
-        )
+        FlatIndex::from_entries(entries, Some(&tags), &context.hash_strategy, &build_options)
     };
 
     // Create a shared in-memory index.
@@ -359,7 +356,7 @@ pub async fn resolve_pypi(
         &config_settings,
         build_isolation,
         LinkMode::default(),
-        &context.build_options,
+        &build_options,
         &context.hash_strategy,
         None,
         LowerBound::default(),
@@ -466,7 +463,7 @@ pub async fn resolve_pypi(
         AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
         &context.hash_strategy,
         options.exclude_newer,
-        &context.build_options,
+        &build_options,
         &context.capabilities,
     );
     let package_requests = Rc::new(RefCell::new(Default::default()));
