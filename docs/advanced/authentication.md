@@ -22,10 +22,11 @@ Options:
       --s3-access-key-id <S3_ACCESS_KEY_ID>          The S3 access key ID
       --s3-secret-access-key <S3_SECRET_ACCESS_KEY>  The S3 secret access key
       --s3-session-token <S3_SESSION_TOKEN>          The S3 session token
-access key id: todo
-  -v, --verbose...                 More output per occurrence
-  -q, --quiet...                   Less output per occurrence
-  -h, --help                       Print help
+  -v, --verbose...                                   Increase logging verbosity
+  -q, --quiet...                                     Decrease logging verbosity
+      --color <COLOR>                                Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]
+      --no-progress                                  Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
+  -h, --help                                         Print help
 ```
 
 The different options are "token", "conda-token" and "username + password".
