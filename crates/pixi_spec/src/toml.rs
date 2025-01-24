@@ -286,7 +286,7 @@ impl TomlSpec {
                     return Err(SpecError::MissingDetailedIdentifier);
                 }
 
-                PixiSpec::DetailedVersion(DetailedSpec {
+                PixiSpec::DetailedVersion(Box::new(DetailedSpec {
                     version: self.version,
                     build: self.build,
                     build_number: self.build_number,
@@ -295,7 +295,7 @@ impl TomlSpec {
                     subdir: self.subdir,
                     md5: self.md5,
                     sha256: self.sha256,
-                })
+                }))
             }
             (_, _, _) => return Err(SpecError::MultipleIdentifiers),
         };
@@ -344,7 +344,7 @@ impl TomlSpec {
                     return Err(SpecError::MissingDetailedIdentifier);
                 }
 
-                BinarySpec::DetailedVersion(DetailedSpec {
+                BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version: self.version,
                     build: self.build,
                     build_number: self.build_number,
@@ -353,7 +353,7 @@ impl TomlSpec {
                     subdir: self.subdir,
                     md5: self.md5,
                     sha256: self.sha256,
-                })
+                }))
             }
             (_, _, _) => return Err(SpecError::MultipleIdentifiers),
         };
