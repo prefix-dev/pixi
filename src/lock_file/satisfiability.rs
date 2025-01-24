@@ -346,7 +346,9 @@ impl IntoUvRequirement for pep508_rs::Requirement {
                                 verbatim: uv_pep508::VerbatimUrl::from_url(
                                     verbatim_url.raw().clone(),
                                 )
-                                .with_given(verbatim_url.given().unwrap()),
+                                .with_given(
+                                    verbatim_url.given().expect("should have given string"),
+                                ),
                             }
                             // Can only be an archive
                         }
