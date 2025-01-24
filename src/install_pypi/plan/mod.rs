@@ -534,11 +534,11 @@ fn need_reinstall(
                 ));
             }
         }
-    } else if locked.requires_python.is_some() {
+    } else if let Some(requires_python) = &locked.requires_python {
         return Ok(ValidateCurrentInstall::Reinstall(
             NeedReinstall::RequiredPythonChanged {
                 installed_python_require: "None".to_string(),
-                locked_python_version: locked.clone().requires_python.unwrap().to_string(),
+                locked_python_version: requires_python.to_string(),
             },
         ));
     }

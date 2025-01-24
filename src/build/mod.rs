@@ -1,20 +1,11 @@
 mod cache;
 mod reporters;
 
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    hash::{Hash, Hasher},
-    ops::Not,
-    path::{Component, Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
-};
-
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
+use miette::IntoDiagnostic;
 use pixi_build_frontend::{BackendOverride, SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
@@ -39,6 +30,15 @@ use rattler_conda_types::{
 use rattler_digest::Sha256;
 use reporters::SourceReporter;
 pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    hash::{Hash, Hasher},
+    ops::Not,
+    path::{Component, Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -73,8 +73,11 @@ pub struct BuildContext {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum BuildError {
-    #[error("failed to resolve source path {}", &.0)]
-    ResolveSourcePath(Utf8TypedPathBuf, #[source] std::io::Error),
+    #[error("failed to resolve path source {}", &.0)]
+    ResolvePathSource(Utf8TypedPathBuf, #[source] std::io::Error),
+
+    #[error("failed to resolve git source {}", &.0)]
+    ResolveGitSource(Url, #[diagnostic_source] miette::Report),
 
     #[error("error calculating sha for {}", &.0.display())]
     CalculateSha(PathBuf, #[source] std::io::Error),
@@ -437,7 +440,7 @@ impl BuildContext {
             SourceSpec::Path(path) => {
                 let source_path = self
                     .resolve_path(path.path.to_path())
-                    .map_err(|err| BuildError::ResolveSourcePath(path.path.clone(), err))?;
+                    .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err))?;
                 Ok(SourceCheckout {
                     path: source_path,
                     pinned: PinnedPathSpec {
@@ -469,7 +472,9 @@ impl BuildContext {
                         source_reporter.map(|sr| sr.as_git_reporter()),
                     )
                     .await
-                    .unwrap();
+                    .map_err(|err| {
+                        BuildError::ResolveGitSource(pinned_git_spec.git.clone(), err)
+                    })?;
                 let path = if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
                     fetched.into_path().join(subdir)
                 } else {
@@ -479,7 +484,7 @@ impl BuildContext {
             }
             PinnedSourceSpec::Path(path) => self
                 .resolve_path(path.path.to_path())
-                .map_err(|err| BuildError::ResolveSourcePath(path.path.clone(), err)),
+                .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err)),
         }
     }
 

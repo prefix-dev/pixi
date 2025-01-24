@@ -468,7 +468,7 @@ pub async fn update_python_distributions(
             .with_reporter(UvReporter::new(options))
             .install(all_dists.clone())
             .await
-            .unwrap();
+            .expect("should be able to install all distributions");
 
         let s = if all_dists.len() == 1 { "" } else { "s" };
         tracing::info!(
