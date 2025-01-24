@@ -53,6 +53,7 @@ pub enum SpecConversionError {
 /// This type can represent both source and binary packages. Use the
 /// [`Self::try_into_nameless_match_spec`] method to convert this type into a
 /// type that only represents binary packages.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Hash, ::serde::Serialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum PixiSpec {
@@ -396,6 +397,7 @@ impl From<PixiSpec> for toml_edit::Value {
 ///
 /// This type only represents binary packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum BinarySpec {
     /// The spec is represented solely by a version string. The package should
