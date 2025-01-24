@@ -572,15 +572,15 @@ impl Project {
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
+        let authenticated_client = self.authenticated_client()?.clone();
         let result = await_in_progress(
             format!(
                 "Creating virtual environment for {}",
                 env_name.fancy_display()
             ),
-            // todo: unwrap
             |pb| {
                 Installer::new()
-                    .with_download_client(self.authenticated_client().unwrap().clone())
+                    .with_download_client(authenticated_client)
                     .with_execute_link_scripts(false)
                     .with_package_cache(package_cache)
                     .with_target_platform(platform)
