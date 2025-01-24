@@ -20,12 +20,6 @@ pub struct Args {
     /// The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
     #[clap(long)]
     version: Option<Version>,
-
-    /// The URL where to find Pixi releases. Must provide a Github Releases-like HTTP API.
-    /// - Downloads must be available at ${base-url}/download/v{X.Y.Z}/pixi-unknown-linux-musl
-    /// - ${base-url}/latest must either redirect to ${base-url}/v{X.Y.Z} or serve the bytes for v{X.Y.Z}
-    #[clap(long, default_value = "https://github.com/prefix-dev/pixi/releases/")]
-    base_url: Option<Url>,
 }
 
 fn user_agent() -> String {
@@ -60,11 +54,10 @@ fn default_archive_name() -> Option<String> {
     }
 }
 
-async fn latest_version(base_url: Url) -> miette::Result<Version> {
+async fn latest_version(releases_url: &str) -> miette::Result<Version> {
     // Uses the public Github Releases /latest endpoint to get the latest tag from the URL
-    // If base_url doesn't offer redirects (e.g. static site), then /latest
-    // must be a file whose contents are the latest tag name.
-    let url = base_url.join("latest").into_diagnostic()?;
+    let url = format!("{}/latest", releases_url);
+
     // Create a client with a redirect policy
     let no_redirect_client = Client::builder()
         .redirect(Policy::none()) // Prevent automatic redirects
@@ -72,7 +65,7 @@ async fn latest_version(base_url: Url) -> miette::Result<Version> {
         .into_diagnostic()?;
 
     let version: String = match no_redirect_client
-        .head(url.clone())
+        .head(&url)
         .header("User-Agent", user_agent())
         .send()
         .await
@@ -96,27 +89,19 @@ async fn latest_version(base_url: Url) -> miette::Result<Version> {
                         url
                     ),
                 }
-            } else if response.status().is_success() {
-                // No redirection, but response is ok, check contents
-                let client = Client::new();
-                match client
-                    .get(url.clone())
-                    .header("User-Agent", user_agent())
-                    .send()
-                    .await
-                {
-                    Ok(res) => res.text().await.into_diagnostic()?,
-                    Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
-                }
             } else {
-                miette::bail!("URL: {}. Request failed: {}.", url, response.status())
+                miette::bail!(
+                    "URL: {}. Request failed or did not redirect: {}.",
+                    url,
+                    response.status()
+                )
             }
         }
         Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
     };
     if version == "releases" {
         // /latest redirect took us back to /releases instead of /vX.Y.Z
-        miette::bail!("URL '{}' does not seem to contain any releases.", base_url)
+        miette::bail!("URL '{}' does not seem to contain any releases.", url)
     } else if !version.starts_with("v") {
         miette::bail!("Tag name '{}' must start with v.", version)
     } else {
@@ -125,17 +110,12 @@ async fn latest_version(base_url: Url) -> miette::Result<Version> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut base_url = args
-        .base_url
-        .ok_or_else(|| miette::miette!("Bad value for --base-url"))?;
-    if !base_url.path().ends_with("/") {
-        base_url.set_path(format!("{}/", base_url.path()).as_str())
-    }
+    let releases_url = "https://github.com/prefix-dev/pixi/releases";
 
-    // Get the target version
+    // Get the target version, without 'v' prefix
     let target_version = match &args.version {
         Some(version) => version,
-        None => &latest_version(base_url.clone()).await?,
+        None => &latest_version(releases_url).await?,
     };
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
@@ -183,15 +163,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let archive_name = default_archive_name()
         .expect("Could not find the default archive name for the current platform");
 
-    let url = base_url
-        .join(format!("download/v{}/{}", target_version, archive_name).as_str())
-        .into_diagnostic()?;
+    let download_url = format!(
+        "{}/download/v{}/{}",
+        releases_url, target_version, archive_name
+    );
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
 
     let client = Client::new();
     let mut res = client
-        .get(url.clone())
+        .get(&download_url)
         .header("User-Agent", user_agent())
         .send()
         .await
@@ -200,7 +181,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if res.status() != reqwest::StatusCode::OK {
         return Err(miette::miette!(format!(
             "URL {} returned {}",
-            url,
+            download_url,
             res.status()
         )));
     } else {
