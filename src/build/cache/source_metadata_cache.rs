@@ -41,7 +41,6 @@ pub enum SourceMetadataError {
 /// the metadata of a source checkout.
 pub struct SourceMetadataInput {
     // TODO: I think this should also include the build backend used! Maybe?
-
     /// The URL of the source.
     pub channel_urls: Vec<Url>,
 
