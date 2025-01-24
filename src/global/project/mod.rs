@@ -1058,8 +1058,7 @@ impl Repodata for Project {
     fn repodata_gateway(&self) -> miette::Result<&Gateway> {
         self.repodata_gateway.get_or_try_init(|| {
             let client = self.authenticated_client()?.clone();
-            Ok(self.config()
-                .gateway(client))
+            Ok(self.config().gateway(client))
         })
     }
 }
