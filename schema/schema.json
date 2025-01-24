@@ -1284,7 +1284,7 @@
           "type": "string",
           "minLength": 1,
           "examples": [
-            "https://s3.eu-cental-1.amazonaws.com"
+            "https://s3.eu-central-1.amazonaws.com"
           ]
         },
         "force-path-style": {

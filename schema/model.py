@@ -513,7 +513,7 @@ class S3Options(StrictBaseModel):
 
     endpoint_url: NonEmptyStr = Field(
         description="The endpoint URL to use for the S3 client",
-        examples=["https://s3.eu-cental-1.amazonaws.com"],
+        examples=["https://s3.eu-central-1.amazonaws.com"],
     )
     region: NonEmptyStr = Field(
         description="The region to use for the S3 client",
