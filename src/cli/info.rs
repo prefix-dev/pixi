@@ -453,17 +453,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|p| p.config().clone())
         .unwrap_or_else(pixi_config::Config::load_global);
 
-    // todo: unwrap
-    let auth_file = config
-        .authentication_override_file()
-        .map(|x| x.to_owned())
-        .unwrap_or_else(|| {
-            authentication_storage::backends::file::FileStorage::new()
-                .into_diagnostic()
-                .unwrap()
-                .path
-                .clone()
-        });
+    let auth_file = config.authentication_override_file().map(|x| x.to_owned());
+    let auth_file = match auth_file {
+        Some(auth_file) => auth_file,
+        None => authentication_storage::backends::file::FileStorage::new()
+            .into_diagnostic()?
+            .path
+            .clone(),
+    };
 
     let info = Info {
         platform: Platform::current().to_string(),
