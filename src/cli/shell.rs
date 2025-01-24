@@ -271,14 +271,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::info!("Starting shell: {:?}", interactive_shell);
 
     let prompt_hook = if project.config().change_ps1() {
-        let prompt_name = prompt::get_prompt_name(project.name(), environment.name());
-        format!(
-            "{}\n{}",
-            prompt::get_prompt_for_shell(&interactive_shell, prompt_name.as_str()),
-            prompt::get_hook_for_shell(&interactive_shell),
-        )
+        let prompt_name = prompt::prompt_name(project.name(), environment.name());
+        [
+            prompt::shell_prompt(&interactive_shell, prompt_name.as_str()),
+            prompt::shell_hook(&interactive_shell)
+                .unwrap_or_default()
+                .to_owned(),
+        ]
+        .join("\n")
     } else {
-        "".to_string()
+        String::new()
     };
 
     #[cfg(target_family = "windows")]
