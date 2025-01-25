@@ -377,7 +377,7 @@ pub struct LockFileJsonDiff {
 }
 
 impl LockFileJsonDiff {
-    pub fn new(project: &Project, value: LockFileDiff) -> Self {
+    pub fn new(project: Option<&Project>, value: LockFileDiff) -> Self {
         let mut environment = IndexMap::new();
 
         for (environment_name, environment_diff) in value.environment {
@@ -385,13 +385,18 @@ impl LockFileJsonDiff {
 
             for (platform, packages_diff) in environment_diff {
                 let conda_dependencies = project
-                    .environment(environment_name.as_str())
-                    .map(|env| env.dependencies(pixi_manifest::SpecType::Run, Some(platform)))
+                    .and_then(|p| {
+                        p.environment(environment_name.as_str()).map(|env| {
+                            env.dependencies(pixi_manifest::SpecType::Run, Some(platform))
+                        })
+                    })
                     .unwrap_or_default();
 
                 let pypi_dependencies = project
-                    .environment(environment_name.as_str())
-                    .map(|env| env.pypi_dependencies(Some(platform)))
+                    .and_then(|p| {
+                        p.environment(environment_name.as_str())
+                            .map(|env| env.pypi_dependencies(Some(platform)))
+                    })
                     .unwrap_or_default();
 
                 let add_diffs = packages_diff.added.into_iter().map(|new| match new {
