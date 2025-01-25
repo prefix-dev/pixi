@@ -4,3 +4,6 @@ tls_no_verify = false
 [repodata_config]
 disable_jlap = true
 disable_zstd = true
+
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = ["whatever://config_2"]

@@ -197,12 +197,11 @@ pub async fn update_python_distributions(
         remote,
         reinstalls,
         extraneous,
-    } = InstallPlanner::new(
-        uv_context.cache.clone(),
-        venv.interpreter().python_version(),
-        lock_file_dir,
-    )
-    .plan(&site_packages, registry_index, &required_map)?;
+    } = InstallPlanner::new(uv_context.cache.clone(), lock_file_dir).plan(
+        &site_packages,
+        registry_index,
+        &required_map,
+    )?;
 
     // Determine the currently installed conda packages.
     let installed_packages = prefix.find_installed_packages().with_context(|| {
@@ -471,7 +470,7 @@ pub async fn update_python_distributions(
             .with_reporter(UvReporter::new(options))
             .install(all_dists.clone())
             .await
-            .unwrap();
+            .expect("should be able to install all distributions");
 
         let s = if all_dists.len() == 1 { "" } else { "s" };
         tracing::info!(

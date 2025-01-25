@@ -398,14 +398,18 @@ impl LockFileJsonDiff {
                     LockedPackage::Conda(pkg) => JsonPackageDiff {
                         name: pkg.record().name.as_normalized().to_string(),
                         before: None,
-                        after: Some(serde_json::to_value(&pkg).unwrap()),
+                        after: Some(
+                            serde_json::to_value(&pkg).expect("should be able to serialize"),
+                        ),
                         ty: JsonPackageType::Conda,
                         explicit: conda_dependencies.contains_key(&pkg.record().name),
                     },
                     LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
                         name: pkg.name.as_dist_info_name().into_owned(),
                         before: None,
-                        after: Some(serde_json::to_value(&pkg).unwrap()),
+                        after: Some(
+                            serde_json::to_value(&pkg).expect("should be able to serialize"),
+                        ),
                         ty: JsonPackageType::Pypi,
                         explicit: pypi_dependencies.contains_key(&pkg.name),
                     },
@@ -414,7 +418,9 @@ impl LockFileJsonDiff {
                 let removed_diffs = packages_diff.removed.into_iter().map(|old| match old {
                     LockedPackage::Conda(pkg) => JsonPackageDiff {
                         name: pkg.record().name.as_normalized().to_string(),
-                        before: Some(serde_json::to_value(&pkg).unwrap()),
+                        before: Some(
+                            serde_json::to_value(&pkg).expect("should be able to serialize"),
+                        ),
                         after: None,
                         ty: JsonPackageType::Conda,
                         explicit: conda_dependencies.contains_key(&pkg.record().name),
@@ -422,7 +428,9 @@ impl LockFileJsonDiff {
 
                     LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
                         name: pkg.name.as_dist_info_name().into_owned(),
-                        before: Some(serde_json::to_value(&pkg).unwrap()),
+                        before: Some(
+                            serde_json::to_value(&pkg).expect("should be able to serialize"),
+                        ),
                         after: None,
                         ty: JsonPackageType::Pypi,
                         explicit: pypi_dependencies.contains_key(&pkg.name),
@@ -432,8 +440,8 @@ impl LockFileJsonDiff {
                 let changed_diffs = packages_diff.changed.into_iter().map(|(old, new)| match (old, new) {
                     (LockedPackage::Conda(old), LockedPackage::Conda(new)) =>
                         {
-                            let before = serde_json::to_value(&old).unwrap();
-                            let after = serde_json::to_value(&new).unwrap();
+                            let before = serde_json::to_value(&old).expect("should be able to serialize");
+                            let after = serde_json::to_value(&new).expect("should be able to serialize");
                             let (before, after) = compute_json_diff(before, after);
                             JsonPackageDiff {
                                 name: old.record().name.as_normalized().to_string(),
@@ -444,8 +452,8 @@ impl LockFileJsonDiff {
                             }
                         }
                     (LockedPackage::Pypi(old, _), LockedPackage::Pypi(new, _)) => {
-                        let before = serde_json::to_value(&old).unwrap();
-                        let after = serde_json::to_value(&new).unwrap();
+                        let before = serde_json::to_value(&old).expect("should be able to serialize");
+                        let after = serde_json::to_value(&new).expect("should be able to serialize");
                         let (before, after) = compute_json_diff(before, after);
                         JsonPackageDiff {
                             name: old.name.as_dist_info_name().into_owned(),

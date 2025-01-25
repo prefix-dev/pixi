@@ -128,7 +128,11 @@ pub fn convert_to_dist(
             // We consider it to be a registry url
             // Extract last component from registry url
             // should be something like `package-0.1.0-py3-none-any.whl`
-            let filename_raw = url.path_segments().unwrap().last().unwrap();
+            let filename_raw = url
+                .path_segments()
+                .expect("url should have path segments")
+                .last()
+                .expect("url should have at least one path segment");
 
             // Decode the filename to avoid issues with the HTTP coding like `%2B` to `+`
             let filename_decoded =
