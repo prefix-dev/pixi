@@ -8,7 +8,7 @@ mod global;
 mod install_pypi;
 pub mod lock_file;
 mod prefix;
-mod project;
+pub mod project;
 mod prompt;
 pub(crate) mod repodata;
 pub mod task;
