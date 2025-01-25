@@ -2,7 +2,7 @@
 
 pub mod activation;
 pub mod cli;
-mod diff;
+pub mod diff;
 pub mod environment;
 mod global;
 mod install_pypi;
