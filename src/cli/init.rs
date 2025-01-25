@@ -337,7 +337,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         environments,
                     },
                 )
-                .unwrap();
+                .expect("should be able to render the template");
             if let Err(e) = {
                 fs::OpenOptions::new()
                     .append(true)
@@ -392,7 +392,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         extra_index_urls => &extra_index_urls,
                     },
                 )
-                .unwrap();
+                .expect("should be able to render the template");
             save_manifest_file(&pyproject_manifest_path, rv)?;
 
             let src_dir = dir.join("src").join(pypi_package_name);
@@ -487,7 +487,7 @@ fn render_project(
             extra_index_urls,
         },
     )
-    .unwrap()
+    .expect("should be able to render the template")
 }
 
 /// Save the rendered template to a file, and print a message to the user.

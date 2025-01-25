@@ -19,7 +19,10 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     eprintln!(
         "{}Updated project version to '{}'.",
         console::style(console::Emoji("✔ ", "")).green(),
-        project.version().as_ref().unwrap()
+        project
+            .version()
+            .as_ref()
+            .expect("we just set the version, so it should be there")
     );
 
     Ok(())
