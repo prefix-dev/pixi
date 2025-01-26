@@ -2127,7 +2127,8 @@ Afterwards, restart the shell or source the shell config file.</p>
 </span></code></pre></div>
 <h3 id="zsh-default-on-macos">Zsh (default on macOS)<a class="headerlink" href="#zsh-default-on-macos" title="Permanent link">#</a></h3>
 <p>Add the following to the end of <code>~/.zshrc</code>:</p>
-<div class="language-zsh highlight"><span class="filename">~/.zshrc</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>zsh<span class="k">)</span><span class="s2">&quot;</span>
+<div class="language-zsh highlight"><span class="filename">~/.zshrc</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>autoload<span class="w"> </span>-Uz<span class="w"> </span>compinit<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>compinit<span class="w">  </span><span class="c1"># redundant with Oh My Zsh</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>zsh<span class="k">)</span><span class="s2">&quot;</span>
 </span></code></pre></div>
 <h3 id="powershell-pre-installed-on-all-windows-systems">PowerShell (pre-installed on all Windows systems)<a class="headerlink" href="#powershell-pre-installed-on-all-windows-systems" title="Permanent link">#</a></h3>
 <p>Add the following to the end of <code>Microsoft.PowerShell_profile.ps1</code>.
