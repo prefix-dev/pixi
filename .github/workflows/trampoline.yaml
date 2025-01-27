@@ -100,7 +100,7 @@ jobs:
 
       - name: Commit and push updated binaries
         # Don't run on forks
-        if: github.repository == 'prefix-dev/pixi' && startsWith(github.ref, 'reaf/heads')
+        if: github.repository == 'prefix-dev/pixi' && startsWith(github.ref, 'ref/heads')
         run: |
           # Set the repository to push to the repository the workflow is running on
           git config user.name "GitHub Actions"
