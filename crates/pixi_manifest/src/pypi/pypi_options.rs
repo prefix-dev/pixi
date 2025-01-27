@@ -1,4 +1,4 @@
-use std::{hash::Hash, path::PathBuf};
+use std::{collections::HashSet, hash::Hash, path::PathBuf};
 
 use indexmap::IndexSet;
 use serde::Serialize;
@@ -69,7 +69,7 @@ pub enum NoBuild {
     /// Don't build any sdist
     All,
     /// Don't build sdist for specific packages
-    Packages(Vec<String>),
+    Packages(HashSet<String>),
 }
 
 impl NoBuild {
@@ -238,13 +238,12 @@ impl PypiOptions {
             .or_else(|| other.no_build_isolation.clone());
 
         // Set the no-build option
-        let no_build = self.no_build.as_ref().map(|n| {
-            if let Some(other) = other.no_build.as_ref() {
-                n.union(other)
-            } else {
-                n.clone()
-            }
-        });
+        let no_build = match (self.no_build.as_ref(), other.no_build.as_ref()) {
+            (Some(a), Some(b)) => Some(a.union(b)),
+            (Some(a), None) => Some(a.clone()),
+            (None, Some(b)) => Some(b.clone()),
+            (None, None) => None,
+        };
 
         Ok(PypiOptions {
             index_url: index,
@@ -335,7 +334,7 @@ mod tests {
             ]),
             no_build_isolation: Some(vec!["foo".to_string(), "bar".to_string()]),
             index_strategy: None,
-            no_build: Some(NoBuild::All),
+            no_build: None,
         };
 
         // Create the second set of options
@@ -348,13 +347,47 @@ mod tests {
             ]),
             no_build_isolation: Some(vec!["foo".to_string()]),
             index_strategy: None,
-            no_build: Some(NoBuild::None),
+            no_build: Some(NoBuild::All),
         };
 
         // Merge the two options
         // This should succeed and values should be merged
         let merged_opts = opts.union(&opts2).unwrap();
         insta::assert_yaml_snapshot!(merged_opts);
+    }
+
+    #[test]
+    fn test_no_build_union() {
+        // Case 1: One is `All`, result should be `All`
+        assert_eq!(NoBuild::All.union(&NoBuild::None), NoBuild::All);
+        assert_eq!(NoBuild::None.union(&NoBuild::All), NoBuild::All);
+        assert_eq!(
+            NoBuild::All.union(&NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()]))),
+            NoBuild::All
+        );
+
+        // Case 2: One is `None`, result should be the other
+        assert_eq!(NoBuild::None.union(&NoBuild::None), NoBuild::None);
+        assert_eq!(
+            NoBuild::None.union(&NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()]))),
+            NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()]))
+        );
+        assert_eq!(
+            NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()])).union(&NoBuild::None),
+            NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()]))
+        );
+
+        // Case 3: Both are `Packages`, result should be the union of the two
+        assert_eq!(
+            NoBuild::Packages(HashSet::from_iter(["pkg1".to_string(), "pkg2".to_string()])).union(
+                &NoBuild::Packages(HashSet::from_iter(["pkg2".to_string(), "pkg3".to_string()]))
+            ),
+            NoBuild::Packages(HashSet::from_iter([
+                "pkg1".to_string(),
+                "pkg2".to_string(),
+                "pkg3".to_string()
+            ]))
+        );
     }
 
     #[test]

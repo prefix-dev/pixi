@@ -10,9 +10,9 @@ PypiOptions {
     index_strategy: None,
     no_build: Some(
         Packages(
-            [
+            {
                 "package1",
-            ],
+            },
         ),
     ),
 }

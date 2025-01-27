@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use pixi_toml::{TomlEnum, TomlFromStr, TomlWith};
 use toml_span::{
@@ -22,9 +22,21 @@ impl<'de> toml_span::Deserialize<'de> for NoBuild {
         }
         // We assume it's an array of strings
         if value.as_array().is_some() {
-            Ok(NoBuild::Packages(toml_span::Deserialize::deserialize(
-                value,
-            )?))
+            match value.take() {
+                ValueInner::Array(array) => {
+                    let mut packages = HashSet::with_capacity(array.len());
+                    for mut value in array {
+                        packages.insert(value.take_string(None)?.into_owned());
+                    }
+                    Ok(NoBuild::Packages(packages))
+                }
+                _ => Err(expected(
+                    "an array of packages e.g. [\"foo\", \"bar\"]",
+                    value.take(),
+                    value.span,
+                )
+                .into()),
+            }
         } else {
             Err(expected(
                 r#"either "all", "none" or an array of packages e.g. ["foo", "bar"] "#,
