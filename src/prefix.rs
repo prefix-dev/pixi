@@ -49,18 +49,7 @@ impl Prefix {
     /// Scans the `conda-meta` directory of an environment and returns all the
     /// [`PrefixRecord`]s found in there.
     pub fn find_installed_packages(&self) -> miette::Result<Vec<PrefixRecord>> {
-        // HACK: The `PrefixRecord::collect_from_prefix` function below,
-        // utilize rayon for parallelism. By using rayon it will implicitly
-        // initialize a global thread pool. However, uv has a mechanism to
-        // initialize rayon itself, which will crash if the global thread pool
-        // was already initialized. To prevent this, we force uv the initialize
-        // the rayon global thread pool, this ensures that any rayon code that
-        // is run will use the same thread pool.
-        //
-        // One downside of this approach is that perhaps it turns out that we won't need
-        // the thread pool at all (because no changes needed to happen for instance).
-        // There is a little bit of overhead when that happens, but I don't see another
-        // way around that.
+        // Initialize rayon explicitly to avoid implicit initialization.
         LazyLock::force(&RAYON_INITIALIZE);
 
         PrefixRecord::collect_from_prefix(&self.root).into_diagnostic()

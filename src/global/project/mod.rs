@@ -1,11 +1,25 @@
-use std::{
-    ffi::OsStr,
-    fmt::{Debug, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::OnceLock,
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use super::{
+    common::{get_install_changes, EnvironmentUpdate},
+    install::find_binary_by_name,
+    trampoline::{self, GlobalExecutable},
+    BinDir, EnvRoot, StateChange, StateChanges,
 };
-
+use crate::{
+    global::{
+        common::{
+            channel_url_to_prioritized_channel, find_package_records,
+            get_expose_scripts_sync_status,
+        },
+        find_executables, find_executables_for_many_records,
+        install::{create_executable_trampolines, script_exec_mapping},
+        project::environment::environment_specs_in_sync,
+        EnvDir,
+    },
+    prefix::{Executable, Prefix},
+    repodata::Repodata,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
@@ -36,30 +50,16 @@ use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use std::sync::LazyLock;
+use std::{
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::OnceLock,
+};
 use toml_edit::DocumentMut;
-
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
-use super::{
-    common::{get_install_changes, EnvironmentUpdate},
-    install::find_binary_by_name,
-    trampoline::{self, GlobalExecutable},
-    BinDir, EnvRoot, StateChange, StateChanges,
-};
-use crate::{
-    global::{
-        common::{
-            channel_url_to_prioritized_channel, find_package_records,
-            get_expose_scripts_sync_status,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
-        EnvDir,
-    },
-    prefix::{Executable, Prefix},
-    repodata::Repodata,
-    rlimit::try_increase_rlimit_to_sensible,
-};
+use uv_configuration::RAYON_INITIALIZE;
 
 mod environment;
 mod manifest;
@@ -564,6 +564,10 @@ impl Project {
         .into_diagnostic()??;
 
         try_increase_rlimit_to_sensible();
+
+        // Force the initialization of the rayon thread pool to avoid implicit creation
+        // by the Installer.
+        LazyLock::force(&RAYON_INITIALIZE);
 
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
