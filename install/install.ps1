@@ -158,6 +158,12 @@ $BINARY = "pixi-$ARCH"
 if ($PixiVersion -eq 'latest') {
     $DOWNLOAD_URL = "https://github.com/$REPO/releases/latest/download/$BINARY.zip"
 } else {
+    # Check if version is incorrectly specified without prefix 'v'
+    if ($PixiVersion -notmatch '^v') {
+        $OriginalVersion = $PixiVersion
+        $PixiVersion = "v$PixiVersion"
+        Write-Output "You specified pixi version $OriginalVersion, but version numbers need format v0.0.0, using version $PixiVersion"
+    }
     $DOWNLOAD_URL = "https://github.com/$REPO/releases/download/$PixiVersion/$BINARY.zip"
 }
 
