@@ -17,7 +17,9 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
 use pixi_consts::consts;
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_manifest::{
+    pypi::pypi_options::NoBuild, ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter,
+};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
@@ -67,7 +69,7 @@ use crate::{
     Project,
 };
 
-static SUBSET_PREFIX_PACKAGES: LazyLock<Vec<PackageName>> = LazyLock::new(|| {
+static PYTHON_DEPS_VEC: LazyLock<Vec<PackageName>> = LazyLock::new(|| {
     vec![PackageName::try_from("python").expect("python should be always a valid name")]
 });
 
@@ -1233,13 +1235,20 @@ impl<'p> UpdateContext<'p> {
 
             // Spawn a task to instantiate the environment
             let environment_name = environment.name().clone();
-            // so first we need to have only python here
+
+            // If we are specifying `no-build` for this environment
+            // we only need to install python, as that is the only requirement
+            // for the solve
+            let python_only = match group.pypi_options().no_build {
+                Some(NoBuild::All) => Some(PYTHON_DEPS_VEC.to_vec()),
+                _ => None,
+            };
 
             let pypi_env_task = spawn_create_prefix_task(
                 group.clone(),
                 self.package_cache.clone(),
                 records_future,
-                Some(SUBSET_PREFIX_PACKAGES.to_vec()),
+                python_only,
                 self.io_concurrency_limit.clone(),
                 self.build_context.clone(),
             )
