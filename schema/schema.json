@@ -1184,8 +1184,8 @@
             }
           ],
           "examples": [
-            "none",
-            "all"
+            "true",
+            "false"
           ]
         },
         "no-build-isolation": {
