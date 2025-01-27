@@ -38,7 +38,7 @@ pub struct LockFileDiff {
 
 impl LockFileDiff {
     /// Determine the difference between two lock-files.
-    pub(crate) fn from_lock_files(previous: &LockFile, current: &LockFile) -> Self {
+    pub fn from_lock_files(previous: &LockFile, current: &LockFile) -> Self {
         let mut result = Self {
             environment: IndexMap::new(),
         };
@@ -170,12 +170,12 @@ impl LockFileDiff {
     }
 
     /// Returns true if the diff is empty.
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.environment.is_empty()
     }
 
     // Format the lock-file diff.
-    pub(crate) fn print(&self) -> std::io::Result<()> {
+    pub fn print(&self) -> std::io::Result<()> {
         let mut writer = TabWriter::new(stderr());
         for (idx, (environment_name, environment)) in self
             .environment
@@ -377,7 +377,7 @@ pub struct LockFileJsonDiff {
 }
 
 impl LockFileJsonDiff {
-    pub fn new(project: &Project, value: LockFileDiff) -> Self {
+    pub fn new(project: Option<&Project>, value: LockFileDiff) -> Self {
         let mut environment = IndexMap::new();
 
         for (environment_name, environment_diff) in value.environment {
@@ -385,13 +385,18 @@ impl LockFileJsonDiff {
 
             for (platform, packages_diff) in environment_diff {
                 let conda_dependencies = project
-                    .environment(environment_name.as_str())
-                    .map(|env| env.dependencies(pixi_manifest::SpecType::Run, Some(platform)))
+                    .and_then(|p| {
+                        p.environment(environment_name.as_str()).map(|env| {
+                            env.dependencies(pixi_manifest::SpecType::Run, Some(platform))
+                        })
+                    })
                     .unwrap_or_default();
 
                 let pypi_dependencies = project
-                    .environment(environment_name.as_str())
-                    .map(|env| env.pypi_dependencies(Some(platform)))
+                    .and_then(|p| {
+                        p.environment(environment_name.as_str())
+                            .map(|env| env.pypi_dependencies(Some(platform)))
+                    })
                     .unwrap_or_default();
 
                 let add_diffs = packages_diff.added.into_iter().map(|new| match new {
