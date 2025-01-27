@@ -75,7 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: trampoline-${{ matrix.target }}
-          path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zstd
+          path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
 
   aggregate:
     runs-on: ubuntu-latest
