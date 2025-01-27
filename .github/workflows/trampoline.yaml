@@ -88,6 +88,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: trampoline/binaries/
+          merge-multiple: true
 
       - name: List downloaded files
         run: ls -R trampoline/binaries/
