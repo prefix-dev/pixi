@@ -166,12 +166,12 @@ impl GitAttributes {
         match self {
             GitAttributes::Github | GitAttributes::Codeberg => {
                 r#"# SCM syntax highlighting
-pixi.lock linguist-language=YAML linguist-generated=true
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true
 "#
             }
             GitAttributes::Gitlab => {
                 r#"# GitLab syntax highlighting
-pixi.lock gitlab-language=yaml gitlab-generated=true
+pixi.lock merge=binary gitlab-language=yaml gitlab-generated=true
 "#
             }
         }
