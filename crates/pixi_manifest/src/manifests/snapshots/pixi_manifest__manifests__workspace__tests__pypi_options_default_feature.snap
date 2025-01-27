@@ -10,4 +10,4 @@ find-links:
   - url: "https://example.com/bar"
 no-build-isolation: ~
 index-strategy: ~
-no-build: none
+no-build: ~

@@ -107,7 +107,7 @@ pub struct PypiOptions {
     /// The strategy to use when resolving against multiple index URLs.
     pub index_strategy: Option<IndexStrategy>,
     /// Don't build sdist for all or certain packages
-    pub no_build: NoBuild,
+    pub no_build: Option<NoBuild>,
 }
 
 /// Clones and deduplicates two iterators of values
@@ -138,7 +138,7 @@ impl PypiOptions {
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
-            no_build: no_build.unwrap_or_default(),
+            no_build,
         }
     }
 
@@ -237,7 +237,14 @@ impl PypiOptions {
             })
             .or_else(|| other.no_build_isolation.clone());
 
-        let no_build = self.no_build.union(&other.no_build);
+        // Set the no-build option
+        let no_build = self.no_build.as_ref().map(|n| {
+            if let Some(other) = other.no_build.as_ref() {
+                n.union(other)
+            } else {
+                n.clone()
+            }
+        });
 
         Ok(PypiOptions {
             index_url: index,
@@ -328,7 +335,7 @@ mod tests {
             ]),
             no_build_isolation: Some(vec!["foo".to_string(), "bar".to_string()]),
             index_strategy: None,
-            no_build: NoBuild::All,
+            no_build: Some(NoBuild::All),
         };
 
         // Create the second set of options
@@ -341,7 +348,7 @@ mod tests {
             ]),
             no_build_isolation: Some(vec!["foo".to_string()]),
             index_strategy: None,
-            no_build: NoBuild::None,
+            no_build: Some(NoBuild::None),
         };
 
         // Merge the two options

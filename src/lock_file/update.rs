@@ -289,7 +289,11 @@ impl<'p> LockFileDerivedData<'p> {
             .await?;
 
         let non_isolated_packages = environment.pypi_options().no_build_isolation;
-        let no_build = &environment.pypi_options().no_build;
+        let no_build = environment
+            .pypi_options()
+            .no_build
+            .clone()
+            .unwrap_or_default();
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -305,7 +309,7 @@ impl<'p> LockFileDerivedData<'p> {
             self.project.root(),
             environment.best_platform(),
             non_isolated_packages,
-            no_build,
+            &no_build,
         )
         .await
         .with_context(|| {

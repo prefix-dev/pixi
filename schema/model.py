@@ -537,7 +537,7 @@ class PyPIOptions(StrictBaseModel):
         description="The strategy to use when resolving packages from multiple indexes",
         examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
     )
-    no_build: Literal["all"] | Literal["none"] | list[PyPIPackageName] | None = Field(
+    no_build: bool | list[PyPIPackageName] | None = Field(
         None,
         description="Packages that should NOT be built",
         examples=["none", "all"],

@@ -4,7 +4,7 @@ use std::str::FromStr;
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
-    into_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
+    to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
 };
 use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
 use url::Url;
@@ -99,7 +99,7 @@ pub fn convert_to_dist(
 
             if LockedGitUrl::is_locked_git_url(&url_without_direct) {
                 let locked_git_url = LockedGitUrl::new(url_without_direct.clone().into_owned());
-                let parsed_git_url = into_parsed_git_url(&locked_git_url).map_err(|err| {
+                let parsed_git_url = to_parsed_git_url(&locked_git_url).map_err(|err| {
                     ConvertToUvDistError::LockedUrl(
                         err.to_string(),
                         locked_git_url.to_url().to_string(),

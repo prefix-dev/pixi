@@ -82,5 +82,7 @@ PypiOptions {
     index_strategy: Some(
         FirstIndex,
     ),
-    no_build: All,
+    no_build: Some(
+        All,
+    ),
 }

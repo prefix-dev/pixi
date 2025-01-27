@@ -342,7 +342,7 @@ When enabled, resolving will not run arbitrary Python code. The cached wheels of
 Can be either set per package or globally.
 ```toml
 [pypi-options]
-no-build = "all" # default is "none"
+no-build = true # default is false
 ```
 or:
 ```toml

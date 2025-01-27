@@ -20,8 +20,8 @@ use pixi_manifest::FeaturesExt;
 use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{
-    as_uv_req, as_uv_specifiers, as_uv_version, into_pixi_reference, to_normalize,
-    to_uv_marker_tree, to_uv_version_specifiers, AsPep508Error,
+    as_uv_req, into_pixi_reference, to_normalize, to_uv_marker_tree, to_uv_specifiers,
+    to_uv_version, to_uv_version_specifiers, AsPep508Error,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
@@ -1062,14 +1062,14 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                     // Ensure that the record matches the currently selected interpreter.
                     if let Some(requires_python) = &record.0.requires_python {
-                        let uv_specifier_requires_python = as_uv_specifiers(requires_python)
+                        let uv_specifier_requires_python = to_uv_specifiers(requires_python)
                             .expect("pep440 conversion should never fail");
 
                         let marker_version = pep440_rs::Version::from_str(
                             &marker_environment.python_full_version().version.to_string(),
                         )
                         .expect("cannot parse version");
-                        let uv_maker_version = as_uv_version(&marker_version)
+                        let uv_maker_version = to_uv_version(&marker_version)
                             .expect("cannot convert python marker version to uv_pep440");
 
                         let marker_requires_python =

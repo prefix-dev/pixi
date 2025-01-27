@@ -294,7 +294,9 @@ pub async fn resolve_pypi(
             .connectivity(Connectivity::Online)
             .build(),
     );
-    let build_options = no_build_to_build_options(&pypi_options.no_build).into_diagnostic()?;
+    let build_options =
+        no_build_to_build_options(&pypi_options.no_build.clone().unwrap_or_default())
+            .into_diagnostic()?;
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
