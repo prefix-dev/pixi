@@ -1173,10 +1173,7 @@
           "description": "Packages that should NOT be built",
           "anyOf": [
             {
-              "const": "all"
-            },
-            {
-              "const": "none"
+              "type": "boolean"
             },
             {
               "type": "array",
