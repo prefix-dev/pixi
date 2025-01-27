@@ -133,10 +133,9 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             manifest_path,
             "platform",
             "remove",
-            "win-64",
+            "linux-64",
         ],
-        ExitCode.FAILURE,
-        stderr_contains="win-64",
+        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [
@@ -148,7 +147,8 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "remove",
             "linux-64",
         ],
-        ExitCode.SUCCESS,
+        ExitCode.FAILURE,
+        stderr_contains="linux-64",
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
