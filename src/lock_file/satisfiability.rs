@@ -1415,7 +1415,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::Project;
+    use crate::Workspace;
 
     #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
@@ -1432,7 +1432,7 @@ mod tests {
     }
 
     async fn verify_lockfile_satisfiability(
-        project: &Project,
+        project: &Workspace,
         lock_file: &LockFile,
     ) -> Result<(), LockfileUnsat> {
         for env in project.environments() {
@@ -1473,7 +1473,7 @@ mod tests {
             return;
         }
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -1495,7 +1495,7 @@ mod tests {
             }
         }
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -1513,7 +1513,7 @@ mod tests {
     ) {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         let err = verify_lockfile_satisfiability(&project, &lock_file)
             .await

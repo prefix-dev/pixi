@@ -2,7 +2,7 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{cli::cli_config::ProjectConfig, Workspace};
 use clap::Parser;
 
 /// Commands to manage project platforms.
@@ -30,7 +30,7 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
 
     match args.command {
         Command::Add(args) => add::execute(project, args).await,

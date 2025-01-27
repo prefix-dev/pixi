@@ -19,7 +19,7 @@ use crate::{
     lock_file::LockFileDerivedData,
     project::Environment,
     task::task_graph::{TaskGraph, TaskId},
-    Project,
+    Workspace,
 };
 use fs_err::tokio as tokio_fs;
 use pixi_consts::consts;
@@ -82,7 +82,7 @@ pub enum CanSkip {
 /// tasks.
 #[derive(Clone)]
 pub struct ExecutableTask<'p> {
-    pub project: &'p Project,
+    pub project: &'p Workspace,
     pub name: Option<TaskName>,
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
@@ -113,7 +113,7 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the project in which this task is defined.
-    pub(crate) fn project(&self) -> &'p Project {
+    pub(crate) fn project(&self) -> &'p Workspace {
         self.project
     }
 
@@ -424,7 +424,7 @@ mod tests {
         )
         .unwrap();
 
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         let task = project
             .default_environment()
@@ -448,7 +448,7 @@ mod tests {
         )
         .unwrap();
 
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         let task = project
             .default_environment()
@@ -479,7 +479,7 @@ mod tests {
         )
         .unwrap();
 
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         let environment = project.default_environment();
         let env = get_task_env(&environment, false, None, false, false)

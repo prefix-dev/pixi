@@ -17,7 +17,7 @@ use regex::Regex;
 use crate::{
     cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
     lock_file::UpdateLockFileOptions,
-    project::{Environment, Project},
+    project::{Environment, Workspace},
 };
 
 /// Show a tree of project dependencies
@@ -73,7 +73,7 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 };
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())
         .wrap_err("Failed to load project")?;
 
     let environment = project
@@ -118,7 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         print_dependency_tree(&mut handle, &dep_map, &direct_deps, &args.regex)
             .wrap_err("Couldn't print the dependency tree")?;
     }
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 

@@ -1,4 +1,4 @@
-use crate::Project;
+use crate::Workspace;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
@@ -70,7 +70,7 @@ impl Diagnostic for UnsupportedPlatformError {
 #[error("the task '{0}' could not be found", task_name.fancy_display())]
 pub struct UnknownTask<'p> {
     /// The project that the platform is not supported for.
-    pub project: &'p Project,
+    pub project: &'p Workspace,
 
     /// The environment that the platform is not supported for.
     pub environment: EnvironmentName,

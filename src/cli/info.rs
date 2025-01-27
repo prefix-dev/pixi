@@ -22,7 +22,7 @@ use crate::{
     global,
     global::{BinDir, EnvRoot},
     task::TaskName,
-    Project,
+    Workspace,
 };
 use fancy_display::FancyDisplay;
 
@@ -369,7 +369,8 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
+    let project =
+        Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = project.as_ref().map(|p| p.pixi_dir());
@@ -477,12 +478,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.json {
         println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
 
-        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+        Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         Ok(())
     } else {
         println!("{}", info);
 
-        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+        Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         Ok(())
     }
 }

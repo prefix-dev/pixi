@@ -17,7 +17,7 @@ use crate::{
     activation::get_activator,
     cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
     project::{Environment, HasProjectRef},
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, Workspace,
 };
 
 /// Print the pixi environment activation script.
@@ -121,7 +121,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .prompt_config
         .merge_config(args.activation_config.into())
         .merge_config(args.prefix_update_config.config.clone().into());
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(config);
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
@@ -168,7 +168,7 @@ mod tests {
     async fn test_shell_hook() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Platform::current());
-        let project = Project::discover().unwrap();
+        let project = Workspace::discover().unwrap();
         let environment = project.default_environment();
         let script = generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment)
             .await

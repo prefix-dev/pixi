@@ -12,7 +12,7 @@ use crate::{
     build::GlobHashCache,
     lock_file::satisfiability::EnvironmentUnsat,
     project::{Environment, SolveGroup},
-    Project,
+    Workspace,
 };
 
 /// A struct that contains information about specific outdated environments.
@@ -62,7 +62,7 @@ impl<'p> OutdatedEnvironments<'p> {
     /// Constructs a new instance of this struct by examining the project and
     /// lock-file and finding any mismatches.
     pub(crate) async fn from_project_and_lock_file(
-        project: &'p Project,
+        project: &'p Workspace,
         lock_file: &LockFile,
         glob_hash_cache: GlobHashCache,
     ) -> Self {
@@ -140,7 +140,7 @@ impl<'p> OutdatedEnvironments<'p> {
 /// Find all targets (combination of environment and platform) who's
 /// requirements in the `project` are not satisfied by the `lock_file`.
 async fn find_unsatisfiable_targets<'p>(
-    project: &'p Project,
+    project: &'p Workspace,
     lock_file: &LockFile,
     outdated_conda: &mut HashMap<Environment<'p>, HashSet<Platform>>,
     outdated_pypi: &mut HashMap<Environment<'p>, HashSet<Platform>>,
@@ -283,7 +283,7 @@ fn map_outdated_targets_to_solve_groups<'p>(
 /// its environments are the same. For each package name, only one candidate is
 /// allowed.
 fn find_inconsistent_solve_groups<'p>(
-    project: &'p Project,
+    project: &'p Workspace,
     lock_file: &LockFile,
     outdated_conda: &HashMap<Environment<'p>, HashSet<Platform>>,
     conda_solve_groups_out_of_date: &mut HashMap<SolveGroup<'p>, HashSet<Platform>>,

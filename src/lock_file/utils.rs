@@ -7,7 +7,7 @@ use tokio::sync::Semaphore;
 
 use crate::{
     project::{grouped_environment::GroupedEnvironment, Environment},
-    Project,
+    Workspace,
 };
 
 /// Wraps a semaphore to limit the number of concurrent IO operations. The
@@ -33,7 +33,7 @@ pub fn filter_lock_file<
     'lock,
     F: FnMut(&Environment<'p>, Platform, LockedPackageRef<'lock>) -> bool,
 >(
-    project: &'p Project,
+    project: &'p Workspace,
     lock_file: &'lock LockFile,
     mut filter: F,
 ) -> LockFile {

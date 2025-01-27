@@ -61,10 +61,10 @@ use crate::{
         Environment, HasProjectRef,
     },
     repodata::Repodata,
-    Project,
+    Workspace,
 };
 
-impl Project {
+impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project information.
     ///
     /// Returns the lock-file and any potential derived data that was computed
@@ -90,7 +90,7 @@ enum UpdateError {
     ParseLockFileError(#[from] ParseLockFileError),
 }
 
-/// Options to pass to [`Project::update_lock_file`].
+/// Options to pass to [`Workspace::update_lock_file`].
 #[derive(Default)]
 pub struct UpdateLockFileOptions {
     /// Defines what to do if the lock-file is out of date
@@ -108,7 +108,7 @@ pub struct UpdateLockFileOptions {
 /// A struct that holds the lock-file and any potential derived data that was
 /// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
-    pub project: &'p Project,
+    pub project: &'p Workspace,
 
     /// The lock-file
     pub lock_file: LockFile,
@@ -439,7 +439,7 @@ impl<'p> LockFileDerivedData<'p> {
 }
 
 pub struct UpdateContext<'p> {
-    project: &'p Project,
+    project: &'p Workspace,
 
     /// Repodata records from the lock-file. This contains the records that
     /// actually exist in the lock-file. If the lock-file is missing or
@@ -650,7 +650,7 @@ impl<'p> UpdateContext<'p> {
 /// If the project has any source dependencies, like `git` or `path`
 /// dependencies. for pypi dependencies, we need to limit the solve to 1,
 /// because of uv internals
-fn determine_pypi_solve_permits(project: &Project) -> usize {
+fn determine_pypi_solve_permits(project: &Workspace) -> usize {
     // Get all environments
     let environments = project.environments();
     for environment in environments {
@@ -678,7 +678,7 @@ fn determine_pypi_solve_permits(project: &Project) -> usize {
 /// be done to update the lock-file. The tasks are awaited in a specific order
 /// to make sure that we can start instantiating prefixes as soon as possible.
 pub async fn update_lock_file(
-    project: &Project,
+    project: &Workspace,
     options: UpdateLockFileOptions,
 ) -> miette::Result<LockFileDerivedData<'_>> {
     let lock_file = load_lock_file(project).await?;
@@ -753,7 +753,7 @@ pub async fn update_lock_file(
 
 pub struct UpdateContextBuilder<'p> {
     /// The project
-    project: &'p Project,
+    project: &'p Workspace,
 
     /// The current lock-file.
     lock_file: LockFile,
@@ -1049,7 +1049,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
 impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
-    pub(crate) fn builder(project: &'p Project) -> UpdateContextBuilder<'p> {
+    pub(crate) fn builder(project: &'p Workspace) -> UpdateContextBuilder<'p> {
         UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
@@ -1626,14 +1626,7 @@ fn make_unsupported_pypi_platform_error(
     diag.labels = Some(labels);
     diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
 
-    let reporter = miette::Report::new(diag);
-
-    // Add the source code if we have it available.
-    if let Some(content) = environment.project().manifest.contents.as_ref() {
-        reporter.with_source_code(content.clone())
-    } else {
-        reporter
-    }
+    miette::Report::new(diag).with_source_code(environment.project().manifest.contents.clone())
 }
 
 /// Represents data that is sent back from a task. This is used to communicate

@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use crate::Project;
+use crate::Workspace;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -8,7 +8,7 @@ pub struct Args {
     pub name: String,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(mut project: Workspace, args: Args) -> miette::Result<()> {
     // Remove the environment
     if !project.manifest.remove_environment(&args.name)? {
         // TODO: Add help for names of environments that are close.

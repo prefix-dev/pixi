@@ -4,13 +4,13 @@ use itertools::Itertools;
 use pixi_manifest as manifest;
 use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements};
 
-use super::{Environment, HasProjectRef, Project};
+use super::{Environment, HasProjectRef, Workspace};
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
 pub struct SolveGroup<'p> {
     /// The project that the group is part of.
-    pub(super) project: &'p Project,
+    pub(super) project: &'p Workspace,
 
     /// A reference to the solve group in the manifest
     pub(super) solve_group: &'p manifest::SolveGroup,
@@ -86,7 +86,7 @@ impl<'p> HasFeaturesIter<'p> for SolveGroup<'p> {
 }
 
 impl<'p> HasProjectRef<'p> for SolveGroup<'p> {
-    fn project(&self) -> &'p Project {
+    fn project(&self) -> &'p Workspace {
         self.project
     }
 }
@@ -99,11 +99,11 @@ mod tests {
     use pixi_manifest::FeaturesExt;
     use rattler_conda_types::PackageName;
 
-    use crate::Project;
+    use crate::Workspace;
 
     #[test]
     fn test_solve_group() {
-        let project = Project::from_str(
+        let project = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]

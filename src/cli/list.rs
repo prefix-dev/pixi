@@ -10,7 +10,7 @@ use miette::IntoDiagnostic;
 
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::Project;
+use crate::Workspace;
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
@@ -143,7 +143,7 @@ impl PackageExt {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project
@@ -262,7 +262,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "{}No packages found.",
             console::style(console::Emoji("✘ ", "")).red(),
         );
-        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+        Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         return Ok(());
     }
 
@@ -279,7 +279,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }
 
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 

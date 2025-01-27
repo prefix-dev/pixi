@@ -1,5 +1,5 @@
 use crate::project::Environment;
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
@@ -42,7 +42,7 @@ impl std::fmt::Display for EnvironmentDisplay {
     }
 }
 
-pub(crate) fn execute(project: &Project, args: Args) -> miette::Result<()> {
+pub(crate) fn execute(project: &Workspace, args: Args) -> miette::Result<()> {
     let environments: Vec<EnvironmentDisplay> = if let Some(env_name) = args.environment {
         let result: Vec<_> = project
             .environment(&env_name)

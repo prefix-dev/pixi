@@ -1,5 +1,5 @@
 use crate::cli::project::system_requirements::SystemRequirementEnum;
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 use pixi_manifest::{FeatureName, LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
 
@@ -20,7 +20,7 @@ pub struct Args {
     pub feature: Option<String>,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(mut project: Workspace, args: Args) -> miette::Result<()> {
     let requirement = match args.requirement {
         SystemRequirementEnum::Linux => SystemRequirements {
             linux: Some(args.version),

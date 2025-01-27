@@ -7,7 +7,7 @@ use crate::{
 use crate::{
     load_lock_file,
     lock_file::{filter_lock_file, UpdateContext},
-    Project,
+    Workspace,
 };
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -123,7 +123,7 @@ impl UpdateSpecs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args.config;
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(config);
 
     let specs = UpdateSpecs::from(args.specs);
@@ -266,7 +266,7 @@ fn ensure_package_exists(
 }
 
 /// Constructs a new lock-file where some of the constraints have been removed.
-fn unlock_packages(project: &Project, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
+fn unlock_packages(project: &Workspace, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
     filter_lock_file(project, lock_file, |env, platform, package| {
         !specs.should_relax(env.name(), &platform, package)
     })

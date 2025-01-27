@@ -1,7 +1,7 @@
 use crate::cli::cli_config::ProjectConfig;
 use crate::environment::get_update_lock_file_and_prefix;
 use crate::lock_file::UpdateMode;
-use crate::{Project, UpdateLockFileOptions};
+use crate::{UpdateLockFileOptions, Workspace};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -28,7 +28,7 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.config);
 
     // Install either:
@@ -91,6 +91,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }

@@ -1,7 +1,7 @@
-use crate::Project;
+use crate::Workspace;
 
 /// Trait for objects that have a reference to a Project.
 pub trait HasProjectRef<'p> {
     /// Reference to the project.
-    fn project(&self) -> &'p Project;
+    fn project(&self) -> &'p Workspace;
 }

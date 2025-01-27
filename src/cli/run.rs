@@ -18,7 +18,7 @@ use crate::task::{
     get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
     InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
 };
-use crate::Project;
+use crate::Workspace;
 use pixi_config::ConfigCliActivation;
 use pixi_manifest::TaskName;
 use thiserror::Error;
@@ -72,7 +72,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.prefix_update_config.config.clone().into());
 
     // Load the project
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(cli_config);
 
     // Extract the passed in environment name.
@@ -242,12 +242,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_diagnostic()?;
     }
 
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 
 /// Called when a command was not found.
-fn command_not_found<'p>(project: &'p Project, explicit_environment: Option<Environment<'p>>) {
+fn command_not_found<'p>(project: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
             explicit_environment.get_filtered_tasks()

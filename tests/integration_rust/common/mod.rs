@@ -28,7 +28,7 @@ use pixi::{
         get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
         TaskGraphError, TaskName,
     },
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, Workspace,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -244,8 +244,8 @@ impl PixiControl {
     }
 
     /// Loads the project manifest and returns it.
-    pub fn project(&self) -> miette::Result<Project> {
-        Project::load_or_else_discover(Some(&self.manifest_path())).into_diagnostic()
+    pub fn project(&self) -> miette::Result<Workspace> {
+        Workspace::load_or_else_discover(Some(&self.manifest_path())).into_diagnostic()
     }
 
     /// Get the path to the project
@@ -554,7 +554,7 @@ impl PixiControl {
     /// If you want to lock-file to be up-to-date with the project call
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
-        let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
+        let project = Workspace::load_or_else_discover(Some(&self.manifest_path()))?;
         pixi::load_lock_file(&project).await
     }
 

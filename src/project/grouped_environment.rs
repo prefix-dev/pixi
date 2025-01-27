@@ -2,7 +2,7 @@ use crate::project::HasProjectRef;
 use crate::{
     prefix::Prefix,
     project::{virtual_packages::get_minimal_virtual_packages, Environment, SolveGroup},
-    Project,
+    Workspace,
 };
 use fancy_display::FancyDisplay;
 use itertools::Either;
@@ -59,7 +59,7 @@ impl<'p> GroupedEnvironment<'p> {
     }
 
     /// Constructs a `GroupedEnvironment` from a `GroupedEnvironmentName`.
-    pub(crate) fn from_name(project: &'p Project, name: &GroupedEnvironmentName) -> Option<Self> {
+    pub(crate) fn from_name(project: &'p Workspace, name: &GroupedEnvironmentName) -> Option<Self> {
         match name {
             GroupedEnvironmentName::Group(g) => {
                 Some(GroupedEnvironment::Group(project.solve_group(g)?))
@@ -112,7 +112,7 @@ impl<'p> GroupedEnvironment<'p> {
 }
 
 impl<'p> HasProjectRef<'p> for GroupedEnvironment<'p> {
-    fn project(&self) -> &'p Project {
+    fn project(&self) -> &'p Workspace {
         match self {
             GroupedEnvironment::Group(group) => group.project(),
             GroupedEnvironment::Environment(env) => env.project(),

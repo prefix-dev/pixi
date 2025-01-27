@@ -1,5 +1,5 @@
 use crate::cli::cli_config::ProjectConfig;
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
@@ -197,7 +197,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
-    match Project::load_or_else_discover(common_args.project_config.manifest_path.as_deref()) {
+    match Workspace::load_or_else_discover(common_args.project_config.manifest_path.as_deref()) {
         Err(e) => {
             if common_args.local {
                 return Err(miette::miette!(

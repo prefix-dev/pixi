@@ -21,7 +21,7 @@ use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
 
-use crate::Project;
+use crate::Workspace;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -238,7 +238,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             None,
             &vec![],
         );
-        let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
+        let mut project = Workspace::from_str(&pixi_manifest_path, &rv)?;
         let channel_config = project.channel_config();
         for spec in conda_deps {
             // Determine the name of the package to add

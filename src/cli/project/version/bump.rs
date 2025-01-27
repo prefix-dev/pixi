@@ -1,8 +1,8 @@
-use crate::Project;
+use crate::Workspace;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::VersionBumpType;
 
-pub async fn execute(mut project: Project, bump_type: VersionBumpType) -> miette::Result<()> {
+pub async fn execute(mut project: Workspace, bump_type: VersionBumpType) -> miette::Result<()> {
     // get version and exit with error if not found
     let current_version = project
         .version()

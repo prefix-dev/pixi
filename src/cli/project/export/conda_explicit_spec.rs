@@ -13,7 +13,7 @@ use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
 use crate::{
     cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
     lock_file::UpdateLockFileOptions,
-    Project,
+    Workspace,
 };
 
 #[derive(Debug, Parser)]
@@ -159,7 +159,7 @@ fn render_env_platform(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.prefix_update_config.config.clone());
 
     let lockfile = project

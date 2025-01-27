@@ -18,7 +18,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
     SolveGroup,
 };
-use crate::{project::HasProjectRef, Project};
+use crate::{project::HasProjectRef, Workspace};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -36,7 +36,7 @@ use crate::{project::HasProjectRef, Project};
 #[derive(Clone)]
 pub struct Environment<'p> {
     /// The project this environment belongs to.
-    pub(super) project: &'p Project,
+    pub(super) project: &'p Workspace,
 
     /// The environment that this environment is based on.
     pub(super) environment: &'p manifest::Environment,
@@ -62,7 +62,7 @@ impl<'p> Eq for Environment<'p> {}
 
 impl<'p> Environment<'p> {
     /// Return new instance of Environment
-    pub(crate) fn new(project: &'p Project, environment: &'p manifest::Environment) -> Self {
+    pub(crate) fn new(project: &'p Workspace, environment: &'p manifest::Environment) -> Self {
         Self {
             project,
             environment,
@@ -320,7 +320,7 @@ impl<'p> Environment<'p> {
 }
 
 impl<'p> HasProjectRef<'p> for Environment<'p> {
-    fn project(&self) -> &'p Project {
+    fn project(&self) -> &'p Workspace {
         self.project
     }
 }
@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_default_channels() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -392,7 +392,7 @@ mod tests {
 
     #[test]
     fn test_default_platforms() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn test_default_tasks() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -454,7 +454,7 @@ mod tests {
     }
     #[test]
     fn test_filtered_tasks() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -484,7 +484,7 @@ mod tests {
 
     #[test]
     fn test_dependencies() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -523,7 +523,7 @@ mod tests {
 
     #[test]
     fn test_activation() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
             [project]
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_activation_env() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
             [project]
@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn test_channel_feature_priority() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -660,7 +660,7 @@ mod tests {
 
     #[test]
     fn test_channel_feature_priority_with_redefinition() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -701,7 +701,7 @@ mod tests {
 
     #[test]
     fn test_channel_priorities() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -752,7 +752,7 @@ mod tests {
 
     #[test]
     fn test_pypi_options_per_environment() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -838,7 +838,7 @@ mod tests {
             bar = { features = ["foo"], no-default-feature = true }
             "##;
 
-        let manifest = Project::from_str(Path::new("pixi.toml"), contents).unwrap();
+        let manifest = Workspace::from_str(Path::new("pixi.toml"), contents).unwrap();
         assert_eq!(
             manifest
                 .default_environment()
@@ -858,7 +858,7 @@ mod tests {
 
     #[test]
     fn test_validate_platform() {
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]
@@ -872,7 +872,7 @@ mod tests {
         // This should also work on OsxArm64
         assert!(env.validate_platform_support(Some(Platform::Osx64)).is_ok());
 
-        let manifest = Project::from_str(
+        let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
         [project]

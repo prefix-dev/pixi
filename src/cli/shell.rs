@@ -13,7 +13,7 @@ use crate::lock_file::UpdateMode;
 use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, Workspace,
 };
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 use pixi_manifest::EnvironmentName;
@@ -231,7 +231,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.prompt_config.into())
         .merge_config(args.prefix_update_config.config.clone().into());
 
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(config);
 
     let environment = project.environment_from_name_or_env_var(args.environment)?;

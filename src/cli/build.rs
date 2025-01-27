@@ -15,7 +15,7 @@ use crate::{
     cli::cli_config::ProjectConfig,
     repodata::Repodata,
     utils::{move_file, MoveError},
-    Project,
+    Workspace,
 };
 
 #[derive(Parser, Debug)]
@@ -77,7 +77,7 @@ impl CondaBuildReporter for ProgressReporter {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
         .with_cli_config(args.config_cli);
 
     // TODO: Implement logic to take the source code from a VCS instead of from a

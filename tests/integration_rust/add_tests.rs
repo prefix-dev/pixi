@@ -5,7 +5,7 @@ use crate::common::{
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use pixi::{cli::cli_config::GitRev, DependencyType, Project};
+use pixi::{cli::cli_config::GitRev, DependencyType, Workspace};
 use pixi_consts::consts;
 use pixi_manifest::pypi::VersionOrStar;
 use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, PyPiRequirement, SpecType};
@@ -93,7 +93,7 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
         .default_environment()
         .combined_dependencies(Some(Platform::current()))
@@ -280,7 +280,7 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     // Read project from file and check if the dev extras are added.
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -388,7 +388,7 @@ async fn add_pypi_extra_functionality() {
         .unwrap();
 
     // Check if the extras are added
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -410,7 +410,7 @@ async fn add_pypi_extra_functionality() {
         .unwrap();
 
     // Check if the extras are removed
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -429,7 +429,7 @@ async fn add_pypi_extra_functionality() {
         .unwrap();
 
     // Check if the extras added and the version is set
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)

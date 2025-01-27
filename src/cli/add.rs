@@ -9,7 +9,7 @@ use super::has_specs::HasSpecs;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
     environment::verify_prefix_location_unchanged,
-    project::{DependencyType, Project},
+    project::{DependencyType, Workspace},
 };
 
 /// Adds dependencies to the project
@@ -89,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &args.project_config,
     );
 
-    let mut project = Project::load_or_else_discover(project_config.manifest_path.as_deref())?
+    let mut project = Workspace::load_or_else_discover(project_config.manifest_path.as_deref())?
         .with_cli_config(prefix_update_config.config.clone());
 
     // Sanity check of prefix location
@@ -188,6 +188,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         dependency_config.display_success("Added", update_deps.implicit_constraints);
     }
 
-    Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
+    Workspace::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
     Ok(())
 }

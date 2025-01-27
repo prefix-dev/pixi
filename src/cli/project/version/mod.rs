@@ -2,7 +2,7 @@ pub mod bump;
 pub mod get;
 pub mod set;
 
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{cli::cli_config::ProjectConfig, Workspace};
 use clap::Parser;
 use rattler_conda_types::VersionBumpType;
 
@@ -32,7 +32,7 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
 
     match args.command {
         Command::Get(args) => get::execute(project, args).await?,

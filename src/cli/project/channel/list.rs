@@ -1,7 +1,7 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
 
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{cli::cli_config::ProjectConfig, Workspace};
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 
@@ -16,7 +16,7 @@ pub struct Args {
 
 pub(crate) fn execute(args: Args) -> miette::Result<()> {
     // Project without cli config as it shouldn't be needed here.
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
 
     let channel_config = project.channel_config();
     project

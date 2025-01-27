@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::cli::cli_config::ProjectConfig;
 use crate::project::{MatchSpecs, PypiDeps};
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
@@ -56,8 +56,9 @@ pub struct UpgradeSpecsArgs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.prefix_update_config.config.clone());
+    let mut project =
+        Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+            .with_cli_config(args.prefix_update_config.config.clone());
 
     // Ensure that the given feature exists
     let Some(feature) = project.manifest.feature(&args.specs.feature) else {
@@ -123,7 +124,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 
@@ -135,7 +136,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn parse_specs(
     feature: &pixi_manifest::Feature,
     args: &Args,
-    project: &Project,
+    project: &Workspace,
 ) -> miette::Result<(MatchSpecs, PypiDeps)> {
     let spec_type = SpecType::Run;
     let match_spec_iter = feature

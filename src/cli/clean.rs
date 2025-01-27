@@ -1,4 +1,4 @@
-use crate::Project;
+use crate::Workspace;
 /// Command to clean the parts of your system which are touched by pixi.
 use pixi_config;
 use pixi_consts::consts;
@@ -83,7 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(Command::Cache(args)) => clean_cache(args).await?,
         None => {
             let project =
-                Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?; // Extract the passed in environment name.
+                Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?; // Extract the passed in environment name.
 
             let explicit_environment = args
                 .environment
@@ -132,7 +132,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 remove_folder_with_progress(project.activation_env_cache_folder(), false).await?;
             }
 
-            Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref())
+            Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref())
         }
     }
     Ok(())

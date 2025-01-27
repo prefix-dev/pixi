@@ -1,4 +1,4 @@
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 
 #[derive(Parser, Debug)]
@@ -8,7 +8,7 @@ pub struct Args {
     pub name: String,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(mut project: Workspace, args: Args) -> miette::Result<()> {
     // Set the new project name
     project.manifest.set_name(&args.name)?;
 

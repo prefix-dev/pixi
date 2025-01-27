@@ -1,7 +1,7 @@
 use crate::cli::cli_config::ProjectConfig;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
 use crate::project::Environment;
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
@@ -275,7 +275,8 @@ fn list_tasks(
 }
 
 pub fn execute(args: Args) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let mut project =
+        Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     match args.operation {
         Operation::Add(args) => {
             let name = &args.name;
@@ -448,11 +449,11 @@ pub fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
+    Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 
-fn print_tasks_json(project: &Project) {
+fn print_tasks_json(project: &Workspace) {
     let env_feature_task_map: Vec<EnvTasks> = build_env_feature_task_map(project);
 
     let json_string =
@@ -460,7 +461,7 @@ fn print_tasks_json(project: &Project) {
     println!("{}", json_string);
 }
 
-fn build_env_feature_task_map(project: &Project) -> Vec<EnvTasks> {
+fn build_env_feature_task_map(project: &Workspace) -> Vec<EnvTasks> {
     project
         .environments()
         .iter()

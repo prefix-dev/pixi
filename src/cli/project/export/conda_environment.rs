@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::cli::cli_config::ProjectConfig;
-use crate::{project::Environment, Project};
+use crate::{project::Environment, Workspace};
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -225,7 +225,7 @@ fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChanne
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
     let environment = project.environment_from_name_or_env_var(args.environment)?;
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let config = project.config();
@@ -254,7 +254,7 @@ mod tests {
     fn test_export_conda_env_yaml() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml_with_pip_extras() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: None,
@@ -307,7 +307,7 @@ mod tests {
     fn test_export_conda_env_yaml_with_pip_source_editable() {
         let path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-source-deps/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: None,
@@ -334,7 +334,7 @@ mod tests {
     fn test_export_conda_env_yaml_with_pip_custom_registry() {
         let path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-custom-registry/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: None,
@@ -360,7 +360,7 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml_with_pip_find_links() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-find-links/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: None,
@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml_pyproject_panic() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/docker/pyproject.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: Some(Platform::OsxArm64),
@@ -420,7 +420,7 @@ mod tests {
             [dependencies]
             python = "3.9"
            "#;
-        let project = Project::from_str(Path::new("pixi.toml"), toml).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), toml).unwrap();
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),

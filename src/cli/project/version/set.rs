@@ -1,4 +1,4 @@
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 
 #[derive(Parser, Debug, Default)]
@@ -8,7 +8,7 @@ pub struct Args {
     pub version: String,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(mut project: Workspace, args: Args) -> miette::Result<()> {
     // Set the version
     project.manifest.set_version(&args.version)?;
 

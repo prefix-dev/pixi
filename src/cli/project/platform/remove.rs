@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::lock_file::UpdateMode;
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, Workspace,
 };
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -26,7 +26,7 @@ pub struct Args {
     pub feature: Option<String>,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(mut project: Workspace, args: Args) -> miette::Result<()> {
     let feature_name = args
         .feature
         .map_or(FeatureName::Default, FeatureName::Named);

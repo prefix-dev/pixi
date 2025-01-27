@@ -2,7 +2,7 @@ use clap::Parser;
 use miette::Context;
 
 use crate::environment::get_update_lock_file_and_prefix;
-use crate::Project;
+use crate::Workspace;
 use crate::{DependencyType, UpdateLockFileOptions};
 
 use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig};
@@ -36,7 +36,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.project_config,
     );
 
-    let mut project = Project::load_or_else_discover(project_config.manifest_path.as_deref())?
+    let mut project = Workspace::load_or_else_discover(project_config.manifest_path.as_deref())?
         .with_cli_config(prefix_update_config.config.clone());
     let dependency_type = dependency_config.dependency_type();
 
@@ -93,6 +93,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     dependency_config.display_success("Removed", Default::default());
 
-    Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
+    Workspace::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
     Ok(())
 }

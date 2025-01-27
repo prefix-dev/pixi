@@ -1,4 +1,4 @@
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 use pixi_manifest::EnvironmentName;
 
@@ -24,7 +24,7 @@ pub struct Args {
     pub force: bool,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(mut project: Workspace, args: Args) -> miette::Result<()> {
     let environment_exists = project.environment(&args.name).is_some();
     if environment_exists && !args.force {
         return Err(miette::miette!(

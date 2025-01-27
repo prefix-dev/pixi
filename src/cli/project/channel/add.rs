@@ -1,14 +1,15 @@
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
     lock_file::UpdateMode,
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, Workspace,
 };
 
 use super::AddRemoveArgs;
 
 pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.clone().prefix_update_config.config);
+    let mut project =
+        Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+            .with_cli_config(args.clone().prefix_update_config.config);
 
     // Add the channels to the manifest
     project.manifest.add_channels(

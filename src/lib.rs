@@ -18,4 +18,4 @@ mod rlimit;
 mod utils;
 
 pub use lock_file::{load_lock_file, UpdateLockFileOptions};
-pub use project::{DependencyType, Project};
+pub use project::{DependencyType, Workspace};

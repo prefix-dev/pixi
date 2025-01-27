@@ -1,4 +1,4 @@
-use crate::{project::Environment, Project};
+use crate::{project::Environment, Workspace};
 use crate::{project::HasProjectRef, task::EnvironmentHash};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
@@ -40,7 +40,7 @@ struct ActivationCache {
     environment_variables: HashMap<String, String>,
 }
 
-impl Project {
+impl Workspace {
     /// Returns environment variables and their values that should be injected when running a command.
     pub(crate) fn get_metadata_env(&self) -> HashMap<String, String> {
         let mut map = HashMap::from_iter([
@@ -480,7 +480,7 @@ mod tests {
         [environments]
         test = ["test"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), multi_env_project).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), multi_env_project).unwrap();
 
         let default_env = project.default_environment();
         let env = default_env.get_metadata_env();
@@ -507,7 +507,7 @@ mod tests {
         channels = ["conda-forge"]
         platforms = ["linux-64", "osx-64", "win-64"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), project).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
         let env = project.get_metadata_env();
 
         assert_eq!(env.get("PIXI_PROJECT_NAME").unwrap(), project.name());
@@ -538,7 +538,7 @@ mod tests {
         ZZZ = "123test123"
         ZAB = "123test123"
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), project).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
         let env = get_static_environment_variables(&project.default_environment());
 
         // Make sure the user defined environment variables are at the end.
@@ -586,7 +586,7 @@ mod tests {
         TEST = "ACTIVATION123"
         "#;
         let project =
-            Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
         let default_env = project.default_environment();
 
         // Don't create cache, by not giving it a lockfile
@@ -700,7 +700,7 @@ packages:
         TEST = "ACTIVATION123"
         "#;
         let project =
-            Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
         let default_env = project.default_environment();
         let env = run_activation(
             &default_env,
@@ -731,7 +731,7 @@ packages:
         TEST2 = "ACTIVATION1234"
         "#;
         let project =
-            Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
         let default_env = project.default_environment();
         let env = run_activation(
             &default_env,

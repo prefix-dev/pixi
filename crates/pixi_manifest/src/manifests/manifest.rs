@@ -1,3 +1,9 @@
+use indexmap::{Equivalent, IndexSet};
+use itertools::Itertools;
+use miette::{miette, IntoDiagnostic, NamedSource, Report, WrapErr};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{PackageName, Platform, Version};
+use std::sync::Arc;
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -6,12 +12,6 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-
-use indexmap::{Equivalent, IndexSet};
-use itertools::Itertools;
-use miette::{miette, IntoDiagnostic, NamedSource, Report, WrapErr};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform, Version};
 use toml_edit::{DocumentMut, Value};
 
 use crate::{
@@ -61,7 +61,7 @@ pub struct Manifest {
     /// error messages.
     ///
     /// Note that if the document is edited, this field will not be updated.
-    pub contents: Option<String>,
+    pub contents: Arc<str>,
 
     /// Reference to the original toml source
     /// used for modification
@@ -165,7 +165,7 @@ impl Manifest {
 
         Ok(Self {
             path: manifest_path.to_path_buf(),
-            contents: Some(contents),
+            contents: contents.into(),
             source,
             workspace: workspace_manifest,
             package: package_manifest,
@@ -176,7 +176,7 @@ impl Manifest {
     pub fn save(&mut self) -> miette::Result<()> {
         let contents = self.source.to_string();
         fs_err::write(&self.path, &contents).into_diagnostic()?;
-        self.contents = Some(contents);
+        self.contents = contents.into();
         Ok(())
     }
 

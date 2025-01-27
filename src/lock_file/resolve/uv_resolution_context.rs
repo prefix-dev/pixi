@@ -4,7 +4,7 @@ use uv_configuration::{BuildOptions, Concurrency, SourceStrategy, TrustedHost};
 use uv_distribution_types::IndexCapabilities;
 use uv_types::{HashStrategy, InFlight};
 
-use crate::Project;
+use crate::Workspace;
 use pixi_config::{self, get_cache_dir};
 use pixi_consts::consts;
 use pixi_uv_conversions::{to_uv_trusted_host, ConversionError};
@@ -25,7 +25,7 @@ pub struct UvResolutionContext {
 }
 
 impl UvResolutionContext {
-    pub(crate) fn from_project(project: &Project) -> miette::Result<Self> {
+    pub(crate) fn from_project(project: &Workspace) -> miette::Result<Self> {
         let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
         if !uv_cache.exists() {
             fs_err::create_dir_all(&uv_cache)

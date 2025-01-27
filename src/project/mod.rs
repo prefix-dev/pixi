@@ -115,32 +115,38 @@ const NON_SEMVER_PACKAGES: [&str; 11] = [
     "python", "rust", "julia", "gcc", "gxx", "gfortran", "nodejs", "deno", "r", "r-base", "perl",
 ];
 
-/// The pixi project, this main struct to interact with the project. This struct
+/// The pixi workspace, this main struct to interact with a workspace. This struct
 /// holds the `Manifest` and has functions to modify or request information from
 /// it. This allows in the future to have multiple environments or manifests
 /// linked to a project.
 #[derive(Clone)]
-pub struct Project {
-    /// Root folder of the project
+pub struct Workspace {
+    /// Root folder of the workspace
     root: PathBuf,
-    /// Reqwest client shared for this project.
+
+    /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     repodata_gateway: OnceLock<Gateway>,
-    /// The manifest for the project
+
+    /// The manifest for the workspace
     pub(crate) manifest: Manifest,
+
     /// The environment variables that are activated when the environment is
     /// activated. Cached per environment, for both clean and normal
     env_vars: HashMap<EnvironmentName, EnvironmentVars>,
+
     /// The cache that contains mapping
     mapping_source: OnceCell<MappingSource>,
+
     /// The global configuration as loaded from the config file(s)
     config: Config,
 }
 
-impl Debug for Project {
+impl Debug for Workspace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Project")
             .field("root", &self.root)
@@ -184,10 +190,10 @@ pub enum ProjectError {
     IoError(std::io::Error),
 }
 
-impl Project {
+impl Workspace {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifest(manifest: Manifest) -> Self {
-        let env_vars = Project::init_env_vars(&manifest.workspace.environments);
+        let env_vars = Workspace::init_env_vars(&manifest.workspace.environments);
 
         let root = manifest
             .path
@@ -256,7 +262,7 @@ impl Project {
     pub fn from_path(manifest_path: &Path) -> Result<Self, ProjectError> {
         let manifest = Manifest::from_path(manifest_path)
             .map_err(|e| ProjectError::ParseErrorWithPathBuf(e, manifest_path.into()))?;
-        Ok(Project::from_manifest(manifest))
+        Ok(Workspace::from_manifest(manifest))
     }
 
     /// Loads a project manifest file or discovers it in the current directory
@@ -273,9 +279,9 @@ impl Project {
                 } else {
                     path
                 };
-                Project::from_path(path)?
+                Workspace::from_path(path)?
             }
-            None => Project::discover()?,
+            None => Workspace::discover()?,
         };
         Ok(project)
     }
@@ -1067,9 +1073,9 @@ pub struct UpdateDeps {
     pub lock_file_diff: LockFileDiff,
 }
 
-impl<'source> HasManifestRef<'source> for &'source Project {
+impl<'source> HasManifestRef<'source> for &'source Workspace {
     fn manifest(&self) -> &'source Manifest {
-        Project::manifest(self)
+        Workspace::manifest(self)
     }
 }
 
@@ -1224,7 +1230,7 @@ mod tests {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
             let manifest = Manifest::from_str(Path::new("pixi.toml"), &file_content).unwrap();
-            let project = Project::from_manifest(manifest);
+            let project = Workspace::from_manifest(manifest);
             let expected_result = vec![VirtualPackage::LibC(LibC {
                 family: "glibc".to_string(),
                 version: Version::from_str("2.12").unwrap(),
@@ -1263,7 +1269,7 @@ mod tests {
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(
             project
@@ -1300,7 +1306,7 @@ mod tests {
         "#;
 
         let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(
             project
@@ -1335,7 +1341,7 @@ mod tests {
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         assert_snapshot!(format_dependencies(
             project
@@ -1367,7 +1373,7 @@ mod tests {
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
@@ -1409,7 +1415,7 @@ mod tests {
         )
         .unwrap();
 
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         assert_debug_snapshot!(project
             .manifest
@@ -1435,7 +1441,7 @@ mod tests {
             conda-pypi-map = {conda-forge = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json", pytorch = ""}
             "#;
         let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         let mapping = project.pypi_name_mapping_source().unwrap();
         let channel = Channel::from_str("conda-forge", &project.channel_config()).unwrap();
@@ -1454,7 +1460,7 @@ mod tests {
             conda-pypi-map = {"https://prefix.dev/test-channel" = "mapping.json"}
             "#;
         let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         let mapping = project.pypi_name_mapping_source().unwrap();
         assert_eq!(
@@ -1486,7 +1492,7 @@ mod tests {
             channels = ["custom-feature-channel"]
             "#;
         let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         assert!(project.pypi_name_mapping_source().is_ok());
 
@@ -1498,7 +1504,7 @@ mod tests {
             conda-pypi-map = {non-existing-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
             "#;
         let manifest = Manifest::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
-        let project = Project::from_manifest(manifest);
+        let project = Workspace::from_manifest(manifest);
 
         // We output error message with bold channel name,
         // so we need to disable colors for snapshot

@@ -8,7 +8,7 @@ use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
-use pixi::{Project, UpdateLockFileOptions};
+use pixi::{UpdateLockFileOptions, Workspace};
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
@@ -567,7 +567,7 @@ async fn test_installer_name() {
 async fn test_old_lock_install() {
     let lock_str =
         fs_err::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap();
-    let project = Project::from_path(Path::new(
+    let project = Workspace::from_path(Path::new(
         "tests/data/satisfiability/old_lock_file/pyproject.toml",
     ))
     .unwrap();

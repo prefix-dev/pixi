@@ -1,6 +1,6 @@
-use crate::Project;
+use crate::Workspace;
 
-pub async fn execute(project: Project) -> miette::Result<()> {
+pub async fn execute(project: Workspace) -> miette::Result<()> {
     println!("{}", project.name());
     Ok(())
 }
