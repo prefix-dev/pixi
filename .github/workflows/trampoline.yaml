@@ -1,4 +1,4 @@
-name: Update Trampoline Binary
+name: Update Trampoline Binaries
 
 on:
   push:
