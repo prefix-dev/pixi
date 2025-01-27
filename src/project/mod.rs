@@ -9,7 +9,6 @@ pub mod virtual_packages;
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
-    borrow::Borrow,
     collections::{HashMap, HashSet},
     fmt::{Debug, Formatter},
     hash::Hash,
@@ -33,7 +32,6 @@ use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
     FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, PypiDependencyLocation, SpecType,
-    WorkspaceManifest,
 };
 use pixi_spec::{PixiSpec, SourceSpec};
 use pixi_utils::reqwest::build_reqwest_clients;
@@ -148,12 +146,6 @@ impl Debug for Project {
             .field("root", &self.root)
             .field("manifest", &self.manifest)
             .finish()
-    }
-}
-
-impl Borrow<WorkspaceManifest> for Project {
-    fn borrow(&self) -> &WorkspaceManifest {
-        self.manifest.borrow()
     }
 }
 

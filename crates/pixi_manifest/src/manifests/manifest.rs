@@ -1,5 +1,4 @@
 use std::{
-    borrow::Borrow,
     collections::HashMap,
     ffi::OsStr,
     fmt::Display,
@@ -73,12 +72,6 @@ pub struct Manifest {
 
     /// Optionally a package manifest
     pub package: Option<PackageManifest>,
-}
-
-impl Borrow<WorkspaceManifest> for Manifest {
-    fn borrow(&self) -> &WorkspaceManifest {
-        &self.workspace
-    }
 }
 
 impl Manifest {
