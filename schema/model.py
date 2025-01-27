@@ -540,7 +540,7 @@ class PyPIOptions(StrictBaseModel):
     no_build: bool | list[PyPIPackageName] | None = Field(
         None,
         description="Packages that should NOT be built",
-        examples=["none", "all"],
+        examples=["true", "false"],
     )
 
 
