@@ -342,6 +342,7 @@ When enabled, resolving will not run arbitrary Python code. The cached wheels of
 Can be either set per package or globally.
 ```toml
 [pypi-options]
+# No sdists allowed
 no-build = true # default is false
 ```
 or:
@@ -349,6 +350,11 @@ or:
 [pypi-options]
 no-build = ["package1", "package2"]
 ```
+
+When features are merged, the following priority is adhered:
+`no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
+So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+
 
 ### Index Strategy
 

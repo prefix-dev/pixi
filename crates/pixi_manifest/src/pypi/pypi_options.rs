@@ -49,17 +49,7 @@ pub enum FindLinksUrlOrPath {
 }
 
 /// Don't build sdist for all or certain packages
-#[derive(
-    Default,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    Serialize,
-    strum::Display,
-    strum::EnumString,
-    strum::VariantNames,
-)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, strum::Display)]
 #[strum(serialize_all = "kebab-case")]
 #[serde(rename_all = "kebab-case")]
 pub enum NoBuild {
@@ -69,6 +59,7 @@ pub enum NoBuild {
     /// Don't build any sdist
     All,
     /// Don't build sdist for specific packages
+    // Todo: would be nice to check if these are actually used at some point
     Packages(HashSet<String>),
 }
 

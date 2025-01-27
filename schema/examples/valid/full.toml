@@ -17,6 +17,9 @@ readme = "README.md"
 repository = "https://github.com/author/project"
 version = "0.1.0"
 
+[project.pypi-options]
+no-build = false
+
 [package]
 
 [package.build]
@@ -116,6 +119,9 @@ test = "*"
 
 [feature.test2.dependencies]
 test = "*"
+
+[feature.yes-build.pypi-options]
+no-build = true
 
 [feature.prod]
 activation = { scripts = ["activate.sh", "deactivate.sh"] }
