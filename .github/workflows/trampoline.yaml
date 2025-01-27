@@ -71,7 +71,7 @@ jobs:
       - name: Build trampoline binary
         run: pixi run build-trampoline --target ${{ matrix.target }}
 
-      - name: Upload binary artifact (Windows)
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: trampoline-${{ matrix.target }}
