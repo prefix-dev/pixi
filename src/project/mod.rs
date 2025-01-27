@@ -297,7 +297,7 @@ impl Project {
                 let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
 
                 if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
-                    if env_path.as_str() != discover_path.to_str().unwrap() {
+                    if Some(env_path.as_str()) != discover_path.to_str() {
                         tracing::warn!(
                             "Used local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
                             discover_path.to_string_lossy(),
@@ -377,7 +377,6 @@ impl Project {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                #[cfg(not(windows))]
                 if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
                     tracing::warn!(
                         "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
@@ -387,6 +386,7 @@ impl Project {
                         if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
                     );
                 } else {
+                    #[cfg(not(windows))]
                     create_symlink(&detached_environments_path, &default_envs_dir);
                 }
 

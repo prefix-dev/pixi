@@ -70,7 +70,6 @@ const PROJECT_TEMPLATE: &str = r#"[project]
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
 channels = {{ channels }}
-description = "Add a short description here"
 name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
@@ -122,7 +121,6 @@ const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
 authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
 {%- endif %}
 dependencies = []
-description = "Add a short description here"
 name = "{{ name }}"
 requires-python = ">= 3.11"
 version = "{{ version }}"
@@ -337,7 +335,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         environments,
                     },
                 )
-                .unwrap();
+                .expect("should be able to render the template");
             if let Err(e) = {
                 fs::OpenOptions::new()
                     .append(true)
@@ -392,7 +390,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         extra_index_urls => &extra_index_urls,
                     },
                 )
-                .unwrap();
+                .expect("should be able to render the template");
             save_manifest_file(&pyproject_manifest_path, rv)?;
 
             let src_dir = dir.join("src").join(pypi_package_name);
@@ -487,7 +485,7 @@ fn render_project(
             extra_index_urls,
         },
     )
-    .unwrap()
+    .expect("should be able to render the template")
 }
 
 /// Save the rendered template to a file, and print a message to the user.

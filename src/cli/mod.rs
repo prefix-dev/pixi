@@ -173,7 +173,6 @@ pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     set_console_colors(&args);
     let use_colors = console::colors_enabled_stderr();
-
     // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
         Box::new(

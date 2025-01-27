@@ -1,12 +1,17 @@
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
+use pixi_git::sha::GitSha as PixiGitSha;
+use pixi_git::url::RepositoryUrl;
 use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
-use pixi_manifest::pypi::{
-    pypi_options::{IndexStrategy, PypiOptions},
-    GitRev,
-};
-use uv_distribution_types::{Index, IndexLocations, IndexUrl};
-use uv_git::GitReference;
+use pixi_manifest::pypi::pypi_options::{IndexStrategy, PypiOptions};
+use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
+use pixi_spec::GitReference as PixiReference;
+
+use pixi_git::git::GitReference as PixiGitReference;
+
+use pep440_rs::VersionSpecifiers;
+use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 
@@ -132,13 +137,6 @@ pub fn locked_indexes_to_index_locations(
     Ok(IndexLocations::new(indexes, flat_index, no_index))
 }
 
-pub fn to_git_reference(rev: &GitRev) -> GitReference {
-    match rev {
-        GitRev::Full(rev) => GitReference::FullCommit(rev.clone()),
-        GitRev::Short(rev) => GitReference::BranchOrTagOrCommit(rev.clone()),
-    }
-}
-
 fn packages_to_build_isolation<'a>(
     names: Option<&'a [PackageName]>,
     python_environment: &'a PythonEnvironment,
@@ -186,4 +184,97 @@ pub fn to_index_strategy(
     } else {
         uv_configuration::IndexStrategy::default()
     }
+}
+
+pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git::GitReference {
+    match git_ref {
+        PixiGitReference::Branch(branch) => uv_git::GitReference::Branch(branch),
+        PixiGitReference::Tag(tag) => uv_git::GitReference::Tag(tag),
+        PixiGitReference::ShortCommit(rev) => uv_git::GitReference::ShortCommit(rev),
+        PixiGitReference::BranchOrTag(rev) => uv_git::GitReference::BranchOrTag(rev),
+        PixiGitReference::BranchOrTagOrCommit(rev) => {
+            uv_git::GitReference::BranchOrTagOrCommit(rev)
+        }
+        PixiGitReference::NamedRef(rev) => uv_git::GitReference::NamedRef(rev),
+        PixiGitReference::FullCommit(rev) => uv_git::GitReference::FullCommit(rev),
+        PixiGitReference::DefaultBranch => uv_git::GitReference::DefaultBranch,
+    }
+}
+
+pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitSha {
+    uv_git::GitSha::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
+}
+
+pub fn into_pixi_reference(git_reference: uv_git::GitReference) -> PixiReference {
+    match git_reference {
+        uv_git::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
+        uv_git::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
+        uv_git::GitReference::ShortCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::FullCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git::GitReference::DefaultBranch => PixiReference::DefaultBranch,
+    }
+}
+
+/// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
+pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
+    let reference = into_pixi_reference(dist.git.reference().clone());
+
+    // Necessary to convert between our gitsha and uv gitsha.
+    let git_sha = PixiGitSha::from_str(
+        &dist
+            .git
+            .precise()
+            .expect("we expect it to be resolved")
+            .to_string(),
+    )
+    .expect("we expect it to be a valid sha");
+
+    let pinned_checkout = PinnedGitCheckout::new(
+        git_sha,
+        dist.subdirectory.map(|sd| sd.to_string_lossy().to_string()),
+        reference,
+    );
+
+    PinnedGitSpec::new(dist.git.repository().clone(), pinned_checkout)
+}
+
+/// Convert a locked git url into a parsed git url
+/// [`LockedGitUrl`] is always recorded in the lock file and looks like this:
+/// <git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc>
+///
+/// [`uv_pypi_types::ParsedGitUrl`] looks like this:
+/// <git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir>
+///
+/// So we need to convert the locked git url into a parsed git url.
+/// which is used in the uv crate.
+pub fn into_parsed_git_url(
+    locked_git_url: &LockedGitUrl,
+) -> miette::Result<uv_pypi_types::ParsedGitUrl> {
+    let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
+    // Construct manually [`ParsedGitUrl`] from locked url.
+    let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
+        RepositoryUrl::new(&locked_git_url.to_url()).into(),
+        into_uv_git_reference(git_source.reference.into()),
+        Some(into_uv_git_sha(git_source.commit)),
+        git_source.subdirectory.map(|s| PathBuf::from(s.as_str())),
+    );
+
+    Ok(parsed_git_url)
+}
+
+/// uv_pep440 and pep440 are very similar but not the same, this can convert to uv_pep440::VersionSpecifiers
+pub fn as_uv_specifiers(
+    specifiers: &VersionSpecifiers,
+) -> Result<uv_pep440::VersionSpecifiers, uv_pep440::VersionSpecifiersParseError> {
+    uv_pep440::VersionSpecifiers::from_str(specifiers.to_string().as_str())
+}
+
+/// uv_pep440 and pep440 are very similar but not the same, this can convert to uv_pep440::Version
+pub fn as_uv_version(
+    version: &pep440_rs::Version,
+) -> Result<uv_pep440::Version, uv_pep440::VersionParseError> {
+    uv_pep440::Version::from_str(version.to_string().as_str())
 }

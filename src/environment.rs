@@ -18,10 +18,10 @@ use parking_lot::Mutex;
 use pixi_build_frontend::CondaBuildReporter;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
-use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
+use pixi_manifest::{EnvironmentName, FeaturesExt, PyPiRequirement, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
-use pixi_spec::PixiSpec;
+use pixi_spec::{GitSpec, PixiSpec};
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -329,18 +329,28 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     Ok(())
 }
 
-/// Extract filtered requirements from the project based on a filter.
-/// The filter allows specifying which subset of requirements to extract.
-pub fn extract_requirements_from_project(project: &Project) -> Vec<PixiSpec> {
+/// Extract [`GitSpec`] requirements from the project dependencies.
+pub fn extract_git_requirements_from_project(project: &Project) -> Vec<GitSpec> {
     let mut requirements = Vec::new();
 
     for env in project.environments() {
         let env_platforms = env.platforms();
         for platform in env_platforms {
             let dependencies = env.combined_dependencies(Some(platform));
+            let pypi_dependencies = env.pypi_dependencies(Some(platform));
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
-                    requirements.push(spec.clone());
+                    if let PixiSpec::Git(spec) = spec {
+                        requirements.push(spec.clone());
+                    }
+                }
+            }
+
+            for (_, pypi_spec) in pypi_dependencies {
+                for spec in pypi_spec {
+                    if let PyPiRequirement::Git { url, .. } = spec {
+                        requirements.push(url);
+                    }
                 }
             }
         }
@@ -349,14 +359,10 @@ pub fn extract_requirements_from_project(project: &Project) -> Vec<PixiSpec> {
     requirements
 }
 
-/// Store credentials from the filtered requirements.
-/// This method takes the requirements and processes only `PixiSpec::Git`
-/// variants.
-pub fn store_credentials_from_requirements(requirements: Vec<PixiSpec>) {
-    for spec in requirements {
-        if let PixiSpec::Git(git_spec) = spec {
-            store_credentials_from_url(&git_spec.git);
-        }
+/// Store credentials from [`GitSpec`] requirements.
+pub fn store_credentials_from_requirements(git_requirements: Vec<GitSpec>) {
+    for spec in git_requirements {
+        store_credentials_from_url(&spec.git);
     }
 }
 
@@ -469,7 +475,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     sanity_check_project(project).await?;
 
     // Store the git credentials from the git requirements
-    let requirements = extract_requirements_from_project(project);
+    let requirements = extract_git_requirements_from_project(project);
     store_credentials_from_requirements(requirements);
 
     // Ensure that the lock-file is up-to-date
@@ -717,7 +723,10 @@ impl CondaBuildProgress {
         let after = if locked.is_empty() {
             &self.main_progress
         } else {
-            &locked.last().unwrap().1
+            &locked
+                .last()
+                .expect("we just checked that `locked` isn't empty")
+                .1
         };
 
         let pb = pixi_progress::global_multi_progress().insert_after(after, ProgressBar::hidden());
@@ -744,15 +753,19 @@ impl CondaBuildProgress {
         let locked = self.build_progress.lock();
 
         // Finish the build progress bar
-        let (identifier, pb) = locked.get(build_id).unwrap();
+        let (identifier, pb) = locked.get(build_id).expect("build id should exist");
         // If there is an alternative message, use that
         let msg = if let Some(msg) = alternative_message {
-            pb.set_style(indicatif::ProgressStyle::with_template("    {msg}").unwrap());
+            pb.set_style(
+                indicatif::ProgressStyle::with_template("    {msg}")
+                    .expect("should be able to create a progress bar style"),
+            );
             msg
         } else {
             // Otherwise show the default message
             pb.set_style(
-                indicatif::ProgressStyle::with_template("    {msg} in {elapsed}").unwrap(),
+                indicatif::ProgressStyle::with_template("    {msg} in {elapsed}")
+                    .expect("should be able to create a progress bar style"),
             );
             "built".to_string()
         };
@@ -764,10 +777,10 @@ impl CondaBuildReporter for CondaBuildProgress {
     fn on_build_start(&self, build_id: usize) -> usize {
         // Actually show the progress
         let locked = self.build_progress.lock();
-        let (identifier, pb) = locked.get(build_id).unwrap();
+        let (identifier, pb) = locked.get(build_id).expect("build id should exist");
         let template =
             indicatif::ProgressStyle::with_template("    {spinner:.green} {msg} {elapsed}")
-                .unwrap();
+                .expect("should be able to create a progress bar style");
         pb.set_style(template);
         pb.set_message(format!("building {identifier}"));
         pb.enable_steady_tick(Duration::from_millis(100));

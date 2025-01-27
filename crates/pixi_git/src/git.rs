@@ -157,11 +157,11 @@ impl GitReference {
                 .rev_parse(&format!("origin/{s}^0"))
                 .or_else(|_| repo.rev_parse(&format!("refs/remotes/origin/tags/{s}^0"))),
 
-            // Attempt to resolve the branch, then the tag, then the commit.
+            // Attempt to resolve the commit, the tag then the branch.
             Self::BranchOrTagOrCommit(s) => repo
-                .rev_parse(&format!("origin/{s}^0"))
+                .rev_parse(&format!("{s}^0"))
                 .or_else(|_| repo.rev_parse(&format!("refs/remotes/origin/tags/{s}^0")))
-                .or_else(|_| repo.rev_parse(&format!("{s}^0"))),
+                .or_else(|_| repo.rev_parse(&format!("origin/{s}^0"))),
 
             // We'll be using the HEAD commit.
             Self::DefaultBranch => repo.rev_parse("refs/remotes/origin/HEAD"),
@@ -178,6 +178,11 @@ impl GitReference {
     /// Whether a `rev` looks like a commit hash (ASCII hex digits).
     pub fn looks_like_commit_hash(rev: &str) -> bool {
         rev.len() >= 7 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
+    }
+
+    /// Whether a `rev` looks like a commit hash (ASCII hex digits).
+    pub fn looks_like_full_commit_hash(rev: &str) -> bool {
+        rev.len() == 40 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
     }
 }
 
