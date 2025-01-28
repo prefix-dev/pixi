@@ -1,3 +1,4 @@
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_manifest::EnvironmentName;
@@ -65,6 +66,7 @@ pub(crate) fn get_required_virtual_packages_from_conda_records(
         // Lenient parsing is used here because the dependencies to avoid issues with the parsing of the dependencies.
         // As the user can't do anything about the dependencies, we don't want to fail the whole process because of a parsing error.
         .map(|dep| MatchSpec::from_str(dep.as_str(), Lenient))
+        .dedup()
         .collect::<Result<Vec<MatchSpec>, _>>()
         .map_err(MachineValidationError::DependencyParsingError)
 }
@@ -93,6 +95,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
 ) -> Result<bool, MachineValidationError> {
     // Early out if there are no packages in the lockfile
     if lock_file.is_empty() {
+        tracing::debug!("No packages in the lockfile, skipping virtual package validation");
         return Ok(true);
     }
 
@@ -120,9 +123,12 @@ pub(crate) fn validate_system_meets_environment_requirements(
         get_required_virtual_packages_from_conda_records(&conda_records)?;
 
     tracing::info!(
-        "Required virtual packages: {:?} of environment '{}'",
-        required_virtual_packages,
-        environment_name
+        "Required virtual packages of environment '{}': {}",
+        environment_name.fancy_display(),
+        required_virtual_packages
+            .iter()
+            .map(|spec| spec.to_string())
+            .join(", "),
     );
 
     // Default to the environment variable overrides, but allow for an override for testing
@@ -139,9 +145,12 @@ pub(crate) fn validate_system_meets_environment_requirements(
         .collect::<HashMap<_, _>>();
 
     tracing::debug!(
-        "Generic system virtual packages for env: '{}' : {:?}",
-        environment_name,
+        "Generic system virtual packages for env: '{}' : [{}]",
+        environment_name.fancy_display(),
         generic_system_virtual_packages
+            .iter()
+            .map(|(name, vpkg)| format!("{}: {}", name.as_normalized(), vpkg))
+            .join(", ")
     );
 
     // Check if all the required virtual conda packages match the system virtual packages
