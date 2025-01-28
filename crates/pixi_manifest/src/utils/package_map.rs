@@ -10,9 +10,7 @@ use serde::{
 };
 use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Span, Value};
 
-use crate::{
-    error::GenericError, toml::TomlPreview, utils::PixiSpanned, KnownPreviewFeature, TomlError,
-};
+use crate::{error::GenericError, utils::PixiSpanned, TomlError};
 
 #[derive(Clone, Default, Debug, Serialize)]
 pub struct UniquePackageMap {
@@ -29,9 +27,9 @@ pub struct UniquePackageMap {
 impl UniquePackageMap {
     pub fn into_inner(
         self,
-        preview: &TomlPreview,
+        is_pixi_build_enabled: bool,
     ) -> Result<IndexMap<rattler_conda_types::PackageName, PixiSpec>, TomlError> {
-        if !preview.is_enabled(KnownPreviewFeature::PixiBuild) {
+        if !is_pixi_build_enabled {
             if let Some((package_name, _)) = self.specs.iter().find(|(_, spec)| spec.is_source()) {
                 return Err(TomlError::Generic(
                     GenericError::new(

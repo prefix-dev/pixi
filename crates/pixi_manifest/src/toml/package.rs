@@ -11,14 +11,13 @@ use url::Url;
 use crate::{
     package::Package,
     toml::{
-        package_target::TomlPackageTarget, workspace::ExternalWorkspaceProperties,
-        TomlPackageBuild, TomlPreview,
+        package_target::TomlPackageTarget, workspace::ExternalWorkspaceProperties, TomlPackageBuild,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
-    PackageManifest, TargetSelector, Targets, TomlError,
+    PackageManifest, TargetSelector, Targets, TomlError, WorkspaceManifest,
 };
 
-/// The TOML representation of the `[workspace]` section in a pixi manifest.
+/// The TOML representation of the `[package]` section in a pixi manifest.
 ///
 /// In TOML some of the fields can be empty even though they are required in the
 /// data model (e.g. `name`, `version`). This is allowed because some of the
@@ -108,7 +107,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
 /// manifest but we do require to be set in the package section.
 ///
 /// This can be used to inject these properties.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ExternalPackageProperties {
     pub name: Option<String>,
     pub version: Option<Version>,
@@ -155,7 +154,7 @@ impl TomlPackage {
     pub fn into_manifest(
         self,
         external: ExternalPackageProperties,
-        preview: &TomlPreview,
+        workspace_manifest: &WorkspaceManifest,
     ) -> Result<PackageManifest, TomlError> {
         let name = self.name.or(external.name).ok_or(Error {
             kind: ErrorKind::MissingField("name"),
@@ -173,13 +172,13 @@ impl TomlPackage {
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
         }
-        .into_package_target(preview)?;
+        .into_package_target(&workspace_manifest.workspace.preview)?;
 
         let targets = self
             .target
             .into_iter()
             .map(|(selector, target)| {
-                let target = target.into_package_target(preview)?;
+                let target = target.into_package_target(&workspace_manifest.workspace.preview)?;
                 Ok::<_, TomlError>((selector, target))
             })
             .collect::<Result<_, _>>()?;

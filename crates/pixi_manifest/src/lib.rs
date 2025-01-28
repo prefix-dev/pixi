@@ -2,6 +2,7 @@ mod activation;
 mod build_system;
 pub(crate) mod channel;
 mod dependencies;
+mod discovery;
 mod environment;
 mod environments;
 mod error;
@@ -23,7 +24,6 @@ pub mod toml;
 pub mod utils;
 mod validation;
 mod workspace;
-mod discovery;
 
 pub use activation::Activation;
 pub use build_system::PackageBuild;

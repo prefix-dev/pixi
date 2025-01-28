@@ -1,0 +1,4 @@
+[workspace]
+name = "nested-workspace"
+channels = []
+platforms = []

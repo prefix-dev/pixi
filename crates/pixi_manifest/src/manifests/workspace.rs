@@ -47,7 +47,9 @@ impl WorkspaceManifest {
         source: S,
     ) -> Result<Self, WithSourceCode<TomlError, S>> {
         TomlManifest::from_toml_str(source.as_ref())
-            .and_then(|manifest| manifest.into_workspace_manifest(ExternalWorkspaceProperties::default()))
+            .and_then(|manifest| {
+                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default())
+            })
             .map(|manifests| manifests.0)
             .map_err(|e| WithSourceCode { source, error: e })
     }
@@ -748,9 +750,8 @@ fn handle_missing_target(
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr};
+    use std::str::FromStr;
 
-    use super::*;
     use indexmap::{IndexMap, IndexSet};
     use insta::{assert_debug_snapshot, assert_snapshot, assert_yaml_snapshot};
     use itertools::Itertools;
@@ -764,6 +765,7 @@ mod tests {
     use rstest::rstest;
     use toml_edit::DocumentMut;
 
+    use super::*;
     use crate::{
         pypi::PyPiPackageName,
         pyproject::PyProjectManifest,
@@ -773,7 +775,7 @@ mod tests {
             test_utils::{expect_parse_failure, format_parse_error},
             WithSourceCode,
         },
-        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName, Manifest,
+        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
         ManifestDocument, PrioritizedChannel, SpecType, TargetSelector, Task, TomlError,
         WorkspaceManifest,
     };
@@ -844,7 +846,7 @@ start = "python -m flask run --port=5050"
 
         let manifest = PyProjectManifest::from_toml_str(&source)
             .unwrap_or_else(|error| panic!("{}", format_parse_error(&source, error)))
-            .into_manifests()
+            .into_workspace_manifest()
             .unwrap_or_else(|error| panic!("{}", format_parse_error(&source, error)))
             .0;
 
@@ -2783,11 +2785,16 @@ bar = "*"
         platforms = ["win-64"]
         "#;
         let manifest = PyProjectManifest::from_toml_str(manifest_source).unwrap();
-        let error = manifest.into_manifests().unwrap_err();
+        let error = manifest.into_workspace_manifest().unwrap_err();
 
         insta::assert_snapshot!(format_parse_error(manifest_source, error), @r###"
-        × Unsupported pep508 requirement: 'attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main'
-        ╰─▶ Found invalid characters for git revision 'main', branches and tags are not supported yet
+         × Found invalid characters for git revision 'main', branches and tags are not supported yet
+          ╭─[pixi.toml:6:14]
+        5 │         dependencies = [
+        6 │             "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main"
+          ·              ────────────────────────────────────────────────────────────
+        7 │         ]
+          ╰────
         "###);
     }
 

@@ -2,9 +2,9 @@ use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use crate::{
     target::PackageTarget,
-    toml::{target::combine_target_dependencies, TomlPreview},
+    toml::target::combine_target_dependencies,
     utils::{package_map::UniquePackageMap, PixiSpanned},
-    SpecType, TomlError,
+    KnownPreviewFeature, Preview, SpecType, TomlError,
 };
 
 #[derive(Debug)]
@@ -30,7 +30,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageTarget {
 }
 
 impl TomlPackageTarget {
-    pub fn into_package_target(self, preview: &TomlPreview) -> Result<PackageTarget, TomlError> {
+    pub fn into_package_target(self, preview: &Preview) -> Result<PackageTarget, TomlError> {
         Ok(PackageTarget {
             dependencies: combine_target_dependencies(
                 [
@@ -38,7 +38,7 @@ impl TomlPackageTarget {
                     (SpecType::Host, self.host_dependencies),
                     (SpecType::Build, self.build_dependencies),
                 ],
-                preview,
+                preview.is_enabled(KnownPreviewFeature::PixiBuild),
             )?,
         })
     }

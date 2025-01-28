@@ -10,7 +10,11 @@ use pixi_toml::{DeserializeAs, Same, TomlFromStr, TomlIndexMap, TomlWith};
 use pyproject_toml::{
     BuildSystem, Contact, DependencyGroupSpecifier, DependencyGroups, License, Project, ReadMe,
 };
-use toml_span::{de_helpers::{expected, TableHelper}, value::ValueInner, DeserError, Deserialize, Error, ErrorKind, Spanned, Value};
+use toml_span::{
+    de_helpers::{expected, TableHelper},
+    value::ValueInner,
+    DeserError, Deserialize, Error, ErrorKind, Spanned, Value,
+};
 
 use crate::pyproject::{PyProjectManifest, Tool, ToolPoetry};
 
@@ -47,14 +51,17 @@ impl<'de> toml_span::Deserialize<'de> for PyProjectManifest {
         let tools = th.optional("tool");
         th.finalize(Some(value))?;
 
-        Ok(PyProjectManifest { project, tool: tools })
+        Ok(PyProjectManifest {
+            project,
+            tool: tools,
+        })
     }
 }
 
 /// A wrapper around [`BuildSystem`] that implements [`toml_span::Deserialize`]
 /// and [`pixi_toml::DeserializeAs`].
 #[derive(Debug)]
-struct TomlBuildSystem {
+pub struct TomlBuildSystem {
     /// PEP 508 dependencies required to execute the build system
     pub requires: Vec<Spanned<Requirement>>,
     /// A string naming a Python object that will be used to perform the build
@@ -296,7 +303,7 @@ impl<'de> DeserializeAs<'de, Project> for TomlProject {
 /// A wrapper around [`ReadMe`] that implements [`toml_span::Deserialize`] and
 /// [`pixi_toml::DeserializeAs`].
 #[derive(Debug)]
-struct TomlReadme(ReadMe);
+pub struct TomlReadme(ReadMe);
 
 impl TomlReadme {
     pub fn into_inner(self) -> ReadMe {
@@ -334,7 +341,7 @@ impl<'de> DeserializeAs<'de, ReadMe> for TomlReadme {
 /// A wrapper around [`License`] that implements [`toml_span::Deserialize`] and
 /// [`pixi_toml::DeserializeAs`].
 #[derive(Debug)]
-struct TomlLicense(License);
+pub struct TomlLicense(License);
 
 impl TomlLicense {
     pub fn into_inner(self) -> License {

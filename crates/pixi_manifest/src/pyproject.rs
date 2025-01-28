@@ -19,7 +19,8 @@ use crate::{
     manifests::PackageManifest,
     toml::{
         pyproject::{TomlContact, TomlProject},
-        ExternalWorkspaceProperties, FromTomlStr, PyProjectToml, TomlManifest, Warning,
+        ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
+        TomlManifest, Warning,
     },
     FeatureName,
 };
@@ -65,7 +66,7 @@ impl PyProjectManifest {
         if self.name().is_none() {
             let span = self
                 .pixi_manifest()
-                .and_then(|manifest| manifest.workspace.span());
+                .and_then(|manifest| manifest.workspace.as_ref()?.span());
             return Err(TomlError::MissingField("name".into(), span));
         }
 
@@ -79,7 +80,7 @@ impl PyProjectManifest {
     pub fn name(&self) -> Option<&str> {
         if let Some(pixi_name) = self
             .pixi_manifest()
-            .and_then(|p| p.workspace.value.name.as_deref())
+            .and_then(|p| p.workspace.as_ref()?.value.name.as_deref())
         {
             return Some(pixi_name);
         }
@@ -213,8 +214,70 @@ impl From<TomlProject> for PyProjectFields {
 }
 
 impl PyProjectManifest {
+    /// Returns true if the pyproject.toml file also contains a pixi workspace.
+    pub fn has_pixi_workspace(&self) -> bool {
+        self.tool()
+            .and_then(|t| t.pixi.as_ref())
+            .map_or(false, TomlManifest::has_workspace)
+    }
+
+    /// Assume that the manifest is a workspace manifest and convert it as such.
+    ///
+    /// If the manifest also contains a package section that will be converted
+    /// as well.
+    pub fn into_package_manifest(
+        self,
+        workspace: &WorkspaceManifest,
+    ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
+        // Load the data nested under '[tool.pixi]' as pixi manifest
+        let Some(Tool {
+            pixi: Some(pixi),
+            poetry,
+        }) = self.tool
+        else {
+            return Err(TomlError::MissingField("tool.pixi".into(), None));
+        };
+
+        // Extract some of the values we are interested in from the poetry table.
+        let poetry = poetry.unwrap_or_default();
+
+        // Extract the values we are interested in from the pyproject.toml
+        let project = self
+            .project
+            .project
+            .map(PyProjectFields::from)
+            .unwrap_or_default();
+
+        // TODO:  would be nice to add license, license-file, readme, homepage,
+        // repository, documentation, regarding the above, the types are a bit
+        // different than we expect, so the conversion is not straightforward we
+        // could change these types or we can convert. Let's decide when we make it.
+        // etc.
+        pixi.into_package_manifest(
+            ExternalPackageProperties {
+                name: project.name.map(Spanned::take),
+                version: project
+                    .version
+                    .and_then(|v| v.take().to_string().parse().ok())
+                    .or(poetry.version.and_then(|v| v.parse().ok())),
+                description: project
+                    .description
+                    .map(Spanned::take)
+                    .or(poetry.description),
+                authors: project.authors.map(contacts_to_authors).or(poetry.authors),
+                license: None,
+                license_file: None,
+                readme: None,
+                homepage: None,
+                repository: None,
+                documentation: None,
+            },
+            workspace,
+        )
+    }
+
     #[allow(clippy::result_large_err)]
-    pub fn into_manifests(
+    pub fn into_workspace_manifest(
         self,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let PyProjectToml {
@@ -229,7 +292,7 @@ impl PyProjectManifest {
             poetry,
         }) = self.tool
         else {
-            return Err(TomlError::MissingField("tool.pixi".into(), None).into());
+            return Err(TomlError::MissingField("tool.pixi".into(), None));
         };
 
         // Extract the values we are interested in from the pyproject.toml
@@ -325,8 +388,7 @@ impl PyProjectManifest {
                             GenericError::new(format!("{}", err)).with_span(span.into())
                         })
                     })
-                    .transpose()?
-                    .into_iter(),
+                    .transpose()?,
             )
             .flat_map(|map| map.into_iter());
 
@@ -349,7 +411,7 @@ impl PyProjectManifest {
                 if project_name.as_ref() != Some(&requirement.name) {
                     target
                         .try_add_pep508_dependency(
-                            &requirement,
+                            requirement,
                             None,
                             DependencyOverwriteBehavior::Error,
                         )

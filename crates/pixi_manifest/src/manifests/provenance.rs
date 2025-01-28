@@ -1,11 +1,11 @@
+use crate::ManifestSource;
+use miette::Diagnostic;
+use pixi_consts::consts;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
-use miette::Diagnostic;
-use pixi_consts::consts;
 use thiserror::Error;
-use crate::ManifestSource;
 
 /// Describes the origin of a manifest file.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -28,9 +28,7 @@ pub enum ProvenanceError {
 impl ManifestProvenance {
     /// Constructs a new `ManifestProvenance` instance.
     pub fn new(path: PathBuf, kind: ManifestKind) -> Self {
-        Self {
-            path, kind
-        }
+        Self { path, kind }
     }
 
     /// Load the manifest from a path

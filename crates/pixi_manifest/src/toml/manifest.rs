@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-use itertools::chain;
-use pixi_toml::{TomlHashMap, TomlIndexMap};
+use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
 use toml_span::{
     de_helpers::{expected, TableHelper},
     value::ValueInner,
@@ -11,7 +10,7 @@ use toml_span::{
 
 use crate::{
     environment::EnvironmentIdx,
-    error::{FeatureNotEnabled, InvalidNonPackageDependencies},
+    error::FeatureNotEnabled,
     manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
@@ -29,109 +28,92 @@ use crate::{
 /// manifest without any validation logic applied.
 #[derive(Debug)]
 pub struct TomlManifest {
-    pub workspace: PixiSpanned<TomlWorkspace>,
+    pub workspace: Option<PixiSpanned<TomlWorkspace>>,
     pub package: Option<PixiSpanned<TomlPackage>>,
-    pub system_requirements: SystemRequirements,
-    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
+
+    pub system_requirements: Option<PixiSpanned<SystemRequirements>>,
+    pub target: Option<PixiSpanned<IndexMap<PixiSpanned<TargetSelector>, TomlTarget>>>,
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
+    pub pypi_dependencies: Option<PixiSpanned<IndexMap<PyPiPackageName, PyPiRequirement>>>,
 
     /// Additional information to activate an environment.
-    pub activation: Option<Activation>,
+    pub activation: Option<PixiSpanned<Activation>>,
 
     /// Target specific tasks to run in the environment
-    pub tasks: HashMap<TaskName, Task>,
+    pub tasks: Option<PixiSpanned<HashMap<TaskName, Task>>>,
 
     /// The features defined in the project.
-    pub feature: IndexMap<FeatureName, TomlFeature>,
+    pub feature: Option<PixiSpanned<IndexMap<FeatureName, TomlFeature>>>,
 
     /// The environments the project can create.
-    pub environments: IndexMap<EnvironmentName, TomlEnvironmentList>,
+    pub environments: Option<PixiSpanned<IndexMap<EnvironmentName, TomlEnvironmentList>>>,
 
     /// pypi-options
-    pub pypi_options: Option<PypiOptions>,
+    pub pypi_options: Option<PixiSpanned<PypiOptions>>,
 
     /// Any warnings we encountered while parsing the manifest
     pub warnings: Vec<Warning>,
 }
 
 impl TomlManifest {
-    /// Parses a toml string into a project manifest.
-    pub fn is_pixi_build_enabled(&self) -> bool {
-        self.workspace
-            .value
-            .preview
-            .is_enabled(KnownPreviewFeature::PixiBuild)
-    }
-
-    /// Check if some dependency types are used which will not be used.
-    fn check_dependency_usage(&self) -> Result<(), TomlError> {
-        // If `pixi-build` is not enabled then we can ignore the checks.
-        if !self.is_pixi_build_enabled() {
-            return Ok(());
-        }
-
-        // If the `[package]` section is present then we can ignore the checks.
-        if self.package.is_some() {
-            return Ok(());
-        }
-
-        // Find all the dependency sections which are not allowed without the
-        // `[package]` section.
-        let top_level_dependencies = vec![
-            self.host_dependencies.as_ref().and_then(PixiSpanned::span),
-            self.build_dependencies.as_ref().and_then(PixiSpanned::span),
-        ];
-        let target_dependencies = self.target.values().flat_map(|t| {
-            [
-                t.host_dependencies.as_ref().and_then(PixiSpanned::span),
-                t.build_dependencies.as_ref().and_then(PixiSpanned::span),
-            ]
-        });
-        let feature_dependencies = self.feature.values().flat_map(|f| {
-            let top_level_dependencies = [
-                f.host_dependencies.as_ref().and_then(PixiSpanned::span),
-                f.build_dependencies.as_ref().and_then(PixiSpanned::span),
-            ];
-            let target_dependencies = f.target.values().flat_map(|t| {
-                [
-                    t.host_dependencies.as_ref().and_then(PixiSpanned::span),
-                    t.build_dependencies.as_ref().and_then(PixiSpanned::span),
-                ]
-            });
-            chain!(top_level_dependencies, target_dependencies)
-        });
-        let invalid_dependency_sections = chain!(
-            top_level_dependencies,
-            target_dependencies,
-            feature_dependencies
-        )
-        .flatten()
-        .collect::<Vec<_>>();
-
-        if invalid_dependency_sections.is_empty() {
-            Ok(())
-        } else {
-            Err(InvalidNonPackageDependencies {
-                invalid_dependency_sections,
-            }
-            .into())
-        }
+    /// Returns true if the manifest contains a workspace.
+    pub fn has_workspace(&self) -> bool {
+        self.workspace.is_some()
     }
 
     /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
-    /// If the manifest also contains a package section that will be converted as well.
+    /// If the manifest also contains a package section that will be converted
+    /// as well.
+    pub fn into_package_manifest(
+        self,
+        external: ExternalPackageProperties,
+        workspace: &WorkspaceManifest,
+    ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
+        let Some(PixiSpanned {
+            value: package,
+            span: package_span,
+        }) = self.package
+        else {
+            return Err(TomlError::MissingField("package".into(), None));
+        };
+
+        if !workspace
+            .workspace
+            .preview
+            .is_enabled(KnownPreviewFeature::PixiBuild)
+        {
+            return Err(FeatureNotEnabled::new(
+                format!(
+                    "[package] section is only allowed when the `{}` feature is enabled",
+                    KnownPreviewFeature::PixiBuild
+                ),
+                KnownPreviewFeature::PixiBuild,
+            )
+            .with_opt_span(package_span)
+            .into());
+        }
+
+        let package = package.into_manifest(external, workspace)?;
+        Ok((package, Vec::new()))
+    }
+
+    /// Assume that the manifest is a workspace manifest and convert it as such.
+    ///
+    /// If the manifest also contains a package section that will be converted
+    /// as well.
     pub fn into_workspace_manifest(
         self,
         external: ExternalWorkspaceProperties,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
-        self.check_dependency_usage()?;
+        let workspace = self
+            .workspace
+            .ok_or_else(|| TomlError::MissingField("project/workspace".into(), None))?;
 
-        let preview = &self.workspace.value.preview;
-        let pixi_build_enabled = self.is_pixi_build_enabled();
+        let preview = &workspace.value.preview;
+        let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
         let WithWarnings {
             value: default_workspace_target,
@@ -140,15 +122,15 @@ impl TomlManifest {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
-            pypi_dependencies: self.pypi_dependencies,
-            activation: self.activation,
-            tasks: self.tasks,
+            pypi_dependencies: self.pypi_dependencies.map(PixiSpanned::into_inner),
+            activation: self.activation.map(PixiSpanned::into_inner),
+            tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
             warnings: self.warnings,
         }
         .into_workspace_target(None, preview)?;
 
         let mut workspace_targets = IndexMap::new();
-        for (selector, target) in self.target {
+        for (selector, target) in self.target.map(|t| t.value).unwrap_or_default() {
             let WithWarnings {
                 value: workspace_target,
                 warnings: mut target_warnings,
@@ -166,13 +148,16 @@ impl TomlManifest {
             platforms: None,
             channels: None,
 
-            channel_priority: self.workspace.value.channel_priority,
+            channel_priority: workspace.value.channel_priority,
 
-            system_requirements: self.system_requirements,
+            system_requirements: self
+                .system_requirements
+                .map(PixiSpanned::into_inner)
+                .unwrap_or_default(),
 
             // Use the pypi-options from the manifest for
             // the default feature
-            pypi_options: self.pypi_options,
+            pypi_options: self.pypi_options.map(PixiSpanned::into_inner),
 
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(
@@ -186,6 +171,8 @@ impl TomlManifest {
             IndexMap::from_iter([(FeatureName::Default, default_feature)]);
         let named_features = self
             .feature
+            .map(PixiSpanned::into_inner)
+            .unwrap_or_default()
             .into_iter()
             .map(|(name, feature)| {
                 let WithWarnings {
@@ -203,7 +190,11 @@ impl TomlManifest {
         let mut solve_groups = SolveGroups::default();
 
         // Add the default environment first if it was not redefined.
-        if !self.environments.contains_key(&EnvironmentName::Default) {
+        let toml_environments = self
+            .environments
+            .map(PixiSpanned::into_inner)
+            .unwrap_or_default();
+        if !toml_environments.contains_key(&EnvironmentName::Default) {
             environments.environments.push(Some(Environment::default()));
             environments
                 .by_name
@@ -211,7 +202,7 @@ impl TomlManifest {
         }
 
         // Add all named environments
-        for (name, env) in self.environments {
+        for (name, env) in toml_environments {
             // Decompose the TOML
             let (features, features_source_loc, solve_group, no_default_feature) = match env {
                 TomlEnvironmentList::Map(env) => {
@@ -247,14 +238,19 @@ impl TomlManifest {
             .and_then(|p| p.value.name.as_ref())
             .cloned();
 
-        let preview = self.workspace.value.preview.clone();
-        let workspace = self
-            .workspace
+        let workspace = workspace
             .value
             .into_workspace(ExternalWorkspaceProperties {
                 name: project_name.or(external.name),
                 ..external
             })?;
+
+        let workspace_manifest = WorkspaceManifest {
+            workspace,
+            features,
+            environments,
+            solve_groups,
+        };
 
         let package_manifest = if let Some(PixiSpanned {
             value: package,
@@ -273,6 +269,7 @@ impl TomlManifest {
                 .into());
             }
 
+            let workspace = &workspace_manifest.workspace;
             let package = package.into_manifest(
                 ExternalPackageProperties {
                     name: Some(workspace.name.clone()),
@@ -286,19 +283,12 @@ impl TomlManifest {
                     repository: workspace.repository.clone(),
                     documentation: workspace.documentation.clone(),
                 },
-                &preview,
+                &workspace_manifest,
             )?;
 
             Some(package)
         } else {
             None
-        };
-
-        let workspace_manifest = WorkspaceManifest {
-            workspace,
-            features,
-            environments,
-            solve_groups,
         };
 
         Ok((workspace_manifest, package_manifest, warnings))
@@ -310,48 +300,54 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let mut th = TableHelper::new(value)?;
         let mut warnings = Vec::new();
 
-        let workspace_s = if th.contains("workspace") {
-            th.required_s("workspace")?
+        let workspace = if th.contains("workspace") {
+            Some(th.required_s("workspace")?.into())
         } else {
-            th.required_s("project")?
+            th.optional("project")
         };
-        let workspace = workspace_s.value;
         let package = th.optional("package");
+
         let target = th
-            .optional::<TomlIndexMap<_, _>>("target")
-            .map(TomlIndexMap::into_inner)
-            .unwrap_or_default();
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<PixiSpanned<TargetSelector>, Same>>>>(
+                "target",
+            )
+            .map(TomlWith::into_inner);
+
         let dependencies = th.optional("dependencies");
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let pypi_dependencies = th
-            .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
-            .map(TomlIndexMap::into_inner);
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
+            .map(TomlWith::into_inner);
         let activation = th.optional("activation");
         let tasks = th
-            .optional::<TomlHashMap<_, TomlTask>>("tasks")
-            .map(TomlHashMap::into_inner)
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, value)| {
-                let WithWarnings {
-                    value: task,
-                    warnings: mut task_warnings,
-                } = value;
-                warnings.append(&mut task_warnings);
-                (key, task)
-            })
-            .collect();
+            .optional::<TomlWith<_, PixiSpanned<TomlHashMap<_, Same>>>>("tasks")
+            .map(|with| {
+                let inner: PixiSpanned<HashMap<String, TomlTask>> = with.into_inner();
+                PixiSpanned {
+                    value: inner
+                        .value
+                        .into_iter()
+                        .map(|(key, value)| {
+                            let WithWarnings {
+                                value: task,
+                                warnings: mut task_warnings,
+                            } = value;
+                            warnings.append(&mut task_warnings);
+                            (key.into(), task)
+                        })
+                        .collect(),
+                    span: inner.span,
+                }
+            });
         let feature = th
-            .optional::<TomlIndexMap<_, _>>("feature")
-            .map(TomlIndexMap::into_inner)
-            .unwrap_or_default();
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("feature")
+            .map(TomlWith::into_inner);
         let environments = th
-            .optional::<TomlIndexMap<_, _>>("environments")
-            .map(TomlIndexMap::into_inner)
-            .unwrap_or_default();
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("environments")
+            .map(TomlWith::into_inner);
         let pypi_options = th.optional("pypi-options");
-        let system_requirements = th.optional("system-requirements").unwrap_or_default();
+        let system_requirements = th.optional("system-requirements");
 
         // Parse the tool section by ignoring it.
         if let Some(mut tool) = th.table.remove("tool") {
@@ -406,7 +402,9 @@ mod test {
     #[must_use]
     pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml)
-            .and_then(|manifest| manifest.into_workspace_manifest(ExternalWorkspaceProperties::default()))
+            .and_then(|manifest| {
+                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default())
+            })
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)

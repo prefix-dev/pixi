@@ -7,7 +7,7 @@ use toml_edit::DocumentMut;
 use crate::{
     error::TomlError,
     manifests::{provenance::ManifestKind, PackageManifest},
-    pyproject::{PyProjectManifest},
+    pyproject::PyProjectManifest,
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
     PackageBuild, WorkspaceManifest,
 };
@@ -56,7 +56,7 @@ impl Manifest {
                 let manifest = match PyProjectManifest::from_toml_str(&contents)
                     .and_then(|m| m.ensure_pixi())
                 {
-                    Ok(manifest) => match manifest.into_manifests() {
+                    Ok(manifest) => match manifest.into_workspace_manifest() {
                         Ok(manifests) => Ok(manifests),
                         Err(e) => return Err(Report::from(e)),
                     },
