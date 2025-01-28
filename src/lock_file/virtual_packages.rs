@@ -33,20 +33,11 @@ pub enum MachineValidationError {
     #[error(transparent)]
     RepodataConversionError(#[from] ConversionError),
 
-    #[error("No Conda records found in the lockfile for platform: {0}")]
-    NoCondaRecordsFound(Platform),
-
-    #[error("No PyPI packages found in the lockfile for platform: {0}")]
-    NoPypiPackagesFound(Platform),
-
     #[error("Couldn't parse dependencies")]
     DependencyParsingError(#[from] ParseMatchSpecError),
 
     #[error("Can't find environment: {0}")]
     EnvironmentNotFound(String),
-
-    #[error(transparent)]
-    WheelTagsError(#[from] WheelTagsErrors),
 
     #[error(transparent)]
     PyPITagError(#[from] PyPITagError),
@@ -77,28 +68,19 @@ pub(crate) fn get_required_virtual_packages_from_conda_records(
         .map_err(MachineValidationError::DependencyParsingError)
 }
 
-/// Wheel tags errors
-#[derive(Debug, Error, Diagnostic)]
-pub enum WheelTagsErrors {
-    #[error("No PyPI packages found for platform: {0}")]
-    NoPypiPackagesFound(Platform),
-}
-
-fn get_wheels_from_lockfile(
-    pypi_packages: Vec<PypiPackageData>,
-) -> Result<Vec<WheelFilename>, WheelTagsErrors> {
-    Ok(pypi_packages
+fn get_wheels_from_lockfile(pypi_packages: Vec<PypiPackageData>) -> Vec<WheelFilename> {
+    pypi_packages
         .into_iter()
         .map(|package| package.location.clone())
         .flat_map(|location| {
             if let Some(file_name) = location.file_name() {
-                // TODO: Handle errors
                 WheelFilename::from_str(file_name).ok()
             } else {
+                tracing::debug!("No file name found for location: {:?}", location);
                 None
             }
         })
-        .collect_vec())
+        .collect_vec()
 }
 
 /// Validate that current machine has all the required virtual packages for the given environment
@@ -185,16 +167,13 @@ pub(crate) fn validate_system_meets_environment_requirements(
             .map(|(pkg_data, _env_data)| pkg_data.clone())
             .collect_vec();
 
-        let wheels = get_wheels_from_lockfile(pypi_packages)?;
+        let wheels = get_wheels_from_lockfile(pypi_packages);
 
         let system_tags = get_tags_from_machine(&system_virtual_packages, platform, python_record)?;
 
         // Check if all the wheel tags match the system virtual packages
         for wheel in wheels {
-            if wheel.is_compatible(&system_tags) {
-                // TODO: Handle errors
-                continue;
-            } else {
+            if !wheel.is_compatible(&system_tags) {
                 return Err(MachineValidationError::WheelTagsMismatch(wheel.to_string()));
             }
         }
@@ -220,7 +199,6 @@ mod test {
             .conda_repodata_records(platform)
             .map_err(MachineValidationError::RepodataConversionError)
             .unwrap()
-            .ok_or(MachineValidationError::NoCondaRecordsFound(platform))
             .unwrap();
 
         let conda_records: Vec<&PackageRecord> = conda_data
