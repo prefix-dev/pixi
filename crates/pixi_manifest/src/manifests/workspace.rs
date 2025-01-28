@@ -1,28 +1,29 @@
-use crate::manifests::WithProvenance;
+use std::{collections::HashMap, fmt::Display, hash::Hash, str::FromStr};
+
+use indexmap::{Equivalent, IndexMap, IndexSet};
+use itertools::Itertools;
+use miette::{miette, Context, IntoDiagnostic, SourceCode};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{Platform, Version};
+use toml_edit::Value;
+
 use crate::{
     consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
     feature::{Feature, FeatureName},
+    manifests::WithProvenance,
     pypi::PyPiPackageName,
     solve_group::SolveGroups,
     to_options,
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
     utils::WithSourceCode,
     workspace::Workspace,
-    DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
+    DependencyOverwriteBehavior, GetFeatureError, ManifestDocument, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
     TomlError, WorkspaceTarget,
 };
-use indexmap::{Equivalent, IndexMap, IndexSet};
-use itertools::Itertools;
-use miette::{miette, Context, IntoDiagnostic, SourceCode};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{Platform, Version};
-use std::collections::HashMap;
-use std::{fmt::Display, hash::Hash, str::FromStr};
-use toml_edit::Value;
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
 /// describes the part related to the workspace only.
@@ -188,7 +189,14 @@ impl WorkspaceManifest {
     }
 }
 
-impl WithProvenance<WorkspaceManifest> {
+/// A mutable context that allows modifying the workspace manifest both in
+/// memory and on disk.
+pub struct WorkspaceManifestMut<'a> {
+    workspace: &'a mut WorkspaceManifest,
+    document: &'a mut ManifestDocument,
+}
+
+impl WorkspaceManifestMut<'_> {
     /// Add a task to the project.
     ///
     /// This function modifies both the workspace and the TOML document. Use
@@ -201,19 +209,18 @@ impl WithProvenance<WorkspaceManifest> {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
-        if let Ok(tasks) = self.value.tasks(platform, feature_name) {
+        if let Ok(tasks) = self.workspace.tasks(platform, feature_name) {
             if tasks.contains_key(&name) {
                 miette::bail!("task {} already exists", name);
             }
         }
 
         // Add the task to the Toml manifest
-        self.provenance
-            .document
+        self.document
             .add_task(name.as_str(), task.clone(), platform, feature_name)?;
 
         // Add the task to the manifest
-        self.value
+        self.workspace
             .get_or_insert_target_mut(platform, Some(feature_name))
             .tasks
             .insert(name, task);
@@ -232,18 +239,17 @@ impl WithProvenance<WorkspaceManifest> {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task exists
-        self.value
+        self.workspace
             .tasks(platform, feature_name)?
             .get(&name)
             .ok_or_else(|| miette::miette!("task {} does not exist", name))?;
 
         // Remove the task from the Toml manifest
-        self.provenance
-            .document
+        self.document
             .remove_task(name.as_str(), platform, feature_name)?;
 
         // Remove the task from the internal manifest
-        self.value
+        self.workspace
             .feature_mut(feature_name)?
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
@@ -266,19 +272,19 @@ impl WithProvenance<WorkspaceManifest> {
     ) -> miette::Result<()> {
         // Make sure the features exist
         for feature in features.iter().flatten() {
-            if self.value.features.get(feature.as_str()).is_none() {
-                return Err(UnknownFeature::new(feature.to_string(), &self.value).into());
+            if self.workspace.features.get(feature.as_str()).is_none() {
+                return Err(UnknownFeature::new(feature.to_string(), &*self.workspace).into());
             }
         }
 
-        self.provenance.document.add_environment(
+        self.document.add_environment(
             name.clone(),
             features.clone(),
             solve_group.clone(),
             no_default_feature,
         )?;
 
-        let environment_idx = self.value.environments.add(Environment {
+        let environment_idx = self.workspace.environments.add(Environment {
             name: EnvironmentName::Named(name),
             features: features.unwrap_or_default(),
             features_source_loc: None,
@@ -287,7 +293,9 @@ impl WithProvenance<WorkspaceManifest> {
         });
 
         if let Some(solve_group) = solve_group {
-            self.value.solve_groups.add(solve_group, environment_idx);
+            self.workspace
+                .solve_groups
+                .add(solve_group, environment_idx);
         }
 
         Ok(())
@@ -299,20 +307,20 @@ impl WithProvenance<WorkspaceManifest> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn remove_environment(&mut self, name: &str) -> miette::Result<bool> {
         // Remove the environment from the TOML document
-        if !self.provenance.document.remove_environment(name)? {
+        if !self.document.remove_environment(name)? {
             return Ok(false);
         }
 
         // Remove the environment from the internal manifest
         let environment_idx = self
-            .value
+            .workspace
             .environments
             .by_name
             .shift_remove(name)
             .expect("environment should exist");
 
         // Remove the environment from the solve groups
-        self.value
+        self.workspace
             .solve_groups
             .iter_mut()
             .for_each(|group| group.environments.retain(|&idx| idx != environment_idx));
@@ -331,9 +339,9 @@ impl WithProvenance<WorkspaceManifest> {
     ) -> miette::Result<()> {
         // Get current and new platforms for the feature
         let current = match feature_name {
-            FeatureName::Default => self.value.workspace.platforms.get_mut(),
+            FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
             FeatureName::Named(_) => self
-                .value
+                .workspace
                 .get_or_insert_feature_mut(feature_name)
                 .platforms_mut(),
         };
@@ -344,10 +352,7 @@ impl WithProvenance<WorkspaceManifest> {
         current.extend(new.clone());
 
         // Then to the TOML document
-        let platforms = self
-            .provenance
-            .document
-            .get_array_mut("platforms", feature_name)?;
+        let platforms = self.document.get_array_mut("platforms", feature_name)?;
         for platform in new.iter() {
             platforms.push(platform.to_string());
         }
@@ -366,8 +371,8 @@ impl WithProvenance<WorkspaceManifest> {
     ) -> miette::Result<()> {
         // Get current platforms and platform to remove for the feature
         let current = match feature_name {
-            FeatureName::Default => self.value.workspace.platforms.get_mut(),
-            FeatureName::Named(_) => self.value.feature_mut(feature_name)?.platforms_mut(),
+            FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
+            FeatureName::Named(_) => self.workspace.feature_mut(feature_name)?.platforms_mut(),
         };
         // Get the platforms to remove, while checking if they exist
         let to_remove: IndexSet<_> = platforms
@@ -388,10 +393,7 @@ impl WithProvenance<WorkspaceManifest> {
 
         // And from the TOML document
         let retained = retained.iter().map(|p| p.to_string()).collect_vec();
-        let platforms = self
-            .provenance
-            .document
-            .get_array_mut("platforms", feature_name)?;
+        let platforms = self.document.get_array_mut("platforms", feature_name)?;
         platforms.retain(|x| retained.contains(&x.to_string()));
 
         Ok(())
@@ -414,18 +416,13 @@ impl WithProvenance<WorkspaceManifest> {
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
             match self
-                .value
+                .workspace
                 .get_or_insert_target_mut(platform, Some(feature_name))
                 .try_add_dependency(name, spec, spec_type, overwrite_behavior)
             {
                 Ok(true) => {
-                    self.provenance.document.add_dependency(
-                        name,
-                        spec,
-                        spec_type,
-                        platform,
-                        feature_name,
-                    )?;
+                    self.document
+                        .add_dependency(name, spec, spec_type, platform, feature_name)?;
                     any_added = true;
                 }
                 Ok(false) => {}
@@ -449,7 +446,7 @@ impl WithProvenance<WorkspaceManifest> {
         for platform in crate::to_options(platforms) {
             // Remove the dependency from the manifest
             match self
-                .value
+                .workspace
                 .target_mut(platform, feature_name)
                 .ok_or_else(|| {
                     handle_missing_target(platform.as_ref(), feature_name, consts::DEPENDENCIES)
@@ -463,8 +460,7 @@ impl WithProvenance<WorkspaceManifest> {
                 Err(e) => return Err(e.into()),
             };
             // Remove the dependency from the TOML document
-            self.provenance
-                .document
+            self.document
                 .remove_dependency(dep, spec_type, platform, feature_name)?;
         }
         Ok(())
@@ -487,12 +483,12 @@ impl WithProvenance<WorkspaceManifest> {
         for platform in to_options(platforms) {
             // Add the pypi dependency to the manifest
             match self
-                .value
+                .workspace
                 .get_or_insert_target_mut(platform, Some(feature_name))
                 .try_add_pep508_dependency(requirement, editable, overwrite_behavior)
             {
                 Ok(true) => {
-                    self.provenance.document.add_pypi_dependency(
+                    self.document.add_pypi_dependency(
                         requirement,
                         platform,
                         feature_name,
@@ -521,7 +517,7 @@ impl WithProvenance<WorkspaceManifest> {
         for platform in crate::to_options(platforms) {
             // Remove the dependency from the manifest
             match self
-                .value
+                .workspace
                 .target_mut(platform, feature_name)
                 .ok_or_else(|| {
                     handle_missing_target(
@@ -539,8 +535,7 @@ impl WithProvenance<WorkspaceManifest> {
                 Err(e) => return Err(e.into()),
             };
             // Remove the dependency from the TOML document
-            self.provenance
-                .document
+            self.document
                 .remove_pypi_dependency(dep, platform, feature_name)?;
         }
         Ok(())
@@ -561,9 +556,9 @@ impl WithProvenance<WorkspaceManifest> {
 
         // Get the current channels and update them
         let current = match feature_name {
-            FeatureName::Default => &mut self.value.workspace.channels,
+            FeatureName::Default => &mut self.workspace.workspace.channels,
             FeatureName::Named(_) => self
-                .value
+                .workspace
                 .get_or_insert_feature_mut(feature_name)
                 .channels_mut(),
         };
@@ -593,10 +588,7 @@ impl WithProvenance<WorkspaceManifest> {
         *current = final_channels.clone();
 
         // Update the TOML document
-        let channels = self
-            .provenance
-            .document
-            .get_array_mut("channels", feature_name)?;
+        let channels = self.document.get_array_mut("channels", feature_name)?;
         channels.clear();
         for channel in final_channels {
             channels.push(Value::from(channel));
@@ -616,8 +608,8 @@ impl WithProvenance<WorkspaceManifest> {
     ) -> miette::Result<()> {
         // Get current channels and channels to remove for the feature
         let current = match feature_name {
-            FeatureName::Default => &mut self.value.workspace.channels,
-            FeatureName::Named(_) => self.value.feature_mut(feature_name)?.channels_mut(),
+            FeatureName::Default => &mut self.workspace.workspace.channels,
+            FeatureName::Named(_) => self.workspace.feature_mut(feature_name)?.channels_mut(),
         };
         // Get the channels to remove, while checking if they exist
         let to_remove: IndexSet<_> = channels
@@ -642,10 +634,7 @@ impl WithProvenance<WorkspaceManifest> {
         let current_clone = current.clone();
 
         // And from the TOML document
-        let channels = self
-            .provenance
-            .document
-            .get_array_mut("channels", feature_name)?;
+        let channels = self.document.get_array_mut("channels", feature_name)?;
         // clear and recreate from current list
         channels.clear();
         for channel in current_clone.iter() {
@@ -660,8 +649,8 @@ impl WithProvenance<WorkspaceManifest> {
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn set_name(&mut self, name: &str) -> miette::Result<()> {
-        self.value.workspace.name = name.to_string();
-        self.provenance.document.set_name(name);
+        self.workspace.workspace.name = name.to_string();
+        self.document.set_name(name);
         Ok(())
     }
 
@@ -671,8 +660,8 @@ impl WithProvenance<WorkspaceManifest> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn set_description(&mut self, description: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
-        self.value.workspace.description = Some(description.to_string());
-        self.provenance.document.set_description(description);
+        self.workspace.workspace.description = Some(description.to_string());
+        self.document.set_description(description);
 
         Ok(())
     }
@@ -683,12 +672,12 @@ impl WithProvenance<WorkspaceManifest> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn set_version(&mut self, version: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
-        self.value.workspace.version = Some(
+        self.workspace.workspace.version = Some(
             Version::from_str(version)
                 .into_diagnostic()
                 .context("could not convert version to a valid project version")?,
         );
-        self.provenance.document.set_version(version);
+        self.document.set_version(version);
         Ok(())
     }
 
@@ -703,10 +692,10 @@ impl WithProvenance<WorkspaceManifest> {
     ) -> miette::Result<SystemRequirements> {
         // Get the current system requirements
         let current = match feature_name {
-            FeatureName::Default => &mut self.value.default_feature_mut().system_requirements,
+            FeatureName::Default => &mut self.workspace.default_feature_mut().system_requirements,
             FeatureName::Named(_) => {
                 &mut self
-                    .value
+                    .workspace
                     .get_or_insert_feature_mut(feature_name)
                     .system_requirements
             }
@@ -719,8 +708,7 @@ impl WithProvenance<WorkspaceManifest> {
         *current = result.clone();
 
         // Update the TOML document
-        self.provenance
-            .document
+        self.document
             .add_system_requirements(&result, feature_name)
             .into_diagnostic()?;
 
@@ -763,6 +751,7 @@ fn handle_missing_target(
 mod tests {
     use std::{path::Path, str::FromStr};
 
+    use super::*;
     use indexmap::{IndexMap, IndexSet};
     use insta::{assert_debug_snapshot, assert_snapshot, assert_yaml_snapshot};
     use itertools::Itertools;
@@ -774,19 +763,21 @@ mod tests {
         Platform, Version, VersionSpec,
     };
     use rstest::rstest;
+    use toml_edit::DocumentMut;
 
     use crate::{
         manifests::{source::ManifestSource, ManifestProvenance, WithProvenance},
         pypi::PyPiPackageName,
         pyproject::PyProjectManifest,
         to_options,
-        toml::FromTomlStr,
+        toml::{FromTomlStr, TomlDocument},
         utils::{
             test_utils::{expect_parse_failure, format_parse_error},
             WithSourceCode,
         },
         ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName, Manifest,
-        PrioritizedChannel, SpecType, TargetSelector, Task, WorkspaceManifest,
+        ManifestDocument, PrioritizedChannel, SpecType, TargetSelector, Task, TomlError,
+        WorkspaceManifest,
     };
 
     const PROJECT_BOILERPLATE: &str = r#"
@@ -815,31 +806,53 @@ platforms = ["linux-64"]
 start = "python -m flask run --port=5050"
 "#;
 
-    fn parse_pixi_toml(source: impl Into<String>) -> WithProvenance<WorkspaceManifest> {
-        let source = ManifestSource::PixiToml(source.into());
-        let provenance = ManifestProvenance::from_source(source).unwrap();
-        let manifest = WorkspaceManifest::from_toml_str(provenance.source.clone()).unwrap_or_else(
-            |WithSourceCode { source, error }| panic!("{}", format_parse_error(&source, error)),
-        );
-        WithProvenance {
-            value: manifest,
-            provenance,
+    pub struct Workspace {
+        manifest: WorkspaceManifest,
+        document: ManifestDocument,
+    }
+
+    impl Workspace {
+        pub fn editable(&mut self) -> WorkspaceManifestMut<'_> {
+            WorkspaceManifestMut {
+                workspace: &mut self.manifest,
+                document: &mut self.document,
+            }
         }
     }
 
-    fn parse_pyproject_toml(source: impl Into<String>) -> WithProvenance<WorkspaceManifest> {
-        let source = ManifestSource::PyProjectToml(source.into());
-        let provenance = ManifestProvenance::from_source(source).unwrap();
+    fn parse_pixi_toml(source: &str) -> Workspace {
+        let editable_document = DocumentMut::from_str(source)
+            .map(TomlDocument::new)
+            .unwrap_or_else(|error| {
+                panic!("{}", format_parse_error(source, TomlError::from(error)))
+            });
 
-        let manifest = PyProjectManifest::from_toml_str(&provenance.source)
-            .unwrap_or_else(|error| panic!("{}", format_parse_error(&provenance.source, error)))
+        let manifest = WorkspaceManifest::from_toml_str(source).unwrap_or_else(
+            |WithSourceCode { error, source }| panic!("{}", format_parse_error(source, error)),
+        );
+
+        Workspace {
+            manifest,
+            document: ManifestDocument::PixiToml(editable_document),
+        }
+    }
+
+    fn parse_pyproject_toml(source: &str) -> Workspace {
+        let editable_document = DocumentMut::from_str(source)
+            .map(TomlDocument::new)
+            .unwrap_or_else(|error| {
+                panic!("{}", format_parse_error(source, TomlError::from(error)))
+            });
+
+        let manifest = PyProjectManifest::from_toml_str(&source)
+            .unwrap_or_else(|error| panic!("{}", format_parse_error(&source, error)))
             .into_manifests()
-            .unwrap_or_else(|error| panic!("{}", format_parse_error(&provenance.source, error)))
+            .unwrap_or_else(|error| panic!("{}", format_parse_error(&source, error)))
             .0;
 
-        WithProvenance {
-            value: manifest,
-            provenance,
+        Workspace {
+            manifest,
+            document: ManifestDocument::PyProjectToml(editable_document),
         }
     }
 
@@ -852,6 +865,7 @@ start = "python -m flask run --port=5050"
     #[test]
     fn test_add_pep508_dependency() {
         let mut manifest = parse_pyproject_toml(PYPROJECT_BOILERPLATE);
+        let mut manifest = manifest.editable();
 
         // Add numpy to pyproject
         let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
@@ -867,7 +881,7 @@ start = "python -m flask run --port=5050"
             .unwrap();
 
         assert!(manifest
-            .value
+            .workspace
             .default_feature_mut()
             .targets
             .for_opt_target(None)
@@ -891,7 +905,7 @@ start = "python -m flask run --port=5050"
             )
             .unwrap();
         assert!(manifest
-            .value
+            .workspace
             .feature(&FeatureName::Named("test".to_string()))
             .unwrap()
             .targets
@@ -903,12 +917,13 @@ start = "python -m flask run --port=5050"
             .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
             .is_some());
 
-        assert_snapshot!(manifest.provenance.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
     fn test_remove_pypi_dependency() {
         let mut manifest = parse_pyproject_toml(PYPROJECT_BOILERPLATE);
+        let mut manifest = manifest.editable();
 
         // Remove flask from pyproject
         let name = PyPiPackageName::from_str("flask").unwrap();
@@ -917,7 +932,7 @@ start = "python -m flask run --port=5050"
             .unwrap();
 
         assert!(manifest
-            .value
+            .workspace
             .default_feature_mut()
             .targets
             .for_opt_target(None)
@@ -928,7 +943,7 @@ start = "python -m flask run --port=5050"
             .get(&name)
             .is_none());
 
-        assert_snapshot!(manifest.provenance.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -945,7 +960,7 @@ start = "python -m flask run --port=5050"
         "#
         );
 
-        let manifest = parse_pixi_toml(&contents).value;
+        let manifest = parse_pixi_toml(&contents).manifest;
 
         let targets = &manifest.default_feature().targets;
         assert_eq!(
@@ -1001,7 +1016,7 @@ start = "python -m flask run --port=5050"
             "#
         );
 
-        let manifest = parse_pixi_toml(&contents).value;
+        let manifest = parse_pixi_toml(&contents).manifest;
         let deps = manifest
             .default_feature()
             .targets
@@ -1089,7 +1104,7 @@ start = "python -m flask run --port=5050"
             "#
         );
 
-        let manifest = parse_pixi_toml(&contents).value;
+        let manifest = parse_pixi_toml(&contents).manifest;
         let default_target = manifest.default_feature().targets.default();
         let run_dependencies = default_target.run_dependencies().unwrap();
         let build_dependencies = default_target.build_dependencies().unwrap();
@@ -1166,7 +1181,7 @@ start = "python -m flask run --port=5050"
             "#
         );
 
-        let manifest = parse_pixi_toml(&contents).value;
+        let manifest = parse_pixi_toml(&contents).manifest;
 
         assert_snapshot!(manifest
             .default_feature()
@@ -1198,7 +1213,7 @@ start = "python -m flask run --port=5050"
             "#
         );
 
-        let manifest = parse_pixi_toml(&contents).value;
+        let manifest = parse_pixi_toml(&contents).manifest;
         assert_snapshot!(manifest
             .default_feature()
             .targets
@@ -1226,7 +1241,7 @@ start = "python -m flask run --port=5050"
             "#
         );
 
-        let manifest = parse_pixi_toml(&contents).value;
+        let manifest = parse_pixi_toml(&contents).manifest;
         assert_yaml_snapshot!(manifest.workspace.pypi_options.clone().unwrap());
     }
 
@@ -1243,7 +1258,7 @@ start = "python -m flask run --port=5050"
             "#
         );
 
-        let manifest = parse_pixi_toml(&contents).value;
+        let manifest = parse_pixi_toml(&contents).manifest;
         assert_yaml_snapshot!(manifest.workspace.pypi_options.clone().unwrap());
     }
 
@@ -1282,7 +1297,7 @@ start = "python -m flask run --port=5050"
         [workspace.target.win-64.build-variants]
         python = ["1.0.*"]
         "#;
-        let manifest = parse_pixi_toml(contents).value;
+        let manifest = parse_pixi_toml(contents).manifest;
         println!("{:?}", manifest.workspace.build_variants);
         let resolved_linux = manifest
             .workspace
@@ -1326,7 +1341,7 @@ start = "python -m flask run --port=5050"
             env = { FOO = "bar-linux-64" }
             "#;
 
-        let manifest = parse_pixi_toml(contents).value;
+        let manifest = parse_pixi_toml(contents).manifest;
         let default_targets = &manifest.default_feature().targets;
         let default_activation_env = default_targets
             .default()
@@ -1422,11 +1437,12 @@ start = "python -m flask run --port=5050"
         feature_name: &FeatureName,
     ) {
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         // Initially the dependency should exist
         for platform in to_options(platforms) {
             assert!(manifest
-                .value
+                .workspace
                 .feature_mut(feature_name)
                 .unwrap()
                 .targets
@@ -1452,7 +1468,7 @@ start = "python -m flask run --port=5050"
         // The dependency should no longer exist
         for platform in to_options(platforms) {
             assert!(manifest
-                .value
+                .workspace
                 .feature_mut(feature_name)
                 .unwrap()
                 .targets
@@ -1468,7 +1484,7 @@ start = "python -m flask run --port=5050"
         // Write the toml to string and verify the content
         assert_snapshot!(
             format!("test_remove_{}", name),
-            manifest.provenance.document.to_string()
+            manifest.document.to_string()
         );
     }
 
@@ -1538,6 +1554,7 @@ start = "python -m flask run --port=5050"
         "#;
 
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         manifest
             .remove_dependency(
@@ -1550,7 +1567,7 @@ start = "python -m flask run --port=5050"
 
         // The dependency should be removed from the default feature
         assert!(manifest
-            .value
+            .workspace
             .default_feature()
             .targets
             .default()
@@ -1564,7 +1581,7 @@ start = "python -m flask run --port=5050"
             (Platform::Win64, SpecType::Run),
         ] {
             assert!(manifest
-                .value
+                .workspace
                 .default_feature()
                 .targets
                 .for_target(&TargetSelector::Platform(platform))
@@ -1584,13 +1601,14 @@ start = "python -m flask run --port=5050"
         feature_name: &FeatureName,
     ) {
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         let package_name = PyPiPackageName::from_str(name).unwrap();
 
         // Initially the dependency should exist
         for platform in to_options(platforms) {
             assert!(manifest
-                .value
+                .workspace
                 .feature_mut(feature_name)
                 .unwrap()
                 .targets
@@ -1611,7 +1629,7 @@ start = "python -m flask run --port=5050"
         // The dependency should no longer exist
         for platform in to_options(platforms) {
             assert!(manifest
-                .value
+                .workspace
                 .feature_mut(feature_name)
                 .unwrap()
                 .targets
@@ -1627,7 +1645,7 @@ start = "python -m flask run --port=5050"
         // Write the toml to string and verify the content
         assert_snapshot!(
             format!("test_remove_pypi_{}", name),
-            manifest.provenance.document.to_string()
+            manifest.document.to_string()
         );
     }
 
@@ -1686,16 +1704,29 @@ feature_target_dep = "*"
         "#;
 
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         assert_eq!(
-            manifest.value.workspace.version.as_ref().unwrap().clone(),
+            manifest
+                .workspace
+                .workspace
+                .version
+                .as_ref()
+                .unwrap()
+                .clone(),
             Version::from_str("0.1.0").unwrap()
         );
 
         manifest.set_version(&String::from("1.2.3")).unwrap();
 
         assert_eq!(
-            manifest.value.workspace.version.as_ref().unwrap().clone(),
+            manifest
+                .workspace
+                .workspace
+                .version
+                .as_ref()
+                .unwrap()
+                .clone(),
             Version::from_str("1.2.3").unwrap()
         );
     }
@@ -1714,10 +1745,11 @@ feature_target_dep = "*"
         "#;
 
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .workspace
                 .description
                 .as_ref()
@@ -1732,7 +1764,7 @@ feature_target_dep = "*"
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .workspace
                 .description
                 .as_ref()
@@ -1756,9 +1788,10 @@ feature_target_dep = "*"
         "#;
 
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         assert_eq!(
-            manifest.value.workspace.platforms.value,
+            manifest.workspace.workspace.platforms.value,
             vec![Platform::Linux64, Platform::Win64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1769,7 +1802,7 @@ feature_target_dep = "*"
             .unwrap();
 
         assert_eq!(
-            manifest.value.workspace.platforms.value,
+            manifest.workspace.workspace.platforms.value,
             vec![Platform::Linux64, Platform::Win64, Platform::OsxArm64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1784,7 +1817,7 @@ feature_target_dep = "*"
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .feature(&FeatureName::Named("test".to_string()))
                 .unwrap()
                 .platforms
@@ -1805,7 +1838,7 @@ feature_target_dep = "*"
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .feature(&FeatureName::Named("test".to_string()))
                 .unwrap()
                 .platforms
@@ -1838,9 +1871,10 @@ feature_target_dep = "*"
         "#;
 
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         assert_eq!(
-            manifest.value.workspace.platforms.value,
+            manifest.workspace.workspace.platforms.value,
             vec![Platform::Linux64, Platform::Win64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1851,13 +1885,13 @@ feature_target_dep = "*"
             .unwrap();
 
         assert_eq!(
-            manifest.value.workspace.platforms.value,
+            manifest.workspace.workspace.platforms.value,
             vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
         );
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .feature(&FeatureName::Named("test".to_string()))
                 .unwrap()
                 .platforms
@@ -1878,7 +1912,7 @@ feature_target_dep = "*"
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .feature(&FeatureName::Named("test".to_string()))
                 .unwrap()
                 .platforms
@@ -1913,8 +1947,9 @@ platforms = ["linux-64", "win-64"]
     "#;
 
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
-        assert_eq!(manifest.value.workspace.channels, IndexSet::new());
+        assert_eq!(manifest.workspace.workspace.channels, IndexSet::new());
 
         let conda_forge =
             PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge")));
@@ -1941,7 +1976,7 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert_eq!(
-            manifest.value.workspace.channels,
+            manifest.workspace.workspace.channels,
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
@@ -1956,7 +1991,7 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert_eq!(
-            manifest.value.workspace.channels,
+            manifest.workspace.workspace.channels,
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
@@ -1967,7 +2002,7 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .features
                 .get(&cuda_feature)
                 .unwrap()
@@ -1989,7 +2024,7 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .features
                 .get(&cuda_feature)
                 .unwrap()
@@ -2006,7 +2041,7 @@ platforms = ["linux-64", "win-64"]
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .features
                 .get(&test_feature)
                 .unwrap()
@@ -2037,7 +2072,7 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert!(manifest
-            .value
+            .workspace
             .workspace
             .channels
             .iter()
@@ -2053,7 +2088,7 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert!(manifest
-            .value
+            .workspace
             .workspace
             .channels
             .iter()
@@ -2068,13 +2103,13 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         assert!(manifest
-            .value
+            .workspace
             .workspace
             .channels
             .iter()
             .any(|c| c.channel == prioritized_channel2.channel && c.priority == Some(-12i32)));
 
-        assert_snapshot!(manifest.provenance.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2094,9 +2129,10 @@ platforms = ["linux-64", "win-64"]
         "#;
 
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         assert_eq!(
-            manifest.value.workspace.channels,
+            manifest.workspace.workspace.channels,
             vec![PrioritizedChannel::from(NamedChannelOrUrl::Name(
                 String::from("conda-forge")
             ))]
@@ -2114,7 +2150,7 @@ platforms = ["linux-64", "win-64"]
             )
             .unwrap();
 
-        assert_eq!(manifest.value.workspace.channels, IndexSet::new());
+        assert_eq!(manifest.workspace.workspace.channels, IndexSet::new());
 
         manifest
             .remove_channels(
@@ -2127,7 +2163,7 @@ platforms = ["linux-64", "win-64"]
             .unwrap();
 
         let feature_channels = manifest
-            .value
+            .workspace
             .feature(&FeatureName::Named("test".to_string()))
             .unwrap()
             .channels
@@ -2175,7 +2211,7 @@ platforms = ["linux-64", "win-64"]
             test1 = {features = ["test", "py310"], solve-group = "test"}
             test2 = {features = ["py39"], solve-group = "test"}
         "#;
-        let manifest = parse_pixi_toml(file_contents).value;
+        let manifest = parse_pixi_toml(file_contents).manifest;
         let default_env = manifest.default_environment();
         assert_eq!(default_env.name, EnvironmentName::Default);
         assert_eq!(default_env.features, vec!["py39"]);
@@ -2234,10 +2270,9 @@ platforms = ["linux-64", "win-64"]
             target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 
         "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        let manifest = parse_pixi_toml(file_contents).manifest;
 
         let cuda_feature = manifest
-            .workspace
             .features
             .get(&FeatureName::Named("cuda".to_string()))
             .unwrap();
@@ -2366,9 +2401,11 @@ platforms = ["linux-64", "win-64"]
         #[case] file_contents: &str,
         #[case] should_have_pypi_dependencies: bool,
     ) {
-        let manifest = parse_pixi_toml(format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str());
+        let manifest =
+            parse_pixi_toml(format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str()).manifest;
+
         assert_eq!(
-            manifest.value.has_pypi_dependencies(),
+            manifest.has_pypi_dependencies(),
             should_have_pypi_dependencies,
         );
     }
@@ -2389,6 +2426,7 @@ test = "test initial"
         "#;
 
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
 
         manifest
             .add_task(
@@ -2422,7 +2460,7 @@ test = "test initial"
                 &FeatureName::Named("test".to_string()),
             )
             .unwrap();
-        assert_snapshot!(manifest.provenance.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2441,6 +2479,8 @@ bar = "*"
             "#;
         let channel_config = default_channel_config();
         let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
+
         // Determine the name of the package to add
         let spec = &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap();
 
@@ -2461,7 +2501,7 @@ bar = "*"
             .unwrap();
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .default_feature()
                 .targets
                 .default()
@@ -2492,7 +2532,7 @@ bar = "*"
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .feature(&FeatureName::Named("test".to_string()))
                 .unwrap()
                 .targets
@@ -2526,7 +2566,7 @@ bar = "*"
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .feature(&FeatureName::Named("extra".to_string()))
                 .unwrap()
                 .targets
@@ -2561,7 +2601,7 @@ bar = "*"
 
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .feature(&FeatureName::Named("build".to_string()))
                 .map(|f| &f.targets)
                 .and_then(|t| t.for_target(&TargetSelector::Platform(Platform::Linux64)))
@@ -2573,7 +2613,7 @@ bar = "*"
             ">=2.3".to_string()
         );
 
-        assert_snapshot!(manifest.provenance.document.to_string());
+        assert_snapshot!(manifest.document.to_string());
     }
 
     #[test]
@@ -2587,10 +2627,12 @@ bar = "*"
         [environments]
         "#;
         let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
         manifest
             .add_environment(String::from("test"), Some(Vec::new()), None, false)
             .unwrap();
-        assert!(manifest.value.environment("test").is_some());
+        assert!(manifest.workspace.environment("test").is_some());
     }
 
     #[test]
@@ -2606,6 +2648,8 @@ bar = "*"
         [environments]
         "#;
         let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
         manifest
             .add_environment(
                 String::from("test"),
@@ -2614,7 +2658,7 @@ bar = "*"
                 false,
             )
             .unwrap();
-        assert!(manifest.value.environment("test").is_some());
+        assert!(manifest.workspace.environment("test").is_some());
     }
 
     #[test]
@@ -2630,6 +2674,8 @@ bar = "*"
         [environments]
         "#;
         let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
         let err = manifest
             .add_environment(
                 String::from("test"),
@@ -2663,6 +2709,8 @@ bar = "*"
         foo = []
         "#;
         let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
         assert!(manifest.remove_environment("foo").unwrap());
         assert!(!manifest.remove_environment("default").unwrap());
     }
@@ -2686,12 +2734,11 @@ bar = "*"
         test-disabled = ["disabled"]
         "#;
 
-        let manifest = parse_pixi_toml(contents);
+        let manifest = parse_pixi_toml(contents).manifest;
 
-        assert!(manifest.value.default_feature().channel_priority.is_none());
+        assert!(manifest.default_feature().channel_priority.is_none());
         assert_eq!(
             manifest
-                .value
                 .feature("strict")
                 .unwrap()
                 .channel_priority
@@ -2700,7 +2747,6 @@ bar = "*"
         );
         assert_eq!(
             manifest
-                .value
                 .feature("disabled")
                 .unwrap()
                 .channel_priority
@@ -2716,10 +2762,10 @@ bar = "*"
         channel-priority = "disabled"
         "#;
 
-        let manifest = parse_pixi_toml(contents);
+        let manifest = parse_pixi_toml(contents).manifest;
 
         assert_eq!(
-            manifest.value.default_feature().channel_priority.unwrap(),
+            manifest.default_feature().channel_priority.unwrap(),
             ChannelPriority::Disabled
         );
     }
@@ -2756,6 +2802,7 @@ bar = "*"
             platforms = []
         "#;
         let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
 
         // Add pytorch channel with prepend=true
         let pytorch = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("pytorch")));
@@ -2766,7 +2813,7 @@ bar = "*"
         // Verify pytorch is first in the list
         assert_eq!(
             manifest
-                .value
+                .workspace
                 .workspace
                 .channels
                 .iter()
@@ -2784,7 +2831,7 @@ bar = "*"
 
         // Verify order is still pytorch, conda-forge, bioconda
         let channels: Vec<_> = manifest
-            .value
+            .workspace
             .workspace
             .channels
             .iter()
@@ -2808,7 +2855,7 @@ bar = "*"
         let manifest = WorkspaceManifest::from_toml_str(toml);
         let err = manifest.unwrap_err();
         insta::assert_snapshot!(format_parse_error(toml, err.error), @r###"
-         × source dependencies are now allowed without enabling pixi-build
+         × source dependencies are not allowed without enabling pixi-build
           ╭─[pixi.toml:8:15]
         7 │         [dependencies]
         8 │         foo = { path = "./foo" }

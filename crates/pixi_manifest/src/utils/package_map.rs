@@ -35,7 +35,7 @@ impl UniquePackageMap {
             if let Some((package_name, _)) = self.specs.iter().find(|(_, spec)| spec.is_source()) {
                 return Err(TomlError::Generic(
                     GenericError::new(
-                        "source dependencies are now allowed without enabling pixi-build",
+                        "source dependencies are not allowed without enabling pixi-build",
                     )
                     .with_opt_span(self.value_spans.get(package_name).cloned())
                     .with_span_label("source dependency specified here")

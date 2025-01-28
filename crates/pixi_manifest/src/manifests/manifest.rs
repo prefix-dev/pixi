@@ -9,7 +9,7 @@ use crate::{
     manifests::{provenance::ManifestKind, PackageManifest},
     pyproject::{PyProjectManifest, PyProjectToManifestError},
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
-    PackageBuild, WorkspaceManifest,
+    PackageBuild, WithProvenance, WorkspaceManifest,
 };
 
 /// Contains information about a manifest file.
