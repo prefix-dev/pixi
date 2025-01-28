@@ -16,7 +16,7 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{pypi::pypi_options::NoBuild, FeaturesExt};
 use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{
@@ -34,7 +34,7 @@ use rattler_lock::{
 };
 use thiserror::Error;
 use url::Url;
-use uv_distribution_filename::DistExtension;
+use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_git::GitReference;
 use uv_pypi_types::{
     ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
@@ -51,6 +51,14 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     InvalidChannel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    InvalidDistExtensionInNoBuild(#[from] ExtensionError),
+
+    #[error(
+        "the lock-file contains non-binary package: '{0}', but the pypi-option `no-build` is set"
+    )]
+    NoBuildWithNonBinaryPackages(String),
 }
 
 #[derive(Debug, Error)]
@@ -422,39 +430,154 @@ pub fn verify_environment_satisfiability(
         return Err(EnvironmentUnsat::ChannelsMismatch);
     }
 
-    // Check if the indexes in the lock file match our current configuration.
+    // Do some more checks if we have pypi dependencies
+    // 1. Check if the PyPI indexes are present and match
+    // 2. Check if we have a no-build option set, that we only have binary packages, or an editable source
     if !environment.pypi_dependencies(None).is_empty() {
-        let indexes = rattler_lock::PypiIndexes::from(grouped_env.pypi_options());
-        match locked_environment.pypi_indexes() {
-            None => {
-                // Mismatch when there should be an index but there is not
-                if locked_environment
-                    .lock_file()
-                    .version()
-                    .should_pypi_indexes_be_present()
-                    && locked_environment
-                        .pypi_packages_by_platform()
-                        .any(|(_platform, mut packages)| packages.next().is_some())
-                {
-                    return Err(IndexesMismatch {
-                        current: indexes,
-                        previous: None,
-                    }
-                    .into());
-                }
-            }
-            Some(locked_indexes) => {
-                if locked_indexes != &indexes {
-                    return Err(IndexesMismatch {
-                        current: indexes,
-                        previous: Some(locked_indexes.clone()),
-                    }
-                    .into());
-                }
-            }
+        let group_pypi_options = grouped_env.pypi_options();
+        let indexes = rattler_lock::PypiIndexes::from(group_pypi_options.clone());
+
+        // Check if the indexes in the lock file match our current configuration.
+        verify_pypi_indexes(locked_environment, indexes)?;
+
+        // Check that if `no-build` is set, we only have binary packages
+        // or that the package that we disallow are not built from source
+        if let Some(no_build) = group_pypi_options.no_build.as_ref() {
+            verify_pypi_no_build(no_build, locked_environment)?;
         }
     }
 
+    Ok(())
+}
+
+fn verify_pypi_no_build(
+    no_build: &NoBuild,
+    locked_environment: rattler_lock::Environment<'_>,
+) -> Result<(), EnvironmentUnsat> {
+    // Check if we are disallowing all source packages or only a subset
+    #[derive(Eq, PartialEq)]
+    enum Check {
+        All,
+        Packages(HashSet<pep508_rs::PackageName>),
+    }
+
+    let check = match no_build {
+        // Ok, so we are allowed to build any source package
+        NoBuild::None => return Ok(()),
+        // We are not allowed to build any source package
+        NoBuild::All => Check::All,
+        // We are not allowed to build a subset of source packages
+        NoBuild::Packages(hash_set) => {
+            let packages = hash_set
+                .iter()
+                .filter_map(|name| pep508_rs::PackageName::new(name.to_string()).ok())
+                .collect();
+            Check::Packages(packages)
+        }
+    };
+
+    // Small helper function to get the dist extension from a url
+    fn pypi_dist_extension_from_url(url: &Url) -> Result<DistExtension, ExtensionError> {
+        // Take the file name from the url
+        let path = url.path_segments().and_then(|s| s.last()).unwrap_or("");
+        // Convert the path to a dist extension
+        DistExtension::from_path(Path::new(path))
+    }
+
+    // Determine if we do not accept non-wheels for all packages or only for a subset
+    // Check all the currently locked packages if we are making any violations
+    for (_, packages) in locked_environment.pypi_packages_by_platform() {
+        for (package, _) in packages {
+            let extension = match &package.location {
+                // Get the extension from the url
+                UrlOrPath::Url(url) => {
+                    if url.scheme().starts_with("git+") {
+                        // Just choose some source extension, does not really matter, cause it is
+                        // actually a directory, this is just for the check
+                        Ok(DistExtension::Source(SourceDistExtension::TarGz))
+                    } else {
+                        pypi_dist_extension_from_url(url)
+                    }
+                }
+                UrlOrPath::Path(path) => {
+                    let path = Path::new(path.as_str());
+                    if path.is_dir() {
+                        // Editables are allowed with no-build
+                        if package.editable {
+                            continue;
+                        } else {
+                            // Non-editable source packages might not be allowed
+                            Ok(DistExtension::Source(SourceDistExtension::TarGz))
+                        }
+                    } else {
+                        // Could be a reference to a wheel or sdist
+                        DistExtension::from_path(path)
+                    }
+                }
+            };
+
+            // Some extension error? Let's just revalidate
+            let extension = match extension {
+                Ok(e) => e,
+                Err(err) => return Err(err.into()),
+            };
+            match extension {
+                // Wheels are fine
+                DistExtension::Wheel => continue,
+                // Check if we have a source package that we are not allowed to build
+                // it could be that we are only disallowing for certain source packages
+                DistExtension::Source(_) => match check {
+                    Check::All => {
+                        return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
+                            package.name.to_string(),
+                        ))
+                    }
+                    Check::Packages(ref hash_set) => {
+                        if hash_set.contains(&package.name) {
+                            return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
+                                package.name.to_string(),
+                            ));
+                        }
+                    }
+                },
+            }
+        }
+    }
+    Ok(())
+}
+
+fn verify_pypi_indexes(
+    locked_environment: rattler_lock::Environment<'_>,
+    indexes: PypiIndexes,
+) -> Result<(), EnvironmentUnsat> {
+    match locked_environment.pypi_indexes() {
+        None => {
+            // Mismatch when there should be an index but there is not
+            if locked_environment
+                .lock_file()
+                .version()
+                .should_pypi_indexes_be_present()
+                && locked_environment
+                    .pypi_packages_by_platform()
+                    .any(|(_platform, mut packages)| packages.next().is_some())
+            {
+                return Err(IndexesMismatch {
+                    current: indexes,
+                    previous: None,
+                }
+                .into());
+            }
+        }
+        Some(locked_indexes) => {
+            if locked_indexes != &indexes {
+                return Err(IndexesMismatch {
+                    current: indexes,
+                    previous: Some(locked_indexes.clone()),
+                }
+                .into());
+            }
+        }
+    }
     Ok(())
 }
 

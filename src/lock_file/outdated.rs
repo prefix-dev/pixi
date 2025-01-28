@@ -187,6 +187,12 @@ async fn find_unsatisfiable_targets<'p>(
                     // If the indexes mismatched we also cannot trust any of the locked content.
                     disregard_locked_content.pypi.insert(environment.clone());
                 }
+                EnvironmentUnsat::InvalidDistExtensionInNoBuild(_) => {
+                    disregard_locked_content.pypi.insert(environment.clone());
+                }
+                EnvironmentUnsat::NoBuildWithNonBinaryPackages(_) => {
+                    disregard_locked_content.pypi.insert(environment.clone());
+                }
             }
 
             continue;
