@@ -165,13 +165,13 @@ impl GitAttributes {
     fn template(&self) -> &'static str {
         match self {
             GitAttributes::Github | GitAttributes::Codeberg => {
-                r#"# SCM syntax highlighting
-pixi.lock linguist-language=YAML linguist-generated=true
+                r#"# SCM syntax highlighting & preventing 3-way merges
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true
 "#
             }
             GitAttributes::Gitlab => {
-                r#"# GitLab syntax highlighting
-pixi.lock gitlab-language=yaml gitlab-generated=true
+                r#"# GitLab syntax highlighting & preventing 3-way merges
+pixi.lock merge=binary gitlab-language=yaml gitlab-generated=true
 "#
             }
         }
