@@ -119,10 +119,13 @@ pub(crate) fn validate_system_meets_environment_requirements(
     )?;
 
     // Retrieve the conda package records for the specified platform.
-    let conda_data = environment
+    let Some(conda_data) = environment
         .conda_repodata_records(platform)
         .map_err(MachineValidationError::RepodataConversionError)?
-        .ok_or(MachineValidationError::NoCondaRecordsFound(platform))?;
+    else {
+        // Early out if there are no conda records, as we don't need to check for virtual packages
+        return Ok(true);
+    };
 
     let conda_records: Vec<&PackageRecord> = conda_data
         .iter()
