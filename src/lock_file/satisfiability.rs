@@ -514,13 +514,8 @@ fn verify_pypi_no_build(
                         DistExtension::from_path(path)
                     }
                 }
-            };
+            }?;
 
-            // Some extension error? Let's just revalidate
-            let extension = match extension {
-                Ok(e) => e,
-                Err(err) => return Err(err.into()),
-            };
             match extension {
                 // Wheels are fine
                 DistExtension::Wheel => continue,
