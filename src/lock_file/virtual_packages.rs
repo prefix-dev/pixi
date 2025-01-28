@@ -63,6 +63,7 @@ pub(crate) fn get_required_virtual_packages_from_conda_records(
     virtual_dependencies
         .iter()
         // Lenient parsing is used here because the dependencies to avoid issues with the parsing of the dependencies.
+        // As the user can't do anything about the dependencies, we don't want to fail the whole process because of a parsing error.
         .map(|dep| MatchSpec::from_str(dep.as_str(), Lenient))
         .collect::<Result<Vec<MatchSpec>, _>>()
         .map_err(MachineValidationError::DependencyParsingError)
@@ -118,6 +119,12 @@ pub(crate) fn validate_system_meets_environment_requirements(
     let required_virtual_packages =
         get_required_virtual_packages_from_conda_records(&conda_records)?;
 
+    tracing::info!(
+        "Required virtual packages: {:?} of environment '{}'",
+        required_virtual_packages,
+        environment_name
+    );
+
     // Default to the environment variable overrides, but allow for an override for testing
     let virtual_package_overrides =
         virtual_package_overrides.unwrap_or(VirtualPackageOverrides::from_env());
@@ -130,6 +137,12 @@ pub(crate) fn validate_system_meets_environment_requirements(
         .map(GenericVirtualPackage::from)
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
+
+    tracing::debug!(
+        "Generic system virtual packages for env: '{}' : {:?}",
+        environment_name,
+        generic_system_virtual_packages
+    );
 
     // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
@@ -145,6 +158,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
                     spec: required.clone().to_string(),
                 });
             }
+            tracing::debug!("Required virtual package: {} matches the system", required);
         } else {
             return Err(MachineValidationError::VirtualPackageNotFound {
                 spec: required.clone().to_string(),
@@ -176,6 +190,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
             if !wheel.is_compatible(&system_tags) {
                 return Err(MachineValidationError::WheelTagsMismatch(wheel.to_string()));
             }
+            tracing::debug!("Wheel: {} matches the system", wheel);
         }
     }
 
