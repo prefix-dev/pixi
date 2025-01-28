@@ -279,7 +279,7 @@ mod test {
         let overrides = VirtualPackageOverrides {
             // To high version for the wheel, which is fine as we assume backwards compatibility
             osx: Some(Override::String("15.1".to_string())),
-            libc: Some(Override::String("4.10".to_string())),
+            libc: Some(Override::String("2.9999".to_string())),
             ..VirtualPackageOverrides::default()
         };
 

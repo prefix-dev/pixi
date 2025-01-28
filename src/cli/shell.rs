@@ -15,7 +15,6 @@ use crate::{
     Project, UpdateLockFileOptions,
 };
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
-
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
@@ -234,12 +233,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config);
 
     let environment = project.environment_from_name_or_env_var(args.environment)?;
-
-    let prompt_name = match environment.name() {
-        EnvironmentName::Default => project.name().to_string(),
-        EnvironmentName::Named(name) => format!("{}:{}", project.name(), name),
-    };
-    verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
