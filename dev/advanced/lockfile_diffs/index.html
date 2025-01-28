@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/tutorials/ros2/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/lockfile_diffs/">
       
       
-        <link rel="prev" href="../python/">
+        <link rel="prev" href="../updates_github_actions/">
       
       
-        <link rel="next" href="../rust/">
+        <link rel="next" href="../production_deployment/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>ROS 2 - Pixi by prefix.dev</title>
+        <title>Lockfile diffs - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="ROS 2 - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Lockfile diffs - Pixi by prefix.dev" >
       
         <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/ros2.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/lockfile_diffs.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/tutorials/ros2/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/lockfile_diffs/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="ROS 2 - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Lockfile diffs - Pixi by prefix.dev" >
       
         <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/ros2.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/lockfile_diffs.png" >
       
     
     
@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-develop-a-ros-2-package-with-pixi" class="md-skip">
+        <a href="#calculate-lockfile-diffs" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ROS 2
+              Lockfile diffs
             
           </span>
         </div>
@@ -330,8 +330,6 @@
       
   
   
-    
-  
   
   
     
@@ -343,11 +341,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -361,7 +359,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -375,7 +373,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python/" class="md-nav__link">
+      <a href="../../tutorials/python/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -393,30 +391,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    ROS 2
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -425,131 +403,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      Prerequisites
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
-    <span class="md-ellipsis">
-      Create a pixi project.
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-ros-2-dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add ROS 2 dependencies
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-a-custom-python-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add a custom Python node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#simplify-the-user-experience" class="md-nav__link">
-    <span class="md-ellipsis">
-      Simplify the user experience
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-a-c-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build a C++ node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Conclusion
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#show-off-your-work" class="md-nav__link">
-    <span class="md-ellipsis">
-      Show Off Your Work!
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#frequently-asked-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frequently asked questions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Frequently asked questions">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-happens-with-rosdep" class="md-nav__link">
-    <span class="md-ellipsis">
-      What happens with rosdep?
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#community-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      Community examples
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -562,7 +415,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rust/" class="md-nav__link">
+      <a href="../../tutorials/rust/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -583,7 +436,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multi_environment/" class="md-nav__link">
+      <a href="../../tutorials/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1392,8 +1245,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -1403,11 +1258,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
@@ -1421,7 +1276,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -1435,7 +1290,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/authentication/" class="md-nav__link">
+      <a href="../authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1456,7 +1311,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/channel_priority/" class="md-nav__link">
+      <a href="../channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1477,7 +1332,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/github_actions/" class="md-nav__link">
+      <a href="../github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1498,7 +1353,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1519,7 +1374,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
+      <a href="../updates_github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1537,10 +1392,19 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../advanced/lockfile_diffs/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1549,6 +1413,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -1561,7 +1426,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/production_deployment/" class="md-nav__link">
+      <a href="../production_deployment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1582,7 +1447,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
+      <a href="../pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1885,119 +1750,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      Prerequisites
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
-    <span class="md-ellipsis">
-      Create a pixi project.
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-ros-2-dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add ROS 2 dependencies
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-a-custom-python-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add a custom Python node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#simplify-the-user-experience" class="md-nav__link">
-    <span class="md-ellipsis">
-      Simplify the user experience
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-a-c-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build a C++ node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Conclusion
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#show-off-your-work" class="md-nav__link">
-    <span class="md-ellipsis">
-      Show Off Your Work!
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#frequently-asked-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frequently asked questions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Frequently asked questions">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-happens-with-rosdep" class="md-nav__link">
-    <span class="md-ellipsis">
-      What happens with rosdep?
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#community-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      Community examples
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2011,7 +1763,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/tutorials/ros2.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/lockfile_diffs.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -2019,174 +1771,65 @@
   
 
 
-<h1 id="tutorial-develop-a-ros-2-package-with-pixi">Tutorial: Develop a ROS 2 package with <code>pixi</code><a class="headerlink" href="#tutorial-develop-a-ros-2-package-with-pixi" title="Permanent link">#</a></h1>
-<p>In this tutorial, we will show you how to develop a ROS 2 package using <code>pixi</code>.
-The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
-<p>The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try pixi for their development workflow.</p>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
-<ul>
-<li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
-  The crux of this tutorial is to show you only need pixi!</li>
-<li>On Windows, it's advised to enable Developer mode. Go to Settings -&gt; Update &amp; Security -&gt; For developers -&gt; Developer mode.</li>
-</ul>
-<div class="admonition note">
-<p>If you're new to pixi, you can check out the <a href="../../basic_usage/">basic usage</a> guide.
-This will teach you the basics of pixi project within 3 minutes.</p>
-</div>
-<h2 id="create-a-pixi-project">Create a pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_ros2_project<span class="w"> </span>-c<span class="w"> </span>robostack-staging<span class="w"> </span>-c<span class="w"> </span>conda-forge
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
-</span></code></pre></div>
-<p>It should have created a directory structure like this:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>my_ros2_project
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>.gitattributes
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>.gitignore
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>└──<span class="w"> </span>pixi.toml
-</span></code></pre></div>
-<p>The <code>pixi.toml</code> file is the manifest file for your project. It should look like this:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_ros2_project&quot;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Add a short description here&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;User Name &lt;user.name@email.url&gt;&quot;</span><span class="p">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;robostack-staging&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Your project can support multiple platforms, the current platform will be automatically added.</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">[tasks]</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[dependencies]</span>
-</span></code></pre></div>
-<p>The <code>channels</code> you added to the <code>init</code> command are repositories of packages, you can search in these repositories through our <a href="https://prefix.dev/channels">prefix.dev</a> website.
-The <code>platforms</code> are the systems you want to support, in pixi you can support multiple platforms, but you have to define which platforms, so pixi can test if those are supported for your dependencies.
-For the rest of the fields, you can fill them in as you see fit.</p>
-<h2 id="add-ros-2-dependencies">Add ROS 2 dependencies<a class="headerlink" href="#add-ros-2-dependencies" title="Permanent link">#</a></h2>
-<p>To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.</p>
-<p>Let's start with the <code>turtlesim</code> example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-desktop<span class="w"> </span>ros-humble-turtlesim
-</span></code></pre></div>
-<p>This will add the <code>ros-humble-desktop</code> and <code>ros-humble-turtlesim</code> packages to your manifest.
-Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (<code>.pixi</code>).</p>
-<p>Now run the <code>turtlesim</code> example.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtlesim_node
-</span></code></pre></div>
-<p><strong>Or</strong> use the <code>shell</code> command to start an activated environment in your terminal.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>shell
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtlesim_node
-</span></code></pre></div>
-<p>Congratulations you have ROS 2 running on your machine with pixi!</p>
-<details class="example">
-<summary>Some more fun with the turtle</summary>
-<p>To control the turtle you can run the following command in a new terminal
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtle_teleop_key
-</span></code></pre></div>
-Now you can control the turtle with the arrow keys on your keyboard.</p>
-</details>
-<p><img alt="Turtlesim control" src="https://github.com/user-attachments/assets/9424c44b-b7c0-48f4-8e7d-501131e9e9e5" /></p>
-<h2 id="add-a-custom-python-node">Add a custom Python node<a class="headerlink" href="#add-a-custom-python-node" title="Permanent link">#</a></h2>
-<p>As ros works with custom nodes, let's add a custom node to our project.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>pkg<span class="w"> </span>create<span class="w"> </span>--build-type<span class="w"> </span>ament_python<span class="w"> </span>--destination-directory<span class="w"> </span>src<span class="w"> </span>--node-name<span class="w"> </span>my_node<span class="w"> </span>my_package
-</span></code></pre></div>
-<p>To build the package we need some more dependencies:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>colcon-common-extensions<span class="w"> </span><span class="s2">&quot;setuptools&lt;=58.2.0&quot;</span>
-</span></code></pre></div>
-<p>Add the created initialization script for the ros workspace to your manifest file.</p>
-<p>Then run the build command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>colcon<span class="w"> </span>build
-</span></code></pre></div>
-<p>This will create a sourceable script in the <code>install</code> folder, you can source this script through an activation script to use your custom node.
-Normally this would be the script you add to your <code>.bashrc</code> but instead you tell pixi to use it by adding the following to <code>pixi.toml</code>:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[activation]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
+<h1 id="calculate-lockfile-diffs">Calculate Lockfile diffs<a class="headerlink" href="#calculate-lockfile-diffs" title="Permanent link">#</a></h1>
+<p><img alt="pixi-diff demo" src="https://raw.githubusercontent.com/pavelzw/pixi-diff/refs/heads/main/.github/assets/demo/demo-light.gif#only-light" />
+<img alt="pixi-diff demo" src="https://raw.githubusercontent.com/pavelzw/pixi-diff/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark" /></p>
+<p>It can happen that you want to know what changed in your lockfile after repeatedly adding and removing dependencies within a pull request.
+For this, you can use <a href="https://github.com/pavelzw/pixi-diff">pavelzw/pixi-diff</a> to calculate the differences between two lockfiles.
+This can be leveraged in combination with <a href="https://github.com/pavelzw/pixi-diff-to-markdown">pavelzw/pixi-diff-to-markdown</a> to generate a markdown file that shows the diff in a human-readable format.
+With <a href="https://github.com/henriklovhaug/md-tui">henriklovhaug/md-tui</a>, you can even render the markdown file in the terminal.</p>
+<div class="admonition tip">
+<p class="admonition-title">Install the tools globally</p>
+<p>All of the above-mentioned tools are available on conda-forge and can be installed using <a href="../../features/global_tools/"><code>pixi global install</code></a>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-diff<span class="w"> </span>pixi-diff-to-markdown<span class="w"> </span>md-tui
 </span></code></pre></div>
 </div>
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[activation]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.bat&quot;</span><span class="p">]</span>
+<p><code>pixi-diff --before pixi.lock.old --after pixi.lock.new</code> will output a JSON object that contains the differences between the two lockfiles similar to <a href="../../reference/cli/#update"><code>pixi update --json</code></a>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>$<span class="w"> </span>pixi-diff<span class="w"> </span>--before<span class="w"> </span>pixi.lock.old<span class="w"> </span>--after<span class="w"> </span>pixi.lock.new
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">{</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="s2">&quot;version&quot;</span>:<span class="w"> </span><span class="m">1</span>,
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="s2">&quot;environment&quot;</span>:<span class="w"> </span><span class="o">{</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="s2">&quot;default&quot;</span>:<span class="w"> </span><span class="o">{</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">      </span><span class="s2">&quot;osx-arm64&quot;</span>:<span class="w"> </span><span class="o">[</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">        </span><span class="o">{</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">          </span><span class="s2">&quot;name&quot;</span>:<span class="w"> </span><span class="s2">&quot;libmpdec&quot;</span>,
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">          </span><span class="s2">&quot;before&quot;</span>:<span class="w"> </span>null,
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">          </span><span class="s2">&quot;after&quot;</span>:<span class="w"> </span><span class="o">{</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">            </span><span class="s2">&quot;conda&quot;</span>:<span class="w"> </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/osx-arm64/libmpdec-4.0.0-h99b78c6_0.conda&quot;</span>,
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">            </span><span class="s2">&quot;sha256&quot;</span>:<span class="w"> </span><span class="s2">&quot;f7917de9117d3a5fe12a39e185c7ce424f8d5010a6f97b4333e8a1dcb2889d16&quot;</span>,
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">            </span><span class="s2">&quot;md5&quot;</span>:<span class="w"> </span><span class="s2">&quot;7476305c35dd9acef48da8f754eedb40&quot;</span>,
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">            </span><span class="s2">&quot;depends&quot;</span>:<span class="w"> </span><span class="o">[</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">              </span><span class="s2">&quot;__osx &gt;=11.0&quot;</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">            </span><span class="o">]</span>,
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">            </span><span class="s2">&quot;license&quot;</span>:<span class="w"> </span><span class="s2">&quot;BSD-2-Clause&quot;</span>,
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">            </span><span class="s2">&quot;license_family&quot;</span>:<span class="w"> </span><span class="s2">&quot;BSD&quot;</span>,
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">            </span><span class="s2">&quot;size&quot;</span>:<span class="w"> </span><span class="m">69263</span>,
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">            </span><span class="s2">&quot;timestamp&quot;</span>:<span class="w"> </span><span class="m">1723817629767</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">          </span><span class="o">}</span>,
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">          </span><span class="s2">&quot;type&quot;</span>:<span class="w"> </span><span class="s2">&quot;conda&quot;</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">        </span><span class="o">}</span>,
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>//<span class="w"> </span>...
 </span></code></pre></div>
+<p>Named pipes can be handy for comparing lockfiles from different states in your git history:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># bash / zsh</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pixi-diff<span class="w"> </span>--before<span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="o">)</span><span class="w"> </span>--after<span class="w"> </span>pixi.lock
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># fish</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pixi-diff<span class="w"> </span>--before<span class="w"> </span><span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>psub<span class="o">)</span><span class="w"> </span>--after<span class="w"> </span>pixi.lock
+</span></code></pre></div>
+<p>Or specify either the "before" or "after" lockfile via stdin:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>pixi-diff<span class="w"> </span>--before<span class="w"> </span>-<span class="w"> </span>--after<span class="w"> </span>pixi.lock
+</span></code></pre></div>
+<p>This can be integrated with <a href="https://github.com/pavelzw/pixi-diff-to-markdown"><code>pixi-diff-to-markdown</code></a> to generate a markdown file that shows the diff in a human-readable format:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi-diff<span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="o">)</span><span class="w"> </span>pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>pixi-diff-to-markdown<span class="w"> </span>&gt;<span class="w"> </span>diff.md
+</span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">pixi-diff-to-markdown in GitHub Actions updates</p>
+<p>For other usages of <a href="https://github.com/pavelzw/pixi-diff-to-markdown"><code>pixi-diff-to-markdown</code></a>, see also our page about <a href="../updates_github_actions/">updating lockfiles using GitHub Actions</a>.</p>
 </div>
-</div>
-</div>
-<details class="tip">
-<summary>Multi platform support</summary>
-<p>You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
-Use the following example to add support for both Linux and Windows, using the <a href="../../features/multi_platform_configuration/#activation">target</a> syntax.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[project]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">[activation]</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="k">[target.win-64.activation]</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.bat&quot;</span><span class="p">]</span>
+<p>You can view this generated markdown file in your terminal using <a href="https://github.com/henriklovhaug/md-tui"><code>md-tui</code></a>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mdt<span class="w"> </span>diff.md
 </span></code></pre></div>
-</details>
-<p>Now you can run your custom node with the following command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>my_package<span class="w"> </span>my_node
-</span></code></pre></div>
-<h2 id="simplify-the-user-experience">Simplify the user experience<a class="headerlink" href="#simplify-the-user-experience" title="Permanent link">#</a></h2>
-<p>In <code>pixi</code> we have a feature called <code>tasks</code>, this allows you to define a task in your manifest file and run it with a simple command.
-Let's add a task to run the <code>turtlesim</code> example and the custom node.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>sim<span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>build<span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>hello<span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span>
-</span></code></pre></div>
-<p>Now you can run these task by simply running</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>sim
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>hello
-</span></code></pre></div>
-<details class="tip" open="open">
-<summary>Advanced task usage</summary>
-<p>Tasks are a powerful feature in pixi.</p>
-<ul>
-<li>You can add <a href="../../features/advanced_tasks/#depends-on"><code>depends-on</code></a> to the tasks to create a task chain.</li>
-<li>You can add <a href="../../features/advanced_tasks/#working-directory"><code>cwd</code></a> to the tasks to run the task in a different directory from the root of the project.</li>
-<li>You can add <a href="../../features/advanced_tasks/#caching"><code>inputs</code> and <code>outputs</code></a> to the tasks to create a task that only runs when the inputs are changed.</li>
-<li>You can use the <a href="../../reference/pixi_manifest/#the-target-table"><code>target</code></a> syntax to run specific tasks on specific machines.</li>
-</ul>
-</details>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">sim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;src&quot;</span><span class="p">]}</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">hello</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">depends-on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="build-a-c-node">Build a C++ node<a class="headerlink" href="#build-a-c-node" title="Permanent link">#</a></h2>
-<p>To build a C++ node you need to add the <code>ament_cmake</code> and some other build dependencies to your manifest file.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-ament-cmake-auto<span class="w"> </span>compilers<span class="w"> </span>pkg-config<span class="w"> </span>cmake<span class="w"> </span>ninja
-</span></code></pre></div>
-<p>Now you can create a C++ node with the following command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>pkg<span class="w"> </span>create<span class="w"> </span>--build-type<span class="w"> </span>ament_cmake<span class="w"> </span>--destination-directory<span class="w"> </span>src<span class="w"> </span>--node-name<span class="w"> </span>my_cpp_node<span class="w"> </span>my_cpp_package
-</span></code></pre></div>
-<p>Now you can build it again and run it with the following commands</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Passing arguments to the build command to build with Ninja, add them to the manifest if you want to default to ninja.</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span>-G<span class="w"> </span>Ninja
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>my_cpp_package<span class="w"> </span>my_cpp_node
-</span></code></pre></div>
-<details class="tip">
-<summary>Tip</summary>
-<p>Add the cpp task to the manifest file to simplify the user experience.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>hello-cpp<span class="w"> </span><span class="s2">&quot;ros2 run my_cpp_package my_cpp_node&quot;</span>
-</span></code></pre></div>
-</details>
-<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we showed you how to create a Python &amp; CMake ROS2 project using <code>pixi</code>.
-We also showed you how to <strong>add dependencies</strong> to your project using <code>pixi</code>, and how to <strong>run your project</strong> using <code>pixi run</code>.
-This way you can make sure that your project is <strong>reproducible</strong> on all your machines that have <code>pixi</code> installed.</p>
-<h2 id="show-off-your-work">Show Off Your Work!<a class="headerlink" href="#show-off-your-work" title="Permanent link">#</a></h2>
-<p>Finished with your project?
-We'd love to see what you've created!
-Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
-Let's inspire the community together!</p>
-<h2 id="frequently-asked-questions">Frequently asked questions<a class="headerlink" href="#frequently-asked-questions" title="Permanent link">#</a></h2>
-<h3 id="what-happens-with-rosdep">What happens with <code>rosdep</code>?<a class="headerlink" href="#what-happens-with-rosdep" title="Permanent link">#</a></h3>
-<p>Currently, we don't support <code>rosdep</code> in a pixi environment, so you'll have to add the packages using <code>pixi add</code>.
-<code>rosdep</code> will call <code>conda install</code> which isn't supported in a pixi environment.</p>
-<h3 id="community-examples">Community examples<a class="headerlink" href="#community-examples" title="Permanent link">#</a></h3>
-<p>ROS 2 Humble on macOS,<a href="https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655">Simulating differential drive using Gazebo</a>.</p>
 
 
 
@@ -2258,9 +1901,9 @@ Let's inspire the community together!</p>
           
             
             <a
-              href="../python/"
+              href="../updates_github_actions/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Python"
+              aria-label="Previous: Updates using GitHub Actions"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2271,7 +1914,7 @@ Let's inspire the community together!</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Python
+                  Updates using GitHub Actions
                 </div>
               </div>
             </a>
@@ -2281,16 +1924,16 @@ Let's inspire the community together!</p>
           
             
             <a
-              href="../rust/"
+              href="../production_deployment/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Rust"
+              aria-label="Next: Production Deployment"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Rust
+                  Production Deployment
                 </div>
               </div>
               <div class="md-footer__button md-icon">
