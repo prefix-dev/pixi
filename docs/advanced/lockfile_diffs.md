@@ -12,8 +12,7 @@ With [henriklovhaug/md-tui](https://github.com/henriklovhaug/md-tui), you can ev
     All of the above-mentioned tools are available on conda-forge and can be installed using [`pixi global install`](../features/global_tools.md).
 
     ```bash
-    pixi global install --environment pixi-diff pixi-diff pixi-diff-to-markdown
-    pixi global install md-tui
+    pixi global install pixi-diff pixi-diff-to-markdown md-tui
     ```
 
 `pixi-diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../reference/cli.md#update).
