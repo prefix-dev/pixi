@@ -217,7 +217,9 @@ impl<'p> ExecutableTask<'p> {
         let cwd = self.working_directory()?;
         let (stdin, mut stdin_writer) = pipe();
         if let Some(stdin) = input {
-            stdin_writer.write_all(stdin).unwrap();
+            stdin_writer
+                .write_all(stdin)
+                .expect("should be able to write to stdin");
         }
         drop(stdin_writer); // prevent a deadlock by dropping the writer
         let (stdout, stdout_handle) = get_output_writer_and_handle();
@@ -231,8 +233,8 @@ impl<'p> ExecutableTask<'p> {
         let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
         Ok(RunOutput {
             exit_code: code,
-            stdout: stdout_handle.await.unwrap(),
-            stderr: stderr_handle.await.unwrap(),
+            stdout: stdout_handle.await.expect("should be able to get stdout"),
+            stderr: stderr_handle.await.expect("should be able to get stderr"),
         })
     }
 

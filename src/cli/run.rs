@@ -6,6 +6,8 @@ use miette::{Diagnostic, IntoDiagnostic};
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use std::convert::identity;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::{collections::HashMap, string::String};
 
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
@@ -103,6 +105,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ..UpdateLockFileOptions::default()
         })
         .await?;
+
+    // dialoguer doesn't reset the cursor if it's aborted via e.g. SIGINT
+    // So we do it ourselves.
+
+    let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
+    let ctrlc_should_exit_process_clone = Arc::clone(&ctrlc_should_exit_process);
+
+    ctrlc::set_handler(move || {
+        reset_cursor();
+        if ctrlc_should_exit_process_clone.load(Ordering::Relaxed) {
+            exit_process_on_sigint();
+        }
+    })
+    .into_diagnostic()?;
 
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
@@ -205,6 +221,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
+        ctrlc_should_exit_process.store(false, Ordering::Relaxed);
+
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we exit this parent process with
         // the same code.
@@ -220,6 +238,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => return Err(err.into()),
         }
+
+        // Handle CTRL-C ourselves again
+        ctrlc_should_exit_process.store(true, Ordering::Relaxed);
 
         // Update the task cache with the new hash
         executable_task
@@ -285,26 +306,14 @@ async fn execute_task<'p>(
     };
     let cwd = task.working_directory()?;
 
-    // Ignore CTRL+C
-    // Specifically so that the child is responsible for its own signal handling
-    // NOTE: one CTRL+C is registered it will always stay registered for the rest of
-    // the runtime of the program which is fine when using run in isolation,
-    // however if we start to use run in conjunction with some other command we
-    // might want to revaluate this.
-    let ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
-
-    let execute_future = deno_task_shell::execute(
+    let status_code = deno_task_shell::execute(
         script,
         command_env.clone(),
         &cwd,
         Default::default(),
         Default::default(),
-    );
-    let status_code = tokio::select! {
-        code = execute_future => code,
-        // This should never exit
-        _ = ctrl_c => { unreachable!("Ctrl+C should not be triggered") }
-    };
+    )
+    .await;
 
     if status_code != 0 {
         return Err(TaskExecutionError::NonZeroExitCode(status_code));
@@ -343,4 +352,27 @@ fn disambiguate_task_interactive<'p>(
         .interact_opt()
         .map_or(None, identity)
         .map(|idx| problem.environments[idx].clone())
+}
+
+/// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or other exceptions:
+/// https://github.com/console-rs/dialoguer/issues/188.
+///
+/// `dialoguer`, as a library, doesn't want to mess with signal handlers,
+/// but we, as an application, are free to mess with signal handlers if we feel like it, since we
+/// own the process.
+/// This function was taken from https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119
+fn reset_cursor() {
+    let term = console::Term::stdout();
+    let _ = term.show_cursor();
+}
+
+/// Exit the process with the appropriate exit code for a SIGINT.
+fn exit_process_on_sigint() {
+    // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
+    #[cfg(target_os = "windows")]
+    std::process::exit(3);
+
+    // POSIX compliant OSs: 128 + SIGINT (2)
+    #[cfg(not(target_os = "windows"))]
+    std::process::exit(130);
 }

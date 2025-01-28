@@ -1,23 +1,23 @@
-/// Set default pixi prompt for the bash shell
-pub(crate) fn get_bash_hook(env_name: &str) -> String {
-    format!(
-        "export PS1=\"({}) $PS1\"\n{}",
-        env_name,
-        include_str!("shell_snippets/pixi-bash.sh")
-    )
+use pixi_manifest::EnvironmentName;
+use rattler_shell::shell::ShellEnum;
+
+/// Sets default pixi hook for the bash shell
+pub(crate) fn bash_hook() -> &'static str {
+    include_str!("shell_snippets/pixi-bash.sh")
 }
 
-/// Set default pixi prompt for the zsh shell
-pub(crate) fn get_zsh_hook(env_name: &str) -> String {
-    format!(
-        "export PS1=\"({}) $PS1\"\n{}",
-        env_name,
-        include_str!("shell_snippets/pixi-zsh.sh")
-    )
+/// Sets default pixi hook for the zsh shell
+pub(crate) fn zsh_hook() -> &'static str {
+    include_str!("shell_snippets/pixi-zsh.sh")
 }
 
-/// Set default pixi prompt for the fish shell
-pub(crate) fn get_fish_prompt(env_name: &str) -> String {
+/// Sets default pixi prompt for posix shells
+pub(crate) fn posix_prompt(env_name: &str) -> String {
+    format!("export PS1=\"({}) ${{PS1:-}}\"", env_name)
+}
+
+/// Sets default pixi prompt for the fish shell
+pub(crate) fn fish_prompt(env_name: &str) -> String {
     format!(
         r#"
         function __pixi_add_prompt
@@ -61,14 +61,14 @@ pub(crate) fn get_fish_prompt(env_name: &str) -> String {
     )
 }
 
-/// Set default pixi prompt for the xonsh shell
-pub(crate) fn get_xonsh_prompt() -> String {
+/// Sets default pixi prompt for the xonsh shell
+pub(crate) fn xonsh_prompt() -> String {
     // Xonsh' default prompt can find the environment for some reason.
     "".to_string()
 }
 
-/// Set default pixi prompt for the powershell
-pub(crate) fn get_powershell_prompt(env_name: &str) -> String {
+/// Sets default pixi prompt for the powershell
+pub(crate) fn powershell_prompt(env_name: &str) -> String {
     format!(
         "$old_prompt = $function:prompt\n\
          function prompt {{\"({}) $($old_prompt.Invoke())\"}}",
@@ -76,8 +76,8 @@ pub(crate) fn get_powershell_prompt(env_name: &str) -> String {
     )
 }
 
-/// Set default pixi prompt for the Nu shell
-pub(crate) fn get_nu_prompt(env_name: &str) -> String {
+/// Sets default pixi prompt for the Nu shell
+pub(crate) fn nu_prompt(env_name: &str) -> String {
     format!(
         "let old_prompt = $env.PROMPT_COMMAND; \
          $env.PROMPT_COMMAND = {{|| echo $\"\\({}\\) (do $old_prompt)\"}}",
@@ -85,7 +85,37 @@ pub(crate) fn get_nu_prompt(env_name: &str) -> String {
     )
 }
 
-/// Set default pixi prompt for the cmd.exe command prompt
-pub(crate) fn get_cmd_prompt(env_name: &str) -> String {
+/// Sets default pixi prompt for the cmd.exe command prompt
+pub(crate) fn cmd_prompt(env_name: &str) -> String {
     format!(r"@PROMPT ({}) $P$G", env_name)
+}
+
+/// Returns appropriate hook function for configured shell
+pub(crate) fn shell_hook(shell: &ShellEnum) -> Option<&str> {
+    match shell {
+        ShellEnum::Bash(_) => Some(bash_hook()),
+        ShellEnum::Zsh(_) => Some(zsh_hook()),
+        _ => None,
+    }
+}
+
+/// Returns appropriate prompt (without hook) for configured shell
+pub(crate) fn shell_prompt(shell: &ShellEnum, prompt_name: &str) -> String {
+    match shell {
+        ShellEnum::NuShell(_) => nu_prompt(prompt_name),
+        ShellEnum::PowerShell(_) => powershell_prompt(prompt_name),
+        ShellEnum::Bash(_) => posix_prompt(prompt_name),
+        ShellEnum::Zsh(_) => posix_prompt(prompt_name),
+        ShellEnum::Fish(_) => fish_prompt(prompt_name),
+        ShellEnum::Xonsh(_) => xonsh_prompt(),
+        ShellEnum::CmdExe(_) => cmd_prompt(prompt_name),
+    }
+}
+
+/// Returns prompt name for given project and environment
+pub(crate) fn prompt_name(project_name: &str, environment_name: &EnvironmentName) -> String {
+    match environment_name {
+        EnvironmentName::Default => project_name.to_string(),
+        EnvironmentName::Named(name) => format!("{}:{}", project_name, name),
+    }
 }
