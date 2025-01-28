@@ -11,3 +11,8 @@ impl<'source> HasManifestRef<'source> for &'source crate::Manifest {
         self
     }
 }
+
+/// Trait for types that have a reference to workspace manifest.
+pub trait HasWorkspaceManifest<'source> {
+    fn workspace_manifest(&self) -> &'source crate::WorkspaceManifest;
+}

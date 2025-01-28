@@ -1,34 +1,79 @@
-use crate::toml::TomlDocument;
-use crate::{
-    manifests::table_name::TableName, pypi::PyPiPackageName, FeatureName, LibCSystemRequirement,
-    PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements, Task, TomlError,
-};
-use pixi_consts::{consts, consts::PYPROJECT_PIXI_PREFIX};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform};
 use std::fmt;
 #[cfg(test)]
 use std::str::FromStr;
+
+use miette::{NamedSource, SourceCode};
+use pixi_consts::consts;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{PackageName, Platform};
 #[cfg(test)]
 use toml_edit::DocumentMut;
 use toml_edit::{value, Array, Item, Table, Value};
 
-/// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
-#[derive(Debug, Clone)]
-pub enum ManifestSource {
-    PyProjectToml(TomlDocument),
-    PixiToml(TomlDocument),
+use crate::{
+    manifests::table_name::TableName, pypi::PyPiPackageName, toml::TomlDocument, FeatureName,
+    LibCSystemRequirement, PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements,
+    Task, TomlError,
+};
+
+/// Discriminates the source of between a 'pixi.toml' and a 'pyproject.toml'
+/// manifest.
+pub enum ManifestSource<S> {
+    PyProjectToml(S),
+    PixiToml(S),
 }
-impl fmt::Display for ManifestSource {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+
+impl<S> AsRef<S> for ManifestSource<S> {
+    fn as_ref(&self) -> &S {
         match self {
-            ManifestSource::PyProjectToml(document) => write!(f, "{}", document),
-            ManifestSource::PixiToml(document) => write!(f, "{}", document),
+            ManifestSource::PyProjectToml(source) => source,
+            ManifestSource::PixiToml(source) => source,
         }
     }
 }
 
-impl ManifestSource {
+impl<S> ManifestSource<S> {
+    /// Returns the inner source of the manifest.
+    pub fn into_inner(self) -> S {
+        match self {
+            ManifestSource::PyProjectToml(source) => source,
+            ManifestSource::PixiToml(source) => source,
+        }
+    }
+
+    /// Returns the expected file name of a manifest containing the source.
+    pub fn file_name(&self) -> &'static str {
+        match self {
+            ManifestSource::PyProjectToml(_) => consts::PYPROJECT_MANIFEST,
+            ManifestSource::PixiToml(_) => consts::PROJECT_MANIFEST,
+        }
+    }
+}
+
+impl<S: SourceCode + 'static> ManifestSource<S> {
+    /// Converts this instance into a [`NamedSource`] with the appropriate name
+    /// set based on the type of manifest.
+    pub fn into_named(self) -> NamedSource<S> {
+        NamedSource::new(self.file_name(), self.into_inner()).with_language("toml")
+    }
+}
+
+/// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
+#[derive(Debug, Clone)]
+pub enum ManifestDocument {
+    PyProjectToml(TomlDocument),
+    PixiToml(TomlDocument),
+}
+impl fmt::Display for ManifestDocument {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ManifestDocument::PyProjectToml(document) => write!(f, "{}", document),
+            ManifestDocument::PixiToml(document) => write!(f, "{}", document),
+        }
+    }
+}
+
+impl ManifestDocument {
     /// Returns a new empty pixi manifest.
     #[cfg(test)]
     fn empty_pixi() -> Self {
@@ -43,7 +88,7 @@ impl ManifestSource {
         .collect::<Vec<_>>()
         .join("\n");
 
-        ManifestSource::PixiToml(TomlDocument::new(
+        ManifestDocument::PixiToml(TomlDocument::new(
             DocumentMut::from_str(empty_content.as_str()).unwrap(),
         ))
     }
@@ -63,7 +108,7 @@ impl ManifestSource {
         .collect::<Vec<_>>()
         .join("\n");
 
-        ManifestSource::PyProjectToml(TomlDocument::new(
+        ManifestDocument::PyProjectToml(TomlDocument::new(
             DocumentMut::from_str(empty_content.as_str()).unwrap(),
         ))
     }
@@ -72,36 +117,36 @@ impl ManifestSource {
     #[cfg(test)]
     fn file_name(&self) -> &'static str {
         match self {
-            ManifestSource::PyProjectToml(_) => "pyproject.toml",
-            ManifestSource::PixiToml(_) => "pixi.toml",
+            ManifestDocument::PyProjectToml(_) => consts::PYPROJECT_MANIFEST,
+            ManifestDocument::PixiToml(_) => consts::PROJECT_MANIFEST,
         }
     }
 
     fn table_prefix(&self) -> Option<&'static str> {
         match self {
-            ManifestSource::PyProjectToml(_) => Some(PYPROJECT_PIXI_PREFIX),
-            ManifestSource::PixiToml(_) => None,
+            ManifestDocument::PyProjectToml(_) => Some(consts::PYPROJECT_PIXI_PREFIX),
+            ManifestDocument::PixiToml(_) => None,
         }
     }
 
     fn manifest_mut(&mut self) -> &mut TomlDocument {
         match self {
-            ManifestSource::PyProjectToml(document) => document,
-            ManifestSource::PixiToml(document) => document,
+            ManifestDocument::PyProjectToml(document) => document,
+            ManifestDocument::PixiToml(document) => document,
         }
     }
 
     /// Returns the inner TOML document
     pub fn manifest(&self) -> &TomlDocument {
         match self {
-            ManifestSource::PyProjectToml(document) => document,
-            ManifestSource::PixiToml(document) => document,
+            ManifestDocument::PyProjectToml(document) => document,
+            ManifestDocument::PixiToml(document) => document,
         }
     }
 
     /// Returns `true` if the manifest is a 'pyproject.toml' manifest.
     pub fn is_pyproject_toml(&self) -> bool {
-        matches!(self, ManifestSource::PyProjectToml(_))
+        matches!(self, ManifestDocument::PyProjectToml(_))
     }
 
     /// Detect the table name to use when querying elements of the manifest.
@@ -140,8 +185,8 @@ impl ManifestSource {
 
     fn as_table_mut(&mut self) -> &mut Table {
         match self {
-            ManifestSource::PyProjectToml(document) => document.as_table_mut(),
-            ManifestSource::PixiToml(document) => document.as_table_mut(),
+            ManifestDocument::PyProjectToml(document) => document.as_table_mut(),
+            ManifestDocument::PixiToml(document) => document.as_table_mut(),
         }
     }
 
@@ -158,7 +203,7 @@ impl ManifestSource {
         // For 'pyproject.toml' manifest, try and remove the dependency from native
         // arrays
         let remove_requirement =
-            |source: &mut ManifestSource, table, array_name| -> Result<(), TomlError> {
+            |source: &mut ManifestDocument, table, array_name| -> Result<(), TomlError> {
                 let array = source
                     .manifest_mut()
                     .get_mut_toml_array(table, array_name)?;
@@ -183,10 +228,10 @@ impl ManifestSource {
             };
 
         match self {
-            ManifestSource::PyProjectToml(_) if feature_name.is_default() => {
+            ManifestDocument::PyProjectToml(_) if feature_name.is_default() => {
                 remove_requirement(self, "project", "dependencies")?;
             }
-            ManifestSource::PyProjectToml(_) => {
+            ManifestDocument::PyProjectToml(_) => {
                 let name = feature_name.to_string();
                 remove_requirement(self, "project.optional-dependencies", &name)?;
                 remove_requirement(self, "dependency-groups", &name)?;
@@ -270,7 +315,7 @@ impl ManifestSource {
         // Pypi dependencies can be stored in different places in pyproject.toml
         // manifests so we remove any potential dependency of the same name
         // before adding it back
-        if matches!(self, ManifestSource::PyProjectToml(_)) {
+        if matches!(self, ManifestDocument::PyProjectToml(_)) {
             self.remove_pypi_dependency(
                 &PyPiPackageName::from_normalized(requirement.name.clone()),
                 platform,
@@ -284,7 +329,7 @@ impl ManifestSource {
         //  - When explicitly requested
         //  - When a specific platform is requested, as markers are not supported (https://github.com/prefix-dev/pixi/issues/2149)
         //  - When an editable install is requested
-        if matches!(self, ManifestSource::PixiToml(_))
+        if matches!(self, ManifestDocument::PixiToml(_))
             || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
             || platform.is_some()
             || editable.is_some_and(|e| e)
@@ -315,7 +360,7 @@ impl ManifestSource {
         //   - the [dependency-groups.feature_name] array is selected unless
         //   - optional-dependencies is explicitly requested as location
         let add_requirement =
-            |source: &mut ManifestSource, table, array| -> Result<(), TomlError> {
+            |source: &mut ManifestDocument, table, array| -> Result<(), TomlError> {
                 source
                     .manifest_mut()
                     .get_or_insert_toml_array_mut(table, array)?
@@ -340,8 +385,8 @@ impl ManifestSource {
 
     /// Determines the location of a PyPi dependency within the manifest.
     ///
-    /// This method checks various sections of the manifest to locate the specified
-    /// PyPi dependency. It searches in the following order:
+    /// This method checks various sections of the manifest to locate the
+    /// specified PyPi dependency. It searches in the following order:
     /// 1. `pypi-dependencies` table in the manifest.
     /// 2. `project.dependencies` array in the manifest.
     /// 3. `project.optional-dependencies` array in the manifest.
@@ -351,12 +396,13 @@ impl ManifestSource {
     ///
     /// * `dep` - The name of the PyPi package to locate.
     /// * `platform` - An optional platform specification.
-    /// * `feature_name` - The name of the feature to which the dependency belongs.
+    /// * `feature_name` - The name of the feature to which the dependency
+    ///   belongs.
     ///
     /// # Returns
     ///
-    /// An `Option` containing the `PypiDependencyLocation` if the dependency is found,
-    /// or `None` if it is not found in any of the checked sections.
+    /// An `Option` containing the `PypiDependencyLocation` if the dependency is
+    /// found, or `None` if it is not found in any of the checked sections.
     pub fn pypi_dependency_location(
         &self,
         package_name: &PyPiPackageName,
@@ -621,15 +667,16 @@ impl ManifestSource {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::{LibCFamilyAndVersion, Manifest};
     use insta::assert_snapshot;
     use rstest::rstest;
 
+    use super::*;
+    use crate::{LibCFamilyAndVersion, Manifest};
+
     #[rstest]
-    #[case::pixi_toml(ManifestSource::empty_pixi())]
-    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
-    fn test_add_environment(#[case] mut source: ManifestSource) {
+    #[case::pixi_toml(ManifestDocument::empty_pixi())]
+    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
+    fn test_add_environment(#[case] mut source: ManifestDocument) {
         source
             .add_environment("foo", Some(vec![]), None, false)
             .unwrap();
@@ -668,9 +715,9 @@ mod test {
     }
 
     #[rstest]
-    #[case::pixi_toml(ManifestSource::empty_pixi())]
-    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
-    fn test_remove_environment(#[case] mut source: ManifestSource) {
+    #[case::pixi_toml(ManifestDocument::empty_pixi())]
+    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
+    fn test_remove_environment(#[case] mut source: ManifestDocument) {
         source
             .add_environment("foo", Some(vec![String::from("default")]), None, false)
             .unwrap();
@@ -690,9 +737,9 @@ mod test {
     }
 
     #[rstest]
-    #[case::pixi_toml(ManifestSource::empty_pixi())]
-    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
-    fn test_add_empty_system_requirement_environment(#[case] mut source: ManifestSource) {
+    #[case::pixi_toml(ManifestDocument::empty_pixi())]
+    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
+    fn test_add_empty_system_requirement_environment(#[case] mut source: ManifestDocument) {
         let clean_source = source.clone();
 
         let empty_requirements = SystemRequirements::default();
@@ -710,9 +757,9 @@ mod test {
         assert_eq!(source.to_string(), clean_source.to_string());
     }
     #[rstest]
-    #[case::pixi_toml(ManifestSource::empty_pixi())]
-    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
-    fn test_add_single_system_requirement_environment(#[case] mut source: ManifestSource) {
+    #[case::pixi_toml(ManifestDocument::empty_pixi())]
+    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
+    fn test_add_single_system_requirement_environment(#[case] mut source: ManifestDocument) {
         let single_system_requirements = SystemRequirements {
             linux: Some("4.18".parse().unwrap()),
             ..SystemRequirements::default()
@@ -730,9 +777,9 @@ mod test {
         );
     }
     #[rstest]
-    #[case::pixi_toml(ManifestSource::empty_pixi())]
-    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
-    fn test_add_full_system_requirement_environment(#[case] mut source: ManifestSource) {
+    #[case::pixi_toml(ManifestDocument::empty_pixi())]
+    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
+    fn test_add_full_system_requirement_environment(#[case] mut source: ManifestDocument) {
         let full_system_requirements = SystemRequirements {
             linux: Some("4.18".parse().unwrap()),
             cuda: Some("11.1".parse().unwrap()),
@@ -761,9 +808,9 @@ mod test {
         );
     }
     #[rstest]
-    #[case::pixi_toml(ManifestSource::empty_pixi())]
-    #[case::pyproject_toml(ManifestSource::empty_pyproject())]
-    fn test_add_libc_family_system_requirement_environment(#[case] mut source: ManifestSource) {
+    #[case::pixi_toml(ManifestDocument::empty_pixi())]
+    #[case::pyproject_toml(ManifestDocument::empty_pyproject())]
+    fn test_add_libc_family_system_requirement_environment(#[case] mut source: ManifestDocument) {
         let family_system_requirements = SystemRequirements {
             libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
                 family: Some("glibc".to_string()),

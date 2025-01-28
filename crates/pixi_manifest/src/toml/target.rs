@@ -69,11 +69,14 @@ impl TomlTarget {
 
         Ok(WithWarnings {
             value: WorkspaceTarget {
-                dependencies: combine_target_dependencies([
-                    (SpecType::Run, self.dependencies),
-                    (SpecType::Host, self.host_dependencies),
-                    (SpecType::Build, self.build_dependencies),
-                ]),
+                dependencies: combine_target_dependencies(
+                    [
+                        (SpecType::Run, self.dependencies),
+                        (SpecType::Host, self.host_dependencies),
+                        (SpecType::Build, self.build_dependencies),
+                    ],
+                    preview,
+                )?,
                 pypi_dependencies: self.pypi_dependencies,
                 activation: self.activation,
                 tasks: self.tasks,
@@ -86,9 +89,12 @@ impl TomlTarget {
 /// Combines different target dependencies into a single map.
 pub(super) fn combine_target_dependencies(
     iter: impl IntoIterator<Item = (SpecType, Option<PixiSpanned<UniquePackageMap>>)>,
-) -> HashMap<SpecType, IndexMap<rattler_conda_types::PackageName, PixiSpec>> {
+    preview: &TomlPreview,
+) -> Result<HashMap<SpecType, IndexMap<rattler_conda_types::PackageName, PixiSpec>>, TomlError> {
     iter.into_iter()
-        .filter_map(|(ty, deps)| deps.map(|deps| (ty, deps.value.into())))
+        .filter_map(|(ty, deps)| {
+            deps.map(|deps| deps.value.into_inner(preview).map(|deps| (ty, deps)))
+        })
         .collect()
 }
 

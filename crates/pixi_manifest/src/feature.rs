@@ -391,17 +391,15 @@ impl Feature {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
 
     use assert_matches::assert_matches;
 
     use super::*;
-    use crate::Manifest;
+    use crate::WorkspaceManifest;
 
     #[test]
     fn test_dependencies_borrowed() {
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
+        let manifest = WorkspaceManifest::from_toml_str(
             r#"
         [project]
         name = "foo"
@@ -451,7 +449,6 @@ mod tests {
         );
 
         let bla_feature = manifest
-            .workspace
             .features
             .get(&FeatureName::Named(String::from("bla")))
             .unwrap();
@@ -470,8 +467,7 @@ mod tests {
 
     #[test]
     fn test_activation() {
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
+        let manifest = WorkspaceManifest::from_toml_str(
             r#"
         [project]
         name = "foo"
@@ -504,8 +500,7 @@ mod tests {
 
     #[test]
     pub fn test_pypi_options_manifest() {
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
+        let manifest = WorkspaceManifest::from_toml_str(
             r#"
         [project]
         name = "foo"
@@ -525,6 +520,6 @@ mod tests {
         // and should now be none, previously this was added
         // to the default feature
         assert!(manifest.default_feature().pypi_options().is_some());
-        assert!(manifest.workspace.workspace.pypi_options.is_some());
+        assert!(manifest.workspace.pypi_options.is_some());
     }
 }

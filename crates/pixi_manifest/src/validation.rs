@@ -9,8 +9,7 @@ use std::{
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
-    Environment, Feature, FeatureName, KnownPreviewFeature, SystemRequirements, TargetSelector,
-    WorkspaceManifest,
+    Environment, Feature, FeatureName, SystemRequirements, TargetSelector, WorkspaceManifest,
 };
 
 impl WorkspaceManifest {
@@ -147,27 +146,6 @@ impl WorkspaceManifest {
                 "The preview feature{s}: {preview_array} {are} defined in the manifest but un-used pixi");
         }
 
-        // Check if the pixi build feature is enabled
-        let build_enabled = self
-            .workspace
-            .preview
-            .is_enabled(KnownPreviewFeature::PixiBuild);
-
-        // Error any conda source dependencies are used and is not set
-        if !build_enabled {
-            let supported_platforms = self.workspace.platforms.as_ref();
-            // Check all features for source dependencies
-            for feature in self.features.values() {
-                if is_using_source_deps(feature, supported_platforms.iter()) {
-                    return Err(miette::miette!(
-                        help = "enable the `pixi-build` preview feature to use source dependencies",
-                        "source dependencies are used in the feature '{}', but the `pixi-build` preview feature is not enabled",
-                        feature.name
-                    ));
-                }
-            }
-        }
-
         Ok(())
     }
 
@@ -252,32 +230,6 @@ impl WorkspaceManifest {
 
         Ok(())
     }
-}
-
-/// Check if any feature is making use of conda source dependencies
-fn is_using_source_deps<'a>(
-    feature: &Feature,
-    supported_platforms: impl IntoIterator<Item = &'a Platform>,
-) -> bool {
-    // List all spec types
-    let spec_types = [
-        crate::SpecType::Build,
-        crate::SpecType::Run,
-        crate::SpecType::Host,
-    ];
-    // Check if any of the spec types have source dependencies
-    for platform in supported_platforms {
-        for spec in spec_types {
-            let deps = feature.dependencies(spec, Some(*platform));
-            if let Some(deps) = deps {
-                if deps.iter().any(|(_, spec)| spec.is_source()) {
-                    return true;
-                }
-            }
-        }
-    }
-
-    false
 }
 
 // Create an error report for using a platform that is not supported by the

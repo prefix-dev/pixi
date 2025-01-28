@@ -222,7 +222,7 @@ fn parse_specs(
         // Only upgrade in pyproject.toml if it is explicitly mentioned in `tool.pixi.dependencies.python`
         .filter(|(name, _)| {
             if name.as_normalized() == "python" {
-                if let pixi_manifest::ManifestSource::PyProjectToml(document) =
+                if let pixi_manifest::ManifestDocument::PyProjectToml(document) =
                     project.manifest.source.clone()
                 {
                     if document

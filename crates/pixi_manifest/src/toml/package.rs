@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use indexmap::IndexMap;
 pub use pixi_toml::TomlFromStr;
-use pixi_toml::{TomlIndexMap, TomlWith};
+use pixi_toml::{Same, TomlIndexMap, TomlWith};
 use rattler_conda_types::Version;
 use thiserror::Error;
 use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Value};
@@ -10,9 +10,9 @@ use url::Url;
 
 use crate::{
     package::Package,
-    target::PackageTarget,
     toml::{
-        package_target::TomlPackageTarget, workspace::ExternalWorkspaceProperties, TomlPackageBuild,
+        package_target::TomlPackageTarget, workspace::ExternalWorkspaceProperties,
+        TomlPackageBuild, TomlPreview,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     PackageManifest, TargetSelector, Targets, TomlError,
@@ -42,7 +42,7 @@ pub struct TomlPackage {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub target: IndexMap<PixiSpanned<TargetSelector>, PackageTarget>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
     pub span: Span,
 }
@@ -78,7 +78,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let run_dependencies = th.optional("run-dependencies");
         let build = th.required("build")?;
         let target = th
-            .optional::<TomlWith<_, TomlIndexMap<_, TomlPackageTarget>>>("target")
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
             .map(TomlWith::into_inner)
             .unwrap_or_default();
         th.finalize(None)?;
@@ -155,6 +155,7 @@ impl TomlPackage {
     pub fn into_manifest(
         self,
         external: ExternalPackageProperties,
+        preview: &TomlPreview,
     ) -> Result<PackageManifest, TomlError> {
         let name = self.name.or(external.name).ok_or(Error {
             kind: ErrorKind::MissingField("name"),
@@ -172,7 +173,16 @@ impl TomlPackage {
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
         }
-        .into_package_target();
+        .into_package_target(preview)?;
+
+        let targets = self
+            .target
+            .into_iter()
+            .map(|(selector, target)| {
+                let target = target.into_package_target(preview)?;
+                Ok::<_, TomlError>((selector, target))
+            })
+            .collect::<Result<_, _>>()?;
 
         Ok(PackageManifest {
             package: Package {
@@ -188,7 +198,7 @@ impl TomlPackage {
                 documentation: self.documentation.or(external.documentation),
             },
             build: self.build.into_build_system()?,
-            targets: Targets::from_default_and_user_defined(default_package_target, self.target),
+            targets: Targets::from_default_and_user_defined(default_package_target, targets),
         })
     }
 }

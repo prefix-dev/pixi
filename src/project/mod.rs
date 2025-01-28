@@ -31,7 +31,8 @@ use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, PypiDependencyLocation, SpecType,
+    FeaturesExt, HasFeaturesIter, HasManifestRef, HasWorkspaceManifest, Manifest,
+    PypiDependencyLocation, SpecType, WorkspaceManifest,
 };
 use pixi_spec::{PixiSpec, SourceSpec};
 use pixi_utils::reqwest::build_reqwest_clients;
@@ -1076,6 +1077,12 @@ pub struct UpdateDeps {
 impl<'source> HasManifestRef<'source> for &'source Workspace {
     fn manifest(&self) -> &'source Manifest {
         Workspace::manifest(self)
+    }
+}
+
+impl<'source> HasWorkspaceManifest<'source> for &'source Workspace {
+    fn workspace_manifest(&self) -> &'source WorkspaceManifest {
+        &self.manifest.workspace
     }
 }
 

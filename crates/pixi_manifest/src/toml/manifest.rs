@@ -248,6 +248,7 @@ impl TomlManifest {
             .and_then(|p| p.value.name.as_ref())
             .cloned();
 
+        let preview = self.workspace.value.preview.clone();
         let workspace = self
             .workspace
             .value
@@ -273,18 +274,21 @@ impl TomlManifest {
                 .into());
             }
 
-            let package = package.into_manifest(ExternalPackageProperties {
-                name: Some(workspace.name.clone()),
-                version: workspace.version.clone(),
-                description: workspace.description.clone(),
-                authors: workspace.authors.clone(),
-                license: workspace.license.clone(),
-                license_file: workspace.license_file.clone(),
-                readme: workspace.readme.clone(),
-                homepage: workspace.homepage.clone(),
-                repository: workspace.repository.clone(),
-                documentation: workspace.documentation.clone(),
-            })?;
+            let package = package.into_manifest(
+                ExternalPackageProperties {
+                    name: Some(workspace.name.clone()),
+                    version: workspace.version.clone(),
+                    description: workspace.description.clone(),
+                    authors: workspace.authors.clone(),
+                    license: workspace.license.clone(),
+                    license_file: workspace.license_file.clone(),
+                    readme: workspace.readme.clone(),
+                    homepage: workspace.homepage.clone(),
+                    repository: workspace.repository.clone(),
+                    documentation: workspace.documentation.clone(),
+                },
+                &preview,
+            )?;
 
             Some(package)
         } else {

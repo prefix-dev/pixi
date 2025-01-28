@@ -13,11 +13,10 @@ use super::{
     error::{RequirementConversionError, TomlError},
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
 };
-use crate::toml::{FromTomlStr, Warning};
 use crate::{
     error::DependencyError,
     manifests::PackageManifest,
-    toml::{ExternalWorkspaceProperties, TomlManifest},
+    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest, Warning},
     FeatureName,
 };
 
@@ -180,8 +179,6 @@ impl PyProjectManifest {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum PyProjectToManifestError {
-    #[error("The [tool.pixi] table is missing")]
-    MissingPixiTable,
     #[error("Unsupported pep508 requirement: '{0}'")]
     DependencyError(Requirement, #[source] DependencyError),
     #[error(transparent)]
@@ -227,7 +224,7 @@ impl PyProjectManifest {
             poetry,
         }) = self.tool
         else {
-            return Err(PyProjectToManifestError::MissingPixiTable);
+            return Err(TomlError::MissingField("tool.pixi".into(), None).into());
         };
 
         // Extract the values we are interested in from the pyproject.toml
@@ -385,13 +382,10 @@ fn contacts_to_authors(contacts: Vec<Contact>) -> Vec<String> {
 mod tests {
     use std::{path::Path, str::FromStr};
 
-    use insta::assert_snapshot;
     use pep440_rs::VersionSpecifiers;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
-    use crate::{
-        manifests::Manifest, pypi::PyPiPackageName, DependencyOverwriteBehavior, FeatureName,
-    };
+    use crate::manifests::Manifest;
 
     const PYPROJECT_FULL: &str = r#"
         [project]
@@ -535,108 +529,9 @@ mod tests {
         platforms = ["linux-64", "osx-arm64"]
         "#;
 
-    const PYPROJECT_BOILERPLATE: &str = r#"
-        [project]
-        name = "flask-hello-world-pyproject"
-        version = "0.1.0"
-        description = "Example how to get started with flask in a pixi environment."
-        license = "MIT OR Apache-2.0"
-        readme = "README.md"
-        requires-python = ">=3.11"
-        dependencies = ["flask==2.*"]
-
-        [tool.pixi.project]
-        channels = ["https://prefix.dev/conda-forge"]
-        platforms = ["linux-64"]
-
-        [tool.pixi.tasks]
-        start = "python -m flask run --port=5050"
-        "#;
-
     #[test]
     fn test_build_manifest() {
         let _manifest = Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_FULL).unwrap();
-    }
-
-    #[test]
-    fn test_add_pypi_dependency() {
-        let mut manifest =
-            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE).unwrap();
-
-        // Add numpy to pyproject
-        let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
-        manifest
-            .add_pep508_dependency(
-                &requirement,
-                &[],
-                &FeatureName::Default,
-                None,
-                DependencyOverwriteBehavior::Overwrite,
-                &None,
-            )
-            .unwrap();
-
-        assert!(manifest
-            .default_feature_mut()
-            .targets
-            .for_opt_target(None)
-            .unwrap()
-            .pypi_dependencies
-            .as_ref()
-            .unwrap()
-            .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
-            .is_some());
-
-        // Add numpy to feature in pyproject
-        let requirement = pep508_rs::Requirement::from_str("pytest>=3.12").unwrap();
-        manifest
-            .add_pep508_dependency(
-                &requirement,
-                &[],
-                &FeatureName::Named("test".to_string()),
-                None,
-                DependencyOverwriteBehavior::Overwrite,
-                &None,
-            )
-            .unwrap();
-        assert!(manifest
-            .feature(&FeatureName::Named("test".to_string()))
-            .unwrap()
-            .targets
-            .for_opt_target(None)
-            .unwrap()
-            .pypi_dependencies
-            .as_ref()
-            .unwrap()
-            .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
-            .is_some());
-
-        assert_snapshot!(manifest.source.to_string());
-    }
-
-    #[test]
-    fn test_remove_pypi_dependency() {
-        let mut manifest =
-            Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_BOILERPLATE).unwrap();
-
-        // Remove flask from pyproject
-        let name = PyPiPackageName::from_str("flask").unwrap();
-        manifest
-            .remove_pypi_dependency(&name, &[], &FeatureName::Default)
-            .unwrap();
-
-        assert!(manifest
-            .default_feature_mut()
-            .targets
-            .for_opt_target(None)
-            .unwrap()
-            .pypi_dependencies
-            .as_ref()
-            .unwrap()
-            .get(&name)
-            .is_none());
-
-        assert_snapshot!(manifest.source.to_string());
     }
 
     #[test]

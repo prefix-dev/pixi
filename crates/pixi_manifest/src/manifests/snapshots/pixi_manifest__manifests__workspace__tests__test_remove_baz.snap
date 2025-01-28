@@ -1,6 +1,6 @@
 ---
-source: crates/pixi_manifest/src/manifests/manifest.rs
-expression: manifest.document.to_string()
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: manifest.provenance.document.to_string()
 ---
             [project]
             name = "foo"

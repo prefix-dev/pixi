@@ -33,9 +33,12 @@ pub use error::TomlError;
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
-pub use has_manifest_ref::HasManifestRef;
+pub use has_manifest_ref::{HasManifestRef, HasWorkspaceManifest};
 use itertools::Itertools;
-pub use manifests::{Manifest, ManifestKind, ManifestSource, PackageManifest, WorkspaceManifest};
+pub use manifests::{
+    Manifest, ManifestDocument, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
+    WithProvenance, WorkspaceManifest,
+};
 use miette::Diagnostic;
 pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
 pub use pypi::pypi_requirement::PyPiRequirement;
@@ -76,7 +79,8 @@ pub enum DependencyOverwriteBehavior {
 }
 
 pub enum PypiDependencyLocation {
-    /// [pypi-dependencies] in pixi.toml or [tool.pixi.pypi-dependencies] in pyproject.toml
+    /// [pypi-dependencies] in pixi.toml or [tool.pixi.pypi-dependencies] in
+    /// pyproject.toml
     PixiPypiDependencies,
     /// [project.dependencies] in pyproject.toml
     Dependencies,
