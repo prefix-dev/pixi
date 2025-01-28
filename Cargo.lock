@@ -3918,6 +3918,7 @@ dependencies = [
  "insta",
  "itertools 0.13.0",
  "miette 7.4.0",
+ "pathdiff",
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",

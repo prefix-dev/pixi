@@ -12,8 +12,8 @@ use toml_edit::{value, Array, Item, Table, Value};
 
 use crate::{
     manifests::table_name::TableName, pypi::PyPiPackageName, toml::TomlDocument, FeatureName,
-    LibCSystemRequirement, PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements,
-    Task, TomlError,
+    LibCSystemRequirement, ManifestKind, PyPiRequirement, PypiDependencyLocation, SpecType,
+    SystemRequirements, Task, TomlError,
 };
 
 /// Discriminates the source of between a 'pixi.toml' and a 'pyproject.toml'
@@ -42,10 +42,26 @@ impl<S> ManifestSource<S> {
     }
 
     /// Returns the expected file name of a manifest containing the source.
-    pub fn file_name(&self) -> &'static str {
+    pub fn expected_file_name(&self) -> &'static str {
         match self {
             ManifestSource::PyProjectToml(_) => consts::PYPROJECT_MANIFEST,
             ManifestSource::PixiToml(_) => consts::PROJECT_MANIFEST,
+        }
+    }
+
+    /// Returns the kind of manifest this source represents.
+    pub fn kind(&self) -> ManifestKind {
+        match self {
+            ManifestSource::PyProjectToml(_) => ManifestKind::Pyproject,
+            ManifestSource::PixiToml(_) => ManifestKind::Pixi,
+        }
+    }
+
+    /// Maps the source from one type to another.
+    pub fn map<U, F: FnOnce(S) -> U>(self, f: F) -> ManifestSource<U> {
+        match self {
+            ManifestSource::PyProjectToml(source) => ManifestSource::PyProjectToml(f(source)),
+            ManifestSource::PixiToml(source) => ManifestSource::PixiToml(f(source)),
         }
     }
 }
@@ -53,8 +69,8 @@ impl<S> ManifestSource<S> {
 impl<S: SourceCode + 'static> ManifestSource<S> {
     /// Converts this instance into a [`NamedSource`] with the appropriate name
     /// set based on the type of manifest.
-    pub fn into_named(self) -> NamedSource<S> {
-        NamedSource::new(self.file_name(), self.into_inner()).with_language("toml")
+    pub fn into_named(self, file_name: impl AsRef<str>) -> NamedSource<S> {
+        NamedSource::new(file_name, self.into_inner()).with_language("toml")
     }
 }
 

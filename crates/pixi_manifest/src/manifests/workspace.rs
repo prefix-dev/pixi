@@ -13,7 +13,6 @@ use crate::{
     environments::Environments,
     error::{DependencyError, UnknownFeature},
     feature::{Feature, FeatureName},
-    manifests::WithProvenance,
     pypi::PyPiPackageName,
     solve_group::SolveGroups,
     to_options,
@@ -48,7 +47,7 @@ impl WorkspaceManifest {
         source: S,
     ) -> Result<Self, WithSourceCode<TomlError, S>> {
         TomlManifest::from_toml_str(source.as_ref())
-            .and_then(|manifest| manifest.into_manifests(ExternalWorkspaceProperties::default()))
+            .and_then(|manifest| manifest.into_workspace_manifest(ExternalWorkspaceProperties::default()))
             .map(|manifests| manifests.0)
             .map_err(|e| WithSourceCode { source, error: e })
     }
@@ -749,7 +748,7 @@ fn handle_missing_target(
 
 #[cfg(test)]
 mod tests {
-    use std::{path::Path, str::FromStr};
+    use std::{str::FromStr};
 
     use super::*;
     use indexmap::{IndexMap, IndexSet};
@@ -766,7 +765,6 @@ mod tests {
     use toml_edit::DocumentMut;
 
     use crate::{
-        manifests::{source::ManifestSource, ManifestProvenance, WithProvenance},
         pypi::PyPiPackageName,
         pyproject::PyProjectManifest,
         to_options,

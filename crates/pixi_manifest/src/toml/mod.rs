@@ -10,7 +10,7 @@ mod package_target;
 mod platform;
 mod preview;
 mod pypi_options;
-mod pyproject;
+pub mod pyproject;
 mod system_requirements;
 mod target;
 mod task;
@@ -31,6 +31,7 @@ pub use target::TomlTarget;
 use toml_span::DeserError;
 pub use warning::Warning;
 pub use workspace::{ExternalWorkspaceProperties, TomlWorkspace};
+pub use pyproject::{PyProjectToml};
 
 use crate::TomlError;
 

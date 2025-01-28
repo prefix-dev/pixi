@@ -5,24 +5,28 @@ use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
 use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact, DependencyGroups, Project};
+use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use thiserror::Error;
+use toml_span::Spanned;
 
 use super::{
     error::{RequirementConversionError, TomlError},
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
 };
 use crate::{
-    error::DependencyError,
+    error::{DependencyError, GenericError},
     manifests::PackageManifest,
-    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest, Warning},
+    toml::{
+        pyproject::{TomlContact, TomlProject},
+        ExternalWorkspaceProperties, FromTomlStr, PyProjectToml, TomlManifest, Warning,
+    },
     FeatureName,
 };
 
 #[derive(Debug)]
 pub struct PyProjectManifest {
-    pub inner: pyproject_toml::PyProjectToml,
+    pub project: PyProjectToml,
     pub tool: Option<Tool>,
 }
 
@@ -38,14 +42,6 @@ pub struct ToolPoetry {
     pub description: Option<String>,
     pub version: Option<String>,
     pub authors: Option<Vec<String>>,
-}
-
-impl std::ops::Deref for PyProjectManifest {
-    type Target = pyproject_toml::PyProjectToml;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
 }
 
 impl PyProjectManifest {
@@ -87,8 +83,8 @@ impl PyProjectManifest {
         {
             return Some(pixi_name);
         }
-        if let Some(pyproject) = &self.project {
-            return Some(pyproject.name.as_str());
+        if let Some(pyproject) = &self.project.project {
+            return Some(pyproject.name.value.as_str());
         }
         if let Some(poetry_name) = self.poetry().and_then(|p| p.name.as_ref()) {
             return Some(poetry_name.as_str());
@@ -103,10 +99,6 @@ impl PyProjectManifest {
 
     fn tool(&self) -> Option<&Tool> {
         self.tool.as_ref()
-    }
-
-    pub fn project(&self) -> Option<&Project> {
-        self.project.as_ref()
     }
 
     /// Returns a reference to the poetry section if it exists.
@@ -128,12 +120,20 @@ impl PyProjectManifest {
     /// Returns optional dependencies from the `[project.optional-dependencies]`
     /// table
     fn optional_dependencies(&self) -> Option<IndexMap<String, Vec<Requirement>>> {
-        self.project().and_then(|p| p.optional_dependencies.clone())
+        let project = self.project.project.as_ref()?;
+        let optional_dependencies = project.optional_dependencies.as_ref()?;
+        Some(
+            optional_dependencies
+                .iter()
+                .map(|(k, v)| (k.clone(), v.iter().cloned().map(Spanned::take).collect()))
+                .collect(),
+        )
     }
 
     /// Returns dependency groups from the `[dependency-groups]` table
     fn dependency_groups(&self) -> Option<Result<IndexMap<String, Vec<Requirement>>, Pep735Error>> {
-        self.dependency_groups.as_ref().map(|dg| dg.resolve())
+        let dg = self.project.dependency_groups.as_ref()?;
+        Some(dg.value.0.resolve())
     }
 
     /// Builds a list of pixi environments from pyproject groups of optional
@@ -189,17 +189,17 @@ pub enum PyProjectToManifestError {
 
 #[derive(Default)]
 pub struct PyProjectFields {
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub version: Option<Version>,
-    pub authors: Option<Vec<Contact>>,
-    pub requires_python: Option<VersionSpecifiers>,
-    pub dependencies: Option<Vec<Requirement>>,
-    pub optional_dependencies: Option<IndexMap<String, Vec<Requirement>>>,
+    pub name: Option<Spanned<String>>,
+    pub description: Option<Spanned<String>>,
+    pub version: Option<Spanned<Version>>,
+    pub authors: Option<Vec<Spanned<TomlContact>>>,
+    pub requires_python: Option<Spanned<VersionSpecifiers>>,
+    pub dependencies: Option<Vec<Spanned<Requirement>>>,
+    pub optional_dependencies: Option<IndexMap<String, Vec<Spanned<Requirement>>>>,
 }
 
-impl From<pyproject_toml::Project> for PyProjectFields {
-    fn from(project: pyproject_toml::Project) -> Self {
+impl From<TomlProject> for PyProjectFields {
+    fn from(project: TomlProject) -> Self {
         Self {
             name: Some(project.name),
             description: project.description,
@@ -216,8 +216,13 @@ impl PyProjectManifest {
     #[allow(clippy::result_large_err)]
     pub fn into_manifests(
         self,
-    ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), PyProjectToManifestError>
-    {
+    ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
+        let PyProjectToml {
+            project,
+            dependency_groups,
+            ..
+        } = self.project;
+
         // Load the data nested under '[tool.pixi]' as pixi manifest
         let Some(Tool {
             pixi: Some(pixi),
@@ -228,11 +233,6 @@ impl PyProjectManifest {
         };
 
         // Extract the values we are interested in from the pyproject.toml
-        let pyproject_toml::PyProjectToml {
-            project,
-            dependency_groups,
-            ..
-        } = self.inner;
         let project = project.map(PyProjectFields::from).unwrap_or_default();
 
         // Extract some of the values we are interested in from the poetry table.
@@ -245,13 +245,16 @@ impl PyProjectManifest {
         // could change these types or we can convert. Let's decide when we make it.
         // etc.
         let (mut workspace_manifest, package_manifest, warnings) =
-            pixi.into_manifests(ExternalWorkspaceProperties {
-                name: project.name,
+            pixi.into_workspace_manifest(ExternalWorkspaceProperties {
+                name: project.name.map(Spanned::take),
                 version: project
                     .version
-                    .and_then(|v| v.to_string().parse().ok())
+                    .and_then(|v| v.take().to_string().parse().ok())
                     .or(poetry.version.and_then(|v| v.parse().ok())),
-                description: project.description.or(poetry.description),
+                description: project
+                    .description
+                    .map(Spanned::take)
+                    .or(poetry.description),
                 authors: project.authors.map(contacts_to_authors).or(poetry.authors),
                 license: None,
                 license_file: None,
@@ -274,7 +277,7 @@ impl PyProjectManifest {
         if !target.has_dependency(&python, SpecType::Run, None) {
             target.add_dependency(
                 &python,
-                &version_or_url_to_spec(&python_spec).unwrap(),
+                &version_or_url_to_spec(&python_spec.map(Spanned::take)).unwrap(),
                 SpecType::Run,
             );
         } else if let Some(_spec) = python_spec {
@@ -291,12 +294,12 @@ impl PyProjectManifest {
             for requirement in deps.iter() {
                 target
                     .try_add_pep508_dependency(
-                        requirement,
+                        &requirement.value,
                         None,
                         DependencyOverwriteBehavior::Error,
                     )
                     .map_err(|err| {
-                        PyProjectToManifestError::DependencyError(requirement.clone(), err)
+                        GenericError::new(format!("{}", err)).with_span(requirement.span.into())
                     })?;
             }
         }
@@ -304,12 +307,26 @@ impl PyProjectManifest {
         // Define an iterator over both optional dependencies and dependency groups
         let groups = project
             .optional_dependencies
+            .map(|deps| {
+                deps.into_iter()
+                    .map(|(group, reqs)| {
+                        (
+                            group,
+                            reqs.into_iter().map(Spanned::take).collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect()
+            })
             .into_iter()
             .chain(
                 dependency_groups
-                    .as_ref()
-                    .map(DependencyGroups::resolve)
-                    .transpose()?,
+                    .map(|Spanned { span, value }| {
+                        value.0.resolve().map_err(|err| {
+                            GenericError::new(format!("{}", err)).with_span(span.into())
+                        })
+                    })
+                    .transpose()?
+                    .into_iter(),
             )
             .flat_map(|map| map.into_iter());
 
@@ -332,13 +349,11 @@ impl PyProjectManifest {
                 if project_name.as_ref() != Some(&requirement.name) {
                     target
                         .try_add_pep508_dependency(
-                            requirement,
+                            &requirement,
                             None,
                             DependencyOverwriteBehavior::Error,
                         )
-                        .map_err(|err| {
-                            PyProjectToManifestError::DependencyError(requirement.clone(), err)
-                        })?;
+                        .map_err(|err| GenericError::new(format!("{}", err)))?;
                 }
             }
         }
@@ -367,10 +382,10 @@ fn version_or_url_to_spec(
 
 /// Converts [`Contact`] from pyproject.toml to a representation that is used in
 /// pixi.
-fn contacts_to_authors(contacts: Vec<Contact>) -> Vec<String> {
+fn contacts_to_authors(contacts: Vec<Spanned<TomlContact>>) -> Vec<String> {
     contacts
         .into_iter()
-        .map(|contact| match contact {
+        .map(|contact| match contact.take().into_inner() {
             Contact::NameEmail { name, email } => format!("{} <{}>", name, email),
             Contact::Name { name } => name.clone(),
             Contact::Email { email } => email.clone(),

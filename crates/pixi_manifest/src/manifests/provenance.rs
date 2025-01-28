@@ -2,14 +2,13 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
-
 use miette::Diagnostic;
 use pixi_consts::consts;
 use thiserror::Error;
+use crate::ManifestSource;
 
-/// Describes the origin of a manifest file. It contains the location of the
-/// manifest on disk, the contents of the file on disk, and the parsed TOML.
-#[derive(Debug, Clone)]
+/// Describes the origin of a manifest file.
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ManifestProvenance {
     /// The path to the manifest file
     pub path: PathBuf,
@@ -27,6 +26,13 @@ pub enum ProvenanceError {
 }
 
 impl ManifestProvenance {
+    /// Constructs a new `ManifestProvenance` instance.
+    pub fn new(path: PathBuf, kind: ManifestKind) -> Self {
+        Self {
+            path, kind
+        }
+    }
+
     /// Load the manifest from a path
     pub fn from_path(path: PathBuf) -> Result<Self, ProvenanceError> {
         let Some(kind) = ManifestKind::try_from_path(&path) else {
@@ -35,9 +41,18 @@ impl ManifestProvenance {
 
         Ok(Self { kind, path })
     }
+
+    /// Load the contents of the manifest.
+    pub fn read(&self) -> Result<ManifestSource<String>, std::io::Error> {
+        let contents = fs_err::read_to_string(&self.path)?;
+        match self.kind {
+            ManifestKind::Pixi => Ok(ManifestSource::PixiToml(contents)),
+            ManifestKind::Pyproject => Ok(ManifestSource::PyProjectToml(contents)),
+        }
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ManifestKind {
     Pixi,
     Pyproject,

@@ -121,11 +121,10 @@ impl TomlManifest {
         }
     }
 
-    /// Converts the raw manifest into a workspace manifest.
+    /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
-    /// The `name` is used to set the workspace name in the manifest if it is
-    /// not set there. A missing name in the manifest is not allowed.
-    pub fn into_manifests(
+    /// If the manifest also contains a package section that will be converted as well.
+    pub fn into_workspace_manifest(
         self,
         external: ExternalWorkspaceProperties,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
@@ -407,7 +406,7 @@ mod test {
     #[must_use]
     pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml)
-            .and_then(|manifest| manifest.into_manifests(ExternalWorkspaceProperties::default()))
+            .and_then(|manifest| manifest.into_workspace_manifest(ExternalWorkspaceProperties::default()))
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)

@@ -7,9 +7,9 @@ use toml_edit::DocumentMut;
 use crate::{
     error::TomlError,
     manifests::{provenance::ManifestKind, PackageManifest},
-    pyproject::{PyProjectManifest, PyProjectToManifestError},
+    pyproject::{PyProjectManifest},
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
-    PackageBuild, WithProvenance, WorkspaceManifest,
+    PackageBuild, WorkspaceManifest,
 };
 
 /// Contains information about a manifest file.
@@ -48,7 +48,7 @@ impl Manifest {
         let (parsed, file_name) = match manifest_kind {
             ManifestKind::Pixi => (
                 TomlManifest::from_toml_str(&contents).and_then(|manifest| {
-                    manifest.into_manifests(ExternalWorkspaceProperties::default())
+                    manifest.into_workspace_manifest(ExternalWorkspaceProperties::default())
                 }),
                 "pixi.toml",
             ),
@@ -58,7 +58,6 @@ impl Manifest {
                 {
                     Ok(manifest) => match manifest.into_manifests() {
                         Ok(manifests) => Ok(manifests),
-                        Err(PyProjectToManifestError::TomlError(err)) => Err(err),
                         Err(e) => return Err(Report::from(e)),
                     },
                     Err(e) => Err(e),

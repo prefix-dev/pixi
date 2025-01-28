@@ -23,6 +23,7 @@ pub mod toml;
 pub mod utils;
 mod validation;
 mod workspace;
+mod discovery;
 
 pub use activation::Activation;
 pub use build_system::PackageBuild;

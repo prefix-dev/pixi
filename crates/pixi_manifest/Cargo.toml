@@ -14,6 +14,7 @@ fancy_display = { workspace = true }
 fs-err = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }

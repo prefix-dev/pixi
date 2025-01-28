@@ -8,7 +8,7 @@ use crate::toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest};
 #[must_use]
 pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
     let parse_error = TomlManifest::from_toml_str(pixi_toml)
-        .and_then(|manifest| manifest.into_manifests(ExternalWorkspaceProperties::default()))
+        .and_then(|manifest| manifest.into_workspace_manifest(ExternalWorkspaceProperties::default()))
         .expect_err("parsing should fail");
 
     format_parse_error(pixi_toml, parse_error)
