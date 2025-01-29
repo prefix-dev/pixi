@@ -46,6 +46,9 @@ pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
 
+    #[error("the platforms in the lock-file do not match the environments platforms")]
+    PlatformsMismatch,
+
     #[error(transparent)]
     IndexesMismatch(#[from] IndexesMismatch),
 
@@ -428,6 +431,13 @@ pub fn verify_environment_satisfiability(
         .try_collect()?;
     if !channels.eq(&locked_channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);
+    }
+
+    let platforms = environment.platforms();
+    let locked_platforms = locked_environment.platforms().collect::<HashSet<_>>();
+
+    if !locked_platforms.is_empty() && locked_platforms != platforms {
+        return Err(EnvironmentUnsat::PlatformsMismatch);
     }
 
     // Do some more checks if we have pypi dependencies

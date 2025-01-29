@@ -163,21 +163,6 @@ async fn find_unsatisfiable_targets<'p>(
             continue;
         };
 
-        if locked_environment.platforms().collect::<HashSet<_>>() != platforms {
-            tracing::info!(
-                "environment '{0}' is out of date because the platforms of the manifest and the lock file do not match.",
-                environment.name().fancy_display()
-            );
-
-            unsatisfiable_targets
-                .outdated_conda
-                .entry(environment.clone())
-                .or_default()
-                .extend(platforms);
-
-            continue;
-        }
-
         // The locked environment exists, but does it match our project environment?
         if let Err(unsat) = verify_environment_satisfiability(&environment, locked_environment) {
             tracing::info!(
@@ -192,8 +177,15 @@ async fn find_unsatisfiable_targets<'p>(
                 .extend(platforms);
 
             match unsat {
+                EnvironmentUnsat::PlatformsMismatch => {
+                    // If the platforms mismatched we cannot trust any of the locked content.
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .conda
+                        .insert(environment.clone());
+                }
                 EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::InvalidChannel(_) => {
-                    // If the channels mismatched we also cannot trust any of the locked content.
+                    // If the channels mismatched we cannot trust any of the locked content.
                     unsatisfiable_targets
                         .disregard_locked_content
                         .conda
@@ -201,7 +193,7 @@ async fn find_unsatisfiable_targets<'p>(
                 }
 
                 EnvironmentUnsat::IndexesMismatch(_) => {
-                    // If the indexes mismatched we also cannot trust any of the locked content.
+                    // If the indexes mismatched we cannot trust any of the locked content.
                     unsatisfiable_targets
                         .disregard_locked_content
                         .pypi
