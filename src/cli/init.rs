@@ -70,7 +70,6 @@ const PROJECT_TEMPLATE: &str = r#"[project]
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
 channels = {{ channels }}
-description = "Add a short description here"
 name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
@@ -122,7 +121,6 @@ const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
 authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
 {%- endif %}
 dependencies = []
-description = "Add a short description here"
 name = "{{ name }}"
 requires-python = ">= 3.11"
 version = "{{ version }}"
@@ -167,13 +165,13 @@ impl GitAttributes {
     fn template(&self) -> &'static str {
         match self {
             GitAttributes::Github | GitAttributes::Codeberg => {
-                r#"# SCM syntax highlighting
-pixi.lock linguist-language=YAML linguist-generated=true
+                r#"# SCM syntax highlighting & preventing 3-way merges
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true
 "#
             }
             GitAttributes::Gitlab => {
-                r#"# GitLab syntax highlighting
-pixi.lock gitlab-language=yaml gitlab-generated=true
+                r#"# GitLab syntax highlighting & preventing 3-way merges
+pixi.lock merge=binary gitlab-language=yaml gitlab-generated=true
 "#
             }
         }

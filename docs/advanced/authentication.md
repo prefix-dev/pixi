@@ -134,6 +134,10 @@ To install keyring you can use pixi global install:
     ```shell
     pixi global install keyring --with keyring.artifacts
     ```
+=== "AWS CodeArtifact"
+    ```shell
+    pixi global install keyring --with keyrings.codeartifact
+    ```
 
 For other registries, you will need to adapt these instructions to add the right keyring backend.
 
@@ -175,6 +179,14 @@ For other registries, you will need to adapt these instructions to add the right
     ```toml
     [pypi-options]
     extra-index-urls = ["https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/"]
+    ```
+
+=== "AWS CodeArtifact"
+    Ensure you are logged in e.g via `aws sso login` and add the following configuration to your pixi manifest:
+
+    ```toml
+    [pypi-options]
+    extra-index-urls = ["https://aws@<your-domain>-<your-account>.d.codeartifact.<your-region>.amazonaws.com/pypi/<your-repository>/simple/"]
     ```
 
 #### Installing your environment

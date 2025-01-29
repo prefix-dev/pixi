@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use pixi_toml::{TomlEnum, TomlFromStr, TomlWith};
 use toml_span::{
@@ -8,7 +8,45 @@ use toml_span::{
 };
 use url::Url;
 
-use crate::pypi::pypi_options::{FindLinksUrlOrPath, PypiOptions};
+use crate::pypi::pypi_options::{FindLinksUrlOrPath, NoBuild, PypiOptions};
+
+impl<'de> toml_span::Deserialize<'de> for NoBuild {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        // It can be either `true` or `false` or an array of strings
+        if value.as_bool().is_some() {
+            if bool::deserialize(value)? {
+                return Ok(NoBuild::All);
+            } else {
+                return Ok(NoBuild::None);
+            }
+        }
+        // We assume it's an array of strings
+        if value.as_array().is_some() {
+            match value.take() {
+                ValueInner::Array(array) => {
+                    let mut packages = HashSet::with_capacity(array.len());
+                    for mut value in array {
+                        packages.insert(value.take_string(None)?.into_owned());
+                    }
+                    Ok(NoBuild::Packages(packages))
+                }
+                _ => Err(expected(
+                    "an array of packages e.g. [\"foo\", \"bar\"]",
+                    value.take(),
+                    value.span,
+                )
+                .into()),
+            }
+        } else {
+            Err(expected(
+                r#"either "all", "none" or an array of packages e.g. ["foo", "bar"] "#,
+                value.take(),
+                value.span,
+            )
+            .into())
+        }
+    }
+}
 
 impl<'de> toml_span::Deserialize<'de> for PypiOptions {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -26,6 +64,8 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             .optional::<TomlEnum<_>>("index-strategy")
             .map(TomlEnum::into_inner);
 
+        let no_build = th.optional::<NoBuild>("no-build");
+
         th.finalize(None)?;
 
         Ok(Self {
@@ -34,6 +74,7 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             find_links,
             no_build_isolation,
             index_strategy,
+            no_build,
         })
     }
 }
@@ -149,6 +190,7 @@ mod test {
                 ]),
                 no_build_isolation: Some(vec!["pkg1".to_string(), "pkg2".to_string()]),
                 index_strategy: None,
+                no_build: Default::default(),
             },
         );
     }
@@ -164,6 +206,16 @@ mod test {
         ]
         no-build-isolation = ["sigma"]
         index-strategy = "first-index"
+        no-build = true
+        "#;
+        let options = PypiOptions::from_toml_str(input).unwrap();
+        assert_debug_snapshot!(options);
+    }
+
+    #[test]
+    fn test_no_build_packages() {
+        let input = r#"
+        no-build = ["package1"]
         "#;
         let options = PypiOptions::from_toml_str(input).unwrap();
         assert_debug_snapshot!(options);
@@ -256,5 +308,20 @@ mod test {
           ╰────
         "###
         )
+    }
+
+    #[test]
+    fn test_wrong_build_option_type() {
+        let input = r#"no-build = 3"#;
+        assert_snapshot!(format_parse_error(
+            input,
+            PypiOptions::from_toml_str(input).unwrap_err()
+        ), @r###"
+         × expected either "all", "none" or an array of packages e.g. ["foo", "bar"] , found integer
+          ╭─[pixi.toml:1:12]
+        1 │ no-build = 3
+          ·            ─
+          ╰────
+        "###)
     }
 }

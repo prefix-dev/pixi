@@ -8,3 +8,4 @@ extra-index-urls:
 find-links: ~
 no-build-isolation: ~
 index-strategy: ~
+no-build: ~

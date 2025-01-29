@@ -7,7 +7,7 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_git::url::RepositoryUrl;
 use pixi_record::LockedGitUrl;
-use pixi_uv_conversions::{into_parsed_git_url, to_uv_version};
+use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use url::Url;
 use uv_cache::Cache;
@@ -415,7 +415,7 @@ fn need_reinstall(
                             // is it a git url?
                             if LockedGitUrl::is_locked_git_url(url) {
                                 let locked_git_url = LockedGitUrl::new(url.clone());
-                                into_parsed_git_url(&locked_git_url)
+                                to_parsed_git_url(&locked_git_url)
                             } else {
                                 // it is not a git url, so we fallback to use the url as is
                                 ParsedGitUrl::try_from(url.clone()).into_diagnostic()
