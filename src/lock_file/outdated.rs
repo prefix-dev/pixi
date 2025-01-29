@@ -66,20 +66,12 @@ impl<'p> OutdatedEnvironments<'p> {
         lock_file: &LockFile,
         glob_hash_cache: GlobHashCache,
     ) -> Self {
-        let mut outdated_conda: HashMap<_, HashSet<_>> = HashMap::new();
-        let mut outdated_pypi: HashMap<_, HashSet<_>> = HashMap::new();
-        let mut disregard_locked_content = DisregardLockedContent::default();
-
         // Find all targets that are not satisfied by the lock-file
-        find_unsatisfiable_targets(
-            project,
-            lock_file,
-            &mut outdated_conda,
-            &mut outdated_pypi,
-            &mut disregard_locked_content,
-            glob_hash_cache,
-        )
-        .await;
+        let UnsatisfiableTargets {
+            mut outdated_conda,
+            mut outdated_pypi,
+            disregard_locked_content,
+        } = find_unsatisfiable_targets(project, lock_file, glob_hash_cache).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -137,16 +129,21 @@ impl<'p> OutdatedEnvironments<'p> {
     }
 }
 
+#[derive(Debug, Default)]
+struct UnsatisfiableTargets<'p> {
+    outdated_conda: HashMap<Environment<'p>, HashSet<Platform>>,
+    outdated_pypi: HashMap<Environment<'p>, HashSet<Platform>>,
+    disregard_locked_content: DisregardLockedContent<'p>,
+}
+
 /// Find all targets (combination of environment and platform) who's
 /// requirements in the `project` are not satisfied by the `lock_file`.
 async fn find_unsatisfiable_targets<'p>(
     project: &'p Project,
     lock_file: &LockFile,
-    outdated_conda: &mut HashMap<Environment<'p>, HashSet<Platform>>,
-    outdated_pypi: &mut HashMap<Environment<'p>, HashSet<Platform>>,
-    disregard_locked_content: &mut DisregardLockedContent<'p>,
     glob_hash_cache: GlobHashCache,
-) {
+) -> UnsatisfiableTargets<'p> {
+    let mut unsatisfiable_targets = UnsatisfiableTargets::default();
     for environment in project.environments() {
         let platforms = environment.platforms();
 
@@ -157,13 +154,29 @@ async fn find_unsatisfiable_targets<'p>(
                 environment.name().fancy_display()
             );
 
-            outdated_conda
+            unsatisfiable_targets
+                .outdated_conda
                 .entry(environment.clone())
                 .or_default()
                 .extend(platforms);
 
             continue;
         };
+
+        if locked_environment.platforms().collect::<HashSet<_>>() != platforms {
+            tracing::info!(
+                "environment '{0}' is out of date because the platforms of the manifest and the lock file do not match.",
+                environment.name().fancy_display()
+            );
+
+            unsatisfiable_targets
+                .outdated_conda
+                .entry(environment.clone())
+                .or_default()
+                .extend(platforms);
+
+            continue;
+        }
 
         // The locked environment exists, but does it match our project environment?
         if let Err(unsat) = verify_environment_satisfiability(&environment, locked_environment) {
@@ -172,7 +185,8 @@ async fn find_unsatisfiable_targets<'p>(
                 environment.name().fancy_display()
             );
 
-            outdated_conda
+            unsatisfiable_targets
+                .outdated_conda
                 .entry(environment.clone())
                 .or_default()
                 .extend(platforms);
@@ -180,18 +194,30 @@ async fn find_unsatisfiable_targets<'p>(
             match unsat {
                 EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::InvalidChannel(_) => {
                     // If the channels mismatched we also cannot trust any of the locked content.
-                    disregard_locked_content.conda.insert(environment.clone());
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .conda
+                        .insert(environment.clone());
                 }
 
                 EnvironmentUnsat::IndexesMismatch(_) => {
                     // If the indexes mismatched we also cannot trust any of the locked content.
-                    disregard_locked_content.pypi.insert(environment.clone());
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .pypi
+                        .insert(environment.clone());
                 }
                 EnvironmentUnsat::InvalidDistExtensionInNoBuild(_) => {
-                    disregard_locked_content.pypi.insert(environment.clone());
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .pypi
+                        .insert(environment.clone());
                 }
                 EnvironmentUnsat::NoBuildWithNonBinaryPackages(_) => {
-                    disregard_locked_content.pypi.insert(environment.clone());
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .pypi
+                        .insert(environment.clone());
                 }
             }
 
@@ -216,7 +242,8 @@ async fn find_unsatisfiable_targets<'p>(
                         environment.name().fancy_display()
                     );
 
-                    outdated_pypi
+                    unsatisfiable_targets
+                        .outdated_pypi
                         .entry(environment.clone())
                         .or_default()
                         .insert(platform);
@@ -227,7 +254,8 @@ async fn find_unsatisfiable_targets<'p>(
                         environment.name().fancy_display()
                     );
 
-                    outdated_conda
+                    unsatisfiable_targets
+                        .outdated_conda
                         .entry(environment.clone())
                         .or_default()
                         .insert(platform);
@@ -235,6 +263,7 @@ async fn find_unsatisfiable_targets<'p>(
             }
         }
     }
+    unsatisfiable_targets
 }
 
 /// Given a mapping of outdated targets, construct a new mapping of all the
