@@ -46,7 +46,7 @@ fn create_uv_url(
     url.parse()
 }
 
-fn to_version_specificers(
+fn manifest_version_to_version_specifiers(
     version: &VersionOrStar,
 ) -> Result<VersionSpecifiers, uv_pep440::VersionSpecifiersParseError> {
     match version {
@@ -91,7 +91,7 @@ pub fn as_uv_req(
         PyPiRequirement::Version { version, index, .. } => {
             // TODO: implement index later
             RequirementSource::Registry {
-                specifier: to_version_specificers(version)?,
+                specifier: manifest_version_to_version_specifiers(version)?,
                 index: index.clone(),
                 conflict: None,
             }
@@ -180,7 +180,7 @@ pub fn as_uv_req(
             ext: DistExtension::from_path(url.path())?,
         },
         PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
-            specifier: to_version_specificers(version)?,
+            specifier: manifest_version_to_version_specifiers(version)?,
             index: None,
             conflict: None,
         },

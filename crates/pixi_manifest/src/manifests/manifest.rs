@@ -352,35 +352,41 @@ impl Manifest {
     /// Remove the platform(s) from the project
     pub fn remove_platforms(
         &mut self,
-        platforms: impl IntoIterator<Item = Platform>,
+        platforms: impl IntoIterator<Item = Platform> + Clone,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // Get current platforms and platform to remove for the feature
+        // Get current platforms for the feature
         let current = match feature_name {
             FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
             FeatureName::Named(_) => self.feature_mut(feature_name)?.platforms_mut(),
         };
-        // Get the platforms to remove, while checking if they exist
-        let to_remove: IndexSet<_> = platforms
-            .into_iter()
-            .map(|c| {
-                current
-                    .iter()
-                    .position(|x| *x == c)
-                    .ok_or_else(|| miette::miette!("platform {} does not exist", c))
-                    .map(|_| c)
-            })
-            .collect::<Result<_, _>>()?;
 
-        let retained: IndexSet<_> = current.difference(&to_remove).cloned().collect();
+        // Check if some platforms are not part of current
+        let missing = platforms
+            .clone()
+            .into_iter()
+            .filter(|p| !current.contains(p))
+            .collect_vec();
+        if !missing.is_empty() {
+            return Err(miette::miette!(
+                "The following platform{} are not part of {}: {}",
+                if missing.len() > 1 { "s are" } else { " is" },
+                feature_name,
+                missing.into_iter().join(", ")
+            ));
+        }
 
         // Remove platforms from the manifest
-        current.retain(|p| retained.contains(p));
+        current.retain(|p| !platforms.clone().into_iter().contains(p));
 
         // And from the TOML document
-        let retained = retained.iter().map(|p| p.to_string()).collect_vec();
+        let retained = current.iter().map(|p| p.to_string()).collect_vec();
         let platforms = self.source.get_array_mut("platforms", feature_name)?;
-        platforms.retain(|x| retained.contains(&x.to_string()));
+        platforms.retain(|p| {
+            p.as_str()
+                .map(|p| retained.contains(&p.to_string()))
+                .unwrap_or(false)
+        });
 
         Ok(())
     }

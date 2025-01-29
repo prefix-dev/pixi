@@ -1,12 +1,9 @@
-use std::str::FromStr;
-
 use crate::lock_file::UpdateMode;
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
     Project, UpdateLockFileOptions,
 };
 use clap::Parser;
-use miette::IntoDiagnostic;
 use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
 
@@ -14,7 +11,7 @@ use rattler_conda_types::Platform;
 pub struct Args {
     /// The platform name(s) to remove.
     #[clap(required = true, num_args=1..)]
-    pub platform: Vec<String>,
+    pub platforms: Vec<Platform>,
 
     /// Don't update the environment, only remove the platform(s) from the
     /// lock-file.
@@ -31,18 +28,10 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .feature
         .map_or(FeatureName::Default, FeatureName::Named);
 
-    // Determine which platforms to remove
-    let platforms = args
-        .platform
-        .into_iter()
-        .map(|platform_str| Platform::from_str(&platform_str))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
     // Remove the platform(s) from the manifest
     project
         .manifest
-        .remove_platforms(platforms.clone(), &feature_name)?;
+        .remove_platforms(args.platforms.clone(), &feature_name)?;
 
     get_update_lock_file_and_prefix(
         &project.default_environment(),
@@ -57,7 +46,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     project.save()?;
 
     // Report back to the user
-    for platform in platforms {
+    for platform in args.platforms {
         eprintln!(
             "{}Removed {}",
             console::style(console::Emoji("✔ ", "")).green(),
