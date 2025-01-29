@@ -1,5 +1,5 @@
 use std::{
-    cell::RefCell,
+    cell::{OnceCell, RefCell},
     collections::HashMap,
     iter::once,
     ops::Deref,
@@ -52,8 +52,12 @@ use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{
-        records_by_name::HasNameVersion, resolve::resolver_provider::CondaResolverProvider,
-        LockedPypiPackages, PypiPackageIdentifier, PypiRecord, UvResolutionContext,
+        build_dispatch::{PixiBuildDispatch, PixiBuildDispatchState},
+        records_by_name::HasNameVersion,
+        resolve::resolver_provider::CondaResolverProvider,
+        update::{CondaPrefixUpdated, PrefixTask, TaskResult},
+        LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier, PypiRecord,
+        UvResolutionContext,
     },
     uv_reporter::{UvReporter, UvReporterOptions},
 };
@@ -156,7 +160,7 @@ fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageNam
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn resolve_pypi(
+pub async fn resolve_pypi<'p>(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
     dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PyPiRequirement>>,
@@ -165,10 +169,12 @@ pub async fn resolve_pypi(
     locked_pypi_packages: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
-    python_location: &Path,
+    // python_location: &Path,
     env_variables: &HashMap<String, String>,
     project_root: &Path,
-) -> miette::Result<LockedPypiPackages> {
+    prefix_task: PrefixTask<'p>,
+    repodata_records: Arc<PixiRecordsByName>,
+) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
 
@@ -266,13 +272,13 @@ pub async fn resolve_pypi(
     let requires_python = uv_resolver::RequiresPython::from_specifiers(
         &uv_pep440::VersionSpecifiers::from(python_specifier),
     );
-    let interpreter = Interpreter::query(python_location, &context.cache)
-        .into_diagnostic()
-        .wrap_err("failed to query python interpreter")?;
-    tracing::debug!(
-        "using python interpreter (should be assumed for building only): {}",
-        interpreter.key()
-    );
+    // let interpreter = Interpreter::query(python_location, &context.cache)
+    //     .into_diagnostic()
+    //     .wrap_err("failed to query python interpreter")?;
+    // tracing::debug!(
+    //     "using python interpreter (should be assumed for building only): {}",
+    //     interpreter.key()
+    // );
     tracing::info!(
         "using requires python specifier (this may differ from the above): {}",
         requires_python
@@ -324,11 +330,12 @@ pub async fn resolve_pypi(
     let build_dispatch_in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
-    let env = PythonEnvironment::from_interpreter(interpreter.clone());
+    // let env = PythonEnvironment::from_interpreter(interpreter.clone());
     let non_isolated_packages =
         isolated_names_to_packages(pypi_options.no_build_isolation.as_deref()).into_diagnostic()?;
-    let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
-    tracing::debug!("using build-isolation: {:?}", build_isolation);
+    // let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
+    let build_isolation = uv_types::BuildIsolation::default();
+    // tracing::debug!("using build-isolation: {:?}", build_isolation);
 
     let dependency_metadata = DependencyMetadata::default();
     let options = Options {
@@ -344,17 +351,38 @@ pub async fn resolve_pypi(
         context.capabilities.clone(),
     );
 
-    let build_dispatch = BuildDispatch::new(
+    // let build_dispatch = BuildDispatch::new(
+    //     &registry_client,
+    //     &context.cache,
+    //     Constraints::default(),
+    //     &interpreter,
+    //     &index_locations,
+    //     &flat_index,
+    //     &dependency_metadata,
+    //     // TODO: could use this later to add static metadata
+    //     shared_state,
+    //     IndexStrategy::default(),
+    //     &config_settings,
+    //     build_isolation,
+    //     LinkMode::default(),
+    //     &context.build_options,
+    //     &context.hash_strategy,
+    //     None,
+    //     LowerBound::default(),
+    //     context.source_strategy,
+    //     context.concurrency,
+    // )
+    // .with_build_extra_env_vars(env_variables.iter());
+
+    let first_state = PixiBuildDispatchState::new(
         &registry_client,
         &context.cache,
         Constraints::default(),
-        &interpreter,
         &index_locations,
         &flat_index,
         &dependency_metadata,
-        // TODO: could use this later to add static metadata
-        shared_state,
-        IndexStrategy::default(),
+        shared_state.clone(),
+        index_strategy,
         &config_settings,
         build_isolation,
         LinkMode::default(),
@@ -364,8 +392,27 @@ pub async fn resolve_pypi(
         LowerBound::default(),
         context.source_strategy,
         context.concurrency,
-    )
-    .with_build_extra_env_vars(env_variables.iter());
+        env_variables.clone(),
+    );
+
+    let int_cell = OnceCell::new();
+
+    let pixi_build_dispatch = PixiBuildDispatch::new(
+        // build_dispatch,
+        first_state,
+        prefix_task,
+        repodata_records,
+        &int_cell,
+        &context.cache,
+        shared_state.git(),
+        shared_state.capabilities(),
+        &dependency_metadata,
+        &build_options,
+        &config_settings,
+        LowerBound::default(),
+        context.source_strategy,
+        &index_locations,
+    );
 
     // Constrain the conda packages to the specific python packages
     let constraints = conda_python_packages
@@ -430,7 +477,7 @@ pub async fn resolve_pypi(
         &lookahead_index,
         DistributionDatabase::new(
             &registry_client,
-            &build_dispatch,
+            &pixi_build_dispatch,
             context.concurrency.downloads,
         ),
     )
@@ -456,7 +503,7 @@ pub async fn resolve_pypi(
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
             &registry_client,
-            &build_dispatch,
+            &pixi_build_dispatch,
             context.concurrency.downloads,
         ),
         &flat_index,
@@ -512,16 +559,20 @@ pub async fn resolve_pypi(
     }
 
     // Collect resolution into locked packages
-    lock_pypi_packages(
+    let locked_packages = lock_pypi_packages(
         conda_python_packages,
-        &build_dispatch,
+        &pixi_build_dispatch,
         &registry_client,
         resolution,
         &context.capabilities,
         context.concurrency.downloads,
         project_root,
     )
-    .await
+    .await?;
+
+    let conda_task = pixi_build_dispatch.conda_task;
+
+    Ok((locked_packages, conda_task))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -636,7 +687,7 @@ fn get_url_or_path(
 /// Create a vector of locked packages from a resolution
 async fn lock_pypi_packages<'a>(
     conda_python_packages: CondaPythonPackages,
-    build_dispatch: &BuildDispatch<'a>,
+    pixi_build_dispatch: &PixiBuildDispatch<'a>,
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
     index_capabilities: &IndexCapabilities,
@@ -644,7 +695,8 @@ async fn lock_pypi_packages<'a>(
     abs_project_root: &Path,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
-    let database = DistributionDatabase::new(registry_client, build_dispatch, concurrent_downloads);
+    let database =
+        DistributionDatabase::new(registry_client, pixi_build_dispatch, concurrent_downloads);
     for dist in resolution.distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {

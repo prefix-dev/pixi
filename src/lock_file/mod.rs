@@ -1,3 +1,4 @@
+mod build_dispatch;
 mod outdated;
 mod package_identifier;
 mod records_by_name;

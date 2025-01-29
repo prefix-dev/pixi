@@ -15,6 +15,7 @@ readme = "README.md"
 repository = "https://github.com/prefix-dev/pixi"
 
 [workspace.dependencies]
+anyhow = "*"
 ahash = "0.8.11"
 assert_matches = "1.5.0"
 async-fd-lock = "0.2.0"
@@ -99,6 +100,7 @@ toml_edit = "0.22.22"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 typed-path = "0.10.0"
+uv-build-frontend = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
 uv-distribution-filename = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
 uv-distribution-types = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
 uv-install-wheel = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
@@ -206,6 +208,7 @@ slow_integration_tests = []
 performance = ["pixi_allocator"]
 
 [dependencies]
+anyhow ={ workspace = true}
 ahash = { workspace = true }
 assert_matches = { workspace = true }
 async-fd-lock = { workspace = true }
@@ -248,6 +251,7 @@ minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rstest = { workspace = true }
+uv-build-frontend = { workspace = true }
 uv-distribution-filename = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-install-wheel = { workspace = true }
