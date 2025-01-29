@@ -69,6 +69,7 @@ impl DetailedSpec {
             md5: self.md5,
             sha256: self.sha256,
             url: None,
+            extras: Default::default(),
         })
     }
 }
