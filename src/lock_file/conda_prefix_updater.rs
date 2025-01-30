@@ -11,7 +11,6 @@ use pixi_manifest::FeaturesExt;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::Platform;
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::Semaphore;
 
 /// A struct that contains the result of updating a conda prefix.
@@ -22,8 +21,6 @@ pub struct CondaPrefixUpdated {
     pub prefix: Prefix,
     /// Any change to the python interpreter.
     pub python_status: Box<PythonStatus>,
-    /// The duration of the update.
-    pub duration: std::time::Duration,
 }
 
 #[derive(Clone)]
@@ -95,7 +92,6 @@ impl<'a> CondaPrefixUpdater<'a> {
         let package_cache = self.package_cache.clone();
         let build_context = self.build_context.clone();
         let group_name = group_name.clone();
-        let start = Instant::now();
         let has_existing_packages = !installed_packages.is_empty();
         let python_status = environment::update_prefix_conda(
             &prefix,
@@ -121,15 +117,10 @@ impl<'a> CondaPrefixUpdater<'a> {
         )
         .await?;
 
-        // Get the duration of the update
-        let end = Instant::now();
-        let duration = end - start;
-
         Ok(CondaPrefixUpdated {
             group: group_name,
             prefix,
             python_status: Box::new(python_status),
-            duration,
         })
     }
 }

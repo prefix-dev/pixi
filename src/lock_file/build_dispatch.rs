@@ -6,6 +6,7 @@ use once_cell::sync::OnceCell;
 
 use anyhow::Result;
 use std::collections::HashMap;
+use tokio::runtime::Handle;
 use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
 use uv_client::RegistryClient;
@@ -217,14 +218,7 @@ impl<'a> BuildContext for PixiBuildDispatch<'a> {
     type SourceDistBuilder = SourceBuild;
 
     fn interpreter(&self) -> &uv_python::Interpreter {
-        // set the interpreter
-        let runtime = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        let result = runtime.block_on(self.initialize()).unwrap();
-
+        Handle::current().block_on(self.initialize()).unwrap();
         self.interpreter.get().unwrap()
     }
 
