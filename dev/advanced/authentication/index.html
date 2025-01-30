@@ -1993,6 +1993,10 @@ When this environment variable is set, it provides the only source of authentica
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># You can also specify the file in the command line</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--auth-file<span class="w"> </span><span class="nv">$HOME</span>/credentials.json<span class="w"> </span>...
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code>RATTLER_AUTH_FILE</code> has higher precedence than the CLI argument.</p>
+</div>
 <p>The JSON should follow the following format:</p>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">    </span><span class="nt">&quot;*.prefix.dev&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
