@@ -1,4 +1,4 @@
-use crate::project::Environment;
+use crate::workspace::Environment;
 use crate::Workspace;
 use clap::Parser;
 use fancy_display::FancyDisplay;

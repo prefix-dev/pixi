@@ -11,7 +11,7 @@ use rattler_conda_types::{
 use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
 
 use crate::{
-    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
     Workspace,
 };
@@ -20,7 +20,7 @@ use crate::{
 #[clap(arg_required_else_help = false)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     /// Output directory for rendered explicit environment spec files
     pub output_dir: PathBuf,

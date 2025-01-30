@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use crate::{
-    cli::cli_config::ProjectConfig,
+    cli::cli_config::WorkspaceConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
 };
 use crate::{
@@ -26,7 +26,7 @@ pub struct Args {
     pub config: ConfigCli,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.

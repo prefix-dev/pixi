@@ -37,7 +37,7 @@ use uv_pypi_types::{
 use super::{
     package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
 };
-use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
+use crate::workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -389,7 +389,7 @@ pub fn verify_environment_satisfiability(
     // Check if the channels in the lock file match our current configuration. Note
     // that the order matters here. If channels are added in a different order,
     // the solver might return a different result.
-    let config = environment.project().channel_config();
+    let config = environment.workspace().channel_config();
     let channels: Vec<ChannelUrl> = grouped_env
         .channels()
         .into_iter()
@@ -764,7 +764,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     project_root: &Path,
     input_hash_cache: GlobHashCache,
 ) -> Result<(), Box<PlatformUnsat>> {
-    let channel_config = environment.project().channel_config();
+    let channel_config = environment.workspace().channel_config();
 
     // Determine the dependencies requested by the environment
     let environment_dependencies = environment

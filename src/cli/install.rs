@@ -1,4 +1,4 @@
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 use crate::environment::get_update_lock_file_and_prefix;
 use crate::lock_file::UpdateMode;
 use crate::{UpdateLockFileOptions, Workspace};
@@ -11,7 +11,7 @@ use pixi_config::ConfigCli;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageArgs,

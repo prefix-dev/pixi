@@ -1,5 +1,5 @@
-use crate::{project::Environment, Workspace};
-use crate::{project::HasProjectRef, task::EnvironmentHash};
+use crate::{workspace::Environment, Workspace};
+use crate::{workspace::HasWorkspaceRef, task::EnvironmentHash};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -82,9 +82,9 @@ impl Environment<'_> {
     pub(crate) fn get_metadata_env(&self) -> IndexMap<String, String> {
         let prompt = match self.name() {
             EnvironmentName::Named(name) => {
-                format!("{}:{}", self.project().name(), name)
+                format!("{}:{}", self.workspace().name(), name)
             }
-            EnvironmentName::Default => self.project().name().to_string(),
+            EnvironmentName::Default => self.workspace().name().to_string(),
         };
         let mut map = IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
@@ -116,7 +116,7 @@ pub(crate) fn get_activator<'p>(
     let (additional_activation_scripts, missing_scripts): (Vec<_>, _) =
         additional_activation_scripts
             .into_iter()
-            .map(|script| environment.project().root().join(script))
+            .map(|script| environment.workspace().root().join(script))
             .partition(|full_path| full_path.is_file());
 
     if !missing_scripts.is_empty() {
@@ -229,7 +229,7 @@ pub async fn run_activation(
     // If the user requested to use the cache and the lockfile is provided, we can try to use the cache.
     if !force_activate && experimental {
         let cache_file = environment
-            .project()
+            .workspace()
             .activation_env_cache_folder()
             .join(environment.activation_cache_name());
         if let Some(lock_file) = lock_file {
@@ -330,7 +330,7 @@ pub async fn run_activation(
             };
             let cache = serde_json::to_string(&cache).into_diagnostic()?;
 
-            tokio_fs::create_dir_all(environment.project().activation_env_cache_folder())
+            tokio_fs::create_dir_all(environment.workspace().activation_env_cache_folder())
                 .await
                 .into_diagnostic()?;
             tokio_fs::write(&cache_file, cache)
@@ -353,12 +353,12 @@ pub(crate) fn get_static_environment_variables<'p>(
     environment: &'p Environment<'p>,
 ) -> IndexMap<String, String> {
     // Get environment variables from the pixi project meta data
-    let project_env = environment.project().get_metadata_env();
+    let project_env = environment.workspace().get_metadata_env();
 
     // Add the conda default env variable so that the existing tools know about the env.
     let env_name = match environment.name() {
-        EnvironmentName::Named(name) => format!("{}:{}", environment.project().name(), name),
-        EnvironmentName::Default => environment.project().name().to_string(),
+        EnvironmentName::Named(name) => format!("{}:{}", environment.workspace().name(), name),
+        EnvironmentName::Default => environment.workspace().name().to_string(),
     };
     let mut shell_env = HashMap::new();
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);

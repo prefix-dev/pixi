@@ -6,7 +6,7 @@ use rattler_lock::{LockFile, LockFileBuilder, LockedPackageRef};
 use tokio::sync::Semaphore;
 
 use crate::{
-    project::{grouped_environment::GroupedEnvironment, Environment},
+    workspace::{grouped_environment::GroupedEnvironment, Environment},
     Workspace,
 };
 

@@ -1,28 +1,33 @@
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    convert::identity,
+    string::String,
+};
+
 use clap::Parser;
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
-use std::collections::hash_map::Entry;
-use std::collections::HashSet;
-use std::convert::identity;
-use std::{collections::HashMap, string::String};
-
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
-use crate::environment::verify_prefix_location_unchanged;
-use crate::lock_file::UpdateLockFileOptions;
-use crate::project::errors::UnsupportedPlatformError;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
-use crate::project::Environment;
-use crate::task::{
-    get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
-    InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
-};
-use crate::Workspace;
 use pixi_config::ConfigCliActivation;
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;
+
+use crate::{
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    environment::verify_prefix_location_unchanged,
+    lock_file::UpdateLockFileOptions,
+    task::{
+        get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
+        InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+    },
+    workspace::{
+        errors::UnsupportedPlatformError,
+        virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
+    },
+    Workspace, WorkspaceLocator,
+};
 
 /// Runs task in project.
 #[derive(Parser, Debug, Default)]
@@ -33,7 +38,7 @@ pub struct Args {
     pub task: Vec<String>,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
@@ -52,7 +57,8 @@ pub struct Args {
     #[arg(long)]
     pub clean_env: bool,
 
-    /// Don't run the dependencies of the task ('depends-on' field in the task definition)
+    /// Don't run the dependencies of the task ('depends-on' field in the task
+    /// definition)
     #[arg(long)]
     pub skip_deps: bool,
 
@@ -71,12 +77,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .activation_config
         .merge_config(args.prefix_update_config.config.clone().into());
 
-    // Load the project
-    let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    // Load the workspace
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?
         .with_cli_config(cli_config);
 
     // Extract the passed in environment name.
-    let environment = project.environment_from_name_or_env_var(args.environment.clone())?;
+    let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
 
     // Find the environment to run the task in, if any were specified.
     let explicit_environment = if args.environment.is_none() && environment.is_default() {
@@ -87,18 +95,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
-        command_not_found(&project, explicit_environment);
+        command_not_found(&workspace, explicit_environment);
         return Ok(());
     }
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
-        command_not_found(&project, explicit_environment);
+        command_not_found(&workspace, explicit_environment);
         return Ok(());
     }
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+    verify_prefix_location_unchanged(workspace.default_environment().dir().as_path()).await?;
 
     let best_platform = environment.best_platform();
 
@@ -110,24 +118,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Ensure that the lock-file is up-to-date.
-    let mut lock_file = project
+    let mut lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
-            max_concurrent_solves: project.config().max_concurrent_solves(),
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..UpdateLockFileOptions::default()
         })
         .await?;
 
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
-        &project,
+        &workspace,
         explicit_environment.clone(),
         Some(best_platform),
     )
     .with_disambiguate_fn(disambiguate_task_interactive);
 
     let task_graph =
-        TaskGraph::from_cmd_args(&project, &search_environment, args.task, args.skip_deps)?;
+        TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps)?;
 
     tracing::info!("Task graph: {}", task_graph);
 
@@ -158,7 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .green()
                     .bold(),
                 // Only print environment if multiple environments are available
-                if project.environments().len() > 1 {
+                if workspace.environments().len() > 1 {
                     format!(
                         " in {}",
                         executable_task.run_environment.name().fancy_display()
@@ -211,8 +219,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
                     Some(&lock_file.lock_file),
-                    project.config().force_activate(),
-                    project.config().experimental_activation_cache_usage(),
+                    workspace.config().force_activate(),
+                    workspace.config().experimental_activation_cache_usage(),
                 )
                 .await?;
                 entry.insert(command_env)
@@ -228,7 +236,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(TaskExecutionError::NonZeroExitCode(code)) => {
                 if code == 127 {
-                    command_not_found(&project, explicit_environment);
+                    command_not_found(&workspace, explicit_environment);
                 }
                 std::process::exit(code);
             }
@@ -242,17 +250,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_diagnostic()?;
     }
 
-    Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 
 /// Called when a command was not found.
-fn command_not_found<'p>(project: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
+fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
             explicit_environment.get_filtered_tasks()
         } else {
-            project
+            workspace
                 .environments()
                 .into_iter()
                 .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())

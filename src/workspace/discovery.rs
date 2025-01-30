@@ -5,6 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
+use pixi_consts::consts;
 use pixi_manifest::{
     utils::WithSourceCode, ExplicitManifestError, LoadManifestsError, Manifests, ProvenanceError,
     TomlError, Warning, WithWarnings, WorkspaceDiscoveryError,
@@ -118,7 +119,7 @@ impl WorkspaceLocator {
     }
 
     /// Called to locate the workspace or error out if none could be located.
-    pub fn discover(self) -> Result<Workspace, WorkspaceLocatorError> {
+    pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
         // Determine the search root
         let discovery_start = match self.start {
             DiscoveryStart::ExplicitManifest(path) => {
@@ -221,9 +222,8 @@ impl WorkspaceLocator {
                 Err(LoadManifestsError::Io(err)) => return Err(WorkspaceLocatorError::Io(err)),
                 Err(LoadManifestsError::Toml(err)) => return Err(WorkspaceLocatorError::Toml(err)),
                 Err(LoadManifestsError::ProvenanceError(err)) => {
-                    return Err(WorkspaceLocatorError::ProvenanceError(
-                        env_manifest_path,
-                        err,
+                    return Err(WorkspaceLocatorError::ExplicitManifestError(
+                        ExplicitManifestError::InvalidManifest(err),
                     ))
                 }
             }

@@ -1,7 +1,7 @@
 pub mod get;
 pub mod set;
 
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 use crate::Workspace;
 use clap::Parser;
 
@@ -9,7 +9,7 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     /// The subcommand to execute
     #[clap(subcommand)]

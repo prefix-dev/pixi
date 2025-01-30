@@ -7,9 +7,10 @@ use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::has_specs::HasSpecs;
 use crate::{
-    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
+    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::verify_prefix_location_unchanged,
-    project::{DependencyType, Workspace},
+    workspace::{DependencyType, Workspace},
+    WorkspaceLocator,
 };
 
 /// Adds dependencies to the project
@@ -60,16 +61,16 @@ use crate::{
 /// These dependencies will then be read by pixi as if they had been added to
 /// the pixi `pypi-dependencies` tables of the default or of a named feature.
 ///
-/// The versions will be automatically added with a pinning strategy based on semver
-/// or the pinning strategy set in the config. There is a list of packages
-/// that are not following the semver versioning scheme but will use
+/// The versions will be automatically added with a pinning strategy based on
+/// semver or the pinning strategy set in the config. There is a list of
+/// packages that are not following the semver versioning scheme but will use
 /// the minor version by default:
 /// Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
@@ -84,19 +85,21 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let (dependency_config, prefix_update_config, project_config) = (
-        &args.dependency_config,
-        &args.prefix_update_config,
-        &args.project_config,
+        args.dependency_config,
+        args.prefix_update_config,
+        args.workspace_config,
     );
 
-    let mut project = Workspace::load_or_else_discover(project_config.manifest_path.as_deref())?
-        .with_cli_config(prefix_update_config.config.clone());
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(project_config.workspace_locator_start())
+        .locate()?
+        .with_cli_config(prefix_update_config.config);
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+    verify_prefix_location_unchanged(workspace.default_environment().dir().as_path()).await?;
 
     // Add the platform if it is not already present
-    project
+    workspace
         .manifest
         .add_platforms(dependency_config.platforms.iter(), &FeatureName::Default)?;
 
@@ -134,7 +137,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let match_specs = IndexMap::default();
             let source_specs = IndexMap::default();
             let pypi_deps = match dependency_config
-                .vcs_pep508_requirements(&project)
+                .vcs_pep508_requirements(&workspace)
                 .transpose()?
             {
                 Some(vcs_reqs) => vcs_reqs
@@ -142,7 +145,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|(name, req)| (name, (req, None)))
                     .collect(),
                 None => dependency_config
-                    .pypi_deps(&project)?
+                    .pypi_deps(&workspace)?
                     .into_iter()
                     .map(|(name, req)| (name, (req, None)))
                     .collect(),
@@ -156,9 +159,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Save original manifest
     let original_manifest_content =
-        fs_err::read_to_string(project.manifest_path()).into_diagnostic()?;
+        fs_err::read_to_string(workspace.manifest_path()).into_diagnostic()?;
 
-    let update_deps = match project
+    let update_deps = match workspace
         .update_dependencies(
             match_specs,
             pypi_deps,
@@ -173,12 +176,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     {
         Ok(update_deps) => {
             // Write the updated manifest
-            project.save()?;
+            workspace.save()?;
             update_deps
         }
         Err(e) => {
             // Restore original manifest
-            fs_err::write(project.manifest_path(), original_manifest_content).into_diagnostic()?;
+            fs_err::write(workspace.manifest_path(), original_manifest_content).into_diagnostic()?;
             return Err(e);
         }
     };
@@ -188,6 +191,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         dependency_config.display_success("Added", update_deps.implicit_constraints);
     }
 
-    Workspace::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
     Ok(())
 }

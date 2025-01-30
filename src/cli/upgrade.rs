@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::project::{MatchSpecs, PypiDeps};
+use crate::cli::cli_config::WorkspaceConfig;
+use crate::workspace::{MatchSpecs, PypiDeps};
 use crate::Workspace;
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -24,7 +24,7 @@ use rattler_conda_types::{MatchSpec, StringMatcher};
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,

@@ -4,7 +4,7 @@ use crate::common::{
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use pixi::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
+use pixi::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
@@ -228,7 +228,7 @@ async fn install_locked_with_config() {
     let result = pixi
         .run(Args {
             task: vec!["which_python".to_string()],
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: None,
             },
             ..Default::default()

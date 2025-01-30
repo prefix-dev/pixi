@@ -5,7 +5,7 @@ use crate::environment::get_update_lock_file_and_prefix;
 use crate::Workspace;
 use crate::{DependencyType, UpdateLockFileOptions};
 
-use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig};
+use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::UpdateMode;
 
 use super::has_specs::HasSpecs;
@@ -20,7 +20,7 @@ use super::has_specs::HasSpecs;
 #[clap(arg_required_else_help = true)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,

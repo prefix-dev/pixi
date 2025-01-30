@@ -10,7 +10,7 @@ use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
-    HasManifestRef, Manifest, SystemRequirements, Task, TaskName,
+    HasWorkspaceManifest, Manifests, SystemRequirements, Task, TaskName, WorkspaceManifest,
 };
 use rattler_conda_types::{Arch, Platform};
 
@@ -18,7 +18,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
     SolveGroup,
 };
-use crate::{project::HasProjectRef, Workspace};
+use crate::{workspace::HasWorkspaceRef, Workspace};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -36,7 +36,7 @@ use crate::{project::HasProjectRef, Workspace};
 #[derive(Clone)]
 pub struct Environment<'p> {
     /// The project this environment belongs to.
-    pub(super) project: &'p Workspace,
+    pub(super) workspace: &'p Workspace,
 
     /// The environment that this environment is based on.
     pub(super) environment: &'p manifest::Environment,
@@ -45,7 +45,7 @@ pub struct Environment<'p> {
 impl Debug for Environment<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Environment")
-            .field("project", &self.project.name())
+            .field("project", &self.workspace.name())
             .field("environment", &self.environment.name)
             .finish()
     }
@@ -53,7 +53,7 @@ impl Debug for Environment<'_> {
 
 impl<'p> PartialEq for Environment<'p> {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self.project, other.project)
+        std::ptr::eq(self.workspace, other.workspace)
             && std::ptr::eq(self.environment, other.environment)
     }
 }
@@ -64,7 +64,7 @@ impl<'p> Environment<'p> {
     /// Return new instance of Environment
     pub(crate) fn new(project: &'p Workspace, environment: &'p manifest::Environment) -> Self {
         Self {
-            project,
+            workspace: project,
             environment,
         }
     }
@@ -85,27 +85,28 @@ impl<'p> Environment<'p> {
         self.environment
             .solve_group
             .map(|solve_group_idx| SolveGroup {
-                project: self.project,
-                solve_group: &self.project.manifest.workspace.solve_groups[solve_group_idx],
+                workspace: self.workspace,
+                solve_group: &self.workspace.workspace.value.solve_groups[solve_group_idx],
             })
     }
 
     /// Returns the directory where this environment is stored.
     pub fn dir(&self) -> std::path::PathBuf {
-        self.project
+        self.workspace
             .environments_dir()
             .join(self.environment.name.as_str())
     }
 
-    /// We store a hash of the lockfile and all activation env variables in a file
-    /// in the cache. The current name is `activation_environment-name.json`.
+    /// We store a hash of the lockfile and all activation env variables in a
+    /// file in the cache. The current name is
+    /// `activation_environment-name.json`.
     pub(crate) fn activation_cache_name(&self) -> String {
         format!("activation_{}.json", self.name())
     }
 
     /// Returns the activation cache file path.
     pub(crate) fn activation_cache_file_path(&self) -> std::path::PathBuf {
-        self.project
+        self.workspace
             .activation_env_cache_folder()
             .join(self.activation_cache_name())
     }
@@ -125,7 +126,7 @@ impl<'p> Environment<'p> {
         // return osx-64.
         if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
             WARN_ONCE.call_once(|| {
-                let warn_folder = self.project.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
                 let emulation_warn = warn_folder.join("macos-emulation-warn");
                 if !emulation_warn.exists() {
                     tracing::warn!(
@@ -144,7 +145,7 @@ impl<'p> Environment<'p> {
         // return win-64.
         if current.is_windows() && self.platforms().contains(&Platform::Win64) {
             WARN_ONCE.call_once(|| {
-                let warn_folder = self.project.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
                 let emulation_warn = warn_folder.join("windows-emulation-warn");
                 if !emulation_warn.exists() {
                     tracing::warn!(
@@ -218,7 +219,7 @@ impl<'p> Environment<'p> {
     ) -> Result<&'p Task, UnknownTask> {
         match self.tasks(platform).map(|tasks| tasks.get(name).copied()) {
             Err(_) | Ok(None) => Err(UnknownTask {
-                project: self.project,
+                project: self.workspace,
                 environment: self.name().clone(),
                 platform,
                 task_name: name.clone(),
@@ -319,25 +320,24 @@ impl<'p> Environment<'p> {
     }
 }
 
-impl<'p> HasProjectRef<'p> for Environment<'p> {
-    fn project(&self) -> &'p Workspace {
-        self.project
+impl<'p> HasWorkspaceRef<'p> for Environment<'p> {
+    fn workspace(&self) -> &'p Workspace {
+        self.workspace
     }
 }
 
-impl<'p> HasManifestRef<'p> for Environment<'p> {
-    fn manifest(&self) -> &'p Manifest {
-        &self.project().manifest
+impl<'p> HasWorkspaceManifest<'p> for Environment<'p> {
+    fn workspace_manifest(&self) -> &'p WorkspaceManifest {
+        self.workspace().workspace_manifest()
     }
 }
 
 impl<'p> HasFeaturesIter<'p> for Environment<'p> {
     /// Returns references to the features that make up this environment.
     fn features(&self) -> impl DoubleEndedIterator<Item = &'p Feature> + 'p {
-        let manifest = self.manifest();
+        let manifest = self.workspace_manifest();
         let environment_features = self.environment.features.iter().map(|feature_name| {
             manifest
-                .workspace
                 .features
                 .get(&FeatureName::Named(feature_name.clone()))
                 .expect("feature usage should have been validated upfront")

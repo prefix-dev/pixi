@@ -56,9 +56,9 @@ use crate::{
         PypiRecord,
     },
     prefix::Prefix,
-    project::{
+    workspace::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        Environment, HasProjectRef,
+        Environment, HasWorkspaceRef,
     },
     repodata::Repodata,
     Workspace,
@@ -1700,10 +1700,10 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     // Whether we should use custom mapping location
-    let pypi_name_mapping_location = group.project().pypi_name_mapping_source()?.clone();
+    let pypi_name_mapping_location = group.workspace().pypi_name_mapping_source()?.clone();
 
     // Get the channel configuration
-    let channel_config = group.project().channel_config();
+    let channel_config = group.workspace().channel_config();
 
     // A root progress bar for the task. It is used to attach sub-progress bars to,
     // that doesn't need to be split up between multiple platforms.
@@ -2127,13 +2127,13 @@ async fn spawn_solve_pypi_task(
 
     let environment_name = environment.name().clone();
 
-    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source()?;
+    let pypi_name_mapping_location = environment.workspace().pypi_name_mapping_source()?;
 
     let mut pixi_records = repodata_records.records.clone();
     let locked_pypi_records = locked_pypi_packages.records.clone();
 
     pypi_mapping::amend_pypi_purls(
-        environment.project().client().clone().into(),
+        environment.workspace().client().clone().into(),
         pypi_name_mapping_location,
         pixi_records
             .iter_mut()
@@ -2227,9 +2227,9 @@ async fn spawn_create_prefix_task(
 ) -> miette::Result<TaskResult> {
     let group_name = group.name().clone();
     let prefix = group.prefix();
-    let client = group.project().authenticated_client().clone();
+    let client = group.workspace().authenticated_client().clone();
     let channels = group
-        .channel_urls(&group.project().channel_config())
+        .channel_urls(&group.workspace().channel_config())
         .into_diagnostic()?;
 
     // Spawn a task to determine the currently installed packages.

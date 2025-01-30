@@ -8,7 +8,7 @@ use human_bytes::human_bytes;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
+use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::Workspace;
 use fancy_display::FancyDisplay;
@@ -57,7 +57,7 @@ pub struct Args {
     pub sort_by: SortBy,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     /// The environment to list packages for. Defaults to the default environment.
     #[arg(short, long)]

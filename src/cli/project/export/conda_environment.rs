@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::{project::Environment, Workspace};
+use crate::cli::cli_config::WorkspaceConfig;
+use crate::{workspace::Environment, Workspace};
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -19,7 +19,7 @@ use rattler_conda_types::{
 #[derive(Debug, Parser)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     /// Explicit path to export the environment to
     pub output_path: Option<PathBuf>,
@@ -259,7 +259,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            project_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -285,7 +285,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            project_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -312,7 +312,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            project_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -339,7 +339,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("alternative".to_string()),
-            project_config: ProjectConfig::default(),
+            project_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -365,7 +365,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            project_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -391,7 +391,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            project_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -425,7 +425,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: None,
-            project_config: ProjectConfig::default(),
+            project_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)

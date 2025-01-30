@@ -2,15 +2,15 @@ use std::{hash::Hash, path::PathBuf};
 
 use itertools::Itertools;
 use pixi_manifest as manifest;
-use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements};
+use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements, WorkspaceManifest};
 
-use super::{Environment, HasProjectRef, Workspace};
+use super::{Environment, HasWorkspaceRef, Workspace};
 
 /// A grouping of environments that are solved together.
 #[derive(Debug, Clone)]
 pub struct SolveGroup<'p> {
     /// The project that the group is part of.
-    pub(super) project: &'p Workspace,
+    pub(super) workspace: &'p Workspace,
 
     /// A reference to the solve group in the manifest
     pub(super) solve_group: &'p manifest::SolveGroup,
@@ -19,7 +19,7 @@ pub struct SolveGroup<'p> {
 impl PartialEq<Self> for SolveGroup<'_> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self.solve_group, other.solve_group)
-            && std::ptr::eq(self.project, other.project)
+            && std::ptr::eq(self.workspace, other.workspace)
     }
 }
 
@@ -28,7 +28,7 @@ impl Eq for SolveGroup<'_> {}
 impl Hash for SolveGroup<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         std::ptr::hash(self.solve_group, state);
-        std::ptr::hash(self.project, state);
+        std::ptr::hash(self.workspace, state);
     }
 }
 
@@ -40,7 +40,7 @@ impl<'p> SolveGroup<'p> {
 
     /// Returns the directory where this solve group stores its environment
     pub(crate) fn dir(&self) -> PathBuf {
-        self.project
+        self.workspace
             .solve_group_environments_dir()
             .join(self.name())
     }
@@ -52,8 +52,8 @@ impl<'p> SolveGroup<'p> {
     ) -> impl DoubleEndedIterator<Item = Environment<'p>> + ExactSizeIterator + 'p {
         self.solve_group.environments.iter().map(|env_idx| {
             Environment::new(
-                self.project,
-                &self.project.manifest.workspace.environments[*env_idx],
+                self.workspace,
+                &self.workspace_manifest().environments[*env_idx],
             )
         })
     }
@@ -68,9 +68,9 @@ impl<'p> SolveGroup<'p> {
     }
 }
 
-impl<'p> HasManifestRef<'p> for SolveGroup<'p> {
-    fn manifest(&self) -> &'p Manifest {
-        &self.project().manifest
+impl<'p> HasWorkspaceManifest<'p> for SolveGroup<'p> {
+    fn workspace_manifest(&self) -> &'p WorkspaceManifest {
+        self.workspace.manifest()
     }
 }
 
@@ -85,9 +85,9 @@ impl<'p> HasFeaturesIter<'p> for SolveGroup<'p> {
     }
 }
 
-impl<'p> HasProjectRef<'p> for SolveGroup<'p> {
-    fn project(&self) -> &'p Workspace {
-        self.project
+impl<'p> HasWorkspaceRef<'p> for SolveGroup<'p> {
+    fn workspace(&self) -> &'p Workspace {
+        self.workspace
     }
 }
 

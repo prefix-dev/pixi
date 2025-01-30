@@ -21,20 +21,20 @@ use std::{
 use async_once_cell::OnceCell as AsyncCell;
 pub use environment::Environment;
 use grouped_environment::GroupedEnvironment;
-pub use has_project_ref::HasProjectRef;
+pub use has_project_ref::HasWorkspaceRef;
 use indexmap::{Equivalent, IndexMap};
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, RequirementOrigin::Workspace, VersionOrUrl::VersionSpecifier};
+use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, utils::WithSourceCode, AssociateProvenance, DependencyOverwriteBehavior,
-    DiscoveredWorkspace, EnvironmentName, Environments, FeatureName, FeaturesExt, HasFeaturesIter,
-    HasManifestRef, HasWorkspaceManifest, Manifest, ManifestProvenance, Manifests, PackageManifest,
-    PypiDependencyLocation, SpecType, TomlError, WithProvenance, WithWarnings, WorkspaceDiscoverer,
+    EnvironmentName, Environments, FeatureName, FeaturesExt, HasFeaturesIter, HasWorkspaceManifest,
+    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PypiDependencyLocation,
+    SpecType, TomlError, WithProvenance, WithWarnings, WorkspaceDiscoverer,
     WorkspaceDiscoveryError, WorkspaceManifest,
 };
 use pixi_spec::{PixiSpec, SourceSpec};
@@ -47,6 +47,7 @@ use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
+pub use discovery::{WorkspaceLocator, WorkspaceLocatorError, DiscoveryStart};
 use url::{ParseError, Url};
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -137,12 +138,12 @@ pub struct Workspace {
     repodata_gateway: OnceLock<Gateway>,
 
     /// The manifest for the workspace
-    workspace: WithProvenance<WorkspaceManifest>,
+    pub workspace: WithProvenance<WorkspaceManifest>,
 
     /// The manifest of the "current" package. This is the package from which
     /// the workspace was discovered. This might be `None` if no package was
     /// discovered on the current path.
-    package: Option<WithProvenance<PackageManifest>>,
+    pub package: Option<WithProvenance<PackageManifest>>,
 
     /// The environment variables that are activated when the environment is
     /// activated. Cached per environment, for both clean and normal
@@ -228,7 +229,8 @@ impl Workspace {
         Self {
             root,
             client: Default::default(),
-            manifest,
+            workspace: manifest.workspace,
+            package: manifest.package,
             env_vars,
             mapping_source: Default::default(),
             config,
@@ -238,7 +240,7 @@ impl Workspace {
 
     /// Loads a project from manifest file. The `manifest_path` is expected to
     /// be a workspace manifest.
-    pub fn from_path(manifest_path: &Path) -> Result<Self, ProjectError> {
+    pub fn from_path(manifest_path: &Path) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
@@ -271,27 +273,17 @@ impl Workspace {
         self
     }
 
-    /// Returns the name of the project
+    /// Returns the name of the workspace
     pub fn name(&self) -> &str {
-        &self.manifest.workspace.workspace.name
+        &self.workspace.value.workspace.name
     }
 
-    /// Returns the version of the project
-    pub fn version(&self) -> &Option<Version> {
-        &self.manifest.workspace.workspace.version
-    }
-
-    /// Returns the description of the project
-    pub(crate) fn description(&self) -> &Option<String> {
-        &self.manifest.workspace.workspace.description
-    }
-
-    /// Returns the root directory of the project
+    /// Returns the root directory of the workspace
     pub(crate) fn root(&self) -> &Path {
         &self.root
     }
 
-    /// Returns the pixi directory of the project [consts::PIXI_DIR]
+    /// Returns the pixi directory of the workspace [consts::PIXI_DIR]
     pub fn pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
     }
@@ -375,25 +367,15 @@ impl Workspace {
         self.default_solve_group_environments_dir()
     }
 
-    /// Returns the path to the manifest file.
-    pub(crate) fn manifest_path(&self) -> PathBuf {
-        self.manifest.path.clone()
-    }
-
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
     pub(crate) fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
     }
 
-    /// Save back changes
-    pub(crate) fn save(&mut self) -> miette::Result<()> {
-        self.manifest.save()
-    }
-
     /// Returns the default environment of the project.
     pub fn default_environment(&self) -> Environment<'_> {
-        Environment::new(self, self.manifest.default_environment())
+        Environment::new(self, self.workspace.value.default_environment())
     }
 
     /// Returns the environment with the given name or `None` if no such
@@ -402,13 +384,16 @@ impl Workspace {
     where
         Q: ?Sized + Hash + Equivalent<EnvironmentName>,
     {
-        Some(Environment::new(self, self.manifest.environment(name)?))
+        Some(Environment::new(
+            self,
+            self.workspace.value.environment(name)?,
+        ))
     }
 
     /// Returns the environments in this project.
     pub(crate) fn environments(&self) -> Vec<Environment> {
-        self.manifest
-            .workspace
+        self.workspace
+            .value
             .environments
             .iter()
             .map(|env| Environment::new(self, env))
@@ -489,12 +474,12 @@ impl Workspace {
 
     /// Returns all the solve groups in the project.
     pub(crate) fn solve_groups(&self) -> Vec<SolveGroup> {
-        self.manifest
-            .workspace
+        self.workspace
+            .value
             .solve_groups
             .iter()
             .map(|group| SolveGroup {
-                project: self,
+                workspace: self,
                 solve_group: group,
             })
             .collect()
@@ -503,12 +488,12 @@ impl Workspace {
     /// Returns the solve group with the given name or `None` if no such group
     /// exists.
     pub(crate) fn solve_group(&self, name: &str) -> Option<SolveGroup> {
-        self.manifest
-            .workspace
+        self.workspace
+            .value
             .solve_groups
             .find(name)
             .map(|group| SolveGroup {
-                project: self,
+                workspace: self,
                 solve_group: group,
             })
     }
@@ -555,10 +540,10 @@ impl Workspace {
     /// Or we can use our self-hosted
     pub fn pypi_name_mapping_source(&self) -> miette::Result<&MappingSource> {
         fn build_pypi_name_mapping_source(
-            manifest: &Manifest,
+            manifest: &WorkspaceManifest,
             channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
-            match manifest.workspace.workspace.conda_pypi_map.clone() {
+            match manifest.workspace.conda_pypi_map.clone() {
                 Some(map) => {
                     let channel_to_location_map = map
                         .into_iter()
@@ -575,7 +560,6 @@ impl Workspace {
 
                     let project_channels: HashSet<_> = manifest
                         .workspace
-                        .workspace
                         .channels
                         .iter()
                         .map(|pc| pc.channel.clone().into_channel(channel_config))
@@ -583,7 +567,6 @@ impl Workspace {
                         .into_diagnostic()?;
 
                     let feature_channels: HashSet<_> = manifest
-                        .workspace
                         .features
                         .values()
                         .flat_map(|feature| feature.channels.iter())
@@ -641,13 +624,8 @@ impl Workspace {
             }
         }
         self.mapping_source.get_or_try_init(|| {
-            build_pypi_name_mapping_source(&self.manifest, &self.channel_config())
+            build_pypi_name_mapping_source(&self.workspace.value, &self.channel_config())
         })
-    }
-
-    /// Returns the manifest of the project
-    pub fn manifest(&self) -> &Manifest {
-        &self.manifest
     }
 
     /// Update the manifest with the given package specs, and upgrade the
@@ -1031,46 +1009,10 @@ pub struct UpdateDeps {
     pub lock_file_diff: LockFileDiff,
 }
 
-impl<'source> HasManifestRef<'source> for &'source Workspace {
-    fn manifest(&self) -> &'source Manifest {
-        Workspace::manifest(self)
-    }
-}
-
 impl<'source> HasWorkspaceManifest<'source> for &'source Workspace {
     fn workspace_manifest(&self) -> &'source WorkspaceManifest {
-        &self.manifest.workspace
+        &self.workspace.value
     }
-}
-
-/// Iterates over the current directory and all its parent directories and
-/// returns the manifest path in the first directory path that contains the
-/// [`consts::PROJECT_MANIFEST`] or [`consts::PYPROJECT_MANIFEST`].
-pub(crate) fn find_project_manifest(current_dir: impl AsRef<Path>) -> Option<PathBuf> {
-    let manifests = [consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST];
-
-    for dir in current_dir.as_ref().ancestors() {
-        for manifest in &manifests {
-            let path = dir.join(manifest);
-            if !path.is_file() {
-                continue;
-            }
-
-            match *manifest {
-                consts::PROJECT_MANIFEST => return Some(path),
-                consts::PYPROJECT_MANIFEST => {
-                    if let Ok(content) = fs_err::read_to_string(&path) {
-                        if content.contains("[tool.pixi") {
-                            return Some(path);
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    None
 }
 
 /// Create a symlink from the directory to the custom target directory
@@ -1193,14 +1135,17 @@ mod tests {
         for file_content in file_contents {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
-            let manifest = Manifest::from_str(Path::new("pixi.toml"), &file_content).unwrap();
-            let project = Workspace::from_manifest(manifest);
+            let workspace = Workspace::from_str(
+                Path::new("pixi.toml"),
+                &file_content
+            )
+                .unwrap();
             let expected_result = vec![VirtualPackage::LibC(LibC {
                 family: "glibc".to_string(),
                 version: Version::from_str("2.12").unwrap(),
             })];
 
-            let virtual_packages = project
+            let virtual_packages = workspace
                 .default_environment()
                 .system_requirements()
                 .virtual_packages();
@@ -1228,15 +1173,14 @@ mod tests {
         bar = "1.0"
         "#;
 
-        let manifest = Manifest::from_str(
+        let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
-        .unwrap();
-        let project = Workspace::from_manifest(manifest);
+            .unwrap();
 
         assert_snapshot!(format_dependencies(
-            project
+            workspace
                 .default_environment()
                 .combined_dependencies(Some(Platform::Linux64))
         ));
@@ -1269,11 +1213,14 @@ mod tests {
         bar = "1.0"
         "#;
 
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
-        let project = Workspace::from_manifest(manifest);
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+        )
+            .unwrap();
 
         assert_snapshot!(format_dependencies(
-            project
+            workspace
                 .default_environment()
                 .combined_dependencies(Some(Platform::Linux64))
         ));
@@ -1300,15 +1247,14 @@ mod tests {
         [target.linux-64.dependencies]
         wolflib = "1.0"
         "#;
-        let manifest = Manifest::from_str(
+        let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
-        .unwrap();
-        let project = Workspace::from_manifest(manifest);
+            .unwrap();
 
         assert_snapshot!(format_dependencies(
-            project
+            workspace
                 .default_environment()
                 .combined_dependencies(Some(Platform::Linux64))
         ));
@@ -1332,27 +1278,26 @@ mod tests {
             [activation]
             scripts = ["pixi.toml", "pixi.lock"]
             "#;
-        let manifest = Manifest::from_str(
+        let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
-        let project = Workspace::from_manifest(manifest);
 
         assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
             fmt_activation_scripts(
-                project
+                workspace
                     .default_environment()
                     .activation_scripts(Some(Platform::Linux64))
             ),
             fmt_activation_scripts(
-                project
+                workspace
                     .default_environment()
                     .activation_scripts(Some(Platform::Win64))
             ),
             fmt_activation_scripts(
-                project
+                workspace
                     .default_environment()
                     .activation_scripts(Some(Platform::OsxArm64))
             )
@@ -1373,24 +1318,25 @@ mod tests {
             [target.linux-64.tasks]
             test = "test linux"
             "#;
-        let manifest = Manifest::from_str(
+        let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
             format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
         )
         .unwrap();
 
-        let project = Workspace::from_manifest(manifest);
-
-        assert_debug_snapshot!(project
-            .manifest
+        assert_debug_snapshot!(workspace
+            .workspace
+            .value
             .tasks(Some(Platform::Osx64), &FeatureName::Default)
             .unwrap());
-        assert_debug_snapshot!(project
-            .manifest
+        assert_debug_snapshot!(workspace
+            .workspace
+            .value
             .tasks(Some(Platform::Win64), &FeatureName::Default)
             .unwrap());
-        assert_debug_snapshot!(project
-            .manifest
+        assert_debug_snapshot!(workspace
+            .workspace
+            .value
             .tasks(Some(Platform::Linux64), &FeatureName::Default)
             .unwrap());
     }
@@ -1398,17 +1344,16 @@ mod tests {
     #[test]
     fn test_mapping_location() {
         let file_contents = r#"
-            [project]
+            [workspace]
             name = "foo"
             channels = ["conda-forge", "pytorch"]
             platforms = []
             conda-pypi-map = {conda-forge = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json", pytorch = ""}
             "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
-        let project = Workspace::from_manifest(manifest);
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let mapping = project.pypi_name_mapping_source().unwrap();
-        let channel = Channel::from_str("conda-forge", &project.channel_config()).unwrap();
+        let mapping = workspace.pypi_name_mapping_source().unwrap();
+        let channel = Channel::from_str("conda-forge", &workspace.channel_config()).unwrap();
         let canonical_name = channel.canonical_name();
 
         let canonical_channel_name = canonical_name.trim_end_matches('/');
@@ -1417,26 +1362,28 @@ mod tests {
 
         // Check url channel as map key
         let file_contents = r#"
-            [project]
+            [workspace]
             name = "foo"
             channels = ["https://prefix.dev/test-channel"]
             platforms = []
             conda-pypi-map = {"https://prefix.dev/test-channel" = "mapping.json"}
             "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
-        let project = Workspace::from_manifest(manifest);
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let mapping = project.pypi_name_mapping_source().unwrap();
+        let mapping = workspace.pypi_name_mapping_source().unwrap();
         assert_eq!(
             mapping
                 .custom()
                 .unwrap()
                 .mapping
                 .get(
-                    Channel::from_str("https://prefix.dev/test-channel", &project.channel_config())
-                        .unwrap()
-                        .canonical_name()
-                        .trim_end_matches('/')
+                    Channel::from_str(
+                        "https://prefix.dev/test-channel",
+                        &workspace.channel_config()
+                    )
+                    .unwrap()
+                    .canonical_name()
+                    .trim_end_matches('/')
                 )
                 .unwrap(),
             &MappingLocation::Path(PathBuf::from("mapping.json"))
@@ -1446,7 +1393,7 @@ mod tests {
     #[test]
     fn test_mapping_ensure_feature_channels_also_checked() {
         let file_contents = r#"
-            [project]
+            [workspace]
             name = "foo"
             channels = ["conda-forge", "pytorch"]
             platforms = []
@@ -1455,116 +1402,23 @@ mod tests {
             [feature.a]
             channels = ["custom-feature-channel"]
             "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
-        let project = Workspace::from_manifest(manifest);
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        assert!(project.pypi_name_mapping_source().is_ok());
+        assert!(workspace.pypi_name_mapping_source().is_ok());
 
         let non_existing_channel = r#"
-            [project]
+            [workspace]
             name = "foo"
             channels = ["conda-forge", "pytorch"]
             platforms = []
             conda-pypi-map = {non-existing-channel = "https://github.com/prefix-dev/parselmouth/blob/main/files/compressed_mapping.json"}
             "#;
-        let manifest = Manifest::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
-        let project = Workspace::from_manifest(manifest);
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
 
         // We output error message with bold channel name,
         // so we need to disable colors for snapshot
         console::set_colors_enabled(false);
 
-        insta::assert_snapshot!(project.pypi_name_mapping_source().unwrap_err());
-    }
-
-    #[test]
-    fn test_find_project_manifest_in_current_dir() {
-        for manifest in &[consts::PROJECT_MANIFEST, consts::PYPROJECT_MANIFEST] {
-            let dir = tempdir().unwrap();
-            let project_manifest_path = dir.path().join(manifest);
-
-            // Create manifest
-            let mut file = File::create(&project_manifest_path).unwrap();
-            writeln!(file, "[project]").unwrap();
-            if manifest == &consts::PYPROJECT_MANIFEST {
-                writeln!(file, "[tool.pixi.project]").unwrap();
-            }
-
-            assert_eq!(
-                find_project_manifest(dir.into_path()),
-                Some(project_manifest_path)
-            );
-        }
-    }
-
-    #[test]
-    fn test_find_project_manifest_with_multiple() {
-        let dir = tempdir().unwrap();
-        let manifest_path = dir.path().join(consts::PROJECT_MANIFEST);
-        let pyproject_manifest_path = dir.path().join(consts::PYPROJECT_MANIFEST);
-
-        // Create manifests
-        let mut file = File::create(&manifest_path).unwrap();
-        writeln!(file, "[project]").unwrap();
-        let mut file = File::create(&pyproject_manifest_path).unwrap();
-        writeln!(file, "[project]").unwrap();
-        writeln!(file, "[tool.pixi.project]").unwrap();
-
-        assert_eq!(find_project_manifest(dir.into_path()), Some(manifest_path));
-    }
-
-    #[test]
-    fn test_find_manifest_closest_to_current_dir() {
-        // Create a file structure like:
-        // root
-        // ├── child
-        // │   └── pyproject.toml
-        // ├── non-pixi-child
-        // │   └── pyproject.toml
-        // └── pixi.toml
-        //
-        // And verify that the correct manifest is found in each directory
-
-        let dir = tempdir().unwrap();
-        let pixi_child_dir = dir.path().join("child");
-        let non_pixi_child_dir = dir.path().join("non-pixi-child");
-
-        let manifest_path_root = dir.path().join(consts::PROJECT_MANIFEST);
-        let manifest_path_pixi_child = pixi_child_dir.join(consts::PYPROJECT_MANIFEST);
-        let manifest_path_non_pixi_child = non_pixi_child_dir.join(consts::PYPROJECT_MANIFEST);
-
-        // Create manifests
-        // Root manifest is normal pixi.toml
-        let mut file = File::create(&manifest_path_root).unwrap();
-        writeln!(file, "[project]").unwrap();
-
-        // Pixi child manifest is pyproject.toml with pixi tool
-        fs_err::create_dir_all(&pixi_child_dir).unwrap();
-        let mut file = File::create(&manifest_path_pixi_child).unwrap();
-        writeln!(file, "[project]").unwrap();
-        writeln!(file, "[tool.pixi.project]").unwrap();
-
-        // Non pixi child manifest is pyproject.toml without pixi tool
-        fs_err::create_dir_all(&non_pixi_child_dir).unwrap();
-        let mut file = File::create(&manifest_path_non_pixi_child).unwrap();
-        writeln!(file, "[project]").unwrap();
-
-        // In root use root manifest
-        assert_eq!(
-            find_project_manifest(dir.into_path()),
-            Some(manifest_path_root.clone())
-        );
-
-        // In pixi child use pixi child manifest
-        assert_eq!(
-            find_project_manifest(pixi_child_dir),
-            Some(manifest_path_pixi_child)
-        );
-
-        // In non pixi child use root manifest
-        assert_eq!(
-            find_project_manifest(non_pixi_child_dir),
-            Some(manifest_path_root)
-        );
+        insta::assert_snapshot!(workspace.pypi_name_mapping_source().unwrap_err());
     }
 }

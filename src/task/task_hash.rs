@@ -1,4 +1,4 @@
-use crate::project;
+use crate::workspace;
 use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
 use miette::Diagnostic;
 use rattler_lock::LockFile;
@@ -39,7 +39,7 @@ pub struct EnvironmentHash(String);
 
 impl EnvironmentHash {
     pub(crate) fn from_environment(
-        run_environment: &project::Environment<'_>,
+        run_environment: &workspace::Environment<'_>,
         input_environment_variables: &HashMap<String, Option<String>>,
         lock_file: &LockFile,
     ) -> Self {

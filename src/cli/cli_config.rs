@@ -20,13 +20,24 @@ use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
+use crate::workspace::DiscoveryStart;
 
-/// Project configuration
+/// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
-pub struct ProjectConfig {
+pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the project directory
     #[arg(long, global = true)]
     pub manifest_path: Option<PathBuf>,
+}
+
+impl WorkspaceConfig {
+    /// Returns the start location when trying to discover a workspace.
+    pub fn workspace_locator_start(&self) -> DiscoveryStart {
+        match &self.manifest_path {
+            Some(path) => DiscoveryStart::ExplicitManifest(path.clone()),
+            None => DiscoveryStart::CurrentDir,
+        }
+    }
 }
 
 /// Channel configuration

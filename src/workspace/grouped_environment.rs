@@ -1,24 +1,29 @@
-use crate::project::HasProjectRef;
-use crate::{
-    prefix::Prefix,
-    project::{virtual_packages::get_minimal_virtual_packages, Environment, SolveGroup},
-    Workspace,
-};
+use std::path::PathBuf;
+
 use fancy_display::FancyDisplay;
 use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, Feature, HasFeaturesIter, HasManifestRef, Manifest, SystemRequirements,
+    EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements,
+    WorkspaceManifest,
 };
 use rattler_conda_types::{GenericVirtualPackage, Platform};
-use std::path::PathBuf;
+
+use crate::{
+    prefix::Prefix,
+    workspace::{
+        virtual_packages::get_minimal_virtual_packages, Environment, HasWorkspaceRef, SolveGroup,
+    },
+    Workspace,
+};
 
 /// Either a solve group or an individual environment without a solve group.
 ///
-/// If a solve group only contains a single environment then it is treated as a single environment,
-/// not as a solve-group.
+/// If a solve group only contains a single environment then it is treated as a
+/// single environment, not as a solve-group.
 ///
-/// Construct a `GroupedEnvironment` from a `SolveGroup` or `Environment` using `From` trait.
+/// Construct a `GroupedEnvironment` from a `SolveGroup` or `Environment` using
+/// `From` trait.
 #[derive(Debug, Hash, Eq, PartialEq, Clone)]
 pub enum GroupedEnvironment<'p> {
     Group(SolveGroup<'p>),
@@ -102,7 +107,8 @@ impl<'p> GroupedEnvironment<'p> {
         }
     }
 
-    /// Returns the virtual packages from the group based on the system requirements.
+    /// Returns the virtual packages from the group based on the system
+    /// requirements.
     pub(crate) fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
         get_minimal_virtual_packages(platform, &self.system_requirements())
             .into_iter()
@@ -111,18 +117,18 @@ impl<'p> GroupedEnvironment<'p> {
     }
 }
 
-impl<'p> HasProjectRef<'p> for GroupedEnvironment<'p> {
-    fn project(&self) -> &'p Workspace {
+impl<'p> HasWorkspaceRef<'p> for GroupedEnvironment<'p> {
+    fn workspace(&self) -> &'p Workspace {
         match self {
-            GroupedEnvironment::Group(group) => group.project(),
-            GroupedEnvironment::Environment(env) => env.project(),
+            GroupedEnvironment::Group(group) => group.workspace(),
+            GroupedEnvironment::Environment(env) => env.workspace(),
         }
     }
 }
 
-impl<'p> HasManifestRef<'p> for GroupedEnvironment<'p> {
-    fn manifest(&self) -> &'p Manifest {
-        &self.project().manifest
+impl<'p> HasWorkspaceManifest<'p> for GroupedEnvironment<'p> {
+    fn workspace_manifest(&self) -> &'p WorkspaceManifest {
+        self.workspace().workspace_manifest()
     }
 }
 

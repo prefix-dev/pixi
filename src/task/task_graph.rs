@@ -15,7 +15,7 @@ use pixi_manifest::{
 use thiserror::Error;
 
 use crate::{
-    project::{
+    workspace::{
         virtual_packages::{
             verify_current_platform_has_required_virtual_packages, VerifyCurrentPlatformError,
         },

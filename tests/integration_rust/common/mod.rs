@@ -16,7 +16,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
     cli::{
         add,
-        cli_config::{ChannelsConfig, PrefixUpdateConfig, ProjectConfig},
+        cli_config::{ChannelsConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
         project, remove, run, search,
@@ -330,7 +330,7 @@ impl PixiControl {
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
-                project_config: ProjectConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
@@ -352,7 +352,7 @@ impl PixiControl {
         SearchBuilder {
             args: search::Args {
                 package: name,
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 platform: Platform::current(),
@@ -366,7 +366,7 @@ impl PixiControl {
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
             args: remove::Args {
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
@@ -385,7 +385,7 @@ impl PixiControl {
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
             args: project::channel::AddRemoveArgs {
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
@@ -408,7 +408,7 @@ impl PixiControl {
         ProjectChannelRemoveBuilder {
             manifest_path: Some(self.manifest_path()),
             args: project::channel::AddRemoveArgs {
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
@@ -441,8 +441,8 @@ impl PixiControl {
 
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
-        args.project_config.manifest_path = args
-            .project_config
+        args.workspace_config.manifest_path = args
+            .workspace_config
             .manifest_path
             .or_else(|| Some(self.manifest_path()));
 
@@ -519,7 +519,7 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 lock_file_usage: LockFileUsageArgs {
@@ -538,7 +538,7 @@ impl PixiControl {
         UpdateBuilder {
             args: update::Args {
                 config: Default::default(),
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 no_install: true,
@@ -611,7 +611,7 @@ impl TasksControl<'_> {
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: Some(self.pixi.manifest_path()),
             },
             operation: task::Operation::Remove(task::RemoveArgs {

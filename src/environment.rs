@@ -3,7 +3,7 @@ use crate::{
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
-    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+    workspace::{grouped_environment::GroupedEnvironment, Environment},
     rlimit::try_increase_rlimit_to_sensible,
     Workspace,
 };
@@ -454,7 +454,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_lock_file_options: UpdateLockFileOptions,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let current_platform = environment.best_platform();
-    let project = environment.project();
+    let project = environment.workspace();
 
     // Do not install if the platform is not supported
     let mut no_install = update_lock_file_options.no_install;

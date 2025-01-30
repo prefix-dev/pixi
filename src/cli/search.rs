@@ -21,7 +21,7 @@ use tracing::{debug, error};
 use url::Url;
 
 use super::cli_config::ChannelsConfig;
-use crate::{cli::cli_config::ProjectConfig, project::ProjectError, Workspace};
+use crate::{cli::cli_config::WorkspaceConfig, workspace::ProjectError, Workspace};
 
 /// Search a conda package
 ///
@@ -37,7 +37,7 @@ pub struct Args {
     pub channels: ChannelsConfig,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     /// The platform to search for, defaults to current platform
     #[arg(short, long, default_value_t = Platform::current())]

@@ -6,7 +6,7 @@ use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
@@ -28,7 +28,7 @@ pub enum Command {
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -83,7 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(Command::Cache(args)) => clean_cache(args).await?,
         None => {
             let project =
-                Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?; // Extract the passed in environment name.
+                Workspace::load_or_else_discover(args.workspace_config.manifest_path.as_deref())?; // Extract the passed in environment name.
 
             let explicit_environment = args
                 .environment
@@ -132,7 +132,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 remove_folder_with_progress(project.activation_env_cache_folder(), false).await?;
             }
 
-            Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref())
+            Workspace::warn_on_discovered_from_env(args.workspace_config.manifest_path.as_deref())
         }
     }
     Ok(())

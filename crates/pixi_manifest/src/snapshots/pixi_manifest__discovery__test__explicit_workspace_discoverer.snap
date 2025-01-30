@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_manifest/src/discovery.rs
-assertion_line: 598
 expression: snapshot
 ---
 Discovered workspace at: pixi.toml

@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_manifest/src/discovery.rs
-assertion_line: 589
 expression: snapshot
 ---
   × [package] section is only allowed when the `pixi-build` feature is enabled

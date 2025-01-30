@@ -150,7 +150,7 @@ impl BuildContext {
         })
     }
 
-    pub fn from_project(project: &crate::project::Workspace) -> miette::Result<Self> {
+    pub fn from_project(project: &crate::workspace::Workspace) -> miette::Result<Self> {
         let variant = project
             .manifest()
             .workspace

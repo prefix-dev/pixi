@@ -23,7 +23,7 @@
 //! }
 //! ```
 
-use pixi::cli::cli_config::{GitRev, PrefixUpdateConfig, ProjectConfig};
+use pixi::cli::cli_config::{GitRev, PrefixUpdateConfig, WorkspaceConfig};
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -328,7 +328,7 @@ impl TaskAddBuilder {
     pub fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Add(self.args),
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
         })
@@ -351,7 +351,7 @@ impl TaskAliasBuilder {
     pub fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Alias(self.args),
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
         })
@@ -486,7 +486,7 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
         project::environment::execute(project::environment::Args {
-            project_config: ProjectConfig {
+            project_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
             command: project::environment::Command::Add(self.args),

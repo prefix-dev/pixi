@@ -1,4 +1,4 @@
-use crate::project::Workspace;
+use crate::workspace::Workspace;
 use crate::repodata::Repodata;
 use rattler_repodata_gateway::Gateway;
 

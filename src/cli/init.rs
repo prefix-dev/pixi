@@ -29,7 +29,7 @@ pub enum ManifestFormat {
     Pyproject,
 }
 
-/// Creates a new project
+/// Creates a new workspace
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Where to place the project (defaults to current path)
@@ -351,7 +351,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             } else {
                 // Inform about the addition of the package itself as an editable dependency of
-                // the project
+                // the workspace
                 eprintln!(
                     "{}Added package '{}' as an editable dependency.",
                     console::style(console::Emoji("✔ ", "")).green(),

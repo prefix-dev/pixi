@@ -1,14 +1,16 @@
-use std::fmt;
+use std::{fmt, str::FromStr, sync::Arc};
 
+use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
-use toml_edit::{value, Array, Item, Table, Value};
+use thiserror::Error;
+use toml_edit::{value, Array, DocumentMut, Item, Table, Value};
 
 use crate::{
-    manifests::table_name::TableName, pypi::PyPiPackageName, toml::TomlDocument, FeatureName,
-    LibCSystemRequirement, ManifestKind, PyPiRequirement, PypiDependencyLocation, SpecType,
-    SystemRequirements, Task, TomlError,
+    manifests::table_name::TableName, pypi::PyPiPackageName, toml::TomlDocument,
+    utils::WithSourceCode, FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance,
+    PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements, Task, TomlError,
 };
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
@@ -25,6 +27,17 @@ impl fmt::Display for ManifestDocument {
             ManifestDocument::PixiToml(document) => write!(f, "{}", document),
         }
     }
+}
+
+/// An error that is returned when trying to parse a manifest file.
+#[derive(Debug, Error, Diagnostic)]
+pub enum ManifestDocumentError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
 }
 
 impl ManifestDocument {
@@ -78,8 +91,9 @@ impl ManifestDocument {
     /// Converts the document into a string with provenance.
     #[cfg(test)]
     pub(crate) fn into_source_with_provenance(self) -> crate::WithProvenance<String> {
-        use crate::{AssociateProvenance, ManifestProvenance};
         use std::path::PathBuf;
+
+        use crate::{AssociateProvenance, ManifestProvenance};
 
         let kind = self.kind();
         let document = match self {
@@ -92,6 +106,32 @@ impl ManifestDocument {
                 PathBuf::from(consts::PYPROJECT_MANIFEST),
                 kind,
             ))
+    }
+
+    /// Reads the contents of the manifest from a provenance.
+    pub fn from_provenance(provenance: &ManifestProvenance) -> Result<Self, ManifestDocumentError> {
+        // Read the contents of the file
+        let contents = provenance.read()?.into_inner();
+
+        // Parse the contents
+        let toml = match DocumentMut::from_str(&contents) {
+            Ok(document) => TomlDocument::new(document),
+            Err(err) => {
+                return Err(WithSourceCode {
+                    source: NamedSource::new(
+                        provenance.path.to_string_lossy(),
+                        Arc::from(contents),
+                    ),
+                    error: TomlError::from(err),
+                }
+                .into())
+            }
+        };
+
+        match provenance.kind {
+            ManifestKind::Pyproject => Ok(ManifestDocument::PyProjectToml(toml)),
+            ManifestKind::Pixi => Ok(ManifestDocument::PixiToml(toml)),
+        }
     }
 
     /// Returns the type of the manifest.

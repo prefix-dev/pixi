@@ -1,4 +1,4 @@
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 use crate::Workspace;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
@@ -61,7 +61,7 @@ struct CommonArgs {
     system: bool,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 }
 
 #[derive(Parser, Debug, Clone)]

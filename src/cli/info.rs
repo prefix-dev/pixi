@@ -1,6 +1,6 @@
 use std::{fmt::Display, path::PathBuf};
 
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 use chrono::{DateTime, Local};
 use clap::Parser;
 use itertools::Itertools;
@@ -41,7 +41,7 @@ pub struct Args {
     json: bool,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 }
 
 #[derive(Serialize)]

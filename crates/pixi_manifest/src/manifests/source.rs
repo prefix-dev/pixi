@@ -1,6 +1,5 @@
 use crate::{AssociateProvenance, ManifestKind, WithProvenance};
 use miette::{NamedSource, SourceCode};
-use pixi_consts::consts;
 
 /// Discriminates the source of between a 'pixi.toml' and a 'pyproject.toml'
 /// manifest.

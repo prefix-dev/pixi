@@ -11,7 +11,7 @@ use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
     build::GlobHashCache,
     lock_file::satisfiability::EnvironmentUnsat,
-    project::{Environment, SolveGroup},
+    workspace::{Environment, SolveGroup},
     Workspace,
 };
 

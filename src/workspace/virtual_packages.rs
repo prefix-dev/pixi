@@ -1,5 +1,5 @@
-use crate::project::errors::UnsupportedPlatformError;
-use crate::project::Environment;
+use crate::workspace::errors::UnsupportedPlatformError;
+use crate::workspace::Environment;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_default_versions::{default_glibc_version, default_linux_version, default_mac_os_version};

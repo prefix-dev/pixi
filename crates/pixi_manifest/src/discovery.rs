@@ -242,10 +242,9 @@ impl WorkspaceDiscoverer {
         let mut warnings = Vec::new();
         let mut closest_package_manifest = None;
         let (mut next_search_path, root_dir) = match &self.start {
-            DiscoveryStart::SearchRoot(root) => (
-                Some(SearchPath::Directory(&root)),
-                root.parent().unwrap_or(&root),
-            ),
+            DiscoveryStart::SearchRoot(root) => {
+                (Some(SearchPath::Directory(&root)), root.as_path())
+            }
             DiscoveryStart::ExplicitManifest(manifest_path) => (
                 Some(SearchPath::Explicit(&manifest_path)),
                 manifest_path.as_path(),
@@ -259,42 +258,31 @@ impl WorkspaceDiscoverer {
                             ExplicitManifestError::MissingManifest(explicit.to_path_buf()).into(),
                         );
                     }
-                    if !explicit.is_file() {
-                        return Err(ExplicitManifestError::InvalidManifest(
-                            ProvenanceError::UnrecognizedManifestFormat,
-                        )
-                        .into());
+                    if explicit.is_file() {
+                        let provenance = ManifestProvenance::from_path(explicit.to_path_buf())
+                            .map_err(ExplicitManifestError::InvalidManifest)?;
+                        let next_dir = explicit
+                            .parent()
+                            .expect("the manifest itself must have a parent directory")
+                            .parent();
+                        (next_dir, Some(provenance))
+                    } else {
+                        let provenance = Self::provenance_from_dir(explicit).ok_or(
+                            ExplicitManifestError::InvalidManifest(
+                                ProvenanceError::UnrecognizedManifestFormat,
+                            ),
+                        )?;
+                        (explicit.parent(), Some(provenance))
                     }
-                    let provenance = ManifestProvenance::from_path(explicit.to_path_buf())
-                        .map_err(ExplicitManifestError::InvalidManifest)?;
-                    let next_dir = explicit
-                        .parent()
-                        .expect("the manifest itself must have a parent directory")
-                        .parent();
-                    (next_dir.map(SearchPath::Directory), Some(provenance))
                 }
                 SearchPath::Directory(manifest_dir_path) => {
                     // Check if a pixi.toml file exists in the current directory.
-                    let pixi_toml_path = manifest_dir_path.join(consts::PROJECT_MANIFEST);
-                    let pyproject_toml_path = manifest_dir_path.join(consts::PYPROJECT_MANIFEST);
-                    let provenance = if pixi_toml_path.is_file() {
-                        Some(ManifestProvenance::new(pixi_toml_path, ManifestKind::Pixi))
-                    } else if pyproject_toml_path.is_file() {
-                        Some(ManifestProvenance::new(
-                            pyproject_toml_path,
-                            ManifestKind::Pyproject,
-                        ))
-                    } else {
-                        None
-                    };
-                    (
-                        manifest_dir_path.parent().map(SearchPath::Directory),
-                        provenance,
-                    )
+                    let provenance = Self::provenance_from_dir(manifest_dir_path);
+                    (manifest_dir_path.parent(), provenance)
                 }
             };
 
-            next_search_path = next;
+            next_search_path = next.map(SearchPath::Directory);
 
             let Some(provenance) = provenance else {
                 // If there is no manifest for the current search path, continue searching.
@@ -470,6 +458,22 @@ impl WorkspaceDiscoverer {
 
         Ok(None)
     }
+
+    /// Discover the workspace manifest in a directory.
+    fn provenance_from_dir(dir: &Path) -> Option<ManifestProvenance> {
+        let pixi_toml_path = dir.join(consts::PROJECT_MANIFEST);
+        let pyproject_toml_path = dir.join(consts::PYPROJECT_MANIFEST);
+        if pixi_toml_path.is_file() {
+            Some(ManifestProvenance::new(pixi_toml_path, ManifestKind::Pixi))
+        } else if pyproject_toml_path.is_file() {
+            Some(ManifestProvenance::new(
+                pyproject_toml_path,
+                ManifestKind::Pyproject,
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -550,6 +554,7 @@ mod test {
     #[rstest]
     #[case::root("")]
     #[case::pixi("pixi.toml")]
+    #[case::empty("empty")]
     #[case::package_specific("package_a/pixi.toml")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root =

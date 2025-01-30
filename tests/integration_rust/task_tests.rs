@@ -1,5 +1,5 @@
 use crate::common::PixiControl;
-use pixi::cli::cli_config::ProjectConfig;
+use pixi::cli::cli_config::WorkspaceConfig;
 use pixi::cli::run::Args;
 use pixi::task::TaskName;
 use pixi_manifest::task::CmdArgs;
@@ -109,7 +109,7 @@ async fn test_alias() {
     let result = pixi
         .run(Args {
             task: vec!["helloworld".to_string()],
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: None,
             },
             ..Default::default()
@@ -185,7 +185,7 @@ async fn test_cwd() {
     let result = pixi
         .run(Args {
             task: vec!["pwd-test".to_string()],
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: None,
             },
             ..Default::default()
@@ -207,7 +207,7 @@ async fn test_cwd() {
     assert!(pixi
         .run(Args {
             task: vec!["unknown-cwd".to_string()],
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: None
             },
             ..Default::default()
@@ -234,7 +234,7 @@ async fn test_task_with_env() {
     let result = pixi
         .run(Args {
             task: vec!["env-test".to_string()],
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: None,
             },
             ..Default::default()
@@ -260,7 +260,7 @@ async fn test_clean_env() {
 
     let run = pixi.run(Args {
         task: vec!["env-test".to_string()],
-        project_config: ProjectConfig {
+        workspace_config: WorkspaceConfig {
             manifest_path: None,
         },
         clean_env: true,
@@ -279,7 +279,7 @@ async fn test_clean_env() {
     let result = pixi
         .run(Args {
             task: vec!["env-test".to_string()],
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: None,
             },
             clean_env: false,

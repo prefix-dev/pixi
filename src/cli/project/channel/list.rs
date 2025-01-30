@@ -1,14 +1,14 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
 
-use crate::{cli::cli_config::ProjectConfig, Workspace};
+use crate::{cli::cli_config::WorkspaceConfig, Workspace};
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
     /// Whether to display the channel's names or urls
     #[clap(long)]
     pub urls: bool,
