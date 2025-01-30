@@ -7,6 +7,7 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{Platform, Version};
 use toml_edit::Value;
 
+use crate::manifests::document::ManifestDocument;
 use crate::{
     consts,
     environment::{Environment, EnvironmentName},
@@ -19,7 +20,7 @@ use crate::{
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
     utils::WithSourceCode,
     workspace::Workspace,
-    DependencyOverwriteBehavior, GetFeatureError, ManifestDocument, Preview, PrioritizedChannel,
+    DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
     TomlError, WorkspaceTarget,
 };
@@ -766,6 +767,7 @@ mod tests {
     use toml_edit::DocumentMut;
 
     use super::*;
+    use crate::manifests::document::ManifestDocument;
     use crate::{
         pypi::PyPiPackageName,
         pyproject::PyProjectManifest,
@@ -776,8 +778,7 @@ mod tests {
             WithSourceCode,
         },
         ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        ManifestDocument, PrioritizedChannel, SpecType, TargetSelector, Task, TomlError,
-        WorkspaceManifest,
+        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
     };
 
     const PROJECT_BOILERPLATE: &str = r#"

@@ -8,10 +8,10 @@ use toml_span::{de_helpers::TableHelper, DeserError, Value};
 use crate::{
     error::GenericError,
     pypi::PyPiPackageName,
-    toml::{preview::TomlPreview, task::TomlTask, warning::WithWarnings, Warning},
+    toml::{preview::TomlPreview, task::TomlTask},
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, KnownPreviewFeature, PyPiRequirement, SpecType, TargetSelector, Task, TaskName,
-    TomlError, WorkspaceTarget,
+    TomlError, Warning, WithWarnings, WorkspaceTarget,
 };
 
 #[derive(Debug, Default)]

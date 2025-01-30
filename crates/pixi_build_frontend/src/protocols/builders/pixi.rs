@@ -6,7 +6,7 @@ use std::{
 
 use miette::Diagnostic;
 use pixi_consts::consts;
-use pixi_manifest::{Manifest, PackageManifest, PrioritizedChannel, WorkspaceManifest};
+use pixi_manifest::{Manifests, PackageManifest, PrioritizedChannel, WorkspaceManifest};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use thiserror::Error;
 use which::Error;
@@ -123,28 +123,25 @@ impl ProtocolBuilder {
     /// Discovers a pixi project in the given source directory.
     pub fn discover(source_dir: &Path) -> Result<Option<Self>, ProtocolBuildError> {
         if let Some(manifest_path) = find_pixi_manifest(source_dir) {
-            match Manifest::from_path(&manifest_path) {
-                Ok(manifest) => {
-                    // Make sure the manifest describes a package.
-                    let Some(package_manifest) = manifest.package else {
-                        return Err(ProtocolBuildError::NotAPackage(manifest_path));
-                    };
+            let manifests = Manifests::from_workspace_manifest_path(manifest_path.clone())
+                .map_err(|e| {
+                    ProtocolBuildError::FailedToParseManifest(manifest_path.clone(), e.into())
+                })?;
+            // Discard warnings
+            let manifests = manifests.value;
 
-                    let builder = Self::new(
-                        source_dir.to_path_buf(),
-                        manifest_path,
-                        manifest.workspace,
-                        package_manifest,
-                    );
-                    return Ok(Some(builder));
-                }
-                Err(e) => {
-                    return Err(ProtocolBuildError::FailedToParseManifest(
-                        manifest_path.to_path_buf(),
-                        e,
-                    ));
-                }
-            }
+            // Make sure the manifest describes a package.
+            let Some(package_manifest) = manifests.package else {
+                return Err(ProtocolBuildError::NotAPackage(manifest_path));
+            };
+
+            let builder = Self::new(
+                source_dir.to_path_buf(),
+                manifest_path,
+                manifests.workspace.value,
+                package_manifest.value,
+            );
+            return Ok(Some(builder));
         }
         Ok(None)
     }

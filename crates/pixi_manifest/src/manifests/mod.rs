@@ -10,14 +10,17 @@
 
 pub mod table_name;
 
-mod manifest;
+// mod manifest;
+mod document;
 mod package;
 mod provenance;
 mod source;
 mod workspace;
 
-pub use manifest::Manifest;
+pub use document::ManifestDocument;
 pub use package::PackageManifest;
-pub use provenance::{ManifestKind, ManifestProvenance, WithProvenance};
-pub use source::{ManifestDocument, ManifestSource};
+pub use provenance::{
+    AssociateProvenance, ManifestKind, ManifestProvenance, ProvenanceError, WithProvenance,
+};
+pub use source::ManifestSource;
 pub use workspace::WorkspaceManifest;

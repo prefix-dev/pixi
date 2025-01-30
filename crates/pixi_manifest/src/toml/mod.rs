@@ -1,6 +1,5 @@
 mod build_system;
 mod channel;
-mod deprecation;
 mod document;
 mod environment;
 mod feature;
@@ -14,12 +13,10 @@ pub mod pyproject;
 mod system_requirements;
 mod target;
 mod task;
-mod warning;
 mod workspace;
 
 pub use build_system::TomlPackageBuild;
 pub use channel::TomlPrioritizedChannel;
-pub use deprecation::Deprecation;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};
 pub use feature::TomlFeature;
@@ -30,7 +27,6 @@ pub use preview::TomlPreview;
 pub use pyproject::PyProjectToml;
 pub use target::TomlTarget;
 use toml_span::DeserError;
-pub use warning::Warning;
 pub use workspace::{ExternalWorkspaceProperties, TomlWorkspace};
 
 use crate::TomlError;

@@ -20,9 +20,9 @@ use crate::{
     toml::{
         pyproject::{TomlContact, TomlProject},
         ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
-        TomlManifest, Warning,
+        TomlManifest,
     },
-    FeatureName,
+    FeatureName, Warning,
 };
 
 #[derive(Debug)]
@@ -457,12 +457,12 @@ fn contacts_to_authors(contacts: Vec<Spanned<TomlContact>>) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::Path, str::FromStr};
+    use std::str::FromStr;
 
     use pep440_rs::VersionSpecifiers;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
-    use crate::manifests::Manifest;
+    use crate::{ManifestSource, Manifests};
 
     const PYPROJECT_FULL: &str = r#"
         [project]
@@ -608,7 +608,8 @@ mod tests {
 
     #[test]
     fn test_build_manifest() {
-        let _manifest = Manifest::from_str(Path::new("pyproject.toml"), PYPROJECT_FULL).unwrap();
+        let source = ManifestSource::PyProjectToml(PYPROJECT_FULL.to_string());
+        let _ = Manifests::from_workspace_source(source.with_provenance_from_kind()).unwrap();
     }
 
     #[test]

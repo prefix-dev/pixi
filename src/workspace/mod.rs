@@ -1,3 +1,4 @@
+mod discovery;
 mod environment;
 pub mod errors;
 pub mod grouped_environment;
@@ -23,16 +24,17 @@ use grouped_environment::GroupedEnvironment;
 pub use has_project_ref::HasProjectRef;
 use indexmap::{Equivalent, IndexMap};
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{IntoDiagnostic, NamedSource};
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
+use pep508_rs::{Requirement, RequirementOrigin::Workspace, VersionOrUrl::VersionSpecifier};
 use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
-    pypi::PyPiPackageName, DependencyOverwriteBehavior, EnvironmentName, Environments, FeatureName,
-    FeaturesExt, HasFeaturesIter, HasManifestRef, HasWorkspaceManifest, Manifest,
-    PypiDependencyLocation, SpecType, WorkspaceManifest,
+    pypi::PyPiPackageName, utils::WithSourceCode, DependencyOverwriteBehavior, DiscoveredWorkspace,
+    EnvironmentName, Environments, FeatureName, FeaturesExt, HasFeaturesIter, HasManifestRef,
+    HasWorkspaceManifest, Manifest, PackageManifest, PypiDependencyLocation, SpecType, TomlError,
+    WithProvenance, WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
 };
 use pixi_spec::{PixiSpec, SourceSpec};
 use pixi_utils::reqwest::build_reqwest_clients;
@@ -116,10 +118,10 @@ const NON_SEMVER_PACKAGES: [&str; 11] = [
     "python", "rust", "julia", "gcc", "gxx", "gfortran", "nodejs", "deno", "r", "r-base", "perl",
 ];
 
-/// The pixi workspace, this main struct to interact with a workspace. This struct
-/// holds the `Manifest` and has functions to modify or request information from
-/// it. This allows in the future to have multiple environments or manifests
-/// linked to a project.
+/// The pixi workspace, this main struct to interact with a workspace. This
+/// struct holds the `Manifest` and has functions to modify or request
+/// information from it. This allows in the future to have multiple environments
+/// or manifests linked to a project.
 #[derive(Clone)]
 pub struct Workspace {
     /// Root folder of the workspace
@@ -134,7 +136,12 @@ pub struct Workspace {
     repodata_gateway: OnceLock<Gateway>,
 
     /// The manifest for the workspace
-    pub(crate) manifest: Manifest,
+    workspace: WithProvenance<WorkspaceManifest>,
+
+    /// The manifest of the "current" package. This is the package from which
+    /// the workspace was discovered. This might be `None` if no package was
+    /// discovered on the current path.
+    package: Option<WithProvenance<PackageManifest>>,
 
     /// The environment variables that are activated when the environment is
     /// activated. Cached per environment, for both clean and normal
@@ -151,7 +158,8 @@ impl Debug for Workspace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Project")
             .field("root", &self.root)
-            .field("manifest", &self.manifest)
+            .field("workspace", &self.workspace)
+            .field("package", &self.package)
             .finish()
     }
 }
@@ -168,12 +176,14 @@ pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 pub enum ProjectError {
     #[error("no file was found at {0}")]
     FileNotFound(PathBuf),
+
     #[error(
         "could not find {project_manifest} or {pyproject_manifest} at directory {0}",
         project_manifest = consts::PROJECT_MANIFEST,
         pyproject_manifest = consts::PYPROJECT_MANIFEST
     )]
     FileNotFoundInDirectory(PathBuf),
+
     #[error(
         "could not find {} or {} which is configured to use {}",
         consts::PROJECT_MANIFEST,
@@ -181,13 +191,21 @@ pub enum ProjectError {
         pixi_utils::executable_name()
     )]
     NoFileFound,
+
     #[error("failed to read project from '{0}'")]
     ReadError(std::io::Error),
+
     #[error("failed to parse project from {1}: {0}")]
     ParseErrorWithPathBuf(miette::Report, PathBuf),
+
     #[error("failed to parse project: {0}")]
     ParseError(miette::Report),
-    #[error("io error: {0}")]
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
+
+    #[error(transparent)]
     IoError(std::io::Error),
 }
 
@@ -227,6 +245,64 @@ impl Workspace {
     pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
         Ok(Self::from_manifest(manifest))
+    }
+
+    /// Discovers the workspace manifest files from the given path.
+    ///
+    /// Searching up the directory tree for the closest workspace manifest file.
+    pub(crate) fn discover_from_path_or_env(path: &Path) -> Result<Self, ProjectError> {
+        let discovered_workspace = WorkspaceDiscoverer::new(path.to_path_buf())
+            .with_closest_package(true)
+            .discover();
+        let discovered_workspace = match discovered_workspace {
+            Ok(None) => return Err(ProjectError::FileNotFoundInDirectory(path.to_path_buf())),
+            Ok(Some(discovered_workspace)) => discovered_workspace,
+            Err(WorkspaceDiscoveryError::Toml(error)) => return Err(ProjectError::Toml(error)),
+            Err(WorkspaceDiscoveryError::Io(error)) => return Err(ProjectError::IoError(error)),
+        };
+
+        Self::from_discovered_workspace(discovered_workspace)
+    }
+
+    pub(crate) fn from_discovered_workspace(
+        discovered_workspace: DiscoveredWorkspace,
+    ) -> Result<Self, ProjectError> {
+        if let Some(project_toml) = project_toml {
+            if std::env::var("PIXI_IN_SHELL").is_ok() {
+                if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+                    if env_manifest_path != project_toml.to_string_lossy() {
+                        tracing::warn!(
+                            "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                            project_toml.to_string_lossy(),
+                            env_manifest_path,
+                        );
+                    }
+                }
+            }
+            return Self::from_path(&project_toml);
+        }
+
+        if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
+            return Self::from_path(Path::new(env_manifest_path.as_str()));
+        }
+
+        let root = manifest
+            .path
+            .parent()
+            .expect("manifest path should always have a parent")
+            .to_owned();
+
+        let config = Config::load(&root);
+
+        Self {
+            root,
+            client: Default::default(),
+            manifest,
+            env_vars,
+            mapping_source: Default::default(),
+            config,
+            repodata_gateway: Default::default(),
+        }
     }
 
     /// Discovers the project manifest file in the current directory or any of
@@ -773,7 +849,8 @@ impl Workspace {
         }
 
         // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi build` and `uv`
+        // This is required to ensure that the changes are found by tools like `pixi
+        // build` and `uv`
         if self.manifest.is_pyproject() {
             self.save()?;
         }
@@ -863,7 +940,8 @@ impl Workspace {
         }
 
         // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi build` and `uv`
+        // This is required to ensure that the changes are found by tools like `pixi
+        // build` and `uv`
         if self.manifest.is_pyproject() {
             self.save()?;
         }

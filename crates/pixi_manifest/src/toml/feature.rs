@@ -8,13 +8,13 @@ use toml_span::{de_helpers::TableHelper, DeserError, Value};
 use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
-        platform::TomlPlatform, preview::TomlPreview, task::TomlTask, warning::WithWarnings,
-        TomlPrioritizedChannel, TomlTarget, Warning,
+        platform::TomlPlatform, preview::TomlPreview, task::TomlTask, TomlPrioritizedChannel,
+        TomlTarget,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     workspace::ChannelPriority,
     Activation, Feature, FeatureName, PyPiRequirement, SystemRequirements, TargetSelector, Targets,
-    Task, TaskName, TomlError,
+    Task, TaskName, TomlError, Warning, WithWarnings,
 };
 
 #[derive(Debug)]

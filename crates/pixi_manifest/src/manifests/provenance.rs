@@ -1,11 +1,13 @@
-use crate::ManifestSource;
-use miette::Diagnostic;
-use pixi_consts::consts;
 use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
+
+use miette::Diagnostic;
+use pixi_consts::consts;
 use thiserror::Error;
+
+use crate::ManifestSource;
 
 /// Describes the origin of a manifest file.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -50,7 +52,13 @@ impl ManifestProvenance {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+impl From<ManifestKind> for ManifestProvenance {
+    fn from(value: ManifestKind) -> Self {
+        ManifestProvenance::new(PathBuf::from(value.file_name()), value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum ManifestKind {
     Pixi,
     Pyproject,
@@ -64,6 +72,19 @@ impl ManifestKind {
             consts::PYPROJECT_MANIFEST => Some(Self::Pyproject),
             _ => None,
         }
+    }
+
+    /// Returns the default file name for a manifest of a certain kind.
+    pub fn file_name(self) -> &'static str {
+        match self {
+            ManifestKind::Pixi => consts::PROJECT_MANIFEST,
+            ManifestKind::Pyproject => consts::PYPROJECT_MANIFEST,
+        }
+    }
+
+    /// Returns the language of the manifest file
+    pub fn language(self) -> &'static str {
+        "toml"
     }
 }
 
@@ -90,5 +111,17 @@ impl<T> WithProvenance<T> {
             value: f(self.value),
             provenance: self.provenance,
         }
+    }
+}
+
+/// A trait to associate a provenance with a value. This has a blanked
+/// implementation which allows calling `with_provenance` on any value.
+pub trait AssociateProvenance: Sized {
+    fn with_provenance(self, provenance: ManifestProvenance) -> WithProvenance<Self>;
+}
+
+impl<T> AssociateProvenance for T {
+    fn with_provenance(self, provenance: ManifestProvenance) -> WithProvenance<Self> {
+        WithProvenance::new(self, provenance)
     }
 }

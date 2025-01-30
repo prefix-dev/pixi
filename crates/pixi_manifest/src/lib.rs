@@ -23,22 +23,26 @@ pub mod task;
 pub mod toml;
 pub mod utils;
 mod validation;
+mod warning;
 mod workspace;
 
 pub use activation::Activation;
 pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
+pub use discovery::{
+    DiscoveredWorkspaceError, Manifests, WorkspaceDiscoverer, WorkspaceDiscoveryError,
+};
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
-pub use has_manifest_ref::{HasManifestRef, HasWorkspaceManifest};
+pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    Manifest, ManifestDocument, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
-    WithProvenance, WorkspaceManifest,
+    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
+    ProvenanceError, WithProvenance, WorkspaceManifest,
 };
 use miette::Diagnostic;
 pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
@@ -49,6 +53,7 @@ pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, Syste
 pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
+pub use warning::{Warning, WithWarnings};
 pub use workspace::{ChannelPriority, Workspace};
 
 pub use crate::{
@@ -101,6 +106,7 @@ fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
 
 use console::StyledObject;
 use fancy_display::FancyDisplay;
+pub use manifests::ManifestDocument;
 use pixi_consts::consts;
 
 impl FancyDisplay for EnvironmentName {

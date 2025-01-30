@@ -1,4 +1,6 @@
-use crate::toml::deprecation::Deprecation;
+mod deprecation;
+
+pub use deprecation::Deprecation;
 use miette::Diagnostic;
 use thiserror::Error;
 
@@ -10,18 +12,18 @@ pub enum Warning {
 }
 
 #[derive(Debug)]
-pub struct WithWarnings<T> {
+pub struct WithWarnings<T, W = Warning> {
     pub value: T,
-    pub warnings: Vec<Warning>,
+    pub warnings: Vec<W>,
 }
 
-impl<T> WithWarnings<T> {
-    pub fn with_warnings(self, warnings: Vec<Warning>) -> Self {
+impl<T, W> WithWarnings<T, W> {
+    pub fn with_warnings(self, warnings: Vec<W>) -> Self {
         Self { warnings, ..self }
     }
 }
 
-impl<T> From<T> for WithWarnings<T> {
+impl<T, W> From<T> for WithWarnings<T, W> {
     fn from(value: T) -> Self {
         Self {
             value,

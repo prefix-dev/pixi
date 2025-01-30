@@ -10,10 +10,10 @@ use toml_span::Deserialize;
 
 use crate::{
     pyproject::PyProjectManifest,
-    toml::{ExternalPackageProperties, ExternalWorkspaceProperties, TomlManifest, Warning},
+    toml::{ExternalPackageProperties, ExternalWorkspaceProperties, TomlManifest},
     utils::WithSourceCode,
-    ManifestKind, ManifestProvenance, ManifestSource, PackageManifest, TomlError, WithProvenance,
-    WorkspaceManifest,
+    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
+    ProvenanceError, TomlError, Warning, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 
 /// A helper struct to discover the workspace manifest in a directory tree from
@@ -33,23 +33,132 @@ pub struct WorkspaceDiscoverer {
 
 /// A workspace discovered by calling [`WorkspaceDiscoverer::discover`].
 #[derive(Debug)]
-pub struct DiscoveredWorkspace {
+pub struct Manifests {
     /// The discovered workspace manifest
-    pub workspace_manifest: WithProvenance<WorkspaceManifest>,
+    pub workspace: WithProvenance<WorkspaceManifest>,
 
     /// If requested, contains the package manifest for the closest package in
     /// the workspace. `None` if there is no package manifest on the path to the
     /// workspace.
-    pub package_manifest: Option<WithProvenance<PackageManifest>>,
+    /// If not requested this might still contain the package manifest stored in
+    /// the same manifest as the workspace.
+    pub package: Option<WithProvenance<PackageManifest>>,
+}
 
-    /// Any warnings that were encountered during the discovery process.
-    pub warnings: Vec<WithSourceCode<Warning, NamedSource<Arc<str>>>>,
+/// An error that may occur when loading a discovered workspace directly from a
+/// file.
+#[derive(Debug, Error, Diagnostic)]
+pub enum DiscoveredWorkspaceError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ProvenanceError(#[from] ProvenanceError),
+}
+
+impl Manifests {
+    /// Constructs a new instance from a specific workspace manifest.
+    pub fn from_workspace_manifest_path(
+        workspace_manifest_path: PathBuf,
+    ) -> Result<
+        WithWarnings<Self, WithSourceCode<Warning, NamedSource<Arc<str>>>>,
+        DiscoveredWorkspaceError,
+    > {
+        let provenance = ManifestProvenance::from_path(workspace_manifest_path)?;
+        let contents = provenance.read()?;
+        Self::from_workspace_source(contents.into_inner().with_provenance(provenance))
+    }
+
+    /// Constructs a new instance from a specific workspace manifest that in
+    /// memory.
+    pub fn from_workspace_source<S: AsRef<str>>(
+        WithProvenance {
+            value: source,
+            provenance,
+        }: WithProvenance<S>,
+    ) -> Result<
+        WithWarnings<Self, WithSourceCode<Warning, NamedSource<Arc<str>>>>,
+        DiscoveredWorkspaceError,
+    > {
+        let build_source_code = || {
+            NamedSource::new(
+                provenance.path.to_string_lossy(),
+                Arc::from(source.as_ref()),
+            )
+            .with_language(provenance.kind.language())
+        };
+
+        // Parse the TOML from the manifest.
+        let mut toml = match toml_span::parse(source.as_ref()) {
+            Ok(toml) => toml,
+            Err(e) => {
+                return Err(WithSourceCode {
+                    error: TomlError::from(e),
+                    source: build_source_code(),
+                }
+                .into())
+            }
+        };
+
+        // Parse the manifest as a workspace based on the type of manifest.
+        let parsed_manifests = match provenance.kind {
+            ManifestKind::Pixi => TomlManifest::deserialize(&mut toml)
+                .map_err(TomlError::from)
+                .and_then(|manifest| {
+                    manifest.into_workspace_manifest(ExternalWorkspaceProperties::default())
+                }),
+            ManifestKind::Pyproject => PyProjectManifest::deserialize(&mut toml)
+                .map_err(TomlError::from)
+                .and_then(|manifest| manifest.into_workspace_manifest()),
+        };
+
+        // Handle any errors that occurred during parsing.
+        let (workspace_manifest, package_manifest, warnings) = match parsed_manifests {
+            Ok(parsed_manifests) => parsed_manifests,
+            Err(toml_error) => {
+                return Err(WithSourceCode {
+                    error: toml_error,
+                    source: build_source_code(),
+                }
+                .into())
+            }
+        };
+
+        // Associate the warnings with the source code.
+        let warnings = if warnings.is_empty() {
+            vec![]
+        } else {
+            let source = build_source_code();
+            warnings
+                .into_iter()
+                .map(|warning| WithSourceCode {
+                    error: warning,
+                    source: source.clone(),
+                })
+                .collect()
+        };
+
+        Ok(WithWarnings::from(Self {
+            package: package_manifest
+                .map(|package_manifest| WithProvenance::new(package_manifest, provenance.clone())),
+            workspace: WithProvenance {
+                provenance,
+                value: workspace_manifest,
+            },
+        })
+        .with_warnings(warnings))
+    }
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum WorkspaceDiscoveryError {
     #[error(transparent)]
-    IO(#[from] std::io::Error),
+    Io(#[from] std::io::Error),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -84,7 +193,12 @@ impl WorkspaceDiscoverer {
     }
 
     /// Discover the workspace manifest in the directory tree.
-    pub fn discover(self) -> Result<Option<DiscoveredWorkspace>, WorkspaceDiscoveryError> {
+    pub fn discover(
+        self,
+    ) -> Result<
+        Option<WithWarnings<Manifests, WithSourceCode<Warning, NamedSource<Arc<str>>>>>,
+        WorkspaceDiscoveryError,
+    > {
         // Walk up the directory tree until we find a workspace manifest.
         let mut warnings = Vec::new();
         let mut closest_package_manifest = None;
@@ -262,11 +376,13 @@ impl WorkspaceDiscoverer {
                 }
             };
 
-            return Ok(Some(DiscoveredWorkspace {
-                workspace_manifest: WithProvenance::new(workspace_manifest, provenance),
-                package_manifest: closest_package_manifest,
-                warnings,
-            }));
+            return Ok(Some(
+                WithWarnings::from(Manifests {
+                    workspace: WithProvenance::new(workspace_manifest, provenance),
+                    package: closest_package_manifest,
+                })
+                .with_warnings(warnings),
+            ));
         }
 
         Ok(None)
@@ -310,23 +426,23 @@ mod test {
             .discover()
         {
             Ok(None) => "Not found!".to_owned(),
-            Ok(Some(discovered)) => {
-                let rel_path = pathdiff::diff_paths(
-                    &discovered.workspace_manifest.provenance.path,
-                    test_data_root,
-                )
-                .unwrap_or(discovered.workspace_manifest.provenance.path);
+            Ok(Some(WithWarnings {
+                value: discovered, ..
+            })) => {
+                let rel_path =
+                    pathdiff::diff_paths(&discovered.workspace.provenance.path, test_data_root)
+                        .unwrap_or(discovered.workspace.provenance.path);
 
                 let mut snapshot = String::new();
                 writeln!(
                     &mut snapshot,
                     "Discovered workspace at: {}\n- Name: {}",
                     rel_path.display().to_string().replace("\\", "/"),
-                    &discovered.workspace_manifest.value.workspace.name
+                    &discovered.workspace.value.workspace.name
                 )
                 .unwrap();
 
-                if let Some(package) = &discovered.package_manifest {
+                if let Some(package) = &discovered.package {
                     writeln!(
                         &mut snapshot,
                         "Package: {} @ {}",

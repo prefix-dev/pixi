@@ -14,14 +14,13 @@ use crate::{
     manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
-        environment::TomlEnvironmentList, task::TomlTask, warning::WithWarnings,
-        ExternalPackageProperties, ExternalWorkspaceProperties, TomlFeature, TomlPackage,
-        TomlTarget, TomlWorkspace, Warning,
+        environment::TomlEnvironmentList, task::TomlTask, ExternalPackageProperties,
+        ExternalWorkspaceProperties, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
     KnownPreviewFeature, PyPiRequirement, SolveGroups, SystemRequirements, TargetSelector, Targets,
-    Task, TaskName, TomlError, WorkspaceManifest,
+    Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
