@@ -177,12 +177,15 @@ async fn find_unsatisfiable_targets<'p>(
                 .extend(platforms);
 
             match unsat {
-                EnvironmentUnsat::PlatformsMismatch => {
-                    // If the platforms mismatched we cannot trust any of the locked content.
-                    unsatisfiable_targets
-                        .disregard_locked_content
-                        .conda
-                        .insert(environment.clone());
+                EnvironmentUnsat::AdditionalPlatformsInLockFile(platforms) => {
+                    // If the there are additional platforms in the lock file, then we have to remove them
+                    for platform in platforms {
+                        unsatisfiable_targets
+                            .outdated_conda
+                            .entry(environment.clone())
+                            .or_default()
+                            .insert(platform);
+                    }
                 }
                 EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::InvalidChannel(_) => {
                     // If the channels mismatched we cannot trust any of the locked content.
