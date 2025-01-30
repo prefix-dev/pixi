@@ -818,6 +818,7 @@ fn source_metadata_to_records(
 
                     // These are not important at this point.
                     run_exports: None,
+                    extra_depends: Default::default(),
                 },
             }
         })
