@@ -761,3 +761,104 @@ async fn test_ensure_gitignore_file_creation() {
         ".pixi/.gitignore file does not contain the expected content"
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn pypi_prefix_is_not_created_when_whl() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(false).await.unwrap();
+
+    // Add pypi dependency that is a wheel
+    pixi.add_multiple(vec!["boltons==24.1.0"])
+        .set_type(pixi::DependencyType::PypiDependency)
+        // we don't want to install the package
+        // we just want to check that the prefix is not created
+        .with_install(false)
+        .await
+        .unwrap();
+
+    // Check the locked boltons dependencies
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        pep508_rs::Requirement::from_str("boltons==24.1.0").unwrap()
+    ));
+
+    let default_env_prefix = pixi.default_env_path().unwrap();
+
+    // Check that the prefix is not created
+    assert!(!default_env_prefix.exists());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+/// This test will fail if uv-cache is already initialized
+async fn pypi_prefix_is_created_when_sdist() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-lazy-sdist"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+
+        [dependencies]
+        python = "*"
+
+        [pypi-dependencies]
+        boltons = "*"
+
+        [feature.py39.dependencies]
+        python = "3.9"
+
+        [feature.py39.pypi-dependencies]
+        boltons = "==24.1.0"
+
+        [feature.py310.dependencies]
+        python = "3.10"
+
+        [feature.py310.pypi-dependencies]
+        sdist = "==0.0.0"
+
+        [environments]
+        py39 = ["py39"]
+        py310 = ["py310"]
+        "#,
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    // we need to check two scenarios here
+    // 1. The py39 environment should not have the prefix created
+    // but the lock file should contain the boltons dependency
+    // 2. The py310 environment should have the prefix created
+    // and the lock file should contain the sdist dependency
+    pixi.install().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+
+    assert!(lock.contains_pep508_requirement(
+        "py39",
+        Platform::current(),
+        pep508_rs::Requirement::from_str("boltons").unwrap()
+    ));
+
+    let py39_prefix = pixi.env_path("py39").unwrap();
+
+    // Check that the py310 prefix is created, and the lock file contains the sdist dependency
+    assert!(!py39_prefix.exists());
+
+    assert!(lock.contains_pep508_requirement(
+        "py310",
+        Platform::current(),
+        pep508_rs::Requirement::from_str("sdist").unwrap()
+    ));
+
+    let py310_prefix = pixi.env_path("py310").unwrap();
+
+    // Check that the py310 prefix is not created
+    assert!(py310_prefix.exists());
+}
