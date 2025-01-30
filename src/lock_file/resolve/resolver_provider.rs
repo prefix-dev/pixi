@@ -32,7 +32,7 @@ pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) package_requests: Rc<RefCell<HashMap<uv_normalize::PackageName, u32>>>,
 }
 
-impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, Context> {
+impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Context> {
     fn get_package_versions<'io>(
         &'io self,
         package_name: &'io uv_normalize::PackageName,

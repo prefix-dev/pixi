@@ -634,9 +634,9 @@ fn get_url_or_path(
 }
 
 /// Create a vector of locked packages from a resolution
-async fn lock_pypi_packages<'a>(
+async fn lock_pypi_packages(
     conda_python_packages: CondaPythonPackages,
-    build_dispatch: &BuildDispatch<'a>,
+    build_dispatch: &BuildDispatch<'_>,
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
     index_capabilities: &IndexCapabilities,

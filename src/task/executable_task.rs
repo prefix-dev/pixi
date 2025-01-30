@@ -356,8 +356,8 @@ fn get_export_specific_task_env(task: &Task) -> String {
 
 /// Determine the environment variables to use when executing a command. The method combines the
 /// activation environment with the system environment variables.
-pub async fn get_task_env<'p>(
-    environment: &Environment<'p>,
+pub async fn get_task_env(
+    environment: &Environment<'_>,
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,
