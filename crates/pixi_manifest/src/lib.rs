@@ -31,7 +31,7 @@ pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 pub use discovery::{
-    DiscoveredWorkspaceError, Manifests, WorkspaceDiscoverer, WorkspaceDiscoveryError,
+    LoadManifestsError, Manifests, WorkspaceDiscoverer, WorkspaceDiscoveryError, DiscoveryStart, ExplicitManifestError
 };
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;

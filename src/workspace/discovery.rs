@@ -6,17 +6,33 @@ use std::{
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
 use pixi_manifest::{
-    utils::WithSourceCode, DiscoveredWorkspace, DiscoveredWorkspaceError, ProvenanceError,
-    TomlError, WorkspaceDiscoveryError,
+    utils::WithSourceCode, ExplicitManifestError, LoadManifestsError, Manifests, ProvenanceError,
+    TomlError, Warning, WithWarnings, WorkspaceDiscoveryError,
 };
 use thiserror::Error;
 
 use crate::workspace::Workspace;
 
+/// Defines where the search for the workspace should start.
+#[derive(Debug, Clone, Default)]
+pub enum DiscoveryStart {
+    /// Start the search from the current directory indicated by
+    /// [`std::env::current_dir`].
+    #[default]
+    CurrentDir,
+
+    /// Start the search from the given directory.
+    SearchRoot(PathBuf),
+
+    /// Use the manifest file at the given path. Only search for a workspace if
+    /// the specified manifest is not a workspace.
+    ExplicitManifest(PathBuf),
+}
+
 /// A helper struct that helps discover the workspace root and potentially the
 /// "current" package.
 pub struct WorkspaceLocator {
-    path: Option<PathBuf>,
+    start: DiscoveryStart,
     with_closest_package: bool,
     emit_warnings: bool,
     consider_environment: bool,
@@ -46,15 +62,16 @@ pub enum WorkspaceLocatorError {
     WorkspaceNotFound(PathBuf),
 
     /// The manifest file could not be loaded.
-    #[error("could not load '{0}' as a manifest")]
-    ProvenanceError(PathBuf, #[source] ProvenanceError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExplicitManifestError(#[from] ExplicitManifestError),
 }
 
 impl WorkspaceLocator {
     /// Constructs a new instance.
     pub fn new() -> Self {
         Self {
-            path: None,
+            start: DiscoveryStart::default(),
             with_closest_package: false,
             emit_warnings: false,
             consider_environment: false,
@@ -69,13 +86,9 @@ impl WorkspaceLocator {
             .with_consider_environment(true)
     }
 
-    /// Set the path to start searching for the workspace. If this is not set
-    /// the current directory will be used.
-    pub fn with_path(self, path: impl Into<PathBuf>) -> Self {
-        Self {
-            path: Some(path.into()),
-            ..self
-        }
+    /// Define where the search for the workspace should start.
+    pub fn with_search_start(self, start: DiscoveryStart) -> Self {
+        Self { start, ..self }
     }
 
     /// Also search for the closest package in the workspace.
@@ -107,40 +120,60 @@ impl WorkspaceLocator {
     /// Called to locate the workspace or error out if none could be located.
     pub fn discover(self) -> Result<Workspace, WorkspaceLocatorError> {
         // Determine the search root
-        let path = match self.path {
-            Some(path) => path,
-            None => std::env::current_dir().map_err(WorkspaceLocatorError::CurrentDir)?,
+        let discovery_start = match self.start {
+            DiscoveryStart::ExplicitManifest(path) => {
+                pixi_manifest::DiscoveryStart::ExplicitManifest(path)
+            }
+            DiscoveryStart::CurrentDir => pixi_manifest::DiscoveryStart::SearchRoot(
+                std::env::current_dir().map_err(WorkspaceLocatorError::CurrentDir)?,
+            ),
+            DiscoveryStart::SearchRoot(path) => pixi_manifest::DiscoveryStart::SearchRoot(path),
         };
 
         // Discover the workspace manifest for the current path.
-        let mut workspace_manifests =
-            match pixi_manifest::WorkspaceDiscoverer::new(path.to_path_buf())
-                .with_closest_package(self.with_closest_package)
-                .discover()
-            {
-                Ok(manifests) => manifests,
-                Err(WorkspaceDiscoveryError::Toml(err)) => {
-                    return Err(WorkspaceLocatorError::Toml(err))
-                }
-                Err(WorkspaceDiscoveryError::Io(err)) => {
-                    return Err(WorkspaceLocatorError::Io(err))
-                }
-            };
+        let mut workspace_manifests = match pixi_manifest::WorkspaceDiscoverer::new(discovery_start)
+            .with_closest_package(self.with_closest_package)
+            .discover()
+        {
+            Ok(manifests) => manifests,
+            Err(WorkspaceDiscoveryError::Toml(err)) => {
+                return Err(WorkspaceLocatorError::Toml(err))
+            }
+            Err(WorkspaceDiscoveryError::Io(err)) => return Err(WorkspaceLocatorError::Io(err)),
+            Err(WorkspaceDiscoveryError::ExplicitManifestError(err)) => {
+                return Err(WorkspaceLocatorError::ExplicitManifestError(err))
+            }
+        };
+
+        // Extract the warnings from the discovered workspace.
+        let (mut workspace_manifests, mut warnings) = match workspace_manifests {
+            Some(WithWarnings {
+                value: manifests,
+                warnings,
+            }) => (Some(manifests), warnings),
+            None => (None, Vec::new()),
+        };
 
         // Take into consideration any environment variables that may be set.
         if self.consider_environment {
-            workspace_manifests =
-                Self::apply_environment_overrides(workspace_manifests, self.emit_warnings)?;
+            if let Some(WithWarnings {
+                value: manifests,
+                warnings: mut env_warnings,
+            }) =
+                Self::apply_environment_overrides(workspace_manifests.take(), self.emit_warnings)?
+            {
+                warnings.append(&mut env_warnings);
+                workspace_manifests = Some(manifests);
+            }
         }
 
         // Early out if discovery failed.
         let Some(discovered_workspace) = workspace_manifests else {
-            return Err(WorkspaceLocatorError::WorkspaceNotFound(path));
+            return Err(WorkspaceLocatorError::WorkspaceNotFound(discovery_start));
         };
 
         // Emit any warnings that were encountered during the discovery process.
-        if self.emit_warnings && !discovered_workspace.warnings.is_empty() {
-            let warnings = &discovered_workspace.warnings;
+        if self.emit_warnings && !warnings.is_empty() {
             tracing::warn!(
                 "Encountered {} warning{} while parsing the manifest:\n{}",
                 warnings.len(),
@@ -157,16 +190,19 @@ impl WorkspaceLocator {
 
     /// Apply any environment overrides to a potentially discovered workspace.
     fn apply_environment_overrides(
-        discovered_workspace: Option<DiscoveredWorkspace>,
+        discovered_workspace: Option<Manifests>,
         emit_warnings: bool,
-    ) -> Result<Option<DiscoveredWorkspace>, WorkspaceLocatorError> {
+    ) -> Result<
+        Option<WithWarnings<Manifests, WithSourceCode<Warning, NamedSource<Arc<str>>>>>,
+        WorkspaceLocatorError,
+    > {
         let env_manifest_path = std::env::var("PIXI_PROJECT_MANIFEST")
             .map(PathBuf::from)
             .ok();
 
         // Warn the user if they are currently in a shell of another workspace.
         if let Some(workspace_manifests) = &discovered_workspace {
-            let discovered_manifest_path = &workspace_manifests.workspace_manifest.provenance.path;
+            let discovered_manifest_path = &workspace_manifests.workspace.provenance.path;
             let in_shell = std::env::var("PIXI_IN_SHELL").is_ok();
             if let Some(env_manifest_path) = env_manifest_path {
                 if &env_manifest_path != discovered_manifest_path && in_shell && emit_warnings {
@@ -180,15 +216,11 @@ impl WorkspaceLocator {
         // Else, if we didn't find a workspace manifest, but we there is an
         // active one set in the environment, we try to use that instead.
         } else if let Some(env_manifest_path) = env_manifest_path {
-            match DiscoveredWorkspace::from_workspace_manifest_path(env_manifest_path.clone()) {
+            match Manifests::from_workspace_manifest_path(env_manifest_path.clone()) {
                 Ok(workspace) => return Ok(Some(workspace)),
-                Err(DiscoveredWorkspaceError::Io(err)) => {
-                    return Err(WorkspaceLocatorError::Io(err))
-                }
-                Err(DiscoveredWorkspaceError::Toml(err)) => {
-                    return Err(WorkspaceLocatorError::Toml(err))
-                }
-                Err(DiscoveredWorkspaceError::ProvenanceError(err)) => {
+                Err(LoadManifestsError::Io(err)) => return Err(WorkspaceLocatorError::Io(err)),
+                Err(LoadManifestsError::Toml(err)) => return Err(WorkspaceLocatorError::Toml(err)),
+                Err(LoadManifestsError::ProvenanceError(err)) => {
                     return Err(WorkspaceLocatorError::ProvenanceError(
                         env_manifest_path,
                         err,
@@ -197,6 +229,6 @@ impl WorkspaceLocator {
             }
         }
 
-        Ok(discovered_workspace)
+        Ok(discovered_workspace.map(WithWarnings::from))
     }
 }

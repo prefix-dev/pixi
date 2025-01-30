@@ -144,6 +144,9 @@ impl PackageExt {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+
+    let workspace = WorkspaceLocater::for_cli().discover()?;
+
     let environment = project.environment_from_name_or_env_var(args.environment)?;
 
     let lock_file = project

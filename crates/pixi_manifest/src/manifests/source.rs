@@ -27,14 +27,6 @@ impl<S> ManifestSource<S> {
         }
     }
 
-    /// Returns the expected file name of a manifest containing the source.
-    pub fn expected_file_name(&self) -> &'static str {
-        match self {
-            ManifestSource::PyProjectToml(_) => consts::PYPROJECT_MANIFEST,
-            ManifestSource::PixiToml(_) => consts::PROJECT_MANIFEST,
-        }
-    }
-
     /// Returns the kind of manifest this source represents.
     pub fn kind(&self) -> ManifestKind {
         match self {

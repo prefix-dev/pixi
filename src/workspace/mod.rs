@@ -31,10 +31,11 @@ use pep508_rs::{Requirement, RequirementOrigin::Workspace, VersionOrUrl::Version
 use pixi_config::{Config, PinningStrategy};
 use pixi_consts::consts;
 use pixi_manifest::{
-    pypi::PyPiPackageName, utils::WithSourceCode, DependencyOverwriteBehavior, DiscoveredWorkspace,
-    EnvironmentName, Environments, FeatureName, FeaturesExt, HasFeaturesIter, HasManifestRef,
-    HasWorkspaceManifest, Manifest, PackageManifest, PypiDependencyLocation, SpecType, TomlError,
-    WithProvenance, WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
+    pypi::PyPiPackageName, utils::WithSourceCode, AssociateProvenance, DependencyOverwriteBehavior,
+    DiscoveredWorkspace, EnvironmentName, Environments, FeatureName, FeaturesExt, HasFeaturesIter,
+    HasManifestRef, HasWorkspaceManifest, Manifest, ManifestProvenance, Manifests, PackageManifest,
+    PypiDependencyLocation, SpecType, TomlError, WithProvenance, WithWarnings, WorkspaceDiscoverer,
+    WorkspaceDiscoveryError, WorkspaceManifest,
 };
 use pixi_spec::{PixiSpec, SourceSpec};
 use pixi_utils::reqwest::build_reqwest_clients;
@@ -211,10 +212,12 @@ pub enum ProjectError {
 
 impl Workspace {
     /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifest(manifest: Manifest) -> Self {
-        let env_vars = Workspace::init_env_vars(&manifest.workspace.environments);
+    pub(crate) fn from_manifests(manifest: Manifests) -> Self {
+        let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
 
         let root = manifest
+            .workspace
+            .provenance
             .path
             .parent()
             .expect("manifest path should always have a parent")
@@ -231,6 +234,25 @@ impl Workspace {
             config,
             repodata_gateway: Default::default(),
         }
+    }
+
+    /// Loads a project from manifest file. The `manifest_path` is expected to
+    /// be a workspace manifest.
+    pub fn from_path(manifest_path: &Path) -> Result<Self, ProjectError> {
+        let WithWarnings {
+            value: manifests, ..
+        } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
+        Ok(Self::from_manifests(manifests))
+    }
+
+    /// Constructs a workspace from source loaded from a specific location.
+    pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
+        let WithWarnings {
+            value: manifests, ..
+        } = Manifests::from_workspace_source(
+            content.with_provenance(ManifestProvenance::from_path(manifest_path.to_path_buf())?),
+        )?;
+        Ok(Self::from_manifests(manifests))
     }
 
     /// Initialize empty map of environments variables
@@ -239,149 +261,6 @@ impl Workspace {
             .iter()
             .map(|environment| (environment.name.clone(), EnvironmentVars::new()))
             .collect()
-    }
-
-    /// Constructs a project from a manifest.
-    pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
-        let manifest = Manifest::from_str(manifest_path, content)?;
-        Ok(Self::from_manifest(manifest))
-    }
-
-    /// Discovers the workspace manifest files from the given path.
-    ///
-    /// Searching up the directory tree for the closest workspace manifest file.
-    pub(crate) fn discover_from_path_or_env(path: &Path) -> Result<Self, ProjectError> {
-        let discovered_workspace = WorkspaceDiscoverer::new(path.to_path_buf())
-            .with_closest_package(true)
-            .discover();
-        let discovered_workspace = match discovered_workspace {
-            Ok(None) => return Err(ProjectError::FileNotFoundInDirectory(path.to_path_buf())),
-            Ok(Some(discovered_workspace)) => discovered_workspace,
-            Err(WorkspaceDiscoveryError::Toml(error)) => return Err(ProjectError::Toml(error)),
-            Err(WorkspaceDiscoveryError::Io(error)) => return Err(ProjectError::IoError(error)),
-        };
-
-        Self::from_discovered_workspace(discovered_workspace)
-    }
-
-    pub(crate) fn from_discovered_workspace(
-        discovered_workspace: DiscoveredWorkspace,
-    ) -> Result<Self, ProjectError> {
-        if let Some(project_toml) = project_toml {
-            if std::env::var("PIXI_IN_SHELL").is_ok() {
-                if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
-                    if env_manifest_path != project_toml.to_string_lossy() {
-                        tracing::warn!(
-                            "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
-                            project_toml.to_string_lossy(),
-                            env_manifest_path,
-                        );
-                    }
-                }
-            }
-            return Self::from_path(&project_toml);
-        }
-
-        if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
-            return Self::from_path(Path::new(env_manifest_path.as_str()));
-        }
-
-        let root = manifest
-            .path
-            .parent()
-            .expect("manifest path should always have a parent")
-            .to_owned();
-
-        let config = Config::load(&root);
-
-        Self {
-            root,
-            client: Default::default(),
-            manifest,
-            env_vars,
-            mapping_source: Default::default(),
-            config,
-            repodata_gateway: Default::default(),
-        }
-    }
-
-    /// Discovers the project manifest file in the current directory or any of
-    /// the parent directories, or use the manifest specified by the
-    /// environment. This will also set the current working directory to the
-    /// project root.
-    pub(crate) fn discover() -> Result<Self, ProjectError> {
-        let project_toml =
-            find_project_manifest(std::env::current_dir().map_err(ProjectError::IoError)?);
-
-        if let Some(project_toml) = project_toml {
-            if std::env::var("PIXI_IN_SHELL").is_ok() {
-                if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
-                    if env_manifest_path != project_toml.to_string_lossy() {
-                        tracing::warn!(
-                            "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
-                            project_toml.to_string_lossy(),
-                            env_manifest_path,
-                        );
-                    }
-                }
-            }
-            return Self::from_path(&project_toml);
-        }
-
-        if let Ok(env_manifest_path) = std::env::var("PIXI_PROJECT_MANIFEST") {
-            return Self::from_path(Path::new(env_manifest_path.as_str()));
-        }
-
-        Err(ProjectError::NoFileFound)
-    }
-
-    /// Loads a project from manifest file.
-    pub fn from_path(manifest_path: &Path) -> Result<Self, ProjectError> {
-        let manifest = Manifest::from_path(manifest_path)
-            .map_err(|e| ProjectError::ParseErrorWithPathBuf(e, manifest_path.into()))?;
-        Ok(Workspace::from_manifest(manifest))
-    }
-
-    /// Loads a project manifest file or discovers it in the current directory
-    /// or any of the parent
-    pub fn load_or_else_discover(manifest_path: Option<&Path>) -> Result<Self, ProjectError> {
-        let project = match manifest_path {
-            Some(path) => {
-                if !path.exists() {
-                    return Err(ProjectError::FileNotFound(path.to_owned()));
-                }
-                let path = if path.is_dir() {
-                    &find_project_manifest(path)
-                        .ok_or_else(|| ProjectError::FileNotFoundInDirectory(path.to_owned()))?
-                } else {
-                    path
-                };
-                Workspace::from_path(path)?
-            }
-            None => Workspace::discover()?,
-        };
-        Ok(project)
-    }
-
-    /// Warns if Pixi is using a manifest from an environment variable rather
-    /// than a discovered version
-    pub(crate) fn warn_on_discovered_from_env(manifest_path: Option<&Path>) {
-        if manifest_path.is_none() && std::env::var("PIXI_IN_SHELL").is_ok() {
-            if let Ok(current_dir) = std::env::current_dir() {
-                let discover_path = find_project_manifest(current_dir);
-                let env_path = std::env::var("PIXI_PROJECT_MANIFEST");
-
-                if let (Some(discover_path), Ok(env_path)) = (discover_path, env_path) {
-                    if env_path.as_str() != discover_path.to_str().unwrap() {
-                        tracing::warn!(
-                            "Used local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
-                            discover_path.to_string_lossy(),
-                            env_path,
-                        );
-                    }
-                }
-            }
-        }
     }
 
     pub(crate) fn with_cli_config<C>(mut self, config: C) -> Self

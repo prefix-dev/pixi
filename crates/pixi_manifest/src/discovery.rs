@@ -1,7 +1,10 @@
 //! This module provides the [`WorkspaceDiscoverer`] struct which can be used to
 //! discover the workspace manifest in a directory tree.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
@@ -25,7 +28,7 @@ use crate::{
 /// information.
 pub struct WorkspaceDiscoverer {
     /// The current path
-    current_path: PathBuf,
+    start: DiscoveryStart,
 
     /// Also discover the package closest to the current directory.
     discover_package: bool,
@@ -48,7 +51,7 @@ pub struct Manifests {
 /// An error that may occur when loading a discovered workspace directly from a
 /// file.
 #[derive(Debug, Error, Diagnostic)]
-pub enum DiscoveredWorkspaceError {
+pub enum LoadManifestsError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -67,7 +70,7 @@ impl Manifests {
         workspace_manifest_path: PathBuf,
     ) -> Result<
         WithWarnings<Self, WithSourceCode<Warning, NamedSource<Arc<str>>>>,
-        DiscoveredWorkspaceError,
+        LoadManifestsError,
     > {
         let provenance = ManifestProvenance::from_path(workspace_manifest_path)?;
         let contents = provenance.read()?;
@@ -83,7 +86,7 @@ impl Manifests {
         }: WithProvenance<S>,
     ) -> Result<
         WithWarnings<Self, WithSourceCode<Warning, NamedSource<Arc<str>>>>,
-        DiscoveredWorkspaceError,
+        LoadManifestsError,
     > {
         let build_source_code = || {
             NamedSource::new(
@@ -156,6 +159,15 @@ impl Manifests {
 }
 
 #[derive(Debug, Error, Diagnostic)]
+pub enum ExplicitManifestError {
+    #[error("could not find '{}'", .0.display())]
+    MissingManifest(PathBuf),
+
+    #[error(transparent)]
+    InvalidManifest(ProvenanceError),
+}
+
+#[derive(Debug, Error, Diagnostic)]
 pub enum WorkspaceDiscoveryError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -163,6 +175,10 @@ pub enum WorkspaceDiscoveryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExplicitManifestError(#[from] ExplicitManifestError),
 }
 
 enum EitherManifest {
@@ -170,11 +186,29 @@ enum EitherManifest {
     Pyproject(PyProjectManifest),
 }
 
+/// Defines where the search for the workspace should start.
+#[derive(Debug, Clone)]
+pub enum DiscoveryStart {
+    /// Start the search from the given directory.
+    ///
+    /// This will search for a workspace manifest in the given directory and its
+    /// parent directories.
+    SearchRoot(PathBuf),
+
+    /// Use the manifest file at the given path. Only search for a workspace if
+    /// the specified manifest is not a workspace.
+    ///
+    /// This differs from specifying the parent directory of the manifest file
+    /// in that it is also possible to specify a manifest that is not the
+    /// default preferred format (e.g. `pyproject.toml`).
+    ExplicitManifest(PathBuf),
+}
+
 impl WorkspaceDiscoverer {
     /// Constructs a new instance from the current path.
-    pub fn new(current_path: PathBuf) -> Self {
+    pub fn new(start: DiscoveryStart) -> Self {
         Self {
-            current_path,
+            start,
             discover_package: false,
         }
     }
@@ -199,23 +233,71 @@ impl WorkspaceDiscoverer {
         Option<WithWarnings<Manifests, WithSourceCode<Warning, NamedSource<Arc<str>>>>>,
         WorkspaceDiscoveryError,
     > {
+        enum SearchPath<'a> {
+            Explicit(&'a Path),
+            Directory(&'a Path),
+        }
+
         // Walk up the directory tree until we find a workspace manifest.
         let mut warnings = Vec::new();
         let mut closest_package_manifest = None;
-        let mut current_path = Some(self.current_path.as_path());
-        while let Some(manifest_dir_path) = current_path {
-            // Prepare the next directory to search.
-            current_path = manifest_dir_path.parent();
+        let (mut next_search_path, root_dir) = match &self.start {
+            DiscoveryStart::SearchRoot(root) => (
+                Some(SearchPath::Directory(&root)),
+                root.parent().unwrap_or(&root),
+            ),
+            DiscoveryStart::ExplicitManifest(manifest_path) => (
+                Some(SearchPath::Explicit(&manifest_path)),
+                manifest_path.as_path(),
+            ),
+        };
+        while let Some(search_path) = next_search_path {
+            let (next, provenance) = match search_path {
+                SearchPath::Explicit(explicit) => {
+                    if !explicit.exists() {
+                        return Err(
+                            ExplicitManifestError::MissingManifest(explicit.to_path_buf()).into(),
+                        );
+                    }
+                    if !explicit.is_file() {
+                        return Err(ExplicitManifestError::InvalidManifest(
+                            ProvenanceError::UnrecognizedManifestFormat,
+                        )
+                        .into());
+                    }
+                    let provenance = ManifestProvenance::from_path(explicit.to_path_buf())
+                        .map_err(ExplicitManifestError::InvalidManifest)?;
+                    let next_dir = explicit
+                        .parent()
+                        .expect("the manifest itself must have a parent directory")
+                        .parent();
+                    (next_dir.map(SearchPath::Directory), Some(provenance))
+                }
+                SearchPath::Directory(manifest_dir_path) => {
+                    // Check if a pixi.toml file exists in the current directory.
+                    let pixi_toml_path = manifest_dir_path.join(consts::PROJECT_MANIFEST);
+                    let pyproject_toml_path = manifest_dir_path.join(consts::PYPROJECT_MANIFEST);
+                    let provenance = if pixi_toml_path.is_file() {
+                        Some(ManifestProvenance::new(pixi_toml_path, ManifestKind::Pixi))
+                    } else if pyproject_toml_path.is_file() {
+                        Some(ManifestProvenance::new(
+                            pyproject_toml_path,
+                            ManifestKind::Pyproject,
+                        ))
+                    } else {
+                        None
+                    };
+                    (
+                        manifest_dir_path.parent().map(SearchPath::Directory),
+                        provenance,
+                    )
+                }
+            };
 
-            // Check if a pixi.toml file exists in the current directory.
-            let pixi_toml_path = manifest_dir_path.join(consts::PROJECT_MANIFEST);
-            let pyproject_toml_path = manifest_dir_path.join(consts::PYPROJECT_MANIFEST);
-            let provenance = if pixi_toml_path.is_file() {
-                ManifestProvenance::new(pixi_toml_path, ManifestKind::Pixi)
-            } else if pyproject_toml_path.is_file() {
-                ManifestProvenance::new(pyproject_toml_path, ManifestKind::Pyproject)
-            } else {
-                // Continue the search
+            next_search_path = next;
+
+            let Some(provenance) = provenance else {
+                // If there is no manifest for the current search path, continue searching.
                 continue;
             };
 
@@ -224,13 +306,14 @@ impl WorkspaceDiscoverer {
 
             // Cheap check to see if the manifest contains a pixi section.
             if let ManifestSource::PyProjectToml(source) = &contents {
-                if !source.contains("[tool.pixi") {
+                if !source.contains("[tool.pixi") && !matches!(search_path, SearchPath::Explicit(_))
+                {
                     continue;
                 }
             }
 
-            let path_diff = pathdiff::diff_paths(&provenance.path, self.current_path.as_path())
-                .unwrap_or_else(|| manifest_dir_path.to_path_buf());
+            let path_diff = pathdiff::diff_paths(&provenance.path, root_dir)
+                .unwrap_or_else(|| provenance.path.clone());
             let file_name = path_diff.to_string_lossy();
             let source = contents.into_named(file_name);
 
@@ -421,9 +504,62 @@ mod test {
         let test_data_root =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery");
 
-        let snapshot = match WorkspaceDiscoverer::new(test_data_root.join(subdir))
-            .with_closest_package(true)
-            .discover()
+        let snapshot =
+            match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(test_data_root.join(subdir)))
+                .with_closest_package(true)
+                .discover()
+            {
+                Ok(None) => "Not found!".to_owned(),
+                Ok(Some(WithWarnings {
+                    value: discovered, ..
+                })) => {
+                    let rel_path =
+                        pathdiff::diff_paths(&discovered.workspace.provenance.path, test_data_root)
+                            .unwrap_or(discovered.workspace.provenance.path);
+
+                    let mut snapshot = String::new();
+                    writeln!(
+                        &mut snapshot,
+                        "Discovered workspace at: {}\n- Name: {}",
+                        rel_path.display().to_string().replace("\\", "/"),
+                        &discovered.workspace.value.workspace.name
+                    )
+                    .unwrap();
+
+                    if let Some(package) = &discovered.package {
+                        writeln!(
+                            &mut snapshot,
+                            "Package: {} @ {}",
+                            &package.value.package.name, &package.value.package.version,
+                        )
+                        .unwrap();
+                    }
+
+                    snapshot
+                }
+                Err(e) => format_diagnostic(&e),
+            };
+
+        insta::with_settings!({
+            snapshot_suffix => subdir.replace("/", "_"),
+        }, {
+            insta::assert_snapshot!(snapshot);
+        });
+    }
+
+    #[rstest]
+    #[case::root("")]
+    #[case::pixi("pixi.toml")]
+    #[case::package_specific("package_a/pixi.toml")]
+    fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
+        let test_data_root =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery");
+
+        let snapshot = match WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(
+            test_data_root.join(subdir),
+        ))
+        .with_closest_package(true)
+        .discover()
         {
             Ok(None) => "Not found!".to_owned(),
             Ok(Some(WithWarnings {
