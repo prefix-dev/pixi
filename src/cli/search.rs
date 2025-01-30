@@ -448,7 +448,7 @@ fn print_package_info<W: Write>(
     Ok(())
 }
 
-async fn search_package_by_wildcard<W: Write, QF, FR>(
+pub async fn search_package_by_wildcard<W: Write, QF, FR>(
     package_name: PackageName,
     package_name_filter: &str,
     all_package_names: Vec<PackageName>,
