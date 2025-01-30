@@ -1,6 +1,8 @@
-use std::{cell::OnceCell, path::Path, sync::Arc};
+use std::{path::Path, sync::Arc};
 
 use async_once_cell::OnceCell as AsyncCell;
+
+use once_cell::sync::OnceCell;
 
 use anyhow::Result;
 use std::collections::HashMap;
@@ -154,9 +156,9 @@ impl<'a> PixiBuildDispatch<'a> {
     }
 
     /// Lazy initialization of the `BuildDispatch`.
-    async fn initialize(&self) -> miette::Result<()> {
+    async fn initialize(&self) -> anyhow::Result<&BuildDispatch> {
         self.build_dispatch
-            .get_or_init(async {
+            .get_or_try_init(async {
                 tracing::debug!(
                     "installing conda prefix {} for solving the pypi sdist requirements",
                     self.prefix_task.group.name().as_str()
@@ -165,24 +167,25 @@ impl<'a> PixiBuildDispatch<'a> {
                     .prefix_task
                     .spawn(self.repodata_records.clone())
                     .await
-                    .unwrap();
+                    .map_err(|err| {
+                        anyhow::anyhow!(err).context("failed to install conda prefix")
+                    })?;
 
                 let python_path = prefix
                     .python_status
                     .location()
                     .map(|path| prefix.prefix.root().join(path))
                     .ok_or_else(|| {
-                        miette::miette!(
-                            help =
-                                "Use `pixi add python` to install the latest python interpreter.",
-                            "missing python interpreter from environment"
-                        )
-                    })
-                    .unwrap();
+                        anyhow::anyhow!(format!(
+                            "missing python interpreter from conda prefix {}. \n {}",
+                            prefix.prefix.root().display(),
+                            "Use `pixi add python` to install the latest python interpreter.",
+                        ))
+                    })?;
 
                 let interpreter = self
                     .interpreter
-                    .get_or_init(|| Interpreter::query(python_path, &self.cache).unwrap());
+                    .get_or_try_init(|| Interpreter::query(python_path, &self.cache))?;
 
                 let build_dispatch = BuildDispatch::new(
                     &self.params.client,
@@ -207,11 +210,9 @@ impl<'a> PixiBuildDispatch<'a> {
                 )
                 .with_build_extra_env_vars(self.params.env_variables.clone());
 
-                build_dispatch
+                Ok(build_dispatch)
             })
-            .await;
-
-        Ok(())
+            .await
     }
 }
 
@@ -267,13 +268,7 @@ impl<'a> BuildContext for PixiBuildDispatch<'a> {
     }
 
     async fn resolve<'data>(&'data self, requirements: &'data [Requirement]) -> Result<Resolution> {
-        self.initialize().await.unwrap();
-
-        self.build_dispatch
-            .get()
-            .expect("we already init it before")
-            .resolve(requirements)
-            .await
+        self.initialize().await?.resolve(requirements).await
     }
 
     async fn install<'data>(
@@ -281,13 +276,7 @@ impl<'a> BuildContext for PixiBuildDispatch<'a> {
         resolution: &'data Resolution,
         venv: &'data PythonEnvironment,
     ) -> Result<Vec<CachedDist>> {
-        self.initialize().await.unwrap();
-
-        self.build_dispatch
-            .get()
-            .expect("we already init it before")
-            .install(resolution, venv)
-            .await
+        self.initialize().await?.install(resolution, venv).await
     }
 
     async fn setup_build<'data>(
@@ -301,11 +290,8 @@ impl<'a> BuildContext for PixiBuildDispatch<'a> {
         build_kind: BuildKind,
         build_output: BuildOutput,
     ) -> Result<SourceBuild> {
-        self.initialize().await.unwrap();
-
-        self.build_dispatch
-            .get()
-            .expect("we already init it before")
+        self.initialize()
+            .await?
             .setup_build(
                 source,
                 subdirectory,

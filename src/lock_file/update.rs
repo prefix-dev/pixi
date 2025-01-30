@@ -27,9 +27,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{
-    Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform,
-};
+use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use reqwest_middleware::ClientWithMiddleware;
@@ -653,7 +651,6 @@ impl<'p> UpdateContext<'p> {
             (prefix.0.clone(), prefix.1.clone())
         })
     }
-
 }
 
 /// If the project has any source dependencies, like `git` or `path`
@@ -1324,7 +1321,6 @@ impl<'p> UpdateContext<'p> {
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
                 .get_latest_group_repodata_records(&group, platform)
-                // .expect("conda records should be available now or in the future");
                 .ok_or_else(|| {
                     make_unsupported_pypi_platform_error(environment, current_platform)
                 })?;

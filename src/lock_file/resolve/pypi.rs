@@ -1,5 +1,5 @@
 use std::{
-    cell::{OnceCell, RefCell},
+    cell::RefCell,
     collections::HashMap,
     iter::once,
     ops::Deref,
@@ -8,6 +8,8 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+
+use once_cell::sync::OnceCell;
 
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -340,29 +342,6 @@ pub async fn resolve_pypi<'p>(
         context.in_flight.clone(),
         context.capabilities.clone(),
     );
-
-    // let build_dispatch = BuildDispatch::new(
-    //     &registry_client,
-    //     &context.cache,
-    //     Constraints::default(),
-    //     &interpreter,
-    //     &index_locations,
-    //     &flat_index,
-    //     &dependency_metadata,
-    //     // TODO: could use this later to add static metadata
-    //     shared_state,
-    //     IndexStrategy::default(),
-    //     &config_settings,
-    //     build_isolation,
-    //     LinkMode::default(),
-    //     &context.build_options,
-    //     &context.hash_strategy,
-    //     None,
-    //     LowerBound::default(),
-    //     context.source_strategy,
-    //     context.concurrency,
-    // )
-    // .with_build_extra_env_vars(env_variables.iter());
 
     let first_state = UvBuildDispatchParams::new(
         &registry_client,
