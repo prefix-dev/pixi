@@ -1,9 +1,3 @@
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
-
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_utils::{is_binary_folder, strip_executable_extension};
@@ -12,6 +6,13 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
 };
+use std::sync::LazyLock;
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
+use uv_configuration::RAYON_INITIALIZE;
 
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]
@@ -48,6 +49,9 @@ impl Prefix {
     /// Scans the `conda-meta` directory of an environment and returns all the
     /// [`PrefixRecord`]s found in there.
     pub fn find_installed_packages(&self) -> miette::Result<Vec<PrefixRecord>> {
+        // Initialize rayon explicitly to avoid implicit initialization.
+        LazyLock::force(&RAYON_INITIALIZE);
+
         PrefixRecord::collect_from_prefix(&self.root).into_diagnostic()
     }
 

@@ -1,12 +1,12 @@
-use crate::{
-    build::{BuildReporter, SourceCheckoutReporter},
-    install_pypi,
-    lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
-    prefix::Prefix,
-    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
-    rlimit::try_increase_rlimit_to_sensible,
-    Project,
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    io::{self, ErrorKind},
+    path::{Path, PathBuf},
+    sync::{Arc, LazyLock},
+    time::Duration,
 };
+
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use fs_err as fs;
@@ -29,25 +29,23 @@ use rattler::{
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
 };
-use rattler_lock::LockedPackageRef;
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{LockedPackageRef, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    hash::{Hash, Hasher},
-    io::{self, ErrorKind},
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
 use tokio::sync::Semaphore;
-
-use crate::build::BuildContext;
+use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution_types::{InstalledDist, Name};
-
-use crate::lock_file::LockFileDerivedData;
 use xxhash_rust::xxh3::Xxh3;
+
+use crate::{
+    build::{BuildContext, BuildReporter, SourceCheckoutReporter},
+    install_pypi,
+    lock_file::{LockFileDerivedData, UpdateLockFileOptions, UpdateMode, UvResolutionContext},
+    prefix::Prefix,
+    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+    rlimit::try_increase_rlimit_to_sensible,
+    Project,
+};
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -224,14 +222,16 @@ pub(crate) struct EnvironmentFile {
     pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
 }
 
-/// The path to the environment file in the `conda-meta` directory of the environment.
+/// The path to the environment file in the `conda-meta` directory of the
+/// environment.
 fn environment_file_path(environment_dir: &Path) -> PathBuf {
     environment_dir
         .join(consts::CONDA_META_DIR)
         .join(consts::ENVIRONMENT_FILE_NAME)
 }
 /// Write information about the environment to a file in the environment
-/// directory. Used by the prefix updating to validate if it needs to be updated.
+/// directory. Used by the prefix updating to validate if it needs to be
+/// updated.
 pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
@@ -366,9 +366,10 @@ pub fn store_credentials_from_requirements(git_requirements: Vec<GitSpec>) {
     }
 }
 
-/// Extract any credentials that are defined on the project dependencies themselves.
-/// While we don't store plaintext credentials in the `pixi.lock`, we do respect credentials that are defined
-/// in the `pixi.toml` or `pyproject.toml`.
+/// Extract any credentials that are defined on the project dependencies
+/// themselves. While we don't store plaintext credentials in the `pixi.lock`,
+/// we do respect credentials that are defined in the `pixi.toml` or
+/// `pyproject.toml`.
 pub async fn store_credentials_from_project(project: &Project) -> miette::Result<()> {
     for env in project.environments() {
         let env_platforms = env.platforms();
@@ -717,7 +718,8 @@ impl CondaBuildProgress {
 }
 
 impl CondaBuildProgress {
-    /// Associate a progress bar with a build identifier, and get a build id back
+    /// Associate a progress bar with a build identifier, and get a build id
+    /// back
     pub fn associate(&self, identifier: &str) -> usize {
         let mut locked = self.build_progress.lock();
         let after = if locked.is_empty() {
@@ -826,6 +828,20 @@ pub async fn update_prefix_conda(
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
 
+    // HACK: The `Installer` created below, as well as some code in building
+    // packages from source will utilize rayon for parallelism. By using rayon
+    // it will implicitly initialize a global thread pool. However, uv
+    // has a mechanism to initialize rayon itself, which will crash if the global
+    // thread pool was already initialized. To prevent this, we force uv the
+    // initialize the rayon global thread pool, this ensures that any rayon code
+    // that is run will use the same thread pool.
+    //
+    // One downside of this approach is that perhaps it turns out that we won't need
+    // the thread pool at all (because no changes needed to happen for instance).
+    // There is a little bit of overhead when that happens, but I don't see another
+    // way around that.
+    LazyLock::force(&RAYON_INITIALIZE);
+
     let (mut repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
         .into_iter()
         .partition_map(|record| match record {
@@ -843,7 +859,8 @@ pub async fn update_prefix_conda(
         .map(Ok)
         .and_then(|record| {
             // If we don't have a progress reporter, create one
-            // This is done so that the progress bars are not displayed if there are no source packages
+            // This is done so that the progress bars are not displayed if there are no
+            // source packages
             let progress_reporter = progress_reporter
                 .get_or_insert_with(|| {
                     Arc::new(CondaBuildProgress::new(source_records_length as u64))

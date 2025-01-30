@@ -309,7 +309,7 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
     task: &'t ExecutableTask<'p>,
 }
 
-impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
+impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let command = self.task.task.as_single_command();
         write!(

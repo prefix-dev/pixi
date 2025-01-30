@@ -46,6 +46,9 @@ pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
 
+    #[error("platform(s) '{platforms}' present in the lock-file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", "))]
+    AdditionalPlatformsInLockFile(HashSet<Platform>),
+
     #[error(transparent)]
     IndexesMismatch(#[from] IndexesMismatch),
 
@@ -136,7 +139,7 @@ impl Display for SourceTreeHashMismatch {
 #[derive(Debug, Error, Diagnostic)]
 pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableMatchSpec(MatchSpec, String),
+    UnsatisfiableMatchSpec(Box<MatchSpec>, String),
 
     #[error("no package named exists '{0}' (required by '{1}')")]
     SourcePackageMissing(String, String),
@@ -428,6 +431,18 @@ pub fn verify_environment_satisfiability(
         .try_collect()?;
     if !channels.eq(&locked_channels) {
         return Err(EnvironmentUnsat::ChannelsMismatch);
+    }
+
+    let platforms = environment.platforms();
+    let locked_platforms = locked_environment.platforms().collect::<HashSet<_>>();
+    let additional_platforms = locked_platforms
+        .difference(&platforms)
+        .map(|p| p.to_owned())
+        .collect::<HashSet<_>>();
+    if !additional_platforms.is_empty() {
+        return Err(EnvironmentUnsat::AdditionalPlatformsInLockFile(
+            additional_platforms,
+        ));
     }
 
     // Do some more checks if we have pypi dependencies
@@ -1352,7 +1367,7 @@ fn find_matching_package(
                 None => {
                     // No records match the spec.
                     return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                        spec,
+                        Box::new(spec),
                         source.into_owned(),
                     )));
                 }
@@ -1369,7 +1384,7 @@ fn find_matching_package(
                     // The record does not match the spec, the lock-file is
                     // inconsistent.
                     return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                        spec,
+                        Box::new(spec),
                         source.into_owned(),
                     )));
                 }
@@ -1384,7 +1399,7 @@ fn find_matching_package(
                             // The record does not match the spec, the lock-file is
                             // inconsistent.
                             return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                                spec,
+                                Box::new(spec),
                                 source.into_owned(),
                             )));
                         }
@@ -1392,7 +1407,7 @@ fn find_matching_package(
                         // The record does not match the spec, the lock-file is
                         // inconsistent.
                         return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                            spec,
+                            Box::new(spec),
                             source.into_owned(),
                         )));
                     }

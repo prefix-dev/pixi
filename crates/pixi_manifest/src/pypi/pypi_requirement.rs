@@ -586,6 +586,40 @@ impl PyPiRequirement {
         )
     }
 
+    /// Returns the path of the requirement if it is a path requirement.
+    pub fn as_path(&self) -> Option<&PathBuf> {
+        match self {
+            PyPiRequirement::Path { path, .. } => Some(path),
+            _ => None,
+        }
+    }
+
+    /// Returns the git spec of the requirement if it is a git requirement.
+    pub fn as_git(&self) -> Option<&GitSpec> {
+        match self {
+            PyPiRequirement::Git { url, .. } => Some(url),
+            _ => None,
+        }
+    }
+
+    /// Returns the url of the requirement if it is a url requirement.
+    pub fn as_url(&self) -> Option<&Url> {
+        match self {
+            PyPiRequirement::Url { url, .. } => Some(url),
+            _ => None,
+        }
+    }
+
+    /// Returns the version of the requirement if it is a version requirement.
+    pub fn as_version(&self) -> Option<&VersionOrStar> {
+        match self {
+            PyPiRequirement::Version { version, .. } | PyPiRequirement::RawVersion(version) => {
+                Some(version)
+            }
+            _ => None,
+        }
+    }
+
     /// Define whether the requirement is editable.
     pub fn set_editable(&mut self, editable: bool) {
         match self {

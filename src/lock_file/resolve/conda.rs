@@ -69,6 +69,7 @@ pub async fn resolve_conda(
         let solved = resolvo::Solver.solve(task).into_diagnostic()?;
 
         Ok(solved
+            .records
             .into_iter()
             .map(|record| {
                 url_to_source_package.remove(&record.url).map_or_else(
