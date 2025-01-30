@@ -1,7 +1,3 @@
-use std::fmt::Debug;
-use std::future::Future;
-use std::path::PathBuf;
-
 use pixi_consts::consts::CACHED_BUILD_TOOL_ENVS_DIR;
 use pixi_progress::await_in_progress;
 use pixi_utils::{AsyncPrefixGuard, EnvironmentHash};
@@ -15,6 +11,9 @@ use rattler_shell::{
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use std::fmt::Debug;
+use std::future::Future;
+use std::path::PathBuf;
 
 use super::{
     cache::ToolCache, IsolatedTool, IsolatedToolSpec, SystemTool, Tool, ToolCacheError, ToolSpec,
