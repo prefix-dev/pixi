@@ -340,7 +340,7 @@ pixi task add --feature test test "pytest"
 So pixi has a task system to make it easy to run commands.
 Similar to `npm` scripts or something you would specify in a `Justfile`.
 
-??? tip "Pixi tasks"
+!!! tip "Pixi tasks"
     Tasks are a cool pixi feature that is powerful and runs in a cross-platform shell.
     You can do caching, dependencies and more.
     Read more about tasks in the [tasks](../features/advanced_tasks.md) section.
