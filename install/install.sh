@@ -36,11 +36,9 @@ fi
 if [[ $VERSION == "latest" ]]; then
   DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}"
 else
-  # Check if version is incorrectly specified without prefix 'v'
+  # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
   if [[ ! "$VERSION" =~ ^v ]]; then
-    ORIGINAL_VERSION="$VERSION"
     VERSION="v$VERSION"
-    echo "You specified pixi version $ORIGINAL_VERSION, but version numbers need format v0.0.0, using version $VERSION"
   fi
   DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.${EXTENSION}"
 fi
