@@ -36,6 +36,10 @@ fi
 if [[ $VERSION == "latest" ]]; then
   DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}"
 else
+  # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
+  if [[ ! "$VERSION" =~ ^v ]]; then
+    VERSION="v$VERSION"
+  fi
   DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.${EXTENSION}"
 fi
 
