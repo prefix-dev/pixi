@@ -8,6 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::lock_file::CondaPrefixUpdater;
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
@@ -37,8 +38,8 @@ use tracing::Instrument;
 use uv_normalize::ExtraName;
 
 use super::{
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit, PixiRecordsByName,
-    PypiRecordsByName, UvResolutionContext,
+    conda_prefix_updater::CondaPrefixUpdated, outdated::OutdatedEnvironments,
+    utils::IoConcurrencyLimit, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
@@ -294,6 +295,7 @@ impl<'p> LockFileDerivedData<'p> {
             .no_build
             .clone()
             .unwrap_or_default();
+
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -637,20 +639,6 @@ impl<'p> UpdateContext<'p> {
             })
             .collect()
     }
-
-    /// Returns a future that will resolve to the solved repodata records for
-    /// the given environment or `None` if no task was spawned to
-    /// instantiate the prefix.
-    pub(crate) fn get_conda_prefix(
-        &self,
-        environment: &GroupedEnvironment<'p>,
-    ) -> Option<impl Future<Output = (Prefix, PythonStatus)>> {
-        let cell = self.instantiated_conda_prefixes.get(environment)?.clone();
-        Some(async move {
-            let prefix = cell.wait().await;
-            (prefix.0.clone(), prefix.1.clone())
-        })
-    }
 }
 
 /// If the project has any source dependencies, like `git` or `path`
@@ -755,124 +743,6 @@ pub async fn update_lock_file(
     lock_file_derived_data.write_to_disk()?;
 
     Ok(lock_file_derived_data)
-}
-
-#[derive(Clone)]
-/// A task that updates the prefix for a given environment.
-pub struct PrefixTask<'a> {
-    pub group: GroupedEnvironment<'a>,
-    pub package_cache: PackageCache,
-    pub io_concurrency_limit: IoConcurrencyLimit,
-    pub build_context: BuildContext,
-    pub no_install: bool,
-}
-
-impl<'a> PrefixTask<'a> {
-    /// Creates a new prefix task.
-    pub fn new(
-        group: GroupedEnvironment<'a>,
-        package_cache: PackageCache,
-        io_concurrency_limit: IoConcurrencyLimit,
-        build_context: BuildContext,
-        no_install: bool,
-    ) -> Self {
-        Self {
-            group,
-            package_cache,
-            io_concurrency_limit,
-            build_context,
-            no_install,
-        }
-    }
-
-    /// Spawns a task to update the prefix for the given environment.
-    pub async fn spawn(
-        &self,
-        records: Arc<PixiRecordsByName>,
-    ) -> miette::Result<CondaPrefixUpdated> {
-        if self.no_install {
-            miette::bail!("Cannot update pypi dependencies without first installing a conda prefix that includes python.");
-        }
-
-        tracing::debug!(
-            "spawning prefix task for '{}'",
-            self.group.name().fancy_display()
-        );
-        let group_name = self.group.name().clone();
-        let prefix = self.group.prefix();
-        let client = self.group.project().authenticated_client().clone();
-        let channels = self
-            .group
-            .channel_urls(&self.group.project().channel_config())
-            .into_diagnostic()?;
-
-        // Spawn a task to determine the currently installed packages.
-        let installed_packages_future = tokio::spawn({
-            let prefix = prefix.clone();
-            async move { prefix.find_installed_packages() }
-        })
-        .unwrap_or_else(|e| match e.try_into_panic() {
-            Ok(panic) => std::panic::resume_unwind(panic),
-            Err(_err) => Err(miette::miette!("the operation was cancelled")),
-        });
-
-        // Wait until the conda records are available and until the installed packages
-        // for this prefix are available.
-        let installed_packages = installed_packages_future.await?;
-
-        let build_virtual_packages = self.group.virtual_packages(Platform::current());
-
-        // Spawn a background task to update the prefix
-        let (python_status, duration) = tokio::spawn({
-            let prefix = prefix.clone();
-            let concurrency_limit: Arc<Semaphore> = self.io_concurrency_limit.clone().into();
-            let package_cache = self.package_cache.clone();
-            let build_context = self.build_context.clone();
-
-            let group_name = group_name.clone();
-            async move {
-                let start = Instant::now();
-                let has_existing_packages = !installed_packages.is_empty();
-                let python_status = environment::update_prefix_conda(
-                    &prefix,
-                    package_cache,
-                    client,
-                    installed_packages,
-                    records.records.clone(),
-                    build_virtual_packages,
-                    channels,
-                    Platform::current(),
-                    &format!(
-                        "{} python environment to solve pypi packages for '{}'",
-                        if has_existing_packages {
-                            "updating"
-                        } else {
-                            "creating"
-                        },
-                        group_name.fancy_display()
-                    ),
-                    "  ",
-                    concurrency_limit,
-                    build_context,
-                )
-                .await?;
-                let end = Instant::now();
-                Ok((python_status, end - start))
-            }
-        })
-        .await
-        .unwrap_or_else(|e| match e.try_into_panic() {
-            Ok(panic) => std::panic::resume_unwind(panic),
-            Err(_err) => Err(miette::miette!("the operation was cancelled")),
-        })?;
-
-        Ok(CondaPrefixUpdated {
-            group: group_name,
-            prefix,
-            python_status: Box::new(python_status),
-            duration,
-        })
-    }
 }
 
 pub struct UpdateContextBuilder<'p> {
@@ -1325,7 +1195,8 @@ impl<'p> UpdateContext<'p> {
                     make_unsupported_pypi_platform_error(environment, current_platform)
                 })?;
 
-            let prefix_task = PrefixTask::new(
+            // Creates an object to initiate an update at a later point
+            let conda_prefix_updater = CondaPrefixUpdater::new(
                 group.clone(),
                 self.package_cache.clone(),
                 self.io_concurrency_limit.clone(),
@@ -1354,7 +1225,7 @@ impl<'p> UpdateContext<'p> {
                 group.clone(),
                 platform,
                 repodata_future,
-                prefix_task,
+                conda_prefix_updater,
                 env_variables,
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
@@ -1725,13 +1596,6 @@ fn make_unsupported_pypi_platform_error(
     } else {
         reporter
     }
-}
-
-pub struct CondaPrefixUpdated {
-    pub group: GroupedEnvironmentName,
-    pub prefix: Prefix,
-    pub python_status: Box<PythonStatus>,
-    pub duration: Duration,
 }
 
 /// Represents data that is sent back from a task. This is used to communicate
@@ -2212,7 +2076,7 @@ async fn spawn_solve_pypi_task<'p>(
     environment: GroupedEnvironment<'p>,
     platform: Platform,
     repodata_records: impl Future<Output = Arc<PixiRecordsByName>>,
-    prefix_task: PrefixTask<'p>,
+    prefix_task: CondaPrefixUpdater<'p>,
     env_variables: &HashMap<String, String>,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
@@ -2319,105 +2183,3 @@ async fn spawn_solve_pypi_task<'p>(
         prefix_task_result,
     ))
 }
-
-// /// Updates the prefix for the given environment.
-// ///
-// /// This function will wait until the conda records for the prefix are
-// /// available.
-// async fn spawn_create_prefix_task(
-//     group: GroupedEnvironment<'_>,
-//     package_cache: PackageCache,
-//     pixi_records: impl Future<Output = Arc<PixiRecordsByName>>,
-//     subset_packages: Option<Vec<PackageName>>,
-//     io_concurrency_limit: IoConcurrencyLimit,
-//     build_context: BuildContext,
-// ) -> miette::Result<TaskResult> {
-//     let group_name = group.name().clone();
-//     let prefix = group.prefix();
-//     let client = group.project().authenticated_client().clone();
-//     let channels = group
-//         .channel_urls(&group.project().channel_config())
-//         .into_diagnostic()?;
-
-//     // Spawn a task to determine the currently installed packages.
-//     let installed_packages_future = tokio::spawn({
-//         let prefix = prefix.clone();
-//         async move { prefix.find_installed_packages() }
-//     })
-//     .unwrap_or_else(|e| match e.try_into_panic() {
-//         Ok(panic) => std::panic::resume_unwind(panic),
-//         Err(_err) => Err(miette::miette!("the operation was cancelled")),
-//     });
-
-//     // Wait until the conda records are available and until the installed packages
-//     // for this prefix are available.
-//     let (pixi_records, installed_packages) =
-//         tokio::try_join!(pixi_records.map(Ok), installed_packages_future)?;
-
-//     // filter out that subset of records we need to install
-//     let (pixi_records, status) = if let Some(ref subset_packages) = subset_packages {
-//         let subset_records = filter_pixi_records(pixi_records.clone(), subset_packages);
-//         let subset_records = PixiRecordsByName::from_iter(subset_records.iter().cloned());
-//         (
-//             Arc::new(subset_records.clone()),
-//             PartialPrefixStatus::Partial(subset_records.records),
-//         )
-//     } else {
-//         (pixi_records, PartialPrefixStatus::Full)
-//     };
-
-//     let build_virtual_packages = group.virtual_packages(Platform::current());
-
-//     // Spawn a background task to update the prefix
-//     let (python_status, duration) = tokio::spawn({
-//         let prefix = prefix.clone();
-//         let group_name = group_name.clone();
-//         async move {
-//             let start = Instant::now();
-//             let has_existing_packages = !installed_packages.is_empty();
-//             let python_status = environment::update_prefix_conda(
-//                 &prefix,
-//                 package_cache,
-//                 client,
-//                 installed_packages,
-//                 pixi_records.records.clone(),
-//                 build_virtual_packages,
-//                 channels,
-//                 Platform::current(),
-//                 &format!(
-//                     "{} {} python environment to solve pypi packages for '{}'",
-//                     if has_existing_packages {
-//                         "updating"
-//                     } else {
-//                         "creating"
-//                     },
-//                     if subset_packages.is_some() {
-//                         "partial"
-//                     } else {
-//                         ""
-//                     },
-//                     group_name.fancy_display()
-//                 ),
-//                 "  ",
-//                 io_concurrency_limit.into(),
-//                 build_context,
-//             )
-//             .await?;
-//             let end = Instant::now();
-//             Ok((python_status, end - start))
-//         }
-//     })
-//     .await
-//     .unwrap_or_else(|e| match e.try_into_panic() {
-//         Ok(panic) => std::panic::resume_unwind(panic),
-//         Err(_err) => Err(miette::miette!("the operation was cancelled")),
-//     })?;
-
-//     Ok(TaskResult::CondaPrefixUpdated(
-//         group_name,
-//         prefix,
-//         Box::new(python_status),
-//         duration,
-//         status,
-//     ))
-// }

@@ -22,10 +22,7 @@ use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildContext, BuildIsolation, HashStrategy};
 
-use super::{
-    update::{CondaPrefixUpdated, PrefixTask},
-    PixiRecordsByName,
-};
+use super::{conda_prefix_updater::CondaPrefixUpdated, CondaPrefixUpdater, PixiRecordsByName};
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
 pub struct UvBuildDispatchParams<'a> {
@@ -96,7 +93,7 @@ impl<'a> UvBuildDispatchParams<'a> {
 /// Something that implements the `BuildContext` trait.
 pub struct PixiBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
-    pub prefix_task: PrefixTask<'a>,
+    pub prefix_task: CondaPrefixUpdater<'a>,
     pub repodata_records: Arc<PixiRecordsByName>,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
@@ -123,7 +120,7 @@ impl<'a> PixiBuildDispatch<'a> {
     /// Create a new `PixiBuildDispatch` instance.
     pub fn new(
         params: UvBuildDispatchParams<'a>,
-        prefix_task: PrefixTask<'a>,
+        prefix_task: CondaPrefixUpdater<'a>,
         repodata_records: Arc<PixiRecordsByName>,
         interpreter: &'a OnceCell<Interpreter>,
         cache: &'a uv_cache::Cache,
@@ -165,7 +162,7 @@ impl<'a> PixiBuildDispatch<'a> {
                 );
                 let prefix = self
                     .prefix_task
-                    .spawn(self.repodata_records.clone())
+                    .update(self.repodata_records.clone())
                     .await
                     .map_err(|err| {
                         anyhow::anyhow!(err).context("failed to install conda prefix")

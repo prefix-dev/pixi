@@ -53,11 +53,11 @@ use uv_types::EmptyInstalledPackages;
 use crate::{
     lock_file::{
         build_dispatch::{PixiBuildDispatch, UvBuildDispatchParams},
+        conda_prefix_updater::CondaPrefixUpdated,
         records_by_name::HasNameVersion,
         resolve::resolver_provider::CondaResolverProvider,
-        update::{CondaPrefixUpdated, PrefixTask},
-        LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier, PypiRecord,
-        UvResolutionContext,
+        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
+        PypiRecord, UvResolutionContext,
     },
     uv_reporter::{UvReporter, UvReporterOptions},
 };
@@ -171,7 +171,7 @@ pub async fn resolve_pypi<'p>(
     pb: &ProgressBar,
     env_variables: &HashMap<String, String>,
     project_root: &Path,
-    prefix_task: PrefixTask<'p>,
+    prefix_task: CondaPrefixUpdater<'p>,
     repodata_records: Arc<PixiRecordsByName>,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages

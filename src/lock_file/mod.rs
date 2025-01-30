@@ -1,4 +1,5 @@
 mod build_dispatch;
+mod conda_prefix_updater;
 mod outdated;
 mod package_identifier;
 mod records_by_name;
@@ -9,6 +10,7 @@ mod update;
 mod utils;
 
 use crate::Project;
+pub use conda_prefix_updater::CondaPrefixUpdater;
 use miette::{IntoDiagnostic, WrapErr};
 pub(crate) use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
