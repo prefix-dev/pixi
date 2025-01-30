@@ -30,6 +30,7 @@ use rattler_conda_types::{
 use rattler_digest::Sha256;
 use reporters::SourceReporter;
 pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
+use std::sync::LazyLock;
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -43,6 +44,7 @@ use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
+use uv_configuration::RAYON_INITIALIZE;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::build::cache::{
@@ -282,6 +284,9 @@ impl BuildContext {
                 return Ok(record);
             }
         }
+
+        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
+        LazyLock::force(&RAYON_INITIALIZE);
 
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
@@ -634,6 +639,9 @@ impl BuildContext {
                 ));
             }
         }
+
+        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
+        LazyLock::force(&RAYON_INITIALIZE);
 
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
