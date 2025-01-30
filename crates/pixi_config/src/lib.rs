@@ -280,7 +280,7 @@ pub struct PyPIConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub struct S3Config {
+pub struct S3Options {
     /// S3 endpoint URL
     pub endpoint_url: Url,
 
@@ -613,8 +613,8 @@ pub struct Config {
 
     /// Configuration for S3.
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub s3_config: Option<S3Config>,
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub s3_options: HashMap<String, S3Options>,
 
     /// The option to specify the directory where detached environments are
     /// stored. When using 'true', it defaults to the cache directory.
@@ -652,7 +652,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
-            s3_config: None,
+            s3_options: HashMap::new(),
             detached_environments: None,
             pinning_strategy: None,
             force_activate: None,
@@ -940,10 +940,11 @@ impl Config {
             "pypi-config.index-url",
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
-            "s3-config",
-            "s3-config.endpoint-url",
-            "s3-config.region",
-            "s3-config.force-path-style",
+            "s3-options",
+            // TODO: hashmap
+            // "s3-options.endpoint-url",
+            // "s3-options.region",
+            // "s3-options.force-path-style",
             "experimental.use-environment-activation-cache",
         ]
     }
@@ -973,7 +974,14 @@ impl Config {
             channel_config: other.channel_config,
             repodata_config: self.repodata_config.merge(other.repodata_config),
             pypi_config: self.pypi_config.merge(other.pypi_config),
-            s3_config: other.s3_config.or(self.s3_config),
+            s3_options: {
+                let mut merged = HashMap::new();
+                merged.extend(self.s3_options);
+                merged.extend(other.s3_options);
+
+                merged.clone();
+                merged
+            },
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
@@ -1023,10 +1031,6 @@ impl Config {
 
     pub fn pypi_config(&self) -> &PyPIConfig {
         &self.pypi_config
-    }
-
-    pub fn s3_config(&self) -> &Option<S3Config> {
-        &self.s3_config
     }
 
     pub fn mirror_map(&self) -> &std::collections::HashMap<Url, Vec<Url>> {
@@ -1179,48 +1183,52 @@ impl Config {
                     _ => return Err(err),
                 }
             }
-            key if key.starts_with("s3-config") => {
-                if key == "s3-config" {
+            key if key.starts_with("s3-options") => {
+                if key == "s3-options" {
                     if let Some(value) = value {
-                        self.s3_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.s3_options = serde_json::de::from_str(&value).into_diagnostic()?;
                     } else {
-                        return Err(miette!("s3-config requires a value"));
+                        return Err(miette!("s3-options requires a value"));
                     }
                     return Ok(());
                 }
-                let Some(subkey) = key.strip_prefix("s3-config.") else {
+                let Some(subkey) = key.strip_prefix("s3-options.") else {
                     return Err(err);
                 };
-                if let Some(ref mut config) = self.s3_config {
-                    match subkey {
-                        "endpoint-url" => {
-                            if let Some(value) = value {
-                                config.endpoint_url = Url::parse(&value).into_diagnostic()?;
-                            } else {
-                                return Err(miette!("s3-config.endpoint-url requires a value"));
-                            }
-                        }
-                        "region" => {
-                            if let Some(value) = value {
-                                config.region = value;
-                            } else {
-                                return Err(miette!("s3-config.region requires a value"));
-                            }
-                        }
-                        "force-path-style" => {
-                            if let Some(value) = value {
-                                config.force_path_style = value.parse().into_diagnostic()?;
-                            } else {
-                                return Err(miette!("s3-config.force-path-style requires a value"));
-                            }
-                        }
-                        _ => return Err(err),
-                    }
-                } else {
-                    return Err(miette!(
-                        "Cannot set s3-config subkeys without s3-config being present"
-                    ));
+                let (bucket, rest) = subkey.split_once('.').ok_or(err)?;
+                // if let Some(ref mut config) = self.s3_config {
+                if let Some(ref mut bucket_config) = self.s3_options.get(bucket) {
+                    todo!();
+                    // match subkey {
+                    //     "endpoint-url" => {
+                    //         if let Some(value) = value {
+                    //             bucket_config.endpoint_url = Url::parse(&value).into_diagnostic()?;
+                    //         } else {
+                    //             return Err(miette!("s3-config.endpoint-url requires a value"));
+                    //         }
+                    //     }
+                    //     "region" => {
+                    //         if let Some(value) = value {
+                    //             bucket_config.region = value;
+                    //         } else {
+                    //             return Err(miette!("s3-config.region requires a value"));
+                    //         }
+                    //     }
+                    //     "force-path-style" => {
+                    //         if let Some(value) = value {
+                    //             bucket_config.force_path_style = value.parse().into_diagnostic()?;
+                    //         } else {
+                    //             return Err(miette!("s3-config.force-path-style requires a value"));
+                    //         }
+                    //     }
+                    //     _ => return Err(err),
+                    // }
                 }
+                // } else {
+                //     return Err(miette!(
+                //         "Cannot set s3-config subkeys without s3-config being present"
+                //     ));
+                // }
             }
             key if key.starts_with(EXPERIMENTAL) => {
                 if key == EXPERIMENTAL {
@@ -1315,15 +1323,29 @@ impl Config {
             .finish()
     }
 
-    pub fn compute_s3_config(&self) -> s3_middleware::S3Config {
-        match self.s3_config.clone() {
-            Some(config) => s3_middleware::S3Config::Custom {
-                endpoint_url: config.endpoint_url,
-                region: config.region,
-                force_path_style: config.force_path_style,
-            },
-            None => s3_middleware::S3Config::FromAWS,
-        }
+    pub fn compute_s3_config(&self) -> HashMap<String, s3_middleware::S3Config> {
+        self.s3_options
+            .clone()
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    s3_middleware::S3Config::Custom {
+                        endpoint_url: v.endpoint_url.clone(),
+                        region: v.region.clone(),
+                        force_path_style: v.force_path_style,
+                    },
+                )
+            })
+            .collect()
+        // match self.s3_config.clone() {
+        //     Some(config) => s3_middleware::S3Config::Custom {
+        //         endpoint_url: config.endpoint_url,
+        //         region: config.region,
+        //         force_path_style: config.force_path_style,
+        //     },
+        //     None => s3_middleware::S3Config::FromAWS,
+        // }
     }
 }
 
@@ -1477,25 +1499,25 @@ UNUSED = "unused"
     #[test]
     fn test_s3_config_parse() {
         let toml = r#"
-            [s3-config]
+            [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
             region = "us-east-1"
             force-path-style = false
         "#;
         let (config, _) = Config::from_toml(toml).unwrap();
-        let s3_config = config.s3_config.unwrap();
+        let s3_config = config.s3_options;
         assert_eq!(
-            s3_config.endpoint_url,
+            s3_config["bucket1"].endpoint_url,
             Url::parse("https://my-s3-host").unwrap()
         );
-        assert_eq!(s3_config.region, "us-east-1");
-        assert!(!s3_config.force_path_style);
+        assert_eq!(s3_config["bucket1"].region, "us-east-1");
+        assert!(!s3_config["bucket1"].force_path_style);
     }
 
     #[test]
     fn test_s3_config_invalid_config() {
         let toml = r#"
-            [s3-config]
+            [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
             region = "us-east-1"
             # force-path-style = false
@@ -1550,11 +1572,14 @@ UNUSED = "unused"
                 index_url: Some(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
                 keyring_provider: Some(KeyringProvider::Subprocess),
             },
-            s3_config: Some(S3Config {
-                endpoint_url: Url::parse("https://my-s3-host").unwrap(),
-                region: "us-east-1".to_string(),
-                force_path_style: false,
-            }),
+            s3_options: HashMap::from([(
+                "bucket1".into(),
+                S3Options {
+                    endpoint_url: Url::parse("https://my-s3-host").unwrap(),
+                    region: "us-east-1".to_string(),
+                    force_path_style: false,
+                },
+            )]),
             repodata_config: RepodataConfig {
                 default: RepodataChannelConfig {
                     disable_bzip2: Some(true),
@@ -1584,11 +1609,24 @@ UNUSED = "unused"
                 solves: 5,
                 ..ConcurrencyConfig::default()
             },
-            s3_config: Some(S3Config {
-                endpoint_url: Url::parse("https://my-s3-host").unwrap(),
-                region: "us-east-1".to_string(),
-                force_path_style: false,
-            }),
+            s3_options: HashMap::from([
+                (
+                    "bucket1".into(),
+                    S3Options {
+                        endpoint_url: Url::parse("https://my-s3-host").unwrap(),
+                        region: "us-east-1".to_string(),
+                        force_path_style: false,
+                    },
+                ),
+                (
+                    "bucket2".into(),
+                    S3Options {
+                        endpoint_url: Url::parse("https://my-s3-host").unwrap(),
+                        region: "us-east-1".to_string(),
+                        force_path_style: false,
+                    },
+                ),
+            ]),
             ..Default::default()
         };
         config = config.merge_config(other);
@@ -1601,7 +1639,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
-        assert!(config.s3_config.is_some());
+        assert!(config.s3_options.contains_key("bucket1"));
 
         let other2 = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("channel").unwrap()],
@@ -1610,6 +1648,14 @@ UNUSED = "unused"
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from(
                 "/path/to/envs2",
             ))),
+            s3_options: HashMap::from([(
+                "bucket2".into(),
+                S3Options {
+                    endpoint_url: Url::parse("https://my-new-s3-host").unwrap(),
+                    region: "us-east-1".to_string(),
+                    force_path_style: false,
+                },
+            )]),
             ..Default::default()
         };
 
@@ -1624,7 +1670,12 @@ UNUSED = "unused"
             Some(PathBuf::from("/path/to/envs2"))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
-        assert!(config.s3_config.is_some());
+        assert!(config.s3_options.contains_key("bucket1"));
+        assert!(config.s3_options.contains_key("bucket2"));
+        assert!(config.s3_options["bucket2"]
+            .endpoint_url
+            .to_string()
+            .contains("my-new-s3-host"));
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -1640,6 +1691,13 @@ UNUSED = "unused"
 
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);
+
+        assert!(merged.s3_options.contains_key("bucket1"));
+        assert!(merged.s3_options.contains_key("bucket2"));
+        assert!(merged.s3_options["bucket2"]
+            .endpoint_url
+            .to_string()
+            .contains("my-new-s3-host"));
 
         let debug = format!("{:#?}", merged);
         let debug = debug.replace("\\\\", "/");

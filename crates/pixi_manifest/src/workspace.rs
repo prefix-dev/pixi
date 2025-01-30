@@ -61,7 +61,7 @@ pub struct Workspace {
     pub pypi_options: Option<PypiOptions>,
 
     /// The S3 options supported in the project
-    pub s3_options: Option<S3Options>,
+    pub s3_options: Option<HashMap<String, S3Options>>,
 
     /// Preview features
     pub preview: Preview,

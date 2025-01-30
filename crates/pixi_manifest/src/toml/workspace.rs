@@ -40,7 +40,7 @@ pub struct TomlWorkspace {
     pub documentation: Option<Url>,
     pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
     pub pypi_options: Option<PypiOptions>,
-    pub s3_options: Option<S3Options>,
+    pub s3_options: Option<HashMap<String, S3Options>>,
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
@@ -142,7 +142,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlHashMap<_, _>>("conda-pypi-map")
             .map(TomlHashMap::into_inner);
         let pypi_options = th.optional("pypi-options");
-        let s3_options = th.optional("s3-options");
+        let s3_options = th
+            .optional::<TomlHashMap<_, _>>("s3-options")
+            .map(TomlHashMap::into_inner);
         let preview = th.optional("preview").unwrap_or_default();
         let target = th
             .optional::<TomlIndexMap<_, _>>("target")

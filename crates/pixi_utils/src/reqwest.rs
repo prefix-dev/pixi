@@ -1,12 +1,11 @@
-use std::{sync::Arc, time::Duration};
 use std::{any::Any, path::PathBuf, sync::Arc, time::Duration};
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use rattler_networking::{
-    authentication_storage::backends::file::FileStorageError, mirror_middleware::Mirror,
-    retry_policies::ExponentialBackoff, AuthenticationMiddleware, AuthenticationStorage,
-    GCSMiddleware, MirrorMiddleware, OciMiddleware, S3Middleware,
+    authentication_storage, authentication_storage::backends::file::FileStorageError,
+    mirror_middleware::Mirror, retry_policies::ExponentialBackoff, AuthenticationMiddleware,
+    AuthenticationStorage, GCSMiddleware, MirrorMiddleware, OciMiddleware, S3Middleware,
 };
 
 use reqwest::Client;
@@ -98,7 +97,7 @@ pub fn oci_middleware() -> OciMiddleware {
 
 pub fn build_reqwest_clients(
     config: Option<&Config>,
-    s3_config: Option<rattler_networking::s3_middleware::S3Config>,
+    s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
 ) -> miette::Result<(Client, ClientWithMiddleware)> {
     let app_user_agent = format!("pixi/{}", consts::PIXI_VERSION);
 
@@ -133,13 +132,21 @@ pub fn build_reqwest_clients(
 
     client_builder = client_builder.with(GCSMiddleware);
 
+    let s3_config_global = config.compute_s3_config();
+    let s3_config_project = s3_config_project.unwrap_or_default();
+    // s3_config_project takes precedence over s3_config_global (merged)
+    let mut s3_config = HashMap::new();
+    s3_config.extend(s3_config_global);
+    s3_config.extend(s3_config_project);
+
     debug!("Using s3_config: {:?}", s3_config);
-    let store = auth_storage().into_diagnostic()?;
-    let s3_middleware = if let Some(s3_config) = s3_config {
-        S3Middleware::new(s3_config, store)
-    } else {
-        S3Middleware::new(config.compute_s3_config(), store)
-    };
+    let store = auth_store(&config).into_diagnostic()?;
+    let s3_middleware = S3Middleware::new(s3_config, store);
+    // let s3_middleware = if let Some(s3_config) = s3_config {
+    //     S3Middleware::new(s3_config, store)
+    // } else {
+    //     S3Middleware::new(config.compute_s3_config(), store)
+    // };
     debug!("s3_middleware: {:?}", s3_middleware);
     client_builder = client_builder.with(s3_middleware);
 

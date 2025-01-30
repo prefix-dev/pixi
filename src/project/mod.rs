@@ -142,7 +142,7 @@ pub struct Project {
     /// The global configuration as loaded from the config file(s)
     config: Config,
     /// The S3 configuration
-    s3_config: s3_middleware::S3Config,
+    s3_config: HashMap<String, s3_middleware::S3Config>,
 }
 
 impl Debug for Project {
@@ -202,14 +202,20 @@ impl Project {
 
         let s3_options = manifest.workspace.workspace.s3_options.clone();
 
-        let s3_config = match s3_options {
-            Some(s3_options) => s3_middleware::S3Config::Custom {
-                endpoint_url: s3_options.endpoint_url,
-                region: s3_options.region,
-                force_path_style: s3_options.force_path_style,
-            },
-            None => s3_middleware::S3Config::FromAWS,
-        };
+        let s3_config = s3_options
+            .unwrap_or_default()
+            .iter()
+            .map(|(key, value)| {
+                (
+                    key.clone(),
+                    s3_middleware::S3Config::Custom {
+                        endpoint_url: value.endpoint_url.clone(),
+                        region: value.region.clone(),
+                        force_path_style: value.force_path_style,
+                    },
+                )
+            })
+            .collect::<HashMap<String, s3_middleware::S3Config>>();
 
         let root = manifest
             .path

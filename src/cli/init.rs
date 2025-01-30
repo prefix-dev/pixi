@@ -1,5 +1,6 @@
 use std::{
     cmp::PartialEq,
+    collections::HashMap,
     fs,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
@@ -283,7 +284,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &platforms,
             None,
             &vec![],
-            config.s3_config,
+            config.s3_options,
         );
         let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
         let channel_config = project.channel_config();
@@ -382,7 +383,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         channels,
                         platforms,
                         environments,
-                        s3 => config.s3_config,
+                        s3 => config.s3_options,
                     },
                 )
                 .expect("should be able to render the template");
@@ -438,7 +439,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         platforms,
                         index_url => index_url.as_ref(),
                         extra_index_urls => &extra_index_urls,
-                        s3 => config.s3_config,
+                        s3 => config.s3_options,
                     },
                 )
                 .expect("should be able to render the template");
@@ -484,7 +485,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &platforms,
                 index_url.as_ref(),
                 &extra_index_urls,
-                config.s3_config,
+                config.s3_options,
             );
             save_manifest_file(&pixi_manifest_path, rv)?;
         };
@@ -523,7 +524,7 @@ fn render_project(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
-    s3_config: Option<pixi_config::S3Config>,
+    s3_config: HashMap<String, pixi_config::S3Options>,
 ) -> String {
     env.render_named_str(
         consts::PROJECT_MANIFEST,
