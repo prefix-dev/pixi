@@ -483,8 +483,6 @@ pub struct UpdateContext<'p> {
     /// updated.
     instantiated_conda_prefixes: PerGroup<'p, Arc<BarrierCell<(Prefix, PythonStatus)>>>,
 
-    instantiated_conda_task: PerGroup<'p, Arc<PrefixTask<'p>>>,
-
     /// Keeps track of all pending conda targets that are being solved. The
     /// mapping contains a [`BarrierCell`] that will eventually contain the
     /// solved records computed by another task. This allows tasks to wait
@@ -656,16 +654,6 @@ impl<'p> UpdateContext<'p> {
         })
     }
 
-    /// Returns a future that will resolve to the solved repodata records for
-    /// the given environment or `None` if no task was spawned to
-    /// instantiate the prefix.
-    pub(crate) fn get_conda_task(
-        &self,
-        environment: &GroupedEnvironment<'p>,
-    ) -> Option<Arc<PrefixTask<'p>>> {
-        let cell = self.instantiated_conda_task.get(environment)?.clone();
-        Some(cell)
-    }
 }
 
 /// If the project has any source dependencies, like `git` or `path`
@@ -1173,7 +1161,6 @@ impl<'p> UpdateContextBuilder<'p> {
             solved_pypi_records: HashMap::new(),
             grouped_solved_repodata_records: HashMap::new(),
             grouped_solved_pypi_records: HashMap::new(),
-            instantiated_conda_task: HashMap::new(),
 
             package_cache,
             conda_solve_semaphore: Arc::new(Semaphore::new(self.max_concurrent_solves)),
