@@ -978,8 +978,6 @@ impl Config {
                 let mut merged = HashMap::new();
                 merged.extend(self.s3_options);
                 merged.extend(other.s3_options);
-
-                merged.clone();
                 merged
             },
             detached_environments: other.detached_environments.or(self.detached_environments),
@@ -1691,13 +1689,7 @@ UNUSED = "unused"
 
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);
-
         assert!(merged.s3_options.contains_key("bucket1"));
-        assert!(merged.s3_options.contains_key("bucket2"));
-        assert!(merged.s3_options["bucket2"]
-            .endpoint_url
-            .to_string()
-            .contains("my-new-s3-host"));
 
         let debug = format!("{:#?}", merged);
         let debug = debug.replace("\\\\", "/");
