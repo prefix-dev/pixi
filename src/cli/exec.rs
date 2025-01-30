@@ -200,7 +200,7 @@ pub async fn create_exec_prefix(
         .with_package_cache(PackageCache::new(
             cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
         ))
-        .install(prefix.root(), solved_records)
+        .install(prefix.root(), solved_records.records)
         .await
         .into_diagnostic()
         .context("failed to create environment")?;

@@ -40,8 +40,7 @@ pub enum SourceMetadataError {
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout.
 pub struct SourceMetadataInput {
-    /// TODO: I think this should also include the build backend used! Maybe?
-
+    // TODO: I think this should also include the build backend used! Maybe?
     /// The URL of the source.
     pub channel_urls: Vec<Url>,
 

@@ -590,7 +590,7 @@ impl Project {
                             .clear_when_done(true)
                             .finish(),
                     )
-                    .install(prefix.root(), solved_records)
+                    .install(prefix.root(), solved_records.records)
             },
         )
         .await

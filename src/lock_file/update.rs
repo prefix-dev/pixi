@@ -221,13 +221,25 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            let contains_source_packages = self.lock_file.environments().any(|(_, env)| {
+            // If we contain source packages from conda or PyPI we update the prefix by default
+            let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
                 env.conda_packages(Platform::current())
                     .map_or(false, |mut packages| {
                         packages.any(|package| package.as_source().is_some())
                     })
             });
-            if contains_source_packages {
+
+            // Check if we have source packages from PyPI
+            // that is a directory, this is basically the only kind of source dependency
+            // that you'll modify on a general basis.
+            let contains_pypi_source_pkgs = environment
+                .pypi_dependencies(Some(Platform::current()))
+                .iter()
+                .any(|(_, req)| {
+                    req.iter()
+                        .any(|dep| dep.as_path().map(|p| p.is_dir()).unwrap_or_default())
+                });
+            if contains_conda_source_pkgs || contains_pypi_source_pkgs {
                 tracing::debug!("Lock file contains source packages: ignore lock file hash and update the prefix");
             } else {
                 tracing::info!(

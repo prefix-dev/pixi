@@ -301,7 +301,7 @@ impl ToolInstaller for ToolContext {
                 self.cache_dir
                     .join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
             ))
-            .install(&cached_dir, solved_records)
+            .install(&cached_dir, solved_records.records)
             .await
             .into_diagnostic()?;
 

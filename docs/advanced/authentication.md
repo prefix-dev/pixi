@@ -92,6 +92,9 @@ export RATTLER_AUTH_FILE=$HOME/credentials.json
 pixi global install --auth-file $HOME/credentials.json ...
 ```
 
+!!!note
+    `RATTLER_AUTH_FILE` has higher precedence than the CLI argument.
+
 The JSON should follow the following format:
 
 ```json

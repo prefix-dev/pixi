@@ -1,4 +1,5 @@
 use std::{sync::Arc, time::Duration};
+use std::{any::Any, path::PathBuf, sync::Arc, time::Duration};
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
@@ -22,13 +23,8 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
-fn auth_storage() -> Result<AuthenticationStorage, FileStorageError> {
-    // todo get stuff from other PR here as well
-    AuthenticationStorage::from_env_and_defaults()
-}
-
-fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
-    // todo get stuff from other PR here as well
+fn auth_store(config: &Config) -> Result<AuthenticationStorage, FileStorageError> {
+    let mut store = AuthenticationStorage::from_env_and_defaults()?;
     if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
 
@@ -36,12 +32,32 @@ fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStor
             tracing::warn!("Authentication file does not exist: {:?}", auth_file);
         }
 
-        let store = auth_storage()?;
-
-        return Ok(AuthenticationMiddleware::from_auth_storage(store));
+        // this should be the first place before the keyring authentication
+        // i.e. either index 0 if RATTLER_AUTH_FILE is not set or index 1 if it is
+        let first_storage = store.backends.first().unwrap();
+        let index = if first_storage.type_id()
+            == std::any::TypeId::of::<authentication_storage::backends::file::FileStorage>()
+        {
+            1
+        } else {
+            0
+        };
+        store.backends.insert(
+            index,
+            Arc::from(
+                authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
+                    &auth_file,
+                ))?,
+            ),
+        );
     }
+    Ok(store)
+}
 
-    AuthenticationMiddleware::from_env_and_defaults()
+fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
+    Ok(AuthenticationMiddleware::from_auth_storage(auth_store(
+        config,
+    )?))
 }
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {

@@ -1,3 +1,5 @@
+// TODO: replace this with rattler-build upload after it moved into the rattler crate
+
 use std::path::PathBuf;
 use std::sync::Arc;
 
