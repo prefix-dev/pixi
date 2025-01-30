@@ -48,6 +48,7 @@ pub struct UvBuildDispatchParams<'a> {
 }
 
 impl<'a> UvBuildDispatchParams<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         client: &'a RegistryClient,
         cache: &'a Cache,
@@ -119,6 +120,7 @@ pub struct PixiBuildDispatch<'a> {
 
 impl<'a> PixiBuildDispatch<'a> {
     /// Create a new `PixiBuildDispatch` instance.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         params: UvBuildDispatchParams<'a>,
         prefix_task: CondaPrefixUpdater<'a>,
@@ -183,27 +185,27 @@ impl<'a> PixiBuildDispatch<'a> {
 
                 let interpreter = self
                     .interpreter
-                    .get_or_try_init(|| Interpreter::query(python_path, &self.cache))?;
+                    .get_or_try_init(|| Interpreter::query(python_path, self.cache))?;
 
                 let build_dispatch = BuildDispatch::new(
-                    &self.params.client,
-                    &self.params.cache,
+                    self.params.client,
+                    self.params.cache,
                     self.params.constraints.clone(),
                     interpreter,
-                    &self.params.index_locations,
-                    &self.params.flat_index,
-                    &self.params.dependency_metadata,
+                    self.params.index_locations,
+                    self.params.flat_index,
+                    self.params.dependency_metadata,
                     // TODO: could use this later to add static metadata
                     self.params.shared_state.clone(),
                     self.params.index_strategy,
-                    &self.params.config_settings,
-                    self.params.build_isolation.clone(),
-                    self.params.link_mode.clone(),
-                    &self.params.build_options,
-                    &self.params.hasher,
+                    self.params.config_settings,
+                    self.params.build_isolation,
+                    self.params.link_mode,
+                    self.params.build_options,
+                    self.params.hasher,
                     self.params.exclude_newer,
                     self.params.bounds,
-                    self.params.sources.clone(),
+                    self.params.sources,
                     self.params.concurrency,
                 )
                 .with_build_extra_env_vars(self.params.env_variables.clone());
@@ -218,32 +220,36 @@ impl<'a> BuildContext for PixiBuildDispatch<'a> {
     type SourceDistBuilder = SourceBuild;
 
     fn interpreter(&self) -> &uv_python::Interpreter {
-        Handle::current().block_on(self.initialize()).unwrap();
-        self.interpreter.get().unwrap()
+        Handle::current()
+            .block_on(self.initialize())
+            .expect("failed to initialize build dispatch");
+        self.interpreter
+            .get()
+            .expect("python interpreter not initialized, this is a programming error")
     }
 
     fn cache(&self) -> &uv_cache::Cache {
-        &self.cache
+        self.cache
     }
 
     fn git(&self) -> &uv_git::GitResolver {
-        &self.git
+        self.git
     }
 
     fn capabilities(&self) -> &uv_distribution_types::IndexCapabilities {
-        &self.capabilities
+        self.capabilities
     }
 
     fn dependency_metadata(&self) -> &uv_distribution_types::DependencyMetadata {
-        &self.dependency_metadata
+        self.dependency_metadata
     }
 
     fn build_options(&self) -> &uv_configuration::BuildOptions {
-        &self.build_options
+        self.build_options
     }
 
     fn config_settings(&self) -> &uv_configuration::ConfigSettings {
-        &self.config_settings
+        self.config_settings
     }
 
     fn bounds(&self) -> uv_configuration::LowerBound {
@@ -255,7 +261,7 @@ impl<'a> BuildContext for PixiBuildDispatch<'a> {
     }
 
     fn locations(&self) -> &uv_distribution_types::IndexLocations {
-        &self.locations
+        self.locations
     }
 
     async fn resolve<'data>(&'data self, requirements: &'data [Requirement]) -> Result<Resolution> {
