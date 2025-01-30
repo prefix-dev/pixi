@@ -225,7 +225,7 @@ impl<'p> LockFileDerivedData<'p> {
             // If we contain source packages from conda or PyPI we update the prefix by default
             let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
                 env.conda_packages(Platform::current())
-                    .map_or(false, |mut packages| {
+                    .is_some_and(|mut packages| {
                         packages.any(|package| package.as_source().is_some())
                     })
             });
@@ -1621,14 +1621,6 @@ pub enum TaskResult {
         PixiRecordsByName,
         Duration,
     ),
-
-    /// A prefix was updated with the latest conda packages
-    // CondaPrefixUpdated(
-    //     GroupedEnvironmentName,
-    //     Prefix,
-    //     Box<PythonStatus>,
-    //     Duration,
-    // ),
 
     /// The pypi dependencies for a grouped environment have been solved.
     PypiGroupSolved(
