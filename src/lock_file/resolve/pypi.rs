@@ -16,10 +16,9 @@ use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec, isolated_names_to_packages,
-    names_to_build_isolation, no_build_to_build_options, pypi_options_to_index_locations,
-    to_index_strategy, to_normalize, to_requirements, to_uv_normalize, to_uv_version,
-    to_version_specifiers, ConversionError,
+    as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec, no_build_to_build_options,
+    pypi_options_to_index_locations, to_index_strategy, to_normalize, to_requirements,
+    to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -32,8 +31,8 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound, Overrides};
-use uv_dispatch::{BuildDispatch, SharedState};
+use uv_configuration::{ConfigSettings, Constraints, LowerBound, Overrides};
+use uv_dispatch::SharedState;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
@@ -42,7 +41,6 @@ use uv_distribution_types::{
 use uv_git::GitResolver;
 use uv_install_wheel::linker::LinkMode;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
-use uv_python::{Interpreter, PythonEnvironment};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -52,10 +50,10 @@ use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{
-        build_dispatch::{PixiBuildDispatch, PixiBuildDispatchState},
+        build_dispatch::{PixiBuildDispatch, UvBuildDispatchParams},
         records_by_name::HasNameVersion,
         resolve::resolver_provider::CondaResolverProvider,
-        update::{CondaPrefixUpdated, PrefixTask, TaskResult},
+        update::{CondaPrefixUpdated, PrefixTask},
         LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier, PypiRecord,
         UvResolutionContext,
     },
@@ -169,7 +167,6 @@ pub async fn resolve_pypi<'p>(
     locked_pypi_packages: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
-    // python_location: &Path,
     env_variables: &HashMap<String, String>,
     project_root: &Path,
     prefix_task: PrefixTask<'p>,
@@ -272,13 +269,6 @@ pub async fn resolve_pypi<'p>(
     let requires_python = uv_resolver::RequiresPython::from_specifiers(
         &uv_pep440::VersionSpecifiers::from(python_specifier),
     );
-    // let interpreter = Interpreter::query(python_location, &context.cache)
-    //     .into_diagnostic()
-    //     .wrap_err("failed to query python interpreter")?;
-    // tracing::debug!(
-    //     "using python interpreter (should be assumed for building only): {}",
-    //     interpreter.key()
-    // );
     tracing::info!(
         "using requires python specifier (this may differ from the above): {}",
         requires_python
@@ -331,8 +321,8 @@ pub async fn resolve_pypi<'p>(
     let config_settings = ConfigSettings::default();
 
     // let env = PythonEnvironment::from_interpreter(interpreter.clone());
-    let non_isolated_packages =
-        isolated_names_to_packages(pypi_options.no_build_isolation.as_deref()).into_diagnostic()?;
+    // let non_isolated_packages =
+    //     isolated_names_to_packages(pypi_options.no_build_isolation.as_deref()).into_diagnostic()?;
     // let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
     let build_isolation = uv_types::BuildIsolation::default();
     // tracing::debug!("using build-isolation: {:?}", build_isolation);
@@ -374,7 +364,7 @@ pub async fn resolve_pypi<'p>(
     // )
     // .with_build_extra_env_vars(env_variables.iter());
 
-    let first_state = PixiBuildDispatchState::new(
+    let first_state = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
         Constraints::default(),
@@ -398,7 +388,6 @@ pub async fn resolve_pypi<'p>(
     let int_cell = OnceCell::new();
 
     let pixi_build_dispatch = PixiBuildDispatch::new(
-        // build_dispatch,
         first_state,
         prefix_task,
         repodata_records,

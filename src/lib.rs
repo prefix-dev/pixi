@@ -7,7 +7,6 @@ pub mod environment;
 mod global;
 mod install_pypi;
 pub mod lock_file;
-pub mod partial_prefix;
 mod prefix;
 pub mod project;
 mod prompt;
