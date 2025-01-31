@@ -559,19 +559,19 @@ fn relevant_s3_options(
     // only take s3 options in manifest if they are used in the default channels
     let s3_buckets = channels
         .iter()
-        .filter_map(|channel| 
-            match channel {
-                NamedChannelOrUrl::Name(_) => None,
-                NamedChannelOrUrl::Path(_) => None,
-                NamedChannelOrUrl::Url(url) => {
-                    if url.scheme() == "s3" && url.host().is_some() {
-                        Some(url.host().unwrap().to_string())
-                    } else {
-                        None
-                    }
+        .filter_map(|channel| match channel {
+            NamedChannelOrUrl::Name(_) => None,
+            NamedChannelOrUrl::Path(_) => None,
+            NamedChannelOrUrl::Url(url) => {
+                let host = url.host();
+                if url.scheme() == "s3" && host.is_some() {
+                    Some(host.unwrap().to_string())
+                } else {
+                    None
                 }
             }
-        ).collect::<Vec<_>>();
+        })
+        .collect::<Vec<_>>();
 
     s3_config
         .into_iter()
