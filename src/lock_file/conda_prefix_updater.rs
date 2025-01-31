@@ -74,14 +74,13 @@ impl<'a> CondaPrefixUpdater<'a> {
             .into_diagnostic()?;
 
         // Spawn a task to determine the currently installed packages.
-        let installed_packages_future = tokio::spawn({
-            let prefix = prefix.clone();
-            async move { prefix.find_installed_packages() }
-        })
-        .unwrap_or_else(|e| match e.try_into_panic() {
-            Ok(panic) => std::panic::resume_unwind(panic),
-            Err(_err) => Err(miette::miette!("the operation was cancelled")),
-        });
+        let moved_prefix = prefix.clone();
+        let installed_packages_future =
+            tokio::task::spawn_blocking(move || moved_prefix.find_installed_packages())
+                .unwrap_or_else(|e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_err) => Err(miette::miette!("the operation was cancelled")),
+                });
 
         // Wait until the conda records are available and until the installed packages
         // for this prefix are available.

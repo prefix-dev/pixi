@@ -359,7 +359,7 @@ pub async fn resolve_pypi(
         context.concurrency,
     );
 
-    let int_cell = OnceCell::new();
+    let interpreter = OnceCell::new();
     let non_isolated_packages = OnceCell::new();
     let python_env = OnceCell::new();
 
@@ -369,7 +369,7 @@ pub async fn resolve_pypi(
         project_env_vars,
         environment_name,
         repodata_records,
-        &int_cell,
+        &interpreter,
         &non_isolated_packages,
         &python_env,
         pypi_options.no_build_isolation.clone(),

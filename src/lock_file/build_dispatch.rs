@@ -277,9 +277,11 @@ impl BuildContext for PixiBuildDispatch<'_> {
 
     fn interpreter(&self) -> &uv_python::Interpreter {
         tracing::error!("initialize in interpreter");
-        Handle::current()
-            .block_on(self.initialize())
-            .expect("failed to initialize build dispatch");
+        tokio::task::block_in_place(|| {
+            Handle::current()
+                .block_on(self.initialize())
+                .expect("failed to initialize build dispatch");
+        });
         self.interpreter
             .get()
             .expect("python interpreter not initialized, this is a programming error")
