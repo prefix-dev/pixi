@@ -8,7 +8,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::lock_file::CondaPrefixUpdater;
+use crate::{
+    lock_file::CondaPrefixUpdater,
+    project::{get_activated_environment_variables, EnvironmentVars},
+};
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
@@ -288,18 +291,15 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
-        let env_variables = self
-            .project
-            // Not providing a lock-file as the cache will be invalidated directly anyway,
-            // by it changing the lockfile with pypi records.
-            .get_activated_environment_variables(
-                environment,
-                CurrentEnvVarBehavior::Exclude,
-                None,
-                false,
-                false,
-            )
-            .await?;
+        let env_variables = get_activated_environment_variables(
+            self.project.env_vars(),
+            environment,
+            CurrentEnvVarBehavior::Exclude,
+            None,
+            false,
+            false,
+        )
+        .await?;
 
         let non_isolated_packages = environment.pypi_options().no_build_isolation;
         let no_build = environment
@@ -1189,20 +1189,11 @@ impl<'p> UpdateContext<'p> {
                 continue;
             }
 
-            // Get environment variables from the activation
-            let env_variables = project
-                .get_activated_environment_variables(
-                    environment,
-                    CurrentEnvVarBehavior::Exclude,
-                    None,
-                    false,
-                    false,
-                )
-                .await?;
-
+            // // Get environment variables from the activation
+            let project_variables = self.project.env_vars().clone();
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
-                .get_latest_group_repodata_records(&group, platform)
+                .get_latest_group_repodata_records(&group, environment.best_platform())
                 .ok_or_else(|| {
                     make_unsupported_pypi_platform_error(environment, current_platform)
                 })?;
@@ -1235,10 +1226,11 @@ impl<'p> UpdateContext<'p> {
             let pypi_solve_future = spawn_solve_pypi_task(
                 uv_context,
                 group.clone(),
+                environment.clone(),
+                project_variables,
                 platform,
                 repodata_future,
                 conda_prefix_updater,
-                env_variables,
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
                 locked_group_records,
@@ -2077,20 +2069,21 @@ async fn spawn_extract_environment_task(
 #[allow(clippy::too_many_arguments)]
 async fn spawn_solve_pypi_task<'p>(
     resolution_context: UvResolutionContext,
-    environment: GroupedEnvironment<'p>,
+    grouped_environment: GroupedEnvironment<'p>,
+    environment: Environment<'p>,
+    project_variables: HashMap<EnvironmentName, EnvironmentVars>,
     platform: Platform,
     repodata_records: impl Future<Output = Arc<PixiRecordsByName>>,
     prefix_task: CondaPrefixUpdater<'p>,
-    env_variables: &HashMap<String, String>,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
-    let dependencies = environment.pypi_dependencies(Some(platform));
+    let dependencies = grouped_environment.pypi_dependencies(Some(platform));
     if dependencies.is_empty() {
         return Ok(TaskResult::PypiGroupSolved(
-            environment.name().clone(),
+            grouped_environment.name().clone(),
             platform,
             PypiRecordsByName::default(),
             Duration::from_millis(0),
@@ -2099,14 +2092,14 @@ async fn spawn_solve_pypi_task<'p>(
     }
 
     // Get the system requirements for this environment
-    let system_requirements = environment.system_requirements();
+    let system_requirements = grouped_environment.system_requirements();
 
     // Wait until the conda records and prefix are available.
     let (repodata_records, _guard) = tokio::join!(repodata_records, semaphore.acquire_owned());
 
-    let environment_name = environment.name().clone();
+    let environment_name = grouped_environment.name().clone();
 
-    let pypi_name_mapping_location = environment.project().pypi_name_mapping_source()?;
+    let pypi_name_mapping_location = grouped_environment.project().pypi_name_mapping_source()?;
 
     let mut pixi_records = repodata_records.records.clone();
     let locked_pypi_records = locked_pypi_packages.records.clone();
@@ -2149,10 +2142,11 @@ async fn spawn_solve_pypi_task<'p>(
             &locked_pypi_records,
             platform,
             &pb.pb,
-            env_variables,
             &project_root,
             prefix_task,
             repodata_records,
+            project_variables,
+            environment,
         )
         .await
         .with_context(|| {
@@ -2174,13 +2168,13 @@ async fn spawn_solve_pypi_task<'p>(
     }
     .instrument(tracing::info_span!(
         "resolve_pypi",
-        group = %environment.name().as_str(),
+        group = %grouped_environment.name().as_str(),
         platform = %platform
     ))
     .await?;
 
     Ok(TaskResult::PypiGroupSolved(
-        environment.name().clone(),
+        grouped_environment.name().clone(),
         platform,
         pypi_packages,
         duration,

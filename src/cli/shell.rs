@@ -8,12 +8,15 @@ use rattler_shell::{
     shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
 use crate::lock_file::UpdateMode;
 use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix,
     project::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt,
     Project, UpdateLockFileOptions,
+};
+use crate::{
+    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    project::get_activated_environment_variables,
 };
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 
@@ -251,15 +254,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await?;
 
     // Get the environment variables we need to set activate the environment in the shell.
-    let env = project
-        .get_activated_environment_variables(
-            &environment,
-            CurrentEnvVarBehavior::Exclude,
-            Some(&lock_file_data.lock_file),
-            project.config().force_activate(),
-            project.config().experimental_activation_cache_usage(),
-        )
-        .await?;
+    let env = get_activated_environment_variables(
+        project.env_vars(),
+        &environment,
+        CurrentEnvVarBehavior::Exclude,
+        Some(&lock_file_data.lock_file),
+        project.config().force_activate(),
+        project.config().experimental_activation_cache_usage(),
+    )
+    .await?;
 
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 

@@ -5,6 +5,8 @@ use async_once_cell::OnceCell as AsyncCell;
 use once_cell::sync::OnceCell;
 
 use anyhow::Result;
+use pixi_manifest::EnvironmentName;
+use pixi_uv_conversions::{isolated_names_to_packages, names_to_build_isolation};
 use std::collections::HashMap;
 use tokio::runtime::Handle;
 use uv_build_frontend::SourceBuild;
@@ -18,10 +20,16 @@ use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, IndexLocations, Resolution, SourceDist,
 };
+use uv_pep508::PackageName;
 use uv_pypi_types::Requirement;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
-use uv_types::{BuildContext, BuildIsolation, HashStrategy};
+use uv_types::{BuildContext, HashStrategy};
+
+use crate::{
+    activation::CurrentEnvVarBehavior,
+    project::{get_activated_environment_variables, Environment, EnvironmentVars},
+};
 
 use super::{conda_prefix_updater::CondaPrefixUpdated, CondaPrefixUpdater, PixiRecordsByName};
 
@@ -36,7 +44,6 @@ pub struct UvBuildDispatchParams<'a> {
     shared_state: SharedState,
     index_strategy: IndexStrategy,
     config_settings: &'a ConfigSettings,
-    build_isolation: BuildIsolation<'a>,
     link_mode: uv_install_wheel::linker::LinkMode,
     build_options: &'a BuildOptions,
     hasher: &'a HashStrategy,
@@ -44,7 +51,6 @@ pub struct UvBuildDispatchParams<'a> {
     bounds: LowerBound,
     sources: SourceStrategy,
     concurrency: Concurrency,
-    env_variables: HashMap<String, String>,
 }
 
 impl<'a> UvBuildDispatchParams<'a> {
@@ -59,7 +65,6 @@ impl<'a> UvBuildDispatchParams<'a> {
         shared_state: SharedState,
         index_strategy: IndexStrategy,
         config_settings: &'a ConfigSettings,
-        build_isolation: BuildIsolation<'a>,
         link_mode: uv_install_wheel::linker::LinkMode,
         build_options: &'a BuildOptions,
         hasher: &'a HashStrategy,
@@ -67,7 +72,6 @@ impl<'a> UvBuildDispatchParams<'a> {
         bounds: LowerBound,
         sources: SourceStrategy,
         concurrency: Concurrency,
-        env_variables: HashMap<String, String>,
     ) -> Self {
         Self {
             client,
@@ -79,7 +83,6 @@ impl<'a> UvBuildDispatchParams<'a> {
             shared_state,
             index_strategy,
             config_settings,
-            build_isolation,
             link_mode,
             build_options,
             hasher,
@@ -87,7 +90,6 @@ impl<'a> UvBuildDispatchParams<'a> {
             bounds,
             sources,
             concurrency,
-            env_variables,
         }
     }
 }
@@ -105,6 +107,20 @@ pub struct PixiBuildDispatch<'a> {
     // if we create a new conda prefix, we need to store the task result
     // so we could reuse it later
     pub conda_task: Option<CondaPrefixUpdated>,
+
+    // project environment variables
+    // this is used to get the activated environment variables
+    pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
+    pub environment: Environment<'a>,
+
+    // what pkgs we dont need to activate
+    pub no_build_isolation: Option<Vec<String>>,
+
+    // non isolated packages
+    pub non_isolated_packages: &'a OnceCell<Option<Vec<PackageName>>>,
+
+    // python environment
+    pub python_env: &'a OnceCell<PythonEnvironment>,
 
     // values that can be passed in the BuildContext trait
     cache: &'a uv_cache::Cache,
@@ -124,8 +140,13 @@ impl<'a> PixiBuildDispatch<'a> {
     pub fn new(
         params: UvBuildDispatchParams<'a>,
         prefix_task: CondaPrefixUpdater<'a>,
+        project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
+        environment: Environment<'a>,
         repodata_records: Arc<PixiRecordsByName>,
         interpreter: &'a OnceCell<Interpreter>,
+        non_isolated_packages: &'a OnceCell<Option<Vec<PackageName>>>,
+        python_env: &'a OnceCell<PythonEnvironment>,
+        no_build_isolation: Option<Vec<String>>,
         cache: &'a uv_cache::Cache,
         git: &'a uv_git::GitResolver,
         capabilities: &'a uv_distribution_types::IndexCapabilities,
@@ -140,8 +161,13 @@ impl<'a> PixiBuildDispatch<'a> {
             params,
             prefix_task,
             interpreter,
+            non_isolated_packages,
+            python_env,
             conda_task: None,
+            project_env_vars,
+            environment,
             repodata_records,
+            no_build_isolation,
             cache,
             git,
             capabilities,
@@ -171,6 +197,20 @@ impl<'a> PixiBuildDispatch<'a> {
                         anyhow::anyhow!(err).context("failed to install conda prefix")
                     })?;
 
+                // get the activation vars
+                let env_vars = get_activated_environment_variables(
+                    &self.project_env_vars,
+                    &self.environment,
+                    CurrentEnvVarBehavior::Exclude,
+                    None,
+                    false,
+                    false,
+                )
+                .await
+                .map_err(|err| {
+                    anyhow::anyhow!(err).context("failed to get activated environment variables")
+                })?;
+
                 let python_path = prefix
                     .python_status
                     .location()
@@ -183,9 +223,25 @@ impl<'a> PixiBuildDispatch<'a> {
                         ))
                     })?;
 
+                tracing::error!("python path {:?}", python_path);
+                tracing::error!("querying in initialize");
+
                 let interpreter = self
                     .interpreter
                     .get_or_try_init(|| Interpreter::query(python_path, self.cache))?;
+
+                let env = self
+                    .python_env
+                    .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()));
+
+                let non_isolated_packages = self.non_isolated_packages.get_or_try_init(|| {
+                    isolated_names_to_packages(self.no_build_isolation.as_deref()).map_err(|err| {
+                        anyhow::anyhow!(err).context("failed to get non isolated packages")
+                    })
+                })?;
+
+                let build_isolation =
+                    names_to_build_isolation(non_isolated_packages.as_deref(), env);
 
                 let build_dispatch = BuildDispatch::new(
                     self.params.client,
@@ -199,7 +255,7 @@ impl<'a> PixiBuildDispatch<'a> {
                     self.params.shared_state.clone(),
                     self.params.index_strategy,
                     self.params.config_settings,
-                    self.params.build_isolation,
+                    build_isolation,
                     self.params.link_mode,
                     self.params.build_options,
                     self.params.hasher,
@@ -208,7 +264,7 @@ impl<'a> PixiBuildDispatch<'a> {
                     self.params.sources,
                     self.params.concurrency,
                 )
-                .with_build_extra_env_vars(self.params.env_variables.clone());
+                .with_build_extra_env_vars(env_vars);
 
                 Ok(build_dispatch)
             })
@@ -220,6 +276,7 @@ impl BuildContext for PixiBuildDispatch<'_> {
     type SourceDistBuilder = SourceBuild;
 
     fn interpreter(&self) -> &uv_python::Interpreter {
+        tracing::error!("initialize in interpreter");
         Handle::current()
             .block_on(self.initialize())
             .expect("failed to initialize build dispatch");
@@ -265,6 +322,7 @@ impl BuildContext for PixiBuildDispatch<'_> {
     }
 
     async fn resolve<'data>(&'data self, requirements: &'data [Requirement]) -> Result<Resolution> {
+        tracing::error!("initialize in resolve");
         self.initialize().await?.resolve(requirements).await
     }
 
@@ -273,6 +331,7 @@ impl BuildContext for PixiBuildDispatch<'_> {
         resolution: &'data Resolution,
         venv: &'data PythonEnvironment,
     ) -> Result<Vec<CachedDist>> {
+        tracing::error!("initialize in install");
         self.initialize().await?.install(resolution, venv).await
     }
 
@@ -287,6 +346,7 @@ impl BuildContext for PixiBuildDispatch<'_> {
         build_kind: BuildKind,
         build_output: BuildOutput,
     ) -> Result<SourceBuild> {
+        tracing::error!("initialize in setup build");
         self.initialize()
             .await?
             .setup_build(

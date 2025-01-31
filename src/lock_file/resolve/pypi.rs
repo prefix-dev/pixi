@@ -15,7 +15,9 @@ use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
+use pixi_manifest::{
+    pypi::pypi_options::PypiOptions, EnvironmentName, PyPiRequirement, SystemRequirements,
+};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec, no_build_to_build_options,
@@ -59,6 +61,7 @@ use crate::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
         PypiRecord, UvResolutionContext,
     },
+    project::{Environment, EnvironmentVars},
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 
@@ -169,10 +172,11 @@ pub async fn resolve_pypi(
     locked_pypi_packages: &[PypiRecord],
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
-    env_variables: &HashMap<String, String>,
     project_root: &Path,
     prefix_task: CondaPrefixUpdater<'_>,
     repodata_records: Arc<PixiRecordsByName>,
+    project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
+    environment_name: Environment<'_>,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -322,13 +326,6 @@ pub async fn resolve_pypi(
     let build_dispatch_in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
-    // let env = PythonEnvironment::from_interpreter(interpreter.clone());
-    // let non_isolated_packages =
-    //     isolated_names_to_packages(pypi_options.no_build_isolation.as_deref()).into_diagnostic()?;
-    // let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &env);
-    let build_isolation = uv_types::BuildIsolation::default();
-    // tracing::debug!("using build-isolation: {:?}", build_isolation);
-
     let dependency_metadata = DependencyMetadata::default();
     let options = Options {
         index_strategy,
@@ -353,7 +350,6 @@ pub async fn resolve_pypi(
         shared_state.clone(),
         index_strategy,
         &config_settings,
-        build_isolation,
         LinkMode::default(),
         &build_options,
         &context.hash_strategy,
@@ -361,16 +357,22 @@ pub async fn resolve_pypi(
         LowerBound::default(),
         context.source_strategy,
         context.concurrency,
-        env_variables.clone(),
     );
 
     let int_cell = OnceCell::new();
+    let non_isolated_packages = OnceCell::new();
+    let python_env = OnceCell::new();
 
     let pixi_build_dispatch = PixiBuildDispatch::new(
         build_params,
         prefix_task,
+        project_env_vars,
+        environment_name,
         repodata_records,
         &int_cell,
+        &non_isolated_packages,
+        &python_env,
+        pypi_options.no_build_isolation.clone(),
         &context.cache,
         shared_state.git(),
         shared_state.capabilities(),

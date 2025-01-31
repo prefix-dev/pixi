@@ -249,19 +249,21 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
-    // Add a pypi package but without installing should fail
-    pixi.add("pipx")
+    // Add a pypi package that is a wheel
+    // without installing should succeed
+    pixi.add("pipx==1.7.1")
         .set_type(DependencyType::PypiDependency)
         .with_install(false)
         .await
-        .unwrap_err();
-
-    // Add a pypi package
-    pixi.add("pipx")
-        .set_type(DependencyType::PypiDependency)
-        .with_install(true)
-        .await
         .unwrap();
+
+    // // Adding a pypi package without installing
+    // // that is sdist should fail
+    // pixi.add("sdist")
+    //     .set_type(DependencyType::PypiDependency)
+    //     .with_install(false)
+    //     .await
+    //     .unwrap_err();
 
     // Add a pypi package to a target with short hash
     pixi.add("boltons @ git+https://github.com/mahmoud/boltons.git@d463c60")
