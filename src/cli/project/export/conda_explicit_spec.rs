@@ -14,7 +14,6 @@ use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
-use uv_resolver::InstallTarget::Workspace;
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]

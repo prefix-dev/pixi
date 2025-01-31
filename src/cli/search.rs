@@ -116,7 +116,7 @@ pub async fn execute_impl<W: Write>(
         .locate()
     {
         Ok(project) => Some(project),
-        Err(WorkspaceLocatorError::WorkspaceNotFound(e)) => {
+        Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             debug!("No project file found, continuing without project configuration.",);
             None
         }

@@ -10,7 +10,7 @@ use miette::IntoDiagnostic;
 
 use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::{Workspace, WorkspaceLocator};
+use crate::WorkspaceLocator;
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{

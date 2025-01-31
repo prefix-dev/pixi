@@ -26,7 +26,7 @@ pub struct Args {
     pub feature: Option<String>,
 }
 
-pub async fn execute(mut workspace: Workspace, args: Args) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     let feature_name = args
         .feature
         .map_or(FeatureName::Default, FeatureName::Named);
