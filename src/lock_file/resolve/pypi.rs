@@ -160,7 +160,7 @@ fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageNam
 }
 
 #[allow(clippy::too_many_arguments)]
-pub async fn resolve_pypi<'p>(
+pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
     dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PyPiRequirement>>,
@@ -171,7 +171,7 @@ pub async fn resolve_pypi<'p>(
     pb: &ProgressBar,
     env_variables: &HashMap<String, String>,
     project_root: &Path,
-    prefix_task: CondaPrefixUpdater<'p>,
+    prefix_task: CondaPrefixUpdater<'_>,
     repodata_records: Arc<PixiRecordsByName>,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
@@ -343,7 +343,7 @@ pub async fn resolve_pypi<'p>(
         context.capabilities.clone(),
     );
 
-    let first_state = UvBuildDispatchParams::new(
+    let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
         Constraints::default(),
@@ -367,7 +367,7 @@ pub async fn resolve_pypi<'p>(
     let int_cell = OnceCell::new();
 
     let pixi_build_dispatch = PixiBuildDispatch::new(
-        first_state,
+        build_params,
         prefix_task,
         repodata_records,
         &int_cell,
@@ -653,9 +653,9 @@ fn get_url_or_path(
 }
 
 /// Create a vector of locked packages from a resolution
-async fn lock_pypi_packages<'a>(
+async fn lock_pypi_packages(
     conda_python_packages: CondaPythonPackages,
-    pixi_build_dispatch: &PixiBuildDispatch<'a>,
+    pixi_build_dispatch: &PixiBuildDispatch<'_>,
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
     index_capabilities: &IndexCapabilities,

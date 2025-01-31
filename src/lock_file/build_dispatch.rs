@@ -216,7 +216,7 @@ impl<'a> PixiBuildDispatch<'a> {
     }
 }
 
-impl<'a> BuildContext for PixiBuildDispatch<'a> {
+impl BuildContext for PixiBuildDispatch<'_> {
     type SourceDistBuilder = SourceBuild;
 
     fn interpreter(&self) -> &uv_python::Interpreter {

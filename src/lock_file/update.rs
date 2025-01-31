@@ -1622,14 +1622,6 @@ pub enum TaskResult {
         Duration,
     ),
 
-    /// A prefix was updated with the latest conda packages
-    // CondaPrefixUpdated(
-    //     GroupedEnvironmentName,
-    //     Prefix,
-    //     Box<PythonStatus>,
-    //     Duration,
-    // ),
-
     /// The pypi dependencies for a grouped environment have been solved.
     PypiGroupSolved(
         GroupedEnvironmentName,
