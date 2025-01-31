@@ -45,7 +45,6 @@ pub fn default_progress_style() -> indicatif::ProgressStyle {
 
 /// Returns the style to use for a progressbar that is indeterminate and simply shows a spinner.
 pub fn long_running_progress_style() -> indicatif::ProgressStyle {
-    #[allow(clippy::literal_string_with_formatting_args)]
     indicatif::ProgressStyle::with_template("{prefix}{spinner:.green} {msg}").unwrap()
 }
 
