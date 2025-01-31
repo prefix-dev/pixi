@@ -385,7 +385,7 @@ impl PixiControl {
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
             args: project::channel::AddRemoveArgs {
-                project_config: WorkspaceConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
@@ -408,7 +408,7 @@ impl PixiControl {
         ProjectChannelRemoveBuilder {
             manifest_path: Some(self.manifest_path()),
             args: project::channel::AddRemoveArgs {
-                project_config: WorkspaceConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],

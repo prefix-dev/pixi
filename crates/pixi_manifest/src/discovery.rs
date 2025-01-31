@@ -204,6 +204,16 @@ pub enum DiscoveryStart {
     ExplicitManifest(PathBuf),
 }
 
+impl DiscoveryStart {
+    /// Returns the path of the directory or file to start the search from.
+    pub fn root(&self) -> &Path {
+        match self {
+            DiscoveryStart::SearchRoot(root) => root.as_path(),
+            DiscoveryStart::ExplicitManifest(manifest) => manifest.as_path(),
+        }
+    }
+}
+
 impl WorkspaceDiscoverer {
     /// Constructs a new instance from the current path.
     pub fn new(start: DiscoveryStart) -> Self {

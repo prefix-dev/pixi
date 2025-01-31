@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::workspace::{MatchSpecs, PypiDeps};
-use crate::Workspace;
+use crate::{Workspace, WorkspaceLocator};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
@@ -24,7 +24,7 @@ use rattler_conda_types::{MatchSpec, StringMatcher};
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: WorkspaceConfig,
+    pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
@@ -56,25 +56,23 @@ pub struct UpgradeSpecsArgs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut project =
-        Workspace::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-            .with_cli_config(args.prefix_update_config.config.clone());
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?
+        .with_cli_config(args.prefix_update_config.config.clone());
 
     // Ensure that the given feature exists
-    let Some(feature) = project.manifest.feature(&args.specs.feature) else {
+    let Some(feature) = workspace.workspace.value.feature(&args.specs.feature) else {
         miette::bail!(
             "could not find a feature named {}",
             args.specs.feature.fancy_display()
         )
     };
 
-    let (match_specs, pypi_deps) = parse_specs(feature, &args, &project)?;
+    let (match_specs, pypi_deps) = parse_specs(feature, &args, &workspace)?;
 
-    // Save original manifest
-    let original_manifest_content =
-        fs_err::read_to_string(project.manifest_path()).into_diagnostic()?;
-
-    let update_deps = match project
+    let mut workspace = workspace.modify()?;
+    let update_deps = match workspace
         .update_dependencies(
             match_specs,
             pypi_deps,
@@ -87,19 +85,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await
     {
-        Ok(update_deps) => {
-            if args.dry_run {
-                // Make sure we restore original manifest content
-                fs_err::write(project.manifest_path(), original_manifest_content)
-                    .into_diagnostic()?;
-            } else {
-                project.save()?;
-            }
-            update_deps
-        }
+        Ok(update_deps) => update_deps,
         Err(e) => {
-            // Restore original manifest
-            fs_err::write(project.manifest_path(), original_manifest_content).into_diagnostic()?;
             return Err(e);
         }
     };
@@ -109,7 +96,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let diff = update_deps.lock_file_diff;
         // Format as json?
         if args.json {
-            let json_diff = LockFileJsonDiff::new(&project, diff);
+            let json_diff = LockFileJsonDiff::new(&workspace.workspace(), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
             println!("{}", json);
         } else {
@@ -117,6 +104,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into_diagnostic()
                 .context("failed to print lock-file diff")?;
         }
+        workspace.save().await.into_diagnostic()?;
     } else {
         eprintln!(
             "{}All packages are already up-to-date",
@@ -124,11 +112,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    Workspace::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 
-/// Parses the specifications for dependencies from the given feature, arguments, and project.
+/// Parses the specifications for dependencies from the given feature, arguments, and workspace.
 ///
 /// This function processes the dependencies and PyPi dependencies specified in the feature,
 /// filters them based on the provided arguments, and returns the resulting match specifications
@@ -136,7 +123,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 fn parse_specs(
     feature: &pixi_manifest::Feature,
     args: &Args,
-    project: &Workspace,
+    workspace: &Workspace,
 ) -> miette::Result<(MatchSpecs, PypiDeps)> {
     let spec_type = SpecType::Run;
     let match_spec_iter = feature
@@ -179,7 +166,7 @@ fn parse_specs(
         .filter_map(|(name, req)| match req {
             PixiSpec::DetailedVersion(version_spec) => {
                 let mut nameless_match_spec = version_spec
-                    .try_into_nameless_match_spec(&project.channel_config())
+                    .try_into_nameless_match_spec(&workspace.channel_config())
                     .ok()?;
                 // If it is a detailed spec, always unset version
                 nameless_match_spec.version = None;
@@ -223,7 +210,7 @@ fn parse_specs(
         .filter(|(name, _)| {
             if name.as_normalized() == "python" {
                 if let pixi_manifest::ManifestDocument::PyProjectToml(document) =
-                    project.manifest.source.clone()
+                    workspace.manifest.source.clone()
                 {
                     if document
                         .get_nested_table("[tool.pixi.dependencies.python]")
@@ -275,7 +262,7 @@ fn parse_specs(
             _ => None,
         })
         .map(|(name, req)| {
-            let location = project.manifest.source.pypi_dependency_location(
+            let location = workspace.manifest.source.pypi_dependency_location(
                 &name,
                 None, // TODO: add support for platforms
                 &args.specs.feature,

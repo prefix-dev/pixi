@@ -10,7 +10,7 @@ use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
-    HasWorkspaceManifest, Manifests, SystemRequirements, Task, TaskName, WorkspaceManifest,
+    HasWorkspaceManifest, SystemRequirements, Task, TaskName, WorkspaceManifest,
 };
 use rattler_conda_types::{Arch, Platform};
 
@@ -346,7 +346,7 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
         if self.environment.no_default_feature {
             Either::Right(environment_features)
         } else {
-            Either::Left(environment_features.chain([self.manifest().default_feature()]))
+            Either::Left(environment_features.chain([self.workspace_manifest().default_feature()]))
         }
     }
 }

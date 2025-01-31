@@ -13,7 +13,12 @@ use serde_json;
 
 use crate::activation::CurrentEnvVarBehavior;
 use crate::environment::get_update_lock_file_and_prefix;
-use crate::{activation::get_activator, cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig}, workspace::{Environment, HasWorkspaceRef}, UpdateLockFileOptions, Workspace, WorkspaceLocator};
+use crate::{
+    activation::get_activator,
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    workspace::{Environment, HasWorkspaceRef},
+    UpdateLockFileOptions, WorkspaceLocator,
+};
 
 /// Print the pixi environment activation script.
 ///

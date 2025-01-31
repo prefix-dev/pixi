@@ -33,7 +33,7 @@ pub fn filter_lock_file<
     'lock,
     F: FnMut(&Environment<'p>, Platform, LockedPackageRef<'lock>) -> bool,
 >(
-    project: &'p Workspace,
+    workspace: &'p Workspace,
     lock_file: &'lock LockFile,
     mut filter: F,
 ) -> LockFile {
@@ -41,7 +41,7 @@ pub fn filter_lock_file<
 
     for (environment_name, environment) in lock_file.environments() {
         // Find the environment in the project
-        let Some(project_env) = project.environment(environment_name) else {
+        let Some(project_env) = workspace.environment(environment_name) else {
             continue;
         };
 

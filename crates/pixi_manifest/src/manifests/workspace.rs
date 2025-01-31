@@ -194,8 +194,8 @@ impl WorkspaceManifest {
 /// A mutable context that allows modifying the workspace manifest both in
 /// memory and on disk.
 pub struct WorkspaceManifestMut<'a> {
-    workspace: &'a mut WorkspaceManifest,
-    document: &'a mut ManifestDocument,
+    pub workspace: &'a mut WorkspaceManifest,
+    pub document: &'a mut ManifestDocument,
 }
 
 impl WorkspaceManifestMut<'_> {

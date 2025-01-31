@@ -10,7 +10,11 @@ use rattler_shell::{
 
 use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::UpdateMode;
-use crate::{activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, workspace::virtual_packages::verify_current_platform_has_required_virtual_packages, prompt, UpdateLockFileOptions, Workspace, WorkspaceLocator};
+use crate::{
+    activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
+    workspace::virtual_packages::verify_current_platform_has_required_virtual_packages,
+    UpdateLockFileOptions, WorkspaceLocator,
+};
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 use pixi_manifest::EnvironmentName;
 #[cfg(target_family = "unix")]

@@ -1,5 +1,5 @@
+use crate::{task::EnvironmentHash, workspace::HasWorkspaceRef};
 use crate::{workspace::Environment, Workspace};
-use crate::{workspace::HasWorkspaceRef, task::EnvironmentHash};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -51,11 +51,18 @@ impl Workspace {
             (format!("{PROJECT_PREFIX}NAME"), self.name().to_string()),
             (
                 format!("{PROJECT_PREFIX}MANIFEST"),
-                self.manifest_path().to_string_lossy().into_owned(),
+                self.workspace
+                    .provenance
+                    .path
+                    .to_string_lossy()
+                    .into_owned(),
             ),
             (
                 format!("{PROJECT_PREFIX}VERSION"),
-                self.version()
+                self.workspace
+                    .value
+                    .workspace
+                    .version
                     .as_ref()
                     .map_or("NO_VERSION_SPECIFIED".to_string(), |version| {
                         version.to_string()
@@ -517,11 +524,18 @@ mod tests {
         );
         assert_eq!(
             env.get("PIXI_PROJECT_MANIFEST").unwrap(),
-            project.manifest_path().to_str().unwrap()
+            project.workspace.provenance.path.to_str().unwrap()
         );
         assert_eq!(
             env.get("PIXI_PROJECT_VERSION").unwrap(),
-            &project.version().as_ref().unwrap().to_string()
+            &project
+                .workspace
+                .value
+                .workspace
+                .version
+                .as_ref()
+                .unwrap()
+                .to_string()
         );
     }
 

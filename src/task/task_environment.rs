@@ -4,10 +4,10 @@ use rattler_conda_types::Platform;
 use thiserror::Error;
 
 use crate::{
+    task::error::{AmbiguousTaskError, MissingTaskError},
     workspace::{
         virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
     },
-    task::error::{AmbiguousTaskError, MissingTaskError},
     Workspace,
 };
 

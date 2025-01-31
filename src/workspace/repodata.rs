@@ -1,5 +1,5 @@
-use crate::workspace::Workspace;
 use crate::repodata::Repodata;
+use crate::workspace::Workspace;
 use rattler_repodata_gateway::Gateway;
 
 impl Repodata for Workspace {

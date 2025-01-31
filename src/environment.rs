@@ -3,8 +3,8 @@ use crate::{
     install_pypi,
     lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
-    workspace::{grouped_environment::GroupedEnvironment, Environment},
     rlimit::try_increase_rlimit_to_sensible,
+    workspace::{grouped_environment::GroupedEnvironment, Environment},
     Workspace,
 };
 use dialoguer::theme::ColorfulTheme;
@@ -47,6 +47,7 @@ use crate::build::BuildContext;
 use uv_distribution_types::{InstalledDist, Name};
 
 use crate::lock_file::LockFileDerivedData;
+use crate::workspace::HasWorkspaceRef;
 use xxhash_rust::xxh3::Xxh3;
 
 /// Verify the location of the prefix folder is not changed so the applied

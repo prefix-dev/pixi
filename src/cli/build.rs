@@ -15,7 +15,7 @@ use crate::{
     cli::cli_config::WorkspaceConfig,
     repodata::Repodata,
     utils::{move_file, MoveError},
-    Workspace, WorkspaceLocator,
+    WorkspaceLocator,
 };
 
 #[derive(Parser, Debug)]

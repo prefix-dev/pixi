@@ -14,7 +14,12 @@ use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
-use crate::{cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig}, lock_file::UpdateLockFileOptions, workspace::{Environment, Workspace}, WorkspaceLocator};
+use crate::{
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    lock_file::UpdateLockFileOptions,
+    workspace::Environment,
+    WorkspaceLocator,
+};
 
 /// Show a tree of project dependencies
 #[derive(Debug, Parser)]

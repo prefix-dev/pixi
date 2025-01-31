@@ -1,5 +1,5 @@
-use crate::workspace;
 use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
+use crate::workspace;
 use miette::Diagnostic;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};

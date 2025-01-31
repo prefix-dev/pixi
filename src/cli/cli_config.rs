@@ -1,6 +1,7 @@
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
 use crate::lock_file::UpdateMode;
+use crate::workspace::DiscoveryStart;
 use crate::DependencyType;
 use crate::Workspace;
 use clap::Parser;
@@ -20,7 +21,6 @@ use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
-use crate::workspace::DiscoveryStart;
 
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]

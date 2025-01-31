@@ -400,13 +400,8 @@ pub async fn get_task_env<'p>(
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
-    use pixi_manifest::{
-        AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, Manifests,
-    };
-
     use super::*;
+    use std::path::Path;
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -423,16 +418,13 @@ mod tests {
             [tasks]
             test = {cmd = "test", cwd = "tests", env = {FOO = "bar", BAR = "$FOO"}}
             "#;
-        let manifest = Manifests::from_workspace_source(
-            ManifestSource::PixiToml(format!("{PROJECT_BOILERPLATE}\n{file_contents}"))
-                .with_provenance_from_kind(),
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
         )
-        .unwrap()
-        .value;
+        .unwrap();
 
-        let task = manifest
-            .workspace
-            .value
+        let task = workspace
             .default_environment()
             .task(&TaskName::from("test"), None)
             .unwrap();

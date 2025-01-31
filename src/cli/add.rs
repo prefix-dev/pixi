@@ -9,7 +9,7 @@ use super::has_specs::HasSpecs;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::verify_prefix_location_unchanged,
-    workspace::{DependencyType, Workspace},
+    workspace::DependencyType,
     WorkspaceLocator,
 };
 
@@ -93,14 +93,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(project_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(prefix_update_config.config);
+        .with_cli_config(prefix_update_config.config.clone());
 
     // Sanity check of prefix location
     verify_prefix_location_unchanged(workspace.default_environment().dir().as_path()).await?;
 
+    let mut workspace = workspace.modify()?;
+
     // Add the platform if it is not already present
     workspace
-        .manifest
+        .manifest()
         .add_platforms(dependency_config.platforms.iter(), &FeatureName::Default)?;
 
     let (match_specs, source_specs, pypi_deps) = match dependency_config.dependency_type() {
@@ -137,7 +139,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let match_specs = IndexMap::default();
             let source_specs = IndexMap::default();
             let pypi_deps = match dependency_config
-                .vcs_pep508_requirements(&workspace)
+                .vcs_pep508_requirements(workspace.workspace())
                 .transpose()?
             {
                 Some(vcs_reqs) => vcs_reqs
@@ -145,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|(name, req)| (name, (req, None)))
                     .collect(),
                 None => dependency_config
-                    .pypi_deps(&workspace)?
+                    .pypi_deps(workspace.workspace())?
                     .into_iter()
                     .map(|(name, req)| (name, (req, None)))
                     .collect(),
@@ -157,18 +159,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // TODO: add dry_run logic to add
     let dry_run = false;
 
-    // Save original manifest
-    let original_manifest_content =
-        fs_err::read_to_string(workspace.manifest_path()).into_diagnostic()?;
-
     let update_deps = match workspace
         .update_dependencies(
             match_specs,
             pypi_deps,
             source_specs,
-            prefix_update_config,
-            &args.dependency_config.feature,
-            &args.dependency_config.platforms,
+            &prefix_update_config,
+            &dependency_config.feature,
+            &dependency_config.platforms,
             args.editable,
             dry_run,
         )
@@ -176,12 +174,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     {
         Ok(update_deps) => {
             // Write the updated manifest
-            workspace.save()?;
+            workspace.save().await.into_diagnostic()?;
             update_deps
         }
         Err(e) => {
-            // Restore original manifest
-            fs_err::write(workspace.manifest_path(), original_manifest_content).into_diagnostic()?;
+            workspace.revert().await.into_diagnostic()?;
             return Err(e);
         }
     };

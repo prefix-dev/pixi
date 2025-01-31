@@ -31,7 +31,8 @@ pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
 pub use discovery::{
-    LoadManifestsError, Manifests, WorkspaceDiscoverer, WorkspaceDiscoveryError, DiscoveryStart, ExplicitManifestError
+    DiscoveryStart, ExplicitManifestError, LoadManifestsError, Manifests, WorkspaceDiscoverer,
+    WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;
@@ -42,7 +43,7 @@ pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
-    ProvenanceError, WithProvenance, WorkspaceManifest,
+    ProvenanceError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};

@@ -49,6 +49,7 @@ use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
     SourceMetadataInput,
 };
+use crate::Workspace;
 
 /// A list of globs that should be ignored when calculating any input hash.
 /// These are typically used for build artifacts that should not be included in
@@ -150,18 +151,13 @@ impl BuildContext {
         })
     }
 
-    pub fn from_project(project: &crate::workspace::Workspace) -> miette::Result<Self> {
-        let variant = project
-            .manifest()
-            .workspace
-            .workspace
-            .build_variants
-            .clone();
+    pub fn from_workspace(workspace: &Workspace) -> miette::Result<Self> {
+        let variant = workspace.workspace.value.workspace.build_variants.clone();
 
         Self::new(
             get_cache_dir()?,
-            project.pixi_dir(),
-            project.channel_config(),
+            workspace.pixi_dir(),
+            workspace.channel_config(),
             variant,
             Arc::new(ToolContext::default()),
         )

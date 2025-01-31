@@ -1,8 +1,8 @@
 use crate::Workspace;
 
-pub async fn execute(project: Workspace) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace) -> miette::Result<()> {
     // Print the description if it exists
-    if let Some(description) = project.description() {
+    if let Some(description) = workspace.workspace.value.workspace.description {
         println!("{}", description);
     }
     Ok(())

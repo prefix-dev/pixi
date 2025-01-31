@@ -1,5 +1,6 @@
 use crate::Workspace;
 use clap::Parser;
+use miette::IntoDiagnostic;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -8,18 +9,26 @@ pub struct Args {
     pub version: String,
 }
 
-pub async fn execute(mut project: Workspace, args: Args) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
+    let mut workspace = workspace.modify()?;
+
     // Set the version
-    project.manifest.set_version(&args.version)?;
+    workspace.manifest().set_version(&args.version)?;
 
     // Save the manifest on disk
-    project.save()?;
+    let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     eprintln!(
         "{}Updated project version to '{}'.",
         console::style(console::Emoji("✔ ", "")).green(),
-        project.version().as_ref().unwrap()
+        workspace
+            .workspace
+            .value
+            .workspace
+            .version
+            .as_ref()
+            .unwrap()
     );
 
     Ok(())

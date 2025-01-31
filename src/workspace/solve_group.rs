@@ -2,7 +2,9 @@ use std::{hash::Hash, path::PathBuf};
 
 use itertools::Itertools;
 use pixi_manifest as manifest;
-use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements, WorkspaceManifest};
+use pixi_manifest::{
+    FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements, WorkspaceManifest,
+};
 
 use super::{Environment, HasWorkspaceRef, Workspace};
 
@@ -50,11 +52,9 @@ impl<'p> SolveGroup<'p> {
     pub(crate) fn environments(
         &self,
     ) -> impl DoubleEndedIterator<Item = Environment<'p>> + ExactSizeIterator + 'p {
+        let workspace_manifest = self.workspace_manifest();
         self.solve_group.environments.iter().map(|env_idx| {
-            Environment::new(
-                self.workspace,
-                &self.workspace_manifest().environments[*env_idx],
-            )
+            Environment::new(self.workspace, &workspace_manifest.environments[*env_idx])
         })
     }
     /// Returns the system requirements for this solve group.
@@ -70,7 +70,7 @@ impl<'p> SolveGroup<'p> {
 
 impl<'p> HasWorkspaceManifest<'p> for SolveGroup<'p> {
     fn workspace_manifest(&self) -> &'p WorkspaceManifest {
-        self.workspace.manifest()
+        self.workspace.workspace_manifest()
     }
 }
 
