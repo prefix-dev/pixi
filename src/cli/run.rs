@@ -312,8 +312,8 @@ enum TaskExecutionError {
 /// Called to execute a single command.
 ///
 /// This function is called from [`execute`].
-async fn execute_task<'p>(
-    task: &ExecutableTask<'p>,
+async fn execute_task(
+    task: &ExecutableTask<'_>,
     command_env: &HashMap<String, String>,
 ) -> Result<(), TaskExecutionError> {
     let Some(script) = task.as_deno_script()? else {

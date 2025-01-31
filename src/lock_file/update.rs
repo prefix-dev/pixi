@@ -224,7 +224,7 @@ impl<'p> LockFileDerivedData<'p> {
             // If we contain source packages from conda or PyPI we update the prefix by default
             let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
                 env.conda_packages(Platform::current())
-                    .map_or(false, |mut packages| {
+                    .is_some_and(|mut packages| {
                         packages.any(|package| package.as_source().is_some())
                     })
             });

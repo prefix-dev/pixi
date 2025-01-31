@@ -780,7 +780,10 @@ impl Config {
         tracing::debug!("Loading config from {}", path.display());
         let s = match fs_err::read_to_string(path) {
             Ok(content) => content,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(e)
+                if e.kind() == std::io::ErrorKind::NotFound
+                    || e.kind() == std::io::ErrorKind::NotADirectory =>
+            {
                 return Err(ConfigError::FileNotFound(path.to_path_buf()))
             }
             Err(e) => return Err(ConfigError::ReadError(e)),

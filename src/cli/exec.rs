@@ -1,4 +1,4 @@
-use std::{path::Path, str::FromStr};
+use std::{path::Path, str::FromStr, sync::LazyLock};
 
 use clap::{Parser, ValueHint};
 use miette::{Context, IntoDiagnostic};
@@ -13,6 +13,7 @@ use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platfor
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use uv_configuration::RAYON_INITIALIZE;
 
 use super::cli_config::ChannelsConfig;
 use crate::prefix::Prefix;
@@ -186,6 +187,10 @@ pub async fn create_exec_prefix(
     })
     .into_diagnostic()
     .context("failed to solve environment")?;
+
+    // Force the initialization of the rayon thread pool to avoid implicit creation
+    // by the Installer.
+    LazyLock::force(&RAYON_INITIALIZE);
 
     // Install the environment
     Installer::new()
