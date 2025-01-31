@@ -83,7 +83,7 @@ version = "{{ version }}"
 {%- endif %}
 
 {%- if s3 %}
-{%- for key in s3 %} 
+{%- for key in s3 %}
 
 [project.s3-options.{{ key }}]
 {%- if s3[key]["endpoint-url"] %}
@@ -130,7 +130,7 @@ default = { solve-group = "default" }
 {%- endfor %}
 
 {%- if s3 %}
-{%- for key in s3 %} 
+{%- for key in s3 %}
 
 [tool.pixi.project.s3-options.{{ key }}]
 {%- if s3[key]["endpoint-url"] %}
@@ -181,7 +181,7 @@ platforms = {{ platforms }}
 {%- endif %}
 
 {%- if s3 %}
-{%- for key in s3 %} 
+{%- for key in s3 %}
 
 [tool.pixi.project.s3-options.{{ key }}]
 {%- if s3[key]["endpoint-url"] %}

@@ -1808,8 +1808,12 @@
           "minLength": 1
         },
         "s3-options": {
-          "$ref": "#/$defs/S3Options",
-          "description": "Options related to S3 for this project"
+          "title": "S3-Options",
+          "description": "Options related to S3 for this project",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/S3Options"
+          }
         },
         "version": {
           "title": "Version",
