@@ -941,10 +941,9 @@ impl Config {
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
             "s3-options",
-            // TODO: hashmap
-            // "s3-options.endpoint-url",
-            // "s3-options.region",
-            // "s3-options.force-path-style",
+            "s3-options.<bucket>.endpoint-url",
+            "s3-options.<bucket>.region",
+            "s3-options.<bucket>.force-path-style",
             "experimental.use-environment-activation-cache",
         ]
     }
@@ -1193,40 +1192,50 @@ impl Config {
                 let Some(subkey) = key.strip_prefix("s3-options.") else {
                     return Err(err);
                 };
-                let (bucket, rest) = subkey.split_once('.').ok_or(err)?;
-                // if let Some(ref mut config) = self.s3_config {
-                if let Some(ref mut bucket_config) = self.s3_options.get(bucket) {
-                    todo!();
-                    // match subkey {
-                    //     "endpoint-url" => {
-                    //         if let Some(value) = value {
-                    //             bucket_config.endpoint_url = Url::parse(&value).into_diagnostic()?;
-                    //         } else {
-                    //             return Err(miette!("s3-config.endpoint-url requires a value"));
-                    //         }
-                    //     }
-                    //     "region" => {
-                    //         if let Some(value) = value {
-                    //             bucket_config.region = value;
-                    //         } else {
-                    //             return Err(miette!("s3-config.region requires a value"));
-                    //         }
-                    //     }
-                    //     "force-path-style" => {
-                    //         if let Some(value) = value {
-                    //             bucket_config.force_path_style = value.parse().into_diagnostic()?;
-                    //         } else {
-                    //             return Err(miette!("s3-config.force-path-style requires a value"));
-                    //         }
-                    //     }
-                    //     _ => return Err(err),
-                    // }
+                if let Some((bucket, rest)) = subkey.split_once('.') {
+                    if let Some(bucket_config) = self.s3_options.get_mut(bucket) {
+                        match rest {
+                            "endpoint-url" => {
+                                if let Some(value) = value {
+                                    bucket_config.endpoint_url =
+                                        Url::parse(&value).into_diagnostic()?;
+                                } else {
+                                    return Err(miette!(
+                                        "s3-config.{}.endpoint-url requires a value",
+                                        bucket
+                                    ));
+                                }
+                            }
+                            "region" => {
+                                if let Some(value) = value {
+                                    bucket_config.region = value;
+                                } else {
+                                    return Err(miette!(
+                                        "s3-config.{}.region requires a value",
+                                        bucket
+                                    ));
+                                }
+                            }
+                            "force-path-style" => {
+                                if let Some(value) = value {
+                                    bucket_config.force_path_style =
+                                        value.parse().into_diagnostic()?;
+                                } else {
+                                    return Err(miette!(
+                                        "s3-config.{}.force-path-style requires a value",
+                                        bucket
+                                    ));
+                                }
+                            }
+                            _ => return Err(err),
+                        }
+                    }
+                } else {
+                    return Err(miette!(
+                        "Key needs to be of form s3-options.<bucket>.<option> but got '{}'",
+                        key
+                    ));
                 }
-                // } else {
-                //     return Err(miette!(
-                //         "Cannot set s3-config subkeys without s3-config being present"
-                //     ));
-                // }
             }
             key if key.starts_with(EXPERIMENTAL) => {
                 if key == EXPERIMENTAL {

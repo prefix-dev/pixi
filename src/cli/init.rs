@@ -83,19 +83,22 @@ version = "{{ version }}"
 {%- endif %}
 
 {%- if s3 %}
+{%- for key in s3 %} 
 
-[project.s3-options]
-{%- if s3["endpoint-url"] %}
-endpoint-url = "{{ s3["endpoint-url"] }}"
+[project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- endif %}
-{%- if s3.region %}
+{%- if s3[key].region %}
 {%- endif %}
-{%- if s3.region %}
-region = "{{ s3.region }}"
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
 {%- endif %}
-{%- if s3["force-path-style"] is not none %}
-force-path-style = {{ s3["force-path-style"] }}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
 {%- endif %}
+
+{%- endfor %}
 {%- endif %}
 
 [tasks]
@@ -127,19 +130,22 @@ default = { solve-group = "default" }
 {%- endfor %}
 
 {%- if s3 %}
+{%- for key in s3 %} 
 
-[tool.pixi.project.s3-options]
-{%- if s3["endpoint-url"] %}
-endpoint-url = "{{ s3["endpoint-url"] }}"
+[tool.pixi.project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- endif %}
-{%- if s3.region %}
+{%- if s3[key].region %}
 {%- endif %}
-{%- if s3.region %}
-region = "{{ s3.region }}"
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
 {%- endif %}
-{%- if s3["force-path-style"] is not none %}
-force-path-style = {{ s3["force-path-style"] }}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
 {%- endif %}
+
+{%- endfor %}
 {%- endif %}
 
 [tool.pixi.tasks]
@@ -175,19 +181,22 @@ platforms = {{ platforms }}
 {%- endif %}
 
 {%- if s3 %}
+{%- for key in s3 %} 
 
-[tool.pixi.project.s3-options]
-{%- if s3["endpoint-url"] %}
-endpoint-url = "{{ s3["endpoint-url"] }}"
+[tool.pixi.project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- endif %}
-{%- if s3.region %}
+{%- if s3[key].region %}
 {%- endif %}
-{%- if s3.region %}
-region = "{{ s3.region }}"
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
 {%- endif %}
-{%- if s3["force-path-style"] is not none %}
-force-path-style = {{ s3["force-path-style"] }}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
 {%- endif %}
+
+{%- endfor %}
 {%- endif %}
 
 [tool.pixi.pypi-dependencies]
@@ -383,7 +392,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         channels,
                         platforms,
                         environments,
-                        s3 => config.s3_options,
+                        s3 => relevant_s3_options(config.s3_options, channels),
                     },
                 )
                 .expect("should be able to render the template");
@@ -439,7 +448,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         platforms,
                         index_url => index_url.as_ref(),
                         extra_index_urls => &extra_index_urls,
-                        s3 => config.s3_options,
+                        s3 => relevant_s3_options(config.s3_options, channels),
                     },
                 )
                 .expect("should be able to render the template");
@@ -524,7 +533,7 @@ fn render_project(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
-    s3_config: HashMap<String, pixi_config::S3Options>,
+    s3_options: HashMap<String, pixi_config::S3Options>,
 ) -> String {
     env.render_named_str(
         consts::PROJECT_MANIFEST,
@@ -537,10 +546,37 @@ fn render_project(
             platforms,
             index_url,
             extra_index_urls,
-            s3 => s3_config,
+            s3 => relevant_s3_options(s3_options, channels),
         },
     )
     .expect("should be able to render the template")
+}
+
+fn relevant_s3_options(
+    s3_config: HashMap<String, pixi_config::S3Options>,
+    channels: Vec<NamedChannelOrUrl>,
+) -> HashMap<String, pixi_config::S3Options> {
+    // only take s3 options in manifest if they are used in the default channels
+    let s3_buckets = channels
+        .iter()
+        .filter_map(|channel| 
+            match channel {
+                NamedChannelOrUrl::Name(_) => None,
+                NamedChannelOrUrl::Path(_) => None,
+                NamedChannelOrUrl::Url(url) => {
+                    if url.scheme() == "s3" && url.host().is_some() {
+                        Some(url.host().unwrap().to_string())
+                    } else {
+                        None
+                    }
+                }
+            }
+        ).collect::<Vec<_>>();
+
+    s3_config
+        .into_iter()
+        .filter(|(key, _)| s3_buckets.contains(key))
+        .collect()
 }
 
 /// Save the rendered template to a file, and print a message to the user.
