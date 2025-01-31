@@ -154,7 +154,9 @@ class Workspace(StrictBaseModel):
     pypi_options: PyPIOptions | None = Field(
         None, description="Options related to PyPI indexes for this project"
     )
-    s3_options: dict[str, S3Options] | None = Field(None, description="Options related to S3 for this project")
+    s3_options: dict[str, S3Options] | None = Field(
+        None, description="Options related to S3 for this project"
+    )
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
     )
