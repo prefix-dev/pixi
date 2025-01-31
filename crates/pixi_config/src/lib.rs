@@ -1348,14 +1348,6 @@ impl Config {
                 )
             })
             .collect()
-        // match self.s3_config.clone() {
-        //     Some(config) => s3_middleware::S3Config::Custom {
-        //         endpoint_url: config.endpoint_url,
-        //         region: config.region,
-        //         force_path_style: config.force_path_style,
-        //     },
-        //     None => s3_middleware::S3Config::FromAWS,
-        // }
     }
 }
 

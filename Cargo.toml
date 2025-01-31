@@ -369,28 +369,28 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
-# file_url = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_cache = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_conda_types = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_digest = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_lock = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_networking = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_repodata_gateway = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_shell = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_solve = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-# rattler_virtual_packages = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
-file_url = { path = "../pavelzw-rattler/crates/file_url" }
-rattler = { path = "../pavelzw-rattler/crates/rattler" }
-rattler_cache = { path = "../pavelzw-rattler/crates/rattler_cache" }
-rattler_conda_types = { path = "../pavelzw-rattler/crates/rattler_conda_types" }
-rattler_digest = { path = "../pavelzw-rattler/crates/rattler_digest" }
-rattler_lock = { path = "../pavelzw-rattler/crates/rattler_lock" }
-rattler_networking = { path = "../pavelzw-rattler/crates/rattler_networking" }
-rattler_repodata_gateway = { path = "../pavelzw-rattler/crates/rattler_repodata_gateway" }
-rattler_shell = { path = "../pavelzw-rattler/crates/rattler_shell" }
-rattler_solve = { path = "../pavelzw-rattler/crates/rattler_solve" }
-rattler_virtual_packages = { path = "../pavelzw-rattler/crates/rattler_virtual_packages" }
+file_url = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_cache = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_conda_types = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_digest = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_lock = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_networking = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_repodata_gateway = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_shell = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_solve = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+rattler_virtual_packages = { git = "https://github.com/pavelzw/rattler", branch = "s3" }
+# file_url = { path = "../pavelzw-rattler/crates/file_url" }
+# rattler = { path = "../pavelzw-rattler/crates/rattler" }
+# rattler_cache = { path = "../pavelzw-rattler/crates/rattler_cache" }
+# rattler_conda_types = { path = "../pavelzw-rattler/crates/rattler_conda_types" }
+# rattler_digest = { path = "../pavelzw-rattler/crates/rattler_digest" }
+# rattler_lock = { path = "../pavelzw-rattler/crates/rattler_lock" }
+# rattler_networking = { path = "../pavelzw-rattler/crates/rattler_networking" }
+# rattler_repodata_gateway = { path = "../pavelzw-rattler/crates/rattler_repodata_gateway" }
+# rattler_shell = { path = "../pavelzw-rattler/crates/rattler_shell" }
+# rattler_solve = { path = "../pavelzw-rattler/crates/rattler_solve" }
+# rattler_virtual_packages = { path = "../pavelzw-rattler/crates/rattler_virtual_packages" }
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "57832d0588fbb7aab824813481104761dc1c7740" }
 
