@@ -553,7 +553,7 @@ fn render_project(
 }
 
 fn relevant_s3_options(
-    s3_config: HashMap<String, pixi_config::S3Options>,
+    s3_options: HashMap<String, pixi_config::S3Options>,
     channels: Vec<NamedChannelOrUrl>,
 ) -> HashMap<String, pixi_config::S3Options> {
     // only take s3 options in manifest if they are used in the default channels
@@ -572,7 +572,7 @@ fn relevant_s3_options(
         })
         .collect::<Vec<_>>();
 
-    s3_config
+    s3_options
         .into_iter()
         .filter(|(key, _)| s3_buckets.contains(key))
         .collect()

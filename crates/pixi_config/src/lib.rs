@@ -1204,7 +1204,7 @@ impl Config {
                                         Url::parse(&value).into_diagnostic()?;
                                 } else {
                                     return Err(miette!(
-                                        "s3-config.{}.endpoint-url requires a value",
+                                        "s3-options.{}.endpoint-url requires a value",
                                         bucket
                                     ));
                                 }
@@ -1214,7 +1214,7 @@ impl Config {
                                     bucket_config.region = value;
                                 } else {
                                     return Err(miette!(
-                                        "s3-config.{}.region requires a value",
+                                        "s3-options.{}.region requires a value",
                                         bucket
                                     ));
                                 }
@@ -1225,7 +1225,7 @@ impl Config {
                                         value.parse().into_diagnostic()?;
                                 } else {
                                     return Err(miette!(
-                                        "s3-config.{}.force-path-style requires a value",
+                                        "s3-options.{}.force-path-style requires a value",
                                         bucket
                                     ));
                                 }
@@ -1499,7 +1499,7 @@ UNUSED = "unused"
     }
 
     #[test]
-    fn test_s3_config_parse() {
+    fn test_s3_options_parse() {
         let toml = r#"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
@@ -1507,17 +1507,17 @@ UNUSED = "unused"
             force-path-style = false
         "#;
         let (config, _) = Config::from_toml(toml).unwrap();
-        let s3_config = config.s3_options;
+        let s3_options = config.s3_options;
         assert_eq!(
-            s3_config["bucket1"].endpoint_url,
+            s3_options["bucket1"].endpoint_url,
             Url::parse("https://my-s3-host").unwrap()
         );
-        assert_eq!(s3_config["bucket1"].region, "us-east-1");
-        assert!(!s3_config["bucket1"].force_path_style);
+        assert_eq!(s3_options["bucket1"].region, "us-east-1");
+        assert!(!s3_options["bucket1"].force_path_style);
     }
 
     #[test]
-    fn test_s3_config_invalid_config() {
+    fn test_s3_options_invalid_config() {
         let toml = r#"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
