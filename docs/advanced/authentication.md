@@ -8,8 +8,6 @@ You can authenticate pixi with a server like prefix.dev, a private quetz instanc
 Different servers use different authentication methods.
 In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.
 
-TODO: update --help string
-
 ```shell
 Usage: pixi auth login [OPTIONS] <HOST>
 
@@ -17,13 +15,18 @@ Arguments:
   <HOST>  The host to authenticate with (e.g. repo.prefix.dev)
 
 Options:
-      --token <TOKEN>              The token to use (for authentication with prefix.dev)
-      --username <USERNAME>        The username to use (for basic HTTP authentication)
-      --password <PASSWORD>        The password to use (for basic HTTP authentication)
-      --conda-token <CONDA_TOKEN>  The token to use on anaconda.org / quetz authentication
-  -v, --verbose...                 More output per occurrence
-  -q, --quiet...                   Less output per occurrence
-  -h, --help                       Print help
+      --token <TOKEN>                                The token to use (for authentication with prefix.dev)
+      --username <USERNAME>                          The username to use (for basic HTTP authentication)
+      --password <PASSWORD>                          The password to use (for basic HTTP authentication)
+      --conda-token <CONDA_TOKEN>                    The token to use on anaconda.org / quetz authentication
+      --s3-access-key-id <S3_ACCESS_KEY_ID>          The S3 access key ID
+      --s3-secret-access-key <S3_SECRET_ACCESS_KEY>  The S3 secret access key
+      --s3-session-token <S3_SESSION_TOKEN>          The S3 session token
+  -v, --verbose...                                   Increase logging verbosity
+  -q, --quiet...                                     Decrease logging verbosity
+      --color <COLOR>                                Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]
+      --no-progress                                  Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
+  -h, --help                                         Print help
 ```
 
 The different options are "token", "conda-token" and "username + password".
