@@ -1,5 +1,5 @@
 ---
-source: src/project/virtual_packages.rs
+source: src/workspace/virtual_packages.rs
 expression: packages
 ---
 [
@@ -17,10 +17,21 @@ expression: packages
     GenericVirtualPackage {
         name: PackageName {
             normalized: None,
-            source: "__osx",
+            source: "__linux",
         },
         version: Version {
-            version: [[0], [13], [0]],
+            version: [[0], [4], [18]],
+            local: [],
+        },
+        build_string: "0",
+    },
+    GenericVirtualPackage {
+        name: PackageName {
+            normalized: None,
+            source: "__glibc",
+        },
+        version: Version {
+            version: [[0], [2], [28]],
             local: [],
         },
         build_string: "0",
@@ -34,6 +45,6 @@ expression: packages
             version: [[0], [1]],
             local: [],
         },
-        build_string: "m1",
+        build_string: "x86_64",
     },
 ]

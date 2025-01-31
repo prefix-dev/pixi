@@ -198,7 +198,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
-    let workspace = WorkspaceLocator::new()
+    let workspace = WorkspaceLocator::default()
         .with_closest_package(false) // Dont care about the package
         .with_emit_warnings(false) // No reason to emit warnings
         .with_consider_environment(true)

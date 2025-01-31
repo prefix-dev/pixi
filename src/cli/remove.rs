@@ -1,26 +1,27 @@
 use clap::Parser;
-use miette::Context;
-
-use crate::environment::get_update_lock_file_and_prefix;
-use crate::Workspace;
-use crate::{DependencyType, UpdateLockFileOptions};
-
-use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig};
-use crate::lock_file::UpdateMode;
+use miette::{Context, IntoDiagnostic};
 
 use super::has_specs::HasSpecs;
+use crate::{
+    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
+    environment::get_update_lock_file_and_prefix,
+    lock_file::UpdateMode,
+    DependencyType, UpdateLockFileOptions, WorkspaceLocator,
+};
 
 /// Removes dependencies from the project
 ///
-///  If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
-/// - the native pyproject `project.dependencies` array or, if a feature is specified, the native `project.optional-dependencies` table
-/// - pixi `pypi-dependencies` tables of the default feature or, if a feature is specified, a named feature
-///
+///  If the project manifest is a `pyproject.toml`, removing a pypi dependency
+/// with the `--pypi` flag will remove it from either
+/// - the native pyproject `project.dependencies` array or, if a feature is
+///   specified, the native `project.optional-dependencies` table
+/// - pixi `pypi-dependencies` tables of the default feature or, if a feature is
+///   specified, a named feature
 #[derive(Debug, Default, Parser)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: WorkspaceConfig,
+    pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
@@ -30,21 +31,24 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, project_config) = (
+    let (dependency_config, prefix_update_config, workspace_config) = (
         args.dependency_config,
         args.prefix_update_config,
-        args.project_config,
+        args.workspace_config,
     );
 
-    let mut project = Workspace::load_or_else_discover(project_config.manifest_path.as_deref())?
-        .with_cli_config(prefix_update_config.config.clone());
+    let mut workspace = WorkspaceLocator::for_cli()
+        .with_search_start(workspace_config.workspace_locator_start())
+        .locate()?
+        .with_cli_config(prefix_update_config.config.clone())
+        .modify()?;
     let dependency_type = dependency_config.dependency_type();
 
     match dependency_type {
         DependencyType::PypiDependency => {
-            for name in dependency_config.pypi_deps(&project)?.keys() {
-                project
-                    .manifest
+            for name in dependency_config.pypi_deps(workspace.workspace())?.keys() {
+                workspace
+                    .manifest()
                     .remove_pypi_dependency(
                         name,
                         &dependency_config.platforms,
@@ -58,8 +62,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         DependencyType::CondaDependency(spec_type) => {
             for name in dependency_config.specs()?.keys() {
-                project
-                    .manifest
+                workspace
+                    .manifest()
                     .remove_dependency(
                         name,
                         spec_type,
@@ -74,18 +78,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    project.save()?;
+    let workspace = workspace.save().await.into_diagnostic()?;
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
     if !prefix_update_config.no_lockfile_update {
         get_update_lock_file_and_prefix(
-            &project.default_environment(),
+            &workspace.default_environment(),
             UpdateMode::Revalidate,
             UpdateLockFileOptions {
                 lock_file_usage: prefix_update_config.lock_file_usage(),
                 no_install: prefix_update_config.no_install,
-                max_concurrent_solves: project.config().max_concurrent_solves(),
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
         )
         .await?;
@@ -93,6 +97,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     dependency_config.display_success("Removed", Default::default());
 
-    Workspace::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
     Ok(())
 }

@@ -1,0 +1,5 @@
+---
+source: src/workspace/virtual_packages.rs
+expression: packages
+---
+[]

@@ -26,15 +26,15 @@ pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::Equivalent;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, NamedSource};
+use miette::IntoDiagnostic;
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    pypi::PyPiPackageName, utils::WithSourceCode, AssociateProvenance, EnvironmentName,
-    Environments, HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests,
-    PackageManifest, SpecType, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
+    pypi::PyPiPackageName, AssociateProvenance, EnvironmentName, Environments,
+    HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
+    SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
@@ -167,43 +167,6 @@ pub type PypiDeps = indexmap::IndexMap<
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 
-#[derive(thiserror::Error, Debug, miette::Diagnostic)]
-pub enum ProjectError {
-    #[error("no file was found at {0}")]
-    FileNotFound(PathBuf),
-
-    #[error(
-        "could not find {project_manifest} or {pyproject_manifest} at directory {0}",
-        project_manifest = consts::PROJECT_MANIFEST,
-        pyproject_manifest = consts::PYPROJECT_MANIFEST
-    )]
-    FileNotFoundInDirectory(PathBuf),
-
-    #[error(
-        "could not find {} or {} which is configured to use {}",
-        consts::PROJECT_MANIFEST,
-        consts::PYPROJECT_MANIFEST,
-        pixi_utils::executable_name()
-    )]
-    NoFileFound,
-
-    #[error("failed to read project from '{0}'")]
-    ReadError(std::io::Error),
-
-    #[error("failed to parse project from {1}: {0}")]
-    ParseErrorWithPathBuf(miette::Report, PathBuf),
-
-    #[error("failed to parse project: {0}")]
-    ParseError(miette::Report),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
-
-    #[error(transparent)]
-    IoError(std::io::Error),
-}
-
 impl Workspace {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifests(manifest: Manifests) -> Self {
@@ -220,7 +183,7 @@ impl Workspace {
         let config = Config::load(&root);
 
         Self {
-            root,
+            root: dunce::canonicalize(&root).unwrap_or(root),
             client: Default::default(),
             workspace: manifest.workspace,
             package: manifest.package,

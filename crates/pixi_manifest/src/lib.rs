@@ -54,7 +54,7 @@ pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, Syste
 pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
-pub use warning::{Warning, WithWarnings};
+pub use warning::{Warning, WarningWithSource, WithWarnings};
 pub use workspace::{ChannelPriority, Workspace};
 
 pub use crate::{

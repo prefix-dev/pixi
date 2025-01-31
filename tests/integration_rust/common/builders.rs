@@ -325,13 +325,14 @@ impl TaskAddBuilder {
     }
 
     /// Execute the CLI command
-    pub fn execute(self) -> miette::Result<()> {
+    pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Add(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
         })
+        .await
     }
 }
 
@@ -348,13 +349,14 @@ impl TaskAliasBuilder {
     }
 
     /// Execute the CLI command
-    pub fn execute(self) -> miette::Result<()> {
+    pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Alias(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
         })
+        .await
     }
 }
 
@@ -486,7 +488,7 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
         project::environment::execute(project::environment::Args {
-            project_config: WorkspaceConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
             command: project::environment::Command::Add(self.args),

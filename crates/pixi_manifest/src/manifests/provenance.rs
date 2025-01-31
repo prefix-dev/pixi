@@ -33,6 +33,14 @@ impl ManifestProvenance {
         Self { path, kind }
     }
 
+    /// Modifies the provenance to be relative to the specified directory.
+    pub fn relative_to(self, base: &Path) -> Self {
+        Self::new(
+            pathdiff::diff_paths(&self.path, base).unwrap_or(self.path),
+            self.kind,
+        )
+    }
+
     /// Load the manifest from a path
     pub fn from_path(path: PathBuf) -> Result<Self, ProvenanceError> {
         let Some(kind) = ManifestKind::try_from_path(&path) else {

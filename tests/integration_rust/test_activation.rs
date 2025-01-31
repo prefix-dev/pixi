@@ -11,7 +11,7 @@ async fn test_pixi_only_env_activation() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
     let default_env = project.default_environment();
 
     let pixi_only_env = project
@@ -38,7 +38,7 @@ async fn test_full_env_activation() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
     let default_env = project.default_environment();
 
     std::env::set_var("DIRTY_VAR", "Dookie");
@@ -64,7 +64,7 @@ async fn test_clean_env_activation() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
     let default_env = project.default_environment();
 
     std::env::set_var("DIRTY_VAR", "Dookie");

@@ -58,13 +58,13 @@ impl WorkspaceMut {
         let toml = match DocumentMut::from_str(&contents) {
             Ok(document) => TomlDocument::new(document),
             Err(err) => {
-                return Err(WithSourceCode {
+                return Err(Box::new(WithSourceCode {
                     source: NamedSource::new(
                         workspace.workspace.provenance.path.to_string_lossy(),
                         Arc::from(contents),
                     ),
                     error: TomlError::from(err),
-                }
+                })
                 .into())
             }
         };
@@ -96,10 +96,10 @@ impl WorkspaceMut {
         let toml = match DocumentMut::from_str(&contents) {
             Ok(document) => TomlDocument::new(document),
             Err(err) => {
-                return Err(WithSourceCode {
+                return Err(Box::new(WithSourceCode {
                     source: NamedSource::new(manifest_path.to_string_lossy(), Arc::from(contents)),
                     error: TomlError::from(err),
-                }
+                })
                 .into())
             }
         };
@@ -162,8 +162,7 @@ impl WorkspaceMut {
         let mut workspace = self.workspace.take().expect("workspace is not available");
         if let Some(original) = self.original.take() {
             workspace.workspace.value = original.manifest;
-            fs_err::tokio::write(&self.workspace().workspace.provenance.path, original.source)
-                .await?;
+            fs_err::tokio::write(&workspace.workspace.provenance.path, original.source).await?;
         }
 
         Ok(workspace)

@@ -1,7 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     error::Error,
-    io,
     path::PathBuf,
     str::FromStr,
 };
@@ -10,6 +9,7 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_manifest::{
     task::{quote, Alias, CmdArgs, Execute, Task, TaskName},
     EnvironmentName, FeatureName,
@@ -22,6 +22,7 @@ use crate::{
     cli::cli_config::WorkspaceConfig,
     workspace::{
         virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
+        WorkspaceMut,
     },
     Workspace, WorkspaceLocator,
 };
@@ -238,10 +239,7 @@ fn print_heading(value: &str) {
     eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
 }
 
-fn list_tasks(
-    task_map: HashMap<Environment, HashMap<TaskName, Task>>,
-    summary: bool,
-) -> io::Result<()> {
+fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, Task>>, summary: bool) {
     if summary {
         print_heading("Tasks per environment:");
         for (env, tasks) in task_map {
@@ -252,7 +250,7 @@ fn list_tasks(
                 .join(", ");
             eprintln!("{}: {}", env.name().fancy_display().bold(), formatted);
         }
-        return Ok(());
+        return;
     }
 
     let mut all_tasks: BTreeSet<TaskName> = BTreeSet::new();
@@ -280,187 +278,209 @@ fn list_tasks(
 
     let formatted_descriptions: String = formatted_descriptions.values().join("\n");
     eprintln!("\n{}", formatted_descriptions);
-
-    Ok(())
 }
 
-pub fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
     match args.operation {
-        Operation::Add(args) => {
-            let name = &args.name;
-            let task: Task = args.clone().into();
-            let feature = args
-                .feature
-                .map_or(FeatureName::Default, FeatureName::Named);
+        Operation::Add(args) => add_task(workspace.modify()?, args).await,
+        Operation::Remove(args) => remove_tasks(workspace.modify()?, args).await,
+        Operation::Alias(args) => alias_task(workspace.modify()?, args).await,
+        Operation::List(args) => list_tasks(workspace, args),
+    }
+}
+
+fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> {
+    if args.json {
+        print_tasks_json(&workspace);
+        return Ok(());
+    }
+
+    let explicit_environment = args
+        .environment
+        .map(|n| EnvironmentName::from_str(n.as_str()))
+        .transpose()?
+        .map(|n| {
             workspace
-                .manifest
-                .add_task(name.clone(), task.clone(), args.platform, &feature)?;
-            workspace.save()?;
-            eprintln!(
-                "{}Added task `{}`: {}",
-                console::style(console::Emoji("✔ ", "+")).green(),
-                name.fancy_display().bold(),
-                task,
-            );
-        }
-        Operation::Remove(args) => {
-            let mut to_remove = Vec::new();
-            let feature = args
-                .feature
-                .map_or(FeatureName::Default, FeatureName::Named);
-            for name in args.names.iter() {
-                if let Some(platform) = args.platform {
-                    if !workspace
-                        .manifest
-                        .tasks(Some(platform), &feature)?
-                        .contains_key(name)
-                    {
-                        eprintln!(
-                            "{}Task '{}' does not exist on {}",
-                            console::style(console::Emoji("❌ ", "X")).red(),
-                            name.fancy_display().bold(),
-                            console::style(platform.as_str()).bold(),
-                        );
-                        continue;
+                .environment(&n)
+                .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
+        })
+        .transpose()?;
+
+    let env_task_map: HashMap<Environment, HashSet<TaskName>> =
+        if let Some(explicit_environment) = explicit_environment {
+            HashMap::from([(
+                explicit_environment.clone(),
+                explicit_environment.get_filtered_tasks(),
+            )])
+        } else {
+            workspace
+                .environments()
+                .iter()
+                .filter_map(|env| {
+                    if verify_current_platform_has_required_virtual_packages(env).is_ok() {
+                        Some((env.clone(), env.get_filtered_tasks()))
+                    } else {
+                        None
                     }
-                } else if !workspace.manifest.tasks(None, &feature)?.contains_key(name) {
-                    eprintln!(
-                        "{}Task `{}` does not exist for the `{}` feature",
-                        console::style(console::Emoji("❌ ", "X")).red(),
-                        name.fancy_display().bold(),
-                        console::style(&feature).bold(),
-                    );
-                    continue;
-                }
-
-                // Check if task has dependencies
-                // TODO: Make this properly work by inspecting which actual tasks depend on the
-                // task  we just removed taking into account environments and
-                // features. let depends_on =
-                // project.task_names_depending_on(name); if !depends_on.
-                // is_empty() && !args.names.contains(name) {     eprintln!(
-                //         "{}: {}",
-                //         console::style("Warning, the following task/s depend on this task")
-                //             .yellow(),
-                //         console::style(depends_on.iter().to_owned().join(", ")).bold()
-                //     );
-                //     eprintln!(
-                //         "{}",
-                //         console::style("Be sure to modify these after the
-                // removal\n").yellow()     );
-                // }
-
-                // Safe to remove
-                to_remove.push((name, args.platform));
-            }
-
-            for (name, platform) in to_remove {
-                workspace
-                    .manifest
-                    .remove_task(name.clone(), platform, &feature)?;
-                workspace.save()?;
-                eprintln!(
-                    "{}Removed task `{}` ",
-                    console::style(console::Emoji("✔ ", "+")).green(),
-                    name.fancy_display().bold(),
-                );
-            }
-        }
-        Operation::Alias(args) => {
-            let name = &args.alias;
-            let task: Task = args.clone().into();
-            workspace.manifest.add_task(
-                name.clone(),
-                task.clone(),
-                args.platform,
-                &FeatureName::Default,
-            )?;
-            workspace.save()?;
-            eprintln!(
-                "{} Added alias `{}`: {}",
-                console::style("@").blue(),
-                name.fancy_display().bold(),
-                task,
-            );
-        }
-        Operation::List(args) => {
-            if args.json {
-                print_tasks_json(&workspace);
-                return Ok(());
-            }
-
-            let explicit_environment = args
-                .environment
-                .map(|n| EnvironmentName::from_str(n.as_str()))
-                .transpose()?
-                .map(|n| {
-                    workspace
-                        .environment(&n)
-                        .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
                 })
-                .transpose()?;
+                .collect()
+        };
 
-            let env_task_map: HashMap<Environment, HashSet<TaskName>> =
-                if let Some(explicit_environment) = explicit_environment {
-                    HashMap::from([(
-                        explicit_environment.clone(),
-                        explicit_environment.get_filtered_tasks(),
-                    )])
-                } else {
-                    workspace
-                        .environments()
-                        .iter()
-                        .filter_map(|env| {
-                            if verify_current_platform_has_required_virtual_packages(env).is_ok() {
-                                Some((env.clone(), env.get_filtered_tasks()))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect()
-                };
+    let available_tasks: HashSet<TaskName> = env_task_map.values().flatten().cloned().collect();
 
-            let available_tasks: HashSet<TaskName> =
-                env_task_map.values().flatten().cloned().collect();
+    if available_tasks.is_empty() {
+        eprintln!("No tasks found",);
+        return Ok(());
+    }
 
-            if available_tasks.is_empty() {
-                eprintln!("No tasks found",);
-                return Ok(());
-            }
+    if args.machine_readable {
+        let unformatted: String = available_tasks
+            .iter()
+            .sorted()
+            .map(|name| name.as_str())
+            .join(" ");
+        println!("{}", unformatted);
+        return Ok(());
+    }
 
-            if args.machine_readable {
-                let unformatted: String = available_tasks
-                    .iter()
-                    .sorted()
-                    .map(|name| name.as_str())
-                    .join(" ");
-                println!("{}", unformatted);
-                return Ok(());
-            }
-
-            let tasks_per_env = env_task_map
+    let tasks_per_env = env_task_map
+        .into_iter()
+        .map(|(env, task_names)| {
+            let tasks: HashMap<TaskName, Task> = task_names
                 .into_iter()
-                .map(|(env, task_names)| {
-                    let tasks: HashMap<TaskName, Task> = task_names
-                        .into_iter()
-                        .filter_map(|task_name| {
-                            env.task(&task_name, Some(env.best_platform()))
-                                .ok()
-                                .map(|task| (task_name, task.clone()))
-                        })
-                        .collect();
-                    (env, tasks)
+                .filter_map(|task_name| {
+                    env.task(&task_name, Some(env.best_platform()))
+                        .ok()
+                        .map(|task| (task_name, task.clone()))
                 })
                 .collect();
+            (env, tasks)
+        })
+        .collect();
 
-            list_tasks(tasks_per_env, args.summary).expect("io error when printing tasks");
+    print_tasks(tasks_per_env, args.summary);
+    Ok(())
+}
+
+async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Result<()> {
+    let name = &args.alias;
+    let task: Task = args.clone().into();
+    workspace.manifest().add_task(
+        name.clone(),
+        task.clone(),
+        args.platform,
+        &FeatureName::Default,
+    )?;
+    workspace.save().await.into_diagnostic()?;
+    eprintln!(
+        "{} Added alias `{}`: {}",
+        console::style("@").blue(),
+        name.fancy_display().bold(),
+        task,
+    );
+    Ok(())
+}
+
+async fn remove_tasks(mut workspace: WorkspaceMut, args: RemoveArgs) -> miette::Result<()> {
+    let mut to_remove = Vec::new();
+    let feature = args
+        .feature
+        .map_or(FeatureName::Default, FeatureName::Named);
+    for name in args.names.iter() {
+        if let Some(platform) = args.platform {
+            if !workspace
+                .workspace()
+                .workspace
+                .value
+                .tasks(Some(platform), &feature)?
+                .contains_key(name)
+            {
+                eprintln!(
+                    "{}Task '{}' does not exist on {}",
+                    console::style(console::Emoji("❌ ", "X")).red(),
+                    name.fancy_display().bold(),
+                    console::style(platform.as_str()).bold(),
+                );
+                continue;
+            }
+        } else if !workspace
+            .workspace()
+            .workspace
+            .value
+            .tasks(None, &feature)?
+            .contains_key(name)
+        {
+            eprintln!(
+                "{}Task `{}` does not exist for the `{}` feature",
+                console::style(console::Emoji("❌ ", "X")).red(),
+                name.fancy_display().bold(),
+                console::style(&feature).bold(),
+            );
+            continue;
         }
-    };
 
+        // Check if task has dependencies
+        // TODO: Make this properly work by inspecting which actual tasks depend on the
+        // task  we just removed taking into account environments and
+        // features. let depends_on =
+        // project.task_names_depending_on(name); if !depends_on.
+        // is_empty() && !args.names.contains(name) {     eprintln!(
+        //         "{}: {}",
+        //         console::style("Warning, the following task/s depend on this task")
+        //             .yellow(),
+        //         console::style(depends_on.iter().to_owned().join(", ")).bold()
+        //     );
+        //     eprintln!(
+        //         "{}",
+        //         console::style("Be sure to modify these after the
+        // removal\n").yellow()     );
+        // }
+
+        // Safe to remove
+        to_remove.push((name, args.platform));
+    }
+
+    let mut removed = Vec::with_capacity(to_remove.len());
+    for (name, platform) in to_remove {
+        workspace
+            .manifest()
+            .remove_task(name.clone(), platform, &feature)?;
+        removed.push(name);
+    }
+
+    workspace.save().await.into_diagnostic()?;
+
+    for name in removed {
+        eprintln!(
+            "{}Removed task `{}` ",
+            console::style(console::Emoji("✔ ", "+")).green(),
+            name.fancy_display().bold(),
+        );
+    }
+
+    Ok(())
+}
+
+async fn add_task(mut workspace: WorkspaceMut, args: AddArgs) -> miette::Result<()> {
+    let name = &args.name;
+    let task: Task = args.clone().into();
+    let feature = args
+        .feature
+        .map_or(FeatureName::Default, FeatureName::Named);
+    workspace
+        .manifest()
+        .add_task(name.clone(), task.clone(), args.platform, &feature)?;
+    workspace.save().await.into_diagnostic()?;
+    eprintln!(
+        "{}Added task `{}`: {}",
+        console::style(console::Emoji("✔ ", "+")).green(),
+        name.fancy_display().bold(),
+        task,
+    );
     Ok(())
 }
 

@@ -4,9 +4,12 @@ use std::{
     sync::Arc,
 };
 
-use miette::Diagnostic;
+use miette::{Diagnostic, Report};
 use pixi_consts::consts;
-use pixi_manifest::{Manifests, PackageManifest, PrioritizedChannel, WorkspaceManifest};
+use pixi_manifest::{
+    AssociateProvenance, ManifestProvenance, Manifests, PackageManifest, PrioritizedChannel,
+    WorkspaceManifest,
+};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use thiserror::Error;
 use which::Error;
@@ -123,10 +126,30 @@ impl ProtocolBuilder {
     /// Discovers a pixi project in the given source directory.
     pub fn discover(source_dir: &Path) -> Result<Option<Self>, ProtocolBuildError> {
         if let Some(manifest_path) = find_pixi_manifest(source_dir) {
-            let manifests = Manifests::from_workspace_manifest_path(manifest_path.clone())
+            // Construct a provenance object from the manifest path
+            let provenance = ManifestProvenance::from_path(manifest_path.clone()).map_err(|e| {
+                ProtocolBuildError::FailedToParseManifest(manifest_path.clone(), e.into())
+            })?;
+
+            // Read the contents of the provenance.
+            let contents = provenance
+                .read()
                 .map_err(|e| {
-                    ProtocolBuildError::FailedToParseManifest(manifest_path.clone(), e.into())
-                })?;
+                    ProtocolBuildError::FailedToParseManifest(
+                        manifest_path.clone(),
+                        Report::from_err(e),
+                    )
+                })?
+                .into_inner();
+
+            // Associate the contents with the provenance, but make the path relative to the
+            // source directory
+            let source = contents.with_provenance(provenance.relative_to(source_dir));
+
+            let manifests = Manifests::from_workspace_source(source).map_err(|e| {
+                ProtocolBuildError::FailedToParseManifest(manifest_path.clone(), e.into())
+            })?;
+
             // Discard warnings
             let manifests = manifests.value;
 

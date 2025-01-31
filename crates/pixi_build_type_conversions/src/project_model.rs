@@ -192,6 +192,8 @@ mod tests {
                 let name = package_manifest
                     .provenance
                     .path
+                    .parent()
+                    .unwrap()
                     .file_name()
                     .and_then(OsStr::to_str)
                     .unwrap();

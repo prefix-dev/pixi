@@ -15,8 +15,9 @@ use crate::{
     pyproject::PyProjectManifest,
     toml::{ExternalPackageProperties, ExternalWorkspaceProperties, TomlManifest},
     utils::WithSourceCode,
+    warning::WarningWithSource,
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
-    ProvenanceError, TomlError, Warning, WithProvenance, WithWarnings, WorkspaceManifest,
+    ProvenanceError, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 
 /// A helper struct to discover the workspace manifest in a directory tree from
@@ -57,7 +58,7 @@ pub enum LoadManifestsError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
+    Toml(#[from] Box<WithSourceCode<TomlError, NamedSource<Arc<str>>>>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -68,10 +69,7 @@ impl Manifests {
     /// Constructs a new instance from a specific workspace manifest.
     pub fn from_workspace_manifest_path(
         workspace_manifest_path: PathBuf,
-    ) -> Result<
-        WithWarnings<Self, WithSourceCode<Warning, NamedSource<Arc<str>>>>,
-        LoadManifestsError,
-    > {
+    ) -> Result<WithWarnings<Self, WarningWithSource>, LoadManifestsError> {
         let provenance = ManifestProvenance::from_path(workspace_manifest_path)?;
         let contents = provenance.read()?;
         Self::from_workspace_source(contents.into_inner().with_provenance(provenance))
@@ -84,10 +82,7 @@ impl Manifests {
             value: source,
             provenance,
         }: WithProvenance<S>,
-    ) -> Result<
-        WithWarnings<Self, WithSourceCode<Warning, NamedSource<Arc<str>>>>,
-        LoadManifestsError,
-    > {
+    ) -> Result<WithWarnings<Self, WarningWithSource>, LoadManifestsError> {
         let build_source_code = || {
             NamedSource::new(
                 provenance.path.to_string_lossy(),
@@ -100,10 +95,10 @@ impl Manifests {
         let mut toml = match toml_span::parse(source.as_ref()) {
             Ok(toml) => toml,
             Err(e) => {
-                return Err(WithSourceCode {
+                return Err(Box::new(WithSourceCode {
                     error: TomlError::from(e),
                     source: build_source_code(),
-                }
+                })
                 .into())
             }
         };
@@ -124,10 +119,10 @@ impl Manifests {
         let (workspace_manifest, package_manifest, warnings) = match parsed_manifests {
             Ok(parsed_manifests) => parsed_manifests,
             Err(toml_error) => {
-                return Err(WithSourceCode {
+                return Err(Box::new(WithSourceCode {
                     error: toml_error,
                     source: build_source_code(),
-                }
+                })
                 .into())
             }
         };
@@ -174,7 +169,7 @@ pub enum WorkspaceDiscoveryError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
+    Toml(#[from] Box<WithSourceCode<TomlError, NamedSource<Arc<str>>>>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -239,10 +234,7 @@ impl WorkspaceDiscoverer {
     /// Discover the workspace manifest in the directory tree.
     pub fn discover(
         self,
-    ) -> Result<
-        Option<WithWarnings<Manifests, WithSourceCode<Warning, NamedSource<Arc<str>>>>>,
-        WorkspaceDiscoveryError,
-    > {
+    ) -> Result<Option<WithWarnings<Manifests, WarningWithSource>>, WorkspaceDiscoveryError> {
         enum SearchPath<'a> {
             Explicit(&'a Path),
             Directory(&'a Path),
@@ -252,11 +244,9 @@ impl WorkspaceDiscoverer {
         let mut warnings = Vec::new();
         let mut closest_package_manifest = None;
         let (mut next_search_path, root_dir) = match &self.start {
-            DiscoveryStart::SearchRoot(root) => {
-                (Some(SearchPath::Directory(&root)), root.as_path())
-            }
+            DiscoveryStart::SearchRoot(root) => (Some(SearchPath::Directory(root)), root.as_path()),
             DiscoveryStart::ExplicitManifest(manifest_path) => (
-                Some(SearchPath::Explicit(&manifest_path)),
+                Some(SearchPath::Explicit(manifest_path)),
                 manifest_path.as_path(),
             ),
         };
@@ -319,10 +309,10 @@ impl WorkspaceDiscoverer {
             let mut toml = match toml_span::parse(source.inner()) {
                 Ok(toml) => toml,
                 Err(e) => {
-                    return Err(WithSourceCode {
+                    return Err(Box::new(WithSourceCode {
                         error: TomlError::from(e),
                         source,
-                    }
+                    })
                     .into())
                 }
             };
@@ -340,10 +330,10 @@ impl WorkspaceDiscoverer {
                     let manifest = match TomlManifest::deserialize(&mut toml) {
                         Ok(manifest) => manifest,
                         Err(err) => {
-                            return Err(WithSourceCode {
+                            return Err(Box::new(WithSourceCode {
                                 error: TomlError::from(err),
                                 source,
-                            }
+                            })
                             .into())
                         }
                     };
@@ -376,10 +366,10 @@ impl WorkspaceDiscoverer {
                     let manifest = match PyProjectManifest::deserialize(&mut toml) {
                         Ok(manifest) => manifest,
                         Err(err) => {
-                            return Err(WithSourceCode {
+                            return Err(Box::new(WithSourceCode {
                                 error: TomlError::from(err),
                                 source,
-                            }
+                            })
                             .into())
                         }
                     };
@@ -405,7 +395,7 @@ impl WorkspaceDiscoverer {
 
             let (workspace_manifest, package_manifest, workspace_warnings) = match parsed_manifest {
                 Ok(parsed_manifest) => parsed_manifest,
-                Err(error) => return Err(WithSourceCode { error, source }.into()),
+                Err(error) => return Err(Box::new(WithSourceCode { error, source }).into()),
             };
 
             // Add the errors from the workspace manifest to the list of warnings.
@@ -451,7 +441,7 @@ impl WorkspaceDiscoverer {
                             Some(WithProvenance::new(package_manifest, provenance))
                         }
                         Err(error) => {
-                            return Err(WithSourceCode { error, source }.into());
+                            return Err(Box::new(WithSourceCode { error, source }).into());
                         }
                     }
                 }

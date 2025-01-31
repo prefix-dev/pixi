@@ -37,7 +37,7 @@ pub enum ManifestDocumentError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
+    Toml(#[from] Box<WithSourceCode<TomlError, NamedSource<Arc<str>>>>),
 }
 
 impl ManifestDocument {
@@ -117,13 +117,13 @@ impl ManifestDocument {
         let toml = match DocumentMut::from_str(&contents) {
             Ok(document) => TomlDocument::new(document),
             Err(err) => {
-                return Err(WithSourceCode {
+                return Err(Box::new(WithSourceCode {
                     source: NamedSource::new(
                         provenance.path.to_string_lossy(),
                         Arc::from(contents),
                     ),
                     error: TomlError::from(err),
-                }
+                })
                 .into())
             }
         };

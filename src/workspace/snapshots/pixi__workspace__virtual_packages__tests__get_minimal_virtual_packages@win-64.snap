@@ -1,26 +1,15 @@
 ---
-source: src/project/virtual_packages.rs
+source: src/workspace/virtual_packages.rs
 expression: packages
 ---
 [
     GenericVirtualPackage {
         name: PackageName {
             normalized: None,
-            source: "__unix",
+            source: "__win",
         },
         version: Version {
             version: [[0], [0]],
-            local: [],
-        },
-        build_string: "0",
-    },
-    GenericVirtualPackage {
-        name: PackageName {
-            normalized: None,
-            source: "__osx",
-        },
-        version: Version {
-            version: [[0], [13], [0]],
             local: [],
         },
         build_string: "0",

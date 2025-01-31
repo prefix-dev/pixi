@@ -845,10 +845,10 @@ start = "python -m flask run --port=5050"
                 panic!("{}", format_parse_error(source, TomlError::from(error)))
             });
 
-        let manifest = PyProjectManifest::from_toml_str(&source)
-            .unwrap_or_else(|error| panic!("{}", format_parse_error(&source, error)))
+        let manifest = PyProjectManifest::from_toml_str(source)
+            .unwrap_or_else(|error| panic!("{}", format_parse_error(source, error)))
             .into_workspace_manifest()
-            .unwrap_or_else(|error| panic!("{}", format_parse_error(&source, error)))
+            .unwrap_or_else(|error| panic!("{}", format_parse_error(source, error)))
             .0;
 
         Workspace {

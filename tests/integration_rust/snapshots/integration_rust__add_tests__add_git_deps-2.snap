@@ -1,11 +1,11 @@
 ---
 source: tests/integration_rust/add_tests.rs
-expression: pixi.project().unwrap().manifest().source.to_string()
+expression: pixi.workspace().unwrap().workspace.provenance.read().unwrap().into_inner()
 ---
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
+platforms = ["win-64"]
 preview = ['pixi-build']
 
 [dependencies]

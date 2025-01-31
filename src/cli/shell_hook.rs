@@ -171,7 +171,7 @@ mod tests {
     async fn test_shell_hook() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Platform::current());
-        let project = WorkspaceLocator::new().locate().unwrap();
+        let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
         let script = generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment)
             .await

@@ -1,6 +1,5 @@
 ---
-source: src/project/environment.rs
-assertion_line: 475
+source: src/workspace/environment.rs
 expression: format_dependencies(deps)
 ---
 foo = ">=1.0"

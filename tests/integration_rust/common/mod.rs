@@ -243,19 +243,19 @@ impl PixiControl {
         Ok(())
     }
 
-    /// Loads the project manifest and returns it.
-    pub fn project(&self) -> miette::Result<Workspace> {
-        Workspace::load_or_else_discover(Some(&self.manifest_path())).into_diagnostic()
+    /// Loads the workspace manifest and returns it.
+    pub fn workspace(&self) -> miette::Result<Workspace> {
+        Workspace::from_path(&self.manifest_path()).into_diagnostic()
     }
 
-    /// Get the path to the project
-    pub fn project_path(&self) -> &Path {
+    /// Get the path to the workspace
+    pub fn workspace_path(&self) -> &Path {
         self.tmpdir.path()
     }
 
     /// Get path to default environment
     pub fn default_env_path(&self) -> miette::Result<PathBuf> {
-        let project = self.project()?;
+        let project = self.workspace()?;
         let env = project.environment("default");
         let env = env.ok_or_else(|| miette::miette!("default environment not found"))?;
         Ok(self.tmpdir.path().join(env.dir()))
@@ -263,16 +263,20 @@ impl PixiControl {
 
     pub fn manifest_path(&self) -> PathBuf {
         // Either pixi.toml or pyproject.toml
-        if self.project_path().join(consts::PROJECT_MANIFEST).exists() {
-            self.project_path().join(consts::PROJECT_MANIFEST)
+        if self
+            .workspace_path()
+            .join(consts::PROJECT_MANIFEST)
+            .exists()
+        {
+            self.workspace_path().join(consts::PROJECT_MANIFEST)
         } else if self
-            .project_path()
+            .workspace_path()
             .join(consts::PYPROJECT_MANIFEST)
             .exists()
         {
-            self.project_path().join(consts::PYPROJECT_MANIFEST)
+            self.workspace_path().join(consts::PYPROJECT_MANIFEST)
         } else {
-            self.project_path().join(consts::PROJECT_MANIFEST)
+            self.workspace_path().join(consts::PROJECT_MANIFEST)
         }
     }
 
@@ -290,7 +294,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.project_path().to_path_buf(),
+                path: self.workspace_path().to_path_buf(),
                 channels: None,
                 platforms: Vec::new(),
                 env_file: None,
@@ -308,7 +312,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.project_path().to_path_buf(),
+                path: self.workspace_path().to_path_buf(),
                 channels: None,
                 platforms,
                 env_file: None,
@@ -366,7 +370,7 @@ impl PixiControl {
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
             args: remove::Args {
-                project_config: WorkspaceConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
@@ -447,7 +451,7 @@ impl PixiControl {
             .or_else(|| Some(self.manifest_path()));
 
         // Load the project
-        let project = self.project()?;
+        let project = self.workspace()?;
 
         // Extract the passed in environment name.
         let explicit_environment = args
@@ -554,14 +558,14 @@ impl PixiControl {
     /// If you want to lock-file to be up-to-date with the project call
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
-        let project = Workspace::load_or_else_discover(Some(&self.manifest_path()))?;
-        pixi::load_lock_file(&project).await
+        let workspace = Workspace::from_path(&self.manifest_path())?;
+        pixi::load_lock_file(&workspace).await
     }
 
     /// Load the current lock-file and makes sure that its up to date with the
     /// project.
     pub async fn update_lock_file(&self) -> miette::Result<LockFile> {
-        let project = self.project()?;
+        let project = self.workspace()?;
         Ok(project
             .update_lock_file(UpdateLockFileOptions::default())
             .await?
@@ -620,6 +624,7 @@ impl TasksControl<'_> {
                 feature: feature_name,
             }),
         })
+        .await
     }
 
     /// Alias one or multiple tasks

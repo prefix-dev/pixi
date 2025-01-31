@@ -5,7 +5,7 @@ use miette::{Diagnostic, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{
     utils::WithSourceCode, ExplicitManifestError, LoadManifestsError, Manifests, TomlError,
-    Warning, WithWarnings, WorkspaceDiscoveryError,
+    WarningWithSource, WithWarnings, WorkspaceDiscoveryError,
 };
 use thiserror::Error;
 
@@ -29,6 +29,7 @@ pub enum DiscoveryStart {
 
 /// A helper struct that helps discover the workspace root and potentially the
 /// "current" package.
+#[derive(Default)]
 pub struct WorkspaceLocator {
     start: DiscoveryStart,
     with_closest_package: bool,
@@ -49,7 +50,7 @@ pub enum WorkspaceLocatorError {
     /// A TOML parsing error occurred while trying to discover the workspace.
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Toml(#[from] WithSourceCode<TomlError, NamedSource<Arc<str>>>),
+    Toml(#[from] Box<WithSourceCode<TomlError, NamedSource<Arc<str>>>>),
 
     /// The workspace could not be located.
     #[error(
@@ -66,20 +67,10 @@ pub enum WorkspaceLocatorError {
 }
 
 impl WorkspaceLocator {
-    /// Constructs a new instance.
-    pub fn new() -> Self {
-        Self {
-            start: DiscoveryStart::default(),
-            with_closest_package: false,
-            emit_warnings: false,
-            consider_environment: false,
-        }
-    }
-
     /// Constructs a new instance tailored for finding the workspace for CLI
     /// commands.
     pub fn for_cli() -> Self {
-        Self::new()
+        Self::default()
             .with_emit_warnings(true)
             .with_consider_environment(true)
     }
@@ -180,7 +171,7 @@ impl WorkspaceLocator {
                 if warnings.len() == 1 { "" } else { "s" },
                 warnings
                     .into_iter()
-                    .map(|warning| Report::from(warning))
+                    .map(Report::from)
                     .format_with("\n", |w, f| f(&format_args!("{:?}", w)))
             );
         }
@@ -192,10 +183,7 @@ impl WorkspaceLocator {
     fn apply_environment_overrides(
         discovered_workspace: Option<Manifests>,
         emit_warnings: bool,
-    ) -> Result<
-        Option<WithWarnings<Manifests, WithSourceCode<Warning, NamedSource<Arc<str>>>>>,
-        WorkspaceLocatorError,
-    > {
+    ) -> Result<Option<WithWarnings<Manifests, WarningWithSource>>, WorkspaceLocatorError> {
         let env_manifest_path = std::env::var("PIXI_PROJECT_MANIFEST")
             .map(PathBuf::from)
             .ok();

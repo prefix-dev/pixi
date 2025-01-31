@@ -1,24 +1,24 @@
-use crate::workspace::errors::UnsupportedPlatformError;
-use crate::workspace::Environment;
+use std::collections::HashMap;
+
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_default_versions::{default_glibc_version, default_linux_version, default_mac_os_version};
-use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
+use pixi_manifest::{FeaturesExt, LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use rattler_virtual_packages::{
     Archspec, Cuda, DetectVirtualPackageError, LibC, Linux, Osx, VirtualPackage,
     VirtualPackageOverrides,
 };
-use std::collections::HashMap;
 use thiserror::Error;
 
-use pixi_manifest::FeaturesExt;
+use crate::workspace::{errors::UnsupportedPlatformError, Environment};
 
-/// Returns a reasonable modern set of virtual packages that should be safe enough to assume.
-/// At the time of writing, this is in sync with the conda-lock set of minimal virtual packages.
-/// <https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175>
+/// Returns a reasonable modern set of virtual packages that should be safe
+/// enough to assume. At the time of writing, this is in sync with the
+/// conda-lock set of minimal virtual packages. <https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175>
 ///
-/// The method also takes into account system requirements specified in the project manifest.
+/// The method also takes into account system requirements specified in the
+/// project manifest.
 pub(crate) fn get_minimal_virtual_packages(
     platform: Platform,
     system_requirements: &SystemRequirements,
@@ -73,15 +73,16 @@ pub(crate) fn get_minimal_virtual_packages(
 }
 
 impl Environment<'_> {
-    /// Returns the set of virtual packages to use for the specified platform. This method
-    /// takes into account the system requirements specified in the project manifest.
+    /// Returns the set of virtual packages to use for the specified platform.
+    /// This method takes into account the system requirements specified in
+    /// the project manifest.
     pub(crate) fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
         get_minimal_virtual_packages(platform, &self.system_requirements())
     }
 }
 
-/// An error that occurs when the current platform does not satisfy the minimal virtual package
-/// requirements.
+/// An error that occurs when the current platform does not satisfy the minimal
+/// virtual package requirements.
 #[derive(Debug, Error, Diagnostic)]
 pub enum VerifyCurrentPlatformError {
     #[error("The current platform does not satisfy the minimal virtual package requirements")]
@@ -112,7 +113,8 @@ pub enum VerifyCurrentPlatformError {
     },
 }
 
-/// Verifies if the current platform satisfies the minimal virtual package requirements.
+/// Verifies if the current platform satisfies the minimal virtual package
+/// requirements.
 pub(crate) fn verify_current_platform_has_required_virtual_packages(
     environment: &Environment<'_>,
 ) -> Result<(), VerifyCurrentPlatformError> {
@@ -140,7 +142,8 @@ pub(crate) fn verify_current_platform_has_required_virtual_packages(
         .into_iter()
         .map(GenericVirtualPackage::from);
 
-    // Check for every local minimum package if it is available and on the correct version.
+    // Check for every local minimum package if it is available and on the correct
+    // version.
     for req_pkg in required_pkgs {
         if req_pkg.name.as_normalized() == "__archspec" {
             // Skip archspec packages completely for now.
@@ -157,7 +160,8 @@ pub(crate) fn verify_current_platform_has_required_virtual_packages(
             }
 
             if req_pkg.version > local_vpkg.version {
-                // This case can simply happen because the default system requirements in get_minimal_virtual_packages() is higher than required.
+                // This case can simply happen because the default system requirements in
+                // get_minimal_virtual_packages() is higher than required.
                 return Err(VerifyCurrentPlatformError::MismatchingVersion {
                     required: req_pkg.name.as_source().to_string(),
                     required_version: Box::from(req_pkg.version),
@@ -178,10 +182,11 @@ pub(crate) fn verify_current_platform_has_required_virtual_packages(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use insta::assert_debug_snapshot;
     use pixi_manifest::SystemRequirements;
     use rattler_conda_types::Platform;
+
+    use super::*;
 
     // Regression test on the virtual packages so there is not accidental changes
     #[test]
@@ -203,8 +208,9 @@ mod tests {
                 .into_iter()
                 .map(GenericVirtualPackage::from)
                 .collect_vec();
-            let snapshot_name = format!("test_get_minimal_virtual_packages.{}", platform);
-            assert_debug_snapshot!(snapshot_name, packages);
+            insta::with_settings!({snapshot_suffix => platform.as_str()}, {
+                assert_debug_snapshot!(packages);
+            });
         }
     }
 }

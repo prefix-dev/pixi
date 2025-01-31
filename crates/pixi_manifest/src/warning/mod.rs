@@ -1,7 +1,9 @@
 mod deprecation;
 
+use crate::utils::WithSourceCode;
 pub use deprecation::Deprecation;
-use miette::Diagnostic;
+use miette::{Diagnostic, NamedSource};
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Debug, Error, Diagnostic)]
@@ -31,3 +33,5 @@ impl<T, W> From<T> for WithWarnings<T, W> {
         }
     }
 }
+
+pub type WarningWithSource = WithSourceCode<Warning, NamedSource<Arc<str>>>;

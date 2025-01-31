@@ -158,11 +158,11 @@ async fn install_locked_with_config() {
 
     // Overwrite install location to a target directory
     let mut config = Config::default();
-    let target_dir = pixi.project_path().join("target");
+    let target_dir = pixi.workspace_path().join("target");
     config.detached_environments = Some(DetachedEnvironments::Path(target_dir.clone()));
     fs_err::create_dir_all(target_dir.clone()).unwrap();
 
-    let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
+    let config_path = pixi.workspace().unwrap().pixi_dir().join("config.toml");
     fs_err::create_dir_all(config_path.parent().unwrap()).unwrap();
 
     let mut file = File::create(config_path).unwrap();
@@ -223,6 +223,7 @@ async fn install_locked_with_config() {
         .add("which_python".into(), None, FeatureName::Default)
         .with_commands([which_command])
         .execute()
+        .await
         .unwrap();
 
     let result = pixi
@@ -643,14 +644,14 @@ setup(
 
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
 
-    let project_path = pixi.project_path();
+    let project_path = pixi.workspace_path();
     // Write setup.py to a my-pkg folder
     let my_pkg = project_path.join("my-pkg");
     fs_err::create_dir_all(&my_pkg).unwrap();
     fs_err::write(my_pkg.join("setup.py"), setup_py).unwrap();
 
     let has_pkg = pixi
-        .project()
+        .workspace()
         .unwrap()
         .default_environment()
         .pypi_options()
@@ -715,7 +716,7 @@ async fn test_many_linux_wheel_tag() {
 async fn test_ensure_gitignore_file_creation() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    let gitignore_path = pixi.project().unwrap().pixi_dir().join(".gitignore");
+    let gitignore_path = pixi.workspace().unwrap().pixi_dir().join(".gitignore");
     assert!(
         !gitignore_path.exists(),
         ".pixi/.gitignore file should not exist"
