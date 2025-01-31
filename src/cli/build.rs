@@ -42,6 +42,7 @@ struct ProgressReporter {
 
 impl ProgressReporter {
     fn new(source: &str) -> Self {
+        #[allow(clippy::literal_string_with_formatting_args)]
         let style = indicatif::ProgressStyle::default_bar()
             .template("{spinner:.dim} {elapsed} {prefix} {wide_msg:.dim}")
             .expect("should be able to create a progress bar style");

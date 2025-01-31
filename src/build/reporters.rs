@@ -100,6 +100,7 @@ impl SourceCheckoutReporter {
 
     /// Similar to the default pixi_progress::default_progress_style, but with a spinner in front.
     pub fn spinner_style() -> indicatif::ProgressStyle {
+        #[allow(clippy::literal_string_with_formatting_args)]
         indicatif::ProgressStyle::with_template("  {spinner:.green} {prefix:30!} {wide_msg:.dim}")
             .expect("should be able to create a progress bar style")
     }

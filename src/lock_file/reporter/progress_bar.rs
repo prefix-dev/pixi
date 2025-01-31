@@ -87,6 +87,7 @@ impl SolveProgressBar {
     pub(crate) fn reset_style(&self) {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(
+                #[allow(clippy::literal_string_with_formatting_args)]
                 "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {msg:.dim}",
             )
             .expect("should be able to create a progress bar style"),

@@ -758,6 +758,7 @@ impl CondaBuildProgress {
         let (identifier, pb) = locked.get(build_id).expect("build id should exist");
         // If there is an alternative message, use that
         let msg = if let Some(msg) = alternative_message {
+            #[allow(clippy::literal_string_with_formatting_args)]
             pb.set_style(
                 indicatif::ProgressStyle::with_template("    {msg}")
                     .expect("should be able to create a progress bar style"),
@@ -765,6 +766,7 @@ impl CondaBuildProgress {
             msg
         } else {
             // Otherwise show the default message
+            #[allow(clippy::literal_string_with_formatting_args)]
             pb.set_style(
                 indicatif::ProgressStyle::with_template("    {msg} in {elapsed}")
                     .expect("should be able to create a progress bar style"),

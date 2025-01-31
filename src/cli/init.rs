@@ -563,9 +563,8 @@ fn relevant_s3_options(
             NamedChannelOrUrl::Name(_) => None,
             NamedChannelOrUrl::Path(_) => None,
             NamedChannelOrUrl::Url(url) => {
-                let host = url.host();
-                if url.scheme() == "s3" && host.is_some() {
-                    Some(host.unwrap().to_string())
+                if url.scheme() == "s3" {
+                    url.host().map(|host| host.to_string())
                 } else {
                     None
                 }
