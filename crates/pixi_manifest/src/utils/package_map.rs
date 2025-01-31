@@ -1,12 +1,16 @@
-use crate::utils::PixiSpanned;
+use std::{fmt, marker::PhantomData, ops::Range, str::FromStr};
+
 use indexmap::IndexMap;
+use itertools::Itertools;
 use pixi_spec::PixiSpec;
+use rattler_conda_types::PackageName;
 use serde::{
     de::{DeserializeSeed, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize,
 };
-use std::ops::Range;
-use std::{fmt, marker::PhantomData};
+use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Span, Value};
+
+use crate::utils::PixiSpanned;
 
 #[derive(Clone, Default, Debug, Serialize)]
 pub struct UniquePackageMap {
@@ -87,7 +91,7 @@ impl<'de> Deserialize<'de> for UniquePackageMap {
 
 struct PackageMap<'a>(&'a IndexMap<rattler_conda_types::PackageName, PixiSpec>);
 
-impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
+impl<'de> DeserializeSeed<'de> for PackageMap<'_> {
     type Value = PixiSpanned<rattler_conda_types::PackageName>;
 
     fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
@@ -104,5 +108,92 @@ impl<'de, 'a> DeserializeSeed<'de> for PackageMap<'a> {
             }
             None => Ok(package_name),
         }
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for UniquePackageMap {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let table = match value.take() {
+            ValueInner::Table(table) => table,
+            inner => return Err(expected("a table", inner, value.span).into()),
+        };
+
+        let mut errors = DeserError { errors: vec![] };
+        let mut result = Self::default();
+        for (key, mut value) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
+            let name = match PackageName::from_str(&key.name) {
+                Ok(name) => {
+                    if let Some(first) = result.name_spans.get(&name) {
+                        errors.errors.push(toml_span::Error {
+                            kind: toml_span::ErrorKind::DuplicateKey {
+                                key: key.name.into_owned(),
+                                first: Span {
+                                    start: first.start,
+                                    end: first.end,
+                                },
+                            },
+                            span: key.span,
+                            line_info: None,
+                        });
+                        None
+                    } else {
+                        Some(name)
+                    }
+                }
+                Err(e) => {
+                    errors.errors.push(toml_span::Error {
+                        kind: toml_span::ErrorKind::Custom(e.to_string().into()),
+                        span: key.span,
+                        line_info: None,
+                    });
+                    None
+                }
+            };
+
+            let spec: Option<PixiSpec> = match toml_span::Deserialize::deserialize(&mut value) {
+                Ok(spec) => Some(spec),
+                Err(e) => {
+                    errors.merge(e);
+                    None
+                }
+            };
+
+            if let (Some(name), Some(spec)) = (name, spec) {
+                result.specs.insert(name.clone(), spec);
+                result
+                    .name_spans
+                    .insert(name.clone(), key.span.start..key.span.end);
+                result
+                    .value_spans
+                    .insert(name, value.span.start..value.span.end);
+            }
+        }
+
+        if errors.errors.is_empty() {
+            Ok(result)
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use insta::assert_snapshot;
+
+    use super::*;
+    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+
+    #[test]
+    pub fn test_duplicate_package_name() {
+        let input = r#"
+        foo = "1.0"
+        bar = "2.0"
+        Foo = "1.0"
+        "#;
+        assert_snapshot!(format_parse_error(
+            input,
+            UniquePackageMap::from_toml_str(input).unwrap_err()
+        ));
     }
 }

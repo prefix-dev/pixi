@@ -17,7 +17,7 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
@@ -30,7 +30,6 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
-use rattler_solve::ChannelPriority;
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -43,7 +42,7 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::{BuildContext, GlobHashCache},
+    build::{BuildContext, GlobHashCache, SourceCheckoutReporter},
     environment::{
         self, read_environment_file, write_environment_file, EnvironmentFile, LockFileUsage,
         LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
@@ -222,13 +221,25 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            let contains_source_packages = self.lock_file.environments().any(|(_, env)| {
+            // If we contain source packages from conda or PyPI we update the prefix by default
+            let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
                 env.conda_packages(Platform::current())
-                    .map_or(false, |mut packages| {
+                    .is_some_and(|mut packages| {
                         packages.any(|package| package.as_source().is_some())
                     })
             });
-            if contains_source_packages {
+
+            // Check if we have source packages from PyPI
+            // that is a directory, this is basically the only kind of source dependency
+            // that you'll modify on a general basis.
+            let contains_pypi_source_pkgs = environment
+                .pypi_dependencies(Some(Platform::current()))
+                .iter()
+                .any(|(_, req)| {
+                    req.iter()
+                        .any(|dep| dep.as_path().map(|p| p.is_dir()).unwrap_or_default())
+                });
+            if contains_conda_source_pkgs || contains_pypi_source_pkgs {
                 tracing::debug!("Lock file contains source packages: ignore lock file hash and update the prefix");
             } else {
                 tracing::info!(
@@ -290,6 +301,11 @@ impl<'p> LockFileDerivedData<'p> {
             .await?;
 
         let non_isolated_packages = environment.pypi_options().no_build_isolation;
+        let no_build = environment
+            .pypi_options()
+            .no_build
+            .clone()
+            .unwrap_or_default();
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -305,6 +321,7 @@ impl<'p> LockFileDerivedData<'p> {
             self.project.root(),
             environment.best_platform(),
             non_isolated_packages,
+            &no_build,
         )
         .await
         .with_context(|| {
@@ -1364,7 +1381,8 @@ impl<'p> UpdateContext<'p> {
         let top_level_progress =
             global_multi_progress().add(ProgressBar::new(pending_futures.len() as u64));
         top_level_progress.set_style(indicatif::ProgressStyle::default_bar()
-            .template("{spinner:.cyan} {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}").unwrap()
+            .template("{spinner:.cyan} {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}")
+            .expect("should be able to set style")
             .progress_chars("━━╾─"));
         top_level_progress.enable_steady_tick(Duration::from_millis(50));
         top_level_progress.set_prefix("updating lock-file");
@@ -1713,6 +1731,10 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.project().channel_config();
 
+    // A root progress bar for the task. It is used to attach sub-progress bars to,
+    // that doesn't need to be split up between multiple platforms.
+    let root_pb = global_multi_progress().add(ProgressBar::hidden());
+
     tokio::spawn(
         async move {
             // Acquire a permit before we are allowed to solve the environment.
@@ -1754,6 +1776,7 @@ async fn spawn_solve_conda_environment_task(
                 .into_diagnostic()?;
 
             let mut metadata_progress = None;
+            let mut source_progress = None;
             let mut source_match_specs = Vec::new();
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
@@ -1764,6 +1787,13 @@ async fn spawn_solve_conda_environment_task(
                         source_specs.len() as u64,
                     ))
                 });
+                let source_reporter = source_progress.get_or_insert_with(|| {
+                    Arc::new(SourceCheckoutReporter::new(
+                        root_pb.clone(),
+                        global_multi_progress(),
+                    ))
+                });
+
                 source_futures.push(
                     build_context
                         .extract_source_metadata(
@@ -1774,6 +1804,7 @@ async fn spawn_solve_conda_environment_task(
                             platform,
                             virtual_packages.clone(),
                             metadata_reporter.clone(),
+                            Some(source_reporter.clone()),
                             build_id,
                         )
                         .map_err(|e| {

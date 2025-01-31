@@ -5,6 +5,7 @@ use crate::project::{MatchSpecs, PypiDeps};
 use crate::Project;
 use clap::Parser;
 use fancy_display::FancyDisplay;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::MietteDiagnostic;
 use miette::{Context, IntoDiagnostic};
@@ -76,6 +77,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .update_dependencies(
             match_specs,
             pypi_deps,
+            IndexMap::default(),
             &args.prefix_update_config,
             &args.specs.feature,
             &[],
@@ -106,7 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let diff = update_deps.lock_file_diff;
         // Format as json?
         if args.json {
-            let json_diff = LockFileJsonDiff::new(&project, diff);
+            let json_diff = LockFileJsonDiff::new(Some(&project), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
             println!("{}", json);
         } else {

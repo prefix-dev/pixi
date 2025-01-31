@@ -2,6 +2,10 @@
 
 In this tutorial, we will show you how to create a simple Python package with pixi.
 
+!!! warning
+    `pixi-build` is a preview feature, and will change until it is stabilized.
+    Please keep that in mind when you use it for your projects.
+
 ## Why is this useful?
 
 Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
@@ -90,8 +94,8 @@ This is the content of the `pixi.toml`:
 3. We define a task that runs the `rich-example-main` executable we defined earlier. You can learn more about tasks in this [section](../features/advanced_tasks.md)
 4. In `package` we define the actual pixi package. This information will be used when other pixi packages or workspaces depend on our package or when we upload it to a conda channel.
 5. The same way, Python uses build backends to build a Python package, pixi uses build backends to build pixi packages. `pixi-build-python` creates a pixi package out of a Python package.
-6. In `host-dependencies`, we add Python dependencies that are necessary to build the Python package. By adding them here as well, the dependencies will come from the conda channel rather than PyPI.
-7. In `run-dependencies`, we add the Python dependencies needed during runtime.
+6. In `package.host-dependencies`, we add Python dependencies that are necessary to build the Python package. By adding them here as well, the dependencies will come from the conda channel rather than PyPI.
+7. In `package.run-dependencies`, we add the Python dependencies needed during runtime.
 
 
 When we now run `pixi run start`, we get the following output:

@@ -1,33 +1,27 @@
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::fmt;
-use std::path::Path;
-use std::str::FromStr;
+use std::{cmp::Ordering, fmt, path::Path, str::FromStr};
 
-use super::environment::EnvironmentName;
-use super::ExposedData;
-use crate::global::Mapping;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
-use pixi_manifest::utils::package_map::UniquePackageMap;
-use pixi_manifest::PrioritizedChannel;
+use pixi_manifest::{toml::TomlPlatform, utils::package_map::UniquePackageMap, PrioritizedChannel};
 use pixi_spec::PixiSpec;
+use pixi_toml::{TomlIndexMap, TomlIndexSet};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
-use serde::de::{Deserialize, Deserializer, Visitor};
-use serde::ser::SerializeMap;
-use serde::{Serialize, Serializer};
-use serde_with::{serde_as, serde_derive::Deserialize};
+use serde::{ser::SerializeMap, Serialize, Serializer};
+use serde_with::serde_derive::Deserialize;
 use thiserror::Error;
-use toml_edit::TomlError;
+use toml_span::{de_helpers::TableHelper, DeserError, Deserialize, Value};
 
-pub const GLOBAL_MANIFEST_VERSION: u32 = 1;
+use super::{environment::EnvironmentName, ExposedData};
+use crate::global::{project::manifest::TomlMapping, Mapping};
+
+pub const GLOBAL_MANIFEST_VERSION: i64 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct ManifestVersion(u32);
+pub(crate) struct ManifestVersion(i64);
 
 impl Default for ManifestVersion {
     fn default() -> Self {
@@ -37,18 +31,22 @@ impl Default for ManifestVersion {
 
 impl From<ManifestVersion> for toml_edit::Item {
     fn from(version: ManifestVersion) -> Self {
-        toml_edit::value(version.0 as i64)
+        toml_edit::value(version.0)
     }
 }
 
-#[derive(Error, Debug, Clone, Diagnostic)]
+#[derive(Error, Debug, Clone)]
 pub enum ManifestParsingError {
     #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
-    #[error("The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest")]
-    VersionTooLow(u32, #[source] toml_edit::TomlError),
-    #[error("The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version")]
-    VersionTooHigh(u32, #[source] toml_edit::TomlError),
+    #[error(transparent)]
+    TomlError(#[from] toml_span::Error),
+    #[error("The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest"
+    )]
+    VersionTooLow(i64, #[source] toml_span::Error),
+    #[error("The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version"
+    )]
+    VersionTooHigh(i64, #[source] toml_span::Error),
 }
 
 impl ManifestParsingError {
@@ -78,19 +76,39 @@ impl ManifestParsingError {
     fn span(&self) -> Option<std::ops::Range<usize>> {
         match self {
             ManifestParsingError::Error(e) => e.span(),
+            ManifestParsingError::TomlError(e) => Some(e.span.into()),
             _ => None,
         }
     }
     fn message(&self) -> String {
         match self {
             ManifestParsingError::Error(e) => e.message().to_owned(),
+            ManifestParsingError::TomlError(err) => match &err.kind {
+                toml_span::ErrorKind::UnexpectedKeys { expected, .. } => {
+                    format!(
+                        "Unexpected keys, expected only {}",
+                        expected
+                            .iter()
+                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                    )
+                }
+                toml_span::ErrorKind::UnexpectedValue { expected, .. } => {
+                    format!(
+                        "Expected one of {}",
+                        expected
+                            .iter()
+                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
+                    )
+                }
+                _ => err.to_string(),
+            },
             _ => self.to_string(),
         }
     }
 }
 
 /// Describes the contents of a parsed global project manifest.
-#[derive(Debug, Clone, Serialize, Default)]
+#[derive(Debug, Clone, Default, Serialize)]
 pub struct ParsedManifest {
     /// The version of the manifest
     version: ManifestVersion,
@@ -98,41 +116,84 @@ pub struct ParsedManifest {
     pub(crate) envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
+impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let version = th
+            .optional("version")
+            .map(ManifestVersion)
+            .unwrap_or_default();
+        let envs = th
+            .optional::<TomlIndexMap<_, ParsedEnvironment>>("envs")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default();
+
+        // Check for duplicate keys in the exposed fields
+        let mut exposed_names = IndexSet::new();
+        let mut duplicates = IndexMap::new();
+        for key in envs
+            .values()
+            .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
+        {
+            if !exposed_names.insert(key) {
+                duplicates.entry(key).or_insert_with(Vec::new).push(key);
+            }
+        }
+        if !duplicates.is_empty() {
+            return Err(DeserError::from(toml_span::Error {
+                kind: toml_span::ErrorKind::Custom(
+                    format!(
+                        "Duplicated exposed names found: {}",
+                        duplicates
+                            .keys()
+                            .sorted()
+                            .map(|exposed_name| exposed_name.fancy_display())
+                            .join(", ")
+                    )
+                    .into(),
+                ),
+                span: value.span,
+                line_info: None,
+            }));
+        }
+
+        th.finalize(None)?;
+
+        Ok(Self { version, envs })
+    }
+}
+
 impl ParsedManifest {
     /// Parses a toml string into a project manifest.
     pub(crate) fn from_toml_str(source: &str) -> Result<Self, ManifestParsingError> {
-        // If it fails only try to get version from the file to see if we can create a better error based on that.
-        match toml_edit::de::from_str::<Self>(source) {
-            Ok(toml) => Ok(toml),
-            Err(e) => {
-                // Define a struct that only includes the `version` field.
-                #[derive(Deserialize)]
-                struct VersionOnly {
-                    version: ManifestVersion,
-                }
+        let mut toml_value = toml_span::parse(source)?;
 
-                // Attempt to deserialize the TOML string into `VersionOnly`.
-                match toml_edit::de::from_str::<VersionOnly>(source) {
-                    Ok(version_only) => {
-                        let version = version_only.version.0;
-                        // Check if the version is supported.
-                        match version.cmp(&GLOBAL_MANIFEST_VERSION) {
-                            Ordering::Greater => Err(ManifestParsingError::VersionTooHigh(
-                                version,
-                                TomlError::from(e),
-                            )),
-                            Ordering::Less => Err(ManifestParsingError::VersionTooLow(
-                                version,
-                                TomlError::from(e),
-                            )),
-                            // Version is supported, but there was another parsing error.
-                            Ordering::Equal => Err(ManifestParsingError::Error(TomlError::from(e))),
+        let version = toml_value
+            .as_table()
+            .and_then(|table| table.get("version"))
+            .and_then(|version| version.as_integer());
+
+        match ParsedManifest::deserialize(&mut toml_value) {
+            Ok(manifest) => Ok(manifest),
+            Err(e) => {
+                let error = e
+                    .errors
+                    .into_iter()
+                    .next()
+                    .expect("there should be at least one error");
+                if let Some(version) = version {
+                    // Check if the version is supported.
+                    match version.cmp(&GLOBAL_MANIFEST_VERSION) {
+                        Ordering::Greater => {
+                            Err(ManifestParsingError::VersionTooHigh(version, error))
                         }
+                        Ordering::Less => Err(ManifestParsingError::VersionTooLow(version, error)),
+                        // Version is supported, but there was another parsing error.
+                        Ordering::Equal => Err(ManifestParsingError::TomlError(error)),
                     }
-                    Err(_) => {
-                        // Could not extract the version; return the original error.
-                        Err(ManifestParsingError::Error(TomlError::from(e)))
-                    }
+                } else {
+                    Err(ManifestParsingError::TomlError(error))
                 }
             }
         }
@@ -173,67 +234,6 @@ where
     }
 }
 
-impl<'de> serde::Deserialize<'de> for ParsedManifest {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[serde_as]
-        #[derive(Deserialize, Debug, Clone)]
-        #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-        pub struct TomlManifest {
-            /// The version of the manifest
-            #[serde(default)]
-            version: ManifestVersion,
-            /// The environments the project can create.
-            #[serde(default)]
-            envs: IndexMap<EnvironmentName, ParsedEnvironment>,
-        }
-
-        let manifest = TomlManifest::deserialize(deserializer)?;
-
-        // Check for duplicate keys in the exposed fields
-        let mut exposed_names = IndexSet::new();
-        let mut duplicates = IndexMap::new();
-        for key in manifest
-            .envs
-            .values()
-            .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
-        {
-            if !exposed_names.insert(key) {
-                duplicates.entry(key).or_insert_with(Vec::new).push(key);
-            }
-        }
-        if !duplicates.is_empty() {
-            return Err(serde::de::Error::custom(format!(
-                "Duplicated exposed names found: {}",
-                duplicates
-                    .keys()
-                    .sorted()
-                    .map(|exposed_name| exposed_name.fancy_display())
-                    .join(", ")
-            )));
-        }
-
-        Ok(Self {
-            version: manifest.version,
-            envs: manifest.envs,
-        })
-    }
-}
-
-/// Deserialize a map of exposed names to executable names.
-fn deserialize_expose_mappings<'de, D>(deserializer: D) -> Result<IndexSet<Mapping>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let map: HashMap<ExposedName, String> = HashMap::deserialize(deserializer)?;
-    Ok(map
-        .into_iter()
-        .map(|(exposed_name, executable_name)| Mapping::new(exposed_name, executable_name))
-        .collect())
-}
-
 /// Custom serializer for a map of exposed names to executable names.
 fn serialize_expose_mappings<S>(
     mappings: &IndexSet<Mapping>,
@@ -249,22 +249,41 @@ where
     map.end()
 }
 
-#[serde_as]
-#[derive(Deserialize, Serialize, Debug, Clone, Default)]
+#[derive(Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
-    #[serde_as(as = "IndexSet<pixi_manifest::toml::TomlPrioritizedChannel>")]
-    pub channels: IndexSet<pixi_manifest::PrioritizedChannel>,
-    // Platform used by the environment.
+    pub channels: IndexSet<PrioritizedChannel>,
+    /// Platform used by the environment.
     pub platform: Option<Platform>,
-    #[serde(default)]
     pub(crate) dependencies: UniquePackageMap,
-    #[serde(
-        default,
-        deserialize_with = "deserialize_expose_mappings",
-        serialize_with = "serialize_expose_mappings"
-    )]
+    #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub(crate) exposed: IndexSet<Mapping>,
+}
+
+impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
+    fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let channels = th
+            .optional::<TomlIndexSet<PrioritizedChannel>>("channels")
+            .map(TomlIndexSet::into_inner)
+            .unwrap_or_default();
+        let platform = th.optional::<TomlPlatform>("platform").map(Platform::from);
+        let dependencies = th.optional("dependencies").unwrap_or_default();
+        let exposed = th
+            .optional::<TomlMapping>("exposed")
+            .map(TomlMapping::into_inner)
+            .unwrap_or_default();
+
+        th.finalize(None)?;
+
+        Ok(Self {
+            channels,
+            platform,
+            dependencies,
+            exposed,
+        })
+    }
 }
 
 impl ParsedEnvironment {
@@ -275,7 +294,8 @@ impl ParsedEnvironment {
             ..Default::default()
         }
     }
-    /// Returns the platform associated with this platform, `None` means current platform
+    /// Returns the platform associated with this platform, `None` means current
+    /// platform
     pub(crate) fn platform(&self) -> Option<Platform> {
         self.platform
     }
@@ -313,7 +333,10 @@ impl FancyDisplay for ExposedName {
 
 #[derive(Error, Diagnostic, Debug, PartialEq)]
 pub(crate) enum ExposedNameError {
-    #[error("'pixi' is not allowed as exposed name in the map")]
+    #[error(
+        "'{0}' is not allowed as exposed name in the map",
+        pixi_utils::executable_name()
+    )]
     PixiBinParseError,
 }
 
@@ -321,7 +344,7 @@ impl FromStr for ExposedName {
     type Err = ExposedNameError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        if value == "pixi" {
+        if value == pixi_utils::executable_name() {
             Err(ExposedNameError::PixiBinParseError)
         } else {
             Ok(ExposedName(value.to_string()))
@@ -329,35 +352,16 @@ impl FromStr for ExposedName {
     }
 }
 
-impl<'de> Deserialize<'de> for ExposedName {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct ExposedKeyVisitor;
-
-        impl<'de> Visitor<'de> for ExposedKeyVisitor {
-            type Value = ExposedName;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a string that is not 'pixi'")
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: serde::de::Error,
-            {
-                ExposedName::from_str(value).map_err(serde::de::Error::custom)
-            }
-        }
-
-        deserializer.deserialize_str(ExposedKeyVisitor)
+impl<'de> toml_span::Deserialize<'de> for ExposedName {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        Ok(toml_span::de_helpers::parse(value)?)
     }
 }
 
 /// Represents an error that occurs when parsing an binary exposed name.
 ///
-/// This error is returned when a string fails to be parsed as an environment name.
+/// This error is returned when a string fails to be parsed as an environment
+/// name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error("pixi is not allowed as exposed name in the map")]
 pub struct ParseExposedKeyError {}
@@ -409,9 +413,10 @@ mod tests {
             let re = Regex::new(r"\x1B\[[0-?]*[ -/]*[@-~]").unwrap();
             re.replace_all(input, "").to_string()
         }
-        // Because this error is using `fancy_display`, we need to remove the ANSI escape sequences
-        // before comparing the error message. In CI an interactive tty is not available so the result
-        // will be different when running it locally, it seems :shrug:
+        // Because this error is using `fancy_display`, we need to remove the ANSI
+        // escape sequences before comparing the error message. In CI an
+        // interactive tty is not available so the result will be different when
+        // running it locally, it seems :shrug:
         //
         // Might be better for the error implement `Diagnostic`
         assert!(manifest.is_err());
@@ -444,12 +449,19 @@ mod tests {
         [envs.test.dependencies]
         python = "*"
         [envs.test.exposed]
-        pixi = "python"
+        pixi-bin-name = "python"
         "#;
-        let manifest = ParsedManifest::from_toml_str(contents);
+
+        // Replace the pixi-bin-name with the actual executable name that can be variable at runtime in tests
+        let contents = contents.replace("pixi-bin-name", pixi_utils::executable_name());
+        let manifest = ParsedManifest::from_toml_str(contents.as_str());
 
         assert!(manifest.is_err());
-        assert_snapshot!(manifest.unwrap_err());
+        // Replace back the executable name with "pixi" to satisfy the snapshot
+        assert_snapshot!(manifest
+            .unwrap_err()
+            .to_string()
+            .replace(pixi_utils::executable_name(), "pixi"));
     }
 
     #[test]

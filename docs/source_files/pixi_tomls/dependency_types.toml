@@ -7,20 +7,20 @@ preview = ["pixi-build"]
 name = "simple_cpp"
 version = "0.1.0"
 
-[build-system]
-build-backend = { name = "pixi-build-cmake", version = "*" }
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.1.*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 # --8<-- [start:dependencies]
-[build-dependencies]
+[package.build-dependencies]
 cxx-compiler = "*"
 
-[host-dependencies]
+[package.host-dependencies]
 catch = "*"
 
-[run-dependencies]
+[package.run-dependencies]
 git = "*"
 # --8<-- [end:dependencies]
 # simple_cpp = { path = "." }

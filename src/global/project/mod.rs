@@ -1,11 +1,25 @@
-use std::{
-    ffi::OsStr,
-    fmt::{Debug, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::OnceLock,
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use super::{
+    common::{get_install_changes, EnvironmentUpdate},
+    install::find_binary_by_name,
+    trampoline::{self, GlobalExecutable},
+    BinDir, EnvRoot, StateChange, StateChanges,
 };
-
+use crate::{
+    global::{
+        common::{
+            channel_url_to_prioritized_channel, find_package_records,
+            get_expose_scripts_sync_status,
+        },
+        find_executables, find_executables_for_many_records,
+        install::{create_executable_trampolines, script_exec_mapping},
+        project::environment::environment_specs_in_sync,
+        EnvDir,
+    },
+    prefix::{Executable, Prefix},
+    repodata::Repodata,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
@@ -36,36 +50,21 @@ use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use std::sync::LazyLock;
+use std::{
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::OnceLock,
+};
 use toml_edit::DocumentMut;
-
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
-use super::{
-    common::{get_install_changes, EnvironmentUpdate},
-    install::find_binary_by_name,
-    trampoline::{self, GlobalExecutable},
-    BinDir, EnvRoot, StateChange, StateChanges,
-};
-use crate::{
-    global::{
-        common::{
-            channel_url_to_prioritized_channel, find_package_records,
-            get_expose_scripts_sync_status,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
-        EnvDir,
-    },
-    prefix::{Executable, Prefix},
-    repodata::Repodata,
-    rlimit::try_increase_rlimit_to_sensible,
-};
+use uv_configuration::RAYON_INITIALIZE;
 
 mod environment;
 mod manifest;
 mod parsed_manifest;
 
-pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
 /// The pixi global project, this main struct to interact with the pixi global
@@ -386,15 +385,18 @@ impl Project {
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         // Potential directories, with the highest priority coming first
-        let potential_dirs = [pixi_home(), dirs::config_dir().map(|dir| dir.join("pixi"))]
-            .into_iter()
-            .flatten()
-            .map(|dir| dir.join(MANIFESTS_DIR))
-            .collect_vec();
+        let potential_dirs = [
+            pixi_home(),
+            dirs::config_dir().map(|dir| dir.join(consts::CONFIG_DIR)),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|dir| dir.join(MANIFESTS_DIR))
+        .collect_vec();
 
         // First, check if a `pixi-global.toml` already exists
         for dir in &potential_dirs {
-            if dir.join(MANIFEST_DEFAULT_NAME).is_file() {
+            if dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME).is_file() {
                 return Ok(dir.clone());
             }
         }
@@ -408,7 +410,7 @@ impl Project {
 
     /// Get the default path to the global manifest file
     pub(crate) fn default_manifest_path() -> miette::Result<PathBuf> {
-        Self::manifest_dir().map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
+        Self::manifest_dir().map(|dir| dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME))
     }
 
     /// Loads a project from manifest file.
@@ -563,6 +565,10 @@ impl Project {
 
         try_increase_rlimit_to_sensible();
 
+        // Force the initialization of the rayon thread pool to avoid implicit creation
+        // by the Installer.
+        LazyLock::force(&RAYON_INITIALIZE);
+
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
@@ -585,7 +591,7 @@ impl Project {
                             .clear_when_done(true)
                             .finish(),
                     )
-                    .install(prefix.root(), solved_records)
+                    .install(prefix.root(), solved_records.records)
             },
         )
         .await
@@ -1049,13 +1055,8 @@ impl Project {
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
     fn repodata_gateway(&self) -> &Gateway {
-        self.repodata_gateway.get_or_init(|| {
-            Self::repodata_gateway_init(
-                self.authenticated_client().clone(),
-                self.config().clone().into(),
-                self.config().max_concurrent_downloads(),
-            )
-        })
+        self.repodata_gateway
+            .get_or_init(|| self.config().gateway(self.authenticated_client().clone()))
     }
 }
 
@@ -1097,7 +1098,7 @@ mod tests {
     #[tokio::test]
     async fn test_project_from_path() {
         let tempdir = tempfile::tempdir().unwrap();
-        let manifest_path = tempdir.path().join(MANIFEST_DEFAULT_NAME);
+        let manifest_path = tempdir.path().join(consts::GLOBAL_MANIFEST_DEFAULT_NAME);
 
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();
@@ -1176,7 +1177,7 @@ mod tests {
             non_exposed_manifest,
         );
 
-        // write it's trampline and manifest
+        // write it's trampoline and manifest
         non_exposed_trampoline.save().await.unwrap();
 
         // Create exposed binary
@@ -1251,7 +1252,7 @@ mod tests {
 
         // Create project with env1 and env3
         let manifest = Manifest::from_str(
-            &env_root.path().join(MANIFEST_DEFAULT_NAME),
+            &env_root.path().join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
             r#"
             [envs.env1]
             channels = ["conda-forge"]

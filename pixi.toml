@@ -9,7 +9,7 @@ description = "Package management made easy!"
 name = "pixi"
 # Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 
 [dependencies]
 python = "3.12.*"
@@ -56,7 +56,7 @@ test-integration-ci = "pytest --numprocesses=auto --durations=0 --timeout=100 --
 test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python", depends-on = [
   "build-release",
 ] }
-test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 -m 'extra_slow' tests/integration_python"
+test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python"
 test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ] }
@@ -82,6 +82,7 @@ tbump = ">=6.9.0,<6.10"
 actionlint = ">=1.7.4,<2"
 pre-commit = ">=3.7.1,<4"
 pre-commit-hooks = ">=4.6.0,<5"
+prettier = ">=3.4.2,<4"
 ruff = ">=0.4.8,<0.5"
 shellcheck = ">=0.10.0,<0.11"
 taplo = ">=0.9.1,<0.10"
@@ -89,12 +90,13 @@ typos = ">=1.23.1,<2"
 
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
-cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings -Dclippy::dbg_macro"
-cargo-fmt = "cargo fmt"
+cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings"
+cargo-fmt = "cargo fmt --all"
 check-openssl = "python tests/scripts/check-openssl.py"
 lint = "pre-commit run --all-files --hook-stage=manual"
 pre-commit-install = "pre-commit install --install-hooks"
 pre-commit-run = "pre-commit run --all-files"
+prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
@@ -104,10 +106,11 @@ typos = "typos --write-changes --force-exclude"
 
 [feature.build.dependencies]
 # Needed for building
+compilers = ">=1.9.0,<2"
 git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
-rust = "~=1.81.0"
+rust = ">=1.84.0,<1.85"
 
 [feature.build.target.linux-64.dependencies]
 clang = ">=18.1.8,<19.0"
@@ -126,8 +129,7 @@ cairosvg = "2.7.1.*"
 git-cliff = ">=2.4.0,<3"
 mdx_truly_sane_lists = ">=1.3,<2"
 mike = "2.0.0.*"
-mkdocs = "1.5.3.*"
-mkdocs-material = ">=9.5.20,<10"
+mkdocs-material = ">=9.5.49,<10"
 mkdocs-redirects = ">=1.2.1,<2"
 pillow = ">=9.4.0"
 

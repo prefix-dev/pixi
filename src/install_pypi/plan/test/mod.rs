@@ -1,5 +1,5 @@
 use self::harness::{InstalledDistOptions, MockedSitePackages, NoCache, RequiredPackages};
-use crate::install_pypi::plan::test::harness::{AllCached, TEST_PYTHON_VERSION};
+use crate::install_pypi::plan::test::harness::AllCached;
 use crate::install_pypi::NeedReinstall;
 use assert_matches::assert_matches;
 use url::Url;
@@ -202,8 +202,8 @@ fn test_install_required_python_mismatch() {
         NeedReinstall::RequiredPythonChanged {
             ref installed_python_require,
             ref locked_python_version
-        } if installed_python_require.to_string() == "<3.12"
-        && locked_python_version.to_string() == TEST_PYTHON_VERSION
+        } if installed_python_require == "<3.12"
+        && locked_python_version == "None"
     );
     assert!(install_plan.local.is_empty());
     // Not cached we get it from the remote
@@ -453,14 +453,14 @@ fn test_installed_archive_require_registry() {
 /// testing that these are the ones used in the lock file
 #[test]
 fn test_installed_git_require_registry() {
-    let git_url =
+    let requested =
         Url::parse("git+https://github.com/pypa/pip.git@9d4f36d87dae9a968fb527e2cb87e8a507b0beb3")
             .expect("could not parse git url");
 
     let site_packages = MockedSitePackages::new().add_git(
         "pip",
         "1.0.0",
-        git_url.clone(),
+        requested.clone(),
         InstalledDistOptions::default(),
     );
     let required = RequiredPackages::new().add_registry("pip", "1.0.0");
@@ -469,16 +469,22 @@ fn test_installed_git_require_registry() {
     let install_plan = plan
         .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
+
     assert_matches!(
         install_plan.reinstalls[0].1,
         NeedReinstall::UrlMismatch { .. }
     );
 
+    let locked_git_url =
+        Url::parse("git+https://github.com/pypa/pip.git?rev=9d4f36d87dae9a968fb527e2cb87e8a507b0beb3#9d4f36d87dae9a968fb527e2cb87e8a507b0beb3")
+            .expect("could not parse git url");
+
     // Okay now we require the same git package, it should not reinstall
-    let required = RequiredPackages::new().add_git("pip", "1.0.0", git_url.clone());
+    let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url.clone());
     let install_plan = plan
         .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
+
     assert!(
         install_plan.reinstalls.is_empty(),
         "found reinstalls: {:?}",
@@ -489,8 +495,8 @@ fn test_installed_git_require_registry() {
 /// When the git commit differs we should reinstall
 #[test]
 fn test_installed_git_require_git_commit_mismatch() {
-    let installed = "9d4f36d87dae9a968fb527e2cb87e8a507b0beb3";
-    let git_url = Url::parse(format!("git+https://github.com/pypa/pip.git@{installed}").as_str())
+    let requested = "9d4f36d";
+    let git_url = Url::parse(format!("git+https://github.com/pypa/pip.git@{requested}").as_str())
         .expect("could not parse git url");
 
     let site_packages = MockedSitePackages::new().add_git(
@@ -499,9 +505,11 @@ fn test_installed_git_require_git_commit_mismatch() {
         git_url.clone(),
         InstalledDistOptions::default(),
     );
+    let locked_requested = "cf20850";
     let locked = "cf20850e5e42ba9a71748fdf04193c7857cf5f61";
-    let git_url_2 = Url::parse(format!("git+https://github.com/pypa/pip.git@{locked}").as_str())
-        .expect("could not parse git url");
+    let git_url_2 =
+        Url::parse(format!("git+https://github.com/pypa/pip.git?rev=cf20850#{locked}").as_str())
+            .expect("could not parse git url");
     let required = RequiredPackages::new().add_git("pip", "1.0.0", git_url_2);
 
     let plan = harness::install_planner();
@@ -511,7 +519,42 @@ fn test_installed_git_require_git_commit_mismatch() {
 
     assert_matches!(
         install_plan.reinstalls[0].1,
-        NeedReinstall::GitCommitsMismatch { ref installed_commit, ref locked_commit }
-        if installed == installed_commit && locked == locked_commit
+        NeedReinstall::GitRevMismatch { ref installed_rev, ref locked_rev }
+        if requested == installed_rev && locked_requested == locked_rev
+    );
+}
+
+/// When having a git installed, and we require the same version from the registry
+/// we should reinstall, otherwise we should not
+/// note that we are using full git commits here, because it seems from my (Tim)
+/// testing that these are the ones used in the lock file
+#[test]
+fn test_installed_git_the_same() {
+    let requested = Url::parse("git+https://github.com/pypa/pip.git@some-branch")
+        .expect("could not parse git url");
+
+    let site_packages = MockedSitePackages::new().add_git(
+        "pip",
+        "1.0.0",
+        requested.clone(),
+        InstalledDistOptions::default(),
+    );
+
+    let plan = harness::install_planner();
+
+    let locked_git_url =
+        Url::parse("git+https://github.com/pypa/pip.git?branch=some-branch#9d4f36d87dae9a968fb527e2cb87e8a507b0beb3")
+            .expect("could not parse git url");
+
+    // Okay now we require the same git package, it should not reinstall
+    let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url.clone());
+    let install_plan = plan
+        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .expect("should install");
+
+    assert!(
+        install_plan.reinstalls.is_empty(),
+        "found reinstalls: {:?}",
+        install_plan.reinstalls
     );
 }

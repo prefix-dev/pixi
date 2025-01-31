@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Run from the root of the project using `bash tests/test_export.sh`
 set -e
 set -x

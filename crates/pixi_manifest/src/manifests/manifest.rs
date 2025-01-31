@@ -12,7 +12,7 @@ use indexmap::{Equivalent, IndexSet};
 use itertools::Itertools;
 use miette::{miette, IntoDiagnostic, NamedSource, Report, WrapErr};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{PackageName, Platform, Version};
 use toml_edit::{DocumentMut, Value};
 
 use crate::{
@@ -23,10 +23,10 @@ use crate::{
     pypi::PyPiPackageName,
     pyproject::{PyProjectManifest, PyProjectToManifestError},
     to_options,
-    toml::{ExternalWorkspaceProperties, TomlDocument, TomlManifest},
-    BuildSystem, DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
-    GetFeatureError, PrioritizedChannel, PypiDependencyLocation, SpecType, SystemRequirements,
-    TargetSelector, Task, TaskName, WorkspaceManifest, WorkspaceTarget,
+    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlDocument, TomlManifest},
+    DependencyOverwriteBehavior, Environment, EnvironmentName, Feature, FeatureName,
+    GetFeatureError, PackageBuild, PrioritizedChannel, PypiDependencyLocation, SpecType,
+    SystemRequirements, TargetSelector, Task, TaskName, WorkspaceManifest, WorkspaceTarget,
 };
 
 #[derive(Debug, Clone)]
@@ -134,19 +134,19 @@ impl Manifest {
             }
         };
 
-        let ((workspace_manifest, package_manifest), document) = match parsed.and_then(|manifest| {
-            contents
-                .parse::<DocumentMut>()
-                .map(|doc| (manifest, doc))
-                .map_err(TomlError::from)
-        }) {
-            Ok(result) => result,
-            Err(e) => {
-                return Err(
-                    Report::from(e).with_source_code(NamedSource::new(file_name, contents.clone()))
-                );
-            }
-        };
+        let ((workspace_manifest, package_manifest, warnings), document) =
+            match parsed.and_then(|manifest| {
+                contents
+                    .parse::<DocumentMut>()
+                    .map(|doc| (manifest, doc))
+                    .map_err(TomlError::from)
+            }) {
+                Ok(result) => result,
+                Err(e) => {
+                    return Err(Report::from(e)
+                        .with_source_code(NamedSource::new(file_name, contents.clone())));
+                }
+            };
 
         // Validate the contents of the manifest
         workspace_manifest.validate(NamedSource::new(file_name, contents.to_owned()), root)?;
@@ -155,6 +155,20 @@ impl Manifest {
             ManifestKind::Pixi => ManifestSource::PixiToml(TomlDocument::new(document)),
             ManifestKind::Pyproject => ManifestSource::PyProjectToml(TomlDocument::new(document)),
         };
+
+        // Emit warnings
+        if !warnings.is_empty() {
+            tracing::warn!(
+                "Encountered {} warning{} while parsing the manifest:\n{}",
+                warnings.len(),
+                if warnings.len() == 1 { "" } else { "s" },
+                warnings
+                    .into_iter()
+                    .map(|warning| Report::from(warning)
+                        .with_source_code(NamedSource::new(file_name, contents.clone())))
+                    .format_with("\n", |w, f| f(&format_args!("{:?}", w)))
+            );
+        }
 
         Ok(Self {
             path: manifest_path.to_path_buf(),
@@ -338,67 +352,65 @@ impl Manifest {
     /// Remove the platform(s) from the project
     pub fn remove_platforms(
         &mut self,
-        platforms: impl IntoIterator<Item = Platform>,
+        platforms: impl IntoIterator<Item = Platform> + Clone,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // Get current platforms and platform to remove for the feature
+        // Get current platforms for the feature
         let current = match feature_name {
             FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
             FeatureName::Named(_) => self.feature_mut(feature_name)?.platforms_mut(),
         };
-        // Get the platforms to remove, while checking if they exist
-        let to_remove: IndexSet<_> = platforms
-            .into_iter()
-            .map(|c| {
-                current
-                    .iter()
-                    .position(|x| *x == c)
-                    .ok_or_else(|| miette::miette!("platform {} does not exist", c))
-                    .map(|_| c)
-            })
-            .collect::<Result<_, _>>()?;
 
-        let retained: IndexSet<_> = current.difference(&to_remove).cloned().collect();
+        // Check if some platforms are not part of current
+        let missing = platforms
+            .clone()
+            .into_iter()
+            .filter(|p| !current.contains(p))
+            .collect_vec();
+        if !missing.is_empty() {
+            return Err(miette::miette!(
+                "The following platform{} are not part of {}: {}",
+                if missing.len() > 1 { "s are" } else { " is" },
+                feature_name,
+                missing.into_iter().join(", ")
+            ));
+        }
 
         // Remove platforms from the manifest
-        current.retain(|p| retained.contains(p));
+        current.retain(|p| !platforms.clone().into_iter().contains(p));
 
         // And from the TOML document
-        let retained = retained.iter().map(|p| p.to_string()).collect_vec();
+        let retained = current.iter().map(|p| p.to_string()).collect_vec();
         let platforms = self.source.get_array_mut("platforms", feature_name)?;
-        platforms.retain(|x| retained.contains(&x.to_string()));
+        platforms.retain(|p| {
+            p.as_str()
+                .map(|p| retained.contains(&p.to_string()))
+                .unwrap_or(false)
+        });
 
         Ok(())
     }
 
-    /// Add a matchspec to the manifest
+    /// Add a pixi spec to the manifest
     pub fn add_dependency(
         &mut self,
-        spec: &MatchSpec,
+        name: &PackageName,
+        spec: &PixiSpec,
         spec_type: SpecType,
         platforms: &[Platform],
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
-        channel_config: &ChannelConfig,
     ) -> miette::Result<bool> {
-        // Determine the name of the package to add
-        let (Some(name), spec) = spec.clone().into_nameless() else {
-            miette::bail!(
-                "{} does not support wildcard dependencies",
-                pixi_utils::executable_name()
-            );
-        };
-        let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
         let mut any_added = false;
         for platform in to_options(platforms) {
             // Add the dependency to the manifest
             match self
                 .get_or_insert_target_mut(platform, Some(feature_name))
-                .try_add_dependency(&name, &spec, spec_type, overwrite_behavior)
+                .try_add_dependency(name, spec, spec_type, overwrite_behavior)
             {
                 Ok(true) => {
                     self.source
-                        .add_dependency(&name, &spec, spec_type, platform, feature_name)?;
+                        .add_dependency(name, spec, spec_type, platform, feature_name)?;
                     any_added = true;
                 }
                 Ok(false) => {}
@@ -799,8 +811,8 @@ impl Manifest {
     }
 
     /// Return the build section from the parsed manifest
-    pub fn build_section(&self) -> Option<&BuildSystem> {
-        self.package.as_ref().map(|package| &package.build_system)
+    pub fn build_section(&self) -> Option<&PackageBuild> {
+        self.package.as_ref().map(|package| &package.build)
     }
 }
 
@@ -808,21 +820,19 @@ impl Manifest {
 mod tests {
     use std::str::FromStr;
 
-    use glob::glob;
     use indexmap::IndexMap;
     use insta::assert_snapshot;
     use miette::NarratableReportHandler;
     use rattler_conda_types::{
-        NamedChannelOrUrl, ParseStrictness,
-        ParseStrictness::{Lenient, Strict},
+        MatchSpec, NamedChannelOrUrl,
+        ParseStrictness::{self, Lenient, Strict},
         VersionSpec,
     };
-    use rattler_solve::ChannelPriority;
     use rstest::*;
     use tempfile::tempdir;
 
     use super::*;
-    use crate::channel::PrioritizedChannel;
+    use crate::{channel::PrioritizedChannel, workspace::ChannelPriority};
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -2062,14 +2072,22 @@ bar = "*"
             "#;
         let channel_config = default_channel_config();
         let mut manifest = Manifest::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+        // Determine the name of the package to add
+        let spec = &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap();
+
+        let (name, spec) = spec.clone().into_nameless();
+        let name = name.unwrap();
+
+        let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
+
         manifest
             .add_dependency(
-                &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap(),
+                &name,
+                &spec,
                 SpecType::Run,
                 &[],
                 &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )
             .unwrap();
         assert_eq!(
@@ -2085,14 +2103,20 @@ bar = "*"
                 .as_version_spec(),
             Some(&VersionSpec::from_str(">=1.2.3", Strict).unwrap())
         );
+
+        let (name, spec) = MatchSpec::from_str("bal >=2.3", Strict)
+            .unwrap()
+            .into_nameless();
+        let pixi_spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
+
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" bal >=2.3", Strict).unwrap(),
+                &name.unwrap(),
+                &pixi_spec,
                 SpecType::Run,
                 &[],
                 &FeatureName::Named("test".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )
             .unwrap();
 
@@ -2113,14 +2137,19 @@ bar = "*"
             ">=2.3".to_string()
         );
 
+        let (package_name, nameless) = MatchSpec::from_str(" boef >=2.3", Strict)
+            .unwrap()
+            .into_nameless();
+        let pixi_spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" boef >=2.3", Strict).unwrap(),
+                &package_name.unwrap(),
+                &pixi_spec,
                 SpecType::Run,
                 &[Platform::Linux64],
                 &FeatureName::Named("extra".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )
             .unwrap();
 
@@ -2142,14 +2171,19 @@ bar = "*"
             ">=2.3".to_string()
         );
 
+        let matchspec = MatchSpec::from_str(" cmake >=2.3", ParseStrictness::Strict).unwrap();
+        let (package_name, nameless) = matchspec.into_nameless();
+
+        let pixi_spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+
         manifest
             .add_dependency(
-                &MatchSpec::from_str(" cmake >=2.3", ParseStrictness::Strict).unwrap(),
+                &package_name.unwrap(),
+                &pixi_spec,
                 SpecType::Build,
                 &[Platform::Linux64],
                 &FeatureName::Named("build".to_string()),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )
             .unwrap();
 
@@ -2320,7 +2354,7 @@ bar = "*"
     }
 
     #[test]
-    pub fn test_unsupported_pep508_errors() {
+    pub fn test_supported_pep508_url() {
         let manifest_error = Manifest::from_str(
             Path::new("pyproject.toml"),
             r#"
@@ -2336,36 +2370,23 @@ bar = "*"
         platforms = ["win-64"]
         "#,
         )
-        .unwrap_err();
+        .unwrap();
 
-        let mut error = String::new();
-        let report_handler = NarratableReportHandler::new().with_cause_chain();
-        report_handler
-            .render_report(&mut error, manifest_error.as_ref())
+        let pypi_reqs = manifest_error
+            .default_feature()
+            .pypi_dependencies(Some(Platform::Win64))
             .unwrap();
-        insta::assert_snapshot!(error, @r###"
-        Unsupported pep508 requirement: 'attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main'
-            Diagnostic severity: error
-            Caused by: Found invalid characters for git revision 'main', branches and tags are not supported yet
-        "###);
+
+        // insta::assert_snapshot!(pypi_reqs[0]);
+        insta::assert_snapshot!(pypi_reqs[0], @r###"{ git = "git+ssh://git@github.com/python-attrs/attrs.git", rev = "main" }"###);
     }
 
-    #[test]
-    fn test_docs_pixi_manifests() {
-        let location = "../../docs/source_files/pixi_tomls/*.toml";
-
-        // Check that the glob is not empty
-        assert!(glob(location).unwrap().count() > 0);
-
-        for entry in glob(location).unwrap() {
-            match entry {
-                Ok(path) => {
-                    let contents = fs_err::read_to_string(path).unwrap();
-                    let _manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
-                }
-                Err(e) => println!("{:?}", e),
-            }
-        }
+    #[rstest]
+    fn test_docs_pixi_manifests(
+        #[files("../../docs/source_files/pixi_tomls/*.toml")] manifest_path: PathBuf,
+    ) {
+        let contents = fs_err::read_to_string(manifest_path).unwrap();
+        let _manifest = Manifest::from_str(Path::new("pixi.toml"), contents).unwrap();
     }
 
     #[test]

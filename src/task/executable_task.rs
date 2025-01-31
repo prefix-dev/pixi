@@ -218,7 +218,9 @@ impl<'p> ExecutableTask<'p> {
         let cwd = self.working_directory()?;
         let (stdin, mut stdin_writer) = pipe();
         if let Some(stdin) = input {
-            stdin_writer.write_all(stdin).unwrap();
+            stdin_writer
+                .write_all(stdin)
+                .expect("should be able to write to stdin");
         }
         drop(stdin_writer); // prevent a deadlock by dropping the writer
         let (stdout, stdout_handle) = get_output_writer_and_handle();
@@ -232,8 +234,8 @@ impl<'p> ExecutableTask<'p> {
         let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
         Ok(RunOutput {
             exit_code: code,
-            stdout: stdout_handle.await.unwrap(),
-            stderr: stderr_handle.await.unwrap(),
+            stdout: stdout_handle.await.expect("should be able to get stdout"),
+            stderr: stderr_handle.await.expect("should be able to get stderr"),
         })
     }
 
@@ -307,7 +309,7 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
     task: &'t ExecutableTask<'p>,
 }
 
-impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
+impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let command = self.task.task.as_single_command();
         write!(
@@ -354,8 +356,8 @@ fn get_export_specific_task_env(task: &Task) -> String {
 
 /// Determine the environment variables to use when executing a command. The method combines the
 /// activation environment with the system environment variables.
-pub async fn get_task_env<'p>(
-    environment: &Environment<'p>,
+pub async fn get_task_env(
+    environment: &Environment<'_>,
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,

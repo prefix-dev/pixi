@@ -1,12 +1,12 @@
-use crate::{
-    build::BuildReporter,
-    install_pypi,
-    lock_file::{UpdateLockFileOptions, UpdateMode, UvResolutionContext},
-    prefix::Prefix,
-    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
-    rlimit::try_increase_rlimit_to_sensible,
-    Project,
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+    io::{self, ErrorKind},
+    path::{Path, PathBuf},
+    sync::{Arc, LazyLock},
+    time::Duration,
 };
+
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use fs_err as fs;
@@ -18,10 +18,10 @@ use parking_lot::Mutex;
 use pixi_build_frontend::CondaBuildReporter;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
-use pixi_manifest::{EnvironmentName, FeaturesExt, SystemRequirements};
+use pixi_manifest::{EnvironmentName, FeaturesExt, PyPiRequirement, SystemRequirements};
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
-use pixi_spec::PixiSpec;
+use pixi_spec::{GitSpec, PixiSpec};
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer, PythonInfo, Transaction},
     package_cache::PackageCache,
@@ -29,25 +29,23 @@ use rattler::{
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
 };
-use rattler_lock::LockedPackageRef;
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{LockedPackageRef, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    hash::{Hash, Hasher},
-    io::{self, ErrorKind},
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
-};
 use tokio::sync::Semaphore;
-
-use crate::build::BuildContext;
+use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution_types::{InstalledDist, Name};
-
-use crate::lock_file::LockFileDerivedData;
 use xxhash_rust::xxh3::Xxh3;
+
+use crate::{
+    build::{BuildContext, BuildReporter, SourceCheckoutReporter},
+    install_pypi,
+    lock_file::{LockFileDerivedData, UpdateLockFileOptions, UpdateMode, UvResolutionContext},
+    prefix::Prefix,
+    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
+    rlimit::try_increase_rlimit_to_sensible,
+    Project,
+};
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -224,14 +222,16 @@ pub(crate) struct EnvironmentFile {
     pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
 }
 
-/// The path to the environment file in the `conda-meta` directory of the environment.
+/// The path to the environment file in the `conda-meta` directory of the
+/// environment.
 fn environment_file_path(environment_dir: &Path) -> PathBuf {
     environment_dir
         .join(consts::CONDA_META_DIR)
         .join(consts::ENVIRONMENT_FILE_NAME)
 }
 /// Write information about the environment to a file in the environment
-/// directory. Used by the prefix updating to validate if it needs to be updated.
+/// directory. Used by the prefix updating to validate if it needs to be
+/// updated.
 pub(crate) fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
@@ -329,18 +329,28 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
     Ok(())
 }
 
-/// Extract filtered requirements from the project based on a filter.
-/// The filter allows specifying which subset of requirements to extract.
-pub fn extract_requirements_from_project(project: &Project) -> Vec<PixiSpec> {
+/// Extract [`GitSpec`] requirements from the project dependencies.
+pub fn extract_git_requirements_from_project(project: &Project) -> Vec<GitSpec> {
     let mut requirements = Vec::new();
 
     for env in project.environments() {
         let env_platforms = env.platforms();
         for platform in env_platforms {
             let dependencies = env.combined_dependencies(Some(platform));
+            let pypi_dependencies = env.pypi_dependencies(Some(platform));
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
-                    requirements.push(spec.clone());
+                    if let PixiSpec::Git(spec) = spec {
+                        requirements.push(spec.clone());
+                    }
+                }
+            }
+
+            for (_, pypi_spec) in pypi_dependencies {
+                for spec in pypi_spec {
+                    if let PyPiRequirement::Git { url, .. } = spec {
+                        requirements.push(url);
+                    }
                 }
             }
         }
@@ -349,19 +359,17 @@ pub fn extract_requirements_from_project(project: &Project) -> Vec<PixiSpec> {
     requirements
 }
 
-/// Store credentials from the filtered requirements.
-/// This method takes the requirements and processes only `PixiSpec::Git` variants.
-pub fn store_credentials_from_requirements(requirements: Vec<PixiSpec>) {
-    for spec in requirements {
-        if let PixiSpec::Git(git_spec) = spec {
-            store_credentials_from_url(&git_spec.git);
-        }
+/// Store credentials from [`GitSpec`] requirements.
+pub fn store_credentials_from_requirements(git_requirements: Vec<GitSpec>) {
+    for spec in git_requirements {
+        store_credentials_from_url(&spec.git);
     }
 }
 
-/// Extract any credentials that are defined on the project dependencies themselves.
-/// While we don't store plaintext credentials in the `pixi.lock`, we do respect credentials that are defined
-/// in the `pixi.toml` or `pyproject.toml`.
+/// Extract any credentials that are defined on the project dependencies
+/// themselves. While we don't store plaintext credentials in the `pixi.lock`,
+/// we do respect credentials that are defined in the `pixi.toml` or
+/// `pyproject.toml`.
 pub async fn store_credentials_from_project(project: &Project) -> miette::Result<()> {
     for env in project.environments() {
         let env_platforms = env.platforms();
@@ -467,7 +475,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     sanity_check_project(project).await?;
 
     // Store the git credentials from the git requirements
-    let requirements = extract_requirements_from_project(project);
+    let requirements = extract_git_requirements_from_project(project);
     store_credentials_from_requirements(requirements);
 
     // Ensure that the lock-file is up-to-date
@@ -505,6 +513,7 @@ pub async fn update_prefix_pypi(
     lock_file_dir: &Path,
     platform: Platform,
     non_isolated_packages: Option<Vec<String>>,
+    no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
 ) -> miette::Result<()> {
     // If we have changed interpreter, we need to uninstall all site-packages from
     // the old interpreter We need to do this before the pypi prefix update,
@@ -570,6 +579,7 @@ pub async fn update_prefix_pypi(
                 environment_variables,
                 platform,
                 non_isolated_packages,
+                no_build,
             )
         },
     )
@@ -708,13 +718,17 @@ impl CondaBuildProgress {
 }
 
 impl CondaBuildProgress {
-    /// Associate a progress bar with a build identifier, and get a build id back
+    /// Associate a progress bar with a build identifier, and get a build id
+    /// back
     pub fn associate(&self, identifier: &str) -> usize {
         let mut locked = self.build_progress.lock();
         let after = if locked.is_empty() {
             &self.main_progress
         } else {
-            &locked.last().unwrap().1
+            &locked
+                .last()
+                .expect("we just checked that `locked` isn't empty")
+                .1
         };
 
         let pb = pixi_progress::global_multi_progress().insert_after(after, ProgressBar::hidden());
@@ -741,15 +755,19 @@ impl CondaBuildProgress {
         let locked = self.build_progress.lock();
 
         // Finish the build progress bar
-        let (identifier, pb) = locked.get(build_id).unwrap();
+        let (identifier, pb) = locked.get(build_id).expect("build id should exist");
         // If there is an alternative message, use that
         let msg = if let Some(msg) = alternative_message {
-            pb.set_style(indicatif::ProgressStyle::with_template("    {msg}").unwrap());
+            pb.set_style(
+                indicatif::ProgressStyle::with_template("    {msg}")
+                    .expect("should be able to create a progress bar style"),
+            );
             msg
         } else {
             // Otherwise show the default message
             pb.set_style(
-                indicatif::ProgressStyle::with_template("    {msg} in {elapsed}").unwrap(),
+                indicatif::ProgressStyle::with_template("    {msg} in {elapsed}")
+                    .expect("should be able to create a progress bar style"),
             );
             "built".to_string()
         };
@@ -761,10 +779,10 @@ impl CondaBuildReporter for CondaBuildProgress {
     fn on_build_start(&self, build_id: usize) -> usize {
         // Actually show the progress
         let locked = self.build_progress.lock();
-        let (identifier, pb) = locked.get(build_id).unwrap();
+        let (identifier, pb) = locked.get(build_id).expect("build id should exist");
         let template =
             indicatif::ProgressStyle::with_template("    {spinner:.green} {msg} {elapsed}")
-                .unwrap();
+                .expect("should be able to create a progress bar style");
         pb.set_style(template);
         pb.set_message(format!("building {identifier}"));
         pb.enable_steady_tick(Duration::from_millis(100));
@@ -810,6 +828,20 @@ pub async fn update_prefix_conda(
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
 
+    // HACK: The `Installer` created below, as well as some code in building
+    // packages from source will utilize rayon for parallelism. By using rayon
+    // it will implicitly initialize a global thread pool. However, uv
+    // has a mechanism to initialize rayon itself, which will crash if the global
+    // thread pool was already initialized. To prevent this, we force uv the
+    // initialize the rayon global thread pool, this ensures that any rayon code
+    // that is run will use the same thread pool.
+    //
+    // One downside of this approach is that perhaps it turns out that we won't need
+    // the thread pool at all (because no changes needed to happen for instance).
+    // There is a little bit of overhead when that happens, but I don't see another
+    // way around that.
+    LazyLock::force(&RAYON_INITIALIZE);
+
     let (mut repodata_records, source_records): (Vec<_>, Vec<_>) = pixi_records
         .into_iter()
         .partition_map(|record| match record {
@@ -818,16 +850,29 @@ pub async fn update_prefix_conda(
         });
 
     let mut progress_reporter = None;
+    let mut source_reporter = None;
+    let source_pb = global_multi_progress().add(ProgressBar::hidden());
+
     let source_records_length = source_records.len();
     // Build conda packages out of the source records
     let mut processed_source_packages = stream::iter(source_records)
         .map(Ok)
         .and_then(|record| {
             // If we don't have a progress reporter, create one
-            // This is done so that the progress bars are not displayed if there are no source packages
+            // This is done so that the progress bars are not displayed if there are no
+            // source packages
             let progress_reporter = progress_reporter
                 .get_or_insert_with(|| {
                     Arc::new(CondaBuildProgress::new(source_records_length as u64))
+                })
+                .clone();
+
+            let source_reporter = source_reporter
+                .get_or_insert_with(|| {
+                    Arc::new(SourceCheckoutReporter::new(
+                        source_pb.clone(),
+                        global_multi_progress(),
+                    ))
                 })
                 .clone();
             let build_id = progress_reporter.associate(record.package_record.name.as_source());
@@ -843,6 +888,7 @@ pub async fn update_prefix_conda(
                         virtual_packages.clone(),
                         virtual_packages.clone(),
                         progress_reporter.clone(),
+                        Some(source_reporter),
                         build_id,
                     )
                     .await

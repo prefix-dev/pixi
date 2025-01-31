@@ -6,6 +6,10 @@ on:
       - main
   workflow_dispatch:
   pull_request:
+    types:
+      - labeled
+      - synchronize
+      - opened
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
@@ -55,6 +59,7 @@ jobs:
               - "**/*"
               - "!assets/**"
               - "!docs/**"
+              - "docs/source_files/**"
               - "!install/**"
               - "!assets/**"
               - "!**/*.md"
@@ -69,22 +74,6 @@ jobs:
           environments: lint
       - name: pre-commit
         run: pixi run pre-commit-run --color=always --show-diff-on-failure
-        env:
-          # As the rust GitHub action is better at the rust jobs it can be skipped in this job.
-          SKIP: clippy,fmt
-
-  # Format the all rust code and make sure it's formatted correctly.
-  format:
-    name: "cargo fmt | ubuntu"
-    needs: determine_changes
-    runs-on: ubuntu-latest
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: "Install Rustfmt"
-        run: rustup component add rustfmt
-      - name: "rustfmt"
-        run: cargo fmt --all --check
 
   # Check that all the code references are correct.
   check-rustdoc-links:
@@ -102,22 +91,6 @@ jobs:
             cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
           done
 
-  # Run `cargo clippy` on the entire codebase.
-  lint:
-    name: "cargo clippy | ubuntu"
-    needs: determine_changes
-    runs-on: ubuntu-latest
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: "Install Rust toolchain"
-        run: rustup component add clippy
-      - name: Run clippy
-        run: cargo clippy --all-targets --workspace --locked
-
   # Checks for dependencies that are not used in the codebase
   cargo-machete:
     name: Cargo Machete
@@ -127,7 +100,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Machete
         uses: bnjbvr/cargo-machete@main
-
 
   #
   # Run tests on important platforms.
@@ -173,7 +145,7 @@ jobs:
 
   cargo-test-macos-x86_64:
     name: "cargo test | macos x86_64"
-    timeout-minutes: 15
+    timeout-minutes: 30
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
     runs-on: macos-13
@@ -221,26 +193,26 @@ jobs:
     runs-on: 8core_ubuntu_latest_runner
     name: "build binary | linux x86_64"
     steps:
-        - uses: actions/checkout@v4
-        - uses: rui314/setup-mold@v1
-        - name: "Setup musl"
-          run: |
-            sudo apt-get install musl-tools
-            rustup target add x86_64-unknown-linux-musl
-        - uses: Swatinem/rust-cache@v2
-        - name: "Build"
-          run: >
-            cargo build
-            --locked
-            --target x86_64-unknown-linux-musl
-            --profile $CARGO_BUILD_PROFILE
-            --features self_update
-        - name: "Upload binary"
-          uses: actions/upload-artifact@v4
-          with:
-            name: pixi-linux-x86_64-${{ github.sha }}
-            path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
-            retention-days: 1
+      - uses: actions/checkout@v4
+      - uses: rui314/setup-mold@v1
+      - name: "Setup musl"
+        run: |
+          sudo apt-get install musl-tools
+          rustup target add x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - name: "Build"
+        run: >
+          cargo build
+          --locked
+          --target x86_64-unknown-linux-musl
+          --profile $CARGO_BUILD_PROFILE
+          --features self_update
+      - name: "Upload binary"
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixi-linux-x86_64-${{ github.sha }}
+          path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          retention-days: 1
 
   build-binary-macos-aarch64:
     needs: determine_changes
@@ -462,7 +434,6 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: bash tests/scripts/test-examples.sh
 
-
   test-integration-macos-aarch64:
     timeout-minutes: 30
     name: Integration tests | macos aarch64
@@ -582,7 +553,6 @@ jobs:
         run: pixi install
         working-directory: ${{ env.PIXI_WORKSPACE }}/polarify
 
-
   test-downstream-macos-aarch64:
     timeout-minutes: 15
     name: Downstream tests | macos aarch64
@@ -688,9 +658,9 @@ jobs:
       - build-binary-linux-x86_64
     uses: ./.github/workflows/test_common_wheels.yml
     with:
-        sha: ${{ github.sha }}
-        arch: linux-x86_64
-        runs-on: 8core_ubuntu_latest_runner
+      sha: ${{ github.sha }}
+      arch: linux-x86_64
+      runs-on: 8core_ubuntu_latest_runner
 
   test-common-wheels-windows-x86_64:
     name: Wheel Tests | windows x86_64

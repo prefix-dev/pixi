@@ -60,23 +60,6 @@ impl PixiRecord {
             PixiRecord::Source(record) => Some(record),
         }
     }
-
-    /// Converts this instance into a source record if it is a source record.
-    pub fn into_source(self) -> Option<SourceRecord> {
-        match self {
-            PixiRecord::Binary(_) => None,
-            PixiRecord::Source(record) => Some(record),
-        }
-    }
-
-    /// Returns a mutable reference to the source record if it is a source
-    /// record.
-    pub fn as_source_mut(&mut self) -> Option<&mut SourceRecord> {
-        match self {
-            PixiRecord::Binary(_) => None,
-            PixiRecord::Source(record) => Some(record),
-        }
-    }
 }
 
 impl From<SourceRecord> for PixiRecord {

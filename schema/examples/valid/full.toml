@@ -17,17 +17,20 @@ readme = "README.md"
 repository = "https://github.com/author/project"
 version = "0.1.0"
 
+[project.pypi-options]
+no-build = false
+
 [package]
 
-[build-system]
+[package.build]
 additional-dependencies = { git = "*" }
-build-backend = { name = "pixi-build-python", version = "*" }
+backend = { name = "pixi-build-python", version = "0.1.*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 
-[build-backend.pixi-build-python]
+[tool.pixi-build-python]
 noarch = false
 
 [dependencies]
@@ -55,6 +58,7 @@ git4 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0", subdirec
 #path2 = { path = "path/to/package" }
 
 [pypi-options]
+no-build = ["foobar"]
 no-build-isolation = ["requests"]
 
 [pypi-dependencies]
@@ -67,13 +71,22 @@ testpypi = "*"
 testpypi1 = "*"
 
 
-[host-dependencies]
+[package.host-dependencies]
 package1 = { version = ">=1.2.3", build = "py34_0" }
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
 
-[build-dependencies]
+[package.build-dependencies]
+package1 = { version = ">=1.2.3", build = "py34_0" }
+pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+test = "*"
+test1 = "*"
+
+[package.run-dependencies]
+test1 = "*"
+
+[package.target.osx-64.host-dependencies]
 package1 = { version = ">=1.2.3", build = "py34_0" }
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
@@ -81,8 +94,7 @@ test1 = "*"
 
 [tasks]
 build = "conda build ."
-# deprecated depends_on
-test = { cmd = "pytest", cwd = "tests", depends_on = [
+test = { cmd = "pytest", cwd = "tests", depends-on = [
   "build",
 ], description = "Run tests using pytests after building." }
 test2 = { cmd = "pytest", cwd = "tests" }
@@ -107,6 +119,9 @@ test = "*"
 
 [feature.test2.dependencies]
 test = "*"
+
+[feature.yes-build.pypi-options]
+no-build = true
 
 [feature.prod]
 activation = { scripts = ["activate.sh", "deactivate.sh"] }
@@ -143,18 +158,6 @@ requests = { version = ">= 2.8.1, ==2.8.*", extras = [
 ] } # Using the map allows the user to add `extras`
 testpypi = "*"
 testpypi1 = "*"
-
-[target.osx-64.host-dependencies]
-package1 = { version = ">=1.2.3", build = "py34_0" }
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-test = "*"
-test1 = "*"
-
-[target.linux-64.build-dependencies]
-package1 = { version = ">=1.2.3", build = "py34_0" }
-pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
-test = "*"
-test1 = "*"
 
 [target.linux-64.tasks]
 build = "conda build ."

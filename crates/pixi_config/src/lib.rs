@@ -98,7 +98,7 @@ pub struct ConfigCli {
     tls_no_verify: bool,
 
     /// Path to the file containing the authentication token.
-    #[arg(long, env = "RATTLER_AUTH_FILE")]
+    #[arg(long)]
     auth_file: Option<PathBuf>,
 
     /// Specifies if we want to use uv keyring provider
@@ -633,7 +633,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
-            detached_environments: Some(DetachedEnvironments::default()),
+            detached_environments: None,
             pinning_strategy: None,
             force_activate: None,
             experimental: ExperimentalConfig::default(),
@@ -760,7 +760,10 @@ impl Config {
         tracing::debug!("Loading config from {}", path.display());
         let s = match fs_err::read_to_string(path) {
             Ok(content) => content,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(e)
+                if e.kind() == std::io::ErrorKind::NotFound
+                    || e.kind() == std::io::ErrorKind::NotADirectory =>
+            {
                 return Err(ConfigError::FileNotFound(path.to_path_buf()))
             }
             Err(e) => return Err(ConfigError::ReadError(e)),
@@ -927,8 +930,8 @@ impl Config {
     /// Merge the given config into the current one.
     /// The given config will have higher priority
     #[must_use]
-    pub fn merge_config(self, mut other: Config) -> Self {
-        other.mirrors.extend(self.mirrors);
+    pub fn merge_config(mut self, mut other: Config) -> Self {
+        self.mirrors.extend(other.mirrors);
         other.loaded_from.extend(self.loaded_from);
 
         Self {
@@ -942,7 +945,8 @@ impl Config {
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
-            mirrors: other.mirrors,
+            // Extended self.mirrors with other.mirrors
+            mirrors: self.mirrors,
             loaded_from: other.loaded_from,
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,

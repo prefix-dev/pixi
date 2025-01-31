@@ -1,5 +1,8 @@
 [workspace] # (1)!
-channels = ["https://prefix.dev/conda-forge"]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 
@@ -13,15 +16,11 @@ start = "rich-example-main"
 name = "rich_example"
 version = "0.1.0"
 
-[build-system] # (5)!
-build-backend = { name = "pixi-build-python", version = "*" }
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+[package.build] # (5)!
+backend = { name = "pixi-build-python", version = "0.1.*" }
 
-[host-dependencies] # (6)!
+[package.host-dependencies] # (6)!
 hatchling = "==1.26.3"
 
-[run-dependencies] # (7)!
-rich = ">=13.9.4,<14"
+[package.run-dependencies] # (7)!
+rich = "13.9.*"

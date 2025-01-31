@@ -281,6 +281,7 @@ The options that can be defined are:
 - `extra-index-urls`: adds an extra index url.
 - `find-links`: similar to `--find-links` option in `pip`.
 - `no-build-isolation`: disables build isolation, can only be set per package.
+- `no-build`: don't build source distributions.
 - `index-strategy`: allows for specifying the index strategy to use.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
@@ -335,6 +336,26 @@ detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev =
 !!! tip "Conda dependencies define the build environment"
     To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
 
+### No Build
+When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error.
+
+Can be either set per package or globally.
+```toml
+[pypi-options]
+# No sdists allowed
+no-build = true # default is false
+```
+or:
+```toml
+[pypi-options]
+no-build = ["package1", "package2"]
+```
+
+When features are merged, the following priority is adhered:
+`no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
+So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+
+
 ### Index Strategy
 
 The strategy to use when resolving against multiple index URLs. Description modified from the [uv](https://docs.astral.sh/uv/reference/settings/#index-strategy) documentation:
@@ -370,7 +391,7 @@ Some examples are:
 
 ```toml
 # Use this exact package version
-package0 = "1.2.3"
+package0 = "==1.2.3"
 # Use 1.2.3 up to 1.3.0
 package1 = "~=1.2.3"
 # Use larger than 1.2 lower and equal to 1.4
@@ -402,7 +423,7 @@ Even if the dependency defines a channel that channel should be added to the `pr
 ```toml
 [dependencies]
 python = ">3.9,<=3.11"
-rust = "1.72"
+rust = "==1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
@@ -541,7 +562,7 @@ Use `git` in combination with `rev` or `subdirectory`:
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
-py-rattler = { git = "ssh://git@github.com/mamba-org/rattler.git", subdirectory = "py-rattler" }
+py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
 ```
 
 ##### `path`
@@ -797,12 +818,8 @@ Pixi sometimes introduces new features that are not yet stable, but that we woul
 
 An example of a preview feature in the project manifest:
 
-```toml title="pixi.toml"
-[workspace]
-name = "foo"
-channels = []
-platforms = []
-preview = ["pixi-build"]
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
 ```
 
 Preview features in the documentation will be marked as such on the relevant pages.
@@ -823,8 +840,7 @@ The package section is used to define the package that is built by the project.
 Pixi only allows this table if `preview = ["pixi-build"]` is set in `[workspace]`.
 
 ```toml
-[package]
-version = "1.0.0"
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:package"
 ```
 
 ### Host, Build, dependencies
@@ -840,8 +856,7 @@ For Python packages, these are the most common dependency types.
 For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.
 
 ```toml
-[package.run-dependencies]
-rich = "*"
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:run-dependencies"
 ```
 
 ### The `build-system`
@@ -855,14 +870,9 @@ The build system is a table that can contain the following fields:
   - `version`: the version of the build backend to use.
 
 ```toml
-[build-system] # (5)!
-build-backend = { name = "pixi-build-python", version = "*" }
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
 !!! note
     We are currently not publishing the backends on conda-forge, but will do so in the future.
-    For now the backends are published at "https://prefix.dev/pixi-build-backends".
+    For now the backends are published at [conda channel](https://prefix.dev/channels/pixi-build-backends).

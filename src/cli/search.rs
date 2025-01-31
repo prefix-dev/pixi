@@ -17,10 +17,11 @@ use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
+use tracing::{debug, error};
 use url::Url;
 
 use super::cli_config::ChannelsConfig;
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{cli::cli_config::ProjectConfig, project::ProjectError, Project};
 
 /// Search a conda package
 ///
@@ -109,7 +110,29 @@ pub async fn execute_impl<W: Write>(
     args: Args,
     out: &mut W,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
+    let project = match Project::load_or_else_discover(args.project_config.manifest_path.as_deref())
+    {
+        Ok(project) => Some(project),
+        Err(e) => {
+            match e {
+                ProjectError::FileNotFound(_)
+                | ProjectError::FileNotFoundInDirectory(_)
+                | ProjectError::NoFileFound => {
+                    debug!(
+                        "No project file found, continuing without project configuration. {}",
+                        e
+                    );
+                }
+                _ => {
+                    error!(
+                        "Error loading project configuration, continuing without: {}",
+                        e
+                    );
+                }
+            };
+            None
+        }
+    };
 
     // Resolve channels from project / CLI args
     let channels = args.channels.resolve_from_project(project.as_ref())?;
@@ -381,14 +404,14 @@ fn print_package_info<W: Write>(
             .map(|v| v.to_string().len())
             .chain(["Version".len()].iter().cloned())
             .max()
-            .unwrap()
+            .expect("there is at least one version, so this should not be empty")
             + 1;
         let build_width = other_versions
             .iter()
             .map(|v| v.package_record.build.len())
             .chain(["Build".len()].iter().cloned())
             .max()
-            .unwrap()
+            .expect("there is at least one build, so this should not be empty")
             + 1;
         writeln!(
             out,
@@ -525,7 +548,7 @@ fn print_matching_packages<W: Write>(
     for package in packages {
         // TODO: change channel fetch logic to be more robust
         // currently it relies on channel field being a url with trailing slash
-        // https://github.com/mamba-org/rattler/issues/146
+        // https://github.com/conda/rattler/issues/146
 
         let channel_name = package
             .channel

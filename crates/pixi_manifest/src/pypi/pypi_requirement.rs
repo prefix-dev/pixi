@@ -1,71 +1,30 @@
-use super::{pypi_requirement_types::GitRevParseError, GitRev, VersionOrStar};
-use crate::utils::extract_directory_from_url;
-use crate::PyPiRequirement::RawVersion;
-use pep440_rs::VersionSpecifiers;
-use pep508_rs::ExtraName;
-use serde::de::Error;
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use std::fmt::Display;
 use std::{
     fmt,
-    fmt::Formatter,
+    fmt::{Display, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
 };
+
+use itertools::Itertools;
+use pep440_rs::VersionSpecifiers;
+use pep508_rs::ExtraName;
+use pixi_spec::{GitReference, GitSpec};
+use pixi_toml::{TomlFromStr, TomlWith};
+use serde::Serialize;
 use thiserror::Error;
+use toml_span::{de_helpers::TableHelper, DeserError, Value};
 use url::Url;
 
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
-#[serde(rename_all = "kebab-case", deny_unknown_fields)]
-pub struct ParsedGitUrl {
-    pub git: Url,
-    pub branch: Option<String>,
-    pub tag: Option<String>,
-    pub rev: Option<GitRev>,
-    pub subdirectory: Option<String>,
-}
+use pixi_git::GitUrl;
 
-impl TryFrom<Url> for ParsedGitUrl {
-    type Error = Pep508ToPyPiRequirementError;
-
-    fn try_from(url: Url) -> Result<Self, Self::Error> {
-        let subdirectory = extract_directory_from_url(&url);
-
-        // Strip the git+ from the url.
-        let url_without_git = url.as_str().strip_prefix("git+").unwrap_or(url.as_str());
-        let mut url = Url::parse(url_without_git)?;
-        url.set_fragment(None);
-
-        // Split the repository url and the rev.
-        let (repository_url, rev) = if let Some((prefix, suffix)) = url
-            .path()
-            .rsplit_once('@')
-            .map(|(prefix, suffix)| (prefix.to_string(), suffix.to_string()))
-        {
-            let mut repository_url = url.clone();
-            repository_url.set_path(&prefix);
-            (repository_url, Some(GitRev::from_str(&suffix)?))
-        } else {
-            (url, None)
-        };
-
-        Ok(ParsedGitUrl {
-            git: repository_url,
-            branch: None,
-            tag: None,
-            rev,
-            subdirectory,
-        })
-    }
-}
+use super::VersionOrStar;
+use crate::utils::extract_directory_from_url;
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq, Hash)]
 #[serde(untagged, rename_all = "kebab-case", deny_unknown_fields)]
 pub enum PyPiRequirement {
     Git {
-        #[serde(flatten)]
-        url: ParsedGitUrl,
+        url: GitSpec,
         #[serde(default)]
         extras: Vec<ExtraName>,
     },
@@ -91,7 +50,8 @@ pub enum PyPiRequirement {
     RawVersion(VersionOrStar),
 }
 
-/// Returns a more helpful message when a version requirement is used incorrectly.
+/// Returns a more helpful message when a version requirement is used
+/// incorrectly.
 fn version_requirement_error<T: Into<String>>(input: T) -> Option<impl Display> {
     let input = input.into();
     if input.starts_with('/')
@@ -113,16 +73,10 @@ fn version_requirement_error<T: Into<String>>(input: T) -> Option<impl Display> 
     None
 }
 
-#[serde_as]
-#[derive(serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "kebab-case")]
 struct RawPyPiRequirement {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     pub version: Option<VersionOrStar>,
 
-    #[serde(default)]
     extras: Vec<ExtraName>,
 
     // Path Only
@@ -133,7 +87,7 @@ struct RawPyPiRequirement {
     pub git: Option<Url>,
     pub branch: Option<String>,
     pub tag: Option<String>,
-    pub rev: Option<GitRev>,
+    pub rev: Option<String>,
 
     // Url only
     pub url: Option<Url>,
@@ -142,119 +96,185 @@ struct RawPyPiRequirement {
     pub subdirectory: Option<String>,
 
     // Pinned index
-    #[serde(default)]
     pub index: Option<Url>,
-}
-
-impl<'de> Deserialize<'de> for PyPiRequirement {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        serde_untagged::UntaggedEnumVisitor::new()
-            .map(|map| {
-                let raw_req: RawPyPiRequirement = map.deserialize()?;
-
-                if raw_req.git.is_none()
-                    && (raw_req.branch.is_some() || raw_req.rev.is_some() || raw_req.tag.is_some())
-                {
-                    return Err(serde_untagged::de::Error::custom(
-                        "`branch`, `rev`, and `tag` are only valid when `git` is specified",
-                    ));
-                }
-
-                // Only one of the git version specifiers can be used.
-                if raw_req.branch.is_some() && raw_req.tag.is_some()
-                    || raw_req.branch.is_some() && raw_req.rev.is_some()
-                    || raw_req.tag.is_some() && raw_req.rev.is_some()
-                {
-                    return Err(serde_untagged::de::Error::custom(
-                        "Only one of `branch` or `tag` or `rev` can be specified",
-                    ));
-                }
-
-                let is_git = raw_req.git.is_some();
-                let is_path = raw_req.path.is_some();
-                let is_url = raw_req.url.is_some();
-
-                let git_key = is_git.then_some("`git`");
-                let path_key = is_path.then_some("`path`");
-                let url_key = is_url.then_some("`url`");
-                let non_detailed_keys = [git_key, path_key, url_key]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                if !non_detailed_keys.is_empty() && raw_req.version.is_some() {
-                    return Err(serde_untagged::de::Error::custom(format!(
-                        "`version` cannot be used with {non_detailed_keys}"
-                    )));
-                }
-
-                let req = match (
-                    raw_req.url,
-                    raw_req.path,
-                    raw_req.git,
-                    raw_req.extras,
-                    raw_req.index,
-                ) {
-                    (Some(url), None, None, extras, None) => PyPiRequirement::Url {
-                        url,
-                        extras,
-                        subdirectory: raw_req.subdirectory,
-                    },
-                    (None, Some(path), None, extras, None) => PyPiRequirement::Path {
-                        path,
-                        editable: raw_req.editable,
-                        extras,
-                    },
-                    (None, None, Some(git), extras, None) => PyPiRequirement::Git {
-                        url: ParsedGitUrl {
-                            git,
-                            branch: raw_req.branch,
-                            tag: raw_req.tag,
-                            rev: raw_req.rev,
-                            subdirectory: raw_req.subdirectory,
-                        },
-                        extras,
-                    },
-                    (None, None, None, extras, index) => PyPiRequirement::Version {
-                        version: raw_req.version.unwrap_or(VersionOrStar::Star),
-                        extras,
-                        index,
-                    },
-                    (_, _, _, extras, index) if !extras.is_empty() => PyPiRequirement::Version {
-                        version: raw_req.version.unwrap_or(VersionOrStar::Star),
-                        extras,
-                        index,
-                    },
-                    _ => {
-                        return Err(serde_untagged::de::Error::custom(
-                            "Exactly one of `url`, `path`, `git`, or `version` must be specified",
-                        ));
-                    }
-                };
-
-                Ok(req)
-            })
-            .string(|s| {
-                VersionOrStar::from_str(s).map(RawVersion).map_err(|err| {
-                    if let Some(msg) = version_requirement_error(s) {
-                        serde_untagged::de::Error::custom(msg)
-                    } else {
-                        serde_untagged::de::Error::custom(err)
-                    }
-                })
-            })
-            .expecting("a version or a mapping with `family` and `version`")
-            .deserialize(deserializer)
-    }
 }
 
 impl Default for PyPiRequirement {
     fn default() -> Self {
         PyPiRequirement::RawVersion(VersionOrStar::Star)
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum SpecConversion {
+    #[error("`branch`, `rev`, and `tag` are only valid when `git` is specified")]
+    MissingGit,
+    #[error("Only one of `branch` or `tag` or `rev` can be specified")]
+    MultipleGitSpecifiers,
+    #[error("`version` cannot be used with {non_detailed_keys}")]
+    VersionWithNonDetailedKeys { non_detailed_keys: String },
+    #[error("Exactly one of `url`, `path`, `git`, or `version` must be specified")]
+    MultipleVersionSpecifiers,
+}
+
+impl RawPyPiRequirement {
+    fn into_pypi_requirement(self) -> Result<PyPiRequirement, SpecConversion> {
+        if self.git.is_none() && (self.branch.is_some() || self.rev.is_some() || self.tag.is_some())
+        {
+            return Err(SpecConversion::MissingGit);
+        }
+
+        // Only one of the git version specifiers can be used.
+        if self.branch.is_some() && self.tag.is_some()
+            || self.branch.is_some() && self.rev.is_some()
+            || self.tag.is_some() && self.rev.is_some()
+        {
+            return Err(SpecConversion::MultipleGitSpecifiers);
+        }
+
+        let is_git = self.git.is_some();
+        let is_path = self.path.is_some();
+        let is_url = self.url.is_some();
+
+        let git_key = is_git.then_some("`git`");
+        let path_key = is_path.then_some("`path`");
+        let url_key = is_url.then_some("`url`");
+        let non_detailed_keys = [git_key, path_key, url_key]
+            .into_iter()
+            .flatten()
+            .format(", ")
+            .to_string();
+
+        if !non_detailed_keys.is_empty() && self.version.is_some() {
+            return Err(SpecConversion::VersionWithNonDetailedKeys { non_detailed_keys });
+        }
+
+        let req = match (self.url, self.path, self.git, self.extras, self.index) {
+            (Some(url), None, None, extras, None) => PyPiRequirement::Url {
+                url,
+                extras,
+                subdirectory: self.subdirectory,
+            },
+            (None, Some(path), None, extras, None) => PyPiRequirement::Path {
+                path,
+                editable: self.editable,
+                extras,
+            },
+            (None, None, Some(git), extras, None) => {
+                let rev = match (self.branch, self.rev, self.tag) {
+                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
+                    (None, None, None) => None,
+                    _ => {
+                        return Err(SpecConversion::MultipleGitSpecifiers);
+                    }
+                };
+                PyPiRequirement::Git {
+                    url: GitSpec {
+                        git,
+                        rev,
+                        subdirectory: self.subdirectory,
+                    },
+                    extras,
+                }
+            }
+            (None, None, None, extras, index) => PyPiRequirement::Version {
+                version: self.version.unwrap_or(VersionOrStar::Star),
+                extras,
+                index,
+            },
+            (_, _, _, extras, index) if !extras.is_empty() => PyPiRequirement::Version {
+                version: self.version.unwrap_or(VersionOrStar::Star),
+                extras,
+                index,
+            },
+            _ => {
+                return Err(SpecConversion::MultipleVersionSpecifiers);
+            }
+        };
+
+        Ok(req)
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let version = th.optional("version");
+        let extras = th
+            .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("extras")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
+
+        let path = th
+            .optional::<TomlFromStr<_>>("path")
+            .map(TomlFromStr::into_inner);
+        let editable = th.optional("editable");
+
+        let git = th
+            .optional::<TomlFromStr<_>>("git")
+            .map(TomlFromStr::into_inner);
+        let branch = th.optional("branch");
+        let tag = th.optional("tag");
+        let rev = th
+            .optional::<TomlFromStr<_>>("rev")
+            .map(TomlFromStr::into_inner);
+
+        let url = th
+            .optional::<TomlFromStr<_>>("url")
+            .map(TomlFromStr::into_inner);
+
+        let subdirectory = th.optional("subdirectory");
+
+        let index = th
+            .optional::<TomlFromStr<_>>("index")
+            .map(TomlFromStr::into_inner);
+
+        th.finalize(None)?;
+
+        Ok(RawPyPiRequirement {
+            version,
+            extras,
+            path,
+            editable,
+            git,
+            branch,
+            tag,
+            rev,
+            url,
+            subdirectory,
+            index,
+        })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for PyPiRequirement {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        if let Some(str) = value.as_str() {
+            return Ok(PyPiRequirement::RawVersion(
+                VersionOrStar::from_str(str).map_err(|e| toml_span::Error {
+                    kind: toml_span::ErrorKind::Custom(
+                        version_requirement_error(str)
+                            .map_or(e.to_string().into(), |e| e.to_string().into()),
+                    ),
+                    span: value.span,
+                    line_info: None,
+                })?,
+            ));
+        }
+
+        <RawPyPiRequirement as toml_span::Deserialize>::deserialize(value)?
+            .into_pypi_requirement()
+            .map_err(|e| {
+                toml_span::Error {
+                    kind: toml_span::ErrorKind::Custom(e.to_string().into()),
+                    span: value.span,
+                    line_info: None,
+                }
+                .into()
+            })
     }
 }
 
@@ -325,10 +345,8 @@ impl From<PyPiRequirement> for toml_edit::Value {
             }
             PyPiRequirement::Git {
                 url:
-                    ParsedGitUrl {
+                    GitSpec {
                         git,
-                        branch,
-                        tag,
                         rev,
                         subdirectory,
                     },
@@ -339,24 +357,31 @@ impl From<PyPiRequirement> for toml_edit::Value {
                     "git",
                     toml_edit::Value::String(toml_edit::Formatted::new(git.to_string())),
                 );
-                if let Some(branch) = branch {
-                    table.insert(
-                        "branch",
-                        toml_edit::Value::String(toml_edit::Formatted::new(branch.clone())),
-                    );
-                }
-                if let Some(tag) = tag {
-                    table.insert(
-                        "tag",
-                        toml_edit::Value::String(toml_edit::Formatted::new(tag.clone())),
-                    );
-                }
+
                 if let Some(rev) = rev {
-                    table.insert(
-                        "rev",
-                        toml_edit::Value::String(toml_edit::Formatted::new(rev.to_string())),
-                    );
-                }
+                    match rev {
+                        GitReference::Branch(branch) => {
+                            table.insert(
+                                "branch",
+                                toml_edit::Value::String(toml_edit::Formatted::new(branch.clone())),
+                            );
+                        }
+                        GitReference::Tag(tag) => {
+                            table.insert(
+                                "tag",
+                                toml_edit::Value::String(toml_edit::Formatted::new(tag.clone())),
+                            );
+                        }
+                        GitReference::Rev(rev) => {
+                            table.insert(
+                                "rev",
+                                toml_edit::Value::String(toml_edit::Formatted::new(rev.clone())),
+                            );
+                        }
+                        GitReference::DefaultBranch => {}
+                    }
+                };
+
                 if let Some(subdirectory) = subdirectory {
                     table.insert(
                         "subdirectory",
@@ -422,9 +447,6 @@ pub enum Pep508ToPyPiRequirementError {
     #[error(transparent)]
     ParseUrl(#[from] url::ParseError),
 
-    #[error(transparent)]
-    ParseGitRev(#[from] GitRevParseError),
-
     #[error("could not convert '{0}' to a file path")]
     PathUrlIntoPath(Url),
 
@@ -461,10 +483,20 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
                     let url = u.to_url();
                     if let Some((prefix, ..)) = url.scheme().split_once('+') {
                         match prefix {
-                            "git" => Self::Git {
-                                url: ParsedGitUrl::try_from(url)?,
-                                extras: req.extras,
-                            },
+                            "git" => {
+                                let subdirectory = extract_directory_from_url(&url);
+                                let git_url = GitUrl::try_from(url).unwrap();
+                                let git_spec = GitSpec {
+                                    git: git_url.repository().clone(),
+                                    rev: Some(git_url.reference().clone().into()),
+                                    subdirectory,
+                                };
+
+                                Self::Git {
+                                    url: git_spec,
+                                    extras: req.extras,
+                                }
+                            }
                             "bzr" => {
                                 return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
                                     prefix: prefix.to_string(),
@@ -498,9 +530,15 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
                         .extension()
                         .is_some_and(|ext| ext.eq_ignore_ascii_case("git"))
                     {
-                        let parsed_url = ParsedGitUrl::try_from(url)?;
+                        let git_url = GitUrl::try_from(url).unwrap();
+                        let subdirectory = extract_directory_from_url(git_url.repository());
+                        let git_spec = GitSpec {
+                            git: git_url.repository().clone(),
+                            rev: Some(git_url.reference().clone().into()),
+                            subdirectory,
+                        };
                         Self::Git {
-                            url: parsed_url,
+                            url: git_spec,
                             extras: req.extras,
                         }
                     } else if url.scheme().eq_ignore_ascii_case("file") {
@@ -548,6 +586,40 @@ impl PyPiRequirement {
         )
     }
 
+    /// Returns the path of the requirement if it is a path requirement.
+    pub fn as_path(&self) -> Option<&PathBuf> {
+        match self {
+            PyPiRequirement::Path { path, .. } => Some(path),
+            _ => None,
+        }
+    }
+
+    /// Returns the git spec of the requirement if it is a git requirement.
+    pub fn as_git(&self) -> Option<&GitSpec> {
+        match self {
+            PyPiRequirement::Git { url, .. } => Some(url),
+            _ => None,
+        }
+    }
+
+    /// Returns the url of the requirement if it is a url requirement.
+    pub fn as_url(&self) -> Option<&Url> {
+        match self {
+            PyPiRequirement::Url { url, .. } => Some(url),
+            _ => None,
+        }
+    }
+
+    /// Returns the version of the requirement if it is a version requirement.
+    pub fn as_version(&self) -> Option<&VersionOrStar> {
+        match self {
+            PyPiRequirement::Version { version, .. } | PyPiRequirement::RawVersion(version) => {
+                Some(version)
+            }
+            _ => None,
+        }
+    }
+
     /// Define whether the requirement is editable.
     pub fn set_editable(&mut self, editable: bool) {
         match self {
@@ -576,13 +648,14 @@ impl PyPiRequirement {
 mod tests {
     use std::str::FromStr;
 
-    use super::*;
-    use crate::pypi::PyPiPackageName;
-    use assert_matches::assert_matches;
-    use indexmap::IndexMap;
     use insta::assert_snapshot;
     use pep508_rs::Requirement;
+    use pixi_toml::TomlIndexMap;
     use serde_json::{json, Value};
+    use toml_span::{value::ValueInner, Deserialize};
+
+    use super::*;
+    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error, TomlError};
 
     #[test]
     fn test_pypi_to_string() {
@@ -601,8 +674,11 @@ mod tests {
 
     #[test]
     fn test_only_version() {
-        let requirement: IndexMap<pep508_rs::PackageName, PyPiRequirement> =
-            toml_edit::de::from_str(r#"foo = ">=3.12""#).unwrap();
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = ">=3.12""#,
+        )
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().0,
             &pep508_rs::PackageName::from_str("foo").unwrap()
@@ -612,34 +688,42 @@ mod tests {
             &PyPiRequirement::RawVersion(">=3.12".parse().unwrap())
         );
 
-        let requirement: IndexMap<pep508_rs::PackageName, PyPiRequirement> =
-            toml_edit::de::from_str(r#"foo = "==3.12.0""#).unwrap();
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = "==3.12.0""#,
+        )
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::RawVersion("==3.12.0".parse().unwrap())
         );
 
-        let requirement: IndexMap<pep508_rs::PackageName, PyPiRequirement> =
-            toml_edit::de::from_str(r#"foo = "~=2.1.3""#).unwrap();
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = "~=2.1.3""#,
+        )
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::RawVersion("~=2.1.3".parse().unwrap())
         );
 
-        let requirement: IndexMap<pep508_rs::PackageName, PyPiRequirement> =
-            toml_edit::de::from_str(r#"foo = "*""#).unwrap();
+        let requirement =
+            TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(r#"foo = "*""#)
+                .unwrap()
+                .into_inner();
         assert_eq!(requirement.first().unwrap().1, &PyPiRequirement::default());
     }
 
     #[test]
     fn test_extended() {
-        let requirement: IndexMap<pep508_rs::PackageName, PyPiRequirement> =
-            toml_edit::de::from_str(
-                r#"
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"
                     foo = { version=">=3.12", extras = ["bar"]}
                     "#,
-            )
-            .unwrap();
+        )
+        .unwrap()
+        .into_inner();
 
         assert_eq!(
             requirement.first().unwrap().0,
@@ -654,11 +738,11 @@ mod tests {
             }
         );
 
-        let requirement: IndexMap<pep508_rs::PackageName, PyPiRequirement> =
-            toml_edit::de::from_str(
-                r#"bar = { version=">=3.12,<3.13.0", extras = ["bar", "foo"] }"#,
-            )
-            .unwrap();
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"bar = { version=">=3.12,<3.13.0", extras = ["bar", "foo"] }"#,
+        )
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().0,
             &pep508_rs::PackageName::from_str("bar").unwrap()
@@ -678,15 +762,14 @@ mod tests {
 
     #[test]
     fn test_deserialize_pypi_requirement_from_map() {
-        let json_string = r#"
-                {
-                    "version": "==1.2.3",
-                    "extras": ["feature1", "feature2"]
-                }
-            "#;
-        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
-        assert!(result.is_ok());
-        let pypi_requirement: PyPiRequirement = result.unwrap();
+        let pypi_requirement = PyPiRequirement::from_toml_str(
+            r#"
+        version = "==1.2.3"
+        extras = ["feature1", "feature2"]
+        "#,
+        )
+        .unwrap();
+
         assert_eq!(
             pypi_requirement,
             PyPiRequirement::Version {
@@ -702,10 +785,10 @@ mod tests {
 
     #[test]
     fn test_deserialize_pypi_requirement_from_str() {
-        let json_string = r#""==1.2.3""#;
-        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
-        assert!(result.is_ok());
-        let pypi_requirement: PyPiRequirement = result.unwrap();
+        let pypi_requirement = PyPiRequirement::deserialize(&mut toml_span::Value::new(
+            ValueInner::String(r#"==1.2.3"#.into()),
+        ))
+        .unwrap();
         assert_eq!(
             pypi_requirement,
             PyPiRequirement::RawVersion("==1.2.3".parse().unwrap())
@@ -714,21 +797,20 @@ mod tests {
 
     #[test]
     fn test_deserialize_pypi_requirement_from_str_with_star() {
-        let json_string = r#""*""#;
-        let result: Result<PyPiRequirement, _> = serde_json::from_str(json_string);
-        assert!(result.is_ok());
-        let pypi_requirement: PyPiRequirement = result.unwrap();
+        let pypi_requirement = PyPiRequirement::deserialize(&mut toml_span::Value::new(
+            ValueInner::String("*".into()),
+        ))
+        .unwrap();
         assert_eq!(pypi_requirement, PyPiRequirement::default());
     }
 
     #[test]
     fn test_deserialize_pypi_from_path() {
-        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"
-                    foo = { path = "../numpy-test" }
-                    "#,
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = { path = "../numpy-test" }"#,
         )
-        .unwrap();
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Path {
@@ -740,12 +822,11 @@ mod tests {
     }
     #[test]
     fn test_deserialize_pypi_from_path_editable() {
-        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"
-                foo = { path = "../numpy-test", editable = true }
-                "#,
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = { path = "../numpy-test", editable = true }"#,
         )
-        .unwrap();
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Path {
@@ -758,20 +839,25 @@ mod tests {
 
     #[test]
     fn test_deserialize_fail_on_unknown() {
-        let _ = toml_edit::de::from_str::<IndexMap<PyPiPackageName, PyPiRequirement>>(
-            r#"foo = { borked = "bork"}"#,
-        )
-        .unwrap_err();
+        let input = r#"foo = { borked = "bork"}"#;
+        assert_snapshot!(format_parse_error(input, TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(input).unwrap_err()), @r###"
+         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index'
+          ╭─[pixi.toml:1:9]
+        1 │ foo = { borked = "bork"}
+          ·         ───┬──
+          ·            ╰── 'borked' was not expected here
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_deserialize_pypi_from_url() {
-        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"
-                foo = { url = "https://test.url.com"}
-                "#,
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = { url = "https://test.url.com"}"#,
         )
-        .unwrap();
+        .unwrap()
+        .into_inner();
+
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Url {
@@ -784,19 +870,16 @@ mod tests {
 
     #[test]
     fn test_deserialize_pypi_from_git() {
-        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"
-                foo = { git = "https://test.url.git" }
-                "#,
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = { git = "https://test.url.git" }"#,
         )
-        .unwrap();
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    branch: None,
-                    tag: None,
                     rev: None,
                     subdirectory: None,
                 },
@@ -807,20 +890,17 @@ mod tests {
 
     #[test]
     fn test_deserialize_pypi_from_git_branch() {
-        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"
-                foo = { git = "https://test.url.git", branch = "main" }
-                "#,
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = { git = "https://test.url.git", branch = "main" }"#,
         )
-        .unwrap();
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    branch: Some("main".to_string()),
-                    tag: None,
-                    rev: None,
+                    rev: Some(GitReference::Branch("main".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -830,20 +910,17 @@ mod tests {
 
     #[test]
     fn test_deserialize_pypi_from_git_tag() {
-        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"
-                foo = { git = "https://test.url.git", tag = "v.1.2.3" }
-                "#,
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = { git = "https://test.url.git", tag = "v.1.2.3" }"#,
         )
-        .unwrap();
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    tag: Some("v.1.2.3".to_string()),
-                    branch: None,
-                    rev: None,
+                    rev: Some(GitReference::Tag("v.1.2.3".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -853,20 +930,17 @@ mod tests {
 
     #[test]
     fn test_deserialize_pypi_from_flask() {
-        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"
-                flask = { git = "https://github.com/pallets/flask.git", tag = "3.0.0"}
-                "#,
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"flask = { git = "https://github.com/pallets/flask.git", tag = "3.0.0"}"#,
         )
-        .unwrap();
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
-                    tag: Some("3.0.0".to_string()),
-                    branch: None,
-                    rev: None,
+                    rev: Some(GitReference::Tag("3.0.0".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -876,20 +950,17 @@ mod tests {
 
     #[test]
     fn test_deserialize_pypi_from_git_rev() {
-        let requirement: IndexMap<PyPiPackageName, PyPiRequirement> = toml_edit::de::from_str(
-            r#"
-                foo = { git = "https://test.url.git", rev = "123456" }
-                "#,
+        let requirement = TomlIndexMap::<pep508_rs::PackageName, PyPiRequirement>::from_toml_str(
+            r#"foo = { git = "https://test.url.git", rev = "123456" }"#,
         )
-        .unwrap();
+        .unwrap()
+        .into_inner();
         assert_eq!(
             requirement.first().unwrap().1,
             &PyPiRequirement::Git {
-                url: ParsedGitUrl {
+                url: GitSpec {
                     git: Url::parse("https://test.url.git").unwrap(),
-                    rev: Some(GitRev::Short("123456".to_string())),
-                    tag: None,
-                    branch: None,
+                    rev: Some(GitReference::Rev("123456".to_string())),
                     subdirectory: None,
                 },
                 extras: vec![],
@@ -916,11 +987,9 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Git {
-                url: ParsedGitUrl {
-                    git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
-                    branch: None,
-                    tag: None,
-                    rev: None,
+                url: GitSpec {
+                    git: Url::parse("git+https://github.com/ecederstrand/exchangelib").unwrap(),
+                    rev: Some(GitReference::DefaultBranch),
                     subdirectory: None,
                 },
                 extras: vec![]
@@ -932,11 +1001,9 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PyPiRequirement::Git {
-                url: ParsedGitUrl {
-                    git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
-                    branch: None,
-                    tag: None,
-                    rev: Some(GitRev::Full(
+                url: GitSpec {
+                    git: Url::parse("git+https://github.com/ecederstrand/exchangelib").unwrap(),
+                    rev: Some(GitReference::Rev(
                         "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
                     )),
                     subdirectory: None,
@@ -986,11 +1053,17 @@ mod tests {
             "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main",
         )
         .unwrap();
-        assert_matches!(
-            PyPiRequirement::try_from(parsed),
-            Err(Pep508ToPyPiRequirementError::ParseGitRev(
-                GitRevParseError::InvalidCharacters(characters)
-            )) if characters == "main"
+        assert_eq!(
+            PyPiRequirement::try_from(parsed).unwrap(),
+            PyPiRequirement::Git {
+                url: GitSpec {
+                    git: Url::parse("git+ssh://git@github.com/python-attrs/attrs.git").unwrap(),
+                    rev: Some(GitReference::Rev("main".to_string())),
+                    subdirectory: None
+                },
+
+                extras: vec![]
+            }
         );
 
         // With subdirectory
@@ -1001,11 +1074,9 @@ mod tests {
         assert_eq!(
             PyPiRequirement::try_from(parsed).unwrap(),
             PyPiRequirement::Git {
-                url: ParsedGitUrl {
-                    git: Url::parse("https://github.com/Deltares/Ribasim.git").unwrap(),
-                    branch: None,
-                    tag: None,
-                    rev: None,
+                url: GitSpec {
+                    git: Url::parse("git+https://github.com/Deltares/Ribasim.git").unwrap(),
+                    rev: Some(GitReference::DefaultBranch),
                     subdirectory: Some("python/ribasim".to_string()),
                 },
                 extras: vec![],
@@ -1015,28 +1086,32 @@ mod tests {
 
     #[test]
     fn test_deserialize_succeeding() {
-        let examples = [
-            json! { "==1.2.3" },
-            json!({ "version": "==1.2.3" }),
-            json! { "*" },
-            json!({ "path": "foobar" }),
-            json!({ "path": "~/.cache" }),
-            json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
-            json!({ "git": "ssh://github.com/conda-forge/21cmfast-feedstock", "tag": "v1.2.3" }),
-            json!({ "git": "https://github.com/prefix-dev/rattler-build", "rev": "123456" }),
+        const EXAMPLES: &[&str] = &[
+            r#"pkg = "==1.2.3""#,
+            r#"pkg = { version = "==1.2.3" } "#,
+            r#"pkg = "*""#,
+            r#"pkg = { path = "foobar" } "#,
+            r#"pkg = { path = "~/.cache" } "#,
+            r#"pkg = { url = "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", "branch" = "main" }"#,
+            r#"pkg = { git = "ssh://github.com/conda-forge/21cmfast-feedstock", "tag" = "v1.2.3" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "rev" = "123456" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "subdirectory" = "pyrattler" }"#,
+            r#"pkg = { git = "https://github.com/prefix-dev/rattler-build", "extras" = ["test"] }"#,
         ];
 
         #[derive(Serialize)]
         struct Snapshot {
-            input: Value,
+            input: &'static str,
             result: Value,
         }
 
         let mut snapshot = Vec::new();
-        for input in examples {
-            let req = serde_json::from_value::<PyPiRequirement>(input.clone()).unwrap();
+        for input in EXAMPLES {
+            let mut toml_value = toml_span::parse(input).unwrap();
+            let mut th = TableHelper::new(&mut toml_value).unwrap();
+            let req: PyPiRequirement = th.required("pkg").unwrap();
             let result = serde_json::to_value(&req).unwrap();
             snapshot.push(Snapshot { input, result });
         }
@@ -1046,41 +1121,54 @@ mod tests {
 
     #[test]
     fn test_deserialize_failing() {
-        let examples = [
-            json!({ "ver": "1.2.3" }),
-            json!({ "path": "foobar", "version": "==1.2.3" }),
-            json!({ "version": "//" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1", "rev": "123456" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "rev": "v1" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "tag": "v1", "rev": "123456" }),
-            json!({ "git": "ssh://github.com:conda-forge/21cmfast-feedstock"}),
-            json!({ "branch": "main", "tag": "v1", "rev": "123456"  }),
-            json! { "/path/style"},
-            json! { "./path/style"},
-            json! { "\\path\\style"},
-            json! { "~/path/style"},
-            json! { "https://example.com"},
-            json! { "https://github.com/conda-forge/21cmfast-feedstock"},
+        const EXAMPLES: &[&str] = &[
+            r#"pkg = { ver = "1.2.3" }"#,
+            r#"pkg = { path = "foobar", "version" = "==1.2.3" }"#,
+            r#"pkg = { version = "//" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", tag = "v1" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", tag = "v1", "rev" = "123456" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", rev = "v1" }"#,
+            r#"pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", tag = "v1", rev = "123456" }"#,
+            r#"pkg = { git = "ssh://github.com:conda-forge/21cmfast-feedstock"}"#,
+            r#"pkg = { branch = "main", tag = "v1", rev = "123456"  }"#,
+            r#"pkg = "/path/style""#,
+            r#"pkg = "./path/style""#,
+            r#"pkg = "\\path\\style""#,
+            r#"pkg = "~/path/style""#,
+            r#"pkg = "https://example.com""#,
+            r#"pkg = "https://github.com/conda-forge/21cmfast-feedstock""#,
         ];
 
-        #[derive(Serialize)]
         struct Snapshot {
-            input: Value,
+            input: &'static str,
             result: Value,
         }
 
         let mut snapshot = Vec::new();
-        for input in examples {
-            let error = serde_json::from_value::<PyPiRequirement>(input.clone()).unwrap_err();
+        for input in EXAMPLES {
+            let mut toml_value = toml_span::parse(input).unwrap();
+            let mut th = TableHelper::new(&mut toml_value).unwrap();
+            let req = th.required::<PyPiRequirement>("pkg").unwrap_err();
 
             let result = json!({
-                "error": format!("ERROR: {error}")
+                "error": format_parse_error(input, TomlError::TomlError(req))
             });
 
             snapshot.push(Snapshot { input, result });
         }
 
-        insta::assert_yaml_snapshot!(snapshot);
+        insta::assert_snapshot!(snapshot
+            .into_iter()
+            .map(|Snapshot { input, result }| format!(
+                "input: {input}\nresult: {} ",
+                result
+                    .as_object()
+                    .unwrap()
+                    .get("error")
+                    .unwrap()
+                    .as_str()
+                    .unwrap()
+            ))
+            .join("\n"));
     }
 }

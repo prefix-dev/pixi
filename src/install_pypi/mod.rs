@@ -8,6 +8,7 @@ use pixi_manifest::SystemRequirements;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     isolated_names_to_packages, locked_indexes_to_index_locations, names_to_build_isolation,
+    no_build_to_build_options,
 };
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
@@ -43,7 +44,6 @@ pub(crate) mod utils;
 type CombinedPypiPackageData = (PypiPackageData, PypiPackageEnvironmentData);
 
 /// Installs and/or remove python distributions.
-// TODO: refactor arguments in struct
 #[allow(clippy::too_many_arguments)]
 pub async fn update_python_distributions(
     lock_file_dir: &Path,
@@ -57,6 +57,7 @@ pub async fn update_python_distributions(
     environment_variables: &HashMap<String, String>,
     platform: Platform,
     non_isolated_packages: Option<Vec<String>>,
+    no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
 
@@ -75,6 +76,7 @@ pub async fn update_python_distributions(
         .map(|indexes| locked_indexes_to_index_locations(indexes, lock_file_dir))
         .unwrap_or_else(|| Ok(IndexLocations::default()))
         .into_diagnostic()?;
+    let build_options = no_build_to_build_options(no_build).into_diagnostic()?;
 
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
@@ -95,7 +97,7 @@ pub async fn update_python_distributions(
             entries,
             Some(&tags),
             &uv_types::HashStrategy::None,
-            &uv_context.build_options,
+            &build_options,
         )
     };
 
@@ -143,7 +145,7 @@ pub async fn update_python_distributions(
         &config_settings,
         build_isolation,
         LinkMode::default(),
-        &uv_context.build_options,
+        &build_options,
         &uv_context.hash_strategy,
         None,
         LowerBound::default(),
@@ -195,12 +197,11 @@ pub async fn update_python_distributions(
         remote,
         reinstalls,
         extraneous,
-    } = InstallPlanner::new(
-        uv_context.cache.clone(),
-        venv.interpreter().python_version(),
-        lock_file_dir,
-    )
-    .plan(&site_packages, registry_index, &required_map)?;
+    } = InstallPlanner::new(uv_context.cache.clone(), lock_file_dir).plan(
+        &site_packages,
+        registry_index,
+        &required_map,
+    )?;
 
     // Determine the currently installed conda packages.
     let installed_packages = prefix.find_installed_packages().with_context(|| {
@@ -304,7 +305,6 @@ pub async fn update_python_distributions(
 
         let options = UvReporterOptions::new()
             .with_length(remote.len() as u64)
-            .with_capacity(remote.len() + 30)
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
@@ -325,7 +325,7 @@ pub async fn update_python_distributions(
             &uv_context.cache,
             &tags,
             &uv_types::HashStrategy::None,
-            &uv_context.build_options,
+            &build_options,
             distribution_database,
         )
         .with_reporter(UvReporter::new(options));
@@ -459,7 +459,6 @@ pub async fn update_python_distributions(
 
     let options = UvReporterOptions::new()
         .with_length(all_dists.len() as u64)
-        .with_capacity(all_dists.len() + 30)
         .with_starting_tasks(all_dists.iter().map(|d| format!("{}", d.name())))
         .with_top_level_message("Installing distributions");
 
@@ -471,7 +470,7 @@ pub async fn update_python_distributions(
             .with_reporter(UvReporter::new(options))
             .install(all_dists.clone())
             .await
-            .unwrap();
+            .expect("should be able to install all distributions");
 
         let s = if all_dists.len() == 1 { "" } else { "s" };
         tracing::info!(

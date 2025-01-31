@@ -8,17 +8,16 @@ use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_manifest::{Manifest, PackageManifest, PrioritizedChannel, WorkspaceManifest};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
-use serde::{de::IntoDeserializer, Deserialize};
 use thiserror::Error;
 use which::Error;
 
 use crate::{
+    backend_override::BackendOverride,
     jsonrpc::{Receiver, Sender},
     protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
-    BackendOverride, InProcessBackend, ToolContext,
+    InProcessBackend, ToolContext,
 };
-// use super::{InitializeError, JsonRPCBuildProtocol};
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
 #[derive(Debug)]
@@ -27,15 +26,15 @@ pub struct ProtocolBuilder {
     manifest_path: PathBuf,
     workspace_manifest: WorkspaceManifest,
     package_manifest: PackageManifest,
-    override_backend_spec: Option<ToolSpec>,
+    configuration: Option<serde_json::Value>,
+    backend_override: Option<BackendOverride>,
     channel_config: Option<ChannelConfig>,
     cache_dir: Option<PathBuf>,
 }
 
 #[derive(thiserror::Error, Debug, Diagnostic)]
 pub enum ProtocolBuildError {
-    #[error("failed to setup a build backend, the {} could not be parsed", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest")
-    )]
+    #[error("failed to setup a build backend, failed to parse {0}")]
     #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()
     ))]
     FailedToParseManifest(PathBuf, #[diagnostic_source] miette::Report),
@@ -85,18 +84,25 @@ impl ProtocolBuilder {
             manifest_path,
             workspace_manifest,
             package_manifest,
-            override_backend_spec: None,
+            configuration: None,
+            backend_override: None,
             channel_config: None,
             cache_dir: None,
         }
     }
 
-    /// Sets an optional backend override.
-    pub fn with_backend_override(self, backend_override: Option<BackendOverride>) -> Self {
+    /// Sets the configuration of the build backend
+    pub fn with_configuration(self, config: serde_json::Value) -> Self {
         Self {
-            override_backend_spec: backend_override
-                .map(BackendOverride::into_spec)
-                .or(self.override_backend_spec),
+            configuration: Some(config),
+            ..self
+        }
+    }
+
+    /// Sets an optional backend override.
+    pub fn with_backend_override(self, backend_override: BackendOverride) -> Self {
+        Self {
+            backend_override: Some(backend_override),
             ..self
         }
     }
@@ -143,12 +149,52 @@ impl ProtocolBuilder {
         Ok(None)
     }
 
+    fn get_tool_spec(&self, channel_config: &ChannelConfig) -> Result<ToolSpec, FinishError> {
+        // The tool is either overridden or its not, with pixi the backend is specified
+        // in the toml so it's unclear if we need to override the tool until
+        // this point, lets check that now
+        if let Some(backend_override) = self.backend_override.as_ref() {
+            let tool_name = self.package_manifest.build.backend.name.clone();
+            if let Some(tool) = backend_override.overridden_tool(tool_name.as_normalized()) {
+                return Ok(tool.as_spec());
+            }
+        }
+
+        // If we get here the tool is not overridden, so we use the isolated variant
+        let build_system = &self.package_manifest.build;
+        let specs = [(&build_system.backend.name, &build_system.backend.spec)]
+            .into_iter()
+            .chain(build_system.additional_dependencies.iter())
+            .map(|(name, spec)| {
+                spec.clone()
+                    .try_into_nameless_match_spec(channel_config)
+                    .map(|spec| MatchSpec::from_nameless(spec, Some(name.clone())))
+            })
+            .collect::<Result<_, _>>()
+            .map_err(FinishError::SpecConversionError)?;
+
+        // Figure out the channels to use
+        let channels = build_system.channels.clone().unwrap_or_else(|| {
+            PrioritizedChannel::sort_channels_by_priority(
+                self.workspace_manifest.workspace.channels.iter(),
+            )
+            .cloned()
+            .collect()
+        });
+
+        Ok(ToolSpec::Isolated(IsolatedToolSpec {
+            specs,
+            command: build_system.backend.name.as_source().to_string(),
+            channels,
+        }))
+    }
+
     pub async fn finish(
         self,
         tool: Arc<ToolContext>,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
-        let channel_config = self.channel_config.unwrap_or_else(|| {
+        let channel_config = self.channel_config.clone().unwrap_or_else(|| {
             ChannelConfig::default_with_root_dir(
                 self.manifest_path
                     .parent()
@@ -157,59 +203,24 @@ impl ProtocolBuilder {
             )
         });
 
-        let tool_spec = if let Some(backend_spec) = self.override_backend_spec {
-            backend_spec
-        } else {
-            let build_system = &self.package_manifest.build_system;
-            let specs = [(
-                &build_system.build_backend.name,
-                &build_system.build_backend.spec,
-            )]
-            .into_iter()
-            .chain(build_system.additional_dependencies.iter())
-            .map(|(name, spec)| {
-                spec.clone()
-                    .try_into_nameless_match_spec(&channel_config)
-                    .map(|spec| MatchSpec::from_nameless(spec, Some(name.clone())))
-            })
-            .collect::<Result<_, _>>()
-            .map_err(FinishError::SpecConversionError)?;
-
-            // Figure out the channels to use
-            let channels = build_system.channels.clone().unwrap_or_else(|| {
-                PrioritizedChannel::sort_channels_by_priority(
-                    self.workspace_manifest.workspace.channels.iter(),
-                )
-                .cloned()
-                .collect()
-            });
-
-            ToolSpec::Isolated(IsolatedToolSpec {
-                specs,
-                command: build_system.build_backend.name.as_source().to_string(),
-                channels,
-            })
-        };
+        let tool_spec = self.get_tool_spec(&channel_config)?;
 
         let tool = tool
             .instantiate(tool_spec, &channel_config)
             .await
             .map_err(FinishError::Tool)?;
 
-        let configuration = self
-            .package_manifest
-            .build_system
-            .build_backend
-            .additional_args
-            .map_or(serde_json::Value::Null, |value| {
-                let deserializer = value.into_deserializer();
-                serde_json::Value::deserialize(deserializer).unwrap_or(serde_json::Value::Null)
-            });
+        let channel_config = self
+            .channel_config
+            .clone()
+            .unwrap_or_else(|| ChannelConfig::default_with_root_dir(self.source_dir.clone()));
 
         Ok(JsonRPCBuildProtocol::setup(
             self.source_dir,
             self.manifest_path,
-            configuration,
+            Some(&self.package_manifest),
+            self.configuration,
+            &channel_config,
             build_id,
             self.cache_dir,
             tool,
@@ -224,21 +235,18 @@ impl ProtocolBuilder {
         ipc: InProcessBackend,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, FinishError> {
-        let configuration = self
-            .package_manifest
-            .build_system
-            .build_backend
-            .additional_args
-            .map_or(serde_json::Value::Null, |value| {
-                let deserializer = value.into_deserializer();
-                serde_json::Value::deserialize(deserializer).unwrap_or(serde_json::Value::Null)
-            });
+        let channel_config = self
+            .channel_config
+            .clone()
+            .unwrap_or_else(|| ChannelConfig::default_with_root_dir(self.source_dir.clone()));
 
         Ok(JsonRPCBuildProtocol::setup_with_transport(
             "<IPC>".to_string(),
             self.source_dir,
             self.manifest_path,
-            configuration,
+            Some(&self.package_manifest),
+            self.configuration,
+            &channel_config,
             build_id,
             self.cache_dir,
             Sender::from(ipc.rpc_out),

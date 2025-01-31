@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
-use clap::{ArgAction, Parser};
+use clap::Parser;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
@@ -34,10 +34,6 @@ pub struct Args {
     /// The output directory to place the build artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
-
-    /// Use system backend installed tool
-    #[arg(long, action = ArgAction::SetTrue)]
-    pub with_system: bool,
 }
 
 struct ProgressReporter {
@@ -48,7 +44,7 @@ impl ProgressReporter {
     fn new(source: &str) -> Self {
         let style = indicatif::ProgressStyle::default_bar()
             .template("{spinner:.dim} {elapsed} {prefix} {wide_msg:.dim}")
-            .unwrap();
+            .expect("should be able to create a progress bar style");
         let pb = ProgressBar::new(0);
         pb.set_style(style);
         let progress = pixi_progress::global_multi_progress().add(pb);

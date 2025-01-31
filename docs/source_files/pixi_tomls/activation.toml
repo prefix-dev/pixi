@@ -1,0 +1,29 @@
+[project]
+channels = []
+name = "activation"
+platforms = ["linux-64", "win-64"]
+
+# --8<-- [start:activation]
+[activation.env]
+# Python users often set:
+PYTHONIOENCODING = "utf-8"
+PYTHONNOUSERSITE = "1"
+# R users often set:
+PIXI_R_LIBS = "$CONDA_PREFIX/lib/R/library"
+R_LIBS = "$PIXI_R_LIBS"
+R_LIBS_USER = "$PIXI_R_LIBS"
+
+
+[target.unix.activation]
+# Use sh scripts on unix
+scripts = [
+  # Common in the ROS workspaces
+  "install/setup.sh",
+  # Want to add some personal scripts to the activation:
+  "activation.sh",
+]
+
+# Use batch scripts on windows
+[target.win.activation]
+scripts = ["install/setup.bat"]
+# --8<-- [end:activation]

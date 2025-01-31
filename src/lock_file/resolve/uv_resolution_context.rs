@@ -1,6 +1,6 @@
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
-use uv_configuration::{BuildOptions, Concurrency, SourceStrategy, TrustedHost};
+use uv_configuration::{Concurrency, SourceStrategy, TrustedHost};
 use uv_distribution_types::IndexCapabilities;
 use uv_types::{HashStrategy, InFlight};
 
@@ -14,7 +14,6 @@ use pixi_uv_conversions::{to_uv_trusted_host, ConversionError};
 pub struct UvResolutionContext {
     pub cache: Cache,
     pub in_flight: InFlight,
-    pub build_options: BuildOptions,
     pub hash_strategy: HashStrategy,
     pub client: reqwest::Client,
     pub keyring_provider: uv_configuration::KeyringProviderType,
@@ -66,7 +65,6 @@ impl UvResolutionContext {
             in_flight: InFlight::default(),
             hash_strategy: HashStrategy::None,
             client: project.client().clone(),
-            build_options: BuildOptions::default(),
             keyring_provider,
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Disabled,

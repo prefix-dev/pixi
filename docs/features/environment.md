@@ -120,6 +120,12 @@ It sets the `PATH` and some more environment variables. But more importantly it 
 An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
 Thus, just adding the `bin` directory to the `PATH` is not enough.
 
+You can modify the activation with the `activation` table in the manifest, you can add more activation scripts or inject environment variables into the activation scripts.
+```toml
+--8<-- "docs/source_files/pixi_tomls/activation.toml:activation"
+```
+Find the reference for the `activation` table [here](../reference/pixi_manifest.md#the-activation-table).
+
 ## Traditional `conda activate`-like activation
 
 If you prefer to use the traditional `conda activate`-like activation, you could use the `pixi shell-hook` command.
@@ -204,7 +210,7 @@ If you want to learn more about the solving process, you can read these:
 - [UV(PyPI) resolver blog](https://astral.sh/blog/uv-unified-python-packaging)
 
 Pixi solves both the `conda` and `PyPI` dependencies, where the `PyPI` dependencies use the conda packages as a base, so you can be sure that the packages are compatible with each other.
-These solvers are split between the [`rattler`](https://github.com/mamba-org/rattler) and [`uv`](https://github.com/astral-sh/uv) library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: [`resolvo`](https://github.com/mamba-org/resolvo).
+These solvers are split between the [`rattler`](https://github.com/conda/rattler) and [`uv`](https://github.com/astral-sh/uv) library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: [`resolvo`](https://github.com/mamba-org/resolvo).
 `resolve` is able to solve multiple ecosystem like `conda` and `PyPI`. It implements the lazy solving process for `PyPI` packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
 It also supports the `conda` way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.
 
