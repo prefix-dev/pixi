@@ -182,7 +182,7 @@ impl<'a> PixiBuildDispatch<'a> {
     }
 
     /// Lazy initialization of the `BuildDispatch`.
-    async fn initialize(&self) -> anyhow::Result<&BuildDispatch> {
+    async fn get_or_try_init(&self) -> anyhow::Result<&BuildDispatch> {
         self.build_dispatch
             .get_or_try_init(async {
                 tracing::debug!(
@@ -222,9 +222,6 @@ impl<'a> PixiBuildDispatch<'a> {
                             "Use `pixi add python` to install the latest python interpreter.",
                         ))
                     })?;
-
-                tracing::error!("python path {:?}", python_path);
-                tracing::error!("querying in initialize");
 
                 let interpreter = self
                     .interpreter
@@ -276,12 +273,36 @@ impl BuildContext for PixiBuildDispatch<'_> {
     type SourceDistBuilder = SourceBuild;
 
     fn interpreter(&self) -> &uv_python::Interpreter {
-        tracing::error!("initialize in interpreter");
-        tokio::task::block_in_place(|| {
-            Handle::current()
-                .block_on(self.initialize())
-                .expect("failed to initialize build dispatch");
-        });
+        // In most cases the interpreter should be initialized, because one of the other trait
+        // methods will have been called
+        // But in case it is not, we will initialize it here
+        //
+        // Even though intitalize does not initialize twice, we skip the codepath because the initialization takes time
+        if self.interpreter.get().is_none() {
+            // This will usually be called from the multi-threaded runtime, but there might be tests
+            // that calls this in the current thread runtime.
+            // In the current thread runtime we cannot use `block_in_place` as it will pani
+            let handle = Handle::current();
+            match handle.runtime_flavor() {
+                tokio::runtime::RuntimeFlavor::CurrentThread => {
+                    let runtime = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("failed to initialize the runtime ");
+                    runtime
+                        .block_on(self.get_or_try_init())
+                        .expect("failed to initialize the build dispatch");
+                }
+                // Others are multi-threaded runtimes
+                _ => {
+                    tokio::task::block_in_place(move || {
+                        handle
+                            .block_on(self.get_or_try_init())
+                            .expect("failed to initialize build dispatch");
+                    });
+                }
+            }
+        }
         self.interpreter
             .get()
             .expect("python interpreter not initialized, this is a programming error")
@@ -324,8 +345,7 @@ impl BuildContext for PixiBuildDispatch<'_> {
     }
 
     async fn resolve<'data>(&'data self, requirements: &'data [Requirement]) -> Result<Resolution> {
-        tracing::error!("initialize in resolve");
-        self.initialize().await?.resolve(requirements).await
+        self.get_or_try_init().await?.resolve(requirements).await
     }
 
     async fn install<'data>(
@@ -333,8 +353,10 @@ impl BuildContext for PixiBuildDispatch<'_> {
         resolution: &'data Resolution,
         venv: &'data PythonEnvironment,
     ) -> Result<Vec<CachedDist>> {
-        tracing::error!("initialize in install");
-        self.initialize().await?.install(resolution, venv).await
+        self.get_or_try_init()
+            .await?
+            .install(resolution, venv)
+            .await
     }
 
     async fn setup_build<'data>(
@@ -348,8 +370,7 @@ impl BuildContext for PixiBuildDispatch<'_> {
         build_kind: BuildKind,
         build_output: BuildOutput,
     ) -> Result<SourceBuild> {
-        tracing::error!("initialize in setup build");
-        self.initialize()
+        self.get_or_try_init()
             .await?
             .setup_build(
                 source,
