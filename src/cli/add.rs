@@ -201,9 +201,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
                 return Err(miette::miette!(
                     help = format!("Did you mean one of these?\n{}\nTip: Run `pixi search` to explore available packages.", formatted_suggestions),
-                    "Cannot solve the request because of: No candidates were found for {} *",
-                    package_name
-                ));
+                    "{}", e
+                ).wrap_err(format!("No candidates were found for {}", package_name)));
             }
             return Err(e);
         }
