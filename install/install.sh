@@ -132,7 +132,7 @@ update_shell() {
     [[ -n "${PIXI_NO_PATH_UPDATE:-}" ]] && echo "No path update because PIXI_NO_PATH_UPDATE has a value" && return
 
     # Create the file if it doesn't exist
-    if [ -f "$FILE" ]; then
+    if [ ! -f "$FILE" ]; then
         touch "$FILE"
     fi
 
