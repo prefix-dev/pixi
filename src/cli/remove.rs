@@ -1,5 +1,6 @@
 use clap::Parser;
 use miette::Context;
+use pixi_manifest::FeaturesExt;
 
 use crate::environment::get_update_lock_file_and_prefix;
 use crate::Project;
@@ -40,8 +41,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(prefix_update_config.config.clone());
     let dependency_type = dependency_config.dependency_type();
 
+     // Prevent removing Python if PyPI dependencies exist
+     if let DependencyType::CondaDependency(_) = dependency_type {
+        for name in dependency_config.specs()?.keys() {
+            if name.as_source() == "python" {
+                // Check if there are any PyPI dependencies by importing the PypiDependencies trait
+                let pypi_deps = project.default_environment().pypi_dependencies(None);
+                if !pypi_deps.is_empty() {
+                    let deps_list = pypi_deps
+                        .iter()
+                        .map(|(name, _)| name.as_source())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return Err(miette::miette!(
+                        "Cannot remove Python while PyPI dependencies exist. Please remove these PyPI dependencies first: {}",
+                        deps_list
+                    ));
+                }
+            }
+        }
+    }
     match dependency_type {
         DependencyType::PypiDependency => {
+            let mut removed_deps = Vec::new();
             for name in dependency_config.pypi_deps(&project)?.keys() {
                 project
                     .manifest
@@ -54,7 +76,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         "failed to remove PyPI dependency: '{}'",
                         name.as_source()
                     ))?;
+                removed_deps.push(name.as_source().to_string());
             }
+            eprintln!(
+                "{}Removed PyPI dependencies: {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                removed_deps.join(", ")
+            );
         }
         DependencyType::CondaDependency(spec_type) => {
             for name in dependency_config.specs()?.keys() {
