@@ -11,7 +11,7 @@ use std::sync::Arc;
 use std::{collections::HashMap, string::String};
 
 use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
-use crate::environment::verify_prefix_location_unchanged;
+use crate::environment::sanity_check_project;
 use crate::lock_file::UpdateLockFileOptions;
 use crate::project::errors::UnsupportedPlatformError;
 use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
@@ -100,7 +100,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+    sanity_check_project(&project).await?;
 
     let best_platform = environment.best_platform();
 
