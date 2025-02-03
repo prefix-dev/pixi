@@ -176,6 +176,7 @@ pub enum WorkspaceDiscoveryError {
     ExplicitManifestError(#[from] ExplicitManifestError),
 }
 
+#[allow(clippy::large_enum_variant)]
 enum EitherManifest {
     Pixi(TomlManifest),
     Pyproject(PyProjectManifest),

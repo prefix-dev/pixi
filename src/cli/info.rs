@@ -148,7 +148,8 @@ impl Display for EnvironmentInfo {
         }
 
         if !self.system_requirements.is_empty() {
-            let serialized = to_string(&self.system_requirements).unwrap();
+            let serialized = to_string(&self.system_requirements)
+                .expect("it should always be possible to convert system requirements to a string");
             let indented = serialized
                 .lines()
                 .enumerate()
@@ -461,14 +462,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|p| p.config().clone())
         .unwrap_or_else(pixi_config::Config::load_global);
 
-    let auth_file = config
-        .authentication_override_file()
-        .map(|x| x.to_owned())
-        .unwrap_or_else(|| {
-            authentication_storage::backends::file::FileStorage::default()
-                .path
-                .clone()
-        });
+    let auth_file: PathBuf = if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {
+        auth_file.into()
+    } else if let Some(auth_file) = config.authentication_override_file() {
+        auth_file.to_owned()
+    } else {
+        authentication_storage::backends::file::FileStorage::new()
+            .into_diagnostic()?
+            .path
+    };
 
     let info = Info {
         platform: Platform::current().to_string(),

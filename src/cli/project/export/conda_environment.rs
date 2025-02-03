@@ -57,11 +57,7 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
                 url = git_url.git,
             );
 
-            if let Some(ref branch) = git_url.branch {
-                git_string.push_str(&format!("@{branch}"));
-            } else if let Some(ref tag) = git_url.tag {
-                git_string.push_str(&format!("@{tag}"));
-            } else if let Some(ref rev) = git_url.rev {
+            if let Some(Some(rev)) = git_url.rev.as_ref().map(|rev| rev.reference()) {
                 git_string.push_str(&format!("@{rev}"));
             }
 
@@ -196,7 +192,8 @@ fn build_env_yaml(
         }
 
         env_yaml.dependencies.push(MatchSpecOrSubSection::MatchSpec(
-            MatchSpec::from_str("pip", ParseStrictness::Lenient).unwrap(),
+            MatchSpec::from_str("pip", ParseStrictness::Lenient)
+                .expect("'pip' should be a valid name"),
         ));
 
         env_yaml

@@ -221,13 +221,25 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            let contains_source_packages = self.lock_file.environments().any(|(_, env)| {
+            // If we contain source packages from conda or PyPI we update the prefix by default
+            let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
                 env.conda_packages(Platform::current())
-                    .map_or(false, |mut packages| {
+                    .is_some_and(|mut packages| {
                         packages.any(|package| package.as_source().is_some())
                     })
             });
-            if contains_source_packages {
+
+            // Check if we have source packages from PyPI
+            // that is a directory, this is basically the only kind of source dependency
+            // that you'll modify on a general basis.
+            let contains_pypi_source_pkgs = environment
+                .pypi_dependencies(Some(Platform::current()))
+                .iter()
+                .any(|(_, req)| {
+                    req.iter()
+                        .any(|dep| dep.as_path().map(|p| p.is_dir()).unwrap_or_default())
+                });
+            if contains_conda_source_pkgs || contains_pypi_source_pkgs {
                 tracing::debug!("Lock file contains source packages: ignore lock file hash and update the prefix");
             } else {
                 tracing::info!(
@@ -289,6 +301,11 @@ impl<'p> LockFileDerivedData<'p> {
             .await?;
 
         let non_isolated_packages = environment.pypi_options().no_build_isolation;
+        let no_build = environment
+            .pypi_options()
+            .no_build
+            .clone()
+            .unwrap_or_default();
         // Update the prefix with Pypi records
         environment::update_prefix_pypi(
             environment.name(),
@@ -304,6 +321,7 @@ impl<'p> LockFileDerivedData<'p> {
             self.workspace.root(),
             environment.best_platform(),
             non_isolated_packages,
+            &no_build,
         )
         .await
         .with_context(|| {
@@ -1363,7 +1381,8 @@ impl<'p> UpdateContext<'p> {
         let top_level_progress =
             global_multi_progress().add(ProgressBar::new(pending_futures.len() as u64));
         top_level_progress.set_style(indicatif::ProgressStyle::default_bar()
-            .template("{spinner:.cyan} {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}").unwrap()
+            .template("{spinner:.cyan} {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}")
+            .expect("should be able to set style")
             .progress_chars("━━╾─"));
         top_level_progress.enable_steady_tick(Duration::from_millis(50));
         top_level_progress.set_prefix("updating lock-file");

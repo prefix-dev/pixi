@@ -16,7 +16,7 @@ use crate::{
     UpdateLockFileOptions, WorkspaceLocator,
 };
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
-use pixi_manifest::EnvironmentName;
+
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
@@ -240,11 +240,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
 
-    let prompt_name = match environment.name() {
-        EnvironmentName::Default => workspace.name().to_string(),
-        EnvironmentName::Named(name) => format!("{}:{}", workspace.name(), name),
-    };
-
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
@@ -277,25 +272,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     tracing::info!("Starting shell: {:?}", interactive_shell);
 
-    let prompt = if workspace.config().change_ps1() {
-        match interactive_shell {
-            ShellEnum::NuShell(_) => prompt::get_nu_prompt(prompt_name.as_str()),
-            ShellEnum::PowerShell(_) => prompt::get_powershell_prompt(prompt_name.as_str()),
-            ShellEnum::Bash(_) => prompt::get_bash_hook(prompt_name.as_str()),
-            ShellEnum::Zsh(_) => prompt::get_zsh_hook(prompt_name.as_str()),
-            ShellEnum::Fish(_) => prompt::get_fish_prompt(prompt_name.as_str()),
-            ShellEnum::Xonsh(_) => prompt::get_xonsh_prompt(),
-            ShellEnum::CmdExe(_) => prompt::get_cmd_prompt(prompt_name.as_str()),
-        }
+    let prompt_hook = if workspace.config().change_ps1() {
+        let prompt_name = prompt::prompt_name(workspace.name(), environment.name());
+        [
+            prompt::shell_prompt(&interactive_shell, prompt_name.as_str()),
+            prompt::shell_hook(&interactive_shell)
+                .unwrap_or_default()
+                .to_owned(),
+        ]
+        .join("\n")
     } else {
-        "".to_string()
+        String::new()
     };
 
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt).await,
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt),
-        ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, env, prompt),
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
+        ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, env, prompt_hook),
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
         }
@@ -303,12 +297,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt).await,
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt),
-        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], env, prompt).await,
-        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], env, prompt).await,
-        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], env, prompt).await,
-        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], env, prompt).await,
+        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
+        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
+        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], env, prompt_hook).await,
+        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], env, prompt_hook).await,
+        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], env, prompt_hook).await,
+        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], env, prompt_hook).await,
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell)
         }

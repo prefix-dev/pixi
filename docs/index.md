@@ -71,6 +71,7 @@ Add the following to the end of `~/.zshrc`:
 
 ```zsh title="~/.zshrc"
 
+autoload -Uz compinit && compinit  # redundant with Oh My Zsh
 eval "$(pixi completion --shell zsh)"
 ```
 

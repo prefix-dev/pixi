@@ -102,7 +102,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let diff = update_deps.lock_file_diff;
         // Format as json?
         if args.json {
-            let json_diff = LockFileJsonDiff::new(workspace.workspace(), diff);
+            let json_diff = LockFileJsonDiff::new(Some(workspace.workspace()), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
             println!("{}", json);
         } else {

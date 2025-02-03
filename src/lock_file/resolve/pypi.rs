@@ -16,9 +16,10 @@ use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{pypi::pypi_options::PypiOptions, PyPiRequirement, SystemRequirements};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    as_uv_req, convert_uv_requirements_to_pep508, isolated_names_to_packages,
-    names_to_build_isolation, pypi_options_to_index_locations, to_index_strategy, to_normalize,
-    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
+    as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec, isolated_names_to_packages,
+    names_to_build_isolation, no_build_to_build_options, pypi_options_to_index_locations,
+    to_index_strategy, to_normalize, to_requirements, to_uv_normalize, to_uv_version,
+    to_version_specifiers, ConversionError,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -293,6 +294,9 @@ pub async fn resolve_pypi(
             .connectivity(Connectivity::Online)
             .build(),
     );
+    let build_options =
+        no_build_to_build_options(&pypi_options.no_build.clone().unwrap_or_default())
+            .into_diagnostic()?;
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
@@ -306,12 +310,7 @@ pub async fn resolve_pypi(
             .await
             .into_diagnostic()
             .wrap_err("failed to query find-links locations")?;
-        FlatIndex::from_entries(
-            entries,
-            Some(&tags),
-            &context.hash_strategy,
-            &context.build_options,
-        )
+        FlatIndex::from_entries(entries, Some(&tags), &context.hash_strategy, &build_options)
     };
 
     // Create a shared in-memory index.
@@ -359,7 +358,7 @@ pub async fn resolve_pypi(
         &config_settings,
         build_isolation,
         LinkMode::default(),
-        &context.build_options,
+        &build_options,
         &context.hash_strategy,
         None,
         LowerBound::default(),
@@ -466,7 +465,7 @@ pub async fn resolve_pypi(
         AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
         &context.hash_strategy,
         options.exclude_newer,
-        &context.build_options,
+        &build_options,
         &context.capabilities,
     );
     let package_requests = Rc::new(RefCell::new(Default::default()));
@@ -635,9 +634,9 @@ fn get_url_or_path(
 }
 
 /// Create a vector of locked packages from a resolution
-async fn lock_pypi_packages<'a>(
+async fn lock_pypi_packages(
     conda_python_packages: CondaPythonPackages,
-    build_dispatch: &BuildDispatch<'a>,
+    build_dispatch: &BuildDispatch<'_>,
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
     index_capabilities: &IndexCapabilities,
@@ -758,7 +757,15 @@ async fn lock_pypi_packages<'a>(
                             .context("could not create direct-url")?;
                         (direct_url.into(), hash, false)
                     }
-                    SourceDist::Git(git) => (git.url.to_url().into(), hash, false),
+                    SourceDist::Git(git) => {
+                        // convert resolved source dist into a pinned git spec
+                        let pinned_git_spec = into_pinned_git_spec(git.clone());
+                        (
+                            pinned_git_spec.into_locked_git_url().to_url().into(),
+                            hash,
+                            false,
+                        )
+                    }
                     SourceDist::Path(path) => {
                         // Compute the hash of the package based on the source tree.
                         let hash = if path.install_path.is_dir() {

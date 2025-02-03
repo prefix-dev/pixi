@@ -119,7 +119,6 @@ nav:
   - Switching from:
       - Poetry: switching_from/poetry.md
       - Conda/Mamba: switching_from/conda.md
-      - Changelog: CHANGELOG.md
   - IDE Integration:
       - JupyterLab: ide_integration/jupyterlab.md
       - PyCharm: ide_integration/pycharm.md
@@ -140,6 +139,7 @@ nav:
       - GitHub Actions: advanced/github_actions.md
       - Info Command: advanced/explain_info_command.md
       - Updates using GitHub Actions: advanced/updates_github_actions.md
+      - Lockfile diffs: advanced/lockfile_diffs.md
       - Production Deployment: advanced/production_deployment.md
       - Pyproject.toml: advanced/pyproject_toml.md
   - Reference:
@@ -151,6 +151,7 @@ nav:
       - Packaging: packaging.md
       - Community: Community.md
       - FAQ: FAQ.md
+      - Changelog: CHANGELOG.md
 
 hooks:
   - schema/docs_hooks.py

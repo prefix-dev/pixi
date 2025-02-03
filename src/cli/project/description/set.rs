@@ -28,7 +28,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
             .workspace
             .description
             .as_ref()
-            .unwrap()
+            .expect("we just set the description, so it should be there")
     );
 
     Ok(())

@@ -218,7 +218,7 @@ impl PyProjectManifest {
     pub fn has_pixi_workspace(&self) -> bool {
         self.tool()
             .and_then(|t| t.pixi.as_ref())
-            .map_or(false, TomlManifest::has_workspace)
+            .is_some_and(TomlManifest::has_workspace)
     }
 
     /// Assume that the manifest is a workspace manifest and convert it as such.

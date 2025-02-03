@@ -177,7 +177,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Format as json?
     if args.json {
         let diff = LockFileDiff::from_lock_files(&loaded_lock_file, &updated_lock_file.lock_file);
-        let json_diff = LockFileJsonDiff::new(&workspace, diff);
+        let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);
     } else if diff.is_empty() {

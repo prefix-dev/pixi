@@ -1,20 +1,11 @@
 mod cache;
 mod reporters;
 
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    hash::{Hash, Hasher},
-    ops::Not,
-    path::{Component, Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
-};
-
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
+use miette::IntoDiagnostic;
 use pixi_build_frontend::{BackendOverride, SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
@@ -32,17 +23,28 @@ use pixi_manifest::Targets;
 use pixi_record::{
     InputHash, PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, SourceRecord,
 };
-use pixi_spec::{GitSpec, Reference, SourceSpec};
+use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_digest::Sha256;
 use reporters::SourceReporter;
 pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
+use std::sync::LazyLock;
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    hash::{Hash, Hasher},
+    ops::Not,
+    path::{Component, Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
+use uv_configuration::RAYON_INITIALIZE;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::build::cache::{
@@ -74,8 +76,11 @@ pub struct BuildContext {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum BuildError {
-    #[error("failed to resolve source path {}", &.0)]
-    ResolveSourcePath(Utf8TypedPathBuf, #[source] std::io::Error),
+    #[error("failed to resolve path source {}", &.0)]
+    ResolvePathSource(Utf8TypedPathBuf, #[source] std::io::Error),
+
+    #[error("failed to resolve git source {}", &.0)]
+    ResolveGitSource(Url, #[diagnostic_source] miette::Report),
 
     #[error("error calculating sha for {}", &.0.display())]
     CalculateSha(PathBuf, #[source] std::io::Error),
@@ -276,6 +281,9 @@ impl BuildContext {
             }
         }
 
+        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
+        LazyLock::force(&RAYON_INITIALIZE);
+
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
             .with_channel_config(self.channel_config.clone())
@@ -420,7 +428,10 @@ impl BuildContext {
                         git: fetched.git().repository().clone(),
                         source: PinnedGitCheckout {
                             commit: fetched.git().precise().expect("should be precies"),
-                            reference: git_spec.rev.clone().unwrap_or(Reference::DefaultBranch),
+                            reference: git_spec
+                                .rev
+                                .clone()
+                                .unwrap_or(pixi_spec::GitReference::DefaultBranch),
                             subdirectory: git_spec.subdirectory.clone(),
                         },
                     }),
@@ -430,7 +441,7 @@ impl BuildContext {
             SourceSpec::Path(path) => {
                 let source_path = self
                     .resolve_path(path.path.to_path())
-                    .map_err(|err| BuildError::ResolveSourcePath(path.path.clone(), err))?;
+                    .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err))?;
                 Ok(SourceCheckout {
                     path: source_path,
                     pinned: PinnedPathSpec {
@@ -462,7 +473,9 @@ impl BuildContext {
                         source_reporter.map(|sr| sr.as_git_reporter()),
                     )
                     .await
-                    .unwrap();
+                    .map_err(|err| {
+                        BuildError::ResolveGitSource(pinned_git_spec.git.clone(), err)
+                    })?;
                 let path = if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
                     fetched.into_path().join(subdir)
                 } else {
@@ -472,7 +485,7 @@ impl BuildContext {
             }
             PinnedSourceSpec::Path(path) => self
                 .resolve_path(path.path.to_path())
-                .map_err(|err| BuildError::ResolveSourcePath(path.path.clone(), err)),
+                .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err)),
         }
     }
 
@@ -511,8 +524,8 @@ impl BuildContext {
     ) -> miette::Result<Fetch> {
         let git_reference = git
             .rev
-            .map(|rev| rev.try_into().into_diagnostic())
-            .unwrap_or(Ok(GitReference::DefaultBranch))?;
+            .map(|rev| rev.into())
+            .unwrap_or(GitReference::DefaultBranch);
 
         let git_url = GitUrl::try_from(git.git)
             .into_diagnostic()?
@@ -541,7 +554,7 @@ impl BuildContext {
         git: PinnedGitSpec,
         reporter: Option<Arc<dyn Reporter>>,
     ) -> miette::Result<Fetch> {
-        let git_reference = git.source.reference.try_into().into_diagnostic()?;
+        let git_reference = git.source.reference.into();
 
         let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
 
@@ -622,6 +635,9 @@ impl BuildContext {
                 ));
             }
         }
+
+        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
+        LazyLock::force(&RAYON_INITIALIZE);
 
         // Instantiate a protocol for the source directory.
         let protocol = pixi_build_frontend::BuildFrontend::default()
@@ -806,6 +822,7 @@ fn source_metadata_to_records(
 
                     // These are not important at this point.
                     run_exports: None,
+                    extra_depends: Default::default(),
                 },
             }
         })

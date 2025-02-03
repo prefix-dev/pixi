@@ -397,14 +397,14 @@ fn print_package_info<W: Write>(
             .map(|v| v.to_string().len())
             .chain(["Version".len()].iter().cloned())
             .max()
-            .unwrap()
+            .expect("there is at least one version, so this should not be empty")
             + 1;
         let build_width = other_versions
             .iter()
             .map(|v| v.package_record.build.len())
             .chain(["Build".len()].iter().cloned())
             .max()
-            .unwrap()
+            .expect("there is at least one build, so this should not be empty")
             + 1;
         writeln!(
             out,

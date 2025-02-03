@@ -11,13 +11,13 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::activation::CurrentEnvVarBehavior;
-use crate::environment::get_update_lock_file_and_prefix;
 use crate::{
-    activation::get_activator,
+    activation::{get_activator, CurrentEnvVarBehavior},
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    environment::get_update_lock_file_and_prefix,
+    prompt,
     workspace::{Environment, HasWorkspaceRef},
-    UpdateLockFileOptions, WorkspaceLocator,
+    UpdateLockFileOptions, Workspace, WorkspaceLocator,
 };
 
 /// Print the pixi environment activation script.
@@ -61,6 +61,7 @@ struct ShellEnv<'a> {
 async fn generate_activation_script(
     shell: Option<ShellEnum>,
     environment: &Environment<'_>,
+    project: &Workspace,
 ) -> miette::Result<String> {
     // Get shell from the arguments or from the current process or use default if
     // all fails
@@ -69,7 +70,7 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    let activator = get_activator(environment, shell).into_diagnostic()?;
+    let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
 
     let path = std::env::var("PATH")
         .ok()
@@ -86,7 +87,16 @@ async fn generate_activation_script(
         })
         .into_diagnostic()?;
 
-    result.script.contents().into_diagnostic()
+    let script = result.script.contents().into_diagnostic()?;
+    let hook = prompt::shell_hook(&shell).unwrap_or_default().to_owned();
+
+    if project.config().change_ps1() {
+        let prompt_name = prompt::prompt_name(project.name(), environment.name());
+        let shell_prompt = prompt::shell_prompt(&shell, prompt_name.as_str());
+        Ok([script, hook, shell_prompt].join("\n"))
+    } else {
+        Ok([script, hook].join("\n"))
+    }
 }
 
 /// Generates a JSON object describing the changes to the shell environment when
@@ -151,7 +161,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         // Skipping the activated environment caching for the script.
         // As it can still run scripts.
-        false => generate_activation_script(args.shell, &environment).await?,
+        false => generate_activation_script(args.shell, &environment, &workspace).await?,
     };
 
     // Print the output - either a JSON object or a shell script
@@ -173,48 +183,54 @@ mod tests {
         let path_var_name = default_shell.path_var(&Platform::current());
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
-        let script = generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment)
-            .await
-            .unwrap();
+        let script =
+            generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
+                .await
+                .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 
         let script = generate_activation_script(
             Some(ShellEnum::PowerShell(PowerShell::default())),
             &environment,
+            &project,
         )
         .await
         .unwrap();
         assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
         assert!(script.contains("${Env:CONDA_PREFIX}"));
 
-        let script = generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment)
+        let script = generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment, &project)
             .await
             .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 
-        let script = generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment)
-            .await
-            .unwrap();
+        let script =
+            generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment, &project)
+                .await
+                .unwrap();
         assert!(script.contains(&format!("set -gx {path_var_name} ")));
         assert!(script.contains("set -gx CONDA_PREFIX "));
 
-        let script = generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment)
-            .await
-            .unwrap();
+        let script =
+            generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment, &project)
+                .await
+                .unwrap();
         assert!(script.contains(&format!("${path_var_name} = ")));
         assert!(script.contains("$CONDA_PREFIX = "));
 
-        let script = generate_activation_script(Some(ShellEnum::CmdExe(CmdExe)), &environment)
-            .await
-            .unwrap();
+        let script =
+            generate_activation_script(Some(ShellEnum::CmdExe(CmdExe)), &environment, &project)
+                .await
+                .unwrap();
         assert!(script.contains(&format!("@SET \"{path_var_name}=")));
         assert!(script.contains("@SET \"CONDA_PREFIX="));
 
-        let script = generate_activation_script(Some(ShellEnum::NuShell(NuShell)), &environment)
-            .await
-            .unwrap();
+        let script =
+            generate_activation_script(Some(ShellEnum::NuShell(NuShell)), &environment, &project)
+                .await
+                .unwrap();
         assert!(script.contains(&format!("$env.{path_var_name} = ")));
         assert!(script.contains("$env.CONDA_PREFIX = "));
     }

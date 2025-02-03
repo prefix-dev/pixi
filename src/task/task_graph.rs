@@ -72,7 +72,7 @@ impl fmt::Display for TaskNode<'_> {
     }
 }
 
-impl<'p> TaskNode<'p> {
+impl TaskNode<'_> {
     /// Returns the full command that should be executed for this task. This
     /// includes any additional arguments that should be passed to the
     /// command.

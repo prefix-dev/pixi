@@ -954,10 +954,10 @@ start = "python -m flask run --port=5050"
         {PROJECT_BOILERPLATE}
 
         [target.win-64.dependencies]
-        foo = "3.4.5"
+        foo = "==3.4.5"
 
         [target.osx-64.dependencies]
-        foo = "1.2.3"
+        foo = "==1.2.3"
         "#
         );
 
@@ -2769,34 +2769,6 @@ bar = "*"
             manifest.default_feature().channel_priority.unwrap(),
             ChannelPriority::Disabled
         );
-    }
-
-    #[test]
-    pub fn test_unsupported_pep508_errors() {
-        let manifest_source = r#"
-        [project]
-        name = "issue-1797"
-        version = "0.1.0"
-        dependencies = [
-            "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main"
-        ]
-
-        [tool.pixi.project]
-        channels = ["conda-forge"]
-        platforms = ["win-64"]
-        "#;
-        let manifest = PyProjectManifest::from_toml_str(manifest_source).unwrap();
-        let error = manifest.into_workspace_manifest().unwrap_err();
-
-        insta::assert_snapshot!(format_parse_error(manifest_source, error), @r###"
-         × Found invalid characters for git revision 'main', branches and tags are not supported yet
-          ╭─[pixi.toml:6:14]
-        5 │         dependencies = [
-        6 │             "attrs @ git+ssh://git@github.com/python-attrs/attrs.git@main"
-          ·              ────────────────────────────────────────────────────────────
-        7 │         ]
-          ╰────
-        "###);
     }
 
     #[test]

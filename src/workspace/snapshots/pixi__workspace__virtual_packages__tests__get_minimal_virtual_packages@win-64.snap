@@ -9,7 +9,7 @@ expression: packages
             source: "__win",
         },
         version: Version {
-            version: [[0], [0]],
+            version: [[0], [10], [0]],
             local: [],
         },
         build_string: "0",

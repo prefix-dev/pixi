@@ -163,7 +163,11 @@ impl From<AddArgs> for Task {
 
         // Convert the arguments into a single string representation
         let cmd_args = if value.commands.len() == 1 {
-            value.commands.into_iter().next().unwrap()
+            value
+                .commands
+                .into_iter()
+                .next()
+                .expect("we just checked that the length is 1")
         } else {
             // Simply concatenate all arguments
             value

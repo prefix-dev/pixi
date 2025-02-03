@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use pixi_build_types as pbt;
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
-use pixi_spec::{PixiSpec, Reference, SpecConversionError};
+use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, PackageName};
 
 /// Conversion from a `PixiSpec` to a `pbt::PixiSpecV1`.
@@ -25,22 +25,28 @@ fn to_pixi_spec_v1(
         itertools::Either::Left(source) => {
             let source = match source {
                 pixi_spec::SourceSpec::Url(url_source_spec) => {
+                    let pixi_spec::UrlSourceSpec { url, md5, sha256 } = url_source_spec;
                     pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 {
-                        url: url_source_spec.url.clone(),
-                        md5: url_source_spec.md5.map(Into::into),
-                        sha256: url_source_spec.sha256.map(Into::into),
+                        url,
+                        md5: md5.map(Into::into),
+                        sha256: sha256.map(Into::into),
                     })
                 }
                 pixi_spec::SourceSpec::Git(git_spec) => {
+                    let pixi_spec::GitSpec {
+                        git,
+                        rev,
+                        subdirectory,
+                    } = git_spec;
                     pbt::SourcePackageSpecV1::Git(pbt::GitSpecV1 {
-                        git: git_spec.git.clone(),
-                        rev: git_spec.rev.clone().map(|r| match r {
-                            Reference::Branch(b) => pbt::GitReferenceV1::Branch(b.clone()),
-                            Reference::Tag(t) => pbt::GitReferenceV1::Tag(t.clone()),
-                            Reference::Rev(rev) => pbt::GitReferenceV1::Rev(rev.clone()),
-                            Reference::DefaultBranch => pbt::GitReferenceV1::DefaultBranch,
+                        git,
+                        rev: rev.map(|r| match r {
+                            GitReference::Branch(b) => pbt::GitReferenceV1::Branch(b),
+                            GitReference::Tag(t) => pbt::GitReferenceV1::Tag(t),
+                            GitReference::Rev(rev) => pbt::GitReferenceV1::Rev(rev),
+                            GitReference::DefaultBranch => pbt::GitReferenceV1::DefaultBranch,
                         }),
-                        subdirectory: git_spec.subdirectory.clone(),
+                        subdirectory,
                     })
                 }
                 pixi_spec::SourceSpec::Path(path_source_spec) => {
@@ -53,7 +59,7 @@ fn to_pixi_spec_v1(
         }
         itertools::Either::Right(binary) => {
             let nameless = binary.try_into_nameless_match_spec(channel_config)?;
-            pbt::PackageSpecV1::Binary(pbt::BinaryPackageSpecV1 {
+            pbt::PackageSpecV1::Binary(Box::new(pbt::BinaryPackageSpecV1 {
                 version: nameless.version,
                 build: nameless.build,
                 build_number: nameless.build_number,
@@ -62,7 +68,7 @@ fn to_pixi_spec_v1(
                 subdir: nameless.subdir,
                 md5: nameless.md5.map(Into::into),
                 sha256: nameless.sha256.map(Into::into),
-            })
+            }))
         }
     };
     Ok(pbt_spec)

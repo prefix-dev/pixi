@@ -38,7 +38,7 @@ pub struct LockFileDiff {
 
 impl LockFileDiff {
     /// Determine the difference between two lock-files.
-    pub(crate) fn from_lock_files(previous: &LockFile, current: &LockFile) -> Self {
+    pub fn from_lock_files(previous: &LockFile, current: &LockFile) -> Self {
         let mut result = Self {
             environment: IndexMap::new(),
         };
@@ -170,12 +170,12 @@ impl LockFileDiff {
     }
 
     /// Returns true if the diff is empty.
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.environment.is_empty()
     }
 
     // Format the lock-file diff.
-    pub(crate) fn print(&self) -> std::io::Result<()> {
+    pub fn print(&self) -> std::io::Result<()> {
         let mut writer = TabWriter::new(stderr());
         for (idx, (environment_name, environment)) in self
             .environment
@@ -377,7 +377,7 @@ pub struct LockFileJsonDiff {
 }
 
 impl LockFileJsonDiff {
-    pub fn new(project: &Workspace, value: LockFileDiff) -> Self {
+    pub fn new(project: Option<&Workspace>, value: LockFileDiff) -> Self {
         let mut environment = IndexMap::new();
 
         for (environment_name, environment_diff) in value.environment {
@@ -385,27 +385,36 @@ impl LockFileJsonDiff {
 
             for (platform, packages_diff) in environment_diff {
                 let conda_dependencies = project
-                    .environment(environment_name.as_str())
-                    .map(|env| env.dependencies(pixi_manifest::SpecType::Run, Some(platform)))
+                    .and_then(|p| {
+                        p.environment(environment_name.as_str()).map(|env| {
+                            env.dependencies(pixi_manifest::SpecType::Run, Some(platform))
+                        })
+                    })
                     .unwrap_or_default();
 
                 let pypi_dependencies = project
-                    .environment(environment_name.as_str())
-                    .map(|env| env.pypi_dependencies(Some(platform)))
+                    .and_then(|p| {
+                        p.environment(environment_name.as_str())
+                            .map(|env| env.pypi_dependencies(Some(platform)))
+                    })
                     .unwrap_or_default();
 
                 let add_diffs = packages_diff.added.into_iter().map(|new| match new {
                     LockedPackage::Conda(pkg) => JsonPackageDiff {
                         name: pkg.record().name.as_normalized().to_string(),
                         before: None,
-                        after: Some(serde_json::to_value(&pkg).unwrap()),
+                        after: Some(
+                            serde_json::to_value(&pkg).expect("should be able to serialize"),
+                        ),
                         ty: JsonPackageType::Conda,
                         explicit: conda_dependencies.contains_key(&pkg.record().name),
                     },
                     LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
                         name: pkg.name.as_dist_info_name().into_owned(),
                         before: None,
-                        after: Some(serde_json::to_value(&pkg).unwrap()),
+                        after: Some(
+                            serde_json::to_value(&pkg).expect("should be able to serialize"),
+                        ),
                         ty: JsonPackageType::Pypi,
                         explicit: pypi_dependencies.contains_key(&pkg.name),
                     },
@@ -414,7 +423,9 @@ impl LockFileJsonDiff {
                 let removed_diffs = packages_diff.removed.into_iter().map(|old| match old {
                     LockedPackage::Conda(pkg) => JsonPackageDiff {
                         name: pkg.record().name.as_normalized().to_string(),
-                        before: Some(serde_json::to_value(&pkg).unwrap()),
+                        before: Some(
+                            serde_json::to_value(&pkg).expect("should be able to serialize"),
+                        ),
                         after: None,
                         ty: JsonPackageType::Conda,
                         explicit: conda_dependencies.contains_key(&pkg.record().name),
@@ -422,7 +433,9 @@ impl LockFileJsonDiff {
 
                     LockedPackage::Pypi(pkg, _) => JsonPackageDiff {
                         name: pkg.name.as_dist_info_name().into_owned(),
-                        before: Some(serde_json::to_value(&pkg).unwrap()),
+                        before: Some(
+                            serde_json::to_value(&pkg).expect("should be able to serialize"),
+                        ),
                         after: None,
                         ty: JsonPackageType::Pypi,
                         explicit: pypi_dependencies.contains_key(&pkg.name),
@@ -432,8 +445,8 @@ impl LockFileJsonDiff {
                 let changed_diffs = packages_diff.changed.into_iter().map(|(old, new)| match (old, new) {
                     (LockedPackage::Conda(old), LockedPackage::Conda(new)) =>
                         {
-                            let before = serde_json::to_value(&old).unwrap();
-                            let after = serde_json::to_value(&new).unwrap();
+                            let before = serde_json::to_value(&old).expect("should be able to serialize");
+                            let after = serde_json::to_value(&new).expect("should be able to serialize");
                             let (before, after) = compute_json_diff(before, after);
                             JsonPackageDiff {
                                 name: old.record().name.as_normalized().to_string(),
@@ -444,8 +457,8 @@ impl LockFileJsonDiff {
                             }
                         }
                     (LockedPackage::Pypi(old, _), LockedPackage::Pypi(new, _)) => {
-                        let before = serde_json::to_value(&old).unwrap();
-                        let after = serde_json::to_value(&new).unwrap();
+                        let before = serde_json::to_value(&old).expect("should be able to serialize");
+                        let after = serde_json::to_value(&new).expect("should be able to serialize");
                         let (before, after) = compute_json_diff(before, after);
                         JsonPackageDiff {
                             name: old.name.as_dist_info_name().into_owned(),

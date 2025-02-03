@@ -19,7 +19,7 @@ use toml_span::{
 };
 use url::Url;
 
-use crate::{BinarySpec, DetailedSpec, GitSpec, PathSpec, PixiSpec, Reference, UrlSpec};
+use crate::{BinarySpec, DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
 
 /// A TOML representation of a package specification.
 #[serde_as]
@@ -258,9 +258,9 @@ impl TomlSpec {
             (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
             (None, None, Some(git)) => {
                 let rev = match (self.branch, self.rev, self.tag) {
-                    (Some(branch), None, None) => Some(Reference::Branch(branch)),
-                    (None, Some(rev), None) => Some(Reference::Rev(rev)),
-                    (None, None, Some(tag)) => Some(Reference::Tag(tag)),
+                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
                     (None, None, None) => None,
                     _ => {
                         return Err(SpecError::MultipleGitRefs);
@@ -286,7 +286,7 @@ impl TomlSpec {
                     return Err(SpecError::MissingDetailedIdentifier);
                 }
 
-                PixiSpec::DetailedVersion(DetailedSpec {
+                PixiSpec::DetailedVersion(Box::new(DetailedSpec {
                     version: self.version,
                     build: self.build,
                     build_number: self.build_number,
@@ -295,7 +295,7 @@ impl TomlSpec {
                     subdir: self.subdir,
                     md5: self.md5,
                     sha256: self.sha256,
-                })
+                }))
             }
             (_, _, _) => return Err(SpecError::MultipleIdentifiers),
         };
@@ -344,7 +344,7 @@ impl TomlSpec {
                     return Err(SpecError::MissingDetailedIdentifier);
                 }
 
-                BinarySpec::DetailedVersion(DetailedSpec {
+                BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version: self.version,
                     build: self.build,
                     build_number: self.build_number,
@@ -353,7 +353,7 @@ impl TomlSpec {
                     subdir: self.subdir,
                     md5: self.md5,
                     sha256: self.sha256,
-                })
+                }))
             }
             (_, _, _) => return Err(SpecError::MultipleIdentifiers),
         };

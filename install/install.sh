@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Version: v0.40.2
+# Version: v0.40.3
 
 __wrap__() {
 
@@ -36,6 +36,10 @@ fi
 if [[ $VERSION == "latest" ]]; then
   DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}"
 else
+  # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
+  if [[ ! "$VERSION" =~ ^v ]]; then
+    VERSION="v$VERSION"
+  fi
   DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.${EXTENSION}"
 fi
 
@@ -128,7 +132,7 @@ update_shell() {
     [[ -n "${PIXI_NO_PATH_UPDATE:-}" ]] && echo "No path update because PIXI_NO_PATH_UPDATE has a value" && return
 
     # Create the file if it doesn't exist
-    if [ -f "$FILE" ]; then
+    if [ ! -f "$FILE" ]; then
         touch "$FILE"
     fi
 

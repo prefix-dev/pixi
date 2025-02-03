@@ -1095,7 +1095,7 @@ packages:
   - libgcc >=14
   - python_abi 3.11.* *_cp311
   input:
-    hash: dfd992d351662a2aa4270f37cb966865a06967616d5516038184fb8cb2238cc3
+    hash: f9076e681c422b90f472eed717bd0cdacc4393e903474863a7a9ea8d7a00951f
     globs:
     - pixi.toml
 - conda: packages/python_bindings
@@ -1107,7 +1107,7 @@ packages:
   - libcxx >=19
   - python_abi 3.11.* *_cp311
   input:
-    hash: dfd992d351662a2aa4270f37cb966865a06967616d5516038184fb8cb2238cc3
+    hash: f9076e681c422b90f472eed717bd0cdacc4393e903474863a7a9ea8d7a00951f
     globs:
     - pixi.toml
 - conda: packages/python_bindings
@@ -1119,7 +1119,7 @@ packages:
   - libcxx >=19
   - python_abi 3.11.* *_cp311
   input:
-    hash: dfd992d351662a2aa4270f37cb966865a06967616d5516038184fb8cb2238cc3
+    hash: f9076e681c422b90f472eed717bd0cdacc4393e903474863a7a9ea8d7a00951f
     globs:
     - pixi.toml
 - conda: packages/python_bindings
@@ -1132,7 +1132,7 @@ packages:
   - vc14_runtime >=14.16.27033
   - python_abi 3.11.* *_cp311
   input:
-    hash: dfd992d351662a2aa4270f37cb966865a06967616d5516038184fb8cb2238cc3
+    hash: f9076e681c422b90f472eed717bd0cdacc4393e903474863a7a9ea8d7a00951f
     globs:
     - pixi.toml
 - conda: packages/python_bindings
@@ -1145,7 +1145,7 @@ packages:
   - libgcc >=14
   - python_abi 3.12.* *_cp312
   input:
-    hash: dfd992d351662a2aa4270f37cb966865a06967616d5516038184fb8cb2238cc3
+    hash: f9076e681c422b90f472eed717bd0cdacc4393e903474863a7a9ea8d7a00951f
     globs:
     - pixi.toml
 - conda: packages/python_bindings
@@ -1157,7 +1157,7 @@ packages:
   - libcxx >=19
   - python_abi 3.12.* *_cp312
   input:
-    hash: dfd992d351662a2aa4270f37cb966865a06967616d5516038184fb8cb2238cc3
+    hash: f9076e681c422b90f472eed717bd0cdacc4393e903474863a7a9ea8d7a00951f
     globs:
     - pixi.toml
 - conda: packages/python_bindings
@@ -1169,7 +1169,7 @@ packages:
   - libcxx >=19
   - python_abi 3.12.* *_cp312
   input:
-    hash: dfd992d351662a2aa4270f37cb966865a06967616d5516038184fb8cb2238cc3
+    hash: f9076e681c422b90f472eed717bd0cdacc4393e903474863a7a9ea8d7a00951f
     globs:
     - pixi.toml
 - conda: packages/python_bindings
@@ -1182,7 +1182,7 @@ packages:
   - vc14_runtime >=14.16.27033
   - python_abi 3.12.* *_cp312
   input:
-    hash: dfd992d351662a2aa4270f37cb966865a06967616d5516038184fb8cb2238cc3
+    hash: f9076e681c422b90f472eed717bd0cdacc4393e903474863a7a9ea8d7a00951f
     globs:
     - pixi.toml
 - conda: https://prefix.dev/conda-forge/linux-64/readline-8.2-h8228510_1.conda
@@ -1234,7 +1234,7 @@ packages:
   - rich >=13.9.4,<14
   - python
   input:
-    hash: 7b2b1ef432f9949854e55f97c93bf13361c1021a344ad4189facfa0ab864b5d8
+    hash: f672a8426732e9086523d7518ec1f1ec73dfe7931307c0aab4170bc660eb5e54
     globs:
     - pixi.toml
 - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda

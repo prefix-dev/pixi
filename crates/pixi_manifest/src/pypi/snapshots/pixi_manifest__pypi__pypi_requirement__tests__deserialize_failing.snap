@@ -44,10 +44,10 @@ result:
    ╰──── 
 input: pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", rev = "v1" }
 result: 
-  × Found invalid characters for git revision 'v1', branches and tags are not supported yet
-   ╭─[pixi.toml:1:92]
+  × Only one of `branch` or `tag` or `rev` can be specified
+   ╭─[pixi.toml:1:7]
  1 │ pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", branch = "main", rev = "v1" }
-   ·                                                                                            ──
+   ·       ──────────────────────────────────────────────────────────────────────────────────────────
    ╰──── 
 input: pkg = { git = "https://github.com/conda-forge/21cmfast-feedstock", tag = "v1", rev = "123456" }
 result: 

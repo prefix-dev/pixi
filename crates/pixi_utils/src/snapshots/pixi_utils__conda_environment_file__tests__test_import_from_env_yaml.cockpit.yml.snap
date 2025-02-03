@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_utils/src/conda_environment_file.rs
+assertion_line: 295
 expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\nparse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
@@ -16,6 +17,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -34,6 +36,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -52,6 +55,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -78,6 +82,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -104,6 +109,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -130,6 +136,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -156,6 +163,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -182,6 +190,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -208,6 +217,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -234,6 +244,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -260,6 +271,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -286,6 +298,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -312,6 +325,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -338,6 +352,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -364,6 +379,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -390,6 +406,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -416,6 +433,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -442,6 +460,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -468,6 +487,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -504,6 +524,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,
@@ -530,6 +551,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: Some(
                     Channel {
                         platforms: None,

@@ -26,3 +26,5 @@ disallowed-methods = [
   "std::fs::symlink_metadata",
   "std::fs::write",
 ]
+
+allow-unwrap-in-tests = true

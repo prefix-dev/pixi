@@ -8,7 +8,7 @@ use rattler_conda_types::{MatchSpec, PackageName};
 use super::has_specs::HasSpecs;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
-    environment::verify_prefix_location_unchanged,
+    environment::sanity_check_project,
     workspace::DependencyType,
     WorkspaceLocator,
 };
@@ -95,8 +95,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(prefix_update_config.config.clone());
 
-    // Sanity check of prefix location
-    verify_prefix_location_unchanged(workspace.default_environment().dir().as_path()).await?;
+    sanity_check_project(&workspace).await?;
 
     let mut workspace = workspace.modify()?;
 
