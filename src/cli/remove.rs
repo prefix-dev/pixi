@@ -63,7 +63,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     match dependency_type {
         DependencyType::PypiDependency => {
-            let mut removed_deps = Vec::new();
             for name in dependency_config.pypi_deps(&project)?.keys() {
                 project
                     .manifest
@@ -76,7 +75,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         "failed to remove PyPI dependency: '{}'",
                         name.as_source()
                     ))?;
-                removed_deps.push(name.as_source().to_string());
             }
         }
         DependencyType::CondaDependency(spec_type) => {
