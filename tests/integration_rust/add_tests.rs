@@ -737,7 +737,14 @@ preview = ['pixi-build']
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    insta::assert_snapshot!(pixi
+        .workspace()
+        .unwrap()
+        .modify()
+        .unwrap()
+        .manifest()
+        .document
+        .to_string());
 }
 
 /// Test adding a git dependency with a specific commit
