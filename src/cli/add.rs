@@ -6,9 +6,9 @@ use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::has_specs::HasSpecs;
+use crate::environment::sanity_check_project;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
-    environment::verify_prefix_location_unchanged,
     project::{DependencyType, Project},
 };
 
@@ -92,8 +92,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = Project::load_or_else_discover(project_config.manifest_path.as_deref())?
         .with_cli_config(prefix_update_config.config.clone());
 
-    // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+    sanity_check_project(&project).await?;
 
     // Add the platform if it is not already present
     project
