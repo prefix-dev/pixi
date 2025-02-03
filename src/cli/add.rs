@@ -2,6 +2,7 @@ use std::future::IntoFuture;
 
 use clap::Parser;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_manifest::{FeatureName, SpecType};
@@ -9,6 +10,7 @@ use pixi_progress::await_in_progress;
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName, Platform};
 use regex::Regex;
+use tokio::time::timeout;
 
 use super::has_specs::HasSpecs;
 use crate::{
@@ -189,20 +191,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             fs_err::write(project.manifest_path(), original_manifest_content).into_diagnostic()?;
 
             if let Some(package_name) = is_package_not_found(&e) {
-                let similar = search_similar_packages(&package_name, &project)
-                    .await
-                    .unwrap_or(vec![]);
+                let timeout_duration = std::time::Duration::from_secs(1);
+                if let Ok(Ok(Some(similar_packages))) = timeout(
+                    timeout_duration,
+                    search_similar_packages(&package_name, &project),
+                )
+                .await
+                {
+                    let formatted_suggestions =
+                        format!("{}{}", " - ", similar_packages.join("\n - "));
 
-                if similar.is_empty() {
+                    return Err(miette::miette!(
+                        help = format!("Did you mean one of these?\n{}\nTip: Run `pixi search` to explore available packages.", formatted_suggestions),
+                        "{}", e
+                    ).wrap_err(format!("No candidates were found for {}", package_name)));
+                } else {
                     return Err(e);
                 }
-
-                let formatted_suggestions = format!("{}{}", "\n - ", similar.join("\n - "));
-
-                return Err(miette::miette!(
-                    help = format!("Did you mean one of these?\n{}\nTip: Run `pixi search` to explore available packages.", formatted_suggestions),
-                    "{}", e
-                ).wrap_err(format!("No candidates were found for {}", package_name)));
             }
             return Err(e);
         }
@@ -230,7 +235,7 @@ fn is_package_not_found(err: &miette::Report) -> Option<String> {
 async fn search_similar_packages(
     search_term: &str,
     project: &Project,
-) -> miette::Result<Vec<String>> {
+) -> miette::Result<Option<Vec<String>>> {
     let channels = ChannelsConfig::default().resolve_from_project(Some(project))?;
     let package_name = PackageName::try_from(search_term).into_diagnostic()?;
 
@@ -265,13 +270,14 @@ async fn search_similar_packages(
     )
     .await;
 
-    if let Ok(Some(search_result)) = search_result {
-        return Ok(search_result
-            .into_iter()
-            .map(|r| r.package_record.name.as_normalized().to_owned())
-            .take(5) // real limit
-            .collect());
-    }
-
-    Ok(vec![])
+    search_result.map(|option| {
+        option.map(|records| {
+            records
+                .into_iter()
+                .map(|record| record.package_record.name.as_normalized().to_owned())
+                .take(5)
+                .unique()
+                .collect()
+        })
+    })
 }
