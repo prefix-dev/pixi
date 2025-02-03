@@ -78,11 +78,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     ))?;
                 removed_deps.push(name.as_source().to_string());
             }
-            eprintln!(
-                "{}Removed PyPI dependencies: {}",
-                console::style(console::Emoji("✔ ", "")).green(),
-                removed_deps.join(", ")
-            );
         }
         DependencyType::CondaDependency(spec_type) => {
             for name in dependency_config.specs()?.keys() {
