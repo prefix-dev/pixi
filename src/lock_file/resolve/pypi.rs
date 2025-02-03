@@ -9,8 +9,6 @@ use std::{
     sync::Arc,
 };
 
-use once_cell::sync::OnceCell;
-
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -35,7 +33,7 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, Constraints, LowerBound, Overrides};
+use uv_configuration::{ConfigSettings, Constraints, Overrides};
 use uv_dispatch::SharedState;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
@@ -43,7 +41,6 @@ use uv_distribution_types::{
     IndexUrl, InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
 };
 use uv_git::GitResolver;
-use uv_install_wheel::linker::LinkMode;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
@@ -54,7 +51,7 @@ use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{
-        build_dispatch::{PixiBuildDispatch, UvBuildDispatchParams},
+        build_dispatch::{LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams},
         conda_prefix_updater::CondaPrefixUpdated,
         records_by_name::HasNameVersion,
         resolve::resolver_provider::CondaResolverProvider,
@@ -173,7 +170,7 @@ pub async fn resolve_pypi(
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     project_root: &Path,
-    prefix_task: CondaPrefixUpdater<'_>,
+    prefix_updater: CondaPrefixUpdater<'_>,
     repodata_records: Arc<PixiRecordsByName>,
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment_name: Environment<'_>,
@@ -343,45 +340,27 @@ pub async fn resolve_pypi(
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
-        Constraints::default(),
         &index_locations,
         &flat_index,
         &dependency_metadata,
-        shared_state.clone(),
-        index_strategy,
         &config_settings,
-        LinkMode::default(),
         &build_options,
         &context.hash_strategy,
-        None,
-        LowerBound::default(),
-        context.source_strategy,
-        context.concurrency,
-    );
+    )
+    .with_index_strategy(index_strategy)
+    .with_shared_state(shared_state.clone())
+    .with_source_strategy(context.source_strategy)
+    .with_concurrency(context.concurrency);
 
-    let interpreter = OnceCell::new();
-    let non_isolated_packages = OnceCell::new();
-    let python_env = OnceCell::new();
-
-    let pixi_build_dispatch = PixiBuildDispatch::new(
+    let lazy_build_dispatch_dependencies = LazyBuildDispatchDependencies::default();
+    let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
-        prefix_task,
+        prefix_updater,
         project_env_vars,
         environment_name,
         repodata_records,
-        &interpreter,
-        &non_isolated_packages,
-        &python_env,
         pypi_options.no_build_isolation.clone(),
-        &context.cache,
-        shared_state.git(),
-        shared_state.capabilities(),
-        &dependency_metadata,
-        &build_options,
-        &config_settings,
-        LowerBound::default(),
-        context.source_strategy,
-        &index_locations,
+        &lazy_build_dispatch_dependencies,
     );
 
     // Constrain the conda packages to the specific python packages
@@ -447,7 +426,7 @@ pub async fn resolve_pypi(
         &lookahead_index,
         DistributionDatabase::new(
             &registry_client,
-            &pixi_build_dispatch,
+            &lazy_build_dispatch,
             context.concurrency.downloads,
         ),
     )
@@ -473,7 +452,7 @@ pub async fn resolve_pypi(
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
             &registry_client,
-            &pixi_build_dispatch,
+            &lazy_build_dispatch,
             context.concurrency.downloads,
         ),
         &flat_index,
@@ -531,7 +510,7 @@ pub async fn resolve_pypi(
     // Collect resolution into locked packages
     let locked_packages = lock_pypi_packages(
         conda_python_packages,
-        &pixi_build_dispatch,
+        &lazy_build_dispatch,
         &registry_client,
         resolution,
         &context.capabilities,
@@ -540,7 +519,7 @@ pub async fn resolve_pypi(
     )
     .await?;
 
-    let conda_task = pixi_build_dispatch.conda_task;
+    let conda_task = lazy_build_dispatch.conda_task;
 
     Ok((locked_packages, conda_task))
 }
@@ -657,7 +636,7 @@ fn get_url_or_path(
 /// Create a vector of locked packages from a resolution
 async fn lock_pypi_packages(
     conda_python_packages: CondaPythonPackages,
-    pixi_build_dispatch: &PixiBuildDispatch<'_>,
+    pixi_build_dispatch: &LazyBuildDispatch<'_>,
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
     index_capabilities: &IndexCapabilities,

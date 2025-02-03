@@ -20,6 +20,7 @@ use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, IndexLocations, Resolution, SourceDist,
 };
+use uv_install_wheel::linker::LinkMode;
 use uv_pep508::PackageName;
 use uv_pypi_types::Requirement;
 use uv_python::{Interpreter, PythonEnvironment};
@@ -37,16 +38,16 @@ use super::{conda_prefix_updater::CondaPrefixUpdated, CondaPrefixUpdater, PixiRe
 pub struct UvBuildDispatchParams<'a> {
     client: &'a RegistryClient,
     cache: &'a Cache,
-    constraints: Constraints,
     index_locations: &'a IndexLocations,
     flat_index: &'a FlatIndex,
     dependency_metadata: &'a DependencyMetadata,
-    shared_state: SharedState,
-    index_strategy: IndexStrategy,
     config_settings: &'a ConfigSettings,
-    link_mode: uv_install_wheel::linker::LinkMode,
     build_options: &'a BuildOptions,
     hasher: &'a HashStrategy,
+    index_strategy: IndexStrategy,
+    constraints: Constraints,
+    shared_state: SharedState,
+    link_mode: uv_install_wheel::linker::LinkMode,
     exclude_newer: Option<ExcludeNewer>,
     bounds: LowerBound,
     sources: SourceStrategy,
@@ -58,51 +59,93 @@ impl<'a> UvBuildDispatchParams<'a> {
     pub fn new(
         client: &'a RegistryClient,
         cache: &'a Cache,
-        constraints: Constraints,
         index_locations: &'a IndexLocations,
         flat_index: &'a FlatIndex,
         dependency_metadata: &'a DependencyMetadata,
-        shared_state: SharedState,
-        index_strategy: IndexStrategy,
         config_settings: &'a ConfigSettings,
-        link_mode: uv_install_wheel::linker::LinkMode,
         build_options: &'a BuildOptions,
         hasher: &'a HashStrategy,
-        exclude_newer: Option<ExcludeNewer>,
-        bounds: LowerBound,
-        sources: SourceStrategy,
-        concurrency: Concurrency,
     ) -> Self {
         Self {
             client,
             cache,
-            constraints,
             index_locations,
             flat_index,
             dependency_metadata,
-            shared_state,
-            index_strategy,
             config_settings,
-            link_mode,
             build_options,
             hasher,
-            exclude_newer,
-            bounds,
-            sources,
-            concurrency,
+            index_strategy: IndexStrategy::default(),
+            shared_state: SharedState::default(),
+            link_mode: LinkMode::default(),
+            constraints: Constraints::default(),
+            exclude_newer: None,
+            bounds: LowerBound::default(),
+            sources: SourceStrategy::default(),
+            concurrency: Concurrency::default(),
         }
+    }
+
+    pub fn with_index_strategy(mut self, index_strategy: IndexStrategy) -> Self {
+        self.index_strategy = index_strategy;
+        self
+    }
+
+    pub fn with_shared_state(mut self, shared_state: SharedState) -> Self {
+        self.shared_state = shared_state;
+        self
+    }
+
+    pub fn with_source_strategy(mut self, sources: SourceStrategy) -> Self {
+        self.sources = sources;
+        self
+    }
+
+    pub fn with_concurrency(mut self, concurrency: Concurrency) -> Self {
+        self.concurrency = concurrency;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_link_mode(mut self, link_mode: LinkMode) -> Self {
+        self.link_mode = link_mode;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_constraints(mut self, constraints: Constraints) -> Self {
+        self.constraints = constraints;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_exclude_newer(mut self, exclude_newer: Option<ExcludeNewer>) -> Self {
+        self.exclude_newer = exclude_newer;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_lower_bounds(mut self, lower_bounds: LowerBound) -> Self {
+        self.bounds = lower_bounds;
+        self
     }
 }
 
-/// Something that implements the `BuildContext` trait.
-pub struct PixiBuildDispatch<'a> {
+/// Handles the lazy initialization of a build dispatch.
+///
+/// A build dispatch is used to manage building Python packages from source,
+/// including setting up build environments, dependencies, and executing builds.
+///
+/// This struct helps manage resources needed for build dispatch that may need
+/// to be initialized on-demand rather than upfront.
+///
+/// Both the [`BuildDispatch`] and the conda prefix are instantiated on demand.
+pub struct LazyBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
-    pub prefix_task: CondaPrefixUpdater<'a>,
+    pub prefix_updater: CondaPrefixUpdater<'a>,
     pub repodata_records: Arc<PixiRecordsByName>,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
-    // we need to tie the interpreter to the build dispatch
-    pub interpreter: &'a OnceCell<Interpreter>,
 
     // if we create a new conda prefix, we need to store the task result
     // so we could reuse it later
@@ -116,68 +159,47 @@ pub struct PixiBuildDispatch<'a> {
     // what pkgs we dont need to activate
     pub no_build_isolation: Option<Vec<String>>,
 
-    // non isolated packages
-    pub non_isolated_packages: &'a OnceCell<Option<Vec<PackageName>>>,
-
-    // python environment
-    pub python_env: &'a OnceCell<PythonEnvironment>,
-
-    // values that can be passed in the BuildContext trait
-    cache: &'a uv_cache::Cache,
-    git: &'a uv_git::GitResolver,
-    capabilities: &'a uv_distribution_types::IndexCapabilities,
-    dependency_metadata: &'a uv_distribution_types::DependencyMetadata,
-    build_options: &'a uv_configuration::BuildOptions,
-    config_settings: &'a uv_configuration::ConfigSettings,
-    bounds: uv_configuration::LowerBound,
-    sources: uv_configuration::SourceStrategy,
-    locations: &'a uv_distribution_types::IndexLocations,
+    // we need to tie the interpreter to the build dispatch
+    pub lazy_deps: &'a LazyBuildDispatchDependencies,
 }
 
-impl<'a> PixiBuildDispatch<'a> {
+/// These are resources for the [`BuildDispatch`] that need to be lazily initialized.
+/// along with the build dispatch.
+///
+/// This needs to be passed in externally or there will be problems with the borrows being shorter
+/// than the lifetime of the `BuildDispatch`, and we are returning the references.
+#[derive(Default)]
+pub struct LazyBuildDispatchDependencies {
+    /// The initialized python interpreter
+    interpreter: OnceCell<Interpreter>,
+    /// The non isolated packages
+    non_isolated_packages: OnceCell<Option<Vec<PackageName>>>,
+    /// The python environment
+    python_env: OnceCell<PythonEnvironment>,
+}
+
+impl<'a> LazyBuildDispatch<'a> {
     /// Create a new `PixiBuildDispatch` instance.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         params: UvBuildDispatchParams<'a>,
-        prefix_task: CondaPrefixUpdater<'a>,
+        prefix_updater: CondaPrefixUpdater<'a>,
         project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
         environment: Environment<'a>,
         repodata_records: Arc<PixiRecordsByName>,
-        interpreter: &'a OnceCell<Interpreter>,
-        non_isolated_packages: &'a OnceCell<Option<Vec<PackageName>>>,
-        python_env: &'a OnceCell<PythonEnvironment>,
         no_build_isolation: Option<Vec<String>>,
-        cache: &'a uv_cache::Cache,
-        git: &'a uv_git::GitResolver,
-        capabilities: &'a uv_distribution_types::IndexCapabilities,
-        dependency_metadata: &'a uv_distribution_types::DependencyMetadata,
-        build_options: &'a uv_configuration::BuildOptions,
-        config_settings: &'a uv_configuration::ConfigSettings,
-        bounds: uv_configuration::LowerBound,
-        sources: uv_configuration::SourceStrategy,
-        locations: &'a uv_distribution_types::IndexLocations,
+        lazy_deps: &'a LazyBuildDispatchDependencies,
     ) -> Self {
         Self {
             params,
-            prefix_task,
-            interpreter,
-            non_isolated_packages,
-            python_env,
+            prefix_updater,
             conda_task: None,
             project_env_vars,
             environment,
             repodata_records,
             no_build_isolation,
-            cache,
-            git,
-            capabilities,
-            dependency_metadata,
-            build_options,
-            config_settings,
-            bounds,
-            sources,
-            locations,
             build_dispatch: AsyncCell::new(),
+            lazy_deps,
         }
     }
 
@@ -187,10 +209,10 @@ impl<'a> PixiBuildDispatch<'a> {
             .get_or_try_init(async {
                 tracing::debug!(
                     "installing conda prefix {} for solving the pypi sdist requirements",
-                    self.prefix_task.group.name().as_str()
+                    self.prefix_updater.group.name().as_str()
                 );
                 let prefix = self
-                    .prefix_task
+                    .prefix_updater
                     .update(self.repodata_records.clone())
                     .await
                     .map_err(|err| {
@@ -224,18 +246,23 @@ impl<'a> PixiBuildDispatch<'a> {
                     })?;
 
                 let interpreter = self
+                    .lazy_deps
                     .interpreter
-                    .get_or_try_init(|| Interpreter::query(python_path, self.cache))?;
+                    .get_or_try_init(|| Interpreter::query(python_path, self.cache()))?;
 
                 let env = self
+                    .lazy_deps
                     .python_env
                     .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()));
 
-                let non_isolated_packages = self.non_isolated_packages.get_or_try_init(|| {
-                    isolated_names_to_packages(self.no_build_isolation.as_deref()).map_err(|err| {
-                        anyhow::anyhow!(err).context("failed to get non isolated packages")
-                    })
-                })?;
+                let non_isolated_packages =
+                    self.lazy_deps.non_isolated_packages.get_or_try_init(|| {
+                        isolated_names_to_packages(self.no_build_isolation.as_deref()).map_err(
+                            |err| {
+                                anyhow::anyhow!(err).context("failed to get non isolated packages")
+                            },
+                        )
+                    })?;
 
                 let build_isolation =
                     names_to_build_isolation(non_isolated_packages.as_deref(), env);
@@ -248,7 +275,6 @@ impl<'a> PixiBuildDispatch<'a> {
                     self.params.index_locations,
                     self.params.flat_index,
                     self.params.dependency_metadata,
-                    // TODO: could use this later to add static metadata
                     self.params.shared_state.clone(),
                     self.params.index_strategy,
                     self.params.config_settings,
@@ -269,7 +295,7 @@ impl<'a> PixiBuildDispatch<'a> {
     }
 }
 
-impl BuildContext for PixiBuildDispatch<'_> {
+impl BuildContext for LazyBuildDispatch<'_> {
     type SourceDistBuilder = SourceBuild;
 
     fn interpreter(&self) -> &uv_python::Interpreter {
@@ -278,7 +304,7 @@ impl BuildContext for PixiBuildDispatch<'_> {
         // But in case it is not, we will initialize it here
         //
         // Even though intitalize does not initialize twice, we skip the codepath because the initialization takes time
-        if self.interpreter.get().is_none() {
+        if self.lazy_deps.interpreter.get().is_none() {
             // This will usually be called from the multi-threaded runtime, but there might be tests
             // that calls this in the current thread runtime.
             // In the current thread runtime we cannot use `block_in_place` as it will pani
@@ -303,45 +329,46 @@ impl BuildContext for PixiBuildDispatch<'_> {
                 }
             }
         }
-        self.interpreter
+        self.lazy_deps
+            .interpreter
             .get()
             .expect("python interpreter not initialized, this is a programming error")
     }
 
     fn cache(&self) -> &uv_cache::Cache {
-        self.cache
+        self.params.cache
     }
 
     fn git(&self) -> &uv_git::GitResolver {
-        self.git
+        self.params.shared_state.git()
     }
 
     fn capabilities(&self) -> &uv_distribution_types::IndexCapabilities {
-        self.capabilities
+        self.params.shared_state.capabilities()
     }
 
     fn dependency_metadata(&self) -> &uv_distribution_types::DependencyMetadata {
-        self.dependency_metadata
+        self.params.dependency_metadata
     }
 
     fn build_options(&self) -> &uv_configuration::BuildOptions {
-        self.build_options
+        self.params.build_options
     }
 
     fn config_settings(&self) -> &uv_configuration::ConfigSettings {
-        self.config_settings
+        self.params.config_settings
     }
 
     fn bounds(&self) -> uv_configuration::LowerBound {
-        self.bounds
+        self.params.bounds
     }
 
     fn sources(&self) -> uv_configuration::SourceStrategy {
-        self.sources
+        self.params.sources
     }
 
     fn locations(&self) -> &uv_distribution_types::IndexLocations {
-        self.locations
+        self.params.index_locations
     }
 
     async fn resolve<'data>(&'data self, requirements: &'data [Requirement]) -> Result<Resolution> {
