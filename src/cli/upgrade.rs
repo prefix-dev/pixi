@@ -78,7 +78,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (match_specs, pypi_deps) = parse_specs(feature, &args, &workspace)?;
 
-    let update_deps = match workspace
+    let (update_deps, workspace) = match workspace
         .update_dependencies(
             match_specs,
             pypi_deps,
@@ -91,7 +91,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await
     {
-        Ok(update_deps) => update_deps,
+        Ok(update_deps) => (
+            update_deps,
+            if args.dry_run {
+                workspace.revert().await.into_diagnostic()?
+            } else {
+                workspace.save().await.into_diagnostic()?
+            },
+        ),
         Err(e) => {
             return Err(e);
         }
@@ -102,7 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let diff = update_deps.lock_file_diff;
         // Format as json?
         if args.json {
-            let json_diff = LockFileJsonDiff::new(Some(workspace.workspace()), diff);
+            let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
             println!("{}", json);
         } else {
@@ -110,7 +117,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into_diagnostic()
                 .context("failed to print lock-file diff")?;
         }
-        workspace.save().await.into_diagnostic()?;
     } else {
         eprintln!(
             "{}All packages are already up-to-date",

@@ -368,7 +368,7 @@ impl WorkspaceManifestMut<'_> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn remove_platforms(
         &mut self,
-        platforms: impl IntoIterator<Item = Platform>,
+        platforms: impl IntoIterator<Item = Platform> + Clone,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Get current platforms and platform to remove for the feature
@@ -376,27 +376,32 @@ impl WorkspaceManifestMut<'_> {
             FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
             FeatureName::Named(_) => self.workspace.feature_mut(feature_name)?.platforms_mut(),
         };
-        // Get the platforms to remove, while checking if they exist
-        let to_remove: IndexSet<_> = platforms
+        // Check if some platforms are not part of current
+        let missing = platforms
+            .clone()
             .into_iter()
-            .map(|c| {
-                current
-                    .iter()
-                    .position(|x| *x == c)
-                    .ok_or_else(|| miette::miette!("platform {} does not exist", c))
-                    .map(|_| c)
-            })
-            .collect::<Result<_, _>>()?;
-
-        let retained: IndexSet<_> = current.difference(&to_remove).cloned().collect();
+            .filter(|p| !current.contains(p))
+            .collect_vec();
+        if !missing.is_empty() {
+            return Err(miette::miette!(
+                "The following platform{} are not part of {}: {}",
+                if missing.len() > 1 { "s are" } else { " is" },
+                feature_name,
+                missing.into_iter().join(", ")
+            ));
+        }
 
         // Remove platforms from the manifest
-        current.retain(|p| retained.contains(p));
+        current.retain(|p| !platforms.clone().into_iter().contains(p));
 
         // And from the TOML document
-        let retained = retained.iter().map(|p| p.to_string()).collect_vec();
+        let retained = current.iter().map(|p| p.to_string()).collect_vec();
         let platforms = self.document.get_array_mut("platforms", feature_name)?;
-        platforms.retain(|x| retained.contains(&x.to_string()));
+        platforms.retain(|p| {
+            p.as_str()
+                .map(|p| retained.contains(&p.to_string()))
+                .unwrap_or(false)
+        });
 
         Ok(())
     }
@@ -2842,6 +2847,30 @@ bar = "*"
         9 │
           ╰────
          help: Add `workspace.preview = ["pixi-build"]` to enable pixi build support
+        "###);
+    }
+
+    #[test]
+    fn test_platform_remove() {
+        let toml = r#"
+        [workspace]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = ['linux-64', 'win-64']
+        "#;
+
+        let mut manifest = parse_pixi_toml(toml);
+        let mut manifest = manifest.editable();
+
+        manifest
+            .remove_platforms([Platform::Linux64], &FeatureName::Default)
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "test"
+        channels = ['conda-forge']
+        platforms = [ 'win-64']
         "###);
     }
 }
