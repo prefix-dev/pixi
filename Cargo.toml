@@ -369,17 +369,17 @@ tokio = { workspace = true, features = ["rt"] }
 
 
 [patch.crates-io]
-file_url = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_cache = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_conda_types = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_digest = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_lock = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_networking = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_repodata_gateway = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_shell = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_solve = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
-rattler_virtual_packages = { git = "https://github.com/conda/rattler", ref = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+file_url = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_cache = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_digest = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_lock = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_networking = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_shell = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_solve = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", rev = "8141e3fc3d97ffda1fce053e1611da2db3635553" }
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "57832d0588fbb7aab824813481104761dc1c7740" }
 
