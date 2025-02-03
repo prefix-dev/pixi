@@ -335,9 +335,9 @@ checksum = "8b75356056920673b02621b35afd0f7dda9306d03c79a30f5c56c44cf256e3de"
 
 [[package]]
 name = "async-trait"
-version = "0.1.85"
+version = "0.1.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f934833b4b7233644e5848f235df3f57ed8c80f1528a26c3dfa13d2147fa056"
+checksum = "644dd749086bf3771a2fbc5f256fdb982d53f011c7d5d560304eafeecebce79d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1110,9 +1110,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.10"
+version = "1.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13208fcbb66eaeffe09b99fffbe1af420f00a7b35aa99ad683dfc1aa76145229"
+checksum = "e4730490333d58093109dc02c23174c3f4d490998c3fed3cc8e82d57afedb9cf"
 dependencies = [
  "jobserver",
  "libc",
@@ -1690,9 +1690,9 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "dyn-clone"
-version = "1.0.17"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
+checksum = "feeef44e73baff3a26d371801df019877a9866a8c493d315ab00177843314f35"
 
 [[package]]
 name = "ecdsa"
@@ -1916,7 +1916,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.2"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -3096,9 +3096,9 @@ checksum = "d75a2a4b1b190afb6f5425f10f6a8f959d2ea0b9c2b1d79553551850539e4674"
 
 [[package]]
 name = "jiff"
-version = "0.1.28"
+version = "0.1.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c607c728e28764fecde611a2764a3a5db19ae21dcec46f292244f5cc5c085a81"
+checksum = "c04ef77ae73f3cf50510712722f0c4e8b46f5aaa1bf5ffad2ae213e6495e78e5"
 dependencies = [
  "jiff-tzdb-platform",
  "log",
@@ -3584,12 +3584,12 @@ dependencies = [
 
 [[package]]
 name = "miette"
-version = "7.4.0"
+version = "7.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "317f146e2eb7021892722af37cf1b971f0a70c8406f487e24952667616192c64"
+checksum = "1a955165f87b37fd1862df2a59547ac542c77ef6d17c666f619d1ad22dd89484"
 dependencies = [
  "cfg-if",
- "miette-derive 7.4.0",
+ "miette-derive 7.5.0",
  "owo-colors",
  "serde",
  "supports-color",
@@ -3614,9 +3614,9 @@ dependencies = [
 
 [[package]]
 name = "miette-derive"
-version = "7.4.0"
+version = "7.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23c9b935fbe1d6cbd1dac857b54a688145e2d93f48db36010514d0f612d0ad67"
+checksum = "bf45bf44ab49be92fd1227a3be6fc6f617f1a337c06af54981048574d8783147"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3904,9 +3904,9 @@ checksum = "1261fe7e33c73b354eab43b1273a57c8f967d0391e80353e51f764ac02cf6775"
 
 [[package]]
 name = "openssl"
-version = "0.10.69"
+version = "0.10.70"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5e534d133a060a3c19daec1eb3e98ec6f4685978834f2dbadfe2ec215bab64e"
+checksum = "61cfb4e166a8bb8c9b55c500bc2308550148ece889be90f609377e58140f42c6"
 dependencies = [
  "bitflags 2.8.0",
  "cfg-if",
@@ -3936,9 +3936,9 @@ checksum = "d05e27ee213611ffe7d6348b942e8f942b37114c00cc03cec254295a4a17852e"
 
 [[package]]
 name = "openssl-sys"
-version = "0.9.104"
+version = "0.9.105"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45abf306cbf99debc8195b66b7346498d7b10c210de50418b5ccd7ceba08c741"
+checksum = "8b22d5b84be05a8d6947c7cb71f7c849aa0f112acd4bf51c2a7c1c988ac0a9dc"
 dependencies = [
  "cc",
  "libc",
@@ -4241,18 +4241,18 @@ dependencies = [
 
 [[package]]
 name = "pin-project"
-version = "1.1.8"
+version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e2ec53ad785f4d35dac0adea7f7dc6f1bb277ad84a680c7afefeae05d1f5916"
+checksum = "dfe2e71e1471fe07709406bf725f710b02927c9c54b2b5b2ec0e8087d97c327d"
 dependencies = [
  "pin-project-internal",
 ]
 
 [[package]]
 name = "pin-project-internal"
-version = "1.1.8"
+version = "1.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d56a66c0c55993aa927429d0f8a0abfd74f084e4d9c192cffed01e418d83eefb"
+checksum = "f6e859e6e5bd50440ab63c47e3ebabc90f26251f7c73c3d3e837b74a1cc3fa67"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4322,7 +4322,7 @@ dependencies = [
  "is_executable",
  "itertools 0.13.0",
  "libc",
- "miette 7.4.0",
+ "miette 7.5.0",
  "minijinja",
  "nix",
  "once_cell",
@@ -4426,7 +4426,7 @@ dependencies = [
  "insta",
  "itertools 0.13.0",
  "jsonrpsee",
- "miette 7.4.0",
+ "miette 7.5.0",
  "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
@@ -4496,7 +4496,7 @@ dependencies = [
  "fs-err",
  "insta",
  "itertools 0.13.0",
- "miette 7.4.0",
+ "miette 7.5.0",
  "pixi_consts",
  "rattler",
  "rattler_conda_types",
@@ -4537,7 +4537,7 @@ dependencies = [
  "dashmap",
  "dunce",
  "fs-err",
- "miette 7.4.0",
+ "miette 7.5.0",
  "pixi_utils",
  "reqwest",
  "reqwest-middleware",
@@ -4580,7 +4580,7 @@ dependencies = [
  "indexmap 2.7.1",
  "insta",
  "itertools 0.13.0",
- "miette 7.4.0",
+ "miette 7.5.0",
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
@@ -4630,7 +4630,7 @@ name = "pixi_record"
 version = "0.1.0"
 dependencies = [
  "file_url",
- "miette 7.4.0",
+ "miette 7.5.0",
  "pixi_git",
  "pixi_spec",
  "rattler_conda_types",
@@ -4688,7 +4688,7 @@ dependencies = [
  "indicatif",
  "insta",
  "itertools 0.13.0",
- "miette 7.4.0",
+ "miette 7.5.0",
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
@@ -4714,7 +4714,7 @@ name = "pixi_uv_conversions"
 version = "0.1.0"
 dependencies = [
  "dunce",
- "miette 7.4.0",
+ "miette 7.5.0",
  "pep440_rs",
  "pep508_rs",
  "pixi_git",
@@ -4838,9 +4838,9 @@ dependencies = [
 
 [[package]]
 name = "priority-queue"
-version = "2.1.1"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "714c75db297bc88a63783ffc6ab9f830698a6705aa0201416931759ef4c8183d"
+checksum = "090ded312ed32a928fb49cb91ab4db6523ae3767225e61fbf6ceaaec3664ed26"
 dependencies = [
  "autocfg",
  "equivalent",
@@ -4958,7 +4958,7 @@ dependencies = [
  "futures",
  "http-cache-reqwest",
  "itertools 0.13.0",
- "miette 7.4.0",
+ "miette 7.5.0",
  "pep440_rs",
  "pep508_rs",
  "pixi_config",
@@ -4978,7 +4978,7 @@ dependencies = [
 name = "pypi_modifiers"
 version = "0.1.0"
 dependencies = [
- "miette 7.4.0",
+ "miette 7.5.0",
  "pixi_default_versions",
  "pixi_manifest",
  "rattler_conda_types",
@@ -5125,7 +5125,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.29.0"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "anyhow",
  "clap",
@@ -5166,7 +5166,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.3.5"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5195,7 +5195,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.30.0"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "chrono",
  "dirs",
@@ -5232,7 +5232,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.5"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "blake2",
  "digest",
@@ -5248,7 +5248,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.40"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "chrono",
  "file_url",
@@ -5272,7 +5272,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.5"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "quote",
  "syn",
@@ -5281,7 +5281,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.22.0"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "anyhow",
  "async-fd-lock",
@@ -5311,7 +5311,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.24"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "bzip2 0.5.0",
  "chrono",
@@ -5339,7 +5339,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.6"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -5349,7 +5349,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.21.33"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5404,7 +5404,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.22.16"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "enum_dispatch",
  "fs-err",
@@ -5422,7 +5422,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "1.3.5"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "chrono",
  "futures",
@@ -5441,7 +5441,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "2.0.0"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "archspec",
  "libloading",
@@ -6527,7 +6527,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.0.0"
-source = "git+https://github.com/pavelzw/rattler?branch=s3#bebc5a912b993dc4e992677902b17bf2fb1af4bb"
+source = "git+https://github.com/conda/rattler#8141e3fc3d97ffda1fce053e1611da2db3635553"
 dependencies = [
  "tokio",
 ]
@@ -6715,9 +6715,9 @@ checksum = "b7401a30af6cb5818bb64852270bb722533397edcfc7344954a38f420819ece2"
 
 [[package]]
 name = "syn"
-version = "2.0.96"
+version = "2.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5d0adab1ae378d7f53bdebc67a39f1f151407ef230f0ce2883572f5d8985c80"
+checksum = "36147f1a48ae0ec2b5b3bc5b537d267457555a10dc06f3dbc8cb11ba3006d3b1"
 dependencies = [
  "proc-macro2",
  "quote",
