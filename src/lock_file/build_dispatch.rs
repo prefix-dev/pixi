@@ -1,3 +1,15 @@
+//! This module contains an implementation of the `BuildContext` trait for the `LazyBuildDispatch` trait.
+//! This is mainly to be able to initialize the conda prefix for PyPI resolving on demand.
+//! This is needed because the conda prefix is a heavy operation and we want to avoid initializing it.
+//! And we do not need to initialize it if we are not resolving PyPI source dependencies.
+//! With this implementation we only initialize a prefix once uv requests some operation that actually needs this prefix.
+//!
+//! This is especially prudent to do when we have multiple environments, which translates into multiple prefixes, that all need to be initialized.
+//! Previously we would initialize all prefixes upfront, but this is not needed and can also sometimes not be done for each platform.
+//! Using this implementation we can solve for a lot more platforms than we could before.
+//!
+//! The main struct of interest is the [`LazyBuildDispatch`] struct which holds the parameters needed to create a `BuildContext` uv implementation.
+//! and holds struct that is used to instantiate the conda prefix when its needed.
 use std::{path::Path, sync::Arc};
 
 use async_once_cell::OnceCell as AsyncCell;
@@ -203,7 +215,7 @@ impl<'a> LazyBuildDispatch<'a> {
         }
     }
 
-    /// Lazy initialization of the `BuildDispatch`.
+    /// Lazy initialization of the `BuildDispatch`. This also implies initializing the conda prefix.
     async fn get_or_try_init(&self) -> anyhow::Result<&BuildDispatch> {
         self.build_dispatch
             .get_or_try_init(async {
