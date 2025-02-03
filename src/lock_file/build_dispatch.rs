@@ -160,7 +160,7 @@ pub struct LazyBuildDispatch<'a> {
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
 
     // if we create a new conda prefix, we need to store the task result
-    // so we could reuse it later
+    // so that we can reuse it later
     pub conda_task: Option<CondaPrefixUpdated>,
 
     // project environment variables
