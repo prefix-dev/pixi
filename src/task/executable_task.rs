@@ -23,6 +23,7 @@ use crate::{
     activation::CurrentEnvVarBehavior,
     lock_file::LockFileDerivedData,
     task::task_graph::{TaskGraph, TaskId},
+    workspace::get_activated_environment_variables,
     workspace::{
         virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
         HasWorkspaceRef,
@@ -374,7 +375,8 @@ pub async fn get_task_env(
         CurrentEnvVarBehavior::Include
     };
     let mut activation_env = await_in_progress("activating environment", |_| {
-        environment.workspace().get_activated_environment_variables(
+        get_activated_environment_variables(
+            environment.workspace().env_vars(),
             environment,
             env_var_behavior,
             lock_file,

@@ -10,6 +10,7 @@ use rattler_shell::{
 
 use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::UpdateMode;
+use crate::workspace::get_activated_environment_variables;
 use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
     workspace::virtual_packages::verify_current_platform_has_required_virtual_packages,
@@ -253,15 +254,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await?;
 
     // Get the environment variables we need to set activate the environment in the shell.
-    let env = workspace
-        .get_activated_environment_variables(
-            &environment,
-            CurrentEnvVarBehavior::Exclude,
-            Some(&lock_file_data.lock_file),
-            workspace.config().force_activate(),
-            workspace.config().experimental_activation_cache_usage(),
-        )
-        .await?;
+    let env = get_activated_environment_variables(
+        workspace.env_vars(),
+        &environment,
+        CurrentEnvVarBehavior::Exclude,
+        Some(&lock_file_data.lock_file),
+        workspace.config().force_activate(),
+        workspace.config().experimental_activation_cache_usage(),
+    )
+    .await?;
 
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 
