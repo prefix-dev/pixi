@@ -174,6 +174,7 @@ pub async fn resolve_pypi(
     repodata_records: Arc<PixiRecordsByName>,
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment_name: Environment<'_>,
+    disallow_install_conda_prefix: bool,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -361,6 +362,7 @@ pub async fn resolve_pypi(
         repodata_records.records.clone(),
         pypi_options.no_build_isolation.clone(),
         &lazy_build_dispatch_dependencies,
+        disallow_install_conda_prefix,
     );
 
     // Constrain the conda packages to the specific python packages

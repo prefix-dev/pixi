@@ -1205,7 +1205,6 @@ impl<'p> UpdateContext<'p> {
                 self.package_cache.clone(),
                 self.io_concurrency_limit.clone(),
                 self.build_context.clone(),
-                self.no_install,
             );
 
             // Get the uv context
@@ -1235,6 +1234,7 @@ impl<'p> UpdateContext<'p> {
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
                 locked_group_records,
+                self.no_install,
             );
 
             pending_futures.push(pypi_solve_future.boxed_local());
@@ -2079,6 +2079,7 @@ async fn spawn_solve_pypi_task<'p>(
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,
+    disallow_install_conda_prefix: bool,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(platform));
@@ -2148,6 +2149,7 @@ async fn spawn_solve_pypi_task<'p>(
             repodata_records,
             project_variables,
             environment,
+            disallow_install_conda_prefix,
         )
         .await
         .with_context(|| {

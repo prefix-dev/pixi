@@ -174,6 +174,9 @@ pub struct LazyBuildDispatch<'a> {
 
     // we need to tie the interpreter to the build dispatch
     pub lazy_deps: &'a LazyBuildDispatchDependencies,
+
+    /// Whether to disallow installing the conda prefix.
+    pub disallow_install_conda_prefix: bool,
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily initialized.
@@ -202,6 +205,7 @@ impl<'a> LazyBuildDispatch<'a> {
         repodata_records: Vec<PixiRecord>,
         no_build_isolation: Option<Vec<String>>,
         lazy_deps: &'a LazyBuildDispatchDependencies,
+        disallow_install_conda_prefix: bool,
     ) -> Self {
         Self {
             params,
@@ -213,6 +217,7 @@ impl<'a> LazyBuildDispatch<'a> {
             no_build_isolation,
             build_dispatch: AsyncCell::new(),
             lazy_deps,
+            disallow_install_conda_prefix,
         }
     }
 
@@ -220,8 +225,14 @@ impl<'a> LazyBuildDispatch<'a> {
     async fn get_or_try_init(&self) -> anyhow::Result<&BuildDispatch> {
         self.build_dispatch
             .get_or_try_init(async {
+                // Disallow installing if the flag is set.
+                if self.disallow_install_conda_prefix {
+                    return Err(anyhow::anyhow!(
+                        "need to install conda prefix, to solve PyPI dependencies, but `--no-install` flag has been set"
+                    ));
+                }
                 tracing::debug!(
-                    "installing conda prefix {} for solving the pypi sdist requirements",
+                    "PyPI solve requires instantiation of conda prefix for '{}'",
                     self.prefix_updater.group.name().as_str()
                 );
                 let prefix = self

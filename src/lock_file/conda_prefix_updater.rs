@@ -31,7 +31,6 @@ pub struct CondaPrefixUpdater<'a> {
     pub package_cache: PackageCache,
     pub io_concurrency_limit: IoConcurrencyLimit,
     pub build_context: BuildContext,
-    pub no_install: bool,
 }
 
 impl<'a> CondaPrefixUpdater<'a> {
@@ -42,14 +41,12 @@ impl<'a> CondaPrefixUpdater<'a> {
         package_cache: PackageCache,
         io_concurrency_limit: IoConcurrencyLimit,
         build_context: BuildContext,
-        no_install: bool,
     ) -> Self {
         Self {
             group,
             package_cache,
             io_concurrency_limit,
             build_context,
-            no_install,
             platform,
         }
     }
@@ -59,9 +56,6 @@ impl<'a> CondaPrefixUpdater<'a> {
         &self,
         pixi_records: Vec<PixiRecord>,
     ) -> miette::Result<CondaPrefixUpdated> {
-        if self.no_install {
-            miette::bail!("Cannot install prefix when `--no-install` is set");
-        }
         tracing::debug!(
             "updating prefix for '{}'",
             self.group.name().fancy_display()
