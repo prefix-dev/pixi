@@ -12,7 +12,7 @@ use crate::{
     toml::{platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
     workspace::ChannelPriority,
-    PrioritizedChannel, TargetSelector, Targets, TomlError, Workspace,
+    PrioritizedChannel, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
 };
 
 #[derive(Debug, Clone)]
@@ -70,7 +70,7 @@ impl TomlWorkspace {
     pub fn into_workspace(
         self,
         external: ExternalWorkspaceProperties,
-    ) -> Result<Workspace, TomlError> {
+    ) -> Result<WithWarnings<Workspace>, TomlError> {
         if let Some(Spanned {
             value: license,
             span,
@@ -86,7 +86,14 @@ impl TomlWorkspace {
             }
         }
 
-        Ok(Workspace {
+        let WithWarnings {
+            warnings: preview_warnings,
+            value: preview,
+        } = self.preview.into_preview();
+
+        let warnings = preview_warnings;
+
+        Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name).ok_or(Error {
                 kind: ErrorKind::MissingField("name"),
                 span: self.span,
@@ -106,7 +113,7 @@ impl TomlWorkspace {
             platforms: self.platforms.value,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
-            preview: self.preview.into(),
+            preview,
             build_variants: Targets::from_default_and_user_defined(
                 self.build_variants,
                 self.target
@@ -116,6 +123,7 @@ impl TomlWorkspace {
                     .collect(),
             ),
         })
+        .with_warnings(warnings))
     }
 }
 
@@ -206,8 +214,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
 
 #[cfg(test)]
 mod test {
-    use crate::utils::test_utils::expect_parse_failure;
     use insta::assert_snapshot;
+
+    use crate::utils::test_utils::expect_parse_failure;
 
     #[test]
     fn test_invalid_license() {

@@ -9,7 +9,6 @@ use toml_span::{
     DeserError, Value,
 };
 
-use crate::toml::PlatformSpan;
 use crate::{
     environment::EnvironmentIdx,
     error::FeatureNotEnabled,
@@ -17,8 +16,8 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
         create_unsupported_selector_error, environment::TomlEnvironmentList, task::TomlTask,
-        ExternalPackageProperties, ExternalWorkspaceProperties, TomlFeature, TomlPackage,
-        TomlTarget, TomlWorkspace,
+        ExternalPackageProperties, ExternalWorkspaceProperties, PlatformSpan, TomlFeature,
+        TomlPackage, TomlTarget, TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
@@ -257,12 +256,16 @@ impl TomlManifest {
             .and_then(|p| p.value.name.as_ref())
             .cloned();
 
-        let workspace = workspace
+        let WithWarnings {
+            warnings: mut workspace_warnings,
+            value: workspace,
+        } = workspace
             .value
             .into_workspace(ExternalWorkspaceProperties {
                 name: project_name.or(external.name),
                 ..external
             })?;
+        warnings.append(&mut workspace_warnings);
 
         let workspace_manifest = WorkspaceManifest {
             workspace,

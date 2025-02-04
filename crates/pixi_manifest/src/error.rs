@@ -72,6 +72,11 @@ impl GenericError {
         self
     }
 
+    pub fn with_labels(mut self, labels: impl IntoIterator<Item = LabeledSpan>) -> Self {
+        self.labels.extend(labels);
+        self
+    }
+
     pub fn with_opt_label(mut self, text: impl Into<String>, range: Option<Range<usize>>) -> Self {
         if let Some(range) = range {
             self.labels.push(LabeledSpan::new_with_span(
@@ -195,7 +200,7 @@ pub struct FeatureNotEnabled {
 impl FeatureNotEnabled {
     pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFeature) -> Self {
         Self {
-            feature: feature.as_str().into(),
+            feature: <&'static str>::from(feature).into(),
             message: message.into(),
             span: None,
         }

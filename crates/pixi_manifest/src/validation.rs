@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use itertools::{Either, Itertools};
+use itertools::Either;
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report};
 
 use super::pypi::pypi_options::PypiOptions;
@@ -52,20 +52,6 @@ impl WorkspaceManifest {
             if let Err(report) = self.validate_environment(env, self.default_feature()) {
                 return Err(report.with_source_code(source));
             }
-        }
-
-        // Warn on any unknown preview features
-        let preview = self.workspace.preview.unknown_preview_features();
-        if !preview.is_empty() {
-            let are = if preview.len() > 1 { "are" } else { "is" };
-            let s = if preview.len() > 1 { "s" } else { "" };
-            let preview_array = if preview.len() == 1 {
-                format!("{:?}", preview)
-            } else {
-                format!("[{:?}]", preview.iter().format(", "))
-            };
-            tracing::warn!(
-                "The preview feature{s}: {preview_array} {are} defined in the manifest but un-used pixi");
         }
 
         Ok(())

@@ -46,7 +46,7 @@ pub use manifests::{
     ProvenanceError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
 };
 use miette::Diagnostic;
-pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
+pub use preview::{KnownPreviewFeature, Preview};
 pub use pypi::pypi_requirement::PyPiRequirement;
 use rattler_conda_types::Platform;
 pub use spec_type::SpecType;
