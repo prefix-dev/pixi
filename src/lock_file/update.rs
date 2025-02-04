@@ -1189,7 +1189,7 @@ impl<'p> UpdateContext<'p> {
                 continue;
             }
 
-            // // Get environment variables from the activation
+            // Get environment variables from the activation
             let project_variables = self.project.env_vars().clone();
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
