@@ -10,7 +10,7 @@
 //!
 //! The main struct of interest is the [`LazyBuildDispatch`] struct which holds the parameters needed to create a `BuildContext` uv implementation.
 //! and holds struct that is used to instantiate the conda prefix when its needed.
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 use async_once_cell::OnceCell as AsyncCell;
 
@@ -18,6 +18,7 @@ use once_cell::sync::OnceCell;
 
 use anyhow::Result;
 use pixi_manifest::EnvironmentName;
+use pixi_record::PixiRecord;
 use pixi_uv_conversions::{isolated_names_to_packages, names_to_build_isolation};
 use std::collections::HashMap;
 use tokio::runtime::Handle;
@@ -44,7 +45,7 @@ use crate::{
     project::{get_activated_environment_variables, Environment, EnvironmentVars},
 };
 
-use super::{conda_prefix_updater::CondaPrefixUpdated, CondaPrefixUpdater, PixiRecordsByName};
+use super::{conda_prefix_updater::CondaPrefixUpdated, CondaPrefixUpdater};
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
 pub struct UvBuildDispatchParams<'a> {
@@ -155,7 +156,7 @@ impl<'a> UvBuildDispatchParams<'a> {
 pub struct LazyBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
     pub prefix_updater: CondaPrefixUpdater<'a>,
-    pub repodata_records: Arc<PixiRecordsByName>,
+    pub repodata_records: Vec<PixiRecord>,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
 
@@ -198,7 +199,7 @@ impl<'a> LazyBuildDispatch<'a> {
         prefix_updater: CondaPrefixUpdater<'a>,
         project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
         environment: Environment<'a>,
-        repodata_records: Arc<PixiRecordsByName>,
+        repodata_records: Vec<PixiRecord>,
         no_build_isolation: Option<Vec<String>>,
         lazy_deps: &'a LazyBuildDispatchDependencies,
     ) -> Self {

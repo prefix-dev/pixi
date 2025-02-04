@@ -1201,6 +1201,7 @@ impl<'p> UpdateContext<'p> {
             // Creates an object to initiate an update at a later point
             let conda_prefix_updater = CondaPrefixUpdater::new(
                 group.clone(),
+                environment.best_platform(),
                 self.package_cache.clone(),
                 self.io_concurrency_limit.clone(),
                 self.build_context.clone(),

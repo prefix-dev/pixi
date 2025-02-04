@@ -358,7 +358,7 @@ pub async fn resolve_pypi(
         prefix_updater,
         project_env_vars,
         environment_name,
-        repodata_records,
+        repodata_records.records.clone(),
         pypi_options.no_build_isolation.clone(),
         &lazy_build_dispatch_dependencies,
     );
