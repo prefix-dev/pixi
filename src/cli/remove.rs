@@ -41,8 +41,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(prefix_update_config.config.clone());
     let dependency_type = dependency_config.dependency_type();
 
-     // Prevent removing Python if PyPI dependencies exist
-     if let DependencyType::CondaDependency(_) = dependency_type {
+    // Prevent removing Python if PyPI dependencies exist
+    if let DependencyType::CondaDependency(_) = dependency_type {
         for name in dependency_config.specs()?.keys() {
             if name.as_source() == "python" {
                 // Check if there are any PyPI dependencies by importing the PypiDependencies trait
