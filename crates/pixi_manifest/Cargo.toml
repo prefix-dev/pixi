@@ -9,7 +9,6 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
-dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
 indexmap = { workspace = true }

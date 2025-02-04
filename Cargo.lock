@@ -3756,7 +3756,6 @@ dependencies = [
  "itertools 0.13.0",
  "jsonrpsee",
  "miette 7.4.0",
- "pathdiff",
  "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
@@ -3902,7 +3901,6 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "console",
- "dunce",
  "fancy_display",
  "fs-err",
  "glob",

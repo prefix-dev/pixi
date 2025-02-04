@@ -16,7 +16,6 @@ futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }
 miette = { workspace = true, features = ["fancy-no-backtrace", "serde"] }
-pathdiff = { workspace = true }
 pixi_build_type_conversions = { workspace = true }
 pixi_build_types = { path = "../pixi_build_types" }
 pixi_config = { workspace = true }
