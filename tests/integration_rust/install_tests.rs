@@ -761,3 +761,35 @@ async fn test_ensure_gitignore_file_creation() {
         ".pixi/.gitignore file does not contain the expected content"
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn pypi_prefix_is_not_created_when_whl() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    // Add and update lockfile with this version of python
+    pixi.add("python==3.11").with_install(false).await.unwrap();
+
+    // Add pypi dependency that is a wheel
+    pixi.add_multiple(vec!["boltons==24.1.0"])
+        .set_type(pixi::DependencyType::PypiDependency)
+        // we don't want to install the package
+        // we just want to check that the prefix is not created
+        .with_install(false)
+        .await
+        .unwrap();
+
+    // Check the locked boltons dependencies
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        pep508_rs::Requirement::from_str("boltons==24.1.0").unwrap()
+    ));
+
+    let default_env_prefix = pixi.default_env_path().unwrap();
+
+    // Check that the prefix is not created
+    assert!(!default_env_prefix.exists());
+}

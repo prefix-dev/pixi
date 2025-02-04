@@ -17,7 +17,7 @@ use tokio::task::JoinHandle;
 use super::task_hash::{InputHashesError, TaskCache, TaskHash};
 use crate::{
     lock_file::LockFileDerivedData,
-    project::Environment,
+    project::{get_activated_environment_variables, Environment},
     task::task_graph::{TaskGraph, TaskId},
     Project,
 };
@@ -373,7 +373,8 @@ pub async fn get_task_env(
         CurrentEnvVarBehavior::Include
     };
     let mut activation_env = await_in_progress("activating environment", |_| {
-        environment.project().get_activated_environment_variables(
+        get_activated_environment_variables(
+            environment.project().env_vars(),
             environment,
             env_var_behavior,
             lock_file,

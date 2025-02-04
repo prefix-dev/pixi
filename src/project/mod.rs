@@ -224,6 +224,10 @@ impl Project {
             .collect()
     }
 
+    pub fn env_vars(&self) -> &HashMap<EnvironmentName, EnvironmentVars> {
+        &self.env_vars
+    }
+
     /// Constructs a project from a manifest.
     pub fn from_str(manifest_path: &Path, content: &str) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
@@ -470,67 +474,6 @@ impl Project {
         let environment_name = EnvironmentName::from_arg_or_env_var(name).into_diagnostic()?;
         self.environment(&environment_name)
             .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
-    }
-
-    /// Get or initialize the activated environment variables
-    pub async fn get_activated_environment_variables(
-        &self,
-        environment: &Environment<'_>,
-        current_env_var_behavior: CurrentEnvVarBehavior,
-        lock_file: Option<&LockFile>,
-        force_activate: bool,
-        experimental_cache: bool,
-    ) -> miette::Result<&HashMap<String, String>> {
-        let vars = self.env_vars.get(environment.name()).ok_or_else(|| {
-            miette::miette!(
-                "{} environment should be already created during project creation",
-                environment.name()
-            )
-        })?;
-        match current_env_var_behavior {
-            CurrentEnvVarBehavior::Clean => {
-                vars.clean()
-                    .get_or_try_init(async {
-                        initialize_env_variables(
-                            environment,
-                            current_env_var_behavior,
-                            lock_file,
-                            force_activate,
-                            experimental_cache,
-                        )
-                        .await
-                    })
-                    .await
-            }
-            CurrentEnvVarBehavior::Exclude => {
-                vars.pixi_only()
-                    .get_or_try_init(async {
-                        initialize_env_variables(
-                            environment,
-                            current_env_var_behavior,
-                            lock_file,
-                            force_activate,
-                            experimental_cache,
-                        )
-                        .await
-                    })
-                    .await
-            }
-            CurrentEnvVarBehavior::Include => {
-                vars.full()
-                    .get_or_try_init(async {
-                        initialize_env_variables(
-                            environment,
-                            current_env_var_behavior,
-                            lock_file,
-                            force_activate,
-                            experimental_cache,
-                        )
-                        .await
-                    })
-                    .await
-            }
-        }
     }
 
     /// Returns all the solve groups in the project.
@@ -1109,6 +1052,67 @@ pub(crate) fn find_project_manifest(current_dir: impl AsRef<Path>) -> Option<Pat
     }
 
     None
+}
+
+/// Get or initialize the activated environment variables
+pub async fn get_activated_environment_variables<'a>(
+    project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
+    environment: &Environment<'_>,
+    current_env_var_behavior: CurrentEnvVarBehavior,
+    lock_file: Option<&LockFile>,
+    force_activate: bool,
+    experimental_cache: bool,
+) -> miette::Result<&'a HashMap<String, String>> {
+    let vars = project_env_vars.get(environment.name()).ok_or_else(|| {
+        miette::miette!(
+            "{} environment should be already created during project creation",
+            environment.name()
+        )
+    })?;
+    match current_env_var_behavior {
+        CurrentEnvVarBehavior::Clean => {
+            vars.clean()
+                .get_or_try_init(async {
+                    initialize_env_variables(
+                        environment,
+                        current_env_var_behavior,
+                        lock_file,
+                        force_activate,
+                        experimental_cache,
+                    )
+                    .await
+                })
+                .await
+        }
+        CurrentEnvVarBehavior::Exclude => {
+            vars.pixi_only()
+                .get_or_try_init(async {
+                    initialize_env_variables(
+                        environment,
+                        current_env_var_behavior,
+                        lock_file,
+                        force_activate,
+                        experimental_cache,
+                    )
+                    .await
+                })
+                .await
+        }
+        CurrentEnvVarBehavior::Include => {
+            vars.full()
+                .get_or_try_init(async {
+                    initialize_env_variables(
+                        environment,
+                        current_env_var_behavior,
+                        lock_file,
+                        force_activate,
+                        experimental_cache,
+                    )
+                    .await
+                })
+                .await
+        }
+    }
 }
 
 /// Create a symlink from the directory to the custom target directory

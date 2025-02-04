@@ -3617,6 +3617,7 @@ name = "pixi"
 version = "0.40.3"
 dependencies = [
  "ahash",
+ "anyhow",
  "assert_matches",
  "async-fd-lock",
  "async-once-cell",
@@ -3713,6 +3714,7 @@ dependencies = [
  "typed-path",
  "url",
  "uv-auth",
+ "uv-build-frontend",
  "uv-cache",
  "uv-client",
  "uv-configuration",

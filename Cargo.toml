@@ -16,6 +16,7 @@ repository = "https://github.com/prefix-dev/pixi"
 
 [workspace.dependencies]
 ahash = "0.8.11"
+anyhow = "*"
 assert_matches = "1.5.0"
 async-fd-lock = "0.2.0"
 async-once-cell = "0.5.4"
@@ -99,6 +100,7 @@ toml_edit = "0.22.22"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 typed-path = "0.10.0"
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
 uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
@@ -206,6 +208,7 @@ performance = ["pixi_allocator"]
 
 [dependencies]
 ahash = { workspace = true }
+anyhow = { workspace = true }
 assert_matches = { workspace = true }
 async-fd-lock = { workspace = true }
 async-once-cell = { workspace = true }
@@ -247,6 +250,7 @@ minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rstest = { workspace = true }
+uv-build-frontend = { workspace = true }
 uv-distribution-filename = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-install-wheel = { workspace = true }
