@@ -981,8 +981,7 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
     # Remove the .pixi folder
     dot_pixi = tmp_pixi_workspace / ".pixi"
-    if dot_pixi.exists():
-        shutil.rmtree(dot_pixi)
+    shutil.rmtree(dot_pixi)
 
     # Run pixi lock to recreate the lock file
     verify_cli_command([pixi, "lock", "--manifest-path", manifest_path])
