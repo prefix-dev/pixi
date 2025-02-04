@@ -3,4 +3,4 @@ name = "package_a"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "bla", version = "*"}
+backend = { name = "bla", version = "*" }

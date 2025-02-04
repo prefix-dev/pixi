@@ -1,6 +1,6 @@
 [workspace]
-name = "workspace-discovery"
 channels = []
+name = "workspace-discovery"
 platforms = []
 preview = ["pixi-build"]
 
@@ -9,4 +9,4 @@ preview = ["pixi-build"]
 version = "0.1.0"
 
 [package.build]
-backend = { name = "bla", version = "*"}
+backend = { name = "bla", version = "*" }

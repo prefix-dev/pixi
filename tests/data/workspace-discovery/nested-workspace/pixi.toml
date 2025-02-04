@@ -1,4 +1,4 @@
 [workspace]
-name = "nested-workspace"
 channels = []
+name = "nested-workspace"
 platforms = []

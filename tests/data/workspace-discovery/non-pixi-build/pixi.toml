@@ -1,4 +1,4 @@
 [workspace]
-name = "non-build-workspace"
 channels = []
+name = "non-build-workspace"
 platforms = []

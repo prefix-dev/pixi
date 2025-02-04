@@ -6,4 +6,4 @@ version = "0.1.0"
 # name etc should be derived from the project itself
 
 [tool.pixi.package.build]
-backend = { name = "bla", version = "*"}
+backend = { name = "bla", version = "*" }
