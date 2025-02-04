@@ -8,12 +8,11 @@ use thiserror::Error;
 use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
 use url::Url;
 
+use crate::toml::manifest::ExternalWorkspaceProperties;
 use crate::{
     error::GenericError,
     package::Package,
-    toml::{
-        package_target::TomlPackageTarget, workspace::ExternalWorkspaceProperties, TomlPackageBuild,
-    },
+    toml::{package_target::TomlPackageTarget, TomlPackageBuild},
     utils::{package_map::UniquePackageMap, PixiSpanned},
     PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
 };

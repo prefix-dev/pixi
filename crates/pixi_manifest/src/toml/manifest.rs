@@ -1,18 +1,19 @@
 use std::{
     collections::{HashMap, HashSet},
     ops::Range,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use indexmap::IndexMap;
 use miette::LabeledSpan;
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{Platform, Version};
 use toml_span::{
     de_helpers::{expected, TableHelper},
     value::ValueInner,
     DeserError, Spanned, Value,
 };
+use url::Url;
 
 use crate::{
     environment::EnvironmentIdx,
@@ -21,8 +22,8 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
         create_unsupported_selector_error, environment::TomlEnvironmentList, task::TomlTask,
-        ExternalPackageProperties, ExternalWorkspaceProperties, PlatformSpan, TomlFeature,
-        TomlPackage, TomlTarget, TomlWorkspace,
+        ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
+        TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
@@ -122,7 +123,7 @@ impl TomlManifest {
     /// paths are not checked.
     pub fn into_workspace_manifest(
         self,
-        external: ExternalWorkspaceProperties,
+        mut external: ExternalWorkspaceProperties,
         root_directory: Option<&Path>,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let workspace = self
@@ -221,10 +222,18 @@ impl TomlManifest {
                 Ok((name.value, feature))
             })
             .collect::<Result<IndexMap<FeatureName, Feature>, TomlError>>()?;
-        let features = features
+        let mut features = features
             .into_iter()
             .chain(named_features)
             .collect::<IndexMap<_, _>>();
+
+        // Add external features if they are not overwritten
+        let external_features = std::mem::take(&mut external.features);
+        for (feature_name, feature) in external_features {
+            if !features.contains_key(&feature_name) {
+                features.insert(feature_name, feature);
+            }
+        }
 
         // Construct the environments including the default environment
         let mut environments = Environments::default();
@@ -300,7 +309,7 @@ impl TomlManifest {
             }
 
             // Choose whether to include the default
-            if no_default_feature {
+            if !no_default_feature {
                 used_features.push(
                     features
                         .get(&FeatureName::Default)
@@ -888,4 +897,23 @@ mod test {
         "#,
         ));
     }
+}
+
+/// Defines some of the properties that might be defined in other parts of the
+/// manifest but we do require to be set in the workspace section.
+///
+/// This can be used to inject these properties.
+#[derive(Debug, Clone, Default)]
+pub struct ExternalWorkspaceProperties {
+    pub name: Option<String>,
+    pub version: Option<Version>,
+    pub description: Option<String>,
+    pub authors: Option<Vec<String>>,
+    pub license: Option<String>,
+    pub license_file: Option<PathBuf>,
+    pub readme: Option<PathBuf>,
+    pub homepage: Option<Url>,
+    pub repository: Option<Url>,
+    pub documentation: Option<Url>,
+    pub features: IndexMap<FeatureName, Feature>,
 }

@@ -332,14 +332,19 @@ mod tests {
     fn test_export_conda_env_yaml_with_pip_custom_registry() {
         let path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-custom-registry/pixi.toml");
-        let project = Workspace::from_path(&path).unwrap();
+        let workspace = match Workspace::from_path(&path) {
+            Ok(project) => project,
+            Err(err) => {
+                panic!("Failed to load project: {:?}", err);
+            }
+        };
         let args = Args {
             output_path: None,
             platform: None,
             environment: Some("alternative".to_string()),
             workspace_config: WorkspaceConfig::default(),
         };
-        let environment = project
+        let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
@@ -347,7 +352,7 @@ mod tests {
         let env_yaml = build_env_yaml(
             &platform,
             &environment,
-            project.config().global_channel_config(),
+            workspace.config().global_channel_config(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_custom_registry",

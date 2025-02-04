@@ -8,6 +8,7 @@ use rattler_conda_types::{Platform, Version};
 use toml_edit::Value;
 
 use crate::manifests::document::ManifestDocument;
+use crate::toml::ExternalWorkspaceProperties;
 use crate::{
     consts,
     environment::{Environment, EnvironmentName},
@@ -17,7 +18,7 @@ use crate::{
     pypi::PyPiPackageName,
     solve_group::SolveGroups,
     to_options,
-    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
+    toml::{FromTomlStr, TomlManifest},
     utils::WithSourceCode,
     workspace::Workspace,
     DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,

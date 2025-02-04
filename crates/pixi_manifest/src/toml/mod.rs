@@ -23,6 +23,7 @@ pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};
 pub use feature::TomlFeature;
 use itertools::Itertools;
+pub use manifest::ExternalWorkspaceProperties;
 pub use manifest::TomlManifest;
 use miette::LabeledSpan;
 pub use package::{ExternalPackageProperties, PackageError, TomlPackage};
@@ -32,7 +33,7 @@ pub use pyproject::PyProjectToml;
 use rattler_conda_types::Platform;
 pub use target::TomlTarget;
 use toml_span::{DeserError, Span};
-pub use workspace::{ExternalWorkspaceProperties, TomlWorkspace};
+pub use workspace::TomlWorkspace;
 
 use crate::{error::GenericError, utils::PixiSpanned, TargetSelector, TomlError};
 

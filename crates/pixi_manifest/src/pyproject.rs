@@ -22,7 +22,7 @@ use crate::{
     error::{DependencyError, GenericError},
     manifests::PackageManifest,
     toml::{
-        pyproject::{TomlContact, TomlProject},
+        pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
         ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
         TomlManifest,
     },
@@ -308,12 +308,25 @@ impl PyProjectManifest {
         // Extract some of the values we are interested in from the poetry table.
         let poetry = poetry.unwrap_or_default();
 
+        // Define an iterator over both optional dependencies and dependency groups
+        let pypi_dependency_groups =
+            Self::extract_dependency_groups(dependency_groups, project.optional_dependencies)?;
+
         // Convert the TOML document into a pixi manifest.
         // TODO:  would be nice to add license, license-file, readme, homepage,
         // repository, documentation, regarding the above, the types are a bit
         // different than we expect, so the conversion is not straightforward we
         // could change these types or we can convert. Let's decide when we make it.
         // etc.
+        let implicit_pypi_features = pypi_dependency_groups
+            .iter()
+            .map(|(name, _)| {
+                (
+                    FeatureName::Named(name.clone()),
+                    Feature::new(FeatureName::Named(name.clone())),
+                )
+            })
+            .collect();
         let (mut workspace_manifest, package_manifest, warnings) = pixi.into_workspace_manifest(
             ExternalWorkspaceProperties {
                 name: project.name.map(Spanned::take),
@@ -332,6 +345,7 @@ impl PyProjectManifest {
                 homepage: None,
                 repository: None,
                 documentation: None,
+                features: implicit_pypi_features,
             },
             root_directory,
         )?;
@@ -376,38 +390,11 @@ impl PyProjectManifest {
             }
         }
 
-        // Define an iterator over both optional dependencies and dependency groups
-        let groups = project
-            .optional_dependencies
-            .map(|deps| {
-                deps.into_iter()
-                    .map(|(group, reqs)| {
-                        (
-                            group,
-                            reqs.into_iter().map(Spanned::take).collect::<Vec<_>>(),
-                        )
-                    })
-                    .collect()
-            })
-            .into_iter()
-            .chain(
-                dependency_groups
-                    .map(|Spanned { span, value }| {
-                        value.0.resolve().map_err(|err| {
-                            GenericError::new(format!("{}", err)).with_span(span.into())
-                        })
-                    })
-                    .transpose()?,
-            )
-            .flat_map(|map| map.into_iter());
-
-        // For each group of optional dependency or dependency group,
-        // create a feature of the same name if it does not exist,
-        // and add pypi dependencies, filtering out self-references in optional
-        // dependencies
+        // For each group of optional dependency or dependency group, add pypi
+        // dependencies, filtering out self-references in optional dependencies
         let project_name =
             pep508_rs::PackageName::new(workspace_manifest.workspace.name.clone()).ok();
-        for (group, reqs) in groups {
+        for (group, reqs) in pypi_dependency_groups {
             let feature_name = FeatureName::Named(group.to_string());
             let target = workspace_manifest
                 .features
@@ -430,6 +417,35 @@ impl PyProjectManifest {
         }
 
         Ok((workspace_manifest, package_manifest, warnings))
+    }
+
+    fn extract_dependency_groups(
+        dependency_groups: Option<Spanned<TomlDependencyGroups>>,
+        optional_dependencies: Option<IndexMap<String, Vec<Spanned<Requirement>>>>,
+    ) -> Result<Vec<(String, Vec<Requirement>)>, TomlError> {
+        Ok(optional_dependencies
+            .map(|deps| {
+                deps.into_iter()
+                    .map(|(group, reqs)| {
+                        (
+                            group,
+                            reqs.into_iter().map(Spanned::take).collect::<Vec<_>>(),
+                        )
+                    })
+                    .collect()
+            })
+            .into_iter()
+            .chain(
+                dependency_groups
+                    .map(|Spanned { span, value }| {
+                        value.0.resolve().map_err(|err| {
+                            GenericError::new(format!("{}", err)).with_span(span.into())
+                        })
+                    })
+                    .transpose()?,
+            )
+            .flat_map(|map| map.into_iter())
+            .collect::<Vec<_>>())
     }
 }
 

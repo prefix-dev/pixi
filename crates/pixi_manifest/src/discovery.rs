@@ -11,9 +11,10 @@ use pixi_consts::consts;
 use thiserror::Error;
 use toml_span::Deserialize;
 
+use crate::toml::ExternalWorkspaceProperties;
 use crate::{
     pyproject::PyProjectManifest,
-    toml::{ExternalPackageProperties, ExternalWorkspaceProperties, TomlManifest},
+    toml::{ExternalPackageProperties, TomlManifest},
     utils::WithSourceCode,
     warning::WarningWithSource,
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,

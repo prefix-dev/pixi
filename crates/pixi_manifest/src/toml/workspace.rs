@@ -9,6 +9,7 @@ use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
 use url::Url;
 
+use crate::toml::manifest::ExternalWorkspaceProperties;
 use crate::{
     error::GenericError,
     pypi::pypi_options::PypiOptions,
@@ -49,24 +50,6 @@ pub struct TomlWorkspace {
     pub build_variants: Option<HashMap<String, Vec<String>>>,
 
     pub span: Span,
-}
-
-/// Defines some of the properties that might be defined in other parts of the
-/// manifest but we do require to be set in the workspace section.
-///
-/// This can be used to inject these properties.
-#[derive(Debug, Clone, Default)]
-pub struct ExternalWorkspaceProperties {
-    pub name: Option<String>,
-    pub version: Option<Version>,
-    pub description: Option<String>,
-    pub authors: Option<Vec<String>>,
-    pub license: Option<String>,
-    pub license_file: Option<PathBuf>,
-    pub readme: Option<PathBuf>,
-    pub homepage: Option<Url>,
-    pub repository: Option<Url>,
-    pub documentation: Option<Url>,
 }
 
 impl TomlWorkspace {
@@ -251,8 +234,9 @@ mod test {
 
     use insta::assert_snapshot;
 
+    use crate::toml::manifest::ExternalWorkspaceProperties;
     use crate::{
-        toml::{ExternalWorkspaceProperties, FromTomlStr, TomlWorkspace},
+        toml::{FromTomlStr, TomlWorkspace},
         utils::test_utils::{expect_parse_failure, format_parse_error},
     };
 
