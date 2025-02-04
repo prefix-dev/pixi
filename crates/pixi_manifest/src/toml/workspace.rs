@@ -7,6 +7,7 @@ use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spa
 use url::Url;
 
 use crate::{
+    error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
@@ -32,7 +33,7 @@ pub struct TomlWorkspace {
     pub channels: IndexSet<PrioritizedChannel>,
     pub channel_priority: Option<ChannelPriority>,
     pub platforms: Spanned<IndexSet<Platform>>,
-    pub license: Option<String>,
+    pub license: Option<Spanned<String>>,
     pub license_file: Option<PathBuf>,
     pub readme: Option<PathBuf>,
     pub homepage: Option<Url>,
@@ -70,6 +71,21 @@ impl TomlWorkspace {
         self,
         external: ExternalWorkspaceProperties,
     ) -> Result<Workspace, TomlError> {
+        if let Some(Spanned {
+            value: license,
+            span,
+        }) = &self.license
+        {
+            if let Err(e) = spdx::Expression::parse(license) {
+                return Err(
+                    GenericError::new("'license' is not a valid SPDX expression")
+                        .with_span((*span).into())
+                        .with_span_label(e.to_string())
+                        .into(),
+                );
+            }
+        }
+
         Ok(Workspace {
             name: self.name.or(external.name).ok_or(Error {
                 kind: ErrorKind::MissingField("name"),
@@ -79,7 +95,7 @@ impl TomlWorkspace {
             version: self.version.or(external.version),
             description: self.description.or(external.description),
             authors: self.authors.or(external.authors),
-            license: self.license.or(external.license),
+            license: self.license.map(Spanned::take).or(external.license),
             license_file: self.license_file.or(external.license_file),
             readme: self.readme.or(external.readme),
             homepage: self.homepage.or(external.homepage),
@@ -185,5 +201,23 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
         th.finalize(None)?;
 
         Ok(TomlWorkspaceTarget { build_variants })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::utils::test_utils::expect_parse_failure;
+    use insta::assert_snapshot;
+
+    #[test]
+    fn test_invalid_license() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        license = "MIT OR FOOBAR"
+        "#,
+        ));
     }
 }

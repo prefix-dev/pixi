@@ -4,7 +4,7 @@ use std::{
 };
 
 use itertools::{Either, Itertools};
-use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report, WrapErr};
+use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report};
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
@@ -29,18 +29,6 @@ impl WorkspaceManifest {
                     name,
                 );
             }
-        }
-
-        // parse the SPDX license expression to make sure that it is a valid expression.
-        if let Some(spdx_expr) = &self.workspace.license {
-            spdx::Expression::parse(spdx_expr)
-                .into_diagnostic()
-                .with_context(|| {
-                    format!(
-                        "failed to parse the SPDX license expression '{}'",
-                        spdx_expr
-                    )
-                })?;
         }
 
         let check_file_existence = |x: &Option<PathBuf>| {
