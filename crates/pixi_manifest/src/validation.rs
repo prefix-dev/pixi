@@ -4,10 +4,7 @@ use itertools::Either;
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report};
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{
-    pypi::pypi_options::NoBuild, Environment, Feature, FeatureName, SystemRequirements,
-    WorkspaceManifest,
-};
+use crate::{Environment, Feature, FeatureName, SystemRequirements, WorkspaceManifest};
 
 impl WorkspaceManifest {
     /// Validate the project manifest.
@@ -87,7 +84,7 @@ impl WorkspaceManifest {
         }
 
         // Check if there are no conflicts in pypi options between features
-        let opts = features
+        features
             .iter()
             .chain(default)
             .filter_map(|feature| {
@@ -100,23 +97,6 @@ impl WorkspaceManifest {
             })
             .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
             .into_diagnostic()?;
-
-        // If no-build is set, check if the package names are pep508 compliant
-        if let Some(NoBuild::Packages(packages)) = opts.no_build {
-            let packages = packages
-                .iter()
-                .map(|p| pep508_rs::PackageName::new(p.clone()))
-                .collect::<Result<Vec<_>, _>>();
-            if let Err(e) = packages {
-                return Err(miette::miette!(
-                    labels = vec![LabeledSpan::at(
-                        env.features_source_loc.clone().unwrap_or_default(),
-                        "while resolving no-build packages array"
-                    )],
-                    "{e}",
-                ));
-            }
-        }
 
         Ok(())
     }
