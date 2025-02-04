@@ -99,44 +99,52 @@ impl<'a> UvBuildDispatchParams<'a> {
         }
     }
 
+    /// Set the index strategy for the build dispatch.
     pub fn with_index_strategy(mut self, index_strategy: IndexStrategy) -> Self {
         self.index_strategy = index_strategy;
         self
     }
 
+    /// Set the shared state for the build dispatch
     pub fn with_shared_state(mut self, shared_state: SharedState) -> Self {
         self.shared_state = shared_state;
         self
     }
 
+    /// Set the source strategy for the build dispatch
     pub fn with_source_strategy(mut self, sources: SourceStrategy) -> Self {
         self.sources = sources;
         self
     }
 
+    /// Set the concurrency amount for the build dispatch
     pub fn with_concurrency(mut self, concurrency: Concurrency) -> Self {
         self.concurrency = concurrency;
         self
     }
 
+    /// Set the link mode for the build dispatch
     #[allow(dead_code)]
     pub fn with_link_mode(mut self, link_mode: LinkMode) -> Self {
         self.link_mode = link_mode;
         self
     }
 
+    /// Set the constraints for the build dispatch
     #[allow(dead_code)]
     pub fn with_constraints(mut self, constraints: Constraints) -> Self {
         self.constraints = constraints;
         self
     }
 
+    /// Set the exclude newer options for the build dispatch
     #[allow(dead_code)]
     pub fn with_exclude_newer(mut self, exclude_newer: Option<ExcludeNewer>) -> Self {
         self.exclude_newer = exclude_newer;
         self
     }
 
+    /// Set the lower bounds handling for the build dispatch
     #[allow(dead_code)]
     pub fn with_lower_bounds(mut self, lower_bounds: LowerBound) -> Self {
         self.bounds = lower_bounds;
@@ -228,7 +236,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 // Disallow installing if the flag is set.
                 if self.disallow_install_conda_prefix {
                     return Err(anyhow::anyhow!(
-                        "need to install conda prefix, to solve PyPI dependencies, but `--no-install` flag has been set"
+                        "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
                     ));
                 }
                 tracing::debug!(
@@ -240,7 +248,7 @@ impl<'a> LazyBuildDispatch<'a> {
                     .update(self.repodata_records.clone())
                     .await
                     .map_err(|err| {
-                        anyhow::anyhow!(err).context("failed to install conda prefix")
+                        anyhow::anyhow!(err).context("failed to install conda environment")
                     })?;
 
                 // get the activation vars
