@@ -6,7 +6,7 @@ use std::{
 use miette::{Diagnostic, LabeledSpan, Severity, SourceCode};
 
 /// A struct that binds a [`Diagnostic`] to a [`SourceCode`]. This is similar to
-/// using [`miette::Report::with_source`] but it retains type information.
+/// using [`miette::Report::with_source_code`] but it retains type information.
 #[derive(Debug)]
 pub struct WithSourceCode<E, S> {
     pub error: E,

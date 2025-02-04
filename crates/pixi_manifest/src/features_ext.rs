@@ -27,7 +27,7 @@ pub struct ChannelPriorityCombinationError;
 /// project.
 ///
 /// There is blanket implementation available for all types that implement
-/// [`HasManifestRef`] and [`HasFeaturesIter`]
+/// [`HasWorkspaceManifest`] and [`HasFeaturesIter`]
 pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<'source> {
     /// Returns the channels associated with this collection.
     ///
