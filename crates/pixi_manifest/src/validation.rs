@@ -12,22 +12,6 @@ use crate::{
 impl WorkspaceManifest {
     /// Validate the project manifest.
     pub fn validate(&self, source: NamedSource<String>, _root_folder: &Path) -> miette::Result<()> {
-        // Check if all features are used in environments, warn if not.
-        let mut features_used = HashSet::new();
-        for env in self.environments.iter() {
-            for feature in env.features.iter() {
-                features_used.insert(feature);
-            }
-        }
-        for (name, _feature) in self.features.iter() {
-            if name != &FeatureName::Default && !features_used.contains(&name.to_string()) {
-                tracing::warn!(
-                    "The feature '{}' is defined but not used in any environment",
-                    name,
-                );
-            }
-        }
-
         // Validate the environments defined in the project
         for env in self.environments.iter() {
             if let Err(report) = self.validate_environment(env, self.default_feature()) {

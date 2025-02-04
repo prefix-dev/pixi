@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use indexmap::IndexMap;
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
@@ -11,7 +14,7 @@ use toml_span::{
 
 use crate::{
     environment::EnvironmentIdx,
-    error::FeatureNotEnabled,
+    error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
@@ -46,7 +49,7 @@ pub struct TomlManifest {
     pub tasks: Option<PixiSpanned<HashMap<TaskName, Task>>>,
 
     /// The features defined in the project.
-    pub feature: Option<PixiSpanned<IndexMap<FeatureName, TomlFeature>>>,
+    pub feature: Option<PixiSpanned<IndexMap<PixiSpanned<FeatureName>, TomlFeature>>>,
 
     /// The environments the project can create.
     pub environments: Option<PixiSpanned<IndexMap<EnvironmentName, TomlEnvironmentList>>>,
@@ -196,6 +199,7 @@ impl TomlManifest {
         };
 
         // Construct the features including the default feature
+        let mut feature_name_to_span = HashMap::new();
         let features: IndexMap<FeatureName, Feature> =
             IndexMap::from_iter([(FeatureName::Default, default_feature)]);
         let named_features = self
@@ -207,9 +211,12 @@ impl TomlManifest {
                 let WithWarnings {
                     value: feature,
                     warnings: mut feature_warnings,
-                } = feature.into_feature(name.clone(), preview, &workspace.value)?;
+                } = feature.into_feature(name.value.clone(), preview, &workspace.value)?;
                 warnings.append(&mut feature_warnings);
-                Ok((name, feature))
+                feature_name_to_span
+                    .entry(name.value.clone().to_string())
+                    .or_insert(name.span);
+                Ok((name.value, feature))
             })
             .collect::<Result<IndexMap<FeatureName, Feature>, TomlError>>()?;
         let features = features.into_iter().chain(named_features).collect();
@@ -231,6 +238,7 @@ impl TomlManifest {
         }
 
         // Add all named environments
+        let mut features_used_by_environments = HashSet::new();
         for (name, env) in toml_environments {
             // Decompose the TOML
             let (features, features_source_loc, solve_group, no_default_feature) = match env {
@@ -249,6 +257,8 @@ impl TomlManifest {
                 TomlEnvironmentList::Seq(features) => (features, None, None, false),
             };
 
+            features_used_by_environments.extend(features.iter().cloned());
+
             let environment_idx = EnvironmentIdx(environments.environments.len());
             environments.by_name.insert(name.clone(), environment_idx);
             environments.environments.push(Some(Environment {
@@ -258,6 +268,22 @@ impl TomlManifest {
                 solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
                 no_default_feature,
             }));
+        }
+
+        // Verify that all features are used in at least one environment
+        for (feature_name, span) in feature_name_to_span {
+            if features_used_by_environments.contains(&feature_name) {
+                continue;
+            }
+
+            warnings.push(Warning::from(
+                GenericError::new(format!(
+                    "The feature '{}' is defined but not used in any environment",
+                    feature_name
+                ))
+                .with_opt_span(span)
+                .with_help("Remove the feature from the manifest or add it to an environment"),
+            ));
         }
 
         // Get the name from the [package] section if it's missing from the workspace.
@@ -432,6 +458,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
 #[cfg(test)]
 mod test {
     use insta::assert_snapshot;
+    use itertools::Itertools;
 
     use super::*;
     use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
@@ -447,6 +474,21 @@ mod test {
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
+    }
+
+    /// A helper function that generates a snapshot of the warnings message when
+    /// parsing a manifest TOML. The error is returned.
+    #[must_use]
+    pub(crate) fn expect_parse_warnings(pixi_toml: &str) -> String {
+        match <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml).and_then(|manifest| {
+            manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
+        }) {
+            Ok((_, _, warnings)) => warnings
+                .into_iter()
+                .map(|warning| format_parse_error(pixi_toml, warning))
+                .join("\n\n"),
+            Err(err) => format_parse_error(pixi_toml, err),
+        }
     }
 
     #[test]
@@ -654,6 +696,22 @@ mod test {
         platforms = ['win-64']
 
         [target.osx.dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_unused_features() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ['osx-64']
+
+        [feature.foobar.dependencies]
+
+        [feature.generic.target.osx.dependencies]
         "#,
         ));
     }

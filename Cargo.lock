@@ -3901,6 +3901,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "console",
+ "dunce",
  "fancy_display",
  "fs-err",
  "glob",
