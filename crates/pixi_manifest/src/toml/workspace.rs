@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
-use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Value};
+use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
 use url::Url;
 
 use crate::{
@@ -31,7 +31,7 @@ pub struct TomlWorkspace {
     pub authors: Option<Vec<String>>,
     pub channels: IndexSet<PrioritizedChannel>,
     pub channel_priority: Option<ChannelPriority>,
-    pub platforms: PixiSpanned<IndexSet<Platform>>,
+    pub platforms: Spanned<IndexSet<Platform>>,
     pub license: Option<String>,
     pub license_file: Option<PathBuf>,
     pub readme: Option<PathBuf>,
@@ -87,7 +87,7 @@ impl TomlWorkspace {
             documentation: self.documentation.or(external.documentation),
             channels: self.channels,
             channel_priority: self.channel_priority,
-            platforms: self.platforms,
+            platforms: self.platforms.value,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
             preview: self.preview.into(),
@@ -118,7 +118,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .map(TomlIndexSet::into_inner)?;
         let channel_priority = th.optional("channel-priority");
         let platforms = th
-            .optional::<TomlWith<_, PixiSpanned<TomlIndexSet<TomlPlatform>>>>("platforms")
+            .optional::<TomlWith<_, Spanned<TomlIndexSet<TomlPlatform>>>>("platforms")
             .map(TomlWith::into_inner);
         let license = th.optional("license");
         let license_file = th

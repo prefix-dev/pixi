@@ -341,7 +341,7 @@ impl WorkspaceManifestMut<'_> {
     ) -> miette::Result<()> {
         // Get current and new platforms for the feature
         let current = match feature_name {
-            FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
+            FeatureName::Default => &mut self.workspace.workspace.platforms,
             FeatureName::Named(_) => self
                 .workspace
                 .get_or_insert_feature_mut(feature_name)
@@ -373,7 +373,7 @@ impl WorkspaceManifestMut<'_> {
     ) -> miette::Result<()> {
         // Get current platforms and platform to remove for the feature
         let current = match feature_name {
-            FeatureName::Default => self.workspace.workspace.platforms.get_mut(),
+            FeatureName::Default => &mut self.workspace.workspace.platforms,
             FeatureName::Named(_) => self.workspace.feature_mut(feature_name)?.platforms_mut(),
         };
         // Check if some platforms are not part of current
@@ -1797,7 +1797,7 @@ feature_target_dep = "*"
         let mut manifest = manifest.editable();
 
         assert_eq!(
-            manifest.workspace.workspace.platforms.value,
+            manifest.workspace.workspace.platforms,
             vec![Platform::Linux64, Platform::Win64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1808,7 +1808,7 @@ feature_target_dep = "*"
             .unwrap();
 
         assert_eq!(
-            manifest.workspace.workspace.platforms.value,
+            manifest.workspace.workspace.platforms,
             vec![Platform::Linux64, Platform::Win64, Platform::OsxArm64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1828,8 +1828,7 @@ feature_target_dep = "*"
                 .unwrap()
                 .platforms
                 .clone()
-                .unwrap()
-                .value,
+                .unwrap(),
             vec![Platform::LinuxAarch64, Platform::Osx64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1849,8 +1848,7 @@ feature_target_dep = "*"
                 .unwrap()
                 .platforms
                 .clone()
-                .unwrap()
-                .value,
+                .unwrap(),
             vec![Platform::LinuxAarch64, Platform::Osx64, Platform::Win64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1880,7 +1878,7 @@ feature_target_dep = "*"
         let mut manifest = manifest.editable();
 
         assert_eq!(
-            manifest.workspace.workspace.platforms.value,
+            manifest.workspace.workspace.platforms,
             vec![Platform::Linux64, Platform::Win64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1891,7 +1889,7 @@ feature_target_dep = "*"
             .unwrap();
 
         assert_eq!(
-            manifest.workspace.workspace.platforms.value,
+            manifest.workspace.workspace.platforms,
             vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
         );
 
@@ -1902,8 +1900,7 @@ feature_target_dep = "*"
                 .unwrap()
                 .platforms
                 .clone()
-                .unwrap()
-                .value,
+                .unwrap(),
             vec![Platform::Linux64, Platform::Win64, Platform::Osx64]
                 .into_iter()
                 .collect::<IndexSet<_>>()
@@ -1923,8 +1920,7 @@ feature_target_dep = "*"
                 .unwrap()
                 .platforms
                 .clone()
-                .unwrap()
-                .value,
+                .unwrap(),
             vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
         );
 

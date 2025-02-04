@@ -1,88 +1,20 @@
 use std::{
     collections::HashSet,
-    ops::Range,
     path::{Path, PathBuf},
 };
 
 use itertools::{Either, Itertools};
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report, WrapErr};
-use rattler_conda_types::Platform;
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
     pypi::pypi_options::NoBuild, Environment, Feature, FeatureName, SystemRequirements,
-    TargetSelector, WorkspaceManifest,
+    WorkspaceManifest,
 };
 
 impl WorkspaceManifest {
     /// Validate the project manifest.
     pub fn validate(&self, source: NamedSource<String>, root_folder: &Path) -> miette::Result<()> {
-        // Check if the targets are defined for existing platforms
-        for feature in self.features.values() {
-            let platforms = feature
-                .platforms
-                .as_ref()
-                .unwrap_or(&self.workspace.platforms);
-            for target_sel in feature.targets.user_defined_selectors() {
-                match target_sel {
-                    TargetSelector::Platform(p) => {
-                        if !platforms.as_ref().contains(p) {
-                            return Err(create_unsupported_platform_report(
-                                source,
-                                feature.targets.source_loc(target_sel).unwrap_or_default(),
-                                &[p],
-                                feature,
-                            ));
-                        }
-                    }
-                    TargetSelector::Linux => {
-                        if !platforms.as_ref().iter().any(|p| p.is_linux()) {
-                            return Err(create_unsupported_platform_report(
-                                source,
-                                feature.targets.source_loc(target_sel).unwrap_or_default(),
-                                &[
-                                    &Platform::Linux64,
-                                    &Platform::LinuxAarch64,
-                                    &Platform::LinuxPpc64le,
-                                ],
-                                feature,
-                            ));
-                        }
-                    }
-                    TargetSelector::MacOs => {
-                        if !platforms.as_ref().iter().any(|p| p.is_osx()) {
-                            return Err(create_unsupported_platform_report(
-                                source,
-                                feature.targets.source_loc(target_sel).unwrap_or_default(),
-                                &[&Platform::OsxArm64, &Platform::Osx64],
-                                feature,
-                            ));
-                        }
-                    }
-                    TargetSelector::Win => {
-                        if !platforms.as_ref().iter().any(|p| p.is_windows()) {
-                            return Err(create_unsupported_platform_report(
-                                source,
-                                feature.targets.source_loc(target_sel).unwrap_or_default(),
-                                &[&Platform::Win64, &Platform::WinArm64],
-                                feature,
-                            ));
-                        }
-                    }
-                    TargetSelector::Unix => {
-                        if !platforms.as_ref().iter().any(|p| p.is_unix()) {
-                            return Err(create_unsupported_platform_report(
-                                source,
-                                feature.targets.source_loc(target_sel).unwrap_or_default(),
-                                &[&Platform::Linux64],
-                                feature,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-
         // Check if all features are used in environments, warn if not.
         let mut features_used = HashSet::new();
         for env in self.environments.iter() {
@@ -249,40 +181,6 @@ impl WorkspaceManifest {
 
         Ok(())
     }
-}
-
-// Create an error report for using a platform that is not supported by the
-// project.
-fn create_unsupported_platform_report(
-    source: NamedSource<String>,
-    span: Range<usize>,
-    platform: &[&Platform],
-    feature: &Feature,
-) -> Report {
-    let platform = platform.iter().map(|p| p.to_string()).join(", ");
-
-    miette::miette!(
-        labels = vec![LabeledSpan::at(
-            span,
-            format!("'{}' is not a supported platform", platform)
-        )],
-        help = format!(
-            "Add any of '{platform}' to the `{}` array of the TOML manifest.",
-            if feature.platforms.is_some() {
-                format!(
-                    "feature.{}.platforms",
-                    feature
-                        .name
-                        .name()
-                        .expect("default feature never defines custom platforms")
-                )
-            } else {
-                String::from("project.platforms")
-            }
-        ),
-        "targeting a platform that this project does not support"
-    )
-    .with_source_code(source)
 }
 
 #[cfg(test)]

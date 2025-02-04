@@ -2,20 +2,23 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
+use rattler_conda_types::Platform;
 use toml_span::{
     de_helpers::{expected, TableHelper},
     value::ValueInner,
     DeserError, Value,
 };
 
+use crate::toml::PlatformSpan;
 use crate::{
     environment::EnvironmentIdx,
     error::FeatureNotEnabled,
     manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
-        environment::TomlEnvironmentList, task::TomlTask, ExternalPackageProperties,
-        ExternalWorkspaceProperties, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
+        create_unsupported_selector_error, environment::TomlEnvironmentList, task::TomlTask,
+        ExternalPackageProperties, ExternalWorkspaceProperties, TomlFeature, TomlPackage,
+        TomlTarget, TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
@@ -130,6 +133,23 @@ impl TomlManifest {
 
         let mut workspace_targets = IndexMap::new();
         for (selector, target) in self.target.map(|t| t.value).unwrap_or_default() {
+            // Verify that the target selector matches at least one of the platforms of the
+            // workspace.
+            let matching_platforms = Platform::all()
+                .filter(|p| selector.value.matches(*p))
+                .collect::<Vec<_>>();
+            if !matching_platforms
+                .iter()
+                .any(|p| workspace.value.platforms.value.contains(p))
+            {
+                return Err(create_unsupported_selector_error(
+                    PlatformSpan::Workspace(workspace.value.platforms.span),
+                    &selector,
+                    &matching_platforms,
+                )
+                .into());
+            }
+
             let WithWarnings {
                 value: workspace_target,
                 warnings: mut target_warnings,
@@ -177,7 +197,7 @@ impl TomlManifest {
                 let WithWarnings {
                     value: feature,
                     warnings: mut feature_warnings,
-                } = feature.into_feature(name.clone(), preview)?;
+                } = feature.into_feature(name.clone(), preview, &workspace.value)?;
                 warnings.append(&mut feature_warnings);
                 Ok((name, feature))
             })
@@ -588,6 +608,32 @@ mod test {
         backend = { name = "foobar", version = "*" }
 
         [target.osx-64.build-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_mismatching_target_selector() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = ['win-64']
+
+        [target.osx-64.dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_mismatching_multi_target_selector() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = ['win-64']
+
+        [target.osx.dependencies]
         "#,
         ));
     }

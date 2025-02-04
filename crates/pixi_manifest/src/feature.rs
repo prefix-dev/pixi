@@ -17,7 +17,6 @@ use crate::{
     consts,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
-    utils::PixiSpanned,
     workspace::ChannelPriority,
     PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
 };
@@ -138,7 +137,7 @@ pub struct Feature {
     ///
     /// This value is `None` if this feature does not specify any platforms and
     /// the default platforms from the project should be used.
-    pub platforms: Option<PixiSpanned<IndexSet<Platform>>>,
+    pub platforms: Option<IndexSet<Platform>>,
 
     /// Channels specific to this feature.
     ///
@@ -184,9 +183,7 @@ impl Feature {
     /// Returns a mutable reference to the platforms of the feature. Create them
     /// if needed
     pub fn platforms_mut(&mut self) -> &mut IndexSet<Platform> {
-        self.platforms
-            .get_or_insert_with(Default::default)
-            .get_mut()
+        self.platforms.get_or_insert_with(Default::default)
     }
 
     /// Returns a mutable reference to the channels of the feature. Create them

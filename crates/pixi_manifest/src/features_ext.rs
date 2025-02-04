@@ -95,8 +95,8 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         self.features()
             .map(|feature| {
                 match &feature.platforms {
-                    Some(platforms) => &platforms.value,
-                    None => &self.workspace_manifest().workspace.platforms.value,
+                    Some(platforms) => platforms,
+                    None => &self.workspace_manifest().workspace.platforms,
                 }
                 .iter()
                 .copied()

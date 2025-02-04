@@ -14,10 +14,10 @@ use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryS
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
+use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
 use pixi_consts::consts;
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
@@ -221,7 +221,8 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            // If we contain source packages from conda or PyPI we update the prefix by default
+            // If we contain source packages from conda or PyPI we update the prefix by
+            // default
             let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
                 env.conda_packages(Platform::current())
                     .is_some_and(|mut packages| {
@@ -1082,7 +1083,6 @@ impl<'p> UpdateContext<'p> {
 
     pub async fn update(mut self) -> miette::Result<LockFileDerivedData<'p>> {
         let project = self.project;
-        let current_platform = Platform::current();
 
         // Create a mapping that iterators over all outdated environments and their
         // platforms for both and pypi.
@@ -1211,9 +1211,7 @@ impl<'p> UpdateContext<'p> {
             // the current platform for this group.
             let records_future = self
                 .get_latest_group_repodata_records(&group, environment.best_platform())
-                .ok_or_else(|| {
-                    make_unsupported_pypi_platform_error(environment, current_platform)
-                })?;
+                .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
 
             // Spawn a task to instantiate the environment
             let environment_name = environment.name().clone();
@@ -1594,10 +1592,7 @@ impl<'p> UpdateContext<'p> {
 /// Constructs an error that indicates that the current platform cannot solve
 /// pypi dependencies because there is no python interpreter available for the
 /// current platform.
-fn make_unsupported_pypi_platform_error(
-    environment: &Environment<'_>,
-    current_platform: Platform,
-) -> miette::Report {
+fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette::Report {
     let grouped_environment = GroupedEnvironment::from(environment.clone());
 
     // Construct a diagnostic that explains that the current platform is not
@@ -1607,42 +1602,6 @@ fn make_unsupported_pypi_platform_error(
         GroupedEnvironment::Environment(_) => "environment"
     }));
 
-    let mut labels = Vec::new();
-
-    // Add a reference to the set of platforms that are supported by the project.
-    let project_platforms = &environment.workspace().workspace.value.workspace.platforms;
-    if let Some(span) = project_platforms.span.clone() {
-        labels.push(LabeledSpan::at(
-            span,
-            format!("even though the projects does include support for '{current_platform}'"),
-        ));
-    }
-
-    // Find all the features that are excluding the current platform.
-    let features_without_platform = grouped_environment.features().filter_map(|feature| {
-        let platforms = feature.platforms.as_ref()?;
-        if !platforms.value.contains(&current_platform) {
-            Some((feature, platforms))
-        } else {
-            None
-        }
-    });
-
-    for (feature, platforms) in features_without_platform {
-        let Some(span) = platforms.span.as_ref() else {
-            continue;
-        };
-
-        labels.push(LabeledSpan::at(
-            span.clone(),
-            format!(
-                "feature '{}' does not support '{current_platform}'",
-                feature.name
-            ),
-        ));
-    }
-
-    diag.labels = Some(labels);
     diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
 
     miette::Report::new(diag)
