@@ -1,15 +1,17 @@
 use std::{
     collections::{HashMap, HashSet},
+    ops::Range,
     path::Path,
 };
 
 use indexmap::IndexMap;
+use miette::LabeledSpan;
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::Platform;
 use toml_span::{
     de_helpers::{expected, TableHelper},
     value::ValueInner,
-    DeserError, Value,
+    DeserError, Spanned, Value,
 };
 
 use crate::{
@@ -199,7 +201,7 @@ impl TomlManifest {
         };
 
         // Construct the features including the default feature
-        let mut feature_name_to_span = HashMap::new();
+        let mut feature_name_to_span = IndexMap::new();
         let features: IndexMap<FeatureName, Feature> =
             IndexMap::from_iter([(FeatureName::Default, default_feature)]);
         let named_features = self
@@ -219,7 +221,10 @@ impl TomlManifest {
                 Ok((name.value, feature))
             })
             .collect::<Result<IndexMap<FeatureName, Feature>, TomlError>>()?;
-        let features = features.into_iter().chain(named_features).collect();
+        let features = features
+            .into_iter()
+            .chain(named_features)
+            .collect::<IndexMap<_, _>>();
 
         // Construct the environments including the default environment
         let mut environments = Environments::default();
@@ -241,12 +246,12 @@ impl TomlManifest {
         let mut features_used_by_environments = HashSet::new();
         for (name, env) in toml_environments {
             // Decompose the TOML
-            let (features, features_source_loc, solve_group, no_default_feature) = match env {
+            let (included_features, features_span, solve_group, no_default_feature) = match env {
                 TomlEnvironmentList::Map(env) => {
-                    let (features, features_span) = match env.features {
-                        Some(features) => (features.value, features.span),
-                        None => (Vec::new(), None),
-                    };
+                    let (features, features_span) = env.features.map_or_else(
+                        || (Vec::new(), None),
+                        |Spanned { value, span }| (value, Some(span)),
+                    );
                     (
                         features,
                         features_span,
@@ -254,17 +259,95 @@ impl TomlManifest {
                         env.no_default_feature,
                     )
                 }
-                TomlEnvironmentList::Seq(features) => (features, None, None, false),
+                TomlEnvironmentList::Seq(features) => {
+                    (features.value, Some(features.span), None, false)
+                }
             };
 
-            features_used_by_environments.extend(features.iter().cloned());
+            features_used_by_environments
+                .extend(included_features.iter().map(|span| span.value.clone()));
+
+            // Verify that the features of the environment actually exist and that they are
+            // not defined twice.
+            let mut features_seen_where = HashMap::new();
+            let mut used_features = Vec::with_capacity(included_features.len());
+            for Spanned {
+                value: feature_name,
+                span,
+            } in &included_features
+            {
+                let Some(feature) = features.get(feature_name.as_str()) else {
+                    return Err(TomlError::from(
+                        GenericError::new(format!(
+                            "The feature '{feature_name}' is not defined in the manifest",
+                        ))
+                        .with_span((*span).into())
+                        .with_help("Add the feature to the manifest"),
+                    ));
+                };
+
+                if let Some(previous_span) = features_seen_where.insert(feature_name, *span) {
+                    return Err(TomlError::from(
+                        GenericError::new(format!("The feature '{}' is included more than once.", &feature.name))
+                            .with_span((*span).into())
+                            .with_span_label("the feature is included here")
+                            .with_help("Since the order of the features matters, a duplicate feature is ambiguous")
+                            .with_label(LabeledSpan::new_with_span(Some(String::from("the feature was previously included here")),
+                                                                   Range::<usize>::from(previous_span)))));
+                }
+
+                used_features.push(feature);
+            }
+
+            // Choose whether to include the default
+            if no_default_feature {
+                used_features.push(
+                    features
+                        .get(&FeatureName::Default)
+                        .expect("default feature must exist"),
+                );
+            };
+
+            // Ensure that the system requirements of all the features are compatible
+            if let Err(e) = used_features
+                .iter()
+                .map(|feature| &feature.system_requirements)
+                .try_fold(SystemRequirements::default(), |acc, req| acc.union(req))
+            {
+                return Err(TomlError::from(
+                    GenericError::new(e.to_string())
+                        .with_opt_span(features_span.map(Into::into))
+                        .with_span_label(
+                            "while resolving system requirements of features defined here",
+                        ),
+                ));
+            }
+
+            // Check if there are no conflicts in pypi options between features
+            if let Err(err) = used_features
+                .iter()
+                .filter_map(|feature| {
+                    if feature.pypi_options().is_none() {
+                        // Use the project default features
+                        workspace.value.pypi_options.as_ref()
+                    } else {
+                        feature.pypi_options()
+                    }
+                })
+                .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
+            {
+                return Err(TomlError::from(
+                    GenericError::new(err.to_string())
+                        .with_opt_span(features_span.map(Into::into))
+                        .with_span_label("while resolving pypi options of features defined here"),
+                ));
+            }
 
             let environment_idx = EnvironmentIdx(environments.environments.len());
             environments.by_name.insert(name.clone(), environment_idx);
             environments.environments.push(Some(Environment {
                 name,
-                features,
-                features_source_loc,
+                features: included_features.into_iter().map(Spanned::take).collect(),
                 solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
                 no_default_feature,
             }));
@@ -712,6 +795,96 @@ mod test {
         [feature.foobar.dependencies]
 
         [feature.generic.target.osx.dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_unknown_feature() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [environments]
+        foobar = ["unknown"]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_unknown_feature2() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [environments]
+        foobar = { features = ["unknown"] }
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_duplicate_feature() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.foobar.dependencies]
+        [feature.duplicate.dependencies]
+
+        [environments]
+        foobar = ["duplicate", "foobar", "duplicate"]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_conflicting_system_requirements() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.foo.system-requirements]
+        archspec = "foo"
+
+        [feature.bar.system-requirements]
+        archspec = "bar"
+
+        [environments]
+        foobar = ["foo", "bar"]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_conflicting_pypi_options() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.foo.pypi-options]
+        index-url = "https://google.com"
+
+        [feature.bar.pypi-options]
+        index-url = "https://prefix.dev"
+
+        [environments]
+        foobar = ["foo", "bar"]
         "#,
         ));
     }

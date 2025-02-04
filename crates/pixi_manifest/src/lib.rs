@@ -22,7 +22,6 @@ mod target;
 pub mod task;
 pub mod toml;
 pub mod utils;
-mod validation;
 mod warning;
 mod workspace;
 

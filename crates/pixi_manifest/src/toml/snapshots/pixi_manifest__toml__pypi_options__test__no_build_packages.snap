@@ -11,7 +11,9 @@ PypiOptions {
     no_build: Some(
         Packages(
             {
-                "package1",
+                PackageName(
+                    "package1",
+                ),
             },
         ),
     ),

@@ -141,10 +141,6 @@ pub struct Environment {
     /// that make up the environment.
     pub features: Vec<String>,
 
-    /// The optional location of where the features of the environment are
-    /// defined in the manifest toml.
-    pub features_source_loc: Option<std::ops::Range<usize>>,
-
     /// An optional solver-group. Multiple environments can share the same
     /// solve-group. All the dependencies of the environment that share the
     /// same solve-group will be solved together.

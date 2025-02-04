@@ -289,7 +289,6 @@ impl WorkspaceManifestMut<'_> {
         let environment_idx = self.workspace.environments.add(Environment {
             name: EnvironmentName::Named(name),
             features: features.unwrap_or_default(),
-            features_source_loc: None,
             solve_group: None,
             no_default_feature,
         });
