@@ -1,6 +1,6 @@
-use super::utils::IoConcurrencyLimit;
 use crate::build::BuildContext;
 use crate::environment::{self, PythonStatus};
+use crate::lock_file::IoConcurrencyLimit;
 use crate::prefix::Prefix;
 use crate::project::grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
 use crate::project::HasProjectRef;
@@ -10,8 +10,6 @@ use pixi_manifest::FeaturesExt;
 use pixi_record::PixiRecord;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::Platform;
-use std::sync::Arc;
-use tokio::sync::Semaphore;
 
 /// A struct that contains the result of updating a conda prefix.
 pub struct CondaPrefixUpdated {
@@ -61,18 +59,13 @@ impl<'a> CondaPrefixUpdater<'a> {
             self.group.name().fancy_display()
         );
 
-        // Get the required group names
-        let group_name = self.group.name().clone();
-        let prefix = self.group.prefix();
-        let client = self.group.project().authenticated_client().clone();
-
         let channels = self
             .group
             .channel_urls(&self.group.project().channel_config())
             .into_diagnostic()?;
 
         // Spawn a task to determine the currently installed packages.
-        let prefix_clone = prefix.clone();
+        let prefix_clone = self.group.prefix().clone();
         let installed_packages_future =
             tokio::task::spawn_blocking(move || prefix_clone.find_installed_packages())
                 .unwrap_or_else(|e| match e.try_into_panic() {
@@ -83,23 +76,23 @@ impl<'a> CondaPrefixUpdater<'a> {
         // Wait until the conda records are available and until the installed packages
         // for this prefix are available.
         let installed_packages = installed_packages_future.await?;
-        let build_virtual_packages = self.group.virtual_packages(self.platform);
 
-        let concurrency_limit: Arc<Semaphore> = self.io_concurrency_limit.clone().into();
-        let package_cache = self.package_cache.clone();
-        let build_context = self.build_context.clone();
         let has_existing_packages = !installed_packages.is_empty();
+        let group_name = self.group.name().clone();
+        let client = self.group.project().authenticated_client().clone();
+        let prefix = self.group.prefix();
+
         let python_status = environment::update_prefix_conda(
             &prefix,
-            package_cache,
+            self.package_cache.clone(),
             client,
             installed_packages,
             pixi_records,
-            build_virtual_packages,
+            self.group.virtual_packages(self.platform),
             channels,
             self.platform,
             &format!(
-                "{} python environment to solve pypi packages for '{}'",
+                "{} conda prefix '{}'",
                 if has_existing_packages {
                     "updating"
                 } else {
@@ -108,8 +101,8 @@ impl<'a> CondaPrefixUpdater<'a> {
                 group_name.fancy_display()
             ),
             "  ",
-            concurrency_limit,
-            build_context,
+            self.io_concurrency_limit.clone().into(),
+            self.build_context.clone(),
         )
         .await?;
 

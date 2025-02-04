@@ -51,15 +51,19 @@ use uv_types::EmptyInstalledPackages;
 
 use crate::{
     lock_file::{
-        build_dispatch::{LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams},
-        conda_prefix_updater::CondaPrefixUpdated,
         records_by_name::HasNameVersion,
-        resolve::resolver_provider::CondaResolverProvider,
+        resolve::{
+            build_dispatch::{
+                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
+            },
+            resolver_provider::CondaResolverProvider,
+        },
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
         PypiRecord, UvResolutionContext,
     },
     project::{Environment, EnvironmentVars},
     uv_reporter::{UvReporter, UvReporterOptions},
+    CondaPrefixUpdated,
 };
 
 #[derive(Debug, thiserror::Error)]

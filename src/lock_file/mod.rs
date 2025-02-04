@@ -1,5 +1,3 @@
-mod build_dispatch;
-mod conda_prefix_updater;
 mod outdated;
 mod package_identifier;
 mod records_by_name;
@@ -9,8 +7,8 @@ mod satisfiability;
 mod update;
 mod utils;
 
+pub use crate::CondaPrefixUpdater;
 use crate::Project;
-pub use conda_prefix_updater::CondaPrefixUpdater;
 use miette::{IntoDiagnostic, WrapErr};
 pub(crate) use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
@@ -25,7 +23,7 @@ pub use satisfiability::{
 };
 pub(crate) use update::{LockFileDerivedData, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
-pub(crate) use utils::filter_lock_file;
+pub(crate) use utils::{filter_lock_file, IoConcurrencyLimit};
 
 /// A list of conda packages that are locked for a specific platform.
 pub type LockedCondaPackages = Vec<PixiRecord>;

@@ -41,8 +41,8 @@ use tracing::Instrument;
 use uv_normalize::ExtraName;
 
 use super::{
-    conda_prefix_updater::CondaPrefixUpdated, outdated::OutdatedEnvironments,
-    utils::IoConcurrencyLimit, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit, PixiRecordsByName,
+    PypiRecordsByName, UvResolutionContext,
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
@@ -65,7 +65,7 @@ use crate::{
         Environment, HasProjectRef,
     },
     repodata::Repodata,
-    Project,
+    CondaPrefixUpdated, Project,
 };
 
 impl Project {

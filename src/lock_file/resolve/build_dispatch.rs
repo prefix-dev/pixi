@@ -45,7 +45,7 @@ use crate::{
     project::{get_activated_environment_variables, Environment, EnvironmentVars},
 };
 
-use super::{conda_prefix_updater::CondaPrefixUpdated, CondaPrefixUpdater};
+use crate::{CondaPrefixUpdated, CondaPrefixUpdater};
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
 pub struct UvBuildDispatchParams<'a> {
