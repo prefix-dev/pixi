@@ -14,4 +14,4 @@ expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = 
    ·                    ╰── target selector specified here
  7 │
    ╰────
-  help: Add one of 'osx-64' to the supported platforms
+  help: Add osx-64 to the supported platforms

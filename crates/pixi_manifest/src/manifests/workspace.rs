@@ -49,7 +49,7 @@ impl WorkspaceManifest {
     ) -> Result<Self, WithSourceCode<TomlError, S>> {
         TomlManifest::from_toml_str(source.as_ref())
             .and_then(|manifest| {
-                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default())
+                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
             })
             .map(|manifests| manifests.0)
             .map_err(|e| WithSourceCode { source, error: e })
@@ -791,7 +791,7 @@ mod tests {
 name = "foo"
 version = "0.1.0"
 channels = []
-platforms = []
+platforms = ['win-64', 'osx-64', 'linux-64']
 "#;
 
     const PYPROJECT_BOILERPLATE: &str = r#"
@@ -852,7 +852,7 @@ start = "python -m flask run --port=5050"
 
         let manifest = PyProjectManifest::from_toml_str(source)
             .unwrap_or_else(|error| panic!("{}", format_parse_error(source, error)))
-            .into_workspace_manifest()
+            .into_workspace_manifest(None)
             .unwrap_or_else(|error| panic!("{}", format_parse_error(source, error)))
             .0;
 

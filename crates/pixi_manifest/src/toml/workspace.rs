@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
@@ -34,8 +37,8 @@ pub struct TomlWorkspace {
     pub channel_priority: Option<ChannelPriority>,
     pub platforms: Spanned<IndexSet<Platform>>,
     pub license: Option<Spanned<String>>,
-    pub license_file: Option<PathBuf>,
-    pub readme: Option<PathBuf>,
+    pub license_file: Option<Spanned<PathBuf>>,
+    pub readme: Option<Spanned<PathBuf>>,
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
@@ -67,9 +70,15 @@ pub struct ExternalWorkspaceProperties {
 }
 
 impl TomlWorkspace {
+    /// Converts the TOML representation of the workspace section to the actual
+    /// workspace.
+    ///
+    /// The `root_directory` is used to resolve relative paths, if it is `None`,
+    /// paths are not checked.
     pub fn into_workspace(
         self,
         external: ExternalWorkspaceProperties,
+        root_directory: Option<&Path>,
     ) -> Result<WithWarnings<Workspace>, TomlError> {
         if let Some(Spanned {
             value: license,
@@ -85,6 +94,27 @@ impl TomlWorkspace {
                 );
             }
         }
+
+        let check_file_existence = |path: &Option<Spanned<PathBuf>>| {
+            if let (Some(root_directory), Some(Spanned { span, value: path })) =
+                (root_directory, path)
+            {
+                let full_path = root_directory.join(path);
+                if !full_path.is_file() {
+                    return Err(TomlError::from(
+                        GenericError::new(format!(
+                            "'{}' does not exist",
+                            dunce::simplified(&full_path).display()
+                        ))
+                        .with_span((*span).into()),
+                    ));
+                }
+            }
+            Ok(())
+        };
+
+        check_file_existence(&self.license_file)?;
+        check_file_existence(&self.readme)?;
 
         let WithWarnings {
             warnings: preview_warnings,
@@ -103,8 +133,11 @@ impl TomlWorkspace {
             description: self.description.or(external.description),
             authors: self.authors.or(external.authors),
             license: self.license.map(Spanned::take).or(external.license),
-            license_file: self.license_file.or(external.license_file),
-            readme: self.readme.or(external.readme),
+            license_file: self
+                .license_file
+                .map(Spanned::take)
+                .or(external.license_file),
+            readme: self.readme.map(Spanned::take).or(external.readme),
             homepage: self.homepage.or(external.homepage),
             repository: self.repository.or(external.repository),
             documentation: self.documentation.or(external.documentation),
@@ -146,11 +179,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .map(TomlWith::into_inner);
         let license = th.optional("license");
         let license_file = th
-            .optional::<TomlFromStr<_>>("license-file")
-            .map(TomlFromStr::into_inner);
+            .optional::<TomlWith<_, Spanned<TomlFromStr<_>>>>("license-file")
+            .map(TomlWith::into_inner);
         let readme = th
-            .optional::<TomlFromStr<_>>("readme")
-            .map(TomlFromStr::into_inner);
+            .optional::<TomlWith<_, Spanned<TomlFromStr<_>>>>("readme")
+            .map(TomlWith::into_inner);
         let homepage = th
             .optional::<TomlFromStr<_>>("homepage")
             .map(TomlFromStr::into_inner);
@@ -214,9 +247,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
 
 #[cfg(test)]
 mod test {
+    use std::path::Path;
+
     use insta::assert_snapshot;
 
-    use crate::utils::test_utils::expect_parse_failure;
+    use crate::{
+        toml::{ExternalWorkspaceProperties, FromTomlStr, TomlWorkspace},
+        utils::test_utils::{expect_parse_failure, format_parse_error},
+    };
 
     #[test]
     fn test_invalid_license() {
@@ -228,5 +266,49 @@ mod test {
         license = "MIT OR FOOBAR"
         "#,
         ));
+    }
+
+    #[test]
+    fn test_invalid_license_file() {
+        let input = r#"
+        channels = []
+        platforms = []
+        license-file = "LICENSE.txt"
+        "#;
+        let path = Path::new("");
+        let parse_error = TomlWorkspace::from_toml_str(input)
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error), @r###"
+         × 'LICENSE.txt' does not exist
+          ╭─[pixi.toml:4:25]
+        3 │         platforms = []
+        4 │         license-file = "LICENSE.txt"
+          ·                         ───────────
+        5 │
+          ╰────
+        "###);
+    }
+
+    #[test]
+    fn test_invalid_readme() {
+        let input = r#"
+        channels = []
+        platforms = []
+        readme = "README.md"
+        "#;
+        let path = Path::new("");
+        let parse_error = TomlWorkspace::from_toml_str(input)
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error), @r###"
+         × 'README.md' does not exist
+          ╭─[pixi.toml:4:19]
+        3 │         platforms = []
+        4 │         readme = "README.md"
+          ·                   ─────────
+        5 │
+          ╰────
+        "###);
     }
 }

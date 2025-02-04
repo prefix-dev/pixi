@@ -1,7 +1,4 @@
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashSet, path::Path};
 
 use itertools::Either;
 use miette::{IntoDiagnostic, LabeledSpan, NamedSource, Report};
@@ -14,7 +11,7 @@ use crate::{
 
 impl WorkspaceManifest {
     /// Validate the project manifest.
-    pub fn validate(&self, source: NamedSource<String>, root_folder: &Path) -> miette::Result<()> {
+    pub fn validate(&self, source: NamedSource<String>, _root_folder: &Path) -> miette::Result<()> {
         // Check if all features are used in environments, warn if not.
         let mut features_used = HashSet::new();
         for env in self.environments.iter() {
@@ -30,22 +27,6 @@ impl WorkspaceManifest {
                 );
             }
         }
-
-        let check_file_existence = |x: &Option<PathBuf>| {
-            if let Some(path) = x {
-                let full_path = root_folder.join(path);
-                if !full_path.exists() {
-                    return Err(miette::miette!(
-                        "the file '{}' does not exist",
-                        full_path.display()
-                    ));
-                }
-            }
-            Ok(())
-        };
-
-        check_file_existence(&self.workspace.license_file)?;
-        check_file_existence(&self.workspace.readme)?;
 
         // Validate the environments defined in the project
         for env in self.environments.iter() {

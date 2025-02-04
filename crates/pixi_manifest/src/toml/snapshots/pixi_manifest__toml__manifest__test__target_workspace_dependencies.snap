@@ -1,10 +1,10 @@
 ---
 source: crates/pixi_manifest/src/toml/manifest.rs
-expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n        preview = [\"pixi-build\"]\n\n        [package]\n\n        [package.build]\n        backend = { name = \"foobar\", version = \"*\" }\n\n        [target.osx-64.build-dependencies]\n        \"#,)"
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = ['osx-64']\n        preview = [\"pixi-build\"]\n\n        [package]\n\n        [package.build]\n        backend = { name = \"foobar\", version = \"*\" }\n\n        [target.osx-64.build-dependencies]\n        \"#,)"
 ---
   × When `pixi-build` is enabled, build-dependencies can only be specified for a package.
    ╭─[pixi.toml:5:21]
- 4 │         platforms = []
+ 4 │         platforms = ['osx-64']
  5 │         preview = ["pixi-build"]
    ·                     ─────┬────
    ·                          ╰── pixi-build is enabled here

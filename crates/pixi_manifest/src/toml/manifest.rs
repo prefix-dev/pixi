@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use indexmap::IndexMap;
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
@@ -68,10 +68,14 @@ impl TomlManifest {
     ///
     /// If the manifest also contains a package section that will be converted
     /// as well.
+    ///
+    /// The `root_directory` is used to resolve relative paths, if it is `None`,
+    /// paths are not checked.
     pub fn into_package_manifest(
         self,
         external: ExternalPackageProperties,
         workspace: &WorkspaceManifest,
+        root_directory: Option<&Path>,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
         let Some(PixiSpanned {
             value: package,
@@ -97,17 +101,24 @@ impl TomlManifest {
             .into());
         }
 
-        let package = package.into_manifest(external, workspace)?;
-        Ok((package, Vec::new()))
+        let WithWarnings {
+            value: package,
+            warnings,
+        } = package.into_manifest(external, workspace.preview(), root_directory)?;
+        Ok((package, warnings))
     }
 
     /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
     /// If the manifest also contains a package section that will be converted
     /// as well.
+    ///
+    /// The `root_directory` is used to resolve relative paths, if it is `None`,
+    /// paths are not checked.
     pub fn into_workspace_manifest(
         self,
         external: ExternalWorkspaceProperties,
+        root_directory: Option<&Path>,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let workspace = self
             .workspace
@@ -259,12 +270,13 @@ impl TomlManifest {
         let WithWarnings {
             warnings: mut workspace_warnings,
             value: workspace,
-        } = workspace
-            .value
-            .into_workspace(ExternalWorkspaceProperties {
+        } = workspace.value.into_workspace(
+            ExternalWorkspaceProperties {
                 name: project_name.or(external.name),
                 ..external
-            })?;
+            },
+            root_directory,
+        )?;
         warnings.append(&mut workspace_warnings);
 
         let workspace_manifest = WorkspaceManifest {
@@ -292,7 +304,10 @@ impl TomlManifest {
             }
 
             let workspace = &workspace_manifest.workspace;
-            let package = package.into_manifest(
+            let WithWarnings {
+                value: package_manifest,
+                warnings: mut package_warnings,
+            } = package.into_manifest(
                 ExternalPackageProperties {
                     name: Some(workspace.name.clone()),
                     version: workspace.version.clone(),
@@ -305,10 +320,12 @@ impl TomlManifest {
                     repository: workspace.repository.clone(),
                     documentation: workspace.documentation.clone(),
                 },
-                &workspace_manifest,
+                &workspace_manifest.workspace.preview,
+                root_directory,
             )?;
+            warnings.append(&mut package_warnings);
 
-            Some(package)
+            Some(package_manifest)
         } else {
             None
         };
@@ -425,7 +442,7 @@ mod test {
     pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml)
             .and_then(|manifest| {
-                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default())
+                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
             })
             .expect_err("parsing should fail");
 
@@ -602,7 +619,7 @@ mod test {
             r#"
         [workspace]
         channels = []
-        platforms = []
+        platforms = ['osx-64']
         preview = ["pixi-build"]
 
         [package]

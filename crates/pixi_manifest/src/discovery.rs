@@ -104,15 +104,19 @@ impl Manifests {
         };
 
         // Parse the manifest as a workspace based on the type of manifest.
+        let manifest_dir = provenance.path.parent().expect("a file must have a parent");
         let parsed_manifests = match provenance.kind {
             ManifestKind::Pixi => TomlManifest::deserialize(&mut toml)
                 .map_err(TomlError::from)
                 .and_then(|manifest| {
-                    manifest.into_workspace_manifest(ExternalWorkspaceProperties::default())
+                    manifest.into_workspace_manifest(
+                        ExternalWorkspaceProperties::default(),
+                        Some(manifest_dir),
+                    )
                 }),
             ManifestKind::Pyproject => PyProjectManifest::deserialize(&mut toml)
                 .map_err(TomlError::from)
-                .and_then(|manifest| manifest.into_workspace_manifest()),
+                .and_then(|manifest| manifest.into_workspace_manifest(Some(manifest_dir))),
         };
 
         // Handle any errors that occurred during parsing.
@@ -319,6 +323,7 @@ impl WorkspaceDiscoverer {
             };
 
             // Parse the workspace manifest.
+            let manifest_dir = provenance.path.parent().expect("a file must have a parent");
             let parsed_manifest = match provenance.kind {
                 ManifestKind::Pixi => {
                     if closest_package_manifest.is_some() && toml.pointer("/workspace").is_none() {
@@ -341,7 +346,10 @@ impl WorkspaceDiscoverer {
 
                     if manifest.has_workspace() {
                         // Parse the manifest as a workspace manifest if it contains a workspace
-                        manifest.into_workspace_manifest(ExternalWorkspaceProperties::default())
+                        manifest.into_workspace_manifest(
+                            ExternalWorkspaceProperties::default(),
+                            Some(manifest_dir),
+                        )
                     } else {
                         if self.discover_package {
                             // Otherwise store the manifest for later to parse as the closest
@@ -378,7 +386,7 @@ impl WorkspaceDiscoverer {
                     if manifest.has_pixi_workspace() {
                         // Parse the manifest as a workspace manifest if it
                         // contains a workspace
-                        manifest.into_workspace_manifest()
+                        manifest.into_workspace_manifest(Some(manifest_dir))
                     } else {
                         if self.discover_package {
                             // Otherwise store the manifest for later to parse as the closest
@@ -421,13 +429,15 @@ impl WorkspaceDiscoverer {
                 Some((package_manifest, source, provenance)) => {
                     // Convert a found manifest into a package manifest using the workspace
                     // manifest.
+                    let manifest_dir = provenance.path.parent().expect("a file must have a parent");
                     let package_manifest = match package_manifest {
                         EitherManifest::Pixi(manifest) => manifest.into_package_manifest(
                             ExternalPackageProperties::default(),
                             &workspace_manifest,
+                            Some(manifest_dir),
                         ),
                         EitherManifest::Pyproject(manifest) => {
-                            manifest.into_package_manifest(&workspace_manifest)
+                            manifest.into_package_manifest(&workspace_manifest, Some(manifest_dir))
                         }
                     };
 

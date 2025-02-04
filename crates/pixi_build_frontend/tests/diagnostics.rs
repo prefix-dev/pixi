@@ -152,7 +152,7 @@ async fn test_invalid_backend() {
 
     let (workspace, package, _) = TomlManifest::from_toml_str(toml)
         .unwrap()
-        .into_workspace_manifest(ExternalWorkspaceProperties::default())
+        .into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
         .unwrap();
     let err = pixi_build_frontend::pixi_protocol::ProtocolBuilder::new(
         source_dir.path().to_path_buf(),

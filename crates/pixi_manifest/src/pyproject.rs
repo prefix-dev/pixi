@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use indexmap::IndexMap;
 use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
@@ -228,6 +232,7 @@ impl PyProjectManifest {
     pub fn into_package_manifest(
         self,
         workspace: &WorkspaceManifest,
+        root_directory: Option<&Path>,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
         // Load the data nested under '[tool.pixi]' as pixi manifest
         let Some(Tool {
@@ -273,12 +278,14 @@ impl PyProjectManifest {
                 documentation: None,
             },
             workspace,
+            root_directory,
         )
     }
 
     #[allow(clippy::result_large_err)]
     pub fn into_workspace_manifest(
         self,
+        root_directory: Option<&Path>,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let PyProjectToml {
             project,
@@ -307,8 +314,8 @@ impl PyProjectManifest {
         // different than we expect, so the conversion is not straightforward we
         // could change these types or we can convert. Let's decide when we make it.
         // etc.
-        let (mut workspace_manifest, package_manifest, warnings) =
-            pixi.into_workspace_manifest(ExternalWorkspaceProperties {
+        let (mut workspace_manifest, package_manifest, warnings) = pixi.into_workspace_manifest(
+            ExternalWorkspaceProperties {
                 name: project.name.map(Spanned::take),
                 version: project
                     .version
@@ -325,7 +332,9 @@ impl PyProjectManifest {
                 homepage: None,
                 repository: None,
                 documentation: None,
-            })?;
+            },
+            root_directory,
+        )?;
 
         // Add python as dependency based on the `project.requires_python` property
         let python_spec = project.requires_python;
