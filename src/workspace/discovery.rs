@@ -20,10 +20,15 @@ pub enum DiscoveryStart {
     CurrentDir,
 
     /// Start the search from the given directory.
+    ///
+    /// If a manifest is not found at the specified location the search will
+    /// recursively continue to the parent.
     SearchRoot(PathBuf),
 
     /// Use the manifest file at the given path. Only search for a workspace if
     /// the specified manifest is not a workspace.
+    ///
+    /// If no manifest is found at the given path the search will abort.
     ExplicitManifest(PathBuf),
 }
 

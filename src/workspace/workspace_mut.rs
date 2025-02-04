@@ -1,40 +1,70 @@
-use crate::cli::cli_config::PrefixUpdateConfig;
-use crate::diff::LockFileDiff;
-use crate::environment::LockFileUsage;
-use crate::lock_file::{LockFileDerivedData, UpdateContext, UpdateMode};
-use crate::workspace::grouped_environment::GroupedEnvironment;
-use crate::workspace::{MatchSpecs, PypiDeps, SourceSpecs, UpdateDeps, NON_SEMVER_PACKAGES};
-use crate::{load_lock_file, Workspace};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
+
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
-use pep508_rs::Requirement;
-use pep508_rs::VersionOrUrl::VersionSpecifier;
+use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_config::PinningStrategy;
-use pixi_manifest::pypi::PyPiPackageName;
-use pixi_manifest::toml::TomlDocument;
-use pixi_manifest::utils::WithSourceCode;
 use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
-    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
-    WorkspaceManifestMut,
+    pypi::PyPiPackageName, toml::TomlDocument, utils::WithSourceCode, DependencyOverwriteBehavior,
+    FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError, ManifestDocument, ManifestKind,
+    PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest, WorkspaceManifestMut,
 };
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::LockFile;
-use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::sync::Arc;
 use toml_edit::DocumentMut;
+
+use crate::{
+    cli::cli_config::PrefixUpdateConfig,
+    diff::LockFileDiff,
+    environment::LockFileUsage,
+    load_lock_file,
+    lock_file::{LockFileDerivedData, UpdateContext, UpdateMode},
+    workspace::{
+        grouped_environment::GroupedEnvironment, MatchSpecs, PypiDeps, SourceSpecs, UpdateDeps,
+        NON_SEMVER_PACKAGES,
+    },
+    Workspace,
+};
 
 struct OriginalContent {
     manifest: WorkspaceManifest,
     source: String,
 }
 
+/// This struct represents a safe mutable representation of a [`Workspace`].
+///
+/// It offers methods to mutate the in-memory [`Workspace`] together with the
+/// TOML representation of the manifest files it wraps.
+///
+/// A [`Workspace`] does not contain the original source code from which it is
+/// derived. It only contains references to the files on disk. This struct,
+/// however, parses the original source code into a TOMl representation which
+/// can then be modified.
+///
+/// You can turn a non-mutable workspace into a [`WorkspaceMut`] by calling
+/// [`Workspace::modify`]. This function will consume the original workspace and
+/// return a mutable workspace.
+///
+/// Any changes made to this struct are *not* persisted until the
+/// [`WorkspaceMut::save`] method is called. If the changes should be reverted
+/// to the original state (in case of an error for instance) the
+/// [`WorkspaceMut::revert`] method can be used. If the struct is dropped
+/// without calling either [`WorkspaceMut::save`] or [`WorkspaceMut::revert`]
+/// the changes are also reverted.
 pub struct WorkspaceMut {
+    // This is an option to indicate whether this instance has been consumed. Both `save` and
+    // `revert` return the original workspace from which this instance was created and return this
+    // field. However, the drop function still needs to be run afterward which cannot happen if we
+    // already consumed this field. To facilitate this, we use an option from which the `Workspace`
+    // is "taken" when consumed while keeping this instance in a valid state.
     workspace: Option<Workspace>,
 
     // The original manifest and string content of the manifest on disk. This
@@ -50,6 +80,10 @@ pub struct WorkspaceMut {
 }
 
 impl WorkspaceMut {
+    /// Constructs a new [`WorkspaceMut`] by lightly parsing the files from
+    /// which the workspace was created.
+    ///
+    /// Prefer to use [`Workspace::modify`] over this function.
     pub(super) fn new(workspace: Workspace) -> Result<Self, LoadManifestsError> {
         // Read the contents of the file
         let contents = workspace.workspace.provenance.read()?.into_inner();
@@ -121,10 +155,13 @@ impl WorkspaceMut {
         })
     }
 
+    /// Returns the kind of manifest this workspace is derived from.
     fn kind(&self) -> ManifestKind {
         self.workspace_manifest_document.kind()
     }
 
+    /// Returns a [`WorkspaceManifestMut`] which implements methods to modify a
+    /// workspace manifest both in memory and on-disk.
     #[must_use]
     pub fn manifest(&mut self) -> WorkspaceManifestMut<'_> {
         WorkspaceManifestMut {
@@ -138,14 +175,24 @@ impl WorkspaceMut {
         }
     }
 
+    /// Returns a reference to the in-memory representation of the workspace.
+    ///
+    /// Any previous changes made to the workspace are reflected in the returned
+    /// value.
     pub fn workspace(&self) -> &Workspace {
         self.workspace.as_ref().expect("workspace is not available")
     }
 
+    /// Returns a reference to the underlying workspace manifest document.
     pub fn document(&self) -> &ManifestDocument {
         &self.workspace_manifest_document
     }
 
+    /// An internal method to save the changes to the workspace manifest to disk
+    /// without consuming the instance.
+    ///
+    /// This is useful if an operation needs to save the changes but still needs
+    /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
         let new_contents = self.workspace_manifest_document.to_string();
         fs_err::tokio::write(&self.workspace().workspace.provenance.path, new_contents).await?;
@@ -153,11 +200,15 @@ impl WorkspaceMut {
         Ok(())
     }
 
+    /// Save the changes to the workspace manifest to disk and return the
+    /// modified [`Workspace`].
     pub async fn save(mut self) -> Result<Workspace, std::io::Error> {
         self.save_inner().await?;
         Ok(self.workspace.take().expect("workspace is not available"))
     }
 
+    /// Revert the changes made to the workspace manifest and returns the
+    /// unmodified [`Workspace`].
     pub async fn revert(mut self) -> Result<Workspace, std::io::Error> {
         let mut workspace = self.workspace.take().expect("workspace is not available");
         if let Some(original) = self.original.take() {
@@ -168,7 +219,7 @@ impl WorkspaceMut {
         Ok(workspace)
     }
 
-    // Update the manifest with the given package specs, and upgrade the
+    /// Update the manifest with the given package specs, and upgrade the
     /// packages if possible
     ///
     /// 1. Modify the manifest with the given package specs, if no version is

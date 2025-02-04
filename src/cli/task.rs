@@ -427,23 +427,6 @@ async fn remove_tasks(mut workspace: WorkspaceMut, args: RemoveArgs) -> miette::
             continue;
         }
 
-        // Check if task has dependencies
-        // TODO: Make this properly work by inspecting which actual tasks depend on the
-        // task  we just removed taking into account environments and
-        // features. let depends_on =
-        // project.task_names_depending_on(name); if !depends_on.
-        // is_empty() && !args.names.contains(name) {     eprintln!(
-        //         "{}: {}",
-        //         console::style("Warning, the following task/s depend on this task")
-        //             .yellow(),
-        //         console::style(depends_on.iter().to_owned().join(", ")).bold()
-        //     );
-        //     eprintln!(
-        //         "{}",
-        //         console::style("Be sure to modify these after the
-        // removal\n").yellow()     );
-        // }
-
         // Safe to remove
         to_remove.push((name, args.platform));
     }

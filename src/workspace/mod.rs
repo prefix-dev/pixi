@@ -18,8 +18,6 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-pub use workspace_mut::WorkspaceMut;
-
 use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
@@ -45,6 +43,7 @@ use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
 use url::{ParseError, Url};
+pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::{
@@ -113,10 +112,14 @@ const NON_SEMVER_PACKAGES: [&str; 11] = [
     "python", "rust", "julia", "gcc", "gxx", "gfortran", "nodejs", "deno", "r", "r-base", "perl",
 ];
 
-/// The pixi workspace, this main struct to interact with a workspace. This
-/// struct holds the `Manifest` and has functions to modify or request
-/// information from it. This allows in the future to have multiple environments
-/// or manifests linked to a project.
+/// The pixi workspace, this main struct to interact with a workspace.
+///
+/// This structs holds manifests of the workspace and optionally the current
+/// package. The current package is considered the package the user is
+/// interacting with.
+///
+/// The struct also holds several cached values that can be used throughout the
+/// program like an HTTP request client and configuration.
 #[derive(Clone)]
 pub struct Workspace {
     /// Root folder of the workspace
