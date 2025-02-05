@@ -285,7 +285,6 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
-      - uses: mxschmitt/action-tmate@v3
       - name: "Build"
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: >
