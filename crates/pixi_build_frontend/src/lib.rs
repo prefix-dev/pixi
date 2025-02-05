@@ -16,7 +16,9 @@ use std::path::PathBuf;
 
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
 pub use reporters::{CondaBuildReporter, CondaMetadataReporter};
-pub use reporters::{NoopCondaBuildReporter, NoopCondaMetadataReporter};
+pub use reporters::{
+    NoopCondaBuildReporter, NoopCondaMetadataReporter, NoopCondaSourceDepsReporter,
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolContext, ToolSpec};
 use url::Url;

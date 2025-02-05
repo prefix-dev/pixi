@@ -22,6 +22,7 @@ use pixi_build_types::{
         self,
         conda_build::{CondaBuildParams, CondaBuildResult},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
+        conda_source_deps::{CondaSourceDepsParams, CondaSourceDepsResult},
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
@@ -39,6 +40,7 @@ use tokio::{
 
 use crate::{
     jsonrpc::{stdio_transport, RpcParams},
+    reporters::CondaSourceDepsReporter,
     tool::Tool,
     CondaBuildReporter, CondaMetadataReporter,
 };
@@ -336,6 +338,59 @@ impl JsonRPCBuildProtocol {
         }
 
         reporter.on_metadata_end(operation);
+        result
+    }
+
+    /// Extract metadata from the source dependencies of a recipe.
+    pub async fn get_conda_source_deps(
+        &self,
+        request: &CondaSourceDepsParams,
+        reporter: &dyn CondaSourceDepsReporter,
+    ) -> Result<CondaSourceDepsResult, ProtocolError> {
+        // Capture all of stderr and discard it
+        let stderr = self.stderr.as_ref().map(|stderr| {
+            // Cancellation signal
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+            // Spawn the stderr forwarding task
+            let handle = tokio::spawn(stderr_null(stderr.clone(), cancel_rx));
+            (cancel_tx, handle)
+        });
+
+        // Start the metadata operation
+        let operation = reporter.on_source_deps_start(self.build_id);
+
+        let result = self
+            .client
+            .request(
+                procedures::conda_metadata::METHOD_NAME,
+                RpcParams::from(request),
+            )
+            .await
+            .map_err(|err| {
+                ProtocolError::from_client_error(
+                    self.backend_identifier.clone(),
+                    err,
+                    procedures::conda_metadata::METHOD_NAME,
+                    self.manifest_path.parent().unwrap_or(&self.manifest_path),
+                )
+            });
+
+        // Wait for the stderr sink to finish, by signaling it to stop
+        if let Some((cancel_tx, handle)) = stderr {
+            // Cancel the stderr forwarding
+            if cancel_tx.send(()).is_err() {
+                return Err(ProtocolError::StdErrPipeStopped);
+            }
+            handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(ProtocolError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| ProtocolError::StdErrPipeStopped),
+            )?;
+        }
+
+        reporter.on_source_deps_end(operation);
         result
     }
 

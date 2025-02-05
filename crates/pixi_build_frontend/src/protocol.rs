@@ -4,6 +4,7 @@ use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_types::procedures::{
     conda_build::{CondaBuildParams, CondaBuildResult},
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
+    conda_source_deps::{CondaSourceDepsParams, CondaSourceDepsResult},
 };
 
 use crate::{
@@ -11,6 +12,7 @@ use crate::{
         builders::{conda_protocol, pixi_protocol, rattler_build_protocol},
         JsonRPCBuildProtocol,
     },
+    reporters::CondaSourceDepsReporter,
     CondaBuildReporter, CondaMetadataReporter,
 };
 
@@ -121,6 +123,19 @@ impl Protocol {
                 .get_conda_metadata(request, reporter.as_ref())
                 .await?),
             Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
+        }
+    }
+
+    pub async fn get_conda_source_deps(
+        &self,
+        request: &CondaSourceDepsParams,
+        reporter: Arc<dyn CondaSourceDepsReporter>,
+    ) -> miette::Result<CondaSourceDepsResult> {
+        match self {
+            Self::PixiBuild(protocol) => Ok(protocol
+                .get_conda_source_deps(request, reporter.as_ref())
+                .await?),
+            Self::CondaBuild(_) => unreachable!(),
         }
     }
 

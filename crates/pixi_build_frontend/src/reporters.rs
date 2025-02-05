@@ -25,6 +25,25 @@ impl NoopCondaMetadataReporter {
         Arc::new(Self {})
     }
 }
+/// Reporter trait for reporting the progress of source dependency operations.
+pub trait CondaSourceDepsReporter: Send + Sync {
+    /// Reports the start of the get_source_deps operation.
+    /// Returns a unique identifier for the operation.
+    fn on_source_deps_start(&self, build_id: usize) -> usize;
+
+    /// Reports the end of the get_source_deps operation.
+    fn on_source_deps_end(&self, operation: usize);
+}
+
+/// A no-op implementation of the CondaMetadataSourceDepsReporter trait.
+#[derive(Clone)]
+pub struct NoopCondaSourceDepsReporter;
+impl CondaSourceDepsReporter for NoopCondaSourceDepsReporter {
+    fn on_source_deps_start(&self, _build_id: usize) -> usize {
+        0
+    }
+    fn on_source_deps_end(&self, _operation: usize) {}
+}
 
 /// Reporter trait for reporting the progress of build operations.
 pub trait CondaBuildReporter: Send + Sync {
