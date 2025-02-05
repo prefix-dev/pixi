@@ -257,11 +257,10 @@ pixi upgrade --dry-run
 
 ## `lock`
 
-The `lock` command can be used to update the `pixi.lock` file without updating the environment.
-It will do the minimal amount of work to make sure the lockfile is in the correct state.
-This means only solving the environment if the lockfile is out of date, or installing only the minimal set of dependencies to solve the lockfile for the PyPI dependencies.
+The `lock` command updates the `pixi.lock` file without modifying the environment.
+It ensures the lockfile is accurate by performing minimal tasks, such as solving the environment only if the lockfile is outdated or installing the necessary dependencies to resolve the lockfile for PyPI dependencies.
 
-The output is similar to the `update` command to show the changes that are be made to the lockfile.
+The output is similar to the `update` command, displaying the changes made to the lockfile.
 
 ##### Options
 
