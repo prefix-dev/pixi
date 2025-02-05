@@ -1,0 +1,26 @@
+[project]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pypi-lazy-sdist"
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+[dependencies]
+python = "*"
+
+[pypi-dependencies]
+boltons = "*"
+
+[feature.py39.dependencies]
+python = "3.9"
+
+[feature.py39.pypi-dependencies]
+boltons = "==24.1.0"
+
+[feature.py310.dependencies]
+python = "3.10"
+
+[feature.py310.pypi-dependencies]
+sdist = "==0.0.0"
+
+[environments]
+py310 = ["py310"]
+py39 = ["py39"]

@@ -169,6 +169,7 @@ impl LockFileExt for LockFile {
         requirement: pep508_rs::Requirement,
     ) -> bool {
         let Some(env) = self.environment(environment) else {
+            eprintln!("environment not found: {}", environment);
             return false;
         };
         let package_found = env
@@ -258,6 +259,14 @@ impl PixiControl {
         let project = self.project()?;
         let env = project.environment("default");
         let env = env.ok_or_else(|| miette::miette!("default environment not found"))?;
+        Ok(self.tmpdir.path().join(env.dir()))
+    }
+
+    /// Get path to default environment
+    pub fn env_path(&self, env_name: &str) -> miette::Result<PathBuf> {
+        let project = self.project()?;
+        let env = project.environment(env_name);
+        let env = env.ok_or_else(|| miette::miette!("{} environment not found", env_name))?;
         Ok(self.tmpdir.path().join(env.dir()))
     }
 

@@ -11,7 +11,6 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::activation::CurrentEnvVarBehavior;
 use crate::environment::get_update_lock_file_and_prefix;
 use crate::{
     activation::get_activator,
@@ -19,6 +18,7 @@ use crate::{
     project::{Environment, HasProjectRef},
     prompt, Project, UpdateLockFileOptions,
 };
+use crate::{activation::CurrentEnvVarBehavior, project::get_activated_environment_variables};
 
 /// Print the pixi environment activation script.
 ///
@@ -107,16 +107,15 @@ async fn generate_environment_json(
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<String> {
-    let environment_variables = environment
-        .project()
-        .get_activated_environment_variables(
-            environment,
-            CurrentEnvVarBehavior::Exclude,
-            Some(lock_file),
-            force_activate,
-            experimental_cache,
-        )
-        .await?;
+    let environment_variables = get_activated_environment_variables(
+        environment.project().env_vars(),
+        environment,
+        CurrentEnvVarBehavior::Exclude,
+        Some(lock_file),
+        force_activate,
+        experimental_cache,
+    )
+    .await?;
 
     let shell_env = ShellEnv {
         environment_variables,

@@ -48,7 +48,7 @@ syrupy = ">=4.8.0,<5"
 tomli-w = ">=1.0,<2"
 
 [feature.pytest.tasks]
-test-common-wheels = { cmd = "pytest --numprocesses=auto tests/wheel_tests/", depends-on = [
+test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/", depends-on = [
   "build-release",
 ] }
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }

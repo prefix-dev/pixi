@@ -255,6 +255,24 @@ pixi upgrade --dry-run
     - `url`
     - `subdir`.
 
+## `lock`
+
+The `lock` command updates the `pixi.lock` file without modifying the environment.
+It ensures the lockfile is accurate by performing minimal tasks, such as solving the environment only if the lockfile is outdated or installing the necessary dependencies to resolve the lockfile for PyPI dependencies.
+
+The output is similar to the `update` command, displaying the changes made to the lockfile.
+
+##### Options
+
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+- `--json` Output the changes in json format.
+
+```shell
+pixi lock
+pixi lock --manifest-path ~/myproject/pixi.toml
+pixi lock --json
+```
+
 ## `run`
 
 The `run` commands first checks if the environment is ready to use.
