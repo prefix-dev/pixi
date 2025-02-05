@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.41.0] - 2025-02-05
+#### ✨ Highlights
+
+This PR introduces lazily creating solve environments for the `pypi-dependencies` resulting in a significant speedup for environments that only depend on wheels.
+If you want to force the use of wheels you can now also set `no-build` in the `pypi-options` table.
+To test this you can now just use `pixi lock` to create a lockfile without installing an environment.
+
+#### Added
+
+- Add `pixi lock` by @Hofer-Julian in [#3061](https://github.com/prefix-dev/pixi/pull/3061) and [#3064](https://github.com/prefix-dev/pixi/pull/3064)
+- Add `no-build` to `pypi-options` by @tdejager in [#2997](https://github.com/prefix-dev/pixi/pull/2997)
+
+#### Changed
+
+- Lazily initiate solve environments for `pypi-dependencies` by @nichmor and @tdejager in [#3029](https://github.com/prefix-dev/pixi/pull/3029)
+- Use Github Releases `/latest` for `self-update` and prompt on downgrades by @jaimergp in [#2989](https://github.com/prefix-dev/pixi/pull/2989)
+- Set PS1 in shell-hook too by @jaimergp in [#2991](https://github.com/prefix-dev/pixi/pull/2991)
+- Prevent line-based 3-way merge on pixi.lock by @ChristianRothQC in [#3019](https://github.com/prefix-dev/pixi/pull/3019)
+- Auto-prepend 'v' to version numbers during pixi installation by @m-naumann in [#3000](https://github.com/prefix-dev/pixi/pull/3000)
+- Parse labels and related errors from build backend by @baszalmstra in [#2952](https://github.com/prefix-dev/pixi/pull/2952)
+
+#### Documentation
+
+- Enable autocomplete on Zsh by @ywilke in [#3009](https://github.com/prefix-dev/pixi/pull/3009)
+- Add section on aws codeartifact by @rayduck in [#3020](https://github.com/prefix-dev/pixi/pull/3020)
+- Add `pixi-diff` documentation by @pavelzw in [#3025](https://github.com/prefix-dev/pixi/pull/3025)
+- Fix python tutorial by @ruben-arts in [#3035](https://github.com/prefix-dev/pixi/pull/3035)
+
+#### Fixed
+
+- Always show cursor after control+c by @ruben-arts in [#2635](https://github.com/prefix-dev/pixi/pull/2635)
+- `mirrors` configuration follows correct priority by @ruben-arts in [#3002](https://github.com/prefix-dev/pixi/pull/3002)
+- Don't check requires python in satisfiability by @ruben-arts in [#2968](https://github.com/prefix-dev/pixi/pull/2968)
+- Enforce recompile trampoline by @Hofer-Julian in [#3013](https://github.com/prefix-dev/pixi/pull/3013)
+- `project platform remove` by @Hofer-Julian in [#3017](https://github.com/prefix-dev/pixi/pull/3017)
+- Lockfile not invalidated when we remove platforms by @Hofer-Julian in [#3027](https://github.com/prefix-dev/pixi/pull/3027)
+- Will also update prefix if there are pypi path dependencies by @tdejager in [#3034](https://github.com/prefix-dev/pixi/pull/3034)
+- Initialize rayon late and use uv from tag by @baszalmstra in [#2957](https://github.com/prefix-dev/pixi/pull/2957)
+- Change back to multithreaded runtime by @tdejager in [#3041](https://github.com/prefix-dev/pixi/pull/3041)
+- Logic was backward for creating missing .bashrc by @hjmjohnson in [#3051](https://github.com/prefix-dev/pixi/pull/3051)
+- Do proper sanity check on add and run by @ruben-arts in [#3054](https://github.com/prefix-dev/pixi/pull/3054)
+- Add check error message to remove uv dependencies by @Dozie2001 in [#3052](https://github.com/prefix-dev/pixi/pull/3052)
+
+#### Refactor
+
+- Make diff module public by @pavelzw in [#3010](https://github.com/prefix-dev/pixi/pull/3010)
+- Enforce no `unwrap` via clippy by @Hofer-Julian in [#3006](https://github.com/prefix-dev/pixi/pull/3006)
+- Improve AuthenticationStorage, update rattler by @pavelzw in [#2909](https://github.com/prefix-dev/pixi/pull/2909)
+
+#### Removed
+
+- Remove `description` from `pixi init` template by @Hofer-Julian in [#3012](https://github.com/prefix-dev/pixi/pull/3012)
+
+#### New Contributors
+* @Dozie2001 made their first contribution in [#3052](https://github.com/prefix-dev/pixi/pull/3052)
+* @hjmjohnson made their first contribution in [#3051](https://github.com/prefix-dev/pixi/pull/3051)
+* @m-naumann made their first contribution in [#3000](https://github.com/prefix-dev/pixi/pull/3000)
+* @ChristianRothQC made their first contribution in [#3019](https://github.com/prefix-dev/pixi/pull/3019)
+* @rayduck made their first contribution in [#3020](https://github.com/prefix-dev/pixi/pull/3020)
+* @ywilke made their first contribution in [#3009](https://github.com/prefix-dev/pixi/pull/3009)
+
 ### [0.40.3] - 2025-01-22
 #### ✨ Highlights
 This release will greatly improve the `git` dependency experience for PyPI packages.
