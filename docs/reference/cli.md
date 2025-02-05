@@ -264,6 +264,7 @@ This means only solving the environment if the lockfile is out of date, or insta
 The output is similar to the `update` command to show the changes that are be made to the lockfile.
 
 ##### Options
+
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 - `--json` Output the changes in json format.
 
