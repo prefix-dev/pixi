@@ -221,22 +221,6 @@ pub async fn execute() -> miette::Result<()> {
             format!("resolvo={}", low_level_filter)
                 .parse()
                 .into_diagnostic()?,
-        )
-        .add_directive(
-            format!(
-                "rattler_networking::authentication_storage::backends::file={}",
-                LevelFilter::OFF
-            )
-            .parse()
-            .into_diagnostic()?,
-        )
-        .add_directive(
-            format!(
-                "rattler_networking::authentication_storage::storage={}",
-                LevelFilter::OFF
-            )
-            .parse()
-            .into_diagnostic()?,
         );
 
     // Set up the tracing subscriber
