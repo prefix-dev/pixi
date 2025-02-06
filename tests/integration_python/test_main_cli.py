@@ -984,7 +984,9 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     shutil.rmtree(dot_pixi)
 
     # Run pixi lock to recreate the lock file
-    verify_cli_command([pixi, "lock", "--manifest-path", manifest_path])
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest_path], stderr_contains=["+", "dummy-a"]
+    )
 
     # Read the recreated lock file content
     recreated_lock_content = lock_file_path.read_text()

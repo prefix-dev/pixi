@@ -1,6 +1,3 @@
-use clap::Parser;
-use miette::{Context, IntoDiagnostic};
-
 use super::has_specs::HasSpecs;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
@@ -8,6 +5,9 @@ use crate::{
     lock_file::UpdateMode,
     DependencyType, UpdateLockFileOptions, WorkspaceLocator,
 };
+use clap::Parser;
+use miette::{Context, IntoDiagnostic};
+use pixi_manifest::FeaturesExt;
 
 /// Removes dependencies from the project
 ///
@@ -44,6 +44,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .modify()?;
     let dependency_type = dependency_config.dependency_type();
 
+    // Prevent removing Python if PyPI dependencies exist
+    if let DependencyType::CondaDependency(_) = dependency_type {
+        for name in dependency_config.specs()?.keys() {
+            if name.as_source() == "python" {
+                // Check if there are any PyPI dependencies by importing the PypiDependencies trait
+                let pypi_deps = workspace
+                    .workspace()
+                    .default_environment()
+                    .pypi_dependencies(None);
+                if !pypi_deps.is_empty() {
+                    let deps_list = pypi_deps
+                        .iter()
+                        .map(|(name, _)| name.as_source())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    return Err(miette::miette!(
+                        "Cannot remove Python while PyPI dependencies exist. Please remove these PyPI dependencies first: {}",
+                        deps_list
+                    ));
+                }
+            }
+        }
+    }
     match dependency_type {
         DependencyType::PypiDependency => {
             for name in dependency_config.pypi_deps(workspace.workspace())?.keys() {
