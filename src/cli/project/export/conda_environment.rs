@@ -153,7 +153,7 @@ fn build_env_yaml(
             let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone()));
             env_yaml
                 .dependencies
-                .push(MatchSpecOrSubSection::MatchSpec(spec));
+                .push(MatchSpecOrSubSection::MatchSpec(Box::new(spec)));
         } else {
             tracing::warn!(
                 "Failed to convert dependency to conda environment spec: {:?}. Skipping dependency",
@@ -192,10 +192,12 @@ fn build_env_yaml(
             pip_dependencies.insert(0, format!("--index-url {index_url}"));
         }
 
-        env_yaml.dependencies.push(MatchSpecOrSubSection::MatchSpec(
-            MatchSpec::from_str("pip", ParseStrictness::Lenient)
-                .expect("'pip' should be a valid name"),
-        ));
+        env_yaml
+            .dependencies
+            .push(MatchSpecOrSubSection::MatchSpec(Box::new(
+                MatchSpec::from_str("pip", ParseStrictness::Lenient)
+                    .expect("'pip' should be a valid name"),
+            )));
 
         env_yaml
             .dependencies
