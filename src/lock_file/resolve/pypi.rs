@@ -391,6 +391,7 @@ pub async fn resolve_pypi(
                 extras: vec![],
                 marker: Default::default(),
                 source,
+                groups: Default::default(),
                 origin: None,
             })
         })
@@ -427,7 +428,6 @@ pub async fn resolve_pypi(
         &requirements,
         &constraints,
         &Overrides::default(),
-        &[],
         &context.hash_strategy,
         &lookahead_index,
         DistributionDatabase::new(
@@ -436,7 +436,7 @@ pub async fn resolve_pypi(
             context.concurrency.downloads,
         ),
     )
-    .with_reporter(UvReporter::new(
+    .with_reporter(UvReporter::new_arc(
         UvReporterOptions::new().with_existing(pb.clone()),
     ))
     .resolve(&resolver_env)
@@ -447,11 +447,10 @@ pub async fn resolve_pypi(
         requirements,
         constraints,
         Overrides::default(),
-        Default::default(),
         Preferences::from_iter(preferences, &resolver_env),
         None,
-        None,
-        uv_resolver::Exclusions::None,
+        Default::default(),
+        uv_resolver::Exclusions::default(),
         lookaheads,
     );
 
@@ -485,6 +484,7 @@ pub async fn resolve_pypi(
         options,
         &context.hash_strategy,
         resolver_env,
+        Some(tags),
         &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
         Conflicts::default(),
         &resolver_in_memory_index,

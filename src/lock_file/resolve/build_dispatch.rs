@@ -10,13 +10,13 @@
 //!
 //! The main struct of interest is the [`LazyBuildDispatch`] struct which holds the parameters needed to create a `BuildContext` uv implementation.
 //! and holds struct that is used to instantiate the conda prefix when its needed.
-use std::path::Path;
+use std::{future::Future, path::Path};
 
 use async_once_cell::OnceCell as AsyncCell;
 
-use once_cell::sync::OnceCell;
-
 use anyhow::Result;
+use futures::FutureExt;
+use once_cell::sync::OnceCell;
 use pixi_manifest::EnvironmentName;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{isolated_names_to_packages, names_to_build_isolation};
@@ -27,18 +27,19 @@ use uv_cache::Cache;
 use uv_client::RegistryClient;
 use uv_configuration::{
     BuildKind, BuildOptions, BuildOutput, Concurrency, ConfigSettings, Constraints, IndexStrategy,
-    LowerBound, SourceStrategy,
+    PreviewMode, SourceStrategy,
 };
-use uv_dispatch::{BuildDispatch, SharedState};
+use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
+use uv_distribution_filename::DistFilename;
 use uv_distribution_types::{
-    CachedDist, DependencyMetadata, IndexLocations, Resolution, SourceDist,
+    CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Resolution, SourceDist,
 };
-use uv_install_wheel::linker::LinkMode;
+use uv_install_wheel::LinkMode;
 use uv_pep508::PackageName;
 use uv_pypi_types::Requirement;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
-use uv_types::{BuildContext, HashStrategy};
+use uv_types::{BuildContext, BuildStack, HashStrategy};
 
 use crate::{
     activation::CurrentEnvVarBehavior,
@@ -60,11 +61,11 @@ pub struct UvBuildDispatchParams<'a> {
     index_strategy: IndexStrategy,
     constraints: Constraints,
     shared_state: SharedState,
-    link_mode: uv_install_wheel::linker::LinkMode,
+    link_mode: uv_install_wheel::LinkMode,
     exclude_newer: Option<ExcludeNewer>,
-    bounds: LowerBound,
     sources: SourceStrategy,
     concurrency: Concurrency,
+    preview_mode: PreviewMode,
 }
 
 impl<'a> UvBuildDispatchParams<'a> {
@@ -93,9 +94,9 @@ impl<'a> UvBuildDispatchParams<'a> {
             link_mode: LinkMode::default(),
             constraints: Constraints::default(),
             exclude_newer: None,
-            bounds: LowerBound::default(),
             sources: SourceStrategy::default(),
             concurrency: Concurrency::default(),
+            preview_mode: PreviewMode::default(),
         }
     }
 
@@ -144,10 +145,9 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    /// Set the lower bounds handling for the build dispatch
     #[allow(dead_code)]
-    pub fn with_lower_bounds(mut self, lower_bounds: LowerBound) -> Self {
-        self.bounds = lower_bounds;
+    pub fn with_preview_mode(mut self, preview_mode: PreviewMode) -> Self {
+        self.preview_mode = preview_mode;
         self
     }
 }
@@ -202,6 +202,24 @@ pub struct LazyBuildDispatchDependencies {
     python_env: OnceCell<PythonEnvironment>,
 }
 
+#[derive(Debug, thiserror::Error)]
+enum LazyBuildDispatchError {
+    #[error("installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set")]
+    InstallationRequiredButDisallowed,
+    #[error("failed to initialize build dispatch: '{0}'")]
+    InitializationError(String),
+    #[error(transparent)]
+    Uv(#[from] BuildDispatchError),
+    #[error(transparent)]
+    UvFrontend(#[from] uv_build_frontend::Error),
+}
+
+impl IsBuildBackendError for LazyBuildDispatchError {
+    fn is_build_backend_error(&self) -> bool {
+        false
+    }
+}
+
 impl<'a> LazyBuildDispatch<'a> {
     /// Create a new `PixiBuildDispatch` instance.
     #[allow(clippy::too_many_arguments)]
@@ -230,14 +248,12 @@ impl<'a> LazyBuildDispatch<'a> {
     }
 
     /// Lazy initialization of the `BuildDispatch`. This also implies initializing the conda prefix.
-    async fn get_or_try_init(&self) -> anyhow::Result<&BuildDispatch> {
+    async fn get_or_try_init(&self) -> Result<&BuildDispatch, LazyBuildDispatchError> {
         self.build_dispatch
             .get_or_try_init(async {
                 // Disallow installing if the flag is set.
                 if self.disallow_install_conda_prefix {
-                    return Err(anyhow::anyhow!(
-                        "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
-                    ));
+                    return Err(LazyBuildDispatchError::InstallationRequiredButDisallowed);
                 }
                 tracing::debug!(
                     "PyPI solve requires instantiation of conda prefix for '{}'",
@@ -248,7 +264,10 @@ impl<'a> LazyBuildDispatch<'a> {
                     .update(self.repodata_records.clone())
                     .await
                     .map_err(|err| {
-                        anyhow::anyhow!(err).context("failed to install conda environment")
+                        LazyBuildDispatchError::InitializationError(format!(
+                            "failed to update conda prefix: {}",
+                            err
+                        ))
                     })?;
 
                 // get the activation vars
@@ -261,20 +280,18 @@ impl<'a> LazyBuildDispatch<'a> {
                     false,
                 )
                 .await
-                .map_err(|err| {
-                    anyhow::anyhow!(err).context("failed to get activated environment variables")
-                })?;
+                .map_err(|err| LazyBuildDispatchError::InitializationError(format!("{}", err)))?;
 
                 let python_path = prefix
                     .python_status
                     .location()
                     .map(|path| prefix.prefix.root().join(path))
                     .ok_or_else(|| {
-                        anyhow::anyhow!(format!(
+                        Err(LazyBuildDispatchError::InitializationError(format!(
                             "missing python interpreter from conda prefix {}. \n {}",
                             prefix.prefix.root().display(),
                             "Use `pixi add python` to install the latest python interpreter.",
-                        ))
+                        )))
                     })?;
 
                 let interpreter = self
@@ -290,8 +307,11 @@ impl<'a> LazyBuildDispatch<'a> {
                 let non_isolated_packages =
                     self.lazy_deps.non_isolated_packages.get_or_try_init(|| {
                         isolated_names_to_packages(self.no_build_isolation.as_deref()).map_err(
-                            |err| {
-                                anyhow::anyhow!(err).context("failed to get non isolated packages")
+                            |e| {
+                                Err(LazyBuildDispatchError::InitializationError(format!(
+                                    "failed to read names for PyPI build isolation: {}",
+                                    e
+                                )))
                             },
                         )
                     })?;
@@ -315,9 +335,9 @@ impl<'a> LazyBuildDispatch<'a> {
                     self.params.build_options,
                     self.params.hasher,
                     self.params.exclude_newer,
-                    self.params.bounds,
                     self.params.sources,
                     self.params.concurrency,
+                    self.params.preview_mode,
                 )
                 .with_build_extra_env_vars(env_vars);
 
@@ -391,10 +411,6 @@ impl BuildContext for LazyBuildDispatch<'_> {
         self.params.config_settings
     }
 
-    fn bounds(&self) -> uv_configuration::LowerBound {
-        self.params.bounds
-    }
-
     fn sources(&self) -> uv_configuration::SourceStrategy {
         self.params.sources
     }
@@ -403,44 +419,80 @@ impl BuildContext for LazyBuildDispatch<'_> {
         self.params.index_locations
     }
 
-    async fn resolve<'data>(&'data self, requirements: &'data [Requirement]) -> Result<Resolution> {
-        self.get_or_try_init().await?.resolve(requirements).await
+    fn resolve<'a>(
+        &'a self,
+        requirements: &'a [Requirement],
+        build_stack: &'a BuildStack,
+    ) -> impl Future<Output = Result<Resolution, impl IsBuildBackendError>> + 'a {
+        async {
+            let dispatch = self.get_or_try_init().await?;
+            dispatch
+                .resolve(requirements, build_stack)
+                .await
+                .map_err(LazyBuildDispatchError::Uv)
+        }
     }
 
-    async fn install<'data>(
-        &'data self,
-        resolution: &'data Resolution,
-        venv: &'data PythonEnvironment,
-    ) -> Result<Vec<CachedDist>> {
-        self.get_or_try_init()
-            .await?
-            .install(resolution, venv)
-            .await
+    fn install<'a>(
+        &'a self,
+        resolution: &'a Resolution,
+        venv: &'a PythonEnvironment,
+        build_stack: &'a BuildStack,
+    ) -> impl Future<Output = Result<Vec<CachedDist>, impl IsBuildBackendError>> + 'a {
+        async {
+            let dispatch = self.get_or_try_init().await?;
+            dispatch
+                .install(resolution, venv, build_stack)
+                .await
+                .map_err(LazyBuildDispatchError::Uv)
+        }
     }
 
-    async fn setup_build<'data>(
-        &'data self,
-        source: &'data Path,
-        subdirectory: Option<&'data Path>,
-        install_path: &'data Path,
-        version_id: Option<String>,
-        dist: Option<&'data SourceDist>,
+    fn setup_build<'a>(
+        &'a self,
+        source: &'a Path,
+        subdirectory: Option<&'a Path>,
+        install_path: &'a Path,
+        version_id: Option<&'a str>,
+        dist: Option<&'a SourceDist>,
         sources: SourceStrategy,
         build_kind: BuildKind,
         build_output: BuildOutput,
-    ) -> Result<SourceBuild> {
-        self.get_or_try_init()
-            .await?
-            .setup_build(
-                source,
-                subdirectory,
-                install_path,
-                version_id,
-                dist,
-                sources,
-                build_kind,
-                build_output,
-            )
-            .await
+        build_stack: BuildStack,
+    ) -> impl Future<Output = Result<Self::SourceDistBuilder, impl IsBuildBackendError>> + 'a {
+        async move {
+            let dispatch = self.get_or_try_init().await?;
+            dispatch
+                .setup_build(
+                    source,
+                    subdirectory,
+                    install_path,
+                    version_id,
+                    dist,
+                    sources,
+                    build_kind,
+                    build_output,
+                    build_stack,
+                )
+                .await
+                .map_err(LazyBuildDispatchError::from)
+        }
+    }
+
+    fn direct_build<'a>(
+        &'a self,
+        source: &'a Path,
+        subdirectory: Option<&'a Path>,
+        output_dir: &'a Path,
+        build_kind: BuildKind,
+        version_id: Option<&'a str>,
+    ) -> impl Future<Output = Result<Option<DistFilename>, impl IsBuildBackendError>> + 'a {
+        async move {
+            let dispatch = self.get_or_try_init().await?;
+            dispatch
+                .direct_build(source, subdirectory, output_dir, build_kind, version_id)
+                .await
+                .map_err(LazyBuildDispatchError::from)
+        }
     }
 }

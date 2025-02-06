@@ -16,12 +16,12 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, LowerBound};
+use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, PreviewMode};
 use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{DependencyMetadata, IndexLocations, Name};
 use uv_git::GitResolver;
-use uv_install_wheel::linker::LinkMode;
+use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{FlatIndex, InMemoryIndex};
@@ -125,13 +125,7 @@ pub async fn update_python_distributions(
     let dep_metadata = DependencyMetadata::default();
     let constraints = Constraints::default();
 
-    let shared_state = SharedState::new(
-        git_resolver,
-        in_memory_index,
-        uv_context.in_flight.clone(),
-        uv_context.capabilities.clone(),
-    );
-
+    let shared_state = SharedState::default();
     let build_dispatch = BuildDispatch::new(
         &registry_client,
         &uv_context.cache,
@@ -148,9 +142,9 @@ pub async fn update_python_distributions(
         &build_options,
         &uv_context.hash_strategy,
         None,
-        LowerBound::default(),
         uv_context.source_strategy,
         uv_context.concurrency,
+        PreviewMode::Disabled,
     )
     // ! Important this passes any CONDA activation to the uv build process
     .with_build_extra_env_vars(environment_variables.iter());
@@ -328,7 +322,7 @@ pub async fn update_python_distributions(
             &build_options,
             distribution_database,
         )
-        .with_reporter(UvReporter::new(options));
+        .with_reporter(UvReporter::new_arc(options));
 
         let remote_dists = preparer
             .prepare(
@@ -467,7 +461,7 @@ pub async fn update_python_distributions(
         uv_installer::Installer::new(&venv)
             .with_link_mode(LinkMode::default())
             .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
-            .with_reporter(UvReporter::new(options))
+            .with_reporter(UvReporter::new_arc(options))
             .install(all_dists.clone())
             .await
             .expect("should be able to install all distributions");
