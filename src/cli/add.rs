@@ -158,18 +158,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // TODO: add dry_run logic to add
     let dry_run = false;
 
-    let update_deps = match workspace
-        .update_dependencies(
-            match_specs,
-            pypi_deps,
-            source_specs,
-            &prefix_update_config,
-            &dependency_config.feature,
-            &dependency_config.platforms,
-            args.editable,
-            dry_run,
-        )
-        .await
+    let update_deps = match Box::pin(workspace.update_dependencies(
+        match_specs,
+        pypi_deps,
+        source_specs,
+        &prefix_update_config,
+        &dependency_config.feature,
+        &dependency_config.platforms,
+        args.editable,
+        dry_run,
+    ))
+    .await
     {
         Ok(update_deps) => {
             // Write the updated manifest
