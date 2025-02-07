@@ -1,25 +1,28 @@
-//! This module contains an implementation of the `BuildContext` trait for the `LazyBuildDispatch` trait.
-//! This is mainly to be able to initialize the conda prefix for PyPI resolving on demand.
-//! This is needed because the conda prefix is a heavy operation and we want to avoid initializing it.
-//! And we do not need to initialize it if we are not resolving PyPI source dependencies.
-//! With this implementation we only initialize a prefix once uv requests some operation that actually needs this prefix.
+//! This module contains an implementation of the `BuildContext` trait for the
+//! `LazyBuildDispatch` trait. This is mainly to be able to initialize the conda
+//! prefix for PyPI resolving on demand. This is needed because the conda prefix
+//! is a heavy operation and we want to avoid initializing it. And we do not
+//! need to initialize it if we are not resolving PyPI source dependencies. With
+//! this implementation we only initialize a prefix once uv requests some
+//! operation that actually needs this prefix.
 //!
-//! This is especially prudent to do when we have multiple environments, which translates into multiple prefixes, that all need to be initialized.
-//! Previously we would initialize all prefixes upfront, but this is not needed and can also sometimes not be done for each platform.
-//! Using this implementation we can solve for a lot more platforms than we could before.
+//! This is especially prudent to do when we have multiple environments, which
+//! translates into multiple prefixes, that all need to be initialized.
+//! Previously we would initialize all prefixes upfront, but this is not needed
+//! and can also sometimes not be done for each platform. Using this
+//! implementation we can solve for a lot more platforms than we could before.
 //!
-//! The main struct of interest is the [`LazyBuildDispatch`] struct which holds the parameters needed to create a `BuildContext` uv implementation.
-//! and holds struct that is used to instantiate the conda prefix when its needed.
-use std::{future::Future, path::Path};
+//! The main struct of interest is the [`LazyBuildDispatch`] struct which holds
+//! the parameters needed to create a `BuildContext` uv implementation.
+//! and holds struct that is used to instantiate the conda prefix when its
+//! needed.
+use std::{collections::HashMap, path::Path};
 
 use async_once_cell::OnceCell as AsyncCell;
-
-use anyhow::Result;
 use once_cell::sync::OnceCell;
 use pixi_manifest::EnvironmentName;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{isolated_names_to_packages, names_to_build_isolation};
-use std::collections::HashMap;
 use tokio::runtime::Handle;
 use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
@@ -42,12 +45,12 @@ use uv_types::{BuildContext, BuildStack, HashStrategy};
 
 use crate::{
     activation::CurrentEnvVarBehavior,
-    project::{get_activated_environment_variables, Environment, EnvironmentVars},
+    workspace::{get_activated_environment_variables, Environment, EnvironmentVars},
+    CondaPrefixUpdated, CondaPrefixUpdater,
 };
 
-use crate::{CondaPrefixUpdated, CondaPrefixUpdater};
-
-/// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
+/// This structure holds all the parameters needed to create a `BuildContext` uv
+/// implementation.
 pub struct UvBuildDispatchParams<'a> {
     client: &'a RegistryClient,
     cache: &'a Cache,
@@ -186,11 +189,12 @@ pub struct LazyBuildDispatch<'a> {
     pub disallow_install_conda_prefix: bool,
 }
 
-/// These are resources for the [`BuildDispatch`] that need to be lazily initialized.
-/// along with the build dispatch.
+/// These are resources for the [`BuildDispatch`] that need to be lazily
+/// initialized. along with the build dispatch.
 ///
-/// This needs to be passed in externally or there will be problems with the borrows being shorter
-/// than the lifetime of the `BuildDispatch`, and we are returning the references.
+/// This needs to be passed in externally or there will be problems with the
+/// borrows being shorter than the lifetime of the `BuildDispatch`, and we are
+/// returning the references.
 #[derive(Default)]
 pub struct LazyBuildDispatchDependencies {
     /// The initialized python interpreter
@@ -248,102 +252,95 @@ impl<'a> LazyBuildDispatch<'a> {
         }
     }
 
-    /// Lazy initialization of the `BuildDispatch`. This also implies initializing the conda prefix.
     async fn get_or_try_init(&self) -> Result<&BuildDispatch, LazyBuildDispatchError> {
-        self.build_dispatch
-            .get_or_try_init(async {
-                // Disallow installing if the flag is set.
-                if self.disallow_install_conda_prefix {
-                    return Err(LazyBuildDispatchError::InstallationRequiredButDisallowed);
-                }
-                tracing::debug!(
-                    "PyPI solve requires instantiation of conda prefix for '{}'",
-                    self.prefix_updater.group.name().as_str()
-                );
-                let prefix = self
-                    .prefix_updater
-                    .update(self.repodata_records.clone())
-                    .await
-                    .map_err(|err| {
-                        LazyBuildDispatchError::InitializationError(format!(
-                            "failed to update conda prefix: {}",
-                            err
-                        ))
-                    })?;
-
-                // get the activation vars
-                let env_vars = get_activated_environment_variables(
-                    &self.project_env_vars,
-                    &self.environment,
-                    CurrentEnvVarBehavior::Exclude,
-                    None,
-                    false,
-                    false,
-                )
+        Box::pin(self.build_dispatch.get_or_try_init(async {
+            // Disallow installing if the flag is set.
+            if self.disallow_install_conda_prefix {
+                return Err(LazyBuildDispatchError::InstallationRequiredButDisallowed);
+            }
+            tracing::debug!(
+                "PyPI solve requires instantiation of conda prefix for '{}'",
+                self.prefix_updater.group.name().as_str()
+            );
+            let prefix = self
+                .prefix_updater
+                .update(self.repodata_records.clone())
                 .await
+                .map_err(|err| {
+                    LazyBuildDispatchError::InitializationError(format!(
+                        "failed to update conda prefix: {}",
+                        err
+                    ))
+                })?;
+
+            // get the activation vars
+            let env_vars = get_activated_environment_variables(
+                &self.project_env_vars,
+                &self.environment,
+                CurrentEnvVarBehavior::Exclude,
+                None,
+                false,
+                false,
+            )
+            .await
+            .map_err(|err| LazyBuildDispatchError::InitializationError(format!("{}", err)))?;
+
+            let python_path = prefix
+                .python_status
+                .location()
+                .map(|path| prefix.prefix.root().join(path))
+                .ok_or_else(|| {
+                    LazyBuildDispatchError::InitializationError(format!(
+                        "missing python interpreter from conda prefix {}. \n {}",
+                        prefix.prefix.root().display(),
+                        "Use `pixi add python` to install the latest python interpreter.",
+                    ))
+                })?;
+
+            let interpreter = self
+                .lazy_deps
+                .interpreter
+                .get_or_try_init(|| Interpreter::query(python_path, self.cache()))
+                .map_err(LazyBuildDispatchError::from)?;
+
+            let env = self
+                .lazy_deps
+                .python_env
+                .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()));
+
+            let non_isolated_packages = self
+                .lazy_deps
+                .non_isolated_packages
+                .get_or_try_init(|| isolated_names_to_packages(self.no_build_isolation.as_deref()))
                 .map_err(|err| LazyBuildDispatchError::InitializationError(format!("{}", err)))?;
 
-                let python_path = prefix
-                    .python_status
-                    .location()
-                    .map(|path| prefix.prefix.root().join(path))
-                    .ok_or_else(|| {
-                        LazyBuildDispatchError::InitializationError(format!(
-                            "missing python interpreter from conda prefix {}. \n {}",
-                            prefix.prefix.root().display(),
-                            "Use `pixi add python` to install the latest python interpreter.",
-                        ))
-                    })?;
+            let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), env);
 
-                let interpreter = self
-                    .lazy_deps
-                    .interpreter
-                    .get_or_try_init(|| Interpreter::query(python_path, self.cache()))
-                    .map_err(LazyBuildDispatchError::from)?;
+            let build_dispatch = BuildDispatch::new(
+                self.params.client,
+                self.params.cache,
+                self.params.constraints.clone(),
+                interpreter,
+                self.params.index_locations,
+                self.params.flat_index,
+                self.params.dependency_metadata,
+                self.params.shared_state.clone(),
+                self.params.index_strategy,
+                self.params.config_settings,
+                build_isolation,
+                self.params.link_mode,
+                self.params.build_options,
+                self.params.hasher,
+                self.params.exclude_newer,
+                self.params.sources,
+                self.params.concurrency,
+                self.params.preview_mode,
+            )
+            .with_build_extra_env_vars(env_vars);
 
-                let env = self
-                    .lazy_deps
-                    .python_env
-                    .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()));
-
-                let non_isolated_packages = self
-                    .lazy_deps
-                    .non_isolated_packages
-                    .get_or_try_init(|| {
-                        isolated_names_to_packages(self.no_build_isolation.as_deref())
-                    })
-                    .map_err(|err| {
-                        LazyBuildDispatchError::InitializationError(format!("{}", err))
-                    })?;
-
-                let build_isolation =
-                    names_to_build_isolation(non_isolated_packages.as_deref(), env);
-
-                let build_dispatch = BuildDispatch::new(
-                    self.params.client,
-                    self.params.cache,
-                    self.params.constraints.clone(),
-                    interpreter,
-                    self.params.index_locations,
-                    self.params.flat_index,
-                    self.params.dependency_metadata,
-                    self.params.shared_state.clone(),
-                    self.params.index_strategy,
-                    self.params.config_settings,
-                    build_isolation,
-                    self.params.link_mode,
-                    self.params.build_options,
-                    self.params.hasher,
-                    self.params.exclude_newer,
-                    self.params.sources,
-                    self.params.concurrency,
-                    self.params.preview_mode,
-                )
-                .with_build_extra_env_vars(env_vars);
-
-                Ok(build_dispatch)
-            })
-            .await
+            Ok(build_dispatch)
+        }))
+        .await
     }
 }
 
@@ -351,14 +348,15 @@ impl BuildContext for LazyBuildDispatch<'_> {
     type SourceDistBuilder = SourceBuild;
 
     fn interpreter(&self) -> &uv_python::Interpreter {
-        // In most cases the interpreter should be initialized, because one of the other trait
-        // methods will have been called
+        // In most cases the interpreter should be initialized, because one of the other
+        // trait methods will have been called
         // But in case it is not, we will initialize it here
         //
-        // Even though intitalize does not initialize twice, we skip the codepath because the initialization takes time
+        // Even though intitalize does not initialize twice, we skip the codepath
+        // because the initialization takes time
         if self.lazy_deps.interpreter.get().is_none() {
-            // This will usually be called from the multi-threaded runtime, but there might be tests
-            // that calls this in the current thread runtime.
+            // This will usually be called from the multi-threaded runtime, but there might
+            // be tests that calls this in the current thread runtime.
             // In the current thread runtime we cannot use `block_in_place` as it will pani
             let handle = Handle::current();
             match handle.runtime_flavor() {
@@ -419,36 +417,32 @@ impl BuildContext for LazyBuildDispatch<'_> {
         self.params.index_locations
     }
 
-    fn resolve<'a>(
+    async fn resolve<'a>(
         &'a self,
         requirements: &'a [Requirement],
         build_stack: &'a BuildStack,
-    ) -> impl Future<Output = Result<Resolution, impl IsBuildBackendError>> + 'a {
-        async {
-            let dispatch = self.get_or_try_init().await?;
-            dispatch
-                .resolve(requirements, build_stack)
-                .await
-                .map_err(LazyBuildDispatchError::Uv)
-        }
+    ) -> Result<Resolution, impl IsBuildBackendError> {
+        let dispatch = self.get_or_try_init().await?;
+        dispatch
+            .resolve(requirements, build_stack)
+            .await
+            .map_err(LazyBuildDispatchError::Uv)
     }
 
-    fn install<'a>(
+    async fn install<'a>(
         &'a self,
         resolution: &'a Resolution,
         venv: &'a PythonEnvironment,
         build_stack: &'a BuildStack,
-    ) -> impl Future<Output = Result<Vec<CachedDist>, impl IsBuildBackendError>> + 'a {
-        async {
-            let dispatch = self.get_or_try_init().await?;
-            dispatch
-                .install(resolution, venv, build_stack)
-                .await
-                .map_err(LazyBuildDispatchError::Uv)
-        }
+    ) -> Result<Vec<CachedDist>, impl IsBuildBackendError> {
+        let dispatch = self.get_or_try_init().await?;
+        dispatch
+            .install(resolution, venv, build_stack)
+            .await
+            .map_err(LazyBuildDispatchError::Uv)
     }
 
-    fn setup_build<'a>(
+    async fn setup_build<'a>(
         &'a self,
         source: &'a Path,
         subdirectory: Option<&'a Path>,
@@ -459,40 +453,36 @@ impl BuildContext for LazyBuildDispatch<'_> {
         build_kind: BuildKind,
         build_output: BuildOutput,
         build_stack: BuildStack,
-    ) -> impl Future<Output = Result<Self::SourceDistBuilder, impl IsBuildBackendError>> + 'a {
-        async move {
-            let dispatch = self.get_or_try_init().await?;
-            dispatch
-                .setup_build(
-                    source,
-                    subdirectory,
-                    install_path,
-                    version_id,
-                    dist,
-                    sources,
-                    build_kind,
-                    build_output,
-                    build_stack,
-                )
-                .await
-                .map_err(LazyBuildDispatchError::from)
-        }
+    ) -> Result<Self::SourceDistBuilder, impl IsBuildBackendError> {
+        let dispatch = self.get_or_try_init().await?;
+        dispatch
+            .setup_build(
+                source,
+                subdirectory,
+                install_path,
+                version_id,
+                dist,
+                sources,
+                build_kind,
+                build_output,
+                build_stack,
+            )
+            .await
+            .map_err(LazyBuildDispatchError::from)
     }
 
-    fn direct_build<'a>(
+    async fn direct_build<'a>(
         &'a self,
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         output_dir: &'a Path,
         build_kind: BuildKind,
         version_id: Option<&'a str>,
-    ) -> impl Future<Output = Result<Option<DistFilename>, impl IsBuildBackendError>> + 'a {
-        async move {
-            let dispatch = self.get_or_try_init().await?;
-            dispatch
-                .direct_build(source, subdirectory, output_dir, build_kind, version_id)
-                .await
-                .map_err(LazyBuildDispatchError::from)
-        }
+    ) -> Result<Option<DistFilename>, impl IsBuildBackendError> {
+        let dispatch = self.get_or_try_init().await?;
+        dispatch
+            .direct_build(source, subdirectory, output_dir, build_kind, version_id)
+            .await
+            .map_err(LazyBuildDispatchError::from)
     }
 }

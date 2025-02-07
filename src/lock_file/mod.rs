@@ -8,7 +8,7 @@ mod update;
 mod utils;
 
 pub use crate::CondaPrefixUpdater;
-use crate::Project;
+use crate::Workspace;
 use miette::{IntoDiagnostic, WrapErr};
 pub(crate) use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
@@ -37,7 +37,7 @@ pub type PypiRecord = (PypiPackageData, PypiPackageEnvironmentData);
 
 /// Loads the lockfile for the specified project or returns a dummy one if none
 /// could be found.
-pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
+pub async fn load_lock_file(project: &Workspace) -> miette::Result<LockFile> {
     let lock_file_path = project.lock_file_path();
     if lock_file_path.is_file() {
         // Spawn a background task because loading the file might be IO bound.
@@ -69,7 +69,7 @@ pub async fn load_lock_file(project: &Project) -> miette::Result<LockFile> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{load_lock_file, Project};
+    use crate::{load_lock_file, Workspace};
 
     #[tokio::test]
     async fn test_load_newer_lock_file() {
@@ -83,7 +83,7 @@ mod tests {
         platforms = []
         "#;
         let project =
-            Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
 
         let lock_file_path = project.lock_file_path();
         let raw_lock_file = r#"

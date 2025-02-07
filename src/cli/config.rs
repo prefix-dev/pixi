@@ -1,5 +1,6 @@
-use crate::cli::cli_config::ProjectConfig;
-use crate::Project;
+use crate::cli::cli_config::WorkspaceConfig;
+use crate::workspace::WorkspaceLocatorError;
+use crate::WorkspaceLocator;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
@@ -61,7 +62,7 @@ struct CommonArgs {
     system: bool,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -197,12 +198,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
-    match Project::load_or_else_discover(common_args.project_config.manifest_path.as_deref()) {
-        Err(e) => {
+    let workspace = WorkspaceLocator::default()
+        .with_closest_package(false) // Dont care about the package
+        .with_emit_warnings(false) // No reason to emit warnings
+        .with_consider_environment(true)
+        .with_search_start(common_args.workspace_config.workspace_locator_start())
+        .locate();
+    match workspace {
+        Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             if common_args.local {
                 return Err(miette::miette!(
-                    "--local flag can only be used inside a pixi project: '{e}'",
+                    "--local flag can only be used inside a pixi workspace but no workspace could be found",
                 ));
+            }
+            Ok(None)
+        }
+        Err(e) => {
+            if common_args.local {
+                return Err(e).into_diagnostic().context("--local flag can only be used inside a pixi workspace but loading the workspace failed",);
             }
             Ok(None)
         }

@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [feature.foobar.dependencies]\n        [feature.duplicate.dependencies]\n\n        [environments]\n        foobar = [\"duplicate\", \"foobar\", \"duplicate\"]\n        \"#,)"
+---
+  × The feature 'duplicate' is included more than once.
+    ╭─[pixi.toml:11:43]
+ 10 │         [environments]
+ 11 │         foobar = ["duplicate", "foobar", "duplicate"]
+    ·                    ────┬────              ────┬────
+    ·                        │                      ╰── the feature is included here
+    ·                        ╰── the feature was previously included here
+ 12 │
+    ╰────
+  help: Since the order of the features matters, a duplicate feature is ambiguous

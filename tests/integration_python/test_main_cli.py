@@ -996,3 +996,45 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
     # Ensure the .pixi folder does not exist
     assert not dot_pixi.exists()
+
+
+def test_pixi_auth(pixi: Path) -> None:
+    verify_cli_command([pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"])
+    verify_cli_command(
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"]
+    )
+    verify_cli_command(
+        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "auth",
+            "login",
+            "--username",
+            "DUMMY_USER",
+            "--password",
+            "DUMMY_PASS",
+            "https://host.org",
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "auth",
+            "login",
+            "--s3-access-key-id",
+            "DUMMY_ID",
+            "--s3-secret-access-key",
+            "DUMMY_KEY",
+            "--s3-session-token",
+            "DUMMY_TOKEN",
+            "s3://amazon-aws.com",
+        ]
+    )
+
+    verify_cli_command([pixi, "auth", "logout", "https://prefix.dev/"])
+    verify_cli_command([pixi, "auth", "logout", "https://repo.prefix.dev/"])
+    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"])
+    verify_cli_command([pixi, "auth", "logout", "https://host.org"])
+    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"])

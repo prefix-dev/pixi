@@ -1,11 +1,17 @@
-use crate::Project;
+use crate::Workspace;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::VersionBumpType;
 
-pub async fn execute(mut project: Project, bump_type: VersionBumpType) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace, bump_type: VersionBumpType) -> miette::Result<()> {
+    let mut workspace = workspace.modify()?;
+
     // get version and exit with error if not found
-    let current_version = project
-        .version()
+    let current_version = workspace
+        .workspace()
+        .workspace
+        .value
+        .workspace
+        .version
         .as_ref()
         .ok_or_else(|| miette::miette!("No version found in manifest."))?
         .clone();
@@ -17,10 +23,10 @@ pub async fn execute(mut project: Project, bump_type: VersionBumpType) -> miette
         .context("Failed to bump version.")?;
 
     // Set the version
-    project.manifest.set_version(&new_version.to_string())?;
+    workspace.manifest().set_version(&new_version.to_string())?;
 
     // Save the manifest on disk
-    project.save()?;
+    let _workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     eprintln!(

@@ -60,7 +60,7 @@ pub enum NoBuild {
     All,
     /// Don't build sdist for specific packages
     // Todo: would be nice to check if these are actually used at some point
-    Packages(HashSet<String>),
+    Packages(HashSet<pep508_rs::PackageName>),
 }
 
 impl NoBuild {
@@ -349,34 +349,38 @@ mod tests {
 
     #[test]
     fn test_no_build_union() {
+        let pkg1 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+        let pkg2 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+        let pkg3 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+
         // Case 1: One is `All`, result should be `All`
         assert_eq!(NoBuild::All.union(&NoBuild::None), NoBuild::All);
         assert_eq!(NoBuild::None.union(&NoBuild::All), NoBuild::All);
         assert_eq!(
-            NoBuild::All.union(&NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()]))),
+            NoBuild::All.union(&NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))),
             NoBuild::All
         );
 
         // Case 2: One is `None`, result should be the other
         assert_eq!(NoBuild::None.union(&NoBuild::None), NoBuild::None);
         assert_eq!(
-            NoBuild::None.union(&NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()]))),
-            NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()]))
+            NoBuild::None.union(&NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))),
+            NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))
         );
         assert_eq!(
-            NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()])).union(&NoBuild::None),
-            NoBuild::Packages(HashSet::from_iter(["pkg1".to_string()]))
+            NoBuild::Packages(HashSet::from_iter([pkg1.clone()])).union(&NoBuild::None),
+            NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))
         );
 
         // Case 3: Both are `Packages`, result should be the union of the two
         assert_eq!(
-            NoBuild::Packages(HashSet::from_iter(["pkg1".to_string(), "pkg2".to_string()])).union(
-                &NoBuild::Packages(HashSet::from_iter(["pkg2".to_string(), "pkg3".to_string()]))
+            NoBuild::Packages(HashSet::from_iter([pkg1.clone(), pkg2.clone()])).union(
+                &NoBuild::Packages(HashSet::from_iter([pkg2.clone(), pkg3.clone()]))
             ),
             NoBuild::Packages(HashSet::from_iter([
-                "pkg1".to_string(),
-                "pkg2".to_string(),
-                "pkg3".to_string()
+                pkg1.clone(),
+                pkg2.clone(),
+                pkg3.clone()
             ]))
         );
     }

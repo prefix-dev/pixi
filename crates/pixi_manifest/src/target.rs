@@ -589,17 +589,14 @@ impl<T> Targets<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use insta::assert_snapshot;
     use itertools::Itertools;
 
-    use crate::Manifest;
+    use crate::WorkspaceManifest;
 
     #[test]
     fn test_targets_overwrite_order() {
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
+        let manifest = WorkspaceManifest::from_toml_str(
             r#"
         [project]
         name = "test"

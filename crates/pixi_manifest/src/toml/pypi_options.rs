@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::PathBuf, str::FromStr};
 
 use pixi_toml::{TomlEnum, TomlFromStr, TomlWith};
 use toml_span::{
@@ -9,6 +9,24 @@ use toml_span::{
 use url::Url;
 
 use crate::pypi::pypi_options::{FindLinksUrlOrPath, NoBuild, PypiOptions};
+
+/// A helper struct to deserialize a [`pep508_rs::PackageName`] from a TOML
+/// string.
+struct Pep508PackageName(pub pep508_rs::PackageName);
+
+impl<'de> toml_span::Deserialize<'de> for Pep508PackageName {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let str = value.take_string(None)?;
+        let package_name = pep508_rs::PackageName::from_str(&str).map_err(|e| {
+            DeserError::from(toml_span::Error {
+                kind: ErrorKind::Custom(e.to_string().into()),
+                span: value.span,
+                line_info: None,
+            })
+        })?;
+        Ok(Self(package_name))
+    }
+}
 
 impl<'de> toml_span::Deserialize<'de> for NoBuild {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -26,7 +44,7 @@ impl<'de> toml_span::Deserialize<'de> for NoBuild {
                 ValueInner::Array(array) => {
                     let mut packages = HashSet::with_capacity(array.len());
                     for mut value in array {
-                        packages.insert(value.take_string(None)?.into_owned());
+                        packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
                     }
                     Ok(NoBuild::Packages(packages))
                 }
@@ -321,6 +339,21 @@ mod test {
           ╭─[pixi.toml:1:12]
         1 │ no-build = 3
           ·            ─
+          ╰────
+        "###)
+    }
+
+    #[test]
+    fn test_no_build_package_name() {
+        let input = r#"no-build = ['$$$']"#;
+        assert_snapshot!(format_parse_error(
+            input,
+            PypiOptions::from_toml_str(input).unwrap_err()
+        ), @r###"
+         × Not a valid package or extra name: "$$$". Names must start and end with a letter or digit and may only contain -, _, ., and alphanumeric characters.
+          ╭─[pixi.toml:1:14]
+        1 │ no-build = ['$$$']
+          ·              ───
           ╰────
         "###)
     }

@@ -273,7 +273,7 @@ async fn test_allow_insecure_host() {
         "should occur ssl error"
     );
 
-    let config_path = pixi.project().unwrap().pixi_dir().join("config.toml");
+    let config_path = pixi.workspace().unwrap().pixi_dir().join("config.toml");
     fs_err::create_dir_all(config_path.parent().unwrap()).unwrap();
     let mut file = File::create(config_path).unwrap();
     file.write_all(

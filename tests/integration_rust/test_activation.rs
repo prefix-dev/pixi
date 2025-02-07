@@ -1,5 +1,5 @@
 use crate::common::PixiControl;
-use pixi::{activation::CurrentEnvVarBehavior, project::get_activated_environment_variables};
+use pixi::{activation::CurrentEnvVarBehavior, workspace::get_activated_environment_variables};
 
 #[cfg(windows)]
 const HOME: &str = "HOMEPATH";
@@ -11,11 +11,11 @@ async fn test_pixi_only_env_activation() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
-    let default_env = project.default_environment();
+    let workspace = pixi.workspace().unwrap();
+    let default_env = workspace.default_environment();
 
     let pixi_only_env = get_activated_environment_variables(
-        project.env_vars(),
+        workspace.env_vars(),
         &default_env,
         CurrentEnvVarBehavior::Exclude,
         None,
@@ -38,7 +38,7 @@ async fn test_full_env_activation() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
     let default_env = project.default_environment();
 
     std::env::set_var("DIRTY_VAR", "Dookie");
@@ -64,7 +64,7 @@ async fn test_clean_env_activation() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
     let default_env = project.default_environment();
 
     std::env::set_var("DIRTY_VAR", "Dookie");

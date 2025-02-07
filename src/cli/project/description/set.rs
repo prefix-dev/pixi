@@ -1,5 +1,6 @@
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
+use miette::IntoDiagnostic;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -8,20 +9,22 @@ pub struct Args {
     pub description: String,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
+    let mut workspace = workspace.modify()?;
+
     // Set the description
-    project.manifest.set_description(&args.description)?;
+    workspace.manifest().set_description(&args.description)?;
 
     // Save the manifest on disk
-    project.save()?;
+    let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     eprintln!(
         "{}Updated project description to '{}'.",
         console::style(console::Emoji("✔ ", "")).green(),
-        project
-            .manifest
+        workspace
             .workspace
+            .value
             .workspace
             .description
             .as_ref()

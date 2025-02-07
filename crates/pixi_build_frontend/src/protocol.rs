@@ -36,10 +36,11 @@ pub enum DiscoveryError {
         "failed to discover a valid project manifest, the source does not refer to a directory"
     )]
     NotADirectory,
+
     #[error("failed to discover a valid project manifest, the source path '{}' could not be found", .0.display())]
     NotFound(PathBuf),
 
-    #[error("unable to discover communication protocol, the source directory does not contain a supported manifest")]
+    #[error("the source directory does not contain a supported manifest")]
     #[diagnostic(help(
         "Ensure that the source directory contains a valid pixi.toml or meta.yaml file."
     ))]

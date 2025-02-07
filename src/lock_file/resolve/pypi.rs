@@ -38,15 +38,14 @@ use uv_dispatch::SharedState;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    IndexUrl, InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
-    ToUrlError,
+    IndexUrl, Name, Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
 use uv_git::GitResolver;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    Preferences, PythonRequirement, Resolver, ResolverEnvironment,
+    PreferenceError, Preferences, PythonRequirement, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -62,8 +61,8 @@ use crate::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
         PypiRecord, UvResolutionContext,
     },
-    project::{Environment, EnvironmentVars},
     uv_reporter::{UvReporter, UvReporterOptions},
+    workspace::{Environment, EnvironmentVars},
     CondaPrefixUpdated,
 };
 
@@ -326,7 +325,6 @@ pub async fn resolve_pypi(
     // The BuildDispatch might resolve or install when building wheels which will be
     // mostly with build isolation. In that case we want to use fresh
     // non-tampered requests.
-    let build_dispatch_in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
     let dependency_metadata = DependencyMetadata::default();
@@ -393,6 +391,14 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
+    #[derive(Debug, thiserror::Error)]
+    enum PixiPreferencesError {
+        #[error(transparent)]
+        Conversion(#[from] ConversionError),
+        #[error(transparent)]
+        Preference(#[from] PreferenceError),
+    }
+
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
     let preferences = locked_pypi_packages
@@ -413,9 +419,16 @@ pub async fn resolve_pypi(
                 origin: None,
             };
 
-            Ok(Preference::from_lock(&InstalledDist::Registry(installed)))
+            let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
+            let entry = uv_requirements_txt::RequirementEntry {
+                requirement: named,
+                hashes: Default::default(),
+            };
+
+            Ok(Preference::from_entry(entry)?)
         })
-        .collect::<Result<Vec<_>, ConversionError>>()
+        .filter_map(|pref| pref.transpose())
+        .collect::<Result<Vec<_>, PixiPreferencesError>>()
         .into_diagnostic()?;
 
     let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
@@ -452,6 +465,7 @@ pub async fn resolve_pypi(
         lookaheads,
     );
 
+    let provider_tags = tags.clone();
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
             &registry_client,
@@ -459,7 +473,7 @@ pub async fn resolve_pypi(
             context.concurrency.downloads,
         ),
         &flat_index,
-        Some(&tags),
+        Some(&provider_tags),
         &requires_python,
         AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
         &context.hash_strategy,

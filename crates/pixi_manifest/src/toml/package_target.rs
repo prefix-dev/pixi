@@ -1,11 +1,10 @@
-use pixi_toml::DeserializeAs;
-use toml_span::{de_helpers::TableHelper, DeserError, Deserialize, Value};
+use toml_span::{de_helpers::TableHelper, DeserError, Value};
 
 use crate::{
     target::PackageTarget,
     toml::target::combine_target_dependencies,
     utils::{package_map::UniquePackageMap, PixiSpanned},
-    SpecType,
+    KnownPreviewFeature, Preview, SpecType, TomlError,
 };
 
 #[derive(Debug)]
@@ -30,20 +29,17 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageTarget {
     }
 }
 
-impl<'de> DeserializeAs<'de, PackageTarget> for TomlPackageTarget {
-    fn deserialize_as(value: &mut Value<'de>) -> Result<PackageTarget, DeserError> {
-        TomlPackageTarget::deserialize(value).map(TomlPackageTarget::into_package_target)
-    }
-}
-
 impl TomlPackageTarget {
-    pub fn into_package_target(self) -> PackageTarget {
-        PackageTarget {
-            dependencies: combine_target_dependencies([
-                (SpecType::Run, self.run_dependencies),
-                (SpecType::Host, self.host_dependencies),
-                (SpecType::Build, self.build_dependencies),
-            ]),
-        }
+    pub fn into_package_target(self, preview: &Preview) -> Result<PackageTarget, TomlError> {
+        Ok(PackageTarget {
+            dependencies: combine_target_dependencies(
+                [
+                    (SpecType::Run, self.run_dependencies),
+                    (SpecType::Host, self.host_dependencies),
+                    (SpecType::Build, self.build_dependencies),
+                ],
+                preview.is_enabled(KnownPreviewFeature::PixiBuild),
+            )?,
+        })
     }
 }

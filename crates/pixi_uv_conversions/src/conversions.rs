@@ -33,7 +33,7 @@ pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, Inv
         NoBuild::All => uv_configuration::NoBuild::All,
         NoBuild::Packages(ref vec) => uv_configuration::NoBuild::Packages(
             vec.iter()
-                .map(|s| PackageName::new(s.clone()))
+                .map(|s| PackageName::new(s.to_string()))
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     };
