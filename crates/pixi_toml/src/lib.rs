@@ -24,7 +24,7 @@ pub use hash_map::TomlHashMap;
 pub use index_map::TomlIndexMap;
 pub use index_set::TomlIndexSet;
 pub use one_or_many::OneOrMany;
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Value};
+use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Spanned, Value};
 pub use variant::TomlEnum;
 pub use with::TomlWith;
 
@@ -38,6 +38,14 @@ pub struct Same;
 impl<'de, T: toml_span::Deserialize<'de>> DeserializeAs<'de, T> for Same {
     fn deserialize_as(value: &mut Value<'de>) -> Result<T, DeserError> {
         T::deserialize(value)
+    }
+}
+
+impl<'de, T, U: DeserializeAs<'de, T>> DeserializeAs<'de, Spanned<T>> for Spanned<U> {
+    fn deserialize_as(value: &mut Value<'de>) -> Result<Spanned<T>, DeserError> {
+        let span = value.span;
+        let value = U::deserialize_as(value)?;
+        Ok(Spanned { value, span })
     }
 }
 

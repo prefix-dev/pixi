@@ -1,12 +1,10 @@
-use toml_span::{de_helpers::expected, DeserError, Value};
-
-use crate::utils::PixiSpanned;
+use toml_span::{de_helpers::expected, DeserError, Spanned, Value};
 
 /// Helper struct to deserialize the environment from TOML.
 /// The environment description can only hold these values.
 #[derive(Debug)]
 pub struct TomlEnvironment {
-    pub features: Option<PixiSpanned<Vec<String>>>,
+    pub features: Option<Spanned<Vec<Spanned<String>>>>,
     pub solve_group: Option<String>,
     pub no_default_feature: bool,
 }
@@ -14,14 +12,14 @@ pub struct TomlEnvironment {
 #[derive(Debug)]
 pub enum TomlEnvironmentList {
     Map(TomlEnvironment),
-    Seq(Vec<String>),
+    Seq(Spanned<Vec<Spanned<String>>>),
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = toml_span::de_helpers::TableHelper::new(value)?;
 
-        let features = th.optional_s("features").map(PixiSpanned::from);
+        let features = th.optional_s("features");
         let solve_group = th.optional("solve-group");
         let no_default_feature = th.optional("no-default-feature");
 
@@ -91,7 +89,7 @@ mod test {
         let toplevel = TopLevel::from_toml_str(input).unwrap();
         assert_matches!(
             toplevel.env,
-            TomlEnvironmentList::Seq(envs) if envs == vec!["foo", "bar"]);
+            TomlEnvironmentList::Seq(envs) if envs.value.clone().into_iter().map(Spanned::take).collect::<Vec<_>>() == vec!["foo", "bar"]);
     }
 
     #[test]
@@ -104,7 +102,7 @@ mod test {
         assert_matches!(
             toplevel.env,
             TomlEnvironmentList::Map(map) if
-                map.features.clone().unwrap().value == vec!["foo", "bar"]
+                map.features.clone().unwrap().value.into_iter().map(Spanned::take).collect::<Vec<_>>() == vec!["foo", "bar"]
                 && map.solve_group == Some("group".to_string())
                 && map.no_default_feature);
     }

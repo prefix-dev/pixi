@@ -1,15 +1,20 @@
-use crate::build::BuildContext;
-use crate::environment::{self, PythonStatus};
-use crate::lock_file::IoConcurrencyLimit;
-use crate::prefix::Prefix;
-use crate::project::grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
-use crate::project::HasProjectRef;
 use futures::TryFutureExt;
 use miette::IntoDiagnostic;
 use pixi_manifest::FeaturesExt;
 use pixi_record::PixiRecord;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::Platform;
+
+use crate::{
+    build::BuildContext,
+    environment::{self, PythonStatus},
+    lock_file::IoConcurrencyLimit,
+    prefix::Prefix,
+    workspace::{
+        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+        HasWorkspaceRef,
+    },
+};
 
 /// A struct that contains the result of updating a conda prefix.
 pub struct CondaPrefixUpdated {
@@ -61,7 +66,7 @@ impl<'a> CondaPrefixUpdater<'a> {
 
         let channels = self
             .group
-            .channel_urls(&self.group.project().channel_config())
+            .channel_urls(&self.group.workspace().channel_config())
             .into_diagnostic()?;
 
         // Spawn a task to determine the currently installed packages.
@@ -79,7 +84,7 @@ impl<'a> CondaPrefixUpdater<'a> {
 
         let has_existing_packages = !installed_packages.is_empty();
         let group_name = self.group.name().clone();
-        let client = self.group.project().authenticated_client().clone();
+        let client = self.group.workspace().authenticated_client().clone();
         let prefix = self.group.prefix();
 
         let python_status = environment::update_prefix_conda(

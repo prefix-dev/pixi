@@ -2,6 +2,7 @@ mod activation;
 mod build_system;
 pub(crate) mod channel;
 mod dependencies;
+mod discovery;
 mod environment;
 mod environments;
 mod error;
@@ -21,23 +22,30 @@ mod target;
 pub mod task;
 pub mod toml;
 pub mod utils;
-mod validation;
+mod warning;
 mod workspace;
 
 pub use activation::Activation;
 pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
 pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
+pub use discovery::{
+    DiscoveryStart, ExplicitManifestError, LoadManifestsError, Manifests, WorkspaceDiscoverer,
+    WorkspaceDiscoveryError,
+};
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
-pub use has_manifest_ref::HasManifestRef;
+pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
-pub use manifests::{Manifest, ManifestKind, ManifestSource, PackageManifest, WorkspaceManifest};
+pub use manifests::{
+    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
+    ProvenanceError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
+};
 use miette::Diagnostic;
-pub use preview::{KnownPreviewFeature, Preview, PreviewFeature};
+pub use preview::{KnownPreviewFeature, Preview};
 pub use pypi::pypi_requirement::PyPiRequirement;
 use rattler_conda_types::Platform;
 pub use spec_type::SpecType;
@@ -45,6 +53,7 @@ pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, Syste
 pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
+pub use warning::{Warning, WarningWithSource, WithWarnings};
 pub use workspace::{ChannelPriority, Workspace};
 
 pub use crate::{
@@ -76,7 +85,8 @@ pub enum DependencyOverwriteBehavior {
 }
 
 pub enum PypiDependencyLocation {
-    /// [pypi-dependencies] in pixi.toml or [tool.pixi.pypi-dependencies] in pyproject.toml
+    /// [pypi-dependencies] in pixi.toml or [tool.pixi.pypi-dependencies] in
+    /// pyproject.toml
     PixiPypiDependencies,
     /// [project.dependencies] in pyproject.toml
     Dependencies,
@@ -96,6 +106,7 @@ fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
 
 use console::StyledObject;
 use fancy_display::FancyDisplay;
+pub use manifests::ManifestDocument;
 use pixi_consts::consts;
 
 impl FancyDisplay for EnvironmentName {

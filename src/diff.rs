@@ -14,7 +14,7 @@ use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
 
-use crate::Project;
+use crate::Workspace;
 
 // Represents the differences between two sets of packages.
 #[derive(Default, Clone)]
@@ -377,7 +377,7 @@ pub struct LockFileJsonDiff {
 }
 
 impl LockFileJsonDiff {
-    pub fn new(project: Option<&Project>, value: LockFileDiff) -> Self {
+    pub fn new(project: Option<&Workspace>, value: LockFileDiff) -> Self {
         let mut environment = IndexMap::new();
 
         for (environment_name, environment_diff) in value.environment {

@@ -1,16 +1,18 @@
-use std::ops::Range;
-use std::str::FromStr;
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Value};
+use std::{ops::Range, str::FromStr};
 
-use crate::{utils::PixiSpanned, KnownPreviewFeature, Preview, PreviewFeature};
+use itertools::Itertools;
+use miette::LabeledSpan;
+use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Spanned, Value};
+
+use crate::{error::GenericError, KnownPreviewFeature, Preview, WithWarnings};
 
 #[derive(Debug, Clone, PartialEq)]
 /// The preview features of the project
 pub enum TomlPreview {
     /// All preview features are enabled
-    AllEnabled(PixiSpanned<bool>), // For `preview = true`
+    AllEnabled(Spanned<bool>), // For `preview = true`
     /// Specific preview features are enabled
-    Features(Vec<PixiSpanned<PreviewFeature>>), // For `preview = ["feature"]`
+    Features(Vec<Spanned<KnownOrUnknownPreviewFeature>>), // For `preview = ["feature"]`
 }
 
 impl Default for TomlPreview {
@@ -23,12 +25,10 @@ impl TomlPreview {
     /// Returns the span of the definition of a certain feature.
     pub fn get_span(&self, feature: KnownPreviewFeature) -> Option<Range<usize>> {
         match self {
-            TomlPreview::AllEnabled(enabled) => {
-                enabled.value.then(|| enabled.span.clone()).flatten()
-            }
+            TomlPreview::AllEnabled(enabled) => enabled.value.then(|| enabled.span.into()),
             TomlPreview::Features(features) => features.iter().find_map(|f| {
-                if f.value == feature {
-                    f.span.clone()
+                if f.value == KnownOrUnknownPreviewFeature::Known(feature) {
+                    Some(f.span.into())
                 } else {
                     None
                 }
@@ -40,17 +40,50 @@ impl TomlPreview {
     pub fn is_enabled(&self, feature: KnownPreviewFeature) -> bool {
         match self {
             Self::AllEnabled(_) => true,
-            Self::Features(features) => features.iter().any(|f| f.value == feature),
+            Self::Features(features) => features
+                .iter()
+                .any(|f| f.value == KnownOrUnknownPreviewFeature::Known(feature)),
         }
     }
 }
 
-impl From<TomlPreview> for Preview {
-    fn from(value: TomlPreview) -> Self {
-        match value {
-            TomlPreview::AllEnabled(enabled) => Preview::AllEnabled(enabled.value),
+impl TomlPreview {
+    pub fn into_preview(self) -> WithWarnings<Preview> {
+        match self {
+            TomlPreview::AllEnabled(all_enabled) => {
+                WithWarnings::from(Preview::AllEnabled(all_enabled.value))
+            }
             TomlPreview::Features(features) => {
-                Preview::Features(features.into_iter().map(|f| f.value).collect())
+                let mut known_features = Vec::with_capacity(features.len());
+                let mut unknown_features = Vec::new();
+                for Spanned { value, span } in features {
+                    match value {
+                        KnownOrUnknownPreviewFeature::Known(feature) => {
+                            known_features.push(feature)
+                        }
+                        KnownOrUnknownPreviewFeature::Unknown(feature) => {
+                            unknown_features.push((feature, span))
+                        }
+                    };
+                }
+                let preview = WithWarnings::from(Preview::Features(known_features));
+                if unknown_features.is_empty() {
+                    preview
+                } else {
+                    let are = if unknown_features.len() > 1 {
+                        "are"
+                    } else {
+                        "is"
+                    };
+                    let s = if unknown_features.len() > 1 { "s" } else { "" };
+                    let warning = GenericError::new(
+                        format!("The preview feature{s}: {} {are} defined in the manifest but un-used in pixi",
+                                unknown_features.iter().map(|(name, _)| name).format(", ")))
+                        .with_labels(unknown_features.into_iter().map(|(name, span)| {
+                            LabeledSpan::new_with_span(Some(format!("'{}' is unknown", name)), Range::<usize>::from(span))
+                        }));
+                    preview.with_warnings(vec![warning.into()])
+                }
             }
         }
     }
@@ -60,9 +93,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlPreview {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let span = value.span;
         match value.take() {
-            ValueInner::Boolean(enabled) => Ok(TomlPreview::AllEnabled(PixiSpanned {
+            ValueInner::Boolean(enabled) => Ok(TomlPreview::AllEnabled(Spanned {
                 value: enabled,
-                span: Some(span.into()),
+                span,
             })),
             ValueInner::Array(arr) => {
                 let features = arr
@@ -80,14 +113,20 @@ impl<'de> toml_span::Deserialize<'de> for TomlPreview {
     }
 }
 
-impl<'de> toml_span::Deserialize<'de> for PreviewFeature {
+impl<'de> toml_span::Deserialize<'de> for KnownOrUnknownPreviewFeature {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let str = value.take_string("a feature name".into())?;
         Ok(KnownPreviewFeature::from_str(&str).map_or_else(
-            |_| PreviewFeature::Unknown(str.into_owned()),
-            PreviewFeature::Known,
+            |_| KnownOrUnknownPreviewFeature::Unknown(str.into_owned()),
+            KnownOrUnknownPreviewFeature::Known,
         ))
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KnownOrUnknownPreviewFeature {
+    Known(KnownPreviewFeature),
+    Unknown(String),
 }
 
 #[cfg(test)]
@@ -97,8 +136,10 @@ mod tests {
     use toml_span::de_helpers::TableHelper;
 
     use super::*;
-    use crate::PreviewFeature::Unknown;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::{
+        toml::{preview::KnownOrUnknownPreviewFeature::Unknown, FromTomlStr},
+        utils::test_utils::format_parse_error,
+    };
 
     /// Fake table to test the `Preview` enum
     #[derive(Debug)]
@@ -121,7 +162,7 @@ mod tests {
         let top = TopLevel::from_toml_str(input).expect("should parse as `AllEnabled`");
         assert_matches!(
             top.preview,
-            TomlPreview::AllEnabled(PixiSpanned { value: true, .. })
+            TomlPreview::AllEnabled(Spanned { value: true, .. })
         );
     }
 
@@ -200,11 +241,28 @@ mod tests {
             TomlPreview::Features(vec) => {
                 assert_matches::assert_matches!(
                     &vec[0].value,
-                    PreviewFeature::Unknown(s) => {
+                    Unknown(s) => {
                         s == &"new_parsing".to_string()
                     }
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_unknown_feature_warning() {
+        let input = r#"preview = ["foobar", "pixi-build", "new_parsing"]"#;
+        let top = TopLevel::from_toml_str(input).unwrap();
+        let preview = top.preview.into_preview();
+        assert_eq!(preview.warnings.len(), 1);
+        assert_snapshot!(format_parse_error(input, preview.warnings.into_iter().next().unwrap()), @r###"
+         ⚠ The preview features: foobar, new_parsing are defined in the manifest but un-used in pixi
+          ╭─[pixi.toml:1:13]
+        1 │ preview = ["foobar", "pixi-build", "new_parsing"]
+          ·             ───┬──                  ─────┬─────
+          ·                │                         ╰── 'new_parsing' is unknown
+          ·                ╰── 'foobar' is unknown
+          ╰────
+        "###);
     }
 }

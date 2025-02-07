@@ -8,20 +8,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{
-    lock_file::CondaPrefixUpdater,
-    project::{get_activated_environment_variables, EnvironmentVars},
-};
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
-use miette::{Diagnostic, IntoDiagnostic, LabeledSpan, MietteDiagnostic, Report, WrapErr};
+use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
 use pixi_consts::consts;
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
@@ -57,18 +53,19 @@ use crate::{
         self,
         records_by_name::HasNameVersion,
         reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
-        PypiRecord,
+        CondaPrefixUpdater, PypiRecord,
     },
     prefix::Prefix,
-    project::{
-        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        Environment, HasProjectRef,
-    },
     repodata::Repodata,
-    CondaPrefixUpdated, Project,
+    workspace::{
+        get_activated_environment_variables,
+        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+        Environment, EnvironmentVars, HasWorkspaceRef,
+    },
+    CondaPrefixUpdated, Workspace,
 };
 
-impl Project {
+impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project information.
     ///
     /// Returns the lock-file and any potential derived data that was computed
@@ -94,7 +91,7 @@ enum UpdateError {
     ParseLockFileError(#[from] ParseLockFileError),
 }
 
-/// Options to pass to [`Project::update_lock_file`].
+/// Options to pass to [`Workspace::update_lock_file`].
 #[derive(Default)]
 pub struct UpdateLockFileOptions {
     /// Defines what to do if the lock-file is out of date
@@ -112,7 +109,7 @@ pub struct UpdateLockFileOptions {
 /// A struct that holds the lock-file and any potential derived data that was
 /// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
-    pub project: &'p Project,
+    pub workspace: &'p Workspace,
 
     /// The lock-file
     pub lock_file: LockFile,
@@ -157,7 +154,7 @@ pub enum UpdateMode {
 impl<'p> LockFileDerivedData<'p> {
     /// Write the lock-file to disk.
     pub(crate) fn write_to_disk(&self) -> miette::Result<()> {
-        let lock_file_path = self.project.lock_file_path();
+        let lock_file_path = self.workspace.lock_file_path();
         self.lock_file
             .to_path(&lock_file_path)
             .into_diagnostic()
@@ -201,7 +198,7 @@ impl<'p> LockFileDerivedData<'p> {
         write_environment_file(
             &environment.dir(),
             EnvironmentFile {
-                manifest_path: environment.project().manifest_path(),
+                manifest_path: environment.workspace().workspace.provenance.path.clone(),
                 environment_name: environment.name().to_string(),
                 pixi_version: consts::PIXI_VERSION.to_string(),
                 environment_lock_file_hash: hash,
@@ -225,7 +222,8 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            // If we contain source packages from conda or PyPI we update the prefix by default
+            // If we contain source packages from conda or PyPI we update the prefix by
+            // default
             let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
                 env.conda_packages(Platform::current())
                     .is_some_and(|mut packages| {
@@ -283,7 +281,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         let uv_context = match &self.uv_context {
             None => {
-                let context = UvResolutionContext::from_project(self.project)?;
+                let context = UvResolutionContext::from_workspace(self.workspace)?;
                 self.uv_context = Some(context.clone());
                 context
             }
@@ -292,7 +290,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
         let env_variables = get_activated_environment_variables(
-            self.project.env_vars(),
+            self.workspace.env_vars(),
             environment,
             CurrentEnvVarBehavior::Exclude,
             None,
@@ -320,7 +318,7 @@ impl<'p> LockFileDerivedData<'p> {
             &uv_context,
             self.pypi_indexes(environment).into_diagnostic()?.as_ref(),
             env_variables,
-            self.project.root(),
+            self.workspace.root(),
             environment.best_platform(),
             non_isolated_packages,
             &no_build,
@@ -414,7 +412,7 @@ impl<'p> LockFileDerivedData<'p> {
             .into_diagnostic()?
             .unwrap_or_default();
         let channel_urls = environment
-            .channel_urls(&self.project.channel_config())
+            .channel_urls(&self.workspace.channel_config())
             .into_diagnostic()?;
 
         // Update the prefix with conda packages.
@@ -423,7 +421,7 @@ impl<'p> LockFileDerivedData<'p> {
         let python_status = environment::update_prefix_conda(
             &prefix,
             self.package_cache.clone(),
-            environment.project().authenticated_client().clone(),
+            environment.workspace().authenticated_client().clone(),
             installed_packages,
             records,
             environment
@@ -459,7 +457,7 @@ impl<'p> LockFileDerivedData<'p> {
 }
 
 pub struct UpdateContext<'p> {
-    project: &'p Project,
+    project: &'p Workspace,
 
     /// Repodata records from the lock-file. This contains the records that
     /// actually exist in the lock-file. If the lock-file is missing or
@@ -656,7 +654,7 @@ impl<'p> UpdateContext<'p> {
 /// If the project has any source dependencies, like `git` or `path`
 /// dependencies. for pypi dependencies, we need to limit the solve to 1,
 /// because of uv internals
-fn determine_pypi_solve_permits(project: &Project) -> usize {
+fn determine_pypi_solve_permits(project: &Workspace) -> usize {
     // Get all environments
     let environments = project.environments();
     for environment in environments {
@@ -684,7 +682,7 @@ fn determine_pypi_solve_permits(project: &Project) -> usize {
 /// be done to update the lock-file. The tasks are awaited in a specific order
 /// to make sure that we can start instantiating prefixes as soon as possible.
 pub async fn update_lock_file(
-    project: &Project,
+    project: &Workspace,
     options: UpdateLockFileOptions,
 ) -> miette::Result<LockFileDerivedData<'_>> {
     let lock_file = load_lock_file(project).await?;
@@ -697,14 +695,14 @@ pub async fn update_lock_file(
         tracing::info!("skipping check if lock-file is up-to-date");
 
         return Ok(LockFileDerivedData {
-            project,
+            workspace: project,
             lock_file,
             package_cache,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::from_project(project)?,
+            build_context: BuildContext::from_workspace(project)?,
             glob_hash_cache,
         });
     }
@@ -721,14 +719,14 @@ pub async fn update_lock_file(
 
         // If no-environment is outdated we can return early.
         return Ok(LockFileDerivedData {
-            project,
+            workspace: project,
             lock_file,
             package_cache,
             updated_conda_prefixes: Default::default(),
             updated_pypi_prefixes: Default::default(),
             uv_context: None,
             io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::from_project(project)?,
+            build_context: BuildContext::from_workspace(project)?,
             glob_hash_cache,
         });
     }
@@ -759,7 +757,7 @@ pub async fn update_lock_file(
 
 pub struct UpdateContextBuilder<'p> {
     /// The project
-    project: &'p Project,
+    project: &'p Workspace,
 
     /// The current lock-file.
     lock_file: LockFile,
@@ -1024,7 +1022,7 @@ impl<'p> UpdateContextBuilder<'p> {
             .build();
 
         let build_context =
-            BuildContext::from_project(project)?.with_tool_context(Arc::new(tool_context));
+            BuildContext::from_workspace(project)?.with_tool_context(Arc::new(tool_context));
 
         Ok(UpdateContext {
             project,
@@ -1055,7 +1053,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
 impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
-    pub(crate) fn builder(project: &'p Project) -> UpdateContextBuilder<'p> {
+    pub(crate) fn builder(project: &'p Workspace) -> UpdateContextBuilder<'p> {
         UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
@@ -1070,7 +1068,6 @@ impl<'p> UpdateContext<'p> {
 
     pub async fn update(mut self) -> miette::Result<LockFileDerivedData<'p>> {
         let project = self.project;
-        let current_platform = Platform::current();
 
         // Create a mapping that iterators over all outdated environments and their
         // platforms for both and pypi.
@@ -1194,9 +1191,7 @@ impl<'p> UpdateContext<'p> {
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
                 .get_latest_group_repodata_records(&group, environment.best_platform())
-                .ok_or_else(|| {
-                    make_unsupported_pypi_platform_error(environment, current_platform)
-                })?;
+                .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
 
             // Creates an object to initiate an update at a later point
             let conda_prefix_updater = CondaPrefixUpdater::new(
@@ -1210,7 +1205,7 @@ impl<'p> UpdateContext<'p> {
             // Get the uv context
             let uv_context = match uv_context.as_ref() {
                 None => uv_context
-                    .insert(UvResolutionContext::from_project(project)?)
+                    .insert(UvResolutionContext::from_workspace(project)?)
                     .clone(),
                 Some(context) => context.clone(),
             };
@@ -1526,7 +1521,7 @@ impl<'p> UpdateContext<'p> {
         top_level_progress.finish_and_clear();
 
         Ok(LockFileDerivedData {
-            project,
+            workspace: project,
             lock_file,
             updated_conda_prefixes: self.take_instantiated_conda_prefixes(),
             package_cache: self.package_cache,
@@ -1542,10 +1537,7 @@ impl<'p> UpdateContext<'p> {
 /// Constructs an error that indicates that the current platform cannot solve
 /// pypi dependencies because there is no python interpreter available for the
 /// current platform.
-fn make_unsupported_pypi_platform_error(
-    environment: &Environment<'_>,
-    current_platform: Platform,
-) -> miette::Report {
+fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette::Report {
     let grouped_environment = GroupedEnvironment::from(environment.clone());
 
     // Construct a diagnostic that explains that the current platform is not
@@ -1555,52 +1547,9 @@ fn make_unsupported_pypi_platform_error(
         GroupedEnvironment::Environment(_) => "environment"
     }));
 
-    let mut labels = Vec::new();
-
-    // Add a reference to the set of platforms that are supported by the project.
-    let project_platforms = &environment.project().manifest.workspace.workspace.platforms;
-    if let Some(span) = project_platforms.span.clone() {
-        labels.push(LabeledSpan::at(
-            span,
-            format!("even though the projects does include support for '{current_platform}'"),
-        ));
-    }
-
-    // Find all the features that are excluding the current platform.
-    let features_without_platform = grouped_environment.features().filter_map(|feature| {
-        let platforms = feature.platforms.as_ref()?;
-        if !platforms.value.contains(&current_platform) {
-            Some((feature, platforms))
-        } else {
-            None
-        }
-    });
-
-    for (feature, platforms) in features_without_platform {
-        let Some(span) = platforms.span.as_ref() else {
-            continue;
-        };
-
-        labels.push(LabeledSpan::at(
-            span.clone(),
-            format!(
-                "feature '{}' does not support '{current_platform}'",
-                feature.name
-            ),
-        ));
-    }
-
-    diag.labels = Some(labels);
     diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
 
-    let reporter = miette::Report::new(diag);
-
-    // Add the source code if we have it available.
-    if let Some(content) = environment.project().manifest.contents.as_ref() {
-        reporter.with_source_code(content.clone())
-    } else {
-        reporter
-    }
+    miette::Report::new(diag)
 }
 
 /// Represents data that is sent back from a task. This is used to communicate
@@ -1672,10 +1621,10 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     // Whether we should use custom mapping location
-    let pypi_name_mapping_location = group.project().pypi_name_mapping_source()?.clone();
+    let pypi_name_mapping_location = group.workspace().pypi_name_mapping_source()?.clone();
 
     // Get the channel configuration
-    let channel_config = group.project().channel_config();
+    let channel_config = group.workspace().channel_config();
 
     // A root progress bar for the task. It is used to attach sub-progress bars to,
     // that doesn't need to be split up between multiple platforms.
@@ -2101,13 +2050,13 @@ async fn spawn_solve_pypi_task<'p>(
 
     let environment_name = grouped_environment.name().clone();
 
-    let pypi_name_mapping_location = grouped_environment.project().pypi_name_mapping_source()?;
+    let pypi_name_mapping_location = grouped_environment.workspace().pypi_name_mapping_source()?;
 
     let mut pixi_records = repodata_records.records.clone();
     let locked_pypi_records = locked_pypi_packages.records.clone();
 
     pypi_mapping::amend_pypi_purls(
-        environment.project().client().clone().into(),
+        environment.workspace().client().clone().into(),
         pypi_name_mapping_location,
         pixi_records
             .iter_mut()

@@ -1,5 +1,6 @@
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_manifest::EnvironmentName;
 
 #[derive(Parser, Debug)]
@@ -24,8 +25,8 @@ pub struct Args {
     pub force: bool,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
-    let environment_exists = project.environment(&args.name).is_some();
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
+    let environment_exists = workspace.environment(&args.name).is_some();
     if environment_exists && !args.force {
         return Err(miette::miette!(
             help = "use --force to overwrite the existing environment",
@@ -34,8 +35,10 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         ));
     }
 
+    let mut workspace = workspace.modify()?;
+
     // Add the platforms to the lock-file
-    project.manifest.add_environment(
+    workspace.manifest().add_environment(
         args.name.as_str().to_string(),
         args.features,
         args.solve_group,
@@ -43,7 +46,7 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
     )?;
 
     // Save the project to disk
-    project.save()?;
+    let _workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     eprintln!(

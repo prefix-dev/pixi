@@ -1,6 +1,6 @@
+use crate::Workspace;
 use clap::Parser;
-
-use crate::Project;
+use miette::IntoDiagnostic;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -8,14 +8,16 @@ pub struct Args {
     pub name: String,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
+    let mut workspace = workspace.modify()?;
+
     // Remove the environment
-    if !project.manifest.remove_environment(&args.name)? {
+    if !workspace.manifest().remove_environment(&args.name)? {
         // TODO: Add help for names of environments that are close.
         return Err(miette::miette!("Environment {} not found", args.name));
     }
 
-    project.save()?;
+    workspace.save().await.into_diagnostic()?;
 
     eprintln!(
         "{}Removed environment {}",

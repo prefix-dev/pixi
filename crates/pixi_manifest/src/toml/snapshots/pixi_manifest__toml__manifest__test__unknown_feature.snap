@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [environments]\n        foobar = [\"unknown\"]\n        \"#,)"
+---
+  × The feature 'unknown' is not defined in the manifest
+   ╭─[pixi.toml:8:20]
+ 7 │         [environments]
+ 8 │         foobar = ["unknown"]
+   ·                    ───────
+ 9 │
+   ╰────
+  help: Add the feature to the manifest

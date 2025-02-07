@@ -1,0 +1,5 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+  × unrecognized manifest file format. Expected either pixi.toml or pyproject.toml.

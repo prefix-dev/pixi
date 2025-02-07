@@ -6,7 +6,7 @@ use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
-use pixi_build_frontend::{BackendOverride, SetupRequest, ToolContext};
+use pixi_build_frontend::{BackendOverride, Protocol, SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -51,6 +51,7 @@ use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
     SourceMetadataInput,
 };
+use crate::Workspace;
 
 /// A list of globs that should be ignored when calculating any input hash.
 /// These are typically used for build artifacts that should not be included in
@@ -84,9 +85,11 @@ pub enum BuildError {
     #[error("error calculating sha for {}", &.0.display())]
     CalculateSha(PathBuf, #[source] std::io::Error),
 
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    BuildFrontendSetup(pixi_build_frontend::BuildFrontendError),
+    #[error("failed to initialize a build backend for {}", &.0.pinned)]
+    BuildFrontendSetup(
+        Box<SourceCheckout>,
+        #[diagnostic_source] pixi_build_frontend::BuildFrontendError,
+    ),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -158,18 +161,13 @@ impl BuildContext {
         })
     }
 
-    pub fn from_project(project: &crate::project::Project) -> miette::Result<Self> {
-        let variant = project
-            .manifest()
-            .workspace
-            .workspace
-            .build_variants
-            .clone();
+    pub fn from_workspace(workspace: &Workspace) -> miette::Result<Self> {
+        let variant = workspace.workspace.value.workspace.build_variants.clone();
 
         Self::new(
             get_cache_dir()?,
-            project.pixi_dir(),
-            project.channel_config(),
+            workspace.pixi_dir(),
+            workspace.channel_config(),
             variant,
             Arc::new(ToolContext::default()),
         )
@@ -288,21 +286,7 @@ impl BuildContext {
             }
         }
 
-        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
-        LazyLock::force(&RAYON_INITIALIZE);
-
-        // Instantiate a protocol for the source directory.
-        let protocol = pixi_build_frontend::BuildFrontend::default()
-            .with_channel_config(self.channel_config.clone())
-            .with_cache_dir(self.cache_dir.clone())
-            .with_tool_context(self.tool_context.clone())
-            .setup_protocol(SetupRequest {
-                source_dir: source_checkout.path.clone(),
-                build_tool_override: BackendOverride::from_env(),
-                build_id,
-            })
-            .await
-            .map_err(BuildError::BuildFrontendSetup)?;
+        let protocol = self.setup_protocol(&source_checkout, build_id).await?;
 
         // Extract the conda metadata for the package.
         let build_result = protocol
@@ -643,20 +627,7 @@ impl BuildContext {
             }
         }
 
-        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
-        LazyLock::force(&RAYON_INITIALIZE);
-
-        // Instantiate a protocol for the source directory.
-        let protocol = pixi_build_frontend::BuildFrontend::default()
-            .with_channel_config(self.channel_config.clone())
-            .with_tool_context(self.tool_context.clone())
-            .setup_protocol(SetupRequest {
-                source_dir: source.path.clone(),
-                build_tool_override: BackendOverride::from_env(),
-                build_id,
-            })
-            .await
-            .map_err(BuildError::BuildFrontendSetup)?;
+        let protocol = self.setup_protocol(source, build_id).await?;
 
         // Extract the conda metadata for the package.
         let metadata = protocol
@@ -720,6 +691,31 @@ impl BuildContext {
             metadata.packages,
             input_hash,
         ))
+    }
+
+    async fn setup_protocol(
+        &self,
+        source: &SourceCheckout,
+        build_id: usize,
+    ) -> Result<Protocol, BuildError> {
+        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
+        LazyLock::force(&RAYON_INITIALIZE);
+
+        // Instantiate a protocol for the source directory.
+        let protocol = pixi_build_frontend::BuildFrontend::default()
+            .with_channel_config(self.channel_config.clone())
+            .with_tool_context(self.tool_context.clone())
+            .setup_protocol(SetupRequest {
+                source_dir: source.path.clone(),
+                build_tool_override: BackendOverride::from_env(),
+                build_id,
+            })
+            .await
+            .map_err(|frontend_error| {
+                BuildError::BuildFrontendSetup(Box::new(source.clone()), frontend_error)
+            })?;
+
+        Ok(protocol)
     }
 
     fn cached_build_source_record(

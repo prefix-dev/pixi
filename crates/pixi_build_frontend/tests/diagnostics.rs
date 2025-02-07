@@ -4,7 +4,8 @@ use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest};
-use pixi_manifest::toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest};
+use pixi_manifest::toml::ExternalWorkspaceProperties;
+use pixi_manifest::toml::{FromTomlStr, TomlManifest};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::{
@@ -152,7 +153,7 @@ async fn test_invalid_backend() {
 
     let (workspace, package, _) = TomlManifest::from_toml_str(toml)
         .unwrap()
-        .into_manifests(ExternalWorkspaceProperties::default())
+        .into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
         .unwrap();
     let err = pixi_build_frontend::pixi_protocol::ProtocolBuilder::new(
         source_dir.path().to_path_buf(),

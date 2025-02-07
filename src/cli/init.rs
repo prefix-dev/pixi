@@ -21,7 +21,7 @@ use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
 
-use crate::Project;
+use crate::workspace::WorkspaceMut;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -29,7 +29,7 @@ pub enum ManifestFormat {
     Pyproject,
 }
 
-/// Creates a new project
+/// Creates a new workspace
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Where to place the project (defaults to current path)
@@ -226,7 +226,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
-        let rv = render_project(
+        let rendered_workspace_template = render_project(
             &env,
             name,
             version,
@@ -236,8 +236,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             None,
             &vec![],
         );
-        let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
-        let channel_config = project.channel_config();
+        let mut workspace =
+            WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
+        let channel_config = workspace.workspace().channel_config();
         for spec in conda_deps {
             // Determine the name of the package to add
             let (Some(name), spec) = spec.clone().into_nameless() else {
@@ -247,7 +248,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             };
             let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
-            project.manifest.add_dependency(
+            workspace.manifest().add_dependency(
                 &name,
                 &spec,
                 SpecType::Run,
@@ -258,7 +259,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )?;
         }
         for requirement in pypi_deps {
-            project.manifest.add_pep508_dependency(
+            workspace.manifest().add_pep508_dependency(
                 &requirement,
                 // No platforms required as you can't define them in the yaml
                 &[],
@@ -268,14 +269,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &None,
             )?;
         }
-        project.save()?;
+        let workspace = workspace.save().await.into_diagnostic()?;
 
         eprintln!(
             "{}Created {}",
             console::style(console::Emoji("✔ ", "")).green(),
             // Canonicalize the path to make it more readable, but if it fails just use the path as
             // is.
-            project.manifest_path().display()
+            workspace.workspace.provenance.path.display()
         );
     } else {
         let channels = if let Some(channels) = args.channels {
@@ -349,7 +350,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             } else {
                 // Inform about the addition of the package itself as an editable dependency of
-                // the project
+                // the workspace
                 eprintln!(
                     "{}Added package '{}' as an editable dependency.",
                     console::style(console::Emoji("✔ ", "")).green(),

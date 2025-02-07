@@ -1,13 +1,14 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use crate::{
-    cli::cli_config::ProjectConfig,
+    cli::cli_config::WorkspaceConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
+    WorkspaceLocator,
 };
 use crate::{
     load_lock_file,
     lock_file::{filter_lock_file, UpdateContext},
-    Project,
+    Workspace,
 };
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -26,7 +27,7 @@ pub struct Args {
     pub config: ConfigCli,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
@@ -123,7 +124,9 @@ impl UpdateSpecs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args.config;
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.project_config.workspace_locator_start())
+        .locate()?
         .with_cli_config(config);
 
     let specs = UpdateSpecs::from(args.specs);
@@ -131,7 +134,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // If the user specified an environment name, check to see if it exists.
     if let Some(env) = &specs.environments {
         for env in env {
-            if project.environment(env).is_none() {
+            if workspace.environment(env).is_none() {
                 miette::bail!(
                     "could not find an environment named {}",
                     env.fancy_display()
@@ -142,7 +145,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Load the current lock-file, if any. If none is found, a dummy lock-file is
     // returned.
-    let loaded_lock_file = load_lock_file(&project).await?;
+    let loaded_lock_file = load_lock_file(&workspace).await?;
 
     // If the user specified a package name, check to see if it is even locked.
     if let Some(packages) = &specs.packages {
@@ -152,10 +155,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Unlock dependencies in the lock-file that we want to update.
-    let relaxed_lock_file = unlock_packages(&project, &loaded_lock_file, &specs);
+    let relaxed_lock_file = unlock_packages(&workspace, &loaded_lock_file, &specs);
 
     // Update the packages in the lock-file.
-    let updated_lock_file = UpdateContext::builder(&project)
+    let updated_lock_file = UpdateContext::builder(&workspace)
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
         .finish()
@@ -174,7 +177,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Format as json?
     if args.json {
         let diff = LockFileDiff::from_lock_files(&loaded_lock_file, &updated_lock_file.lock_file);
-        let json_diff = LockFileJsonDiff::new(Some(&project), diff);
+        let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);
     } else if diff.is_empty() {
@@ -266,7 +269,7 @@ fn ensure_package_exists(
 }
 
 /// Constructs a new lock-file where some of the constraints have been removed.
-fn unlock_packages(project: &Project, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
+fn unlock_packages(project: &Workspace, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
     filter_lock_file(project, lock_file, |env, platform, package| {
         !specs.should_relax(env.name(), &platform, package)
     })
