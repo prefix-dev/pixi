@@ -4,11 +4,10 @@ use std::{
     sync::Arc,
 };
 
-use miette::{Diagnostic, Report};
+use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_manifest::{
-    AssociateProvenance, ManifestProvenance, Manifests, PackageManifest, PrioritizedChannel,
-    WorkspaceManifest,
+    DiscoveryStart, PackageManifest, PrioritizedChannel, WorkspaceDiscoverer, WorkspaceManifest,
 };
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use thiserror::Error;
@@ -126,32 +125,22 @@ impl ProtocolBuilder {
     /// Discovers a pixi project in the given source directory.
     pub fn discover(source_dir: &Path) -> Result<Option<Self>, ProtocolBuildError> {
         if let Some(manifest_path) = find_pixi_manifest(source_dir) {
-            // Construct a provenance object from the manifest path
-            let provenance = ManifestProvenance::from_path(manifest_path.clone()).map_err(|e| {
-                ProtocolBuildError::FailedToParseManifest(manifest_path.clone(), e.into())
-            })?;
-
-            // Read the contents of the provenance.
-            let contents = provenance
-                .read()
-                .map_err(|e| {
-                    ProtocolBuildError::FailedToParseManifest(
-                        manifest_path.clone(),
-                        Report::from_err(e),
-                    )
-                })?
-                .into_inner();
-
-            // Associate the contents with the provenance, but make the path relative to the
-            // source directory
-            let source = contents.with_provenance(provenance.relative_to(source_dir));
-
-            let manifests = Manifests::from_workspace_source(source).map_err(|e| {
-                ProtocolBuildError::FailedToParseManifest(manifest_path.clone(), e.into())
-            })?;
-
-            // Discard warnings
-            let manifests = manifests.value;
+            // Discover the workspace at the given location.
+            let manifests = match WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(
+                manifest_path.clone(),
+            ))
+            .with_closest_package(true)
+            .discover()
+            {
+                Err(e) => {
+                    return Err(ProtocolBuildError::FailedToParseManifest(
+                        manifest_path,
+                        e.into(),
+                    ))
+                }
+                Ok(Some(workspace)) => workspace.value,
+                Ok(None) => return Err(ProtocolBuildError::NotAPackage(manifest_path)),
+            };
 
             // Make sure the manifest describes a package.
             let Some(package_manifest) = manifests.package else {
