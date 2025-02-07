@@ -513,7 +513,9 @@ impl Workspace {
                                 Ok(url) => MappingLocation::Url(url),
                                 Err(err) => {
                                     if let ParseError::RelativeUrlWithoutBase = err {
-                                        MappingLocation::Path(PathBuf::from(mapping_location))
+                                        MappingLocation::Path(
+                                            manifest.path.parent().unwrap_or(&PathBuf::from("/")).join(mapping_location)
+                                        )
                                     } else {
                                         miette::bail!("Could not convert {mapping_location} to neither URL or Path")
                                     }
