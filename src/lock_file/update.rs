@@ -1190,7 +1190,7 @@ impl<'p> UpdateContext<'p> {
             let project_variables = self.project.env_vars().clone();
             // Construct a future that will resolve when we have the repodata available
             let repodata_future = self
-                .get_latest_group_repodata_records(&group, environment.best_platform())
+                .get_latest_group_repodata_records(&group, platform)
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
 
             // Creates an object to initiate an update at a later point
