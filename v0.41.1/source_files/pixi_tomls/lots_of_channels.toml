@@ -1,0 +1,12 @@
+[project]
+name = "lots_of_channels"
+platforms = []
+#  --8<-- [start:project_channels_long]
+channels = ["conda-forge", "robostack", "bioconda", "nvidia", "pytorch"]
+# --8<-- [end:project_channels_long]
+
+
+[feature.path_channels]
+#  --8<-- [start:project_channels_path]
+channels = ["conda-forge", "file:///home/user/staged-recipes/build_artifacts"]
+# --8<-- [end:project_channels_path]
