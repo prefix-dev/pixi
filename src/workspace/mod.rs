@@ -446,6 +446,7 @@ impl Workspace {
     /// Or we can use our self-hosted
     pub fn pypi_name_mapping_source(&self) -> miette::Result<&MappingSource> {
         fn build_pypi_name_mapping_source(
+            root_dir: &Path,
             manifest: &WorkspaceManifest,
             channel_config: &ChannelConfig,
         ) -> miette::Result<MappingSource> {
@@ -514,7 +515,7 @@ impl Workspace {
                                 Err(err) => {
                                     if let ParseError::RelativeUrlWithoutBase = err {
                                         MappingLocation::Path(
-                                            manifest.path.parent().unwrap_or(&PathBuf::from("/")).join(mapping_location)
+                                            root_dir.join(mapping_location)
                                         )
                                     } else {
                                         miette::bail!("Could not convert {mapping_location} to neither URL or Path")
@@ -532,7 +533,11 @@ impl Workspace {
             }
         }
         self.mapping_source.get_or_try_init(|| {
-            build_pypi_name_mapping_source(&self.workspace.value, &self.channel_config())
+            build_pypi_name_mapping_source(
+                self.root(),
+                &self.workspace.value,
+                &self.channel_config(),
+            )
         })
     }
 

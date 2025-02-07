@@ -392,7 +392,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     .unwrap();
 
     let mapping_path = pixi
-        .project_path()
+        .workspace_path()
         .join("tests/data/mapping_files/compressed_mapping.json");
 
     fs_err::create_dir_all(mapping_path.parent().unwrap()).unwrap();
@@ -402,7 +402,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     )
     .unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
     let client = project.authenticated_client();
 
@@ -489,13 +489,13 @@ async fn test_custom_mapping_channel_with_suffix() {
     .unwrap();
 
     let mapping_path = pixi
-        .project_path()
+        .workspace_path()
         .join("tests/data/mapping_files/custom_mapping.json");
 
     fs_err::create_dir_all(mapping_path.parent().unwrap()).unwrap();
     fs_err::copy("tests/data/mapping_files/custom_mapping.json", mapping_path).unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
     let client = project.authenticated_client();
 
@@ -547,13 +547,13 @@ async fn test_repo_data_record_channel_with_suffix() {
     .unwrap();
 
     let mapping_path = pixi
-        .project_path()
+        .workspace_path()
         .join("tests/data/mapping_files/custom_mapping.json");
 
     fs_err::create_dir_all(mapping_path.parent().unwrap()).unwrap();
     fs_err::copy("tests/data/mapping_files/custom_mapping.json", mapping_path).unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
     let client = project.authenticated_client();
 
@@ -605,13 +605,13 @@ async fn test_path_channel() {
     .unwrap();
 
     let mapping_path = pixi
-        .project_path()
+        .workspace_path()
         .join("tests/data/mapping_files/custom_mapping.json");
 
     fs_err::create_dir_all(mapping_path.parent().unwrap()).unwrap();
     fs_err::copy("tests/data/mapping_files/custom_mapping.json", mapping_path).unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
     let client = project.authenticated_client();
 
