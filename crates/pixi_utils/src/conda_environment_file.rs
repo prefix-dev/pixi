@@ -344,10 +344,7 @@ mod tests {
 
         let empty_map = HashMap::<String, String>::new();
 
-        assert_eq!(
-            vars,
-            empty_map
-        );
+        assert_eq!(vars, empty_map);
     }
 
     #[test]

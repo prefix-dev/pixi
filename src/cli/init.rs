@@ -497,12 +497,8 @@ fn render_project(
         } else {String::new()}},
     };
 
-    env.render_named_str(
-        consts::PROJECT_MANIFEST,
-        PROJECT_TEMPLATE,
-        ctx,
-    )
-    .expect("should be able to render the template")
+    env.render_named_str(consts::PROJECT_MANIFEST, PROJECT_TEMPLATE, ctx)
+        .expect("should be able to render the template")
 }
 
 /// Save the rendered template to a file, and print a message to the user.
