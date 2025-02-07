@@ -5,7 +5,7 @@
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
   "additionalProperties": false,
-  "oneOf": [
+  "anyOf": [
     {
       "required": [
         "project"
@@ -14,6 +14,11 @@
     {
       "required": [
         "workspace"
+      ]
+    },
+    {
+      "required": [
+        "package"
       ]
     }
   ],

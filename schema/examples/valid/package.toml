@@ -1,0 +1,7 @@
+#:schema ./../../schema.json
+[package]
+name = "project"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-backend", version = "*" }
