@@ -39,6 +39,7 @@ use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
     IndexUrl, InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
+    ToUrlError,
 };
 use uv_git::GitResolver;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
@@ -335,13 +336,7 @@ pub async fn resolve_pypi(
     };
     let git_resolver = GitResolver::default();
 
-    let shared_state = SharedState::new(
-        git_resolver.clone(),
-        build_dispatch_in_memory_index,
-        context.in_flight.clone(),
-        context.capabilities.clone(),
-    );
-
+    let shared_state = SharedState::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
@@ -400,22 +395,25 @@ pub async fn resolve_pypi(
 
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
-    // TODO refactor this later into function
     let preferences = locked_pypi_packages
         .iter()
         .map(|record| {
             let (package_data, _) = record;
-            // Fake being an InstalledRegistryDist
-            let installed = InstalledRegistryDist {
+            let requirement = uv_pep508::Requirement {
                 name: to_uv_normalize(&package_data.name)?,
-                version: to_uv_version(&package_data.version)?,
-                // This is not used, so we can just set it to a random value
-                path: PathBuf::new().join("does_not_exist"),
-                cache_info: None,
+                extras: Vec::new(),
+                version_or_url: Some(uv_pep508::VersionOrUrl::VersionSpecifier(
+                    uv_pep440::VersionSpecifiers::from(
+                        uv_pep440::VersionSpecifier::equals_version(to_uv_version(
+                            &package_data.version,
+                        )?),
+                    ),
+                )),
+                marker: uv_pep508::MarkerTree::TRUE,
+                origin: None,
             };
-            Ok(Preference::from_installed(&InstalledDist::Registry(
-                installed,
-            )))
+
+            Ok(Preference::from_lock(&InstalledDist::Registry(installed)))
         })
         .collect::<Result<Vec<_>, ConversionError>>()
         .into_diagnostic()?;
@@ -496,7 +494,7 @@ pub async fn resolve_pypi(
     )
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?
-    .with_reporter(UvReporter::new(
+    .with_reporter(UvReporter::new_arc(
         UvReporterOptions::new().with_existing(pb.clone()),
     ))
     .resolve()
@@ -540,6 +538,8 @@ enum GetUrlOrPathError {
     CannotJoin(String, String),
     #[error("expected path found: {0}")]
     ExpectedPath(String),
+    #[error("invalid URL")]
+    InvalidUrl(#[from] ToUrlError),
 }
 
 /// Get the UrlOrPath from the index url and file location
@@ -585,7 +585,7 @@ fn get_url_or_path(
                 FileLocation::AbsoluteUrl(url) => {
                     // Convert to a relative path from the base path
                     let absolute = url
-                        .to_url()
+                        .to_url()?
                         .to_file_path()
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(url.to_string()))?;
                     // !IMPORTANT! We need to strip the base path from the absolute path

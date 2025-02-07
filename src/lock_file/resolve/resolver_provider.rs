@@ -171,6 +171,6 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
         &'io self,
         dist: &'io uv_distribution_types::InstalledDist,
     ) -> impl Future<Output = WheelMetadataResult> + 'io {
-        todo!()
+        self.fallback.get_installed_metadata(dist)
     }
 }

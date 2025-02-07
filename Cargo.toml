@@ -108,6 +108,7 @@ uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
 uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
 uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
 uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
 
 wax = "0.6.0"
 which = "7.0.1"
@@ -332,6 +333,7 @@ uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-python = { workspace = true }
 uv-requirements = { workspace = true }
+uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }

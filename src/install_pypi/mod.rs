@@ -19,12 +19,11 @@ use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, IndexStrategy, PreviewMode};
 use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
-use uv_distribution_types::{DependencyMetadata, IndexLocations, Name};
-use uv_git::GitResolver;
+use uv_distribution_types::{DependencyMetadata, IndexLocations, Name, Resolution};
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_python::{Interpreter, PythonEnvironment};
-use uv_resolver::{FlatIndex, InMemoryIndex};
+use uv_resolver::FlatIndex;
 use uv_types::HashStrategy;
 
 use crate::{
@@ -101,7 +100,6 @@ pub async fn update_python_distributions(
         )
     };
 
-    let in_memory_index = InMemoryIndex::default();
     let config_settings = ConfigSettings::default();
 
     // Setup the interpreter from the conda prefix
@@ -119,8 +117,6 @@ pub async fn update_python_distributions(
         isolated_names_to_packages(non_isolated_packages.as_deref()).into_diagnostic()?;
     // Determine if we need to build any packages in isolation
     let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), &venv);
-
-    let git_resolver = GitResolver::default();
 
     let dep_metadata = DependencyMetadata::default();
     let constraints = Constraints::default();
@@ -163,6 +159,7 @@ pub async fn update_python_distributions(
         "Constructed site-packages with {} packages",
         site_packages.iter().count(),
     );
+    let config_settings = ConfigSettings::default();
 
     // This is used to find wheels that are available from the registry
     let registry_index = RegistryWheelIndex::new(
@@ -170,6 +167,7 @@ pub async fn update_python_distributions(
         &tags,
         &index_locations,
         &HashStrategy::None,
+        &config_settings,
     );
 
     // Create a map of the required packages
@@ -324,10 +322,12 @@ pub async fn update_python_distributions(
         )
         .with_reporter(UvReporter::new_arc(options));
 
+        let resolution = Resolution::default();
         let remote_dists = preparer
             .prepare(
                 remote.iter().map(|(d, _)| d.clone()).collect(),
                 &uv_context.in_flight,
+                &resolution,
             )
             .await
             .into_diagnostic()

@@ -15,7 +15,6 @@ use std::{future::Future, path::Path};
 use async_once_cell::OnceCell as AsyncCell;
 
 use anyhow::Result;
-use futures::FutureExt;
 use once_cell::sync::OnceCell;
 use pixi_manifest::EnvironmentName;
 use pixi_record::PixiRecord;
@@ -37,7 +36,7 @@ use uv_distribution_types::{
 use uv_install_wheel::LinkMode;
 use uv_pep508::PackageName;
 use uv_pypi_types::Requirement;
-use uv_python::{Interpreter, PythonEnvironment};
+use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildContext, BuildStack, HashStrategy};
 
@@ -212,6 +211,8 @@ enum LazyBuildDispatchError {
     Uv(#[from] BuildDispatchError),
     #[error(transparent)]
     UvFrontend(#[from] uv_build_frontend::Error),
+    #[error("failed to query interpreter in instantiated prefix")]
+    QueryInterpreterError(#[from] InterpreterError),
 }
 
 impl IsBuildBackendError for LazyBuildDispatchError {
@@ -287,33 +288,32 @@ impl<'a> LazyBuildDispatch<'a> {
                     .location()
                     .map(|path| prefix.prefix.root().join(path))
                     .ok_or_else(|| {
-                        Err(LazyBuildDispatchError::InitializationError(format!(
+                        LazyBuildDispatchError::InitializationError(format!(
                             "missing python interpreter from conda prefix {}. \n {}",
                             prefix.prefix.root().display(),
                             "Use `pixi add python` to install the latest python interpreter.",
-                        )))
+                        ))
                     })?;
 
                 let interpreter = self
                     .lazy_deps
                     .interpreter
-                    .get_or_try_init(|| Interpreter::query(python_path, self.cache()))?;
+                    .get_or_try_init(|| Interpreter::query(python_path, self.cache()))
+                    .map_err(LazyBuildDispatchError::from)?;
 
                 let env = self
                     .lazy_deps
                     .python_env
                     .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()));
 
-                let non_isolated_packages =
-                    self.lazy_deps.non_isolated_packages.get_or_try_init(|| {
-                        isolated_names_to_packages(self.no_build_isolation.as_deref()).map_err(
-                            |e| {
-                                Err(LazyBuildDispatchError::InitializationError(format!(
-                                    "failed to read names for PyPI build isolation: {}",
-                                    e
-                                )))
-                            },
-                        )
+                let non_isolated_packages = self
+                    .lazy_deps
+                    .non_isolated_packages
+                    .get_or_try_init(|| {
+                        isolated_names_to_packages(self.no_build_isolation.as_deref())
+                    })
+                    .map_err(|err| {
+                        LazyBuildDispatchError::InitializationError(format!("{}", err))
                     })?;
 
                 let build_isolation =

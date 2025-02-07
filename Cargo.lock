@@ -3721,6 +3721,7 @@ dependencies = [
  "uv-pypi-types",
  "uv-python",
  "uv-requirements",
+ "uv-requirements-txt",
  "uv-resolver",
  "uv-types",
  "xxhash-rust",
