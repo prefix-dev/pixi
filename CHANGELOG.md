@@ -5,10 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.41.1] - 2025-02-07
+#### Fixed
+- Pixi authentication by @ruben-arts in [#3070](https://github.com/prefix-dev/pixi/pull/3070)
+
 ### [0.41.0] - 2025-02-05
 #### ✨ Highlights
 
-This PR introduces lazily creating solve environments for the `pypi-dependencies` resulting in a significant speedup for environments that only depend on wheels.
+This release introduces lazily creating solve environments for the `pypi-dependencies` resulting in a significant speedup for environments that only depend on wheels.
 If you want to force the use of wheels you can now also set `no-build` in the `pypi-options` table.
 To test this you can now just use `pixi lock` to create a lockfile without installing an environment.
 
