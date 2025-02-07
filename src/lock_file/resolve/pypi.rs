@@ -34,13 +34,11 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, Overrides};
-use uv_dispatch::SharedState;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
     IndexUrl, Name, Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
-use uv_git::GitResolver;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
@@ -317,14 +315,6 @@ pub async fn resolve_pypi(
         FlatIndex::from_entries(entries, Some(&tags), &context.hash_strategy, &build_options)
     };
 
-    // Create a shared in-memory index.
-    // We need two in-memory indexes, one for the build dispatch and one for the
-    // resolver. because we manually override requests for the resolver,
-    // but we don't want to override requests for the build dispatch.
-    //
-    // The BuildDispatch might resolve or install when building wheels which will be
-    // mostly with build isolation. In that case we want to use fresh
-    // non-tampered requests.
     let config_settings = ConfigSettings::default();
 
     let dependency_metadata = DependencyMetadata::default();
@@ -332,9 +322,7 @@ pub async fn resolve_pypi(
         index_strategy,
         ..Options::default()
     };
-    let git_resolver = GitResolver::default();
 
-    let shared_state = SharedState::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
@@ -346,7 +334,15 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
     )
     .with_index_strategy(index_strategy)
-    .with_shared_state(shared_state.clone())
+    // Create a forked shared state that condains the in-memory index.
+    // We need two in-memory indexes, one for the build dispatch and one for the
+    // resolver. because we manually override requests for the resolver,
+    // but we don't want to override requests for the build dispatch.
+    //
+    // The BuildDispatch might resolve or install when building wheels which will be
+    // mostly with build isolation. In that case we want to use fresh
+    // non-tampered requests.
+    .with_shared_state(context.shared_state.fork())
     .with_source_strategy(context.source_strategy)
     .with_concurrency(context.concurrency);
 
@@ -500,7 +496,7 @@ pub async fn resolve_pypi(
         &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
         Conflicts::default(),
         &resolver_in_memory_index,
-        &git_resolver,
+        context.shared_state.git(),
         &context.capabilities,
         &index_locations,
         provider,
