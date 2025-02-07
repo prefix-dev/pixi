@@ -87,8 +87,8 @@ impl CondaEnvFile {
         &self.dependencies
     }
 
-    fn variables(&self) -> &HashMap<String, String> {
-        &self.variables
+    pub fn variables(&self) -> HashMap<String, String> {
+        self.variables.clone()
     }
 
     pub fn from_path(path: &Path) -> miette::Result<Self> {
@@ -346,7 +346,7 @@ mod tests {
 
         assert_eq!(
             vars,
-            &empty_map
+            empty_map
         );
     }
 
@@ -374,7 +374,7 @@ mod tests {
 
         assert_eq!(
             vars,
-            &HashMap::from([
+            HashMap::from([
                 ("MY_VAR".to_string(), "my_value".to_string()),
                 ("MY_OTHER_VAR".to_string(), "123".to_string()),
                 ("MY_EMPTY_VAR".to_string(), "".to_string())
