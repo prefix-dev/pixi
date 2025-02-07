@@ -5,9 +5,9 @@ use std::{
 };
 
 use miette::Diagnostic;
-use pixi_consts::consts;
 use pixi_manifest::{
-    DiscoveryStart, PackageManifest, PrioritizedChannel, WorkspaceDiscoverer, WorkspaceManifest,
+    DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel,
+    WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
 };
 use rattler_conda_types::{ChannelConfig, MatchSpec};
 use thiserror::Error;
@@ -36,10 +36,9 @@ pub struct ProtocolBuilder {
 
 #[derive(thiserror::Error, Debug, Diagnostic)]
 pub enum ProtocolBuildError {
-    #[error("failed to setup a build backend, failed to parse {0}")]
-    #[diagnostic(help("Ensure that the manifest at '{}' is a valid pixi project manifest", .0.display()
-    ))]
-    FailedToParseManifest(PathBuf, #[diagnostic_source] miette::Report),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    FailedToDiscoverPackage(#[from] WorkspaceDiscoveryError),
 
     #[error("the {} does not describe a package", .0.file_name().and_then(std::ffi::OsStr::to_str).unwrap_or("manifest")
     )]
@@ -124,38 +123,35 @@ impl ProtocolBuilder {
 
     /// Discovers a pixi project in the given source directory.
     pub fn discover(source_dir: &Path) -> Result<Option<Self>, ProtocolBuildError> {
-        if let Some(manifest_path) = find_pixi_manifest(source_dir) {
-            // Discover the workspace at the given location.
-            let manifests = match WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(
-                manifest_path.clone(),
-            ))
-            .with_closest_package(true)
-            .discover()
-            {
-                Err(e) => {
-                    return Err(ProtocolBuildError::FailedToParseManifest(
-                        manifest_path,
-                        e.into(),
-                    ))
-                }
-                Ok(Some(workspace)) => workspace.value,
-                Ok(None) => return Err(ProtocolBuildError::NotAPackage(manifest_path)),
-            };
+        let manifests = match WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(
+            source_dir.to_path_buf(),
+        ))
+        .with_closest_package(true)
+        .discover()
+        {
+            Ok(None)
+            | Err(WorkspaceDiscoveryError::ExplicitManifestError(
+                ExplicitManifestError::InvalidManifest(_),
+            )) => return Ok(None),
+            Err(e) => return Err(ProtocolBuildError::FailedToDiscoverPackage(e)),
+            Ok(Some(workspace)) => workspace.value,
+        };
 
-            // Make sure the manifest describes a package.
-            let Some(package_manifest) = manifests.package else {
-                return Err(ProtocolBuildError::NotAPackage(manifest_path));
-            };
+        // Make sure the manifest describes a package.
+        let Some(package_manifest) = manifests.package else {
+            return Err(ProtocolBuildError::NotAPackage(
+                manifests.workspace.provenance.path,
+            ));
+        };
 
-            let builder = Self::new(
-                source_dir.to_path_buf(),
-                manifest_path,
-                manifests.workspace.value,
-                package_manifest.value,
-            );
-            return Ok(Some(builder));
-        }
-        Ok(None)
+        let builder = Self::new(
+            source_dir.to_path_buf(),
+            package_manifest.provenance.path,
+            manifests.workspace.value,
+            package_manifest.value,
+        );
+
+        Ok(Some(builder))
     }
 
     fn get_tool_spec(&self, channel_config: &ChannelConfig) -> Result<ToolSpec, FinishError> {
@@ -266,22 +262,6 @@ impl ProtocolBuilder {
     }
 }
 
-/// Try to find a pixi manifest in the given source directory.
-fn find_pixi_manifest(source_dir: &Path) -> Option<PathBuf> {
-    let pixi_manifest_path = source_dir.join(consts::PROJECT_MANIFEST);
-    if pixi_manifest_path.exists() {
-        return Some(pixi_manifest_path);
-    }
-
-    let pyproject_manifest_path = source_dir.join(consts::PYPROJECT_MANIFEST);
-    // TODO: Really check if this is a pixi project.
-    if pyproject_manifest_path.is_file() {
-        return Some(pyproject_manifest_path);
-    }
-
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -291,8 +271,6 @@ mod tests {
     #[test]
     pub fn discover_basic_pixi_manifest() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/basic");
-        let manifest_path = super::find_pixi_manifest(&manifest_dir)
-            .unwrap_or_else(|| panic!("No manifest found at {}", manifest_dir.display()));
-        ProtocolBuilder::discover(&manifest_path).unwrap();
+        ProtocolBuilder::discover(&manifest_dir).unwrap();
     }
 }

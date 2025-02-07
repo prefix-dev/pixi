@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["Tim de Jager <tim@prefix.dev>"]
 channels = ["conda-forge"]
 description = "Add a short description here"
@@ -9,10 +9,5 @@ version = "0.1.0"
 
 [tasks]
 
-[build-system]
-build-backend = "pixi-build-python"
-dependencies = []
-
-[host-dependencies]
-pip = "24.*"
-python = "3.12.*"
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
