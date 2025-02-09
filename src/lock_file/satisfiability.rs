@@ -7,10 +7,6 @@ use std::{
     str::FromStr,
 };
 
-use super::{
-    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
-};
-use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -40,6 +36,11 @@ use uv_pypi_types::{
     ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
 use uv_resolver::RequiresPython;
+
+use super::{
+    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
+};
+use crate::workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -413,7 +414,7 @@ pub fn verify_environment_satisfiability(
     // Check if the channels in the lock file match our current configuration. Note
     // that the order matters here. If channels are added in a different order,
     // the solver might return a different result.
-    let config = environment.project().channel_config();
+    let config = environment.workspace().channel_config();
     let channels: Vec<ChannelUrl> = grouped_env
         .channels()
         .into_iter()
@@ -447,7 +448,8 @@ pub fn verify_environment_satisfiability(
 
     // Do some more checks if we have pypi dependencies
     // 1. Check if the PyPI indexes are present and match
-    // 2. Check if we have a no-build option set, that we only have binary packages, or an editable source
+    // 2. Check if we have a no-build option set, that we only have binary packages,
+    //    or an editable source
     if !environment.pypi_dependencies(None).is_empty() {
         let group_pypi_options = grouped_env.pypi_options();
         let indexes = rattler_lock::PypiIndexes::from(group_pypi_options.clone());
@@ -499,8 +501,9 @@ fn verify_pypi_no_build(
         DistExtension::from_path(Path::new(path))
     }
 
-    // Determine if we do not accept non-wheels for all packages or only for a subset
-    // Check all the currently locked packages if we are making any violations
+    // Determine if we do not accept non-wheels for all packages or only for a
+    // subset Check all the currently locked packages if we are making any
+    // violations
     for (_, packages) in locked_environment.pypi_packages_by_platform() {
         for (package, _) in packages {
             let extension = match &package.location {
@@ -909,7 +912,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     project_root: &Path,
     input_hash_cache: GlobHashCache,
 ) -> Result<(), Box<PlatformUnsat>> {
-    let channel_config = environment.project().channel_config();
+    let channel_config = environment.workspace().channel_config();
 
     // Determine the dependencies requested by the environment
     let environment_dependencies = environment
@@ -1207,8 +1210,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                         let marker_requires_python =
                             RequiresPython::greater_than_equal_version(&uv_maker_version);
-                        // Use the function of RequiresPython object as it implements the lower bound logic
-                        // Related issue https://github.com/astral-sh/uv/issues/4022
+                        // Use the function of RequiresPython object as it implements the lower
+                        // bound logic Related issue https://github.com/astral-sh/uv/issues/4022
                         if !marker_requires_python.is_contained_by(&uv_specifier_requires_python) {
                             return Err(Box::new(PlatformUnsat::PythonVersionMismatch(
                                 record.0.name.clone(),
@@ -1570,7 +1573,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::Project;
+    use crate::Workspace;
 
     #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
@@ -1587,7 +1590,7 @@ mod tests {
     }
 
     async fn verify_lockfile_satisfiability(
-        project: &Project,
+        project: &Workspace,
         lock_file: &LockFile,
     ) -> Result<(), LockfileUnsat> {
         for env in project.environments() {
@@ -1628,7 +1631,7 @@ mod tests {
             return;
         }
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -1642,7 +1645,8 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_example_satisfiability(#[files("examples/*/p*.toml")] manifest_path: PathBuf) {
-        // If a pyproject.toml is present check for `tool.pixi` in the file to avoid testing of non-pixi files
+        // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
+        // testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {
             let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
             if !manifest_str.contains("tool.pixi") {
@@ -1650,7 +1654,7 @@ mod tests {
             }
         }
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -1668,7 +1672,7 @@ mod tests {
     ) {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         let err = verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -1711,7 +1715,8 @@ mod tests {
             .into_uv_requirement()
             .unwrap();
         let project_root = PathBuf::from_str("/").unwrap();
-        // This will not satisfy because the rev length is different, even being resolved to the same one
+        // This will not satisfy because the rev length is different, even being
+        // resolved to the same one
         pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
 
         let locked_data = PypiPackageData {

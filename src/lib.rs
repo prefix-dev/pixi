@@ -10,10 +10,10 @@ mod global;
 mod install_pypi;
 pub mod lock_file;
 mod prefix;
-pub mod project;
 mod prompt;
 pub(crate) mod repodata;
 pub mod task;
+pub mod workspace;
 
 mod uv_reporter;
 
@@ -23,4 +23,4 @@ mod utils;
 
 pub use conda_prefix_updater::{CondaPrefixUpdated, CondaPrefixUpdater};
 pub use lock_file::{load_lock_file, UpdateLockFileOptions};
-pub use project::{DependencyType, Project};
+pub use workspace::{DependencyType, Workspace, WorkspaceLocator};

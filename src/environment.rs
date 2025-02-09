@@ -42,9 +42,9 @@ use crate::{
     install_pypi,
     lock_file::{LockFileDerivedData, UpdateLockFileOptions, UpdateMode, UvResolutionContext},
     prefix::Prefix,
-    project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef},
     rlimit::try_increase_rlimit_to_sensible,
-    Project,
+    workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef},
+    Workspace,
 };
 
 /// Verify the location of the prefix folder is not changed so the applied
@@ -309,7 +309,7 @@ pub(crate) fn read_environment_file(
 ///     2. It verifies that the system requirements are met.
 ///     3. It verifies the absence of the `env` folder.
 ///     4. It verifies that the prefix contains a `.gitignore` file.
-pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
+pub async fn sanity_check_project(project: &Workspace) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.environments_dir().as_path()).await?;
 
@@ -330,7 +330,7 @@ pub async fn sanity_check_project(project: &Project) -> miette::Result<()> {
 }
 
 /// Extract [`GitSpec`] requirements from the project dependencies.
-pub fn extract_git_requirements_from_project(project: &Project) -> Vec<GitSpec> {
+pub fn extract_git_requirements_from_project(project: &Workspace) -> Vec<GitSpec> {
     let mut requirements = Vec::new();
 
     for env in project.environments() {
@@ -370,7 +370,7 @@ pub fn store_credentials_from_requirements(git_requirements: Vec<GitSpec>) {
 /// themselves. While we don't store plaintext credentials in the `pixi.lock`,
 /// we do respect credentials that are defined in the `pixi.toml` or
 /// `pyproject.toml`.
-pub async fn store_credentials_from_project(project: &Project) -> miette::Result<()> {
+pub async fn store_credentials_from_project(project: &Workspace) -> miette::Result<()> {
     for env in project.environments() {
         let env_platforms = env.platforms();
         for platform in env_platforms {
@@ -462,7 +462,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_lock_file_options: UpdateLockFileOptions,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let current_platform = environment.best_platform();
-    let project = environment.project();
+    let project = environment.workspace();
 
     // Do not install if the platform is not supported
     let mut no_install = update_lock_file_options.no_install;

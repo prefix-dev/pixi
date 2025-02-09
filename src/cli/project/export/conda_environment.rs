@@ -1,14 +1,11 @@
 use std::path::PathBuf;
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::{project::Environment, Project};
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
-use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
 use pixi_manifest::{
-    pypi::{PyPiPackageName, VersionOrStar},
+    pypi::{pypi_options::FindLinksUrlOrPath, PyPiPackageName, VersionOrStar},
     FeaturesExt, PyPiRequirement,
 };
 use rattler_conda_types::{
@@ -16,10 +13,12 @@ use rattler_conda_types::{
     ParseStrictness, Platform,
 };
 
+use crate::{cli::cli_config::WorkspaceConfig, workspace::Environment, WorkspaceLocator};
+
 #[derive(Debug, Parser)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     /// Explicit path to export the environment to
     pub output_path: Option<PathBuf>,
@@ -153,7 +152,7 @@ fn build_env_yaml(
             let spec = MatchSpec::from_nameless(nameless_spec, Some(name.clone()));
             env_yaml
                 .dependencies
-                .push(MatchSpecOrSubSection::MatchSpec(spec));
+                .push(MatchSpecOrSubSection::MatchSpec(Box::new(spec)));
         } else {
             tracing::warn!(
                 "Failed to convert dependency to conda environment spec: {:?}. Skipping dependency",
@@ -192,10 +191,12 @@ fn build_env_yaml(
             pip_dependencies.insert(0, format!("--index-url {index_url}"));
         }
 
-        env_yaml.dependencies.push(MatchSpecOrSubSection::MatchSpec(
-            MatchSpec::from_str("pip", ParseStrictness::Lenient)
-                .expect("'pip' should be a valid name"),
-        ));
+        env_yaml
+            .dependencies
+            .push(MatchSpecOrSubSection::MatchSpec(Box::new(
+                MatchSpec::from_str("pip", ParseStrictness::Lenient)
+                    .expect("'pip' should be a valid name"),
+            )));
 
         env_yaml
             .dependencies
@@ -222,10 +223,12 @@ fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChanne
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
-    let environment = project.environment_from_name_or_env_var(args.environment)?;
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?;
+    let environment = workspace.environment_from_name_or_env_var(args.environment)?;
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
-    let config = project.config();
+    let config = workspace.config();
 
     let env_yaml = build_env_yaml(&platform, &environment, config.global_channel_config())?;
 
@@ -243,20 +246,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use super::*;
+    use crate::Workspace;
+    use std::path::Path;
 
     #[test]
     fn test_export_conda_env_yaml() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            workspace_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -277,12 +280,12 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml_with_pip_extras() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            workspace_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -304,12 +307,12 @@ mod tests {
     fn test_export_conda_env_yaml_with_pip_source_editable() {
         let path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-source-deps/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            workspace_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -331,14 +334,19 @@ mod tests {
     fn test_export_conda_env_yaml_with_pip_custom_registry() {
         let path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-custom-registry/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let workspace = match Workspace::from_path(&path) {
+            Ok(project) => project,
+            Err(err) => {
+                panic!("Failed to load project: {:?}", err);
+            }
+        };
         let args = Args {
             output_path: None,
             platform: None,
             environment: Some("alternative".to_string()),
-            project_config: ProjectConfig::default(),
+            workspace_config: WorkspaceConfig::default(),
         };
-        let environment = project
+        let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
         let platform = args.platform.unwrap_or_else(|| environment.best_platform());
@@ -346,7 +354,7 @@ mod tests {
         let env_yaml = build_env_yaml(
             &platform,
             &environment,
-            project.config().global_channel_config(),
+            workspace.config().global_channel_config(),
         );
         insta::assert_snapshot!(
             "test_export_conda_env_yaml_with_pip_custom_registry",
@@ -357,12 +365,12 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml_with_pip_find_links() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-find-links/pixi.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            workspace_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -383,12 +391,12 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml_pyproject_panic() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/docker/pyproject.toml");
-        let project = Project::from_path(&path).unwrap();
+        let project = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
-            project_config: ProjectConfig::default(),
+            workspace_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)
@@ -417,12 +425,12 @@ mod tests {
             [dependencies]
             python = "3.9"
            "#;
-        let project = Project::from_str(Path::new("pixi.toml"), toml).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), toml).unwrap();
         let args = Args {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: None,
-            project_config: ProjectConfig::default(),
+            workspace_config: WorkspaceConfig::default(),
         };
         let environment = project
             .environment_from_name_or_env_var(args.environment)

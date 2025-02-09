@@ -1,9 +1,9 @@
-use crate::Project;
+use crate::Workspace;
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 
-pub async fn execute(project: Project) -> miette::Result<()> {
-    project
+pub async fn execute(workspace: Workspace) -> miette::Result<()> {
+    workspace
         .environments()
         .iter()
         .map(|e| {

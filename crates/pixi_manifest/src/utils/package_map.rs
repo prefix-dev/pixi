@@ -10,7 +10,7 @@ use serde::{
 };
 use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Span, Value};
 
-use crate::utils::PixiSpanned;
+use crate::{error::GenericError, utils::PixiSpanned, TomlError};
 
 #[derive(Clone, Default, Debug, Serialize)]
 pub struct UniquePackageMap {
@@ -24,9 +24,26 @@ pub struct UniquePackageMap {
     pub value_spans: IndexMap<rattler_conda_types::PackageName, Range<usize>>,
 }
 
-impl From<UniquePackageMap> for IndexMap<rattler_conda_types::PackageName, PixiSpec> {
-    fn from(value: UniquePackageMap) -> Self {
-        value.specs
+impl UniquePackageMap {
+    pub fn into_inner(
+        self,
+        is_pixi_build_enabled: bool,
+    ) -> Result<IndexMap<rattler_conda_types::PackageName, PixiSpec>, TomlError> {
+        if !is_pixi_build_enabled {
+            if let Some((package_name, _)) = self.specs.iter().find(|(_, spec)| spec.is_source()) {
+                return Err(TomlError::Generic(
+                    GenericError::new(
+                        "source dependencies are not allowed without enabling pixi-build",
+                    )
+                    .with_opt_span(self.value_spans.get(package_name).cloned())
+                    .with_span_label("source dependency specified here")
+                    .with_help(
+                        "Add `workspace.preview = [\"pixi-build\"]` to enable pixi build support",
+                    ),
+                ));
+            }
+        }
+        Ok(self.specs)
     }
 }
 

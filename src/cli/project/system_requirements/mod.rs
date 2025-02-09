@@ -1,8 +1,8 @@
 pub mod add;
 pub mod list;
 
-use crate::cli::cli_config::ProjectConfig;
-use crate::Project;
+use crate::cli::cli_config::WorkspaceConfig;
+use crate::WorkspaceLocator;
 use clap::{Parser, ValueEnum};
 
 /// Enum for valid system requirement names.
@@ -26,7 +26,7 @@ pub enum SystemRequirementEnum {
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     /// The subcommand to execute
     #[clap(subcommand)]
@@ -44,10 +44,12 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?;
 
     match args.command {
-        Command::Add(args) => add::execute(project, args).await,
-        Command::List(args) => list::execute(&project, args),
+        Command::Add(args) => add::execute(workspace, args).await,
+        Command::List(args) => list::execute(&workspace, args),
     }
 }

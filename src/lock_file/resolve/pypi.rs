@@ -61,8 +61,8 @@ use crate::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
         PypiRecord, UvResolutionContext,
     },
-    project::{Environment, EnvironmentVars},
     uv_reporter::{UvReporter, UvReporterOptions},
+    workspace::{Environment, EnvironmentVars},
     CondaPrefixUpdated,
 };
 

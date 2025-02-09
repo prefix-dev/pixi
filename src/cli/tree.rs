@@ -15,9 +15,10 @@ use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
 use crate::{
-    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
-    project::{Environment, Project},
+    workspace::Environment,
+    WorkspaceLocator,
 };
 
 /// Show a tree of project dependencies
@@ -43,7 +44,7 @@ pub struct Args {
     pub platform: Option<Platform>,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     /// The environment to list packages for. Defaults to the default
     /// environment.
@@ -73,18 +74,19 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 };
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())
-        .wrap_err("Failed to load project")?;
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?;
 
-    let environment = project
+    let environment = workspace
         .environment_from_name_or_env_var(args.environment)
         .wrap_err("Environment not found")?;
 
-    let lock_file = project
+    let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
-            max_concurrent_solves: project.config().max_concurrent_solves(),
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await
         .wrap_err("Failed to update lock file")?;
@@ -118,7 +120,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         print_dependency_tree(&mut handle, &dep_map, &direct_deps, &args.regex)
             .wrap_err("Couldn't print the dependency tree")?;
     }
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 

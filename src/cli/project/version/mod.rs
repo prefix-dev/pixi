@@ -2,7 +2,7 @@ pub mod bump;
 pub mod get;
 pub mod set;
 
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
 use clap::Parser;
 use rattler_conda_types::VersionBumpType;
 
@@ -10,7 +10,7 @@ use rattler_conda_types::VersionBumpType;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     /// The subcommand to execute
     #[clap(subcommand)]
@@ -19,27 +19,29 @@ pub struct Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// Get the project version.
+    /// Get the workspace version.
     Get(get::Args),
-    /// Set the project version.
+    /// Set the workspace version.
     Set(set::Args),
-    /// Bump the project version to MAJOR.
+    /// Bump the workspace version to MAJOR.
     Major,
-    /// Bump the project version to MINOR.
+    /// Bump the workspace version to MINOR.
     Minor,
-    /// Bump the project version to PATCH.
+    /// Bump the workspace version to PATCH.
     Patch,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?;
 
     match args.command {
-        Command::Get(args) => get::execute(project, args).await?,
-        Command::Set(args) => set::execute(project, args).await?,
-        Command::Major => bump::execute(project, VersionBumpType::Major).await?,
-        Command::Minor => bump::execute(project, VersionBumpType::Minor).await?,
-        Command::Patch => bump::execute(project, VersionBumpType::Patch).await?,
+        Command::Get(args) => get::execute(workspace, args).await?,
+        Command::Set(args) => set::execute(workspace, args).await?,
+        Command::Major => bump::execute(workspace, VersionBumpType::Major).await?,
+        Command::Minor => bump::execute(workspace, VersionBumpType::Minor).await?,
+        Command::Patch => bump::execute(workspace, VersionBumpType::Patch).await?,
     }
 
     Ok(())

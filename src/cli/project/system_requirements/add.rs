@@ -1,6 +1,7 @@
 use crate::cli::project::system_requirements::SystemRequirementEnum;
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_manifest::{FeatureName, LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
 
 #[derive(Parser, Debug)]
@@ -20,7 +21,7 @@ pub struct Args {
     pub feature: Option<String>,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     let requirement = match args.requirement {
         SystemRequirementEnum::Linux => SystemRequirements {
             linux: Some(args.version),
@@ -65,12 +66,13 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .map_or(FeatureName::Default, FeatureName::Named);
 
     // Add the platforms to the lock-file
-    project
-        .manifest
+    let mut workspace = workspace.modify()?;
+    workspace
+        .manifest()
         .add_system_requirement(requirement, &feature_name)?;
 
     // Save the project to disk
-    project.save()?;
+    workspace.save().await.into_diagnostic()?;
 
     Ok(())
 }
