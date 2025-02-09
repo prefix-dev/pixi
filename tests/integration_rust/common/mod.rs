@@ -504,7 +504,7 @@ impl PixiControl {
             let task_env = match task_env.as_ref() {
                 None => {
                     lock_file
-                        .prefix(&task.run_environment, UpdateMode::Revalidate)
+                        .prefix(&task.run_environment, UpdateMode::Revalidate, false)
                         .await?;
                     let env =
                         get_task_env(&task.run_environment, args.clean_env, None, false, false)
@@ -541,6 +541,7 @@ impl PixiControl {
                 },
                 config: Default::default(),
                 all: false,
+                no_path_dependencies: false,
             },
         }
     }

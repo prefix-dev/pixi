@@ -224,6 +224,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .prefix(
                         &executable_task.run_environment,
                         args.prefix_update_config.update_mode(),
+                        false,
                     )
                     .await?;
 

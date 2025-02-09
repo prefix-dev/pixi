@@ -580,6 +580,7 @@ async fn test_old_lock_install() {
             no_install: false,
             ..Default::default()
         },
+        false,
     )
     .await
     .unwrap();

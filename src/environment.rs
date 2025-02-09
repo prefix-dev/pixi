@@ -29,7 +29,9 @@ use rattler::{
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
 };
-use rattler_lock::{LockedPackageRef, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{
+    LockedPackageRef, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath,
+};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
@@ -180,11 +182,15 @@ impl LockedEnvironmentHash {
     pub(crate) fn from_environment(
         environment: rattler_lock::Environment,
         platform: Platform,
+        no_path_dependencies: bool,
     ) -> Self {
         let mut hasher = Xxh3::new();
 
         if let Some(packages) = environment.packages(platform) {
-            for package in packages {
+            for package in packages
+                // exclude packages with a path from hash if no_path_dependencies is true
+                .filter(|p| !no_path_dependencies || matches!(p.location(), UrlOrPath::Url(_)))
+            {
                 // Always has the url or path
                 package.location().to_owned().to_string().hash(&mut hasher);
 
@@ -460,6 +466,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     environment: &Environment<'env>,
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
+    no_path_dependencies: bool,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let current_platform = environment.best_platform();
     let project = environment.workspace();
@@ -491,7 +498,9 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     let prefix = if no_install {
         Prefix::new(environment.dir())
     } else {
-        lock_file.prefix(environment, update_mode).await?
+        lock_file
+            .prefix(environment, update_mode, no_path_dependencies)
+            .await?
     };
 
     Ok((lock_file, prefix))

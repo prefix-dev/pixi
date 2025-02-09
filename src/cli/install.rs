@@ -25,6 +25,10 @@ pub struct Args {
 
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
+
+    /// Do not install local path dependencies. Requires --frozen
+    #[arg(long, requires = "frozen")]
+    pub no_path_dependencies: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -63,6 +67,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
+            args.no_path_dependencies,
         )
         .await?;
 

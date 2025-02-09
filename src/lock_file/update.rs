@@ -28,7 +28,7 @@ use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
-use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData, UrlOrPath};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
@@ -164,6 +164,7 @@ impl<'p> LockFileDerivedData<'p> {
     fn locked_environment_hash(
         &self,
         environment: &Environment<'p>,
+        no_path_dependencies: bool,
     ) -> miette::Result<LockedEnvironmentHash> {
         let locked_environment = self
             .lock_file
@@ -172,6 +173,7 @@ impl<'p> LockFileDerivedData<'p> {
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
             environment.best_platform(),
+            no_path_dependencies,
         ))
     }
 
@@ -180,10 +182,11 @@ impl<'p> LockFileDerivedData<'p> {
         &mut self,
         environment: &Environment<'p>,
         update_mode: UpdateMode,
+        no_path_dependencies: bool,
     ) -> miette::Result<Prefix> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
-        let hash = self.locked_environment_hash(environment)?;
+        let hash = self.locked_environment_hash(environment, no_path_dependencies)?;
         if update_mode == UpdateMode::QuickValidate {
             if let Some(prefix) = self.cached_prefix(environment, &hash) {
                 return prefix;
@@ -191,7 +194,9 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         // Get the up-to-date prefix
-        let prefix = self.update_prefix(environment).await?;
+        let prefix = self
+            .update_prefix(environment, no_path_dependencies)
+            .await?;
 
         // Save an environment file to the environment directory after the update.
         // Avoiding writing the cache away before the update is done.
@@ -255,7 +260,11 @@ impl<'p> LockFileDerivedData<'p> {
     }
 
     /// Returns the up-to-date prefix for the given environment.
-    async fn update_prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+    async fn update_prefix(
+        &mut self,
+        environment: &Environment<'p>,
+        no_path_dependencies: bool,
+    ) -> miette::Result<Prefix> {
         // If we previously updated this environment, early out.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
@@ -264,13 +273,13 @@ impl<'p> LockFileDerivedData<'p> {
         tracing::info!("Updating prefix");
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
-        let (prefix, python_status) = self.conda_prefix(environment).await?;
+        let (prefix, python_status) = self.conda_prefix(environment, no_path_dependencies).await?;
         let pixi_records = self
-            .pixi_records(environment, platform)
+            .pixi_records(environment, platform, no_path_dependencies)
             .into_diagnostic()?
             .unwrap_or_default();
         let pypi_records = self
-            .pypi_records(environment, platform)
+            .pypi_records(environment, platform, no_path_dependencies)
             .into_diagnostic()?
             .unwrap_or_default();
 
@@ -342,13 +351,17 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         platform: Platform,
+        no_path_dependencies: bool,
     ) -> Result<Option<Vec<(PypiPackageData, PypiPackageEnvironmentData)>>, UpdateError> {
         let locked_env = self
             .lock_file
             .environment(environment.name().as_str())
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
 
-        let packages = locked_env.pypi_packages(platform);
+        let packages = locked_env.pypi_packages(platform).map(|packages| {
+            packages
+                .filter(|(p, _)| !no_path_dependencies || matches!(p.location, UrlOrPath::Url(_)))
+        });
         Ok(packages.map(|iter| {
             iter.map(|(data, env_data)| (data.clone(), env_data.clone()))
                 .collect()
@@ -370,6 +383,7 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         platform: Platform,
+        no_path_dependencies: bool,
     ) -> Result<Option<Vec<PixiRecord>>, UpdateError> {
         let locked_env = self
             .lock_file
@@ -378,6 +392,10 @@ impl<'p> LockFileDerivedData<'p> {
 
         Ok(locked_env
             .conda_packages(platform)
+            .map(|packages| {
+                packages
+                    .filter(|p| !no_path_dependencies || matches!(p.location(), UrlOrPath::Url(_)))
+            })
             .map(|iter| {
                 iter.cloned()
                     .map(PixiRecord::try_from)
@@ -389,6 +407,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn conda_prefix(
         &mut self,
         environment: &Environment<'p>,
+        no_path_dependencies: bool,
     ) -> miette::Result<(Prefix, PythonStatus)> {
         // If we previously updated this environment, early out.
         if let Some((prefix, python_status)) = self.updated_conda_prefixes.get(environment.name()) {
@@ -408,7 +427,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the locked environment from the lock-file.
         let records = self
-            .pixi_records(environment, platform)
+            .pixi_records(environment, platform, no_path_dependencies)
             .into_diagnostic()?
             .unwrap_or_default();
         let channel_urls = environment
