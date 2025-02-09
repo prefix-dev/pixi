@@ -178,7 +178,7 @@ impl Workspace {
     pub(crate) fn from_manifests(manifest: Manifests) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
 
-        let s3_options = manifest.workspace.workspace.s3_options.clone();
+        let s3_options = manifest.workspace.value.workspace.s3_options.clone();
 
         let s3_config = s3_options
             .unwrap_or_default()
