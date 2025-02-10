@@ -956,3 +956,4 @@ async fn test_multiple_prefix_update() {
         // verify that the prefix was updated only once, meaning that we instantiated prefix only once
         assert_eq!(*first_modified_date, prefix_metadata.modified().unwrap());
     }
+}
