@@ -20,7 +20,9 @@ use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
 };
 use reqwest_middleware::ClientWithMiddleware;
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::Semaphore;
+
+use async_once_cell::OnceCell as AsyncOnceCell;
 use uv_configuration::RAYON_INITIALIZE;
 
 use super::conda_metadata::{create_history_file, create_prefix_location_file};
@@ -46,6 +48,9 @@ pub struct CondaPrefixUpdaterInner<'a> {
     pub package_cache: PackageCache,
     pub io_concurrency_limit: IoConcurrencyLimit,
     pub build_context: BuildContext,
+
+    /// A flag that indicates if the prefix was created.
+    created: AsyncOnceCell<CondaPrefixUpdated>,
 }
 
 impl<'a> CondaPrefixUpdaterInner<'a> {
@@ -63,6 +68,7 @@ impl<'a> CondaPrefixUpdaterInner<'a> {
             package_cache,
             io_concurrency_limit,
             build_context,
+            created: AsyncOnceCell::new(),
         }
     }
 }
@@ -71,8 +77,6 @@ impl<'a> CondaPrefixUpdaterInner<'a> {
 /// A task that updates the prefix for a given environment.
 pub struct CondaPrefixUpdater<'a> {
     inner: Arc<CondaPrefixUpdaterInner<'a>>,
-    /// A flag that indicates if the prefix was created.
-    _created: Arc<Mutex<Option<CondaPrefixUpdated>>>,
 }
 
 impl<'a> CondaPrefixUpdater<'a> {
@@ -94,27 +98,17 @@ impl<'a> CondaPrefixUpdater<'a> {
 
         Self {
             inner: Arc::new(inner),
-            _created: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Updates the prefix for the given environment.
-    pub(crate) async fn update(
+    pub async fn update(
         &self,
         pixi_records: Vec<PixiRecord>,
-    ) -> miette::Result<CondaPrefixUpdated> {
-        let mut created = self._created.lock().await;
-
-        match created.as_ref() {
-            Some(created) => {
-                tracing::debug!(
-                    "prefix for '{}' already created",
-                    self.inner.group.name().fancy_display()
-                );
-
-                Ok(created.clone())
-            }
-            None => {
+    ) -> miette::Result<&CondaPrefixUpdated> {
+        self.inner
+            .created
+            .get_or_try_init(async {
                 tracing::debug!(
                     "updating prefix for '{}'",
                     self.inner.group.name().fancy_display()
@@ -168,17 +162,13 @@ impl<'a> CondaPrefixUpdater<'a> {
                 )
                 .await?;
 
-                let conda_prefix_updated = CondaPrefixUpdated {
+                Ok(CondaPrefixUpdated {
                     group: group_name,
                     prefix: prefix.clone(),
                     python_status: Box::new(python_status),
-                };
-
-                let _ = created.insert(conda_prefix_updated.clone());
-
-                Ok(conda_prefix_updated)
-            }
-        }
+                })
+            })
+            .await
     }
 
     pub(crate) fn group(&self) -> &GroupedEnvironment {

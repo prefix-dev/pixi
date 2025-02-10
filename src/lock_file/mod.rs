@@ -23,7 +23,9 @@ pub use satisfiability::{
 };
 pub(crate) use update::{LockFileDerivedData, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
-pub(crate) use utils::{filter_lock_file, IoConcurrencyLimit};
+pub(crate) use utils::filter_lock_file;
+
+pub use utils::IoConcurrencyLimit;
 
 /// A list of conda packages that are locked for a specific platform.
 pub type LockedCondaPackages = Vec<PixiRecord>;

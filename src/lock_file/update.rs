@@ -427,7 +427,7 @@ impl<'p> LockFileDerivedData<'p> {
             (prefix.clone(), *python_status.clone()),
         );
 
-        Ok((prefix, *python_status.clone()))
+        Ok((prefix.clone(), *python_status.clone()))
     }
 }
 

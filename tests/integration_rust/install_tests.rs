@@ -4,25 +4,36 @@ use crate::common::{
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use pixi::cli::{run, run::Args, LockFileUsageArgs};
+use futures::{stream::FuturesUnordered, StreamExt};
+use pixi::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
 use pixi::{
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
-    // lock_file::CondaPrefixUpdater,
+    build::BuildContext,
+    cli::{
+        run::{self, Args},
+        LockFileUsageArgs,
+    },
+    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
 };
 use pixi::{UpdateLockFileOptions, Workspace};
+use pixi_build_frontend::ToolContext;
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
-use rattler_conda_types::{Platform, RepoDataRecord};
+use pixi_record::PixiRecord;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
 use std::{
     fs::File,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::Arc,
 };
 use tempfile::TempDir;
+use tokio::fs;
+use url::Url;
 use uv_python::PythonEnvironment;
 
 /// Should add a python version to the environment and lock file that matches
@@ -798,55 +809,92 @@ async fn pypi_prefix_is_not_created_when_whl() {
     assert!(!default_env_prefix.exists());
 }
 
-// #[tokio::test]
-// async fn test_multiple_prefix_update() {
-//     let pixi = PixiControl::from_manifest(
-//         r#"
-//     [project]
-//     name = "test-channel-change"
-//     channels = ["conda-forge"]
-//     platforms = ["linux-64"]
-//     conda-pypi-map = { }
-//     "#,
-//     )
-//     .unwrap();
+#[tokio::test]
+async fn test_multiple_prefix_update() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["conda-forge"]
+    platforms = ["osx-arm64"]
+    conda-pypi-map = { }
+    "#,
+    )
+    .unwrap();
 
-//     let project = pixi.workspace().unwrap();
+    let project = pixi.workspace().unwrap();
 
-//     let boltons_package = Package::build("boltons", "2").finish();
+    let python_package = Package::build("python", "3.13.1").finish();
 
-//     let boltons_repo_data_record = RepoDataRecord {
-//         package_record: boltons_package.package_record,
-//         file_name: "boltons".to_owned(),
-//         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
-//         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
-//     };
+    // https://repo.prefix.dev/conda-forge/osx-arm64/python-3.13.1-h4f43103_105_cp313.conda
 
-//     let mut packages = vec![boltons_repo_data_record];
+    let python_repo_data_record = RepoDataRecord {
+        package_record: python_package.package_record,
+        file_name: "python".to_owned(),
+        url: Url::parse(
+            "https://repo.prefix.dev/conda-forge/osx-arm64/python-3.13.1-h4f43103_105_cp313.conda",
+        )
+        .unwrap(),
+        channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
+    };
 
-//     CondaPrefixUpdater::new(, platform, package_cache, io_concurrency_limit, build_context)
+    let boltons_package = Package::build("wheel", "0.45.1").finish();
 
-//     pypi_mapping::amend_pypi_purls(
-//         blocked_client,
-//         project.pypi_name_mapping_source().unwrap(),
-//         &mut packages,
-//         None,
-//     )
-//     .await
-//     .unwrap();
+    let boltons_repo_data_record = RepoDataRecord {
+        package_record: boltons_package.package_record,
+        file_name: "wheel".to_owned(),
+        url: Url::parse(
+            "https://repo.prefix.dev/conda-forge/noarch/wheel-0.45.1-pyhd8ed1ab_1.conda",
+        )
+        .unwrap(),
+        channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
+    };
 
-//     let boltons_package = packages.pop().unwrap();
+    let tmp_dir = tempfile::tempdir().unwrap();
 
-//     let boltons_first_purl = boltons_package
-//         .package_record
-//         .purls
-//         .as_ref()
-//         .and_then(BTreeSet::first)
-//         .unwrap();
+    // let static_default = Box::<GroupedEnvironment<'_>>::leak(Box::<GroupedEnvironment>::new(project.default_environment().into()));
 
-//     // we verify that even if this name is not present in our mapping
-//     // we record a purl anyways. Because we make the assumption
-//     // that it's a pypi package
-//     assert_eq!(boltons_first_purl.name(), "boltons");
-//     assert!(boltons_first_purl.qualifiers().is_empty());
-// }
+    let conda_prefix_updater = CondaPrefixUpdater::new(
+        project.default_environment().into(),
+        Platform::OsxArm64,
+        PackageCache::new(tmp_dir.path().to_path_buf()),
+        IoConcurrencyLimit::default(),
+        BuildContext::new(
+            tmp_dir.path().to_path_buf(),
+            tmp_dir.path().to_path_buf(),
+            ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
+            Default::default(),
+            Arc::new(ToolContext::default()),
+        )
+        .unwrap(),
+    );
+
+    let pixi_records = Vec::from([
+        PixiRecord::Binary(boltons_repo_data_record),
+        PixiRecord::Binary(python_repo_data_record),
+    ]);
+
+    let mut tasks = FuturesUnordered::new();
+
+    // spawn multiple tokio tasks to update the prefix
+    for _ in 0..4 {
+        // let conda_prefix_updater = conda_prefix_updater.clone();
+        let pixi_records = pixi_records.clone();
+        tasks.push(conda_prefix_updater.update(pixi_records));
+    }
+
+    let mut first_modified = None;
+
+    while let Some(result) = tasks.next().await {
+        let prefix_updated = result.unwrap();
+
+        let prefix = prefix_updated.prefix.root();
+
+        let prefix_metadata = fs::metadata(prefix).await.unwrap();
+
+        let first_modified_date = first_modified.get_or_insert(prefix_metadata.modified().unwrap());
+
+        // verify that the prefix was updated only once, meaning that we instantiated prefix only once
+        assert_eq!(*first_modified_date, prefix_metadata.modified().unwrap());
+    }
+}
