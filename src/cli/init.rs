@@ -105,6 +105,12 @@ force-path-style = {{ s3[key]["force-path-style"] }}
 
 [dependencies]
 
+{%- if env_vars %}
+
+[activation]
+env = { {{ env_vars }} }
+{%- endif %}
+
 "#;
 
 /// The pyproject.toml template
@@ -281,6 +287,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or(default_name.clone().as_str())
             .to_string();
 
+        let env_vars = env_file.variables();
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
@@ -294,6 +301,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             None,
             &vec![],
             config.s3_options,
+            Some(&env_vars),
         );
         let mut workspace =
             WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
@@ -496,6 +504,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 index_url.as_ref(),
                 &extra_index_urls,
                 config.s3_options,
+                None,
             );
             save_manifest_file(&pixi_manifest_path, rv)?;
         };
@@ -535,22 +544,24 @@ fn render_project(
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
     s3_options: HashMap<String, pixi_config::S3Options>,
+    env_vars: Option<&HashMap<String, String>>,
 ) -> String {
-    env.render_named_str(
-        consts::PROJECT_MANIFEST,
-        PROJECT_TEMPLATE,
-        context! {
-            name,
-            version,
-            author,
-            channels,
-            platforms,
-            index_url,
-            extra_index_urls,
-            s3 => relevant_s3_options(s3_options, channels),
-        },
-    )
-    .expect("should be able to render the template")
+    let ctx = context! {
+        name,
+        version,
+        author,
+        channels,
+        platforms,
+        index_url,
+        extra_index_urls,
+        s3 => relevant_s3_options(s3_options, channels),
+        env_vars => {if let Some(env_vars) = env_vars {
+            env_vars.iter().map(|(k, v)| format!("{} = \"{}\"", k, v)).collect::<Vec<String>>().join(", ")
+        } else {String::new()}},
+    };
+
+    env.render_named_str(consts::PROJECT_MANIFEST, PROJECT_TEMPLATE, ctx)
+        .expect("should be able to render the template")
 }
 
 fn relevant_s3_options(
