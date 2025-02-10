@@ -807,6 +807,8 @@ async fn conda_pypi_override_correct_per_platform() {
     pixi.init_with_platforms(vec![
         Platform::OsxArm64.to_string(),
         Platform::Linux64.to_string(),
+        Platform::Win64.to_string(),
+        Platform::Osx64.to_string(),
     ])
     .await
     .unwrap();
