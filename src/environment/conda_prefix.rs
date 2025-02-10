@@ -10,7 +10,6 @@ use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::IntoDiagnostic;
-// use tokio:
 use pixi_manifest::FeaturesExt;
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
@@ -303,6 +302,3 @@ pub async fn update_prefix_conda(
     // Determine if the python version changed.
     Ok(PythonStatus::from_transaction(&result.transaction))
 }
-
-#[cfg(test)]
-mod test {}

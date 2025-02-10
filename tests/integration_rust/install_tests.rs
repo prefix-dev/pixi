@@ -885,8 +885,6 @@ async fn test_multiple_prefix_update() {
 
     let python_package = Package::build("python", "3.13.1").finish();
 
-    // https://repo.prefix.dev/conda-forge/osx-arm64/python-3.13.1-h4f43103_105_cp313.conda
-
     let python_repo_data_record = RepoDataRecord {
         package_record: python_package.package_record,
         file_name: "python".to_owned(),
@@ -937,7 +935,6 @@ async fn test_multiple_prefix_update() {
 
     // spawn multiple tokio tasks to update the prefix
     for _ in 0..4 {
-        // let conda_prefix_updater = conda_prefix_updater.clone();
         let pixi_records = pixi_records.clone();
         tasks.push(conda_prefix_updater.update(pixi_records));
     }
