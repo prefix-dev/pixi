@@ -287,7 +287,7 @@ impl JsonRPCBuildProtocol {
     }
 
     /// Extract metadata from the recipe.
-    pub async fn get_conda_metadata(
+    pub async fn conda_get_metadata(
         &self,
         request: &CondaMetadataParams,
         reporter: &dyn CondaMetadataReporter,
