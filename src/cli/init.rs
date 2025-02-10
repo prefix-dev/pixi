@@ -1,5 +1,6 @@
 use std::{
     cmp::PartialEq,
+    collections::HashMap,
     fs,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
@@ -84,6 +85,12 @@ version = "{{ version }}"
 [tasks]
 
 [dependencies]
+
+{%- if env_vars %}
+
+[activation]
+env = { {{ env_vars }} }
+{%- endif %}
 
 "#;
 
@@ -223,6 +230,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or(default_name.clone().as_str())
             .to_string();
 
+        let env_vars = env_file.variables();
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
@@ -235,6 +243,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &platforms,
             None,
             &vec![],
+            Some(&env_vars),
         );
         let mut workspace =
             WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
@@ -434,6 +443,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &platforms,
                 index_url.as_ref(),
                 &extra_index_urls,
+                None,
             );
             save_manifest_file(&pixi_manifest_path, rv)?;
         };
@@ -472,21 +482,23 @@ fn render_project(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
+    env_vars: Option<&HashMap<String, String>>,
 ) -> String {
-    env.render_named_str(
-        consts::PROJECT_MANIFEST,
-        PROJECT_TEMPLATE,
-        context! {
-            name,
-            version,
-            author,
-            channels,
-            platforms,
-            index_url,
-            extra_index_urls,
-        },
-    )
-    .expect("should be able to render the template")
+    let ctx = context! {
+        name,
+        version,
+        author,
+        channels,
+        platforms,
+        index_url,
+        extra_index_urls,
+        env_vars => {if let Some(env_vars) = env_vars {
+            env_vars.iter().map(|(k, v)| format!("{} = \"{}\"", k, v)).collect::<Vec<String>>().join(", ")
+        } else {String::new()}},
+    };
+
+    env.render_named_str(consts::PROJECT_MANIFEST, PROJECT_TEMPLATE, ctx)
+        .expect("should be able to render the template")
 }
 
 /// Save the rendered template to a file, and print a message to the user.
