@@ -8,6 +8,10 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::{
+    environment::CondaPrefixUpdated,
+    workspace::{get_activated_environment_variables, EnvironmentVars},
+};
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
@@ -27,7 +31,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, MatchSpec, ParseStrictness, Platform};
+use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use reqwest_middleware::ClientWithMiddleware;
@@ -37,8 +41,8 @@ use tracing::Instrument;
 use uv_normalize::ExtraName;
 
 use super::{
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit, PixiRecordsByName,
-    PypiRecordsByName, UvResolutionContext,
+    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit, CondaPrefixUpdater,
+    PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
@@ -53,16 +57,15 @@ use crate::{
         self,
         records_by_name::HasNameVersion,
         reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
-        CondaPrefixUpdater, PypiRecord,
+        PypiRecord,
     },
     prefix::Prefix,
     repodata::Repodata,
     workspace::{
-        get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        Environment, EnvironmentVars, HasWorkspaceRef,
+        Environment, HasWorkspaceRef,
     },
-    CondaPrefixUpdated, Workspace,
+    Workspace,
 };
 
 impl Workspace {
@@ -395,64 +398,36 @@ impl<'p> LockFileDerivedData<'p> {
             return Ok((prefix.clone(), python_status.clone()));
         }
 
-        let prefix = Prefix::new(environment.dir());
+        // Create object to update the prefix
+        let group = GroupedEnvironment::Environment(environment.clone());
         let platform = environment.best_platform();
-
-        // Determine the currently installed packages.
-        let installed_packages = prefix.find_installed_packages().with_context(|| {
-            format!(
-                "failed to determine the currently installed packages for '{}'",
-                environment.name(),
-            )
-        })?;
+        let conda_prefix_updater = CondaPrefixUpdater::new(
+            group,
+            platform,
+            self.package_cache.clone(),
+            self.io_concurrency_limit.clone(),
+            self.build_context.clone(),
+        );
 
         // Get the locked environment from the lock-file.
         let records = self
             .pixi_records(environment, platform)
             .into_diagnostic()?
             .unwrap_or_default();
-        let channel_urls = environment
-            .channel_urls(&self.workspace.channel_config())
-            .into_diagnostic()?;
-
-        // Update the prefix with conda packages.
-        let has_existing_packages = !installed_packages.is_empty();
-        let env_name = GroupedEnvironmentName::Environment(environment.name().clone());
-        let python_status = environment::update_prefix_conda(
-            &prefix,
-            self.package_cache.clone(),
-            environment.workspace().authenticated_client()?.clone(),
-            installed_packages,
-            records,
-            environment
-                .virtual_packages(platform)
-                .into_iter()
-                .map(GenericVirtualPackage::from)
-                .collect(),
-            channel_urls,
-            platform,
-            &format!(
-                "{} environment '{}'",
-                if has_existing_packages {
-                    "updating"
-                } else {
-                    "creating"
-                },
-                env_name.fancy_display()
-            ),
-            "",
-            self.io_concurrency_limit.clone().into(),
-            self.build_context.clone(),
-        )
-        .await?;
+        // Update the conda prefix
+        let CondaPrefixUpdated {
+            prefix,
+            python_status,
+            ..
+        } = conda_prefix_updater.update(records).await?;
 
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_conda_prefixes.insert(
             environment.name().clone(),
-            (prefix.clone(), python_status.clone()),
+            (prefix.clone(), *python_status.clone()),
         );
 
-        Ok((prefix, python_status))
+        Ok((prefix, *python_status.clone()))
     }
 }
 
