@@ -34,18 +34,16 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, Overrides};
-use uv_dispatch::SharedState;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    IndexUrl, InstalledDist, InstalledRegistryDist, Name, Resolution, ResolvedDist, SourceDist,
+    IndexUrl, Name, Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
-use uv_git::GitResolver;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    Preferences, PythonRequirement, Resolver, ResolverEnvironment,
+    PreferenceError, Preferences, PythonRequirement, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -317,31 +315,17 @@ pub async fn resolve_pypi(
         FlatIndex::from_entries(entries, Some(&tags), &context.hash_strategy, &build_options)
     };
 
-    // Create a shared in-memory index.
-    // We need two in-memory indexes, one for the build dispatch and one for the
-    // resolver. because we manually override requests for the resolver,
-    // but we don't want to override requests for the build dispatch.
-    //
-    // The BuildDispatch might resolve or install when building wheels which will be
-    // mostly with build isolation. In that case we want to use fresh
-    // non-tampered requests.
-    let build_dispatch_in_memory_index = InMemoryIndex::default();
-    let config_settings = ConfigSettings::default();
-
-    let dependency_metadata = DependencyMetadata::default();
+    // Hi maintainers! For anyone coming here, if you expose any additional `uv` options, similar to `index_strategy`, make sure to
+    // include them in this struct as well instead of relying on the default.
+    // Otherwise there be panics.
     let options = Options {
         index_strategy,
+        build_options: build_options.clone(),
         ..Options::default()
     };
-    let git_resolver = GitResolver::default();
 
-    let shared_state = SharedState::new(
-        git_resolver.clone(),
-        build_dispatch_in_memory_index,
-        context.in_flight.clone(),
-        context.capabilities.clone(),
-    );
-
+    let config_settings = ConfigSettings::default();
+    let dependency_metadata = DependencyMetadata::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
@@ -353,7 +337,15 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
     )
     .with_index_strategy(index_strategy)
-    .with_shared_state(shared_state.clone())
+    // Create a forked shared state that condains the in-memory index.
+    // We need two in-memory indexes, one for the build dispatch and one for the
+    // resolver. because we manually override requests for the resolver,
+    // but we don't want to override requests for the build dispatch.
+    //
+    // The BuildDispatch might resolve or install when building wheels which will be
+    // mostly with build isolation. In that case we want to use fresh
+    // non-tampered requests.
+    .with_shared_state(context.shared_state.fork())
     .with_source_strategy(context.source_strategy)
     .with_concurrency(context.concurrency);
 
@@ -391,32 +383,51 @@ pub async fn resolve_pypi(
                 extras: vec![],
                 marker: Default::default(),
                 source,
+                groups: Default::default(),
                 origin: None,
             })
         })
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
+    #[derive(Debug, thiserror::Error)]
+    enum PixiPreferencesError {
+        #[error(transparent)]
+        Conversion(#[from] ConversionError),
+        #[error(transparent)]
+        Preference(#[from] PreferenceError),
+    }
+
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
-    // TODO refactor this later into function
     let preferences = locked_pypi_packages
         .iter()
         .map(|record| {
             let (package_data, _) = record;
-            // Fake being an InstalledRegistryDist
-            let installed = InstalledRegistryDist {
+            let requirement = uv_pep508::Requirement {
                 name: to_uv_normalize(&package_data.name)?,
-                version: to_uv_version(&package_data.version)?,
-                // This is not used, so we can just set it to a random value
-                path: PathBuf::new().join("does_not_exist"),
-                cache_info: None,
+                extras: Vec::new(),
+                version_or_url: Some(uv_pep508::VersionOrUrl::VersionSpecifier(
+                    uv_pep440::VersionSpecifiers::from(
+                        uv_pep440::VersionSpecifier::equals_version(to_uv_version(
+                            &package_data.version,
+                        )?),
+                    ),
+                )),
+                marker: uv_pep508::MarkerTree::TRUE,
+                origin: None,
             };
-            Ok(Preference::from_installed(&InstalledDist::Registry(
-                installed,
-            )))
+
+            let named = uv_requirements_txt::RequirementsTxtRequirement::Named(requirement);
+            let entry = uv_requirements_txt::RequirementEntry {
+                requirement: named,
+                hashes: Default::default(),
+            };
+
+            Ok(Preference::from_entry(entry)?)
         })
-        .collect::<Result<Vec<_>, ConversionError>>()
+        .filter_map(|pref| pref.transpose())
+        .collect::<Result<Vec<_>, PixiPreferencesError>>()
         .into_diagnostic()?;
 
     let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
@@ -427,7 +438,6 @@ pub async fn resolve_pypi(
         &requirements,
         &constraints,
         &Overrides::default(),
-        &[],
         &context.hash_strategy,
         &lookahead_index,
         DistributionDatabase::new(
@@ -436,7 +446,7 @@ pub async fn resolve_pypi(
             context.concurrency.downloads,
         ),
     )
-    .with_reporter(UvReporter::new(
+    .with_reporter(UvReporter::new_arc(
         UvReporterOptions::new().with_existing(pb.clone()),
     ))
     .resolve(&resolver_env)
@@ -447,14 +457,14 @@ pub async fn resolve_pypi(
         requirements,
         constraints,
         Overrides::default(),
-        Default::default(),
         Preferences::from_iter(preferences, &resolver_env),
         None,
-        None,
-        uv_resolver::Exclusions::None,
+        Default::default(),
+        uv_resolver::Exclusions::default(),
         lookaheads,
     );
 
+    let provider_tags = tags.clone();
     let fallback_provider = DefaultResolverProvider::new(
         DistributionDatabase::new(
             &registry_client,
@@ -462,7 +472,7 @@ pub async fn resolve_pypi(
             context.concurrency.downloads,
         ),
         &flat_index,
-        Some(&tags),
+        Some(&provider_tags),
         &requires_python,
         AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
         &context.hash_strategy,
@@ -485,10 +495,11 @@ pub async fn resolve_pypi(
         options,
         &context.hash_strategy,
         resolver_env,
+        Some(tags),
         &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
         Conflicts::default(),
         &resolver_in_memory_index,
-        &git_resolver,
+        context.shared_state.git(),
         &context.capabilities,
         &index_locations,
         provider,
@@ -496,7 +507,7 @@ pub async fn resolve_pypi(
     )
     .into_diagnostic()
     .context("failed to resolve pypi dependencies")?
-    .with_reporter(UvReporter::new(
+    .with_reporter(UvReporter::new_arc(
         UvReporterOptions::new().with_existing(pb.clone()),
     ))
     .resolve()
@@ -540,6 +551,8 @@ enum GetUrlOrPathError {
     CannotJoin(String, String),
     #[error("expected path found: {0}")]
     ExpectedPath(String),
+    #[error("invalid URL")]
+    InvalidUrl(#[from] ToUrlError),
 }
 
 /// Get the UrlOrPath from the index url and file location
@@ -585,7 +598,7 @@ fn get_url_or_path(
                 FileLocation::AbsoluteUrl(url) => {
                     // Convert to a relative path from the base path
                     let absolute = url
-                        .to_url()
+                        .to_url()?
                         .to_file_path()
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(url.to_string()))?;
                     // !IMPORTANT! We need to strip the base path from the absolute path
