@@ -245,7 +245,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 }
                 tracing::debug!(
                     "PyPI solve requires instantiation of conda prefix for '{}'",
-                    self.prefix_updater.group.name().as_str()
+                    self.prefix_updater.group().name().as_str()
                 );
                 let prefix = self
                     .prefix_updater

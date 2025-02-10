@@ -4,15 +4,18 @@ use crate::common::{
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use pixi::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
+use pixi::{
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    // lock_file::CondaPrefixUpdater,
+};
 use pixi::{UpdateLockFileOptions, Workspace};
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{Platform, RepoDataRecord};
 use std::{
     fs::File,
     io::Write,
@@ -794,3 +797,56 @@ async fn pypi_prefix_is_not_created_when_whl() {
     // Check that the prefix is not created
     assert!(!default_env_prefix.exists());
 }
+
+// #[tokio::test]
+// async fn test_multiple_prefix_update() {
+//     let pixi = PixiControl::from_manifest(
+//         r#"
+//     [project]
+//     name = "test-channel-change"
+//     channels = ["conda-forge"]
+//     platforms = ["linux-64"]
+//     conda-pypi-map = { }
+//     "#,
+//     )
+//     .unwrap();
+
+//     let project = pixi.workspace().unwrap();
+
+//     let boltons_package = Package::build("boltons", "2").finish();
+
+//     let boltons_repo_data_record = RepoDataRecord {
+//         package_record: boltons_package.package_record,
+//         file_name: "boltons".to_owned(),
+//         url: Url::parse("https://pypi.org/simple/boltons/").unwrap(),
+//         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
+//     };
+
+//     let mut packages = vec![boltons_repo_data_record];
+
+//     CondaPrefixUpdater::new(, platform, package_cache, io_concurrency_limit, build_context)
+
+//     pypi_mapping::amend_pypi_purls(
+//         blocked_client,
+//         project.pypi_name_mapping_source().unwrap(),
+//         &mut packages,
+//         None,
+//     )
+//     .await
+//     .unwrap();
+
+//     let boltons_package = packages.pop().unwrap();
+
+//     let boltons_first_purl = boltons_package
+//         .package_record
+//         .purls
+//         .as_ref()
+//         .and_then(BTreeSet::first)
+//         .unwrap();
+
+//     // we verify that even if this name is not present in our mapping
+//     // we record a purl anyways. Because we make the assumption
+//     // that it's a pypi package
+//     assert_eq!(boltons_first_purl.name(), "boltons");
+//     assert!(boltons_first_purl.qualifiers().is_empty());
+// }

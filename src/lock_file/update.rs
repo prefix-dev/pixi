@@ -1327,27 +1327,6 @@ impl<'p> UpdateContext<'p> {
                         }
                     }
                 }
-                // TaskResult::CondaPrefixUpdated(
-                //     group_name,
-                //     prefix,
-                //     python_status,
-                //     duration,
-                // ) => {
-                //     let group = GroupedEnvironment::from_name(project, &group_name)
-                //         .expect("grouped environment should exist");
-
-                //     self.instantiated_conda_prefixes
-                //         .get_mut(&group)
-                //         .expect("the entry for this environment should exists")
-                //         .set(Arc::new((prefix, *python_status, status, prefix_task)))
-                //         .expect("prefix should not be instantiated twice");
-
-                //     tracing::info!(
-                //         "updated conda packages in the '{}' prefix in {}",
-                //         group.name().fancy_display(),
-                //         humantime::format_duration(duration)
-                //     );
-                // }
                 TaskResult::PypiGroupSolved(
                     group_name,
                     platform,

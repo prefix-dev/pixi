@@ -10,6 +10,7 @@ use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::IntoDiagnostic;
+// use tokio:
 use pixi_manifest::FeaturesExt;
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
@@ -19,7 +20,7 @@ use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
 };
 use reqwest_middleware::ClientWithMiddleware;
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
 use uv_configuration::RAYON_INITIALIZE;
 
 use super::conda_metadata::{create_history_file, create_prefix_location_file};
@@ -27,6 +28,8 @@ use super::reporters::CondaBuildProgress;
 use super::try_increase_rlimit_to_sensible;
 
 /// A struct that contains the result of updating a conda prefix.
+
+#[derive(Clone)]
 pub struct CondaPrefixUpdated {
     /// The name of the group that was updated.
     pub group: GroupedEnvironmentName,
@@ -36,14 +39,40 @@ pub struct CondaPrefixUpdated {
     pub python_status: Box<PythonStatus>,
 }
 
-#[derive(Clone)]
 /// A task that updates the prefix for a given environment.
-pub struct CondaPrefixUpdater<'a> {
+pub struct CondaPrefixUpdaterInner<'a> {
     pub group: GroupedEnvironment<'a>,
     pub platform: Platform,
     pub package_cache: PackageCache,
     pub io_concurrency_limit: IoConcurrencyLimit,
     pub build_context: BuildContext,
+}
+
+impl<'a> CondaPrefixUpdaterInner<'a> {
+    /// Creates a new prefix task.
+    pub fn new(
+        group: GroupedEnvironment<'a>,
+        platform: Platform,
+        package_cache: PackageCache,
+        io_concurrency_limit: IoConcurrencyLimit,
+        build_context: BuildContext,
+    ) -> Self {
+        Self {
+            group,
+            platform,
+            package_cache,
+            io_concurrency_limit,
+            build_context,
+        }
+    }
+}
+
+#[derive(Clone)]
+/// A task that updates the prefix for a given environment.
+pub struct CondaPrefixUpdater<'a> {
+    inner: Arc<CondaPrefixUpdaterInner<'a>>,
+    /// A flag that indicates if the prefix was created.
+    _created: Arc<Mutex<Option<CondaPrefixUpdated>>>,
 }
 
 impl<'a> CondaPrefixUpdater<'a> {
@@ -55,12 +84,17 @@ impl<'a> CondaPrefixUpdater<'a> {
         io_concurrency_limit: IoConcurrencyLimit,
         build_context: BuildContext,
     ) -> Self {
-        Self {
+        let inner = CondaPrefixUpdaterInner::new(
             group,
+            platform,
             package_cache,
             io_concurrency_limit,
             build_context,
-            platform,
+        );
+
+        Self {
+            inner: Arc::new(inner),
+            _created: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -69,63 +103,86 @@ impl<'a> CondaPrefixUpdater<'a> {
         &self,
         pixi_records: Vec<PixiRecord>,
     ) -> miette::Result<CondaPrefixUpdated> {
-        tracing::debug!(
-            "updating prefix for '{}'",
-            self.group.name().fancy_display()
-        );
+        let mut created = self._created.lock().await;
 
-        let channels = self
-            .group
-            .channel_urls(&self.group.workspace().channel_config())
-            .into_diagnostic()?;
+        match created.as_ref() {
+            Some(created) => {
+                tracing::debug!(
+                    "prefix for '{}' already created",
+                    self.inner.group.name().fancy_display()
+                );
 
-        // Spawn a task to determine the currently installed packages.
-        let prefix_clone = self.group.prefix().clone();
-        let installed_packages_future =
-            tokio::task::spawn_blocking(move || prefix_clone.find_installed_packages())
-                .unwrap_or_else(|e| match e.try_into_panic() {
-                    Ok(panic) => std::panic::resume_unwind(panic),
-                    Err(_err) => Err(miette::miette!("the operation was cancelled")),
-                });
+                Ok(created.clone())
+            }
+            None => {
+                tracing::debug!(
+                    "updating prefix for '{}'",
+                    self.inner.group.name().fancy_display()
+                );
 
-        // Wait until the conda records are available and until the installed packages
-        // for this prefix are available.
-        let installed_packages = installed_packages_future.await?;
+                let channels = self
+                    .inner
+                    .group
+                    .channel_urls(&self.inner.group.workspace().channel_config())
+                    .into_diagnostic()?;
 
-        let has_existing_packages = !installed_packages.is_empty();
-        let group_name = self.group.name().clone();
-        let client = self.group.workspace().authenticated_client().clone();
-        let prefix = self.group.prefix();
+                // Spawn a task to determine the currently installed packages.
+                let prefix_clone = self.inner.group.prefix().clone();
+                let installed_packages_future =
+                    tokio::task::spawn_blocking(move || prefix_clone.find_installed_packages())
+                        .unwrap_or_else(|e| match e.try_into_panic() {
+                            Ok(panic) => std::panic::resume_unwind(panic),
+                            Err(_err) => Err(miette::miette!("the operation was cancelled")),
+                        });
 
-        let python_status = update_prefix_conda(
-            &prefix,
-            self.package_cache.clone(),
-            client,
-            installed_packages,
-            pixi_records,
-            self.group.virtual_packages(self.platform),
-            channels,
-            self.platform,
-            &format!(
-                "{} conda prefix '{}'",
-                if has_existing_packages {
-                    "updating"
-                } else {
-                    "creating"
-                },
-                group_name.fancy_display()
-            ),
-            "  ",
-            self.io_concurrency_limit.clone().into(),
-            self.build_context.clone(),
-        )
-        .await?;
+                // Wait until the conda records are available and until the installed packages
+                // for this prefix are available.
+                let installed_packages = installed_packages_future.await?;
 
-        Ok(CondaPrefixUpdated {
-            group: group_name,
-            prefix,
-            python_status: Box::new(python_status),
-        })
+                let has_existing_packages = !installed_packages.is_empty();
+                let group_name = self.inner.group.name().clone();
+                let client = self.inner.group.workspace().authenticated_client().clone();
+                let prefix = self.inner.group.prefix();
+
+                let python_status = update_prefix_conda(
+                    &prefix,
+                    self.inner.package_cache.clone(),
+                    client,
+                    installed_packages,
+                    pixi_records,
+                    self.inner.group.virtual_packages(self.inner.platform),
+                    channels,
+                    self.inner.platform,
+                    &format!(
+                        "{} conda prefix '{}'",
+                        if has_existing_packages {
+                            "updating"
+                        } else {
+                            "creating"
+                        },
+                        group_name.fancy_display()
+                    ),
+                    "  ",
+                    self.inner.io_concurrency_limit.clone().into(),
+                    self.inner.build_context.clone(),
+                )
+                .await?;
+
+                let conda_prefix_updated = CondaPrefixUpdated {
+                    group: group_name,
+                    prefix: prefix.clone(),
+                    python_status: Box::new(python_status),
+                };
+
+                let _ = created.insert(conda_prefix_updated.clone());
+
+                Ok(conda_prefix_updated)
+            }
+        }
+    }
+
+    pub(crate) fn group(&self) -> &GroupedEnvironment {
+        &self.inner.group
     }
 }
 
@@ -256,3 +313,6 @@ pub async fn update_prefix_conda(
     // Determine if the python version changed.
     Ok(PythonStatus::from_transaction(&result.transaction))
 }
+
+#[cfg(test)]
+mod test {}
