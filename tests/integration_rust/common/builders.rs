@@ -208,6 +208,11 @@ impl AddBuilder {
         self
     }
 
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.args.dependency_config.platforms.push(platform);
+        self
+    }
+
     pub fn with_git_url(mut self, url: Url) -> Self {
         self.args.dependency_config.git = Some(url);
         self

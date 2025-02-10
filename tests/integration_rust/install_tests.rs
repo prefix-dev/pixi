@@ -794,3 +794,60 @@ async fn pypi_prefix_is_not_created_when_whl() {
     // Check that the prefix is not created
     assert!(!default_env_prefix.exists());
 }
+
+/// This test checks that the override of a conda package is correctly done per platform.
+/// There have been issues in the past that the wrong repodata was used for the override.
+/// What this test does is recreate this situation by adding a conda package that is only
+/// available on linux and then adding a PyPI dependency on the same package for both linux
+/// and osxarm64.
+/// This should result in the PyPI package being overridden on linux and not on osxarm64.
+#[tokio::test]
+async fn conda_pypi_override_correct_per_platform() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init_with_platforms(vec![
+        Platform::OsxArm64.to_string(),
+        Platform::Linux64.to_string(),
+    ])
+    .await
+    .unwrap();
+    pixi.add("python==3.12").with_install(false).await.unwrap();
+
+    // Add a conda package that is only available on linux
+    pixi.add("boltons")
+        .with_platform(Platform::Linux64)
+        .with_install(false)
+        .await
+        .unwrap();
+
+    // Add a PyPI dependency on boltons as well
+    pixi.add("boltons")
+        .set_pypi(true)
+        .with_install(false)
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    // Check that the conda package is only available on linux
+    assert!(lock.contains_conda_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "boltons"
+    ));
+    // Sanity check that the conda package is not available on osxarm64
+    assert!(!lock.contains_conda_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::OsxArm64,
+        "boltons"
+    ));
+    // Check that the PyPI package is available on osxarm64 only
+    assert!(lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::OsxArm64,
+        pep508_rs::Requirement::from_str("boltons").unwrap(),
+    ));
+    assert!(!lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        pep508_rs::Requirement::from_str("boltons").unwrap(),
+    ));
+}
