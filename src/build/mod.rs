@@ -288,7 +288,7 @@ impl BuildContext {
 
         let protocol = self.setup_protocol(&source_checkout, build_id).await?;
 
-        // Extract the conda metadata for the package.
+        // Build the package
         let build_result = protocol
             .conda_build(
                 &CondaBuildParams {
@@ -629,7 +629,7 @@ impl BuildContext {
 
         let protocol = self.setup_protocol(source, build_id).await?;
 
-        // Extract the conda metadata for the package.
+        // Extract the conda metadata for the package
         let metadata = protocol
             .get_conda_metadata(
                 &CondaMetadataParams {
