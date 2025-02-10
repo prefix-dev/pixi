@@ -112,16 +112,16 @@ impl Protocol {
         }
     }
 
-    pub async fn get_conda_metadata(
+    pub async fn conda_get_metadata(
         &self,
         request: &CondaMetadataParams,
         reporter: Arc<dyn CondaMetadataReporter>,
     ) -> miette::Result<CondaMetadataResult> {
         match self {
             Self::PixiBuild(protocol) => Ok(protocol
-                .get_conda_metadata(request, reporter.as_ref())
+                .conda_get_metadata(request, reporter.as_ref())
                 .await?),
-            Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
+            Self::CondaBuild(protocol) => protocol.conda_get_metadata(request),
         }
     }
 

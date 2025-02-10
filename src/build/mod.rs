@@ -631,7 +631,7 @@ impl BuildContext {
 
         // Extract the conda metadata for the package
         let metadata = protocol
-            .get_conda_metadata(
+            .conda_get_metadata(
                 &CondaMetadataParams {
                     build_platform: Some(PlatformAndVirtualPackages {
                         platform: build_platform,
