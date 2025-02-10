@@ -40,7 +40,7 @@ impl Protocol {
     }
 
     // Extract metadata from the recipe.
-    pub fn get_conda_metadata(
+    pub fn conda_get_metadata(
         &self,
         request: &CondaMetadataParams,
     ) -> miette::Result<CondaMetadataResult> {
