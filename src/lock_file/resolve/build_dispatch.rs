@@ -43,14 +43,13 @@ use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildContext, BuildStack, HashStrategy};
 
+use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
 use crate::{
     activation::CurrentEnvVarBehavior,
     workspace::{get_activated_environment_variables, Environment, EnvironmentVars},
-    CondaPrefixUpdated, CondaPrefixUpdater,
 };
 
-/// This structure holds all the parameters needed to create a `BuildContext` uv
-/// implementation.
+/// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
 pub struct UvBuildDispatchParams<'a> {
     client: &'a RegistryClient,
     cache: &'a Cache,

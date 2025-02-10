@@ -7,7 +7,7 @@ mod satisfiability;
 mod update;
 mod utils;
 
-pub use crate::CondaPrefixUpdater;
+pub use crate::environment::CondaPrefixUpdater;
 use crate::Workspace;
 use miette::{IntoDiagnostic, WrapErr};
 pub(crate) use package_identifier::PypiPackageIdentifier;

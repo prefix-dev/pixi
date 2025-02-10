@@ -48,6 +48,7 @@ use uv_resolver::{
 use uv_types::EmptyInstalledPackages;
 
 use crate::{
+    environment::CondaPrefixUpdated,
     lock_file::{
         records_by_name::HasNameVersion,
         resolve::{
@@ -61,7 +62,6 @@ use crate::{
     },
     uv_reporter::{UvReporter, UvReporterOptions},
     workspace::{Environment, EnvironmentVars},
-    CondaPrefixUpdated,
 };
 
 #[derive(Debug, thiserror::Error)]
