@@ -315,7 +315,7 @@ impl PixiControl {
     }
 
     /// Initialize pixi project inside a temporary directory. Returns a
-    /// [`InitBuilder`]. To execute the command and await the result call
+    /// [`InitBuilder`]. To execute the command and await the result, call
     /// `.await` on the return value.
     pub fn init_with_platforms(&self, platforms: Vec<String>) -> InitBuilder {
         InitBuilder {
@@ -333,13 +333,13 @@ impl PixiControl {
     }
 
     /// Add a dependency to the project. Returns an [`AddBuilder`].
-    /// the command and await the result call `.await` on the return value.
+    /// To execute the command and await the result, call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         self.add_multiple(vec![spec])
     }
 
     /// Add dependencies to the project. Returns an [`AddBuilder`].
-    /// the command and await the result call `.await` on the return value.
+    /// To execute the command and await the result, call `.await` on the return value.
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
