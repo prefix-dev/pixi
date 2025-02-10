@@ -7,6 +7,7 @@ use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use uv_configuration::ConfigSettings;
 
 use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
@@ -188,6 +189,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let tags;
     let uv_context;
     let index_locations;
+    let config_settings = ConfigSettings::default();
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
             uv_context = UvResolutionContext::from_workspace(&workspace)?;
@@ -204,6 +206,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &tags,
                 &index_locations,
                 &uv_types::HashStrategy::None,
+                &config_settings,
             ))
         } else {
             None
