@@ -315,14 +315,17 @@ pub async fn resolve_pypi(
         FlatIndex::from_entries(entries, Some(&tags), &context.hash_strategy, &build_options)
     };
 
-    let config_settings = ConfigSettings::default();
-
-    let dependency_metadata = DependencyMetadata::default();
+    // Hi maintainers! For anyone coming here, if you expose any additional `uv` options, similar to `index_strategy`, make sure to
+    // include them in this struct as well instead of relying on the default.
+    // Otherwise there be panics.
     let options = Options {
         index_strategy,
+        build_options: build_options.clone(),
         ..Options::default()
     };
 
+    let config_settings = ConfigSettings::default();
+    let dependency_metadata = DependencyMetadata::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
