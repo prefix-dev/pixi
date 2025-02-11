@@ -3336,6 +3336,7 @@ The custom tasks defined in the <a href="../pixi_manifest/">manifest file</a> ar
 <li><code>--concurrent-downloads</code>: The number of concurrent downloads to use when installing packages. Defaults to 50.</li>
 <li><code>--concurrent-solves</code>: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.</li>
 <li><code>--skip-deps</code>: Skip the dependencies of the task, which where defined in the <code>depends-on</code> field of the task.</li>
+<li><code>--dry-run (-n)</code>: Run the task in dry-run mode (only print the command that would run)</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>python
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>cowpy<span class="w"> </span><span class="s2">&quot;Hey pixi user&quot;</span>
@@ -3348,14 +3349,16 @@ The custom tasks defined in the <a href="../pixi_manifest/">manifest file</a> ar
 </span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>pixi<span class="w"> </span>run<span class="w"> </span>task<span class="w"> </span>argument1<span class="w"> </span>argument2
 </span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="c1"># Skip dependencies of the task</span>
 </span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>pixi<span class="w"> </span>run<span class="w"> </span>--skip-deps<span class="w"> </span>task
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="c1"># If you have multiple environments you can select the right one with the --environment flag.</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span>cuda<span class="w"> </span>python
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="c1"># THIS DOESN&#39;T WORK ON WINDOWS</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="c1"># If you want to run a command in a clean environment you can use the --clean-env flag.</span>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># The PATH should only contain the pixi environment here.</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>pixi<span class="w"> </span>run<span class="w"> </span>--clean-env<span class="w"> </span><span class="s2">&quot;echo \$PATH&quot;</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="c1"># Run in dry-run mode to see the commands that would be run</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>pixi<span class="w"> </span>run<span class="w"> </span>--dry-run<span class="w"> </span>task
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="c1"># If you have multiple environments you can select the right one with the --environment flag.</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span>cuda<span class="w"> </span>python
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="c1"># THIS DOESN&#39;T WORK ON WINDOWS</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a><span class="c1"># If you want to run a command in a clean environment you can use the --clean-env flag.</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a><span class="c1"># The PATH should only contain the pixi environment here.</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a>pixi<span class="w"> </span>run<span class="w"> </span>--clean-env<span class="w"> </span><span class="s2">&quot;echo \$PATH&quot;</span>
 </span></code></pre></div>
 <div class="admonition info">
 <p class="admonition-title">Info</p>
