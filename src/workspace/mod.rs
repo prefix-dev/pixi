@@ -174,19 +174,18 @@ impl Workspace {
     /// Constructs a new instance from an internal manifest representation
     pub(crate) fn from_manifests(manifest: Manifests) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
-
-        let root = manifest
-            .workspace
-            .provenance
-            .path
+        // Canonicalize the root path
+        let root = &manifest.workspace.provenance.path;
+        let root = dunce::canonicalize(root).unwrap_or(root.to_path_buf());
+        // Take the parent after conicalizing to ensure this works even when the manifest
+        let root = root
             .parent()
             .expect("manifest path should always have a parent")
             .to_owned();
 
         let config = Config::load(&root);
-
         Self {
-            root: dunce::canonicalize(&root).unwrap_or(root),
+            root,
             client: Default::default(),
             workspace: manifest.workspace,
             package: manifest.package,
