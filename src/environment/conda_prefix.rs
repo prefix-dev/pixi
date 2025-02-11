@@ -4,13 +4,11 @@ use crate::build::{BuildContext, SourceCheckoutReporter};
 use crate::environment::PythonStatus;
 use crate::lock_file::IoConcurrencyLimit;
 use crate::prefix::Prefix;
-use crate::workspace::grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
-use crate::workspace::HasWorkspaceRef;
+use crate::workspace::grouped_environment::GroupedEnvironmentName;
 use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::IntoDiagnostic;
-use pixi_manifest::FeaturesExt;
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
@@ -41,8 +39,12 @@ pub struct CondaPrefixUpdated {
 }
 
 /// A task that updates the prefix for a given environment.
-pub struct CondaPrefixUpdaterInner<'a> {
-    pub group: GroupedEnvironment<'a>,
+pub struct CondaPrefixUpdaterInner {
+    pub channels: Vec<ChannelUrl>,
+    pub name: GroupedEnvironmentName,
+    pub client: ClientWithMiddleware,
+    pub prefix: Prefix,
+    pub virtual_packages: Vec<GenericVirtualPackage>,
     pub platform: Platform,
     pub package_cache: PackageCache,
     pub io_concurrency_limit: IoConcurrencyLimit,
@@ -52,17 +54,26 @@ pub struct CondaPrefixUpdaterInner<'a> {
     created: AsyncOnceCell<CondaPrefixUpdated>,
 }
 
-impl<'a> CondaPrefixUpdaterInner<'a> {
+impl CondaPrefixUpdaterInner {
     /// Creates a new prefix task.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        group: GroupedEnvironment<'a>,
+        channels: Vec<ChannelUrl>,
+        name: GroupedEnvironmentName,
+        client: ClientWithMiddleware,
+        prefix: Prefix,
+        virtual_packages: Vec<GenericVirtualPackage>,
         platform: Platform,
         package_cache: PackageCache,
         io_concurrency_limit: IoConcurrencyLimit,
         build_context: BuildContext,
     ) -> Self {
         Self {
-            group,
+            channels,
+            name,
+            client,
+            prefix,
+            virtual_packages,
             platform,
             package_cache,
             io_concurrency_limit,
@@ -74,21 +85,30 @@ impl<'a> CondaPrefixUpdaterInner<'a> {
 
 #[derive(Clone)]
 /// A task that updates the prefix for a given environment.
-pub struct CondaPrefixUpdater<'a> {
-    inner: Arc<CondaPrefixUpdaterInner<'a>>,
+pub struct CondaPrefixUpdater {
+    inner: Arc<CondaPrefixUpdaterInner>,
 }
 
-impl<'a> CondaPrefixUpdater<'a> {
+impl CondaPrefixUpdater {
     /// Creates a new prefix task.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        group: GroupedEnvironment<'a>,
+        channels: Vec<ChannelUrl>,
+        name: GroupedEnvironmentName,
+        client: ClientWithMiddleware,
+        prefix: Prefix,
+        virtual_packages: Vec<GenericVirtualPackage>,
         platform: Platform,
         package_cache: PackageCache,
         io_concurrency_limit: IoConcurrencyLimit,
         build_context: BuildContext,
     ) -> Self {
         let inner = CondaPrefixUpdaterInner::new(
-            group,
+            channels,
+            name,
+            client,
+            prefix,
+            virtual_packages,
             platform,
             package_cache,
             io_concurrency_limit,
@@ -108,19 +128,12 @@ impl<'a> CondaPrefixUpdater<'a> {
         self.inner
             .created
             .get_or_try_init(async {
-                tracing::debug!(
-                    "updating prefix for '{}'",
-                    self.inner.group.name().fancy_display()
-                );
+                tracing::debug!("updating prefix for '{}'", self.inner.name.fancy_display());
 
-                let channels = self
-                    .inner
-                    .group
-                    .channel_urls(&self.inner.group.workspace().channel_config())
-                    .into_diagnostic()?;
+                let channels = self.inner.channels.clone();
 
                 // Spawn a task to determine the currently installed packages.
-                let prefix_clone = self.inner.group.prefix().clone();
+                let prefix_clone = self.inner.prefix.clone();
                 let installed_packages_future =
                     tokio::task::spawn_blocking(move || prefix_clone.find_installed_packages())
                         .unwrap_or_else(|e| match e.try_into_panic() {
@@ -133,17 +146,16 @@ impl<'a> CondaPrefixUpdater<'a> {
                 let installed_packages = installed_packages_future.await?;
 
                 let has_existing_packages = !installed_packages.is_empty();
-                let group_name = self.inner.group.name().clone();
-                let client = self.inner.group.workspace().authenticated_client().clone();
-                let prefix = self.inner.group.prefix();
+                let group_name = self.inner.name.clone();
+                let client = self.inner.client.clone();
 
                 let python_status = update_prefix_conda(
-                    &prefix,
+                    &self.inner.prefix,
                     self.inner.package_cache.clone(),
                     client,
                     installed_packages,
                     pixi_records,
-                    self.inner.group.virtual_packages(self.inner.platform),
+                    self.inner.virtual_packages.clone(),
                     channels,
                     self.inner.platform,
                     &format!(
@@ -163,15 +175,15 @@ impl<'a> CondaPrefixUpdater<'a> {
 
                 Ok(CondaPrefixUpdated {
                     group: group_name,
-                    prefix: prefix.clone(),
+                    prefix: self.inner.prefix.clone(),
                     python_status: Box::new(python_status),
                 })
             })
             .await
     }
 
-    pub(crate) fn group(&self) -> &GroupedEnvironment {
-        &self.inner.group
+    pub(crate) fn name(&self) -> &GroupedEnvironmentName {
+        &self.inner.name
     }
 }
 

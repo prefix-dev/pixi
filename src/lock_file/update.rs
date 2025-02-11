@@ -401,8 +401,20 @@ impl<'p> LockFileDerivedData<'p> {
         // Create object to update the prefix
         let group = GroupedEnvironment::Environment(environment.clone());
         let platform = environment.best_platform();
+        let channels = group
+            .channel_urls(&group.workspace().channel_config())
+            .into_diagnostic()?;
+        let name = group.name();
+        let prefix = group.prefix();
+        let virtual_packages = group.virtual_packages(environment.best_platform());
+        let client = group.workspace().authenticated_client().clone();
+
         let conda_prefix_updater = CondaPrefixUpdater::new(
-            group,
+            channels,
+            name,
+            client,
+            prefix,
+            virtual_packages,
             platform,
             self.package_cache.clone(),
             self.io_concurrency_limit.clone(),
@@ -1172,8 +1184,20 @@ impl<'p> UpdateContext<'p> {
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
 
             // Creates an object to initiate an update at a later point
+            let channels = group
+                .channel_urls(&group.workspace().channel_config())
+                .into_diagnostic()?;
+            let name = group.name();
+            let prefix = group.prefix();
+            let virtual_packages = group.virtual_packages(environment.best_platform());
+            let client = group.workspace().authenticated_client().clone();
+
             let conda_prefix_updater = CondaPrefixUpdater::new(
-                group.clone(),
+                channels,
+                name,
+                client,
+                prefix,
+                virtual_packages,
                 environment.best_platform(),
                 self.package_cache.clone(),
                 self.io_concurrency_limit.clone(),
@@ -1983,7 +2007,7 @@ async fn spawn_solve_pypi_task<'p>(
     platform: Platform,
     repodata_solve_records: impl Future<Output = Arc<PixiRecordsByName>>,
     repodata_current_records: impl Future<Output = Arc<PixiRecordsByName>>,
-    prefix_task: CondaPrefixUpdater<'p>,
+    prefix_task: CondaPrefixUpdater,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,

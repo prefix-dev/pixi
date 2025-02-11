@@ -4,8 +4,6 @@ use crate::common::{
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use futures::{stream::FuturesUnordered, StreamExt};
-use pixi::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
 use pixi::{
@@ -15,6 +13,10 @@ use pixi::{
         LockFileUsageArgs,
     },
     lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
+};
+use pixi::{
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
 };
 use pixi::{UpdateLockFileOptions, Workspace};
 use pixi_build_frontend::ToolContext;
@@ -32,7 +34,7 @@ use std::{
     sync::Arc,
 };
 use tempfile::TempDir;
-use tokio::fs;
+use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_python::PythonEnvironment;
 
@@ -868,7 +870,7 @@ async fn conda_pypi_override_correct_per_platform() {
     ));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multiple_prefix_update() {
     let current_platform = Platform::current();
 
@@ -921,8 +923,22 @@ async fn test_multiple_prefix_update() {
 
     let tmp_dir = tempfile::tempdir().unwrap();
 
+    let group = GroupedEnvironment::from(project.default_environment().clone());
+
+    let channels = group
+        .channel_urls(&group.workspace().channel_config())
+        .unwrap();
+    let name = group.name();
+    let client = group.workspace().authenticated_client().clone();
+    let prefix = group.prefix();
+    let virtual_packages = group.virtual_packages(current_platform);
+
     let conda_prefix_updater = CondaPrefixUpdater::new(
-        project.default_environment().into(),
+        channels,
+        name,
+        client,
+        prefix,
+        virtual_packages,
         current_platform,
         PackageCache::new(tmp_dir.path().to_path_buf()),
         IoConcurrencyLimit::default(),
@@ -941,18 +957,20 @@ async fn test_multiple_prefix_update() {
         PixiRecord::Binary(python_repo_data_record),
     ]);
 
-    let mut tasks = FuturesUnordered::new();
+    let mut sets = JoinSet::new();
 
     // spawn multiple tokio tasks to update the prefix
     for _ in 0..4 {
         let pixi_records = pixi_records.clone();
-        tasks.push(conda_prefix_updater.update(pixi_records));
+        // tasks.push(conda_prefix_updater.update(pixi_records));
+        let updater = conda_prefix_updater.clone();
+        sets.spawn(async move { updater.update(pixi_records).await.cloned() });
     }
 
     let mut first_modified = None;
 
-    while let Some(result) = tasks.next().await {
-        let prefix_updated = result.unwrap();
+    while let Some(result) = sets.join_next().await {
+        let prefix_updated = result.unwrap().unwrap();
 
         let prefix = prefix_updated.prefix.root();
 
