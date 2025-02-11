@@ -520,8 +520,10 @@ mod test {
     #[case::non_pixi_build("non-pixi-build")]
     #[case::non_pixi_build_project("non-pixi-build/project")]
     fn test_workspace_discoverer(#[case] subdir: &str) {
-        let test_data_root =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery");
+        let test_data_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
+        )
+        .unwrap();
 
         let snapshot =
             match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(test_data_root.join(subdir)))
@@ -535,7 +537,7 @@ mod test {
                     let rel_path =
                         pathdiff::diff_paths(&discovered.workspace.provenance.path, test_data_root)
                             .unwrap_or(discovered.workspace.provenance.path);
-
+                    dbg!(&rel_path);
                     let mut snapshot = String::new();
                     writeln!(
                         &mut snapshot,
@@ -572,8 +574,10 @@ mod test {
     #[case::empty("empty")]
     #[case::package_specific("package_a/pixi.toml")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
-        let test_data_root =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery");
+        let test_data_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
+        )
+        .unwrap();
 
         let snapshot = match WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(
             test_data_root.join(subdir),
@@ -585,6 +589,8 @@ mod test {
             Ok(Some(WithWarnings {
                 value: discovered, ..
             })) => {
+                dbg!(&discovered.workspace.provenance.path);
+                dbg!(&test_data_root);
                 let rel_path =
                     pathdiff::diff_paths(&discovered.workspace.provenance.path, test_data_root)
                         .unwrap_or(discovered.workspace.provenance.path);
