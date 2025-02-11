@@ -698,7 +698,7 @@ impl Project {
 
     /// Sync the `exposed` field in manifest based on the executables in the
     /// environment and the expose type. Expose type can be either:
-    /// * If the user initially chooses to auto-exposed everything, we will add
+    /// * If the user initially chooses to auto-expose everything, we will add
     ///   new binaries that are not exposed in the `exposed` field.
     ///
     /// * If the use chose to expose only a subset of binaries, we will remove
@@ -722,15 +722,14 @@ impl Project {
             .exposed
             .iter()
             .filter_map(|mapping| {
-                // If the executable is still requested, do not remove the mapping
-                if env_executables.values().flatten().any(|executable| {
-                    executable_from_path(&executable.path) == mapping.executable_relname()
+                // If the executable isn't requested, remove the mapping
+                if env_executables.values().flatten().all(|executable| {
+                    executable_from_path(&executable.path) != mapping.executable_relname()
                 }) {
-                    tracing::debug!("Not removing mapping to: {}", mapping.executable_relname());
-                    return None;
+                    Some(mapping.exposed_name().clone())
+                } else {
+                    None
                 }
-                // Else do remove the mapping
-                Some(mapping.exposed_name().clone())
             })
             .collect_vec();
 
@@ -739,7 +738,6 @@ impl Project {
             self.manifest.remove_exposed_name(env_name, exposed_name)?;
         }
 
-        // auto-expose the executables if necessary
         match expose_type {
             ExposedType::All => {
                 // Add new binaries that are not yet exposed
@@ -757,7 +755,7 @@ impl Project {
             }
             ExposedType::Ignore(ignore) => {
                 // Add new binaries that are not yet exposed and that don't come from one of the
-                // packages we filter on
+                // packages we ignore
                 let executable_names = env_executables
                     .into_iter()
                     .filter_map(|(package_name, executable)| {
@@ -779,7 +777,7 @@ impl Project {
                 }
             }
             ExposedType::Filter(filter) => {
-                // Add new binaries that are not yet exposed and that don't come from one of the
+                // Add new binaries that are not yet exposed and that come from one of the
                 // packages we filter on
                 let executable_names = env_executables
                     .into_iter()
