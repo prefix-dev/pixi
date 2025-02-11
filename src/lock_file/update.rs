@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    environment::CondaPrefixUpdated,
+    environment::{CondaPrefixUpdated, CondaPrefixUpdaterBuilder},
     workspace::{get_activated_environment_variables, EnvironmentVars},
 };
 use barrier_cell::BarrierCell;
@@ -401,25 +401,15 @@ impl<'p> LockFileDerivedData<'p> {
         // Create object to update the prefix
         let group = GroupedEnvironment::Environment(environment.clone());
         let platform = environment.best_platform();
-        let channels = group
-            .channel_urls(&group.workspace().channel_config())
-            .into_diagnostic()?;
-        let name = group.name();
-        let prefix = group.prefix();
-        let virtual_packages = group.virtual_packages(environment.best_platform());
-        let client = group.workspace().authenticated_client().clone();
 
-        let conda_prefix_updater = CondaPrefixUpdater::new(
-            channels,
-            name,
-            client,
-            prefix,
-            virtual_packages,
+        let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
+            group,
             platform,
             self.package_cache.clone(),
             self.io_concurrency_limit.clone(),
             self.build_context.clone(),
-        );
+        )
+        .build()?;
 
         // Get the locked environment from the lock-file.
         let records = self
@@ -1184,25 +1174,14 @@ impl<'p> UpdateContext<'p> {
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
 
             // Creates an object to initiate an update at a later point
-            let channels = group
-                .channel_urls(&group.workspace().channel_config())
-                .into_diagnostic()?;
-            let name = group.name();
-            let prefix = group.prefix();
-            let virtual_packages = group.virtual_packages(environment.best_platform());
-            let client = group.workspace().authenticated_client().clone();
-
-            let conda_prefix_updater = CondaPrefixUpdater::new(
-                channels,
-                name,
-                client,
-                prefix,
-                virtual_packages,
+            let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
+                group.clone(),
                 environment.best_platform(),
                 self.package_cache.clone(),
                 self.io_concurrency_limit.clone(),
                 self.build_context.clone(),
-            );
+            )
+            .build()?;
 
             // Get the uv context
             let uv_context = match uv_context.as_ref() {

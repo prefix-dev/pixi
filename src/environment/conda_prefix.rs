@@ -4,11 +4,13 @@ use crate::build::{BuildContext, SourceCheckoutReporter};
 use crate::environment::PythonStatus;
 use crate::lock_file::IoConcurrencyLimit;
 use crate::prefix::Prefix;
-use crate::workspace::grouped_environment::GroupedEnvironmentName;
+use crate::workspace::grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
+use crate::workspace::HasWorkspaceRef;
 use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::IntoDiagnostic;
+use pixi_manifest::FeaturesExt;
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
@@ -80,6 +82,58 @@ impl CondaPrefixUpdaterInner {
             build_context,
             created: AsyncOnceCell::new(),
         }
+    }
+}
+
+/// A builder for creating a new conda prefix updater.
+pub struct CondaPrefixUpdaterBuilder<'a> {
+    group: GroupedEnvironment<'a>,
+    platform: Platform,
+    package_cache: PackageCache,
+    io_concurrency_limit: IoConcurrencyLimit,
+    build_context: BuildContext,
+}
+
+impl<'a> CondaPrefixUpdaterBuilder<'a> {
+    /// Creates a new builder.
+    pub fn new(
+        group: GroupedEnvironment<'a>,
+        platform: Platform,
+        package_cache: PackageCache,
+        io_concurrency_limit: IoConcurrencyLimit,
+        build_context: BuildContext,
+    ) -> Self {
+        Self {
+            group,
+            platform,
+            package_cache,
+            io_concurrency_limit,
+            build_context,
+        }
+    }
+
+    /// Builds the conda prefix updater by extracting the necessary information from the group.
+    pub fn build(self) -> miette::Result<CondaPrefixUpdater> {
+        let channels = self
+            .group
+            .channel_urls(&self.group.workspace().channel_config())
+            .into_diagnostic()?;
+        let name = self.group.name();
+        let prefix = self.group.prefix();
+        let virtual_packages = self.group.virtual_packages(self.platform);
+        let client = self.group.workspace().authenticated_client().clone();
+
+        Ok(CondaPrefixUpdater::new(
+            channels,
+            name,
+            client,
+            prefix,
+            virtual_packages,
+            self.platform,
+            self.package_cache,
+            self.io_concurrency_limit,
+            self.build_context,
+        ))
     }
 }
 
