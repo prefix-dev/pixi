@@ -755,6 +755,29 @@ impl Project {
                     self.manifest.add_exposed_mapping(env_name, &mapping)?;
                 }
             }
+            ExposedType::Ignore(ignore) => {
+                // Add new binaries that are not yet exposed and that don't come from one of the
+                // packages we filter on
+                let executable_names = env_executables
+                    .into_iter()
+                    .filter_map(|(package_name, executable)| {
+                        if ignore.contains(&package_name) {
+                            None
+                        } else {
+                            Some(executable)
+                        }
+                    })
+                    .flatten()
+                    .map(|executable| executable.name);
+
+                for executable_name in executable_names {
+                    let mapping = Mapping::new(
+                        ExposedName::from_str(&executable_name)?,
+                        executable_name.to_string(),
+                    );
+                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
+                }
+            }
             ExposedType::Filter(filter) => {
                 // Add new binaries that are not yet exposed and that don't come from one of the
                 // packages we filter on
@@ -762,9 +785,9 @@ impl Project {
                     .into_iter()
                     .filter_map(|(package_name, executable)| {
                         if filter.contains(&package_name) {
-                            None
-                        } else {
                             Some(executable)
+                        } else {
+                            None
                         }
                     })
                     .flatten()

@@ -38,9 +38,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Check if they were all auto-exposed, or if the user manually exposed a subset of them
         let expose_type = if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
-            ExposedType::default()
+            ExposedType::All
         } else {
-            ExposedType::subset()
+            let filtered_packages = exposed_mapping_binaries
+                .into_iter()
+                .filter_map(|m| m.executable_name().parse().ok())
+                .collect();
+            ExposedType::Filter(filtered_packages)
         };
 
         // Reinstall the environment
