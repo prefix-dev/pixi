@@ -662,8 +662,22 @@ impl Project {
         Ok(state_changes)
     }
 
-    /// Get all installed executables for specific environment.
-    pub async fn executables(
+    pub async fn executables_all_dependencies(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<Vec<Executable>> {
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        let prefix = Prefix::new(env_dir.path());
+
+        let prefix_records = &prefix.find_installed_packages()?;
+
+        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
+
+        Ok(all_executables)
+    }
+
+    /// Get all installed executables of direct dependencies of a specific environment.
+    pub async fn executables_direct_dependencies(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<IndexMap<PackageName, Vec<Executable>>> {
@@ -710,7 +724,7 @@ impl Project {
         expose_type: ExposedType,
     ) -> miette::Result<()> {
         // Get env executables
-        let env_executables = self.executables(env_name).await?;
+        let execs_all = self.executables_all_dependencies(env_name).await?;
 
         // Get the parsed environment
         let environment = self
@@ -723,7 +737,7 @@ impl Project {
             .iter()
             .filter_map(|mapping| {
                 // If the executable isn't requested, remove the mapping
-                if env_executables.values().flatten().all(|executable| {
+                if execs_all.iter().all(|executable| {
                     executable_from_path(&executable.path) != mapping.executable_relname()
                 }) {
                     Some(mapping.exposed_name().clone())
@@ -738,10 +752,12 @@ impl Project {
             self.manifest.remove_exposed_name(env_name, exposed_name)?;
         }
 
+        let execs_direct_deps = self.executables_direct_dependencies(env_name).await?;
+
         match expose_type {
             ExposedType::All => {
                 // Add new binaries that are not yet exposed
-                let executable_names = env_executables
+                let executable_names = execs_direct_deps
                     .into_iter()
                     .flat_map(|(_, executables)| executables)
                     .map(|executable| executable.name);
@@ -753,39 +769,17 @@ impl Project {
                     self.manifest.add_exposed_mapping(env_name, &mapping)?;
                 }
             }
+            ExposedType::Nothing => {}
             ExposedType::Ignore(ignore) => {
                 // Add new binaries that are not yet exposed and that don't come from one of the
                 // packages we ignore
-                let executable_names = env_executables
+                let executable_names = execs_direct_deps
                     .into_iter()
                     .filter_map(|(package_name, executable)| {
                         if ignore.contains(&package_name) {
                             None
                         } else {
                             Some(executable)
-                        }
-                    })
-                    .flatten()
-                    .map(|executable| executable.name);
-
-                for executable_name in executable_names {
-                    let mapping = Mapping::new(
-                        ExposedName::from_str(&executable_name)?,
-                        executable_name.to_string(),
-                    );
-                    self.manifest.add_exposed_mapping(env_name, &mapping)?;
-                }
-            }
-            ExposedType::Filter(filter) => {
-                // Add new binaries that are not yet exposed and that come from one of the
-                // packages we filter on
-                let executable_names = env_executables
-                    .into_iter()
-                    .filter_map(|(package_name, executable)| {
-                        if filter.contains(&package_name) {
-                            Some(executable)
-                        } else {
-                            None
                         }
                     })
                     .flatten()
@@ -877,6 +871,7 @@ impl Project {
         }
         Ok(in_sync)
     }
+
     /// Expose executables from the environment to the global bin directory.
     ///
     /// This function will first remove all binaries that are not listed as

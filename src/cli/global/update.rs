@@ -28,7 +28,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         // See what executables were installed prior to update
-        let env_binaries = project.executables(env_name).await?;
+        let env_binaries = project.executables_direct_dependencies(env_name).await?;
 
         // Get the exposed binaries from mapping
         let exposed_mapping_binaries = project
@@ -40,11 +40,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let expose_type = if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
             ExposedType::All
         } else {
-            let filtered_packages = exposed_mapping_binaries
-                .into_iter()
-                .filter_map(|m| m.executable_name().parse().ok())
-                .collect();
-            ExposedType::Filter(filtered_packages)
+            ExposedType::Nothing
         };
 
         // Reinstall the environment
