@@ -91,10 +91,6 @@ def main() -> None:
         "Commit changes",
         "Push changes",
         "Create and merge release prep PR",
-        "Tag release",
-        "Push tag",
-        "Publish release",
-        "Test release",
     ]
 
     colored_print("Select the step to start from:", Colors.YELLOW)
@@ -187,52 +183,13 @@ def main() -> None:
             colored_input("Merge that PR. Press Enter to continue...", Colors.MAGENTA)
             status.append("Created and merged the release prep PR")
 
-        if start_step <= 11:
-            colored_print("\nTagging the release", Colors.YELLOW)
-            colored_print("\nChecking out main...", Colors.YELLOW)
-            run_command(["git", "fetch", "upstream"])
-            run_command(["git", "checkout", "upstream/main"])
+        colored_print(
+            f"\nStart a release build for 'v{release_version}' by starting the workflow manually in https://github.com/prefix-dev/pixi/actions/workflows/release.yml",
+            Colors.YELLOW,
+        )
 
-            colored_print("\nTagging the release...", Colors.YELLOW)
-            run_command(["git", "tag", f"v{release_version}", "-m", f"Release {release_version}"])
-            status.append(f"Tagged the release with version {release_version}")
-
-        if start_step <= 12:
-            colored_print("\nPushing the tag...", Colors.YELLOW)
-            run_command(["git", "push", "upstream", f"v{release_version}"])
-            status.append("Pushed the tag")
-
-        if start_step <= 13:
-            colored_input(
-                "Update the Release which has CI created for you (after the first build) and add the changelog to the release notes. Press Enter to continue...",
-                Colors.MAGENTA,
-            )
-            colored_input(
-                "Make sure all the artifacts are there and the CI is green!!! Press Enter to continue...",
-                Colors.MAGENTA,
-            )
-            colored_input(
-                "Publish the release and make sure it is set as latest. Press Enter to continue...",
-                Colors.MAGENTA,
-            )
-            status.append("Published the release")
-
-            colored_print("Testing the release using `pixi self-update`...", Colors.YELLOW)
-            run_command([pixi, "self-update"])
-
-            version_output = run_command([pixi, "--version"], capture_stdout=True)
-            expected_version_output = f"pixi {release_version}"
-            if version_output == expected_version_output:
-                colored_print(f"Version check passed: {version_output}", Colors.YELLOW)
-            else:
-                colored_print(
-                    f"Version check failed: expected {expected_version_output}, got {version_output}",
-                    Colors.YELLOW,
-                )
-            status.append("Tested the release")
-
-            colored_print("\nDONE!", Colors.YELLOW)
-            status.append("Release process completed successfully")
+        colored_print("\nDONE!", Colors.YELLOW)
+        status.append("Release process completed successfully")
 
     except KeyboardInterrupt:
         colored_print("\nProcess interrupted.", Colors.YELLOW)
