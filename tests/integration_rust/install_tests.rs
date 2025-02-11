@@ -870,14 +870,19 @@ async fn conda_pypi_override_correct_per_platform() {
 
 #[tokio::test]
 async fn test_multiple_prefix_update() {
+    let current_platform = Platform::current();
+
     let pixi = PixiControl::from_manifest(
-        r#"
+        format!(
+            r#"
     [project]
     name = "test-channel-change"
     channels = ["conda-forge"]
-    platforms = ["osx-arm64"]
-    conda-pypi-map = { }
+    platforms = ["{platform}"]
     "#,
+            platform = current_platform
+        )
+        .as_str(),
     )
     .unwrap();
 
@@ -885,13 +890,20 @@ async fn test_multiple_prefix_update() {
 
     let python_package = Package::build("python", "3.13.1").finish();
 
+    #[cfg(target_os = "windows")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/win-64/python-3.13.1-h071d269_105_cp313.conda";
+    #[cfg(target_os = "linux")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/linux-64/python-3.13.1-ha99a958_105_cp313.conda";
+    #[cfg(target_os = "macos")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/osx-64/python-3.13.1-h2334245_105_cp313.conda";
+
     let python_repo_data_record = RepoDataRecord {
         package_record: python_package.package_record,
         file_name: "python".to_owned(),
-        url: Url::parse(
-            "https://repo.prefix.dev/conda-forge/osx-arm64/python-3.13.1-h4f43103_105_cp313.conda",
-        )
-        .unwrap(),
+        url: Url::parse(package_url).unwrap(),
         channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
     };
 
@@ -909,11 +921,9 @@ async fn test_multiple_prefix_update() {
 
     let tmp_dir = tempfile::tempdir().unwrap();
 
-    // let static_default = Box::<GroupedEnvironment<'_>>::leak(Box::<GroupedEnvironment>::new(project.default_environment().into()));
-
     let conda_prefix_updater = CondaPrefixUpdater::new(
         project.default_environment().into(),
-        Platform::OsxArm64,
+        current_platform,
         PackageCache::new(tmp_dir.path().to_path_buf()),
         IoConcurrencyLimit::default(),
         BuildContext::new(
@@ -945,6 +955,15 @@ async fn test_multiple_prefix_update() {
         let prefix_updated = result.unwrap();
 
         let prefix = prefix_updated.prefix.root();
+
+        assert_eq!(
+            prefix_updated
+                .prefix
+                .find_installed_packages()
+                .unwrap()
+                .len(),
+            2
+        );
 
         let prefix_metadata = fs::metadata(prefix).await.unwrap();
 
