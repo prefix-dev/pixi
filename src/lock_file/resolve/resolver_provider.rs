@@ -4,6 +4,7 @@ use std::{
     future::ready,
     rc::Rc,
     str::FromStr,
+    sync::Arc,
 };
 
 use futures::{Future, FutureExt};
@@ -145,6 +146,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                         requires_python: None,
                         provides_extras: iden.extras.iter().cloned().collect(),
                         dependency_groups: Default::default(),
+                        dynamic: false,
                     },
                     hashes: vec![],
                 })))
@@ -158,10 +160,17 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
             .right_future()
     }
 
-    fn with_reporter(self, reporter: impl uv_distribution::Reporter + 'static) -> Self {
+    fn with_reporter(self, reporter: Arc<dyn uv_distribution::Reporter>) -> Self {
         Self {
             fallback: self.fallback.with_reporter(reporter),
             ..self
         }
+    }
+
+    fn get_installed_metadata<'io>(
+        &'io self,
+        dist: &'io uv_distribution_types::InstalledDist,
+    ) -> impl Future<Output = WheelMetadataResult> + 'io {
+        self.fallback.get_installed_metadata(dist)
     }
 }

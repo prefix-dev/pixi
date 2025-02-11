@@ -5,18 +5,6 @@
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
   "additionalProperties": false,
-  "oneOf": [
-    {
-      "required": [
-        "project"
-      ]
-    },
-    {
-      "required": [
-        "workspace"
-      ]
-    }
-  ],
   "properties": {
     "$schema": {
       "title": "Schema",
@@ -203,6 +191,23 @@
       "description": "The workspace's metadata information"
     }
   },
+  "anyOf": [
+    {
+      "required": [
+        "project"
+      ]
+    },
+    {
+      "required": [
+        "workspace"
+      ]
+    },
+    {
+      "required": [
+        "package"
+      ]
+    }
+  ],
   "$defs": {
     "Activation": {
       "title": "Activation",

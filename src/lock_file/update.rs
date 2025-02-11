@@ -1164,7 +1164,10 @@ impl<'p> UpdateContext<'p> {
             // Get environment variables from the activation
             let project_variables = self.project.env_vars().clone();
             // Construct a future that will resolve when we have the repodata available
-            let repodata_future = self
+            let repodata_solve_platform_future = self
+                .get_latest_group_repodata_records(&group, platform)
+                .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
+            let repodata_current_platform = self
                 .get_latest_group_repodata_records(&group, environment.best_platform())
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
 
@@ -1199,7 +1202,8 @@ impl<'p> UpdateContext<'p> {
                 environment.clone(),
                 project_variables,
                 platform,
-                repodata_future,
+                repodata_solve_platform_future,
+                repodata_current_platform,
                 conda_prefix_updater,
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
@@ -1998,7 +2002,8 @@ async fn spawn_solve_pypi_task<'p>(
     environment: Environment<'p>,
     project_variables: HashMap<EnvironmentName, EnvironmentVars>,
     platform: Platform,
-    repodata_records: impl Future<Output = Arc<PixiRecordsByName>>,
+    repodata_solve_records: impl Future<Output = Arc<PixiRecordsByName>>,
+    repodata_current_records: impl Future<Output = Arc<PixiRecordsByName>>,
     prefix_task: CondaPrefixUpdater<'p>,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
@@ -2021,19 +2026,23 @@ async fn spawn_solve_pypi_task<'p>(
     let system_requirements = grouped_environment.system_requirements();
 
     // Wait until the conda records and prefix are available.
-    let (repodata_records, _guard) = tokio::join!(repodata_records, semaphore.acquire_owned());
+    let (repodata_records, repodata_current_records, _guard) = tokio::join!(
+        repodata_solve_records,
+        repodata_current_records,
+        semaphore.acquire_owned()
+    );
 
     let environment_name = grouped_environment.name().clone();
 
     let pypi_name_mapping_location = grouped_environment.workspace().pypi_name_mapping_source()?;
 
-    let mut pixi_records = repodata_records.records.clone();
+    let mut pixi_solve_records = repodata_records.records.clone();
     let locked_pypi_records = locked_pypi_packages.records.clone();
 
     pypi_mapping::amend_pypi_purls(
         environment.workspace().client()?.clone().into(),
         pypi_name_mapping_location,
-        pixi_records
+        pixi_solve_records
             .iter_mut()
             .filter_map(PixiRecord::as_binary_mut),
         None,
@@ -2064,13 +2073,13 @@ async fn spawn_solve_pypi_task<'p>(
             &pypi_options,
             index_map,
             system_requirements,
-            &pixi_records,
+            &pixi_solve_records,
             &locked_pypi_records,
             platform,
             &pb.pb,
             &project_root,
             prefix_task,
-            repodata_records,
+            repodata_current_records,
             project_variables,
             environment,
             disallow_install_conda_prefix,

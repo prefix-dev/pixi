@@ -16,7 +16,6 @@ repository = "https://github.com/prefix-dev/pixi"
 
 [workspace.dependencies]
 ahash = "0.8.11"
-anyhow = "*"
 assert_matches = "1.5.0"
 async-fd-lock = "0.2.0"
 async-once-cell = "0.5.4"
@@ -102,14 +101,15 @@ toml_edit = "0.22.22"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 typed-path = "0.10.0"
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
 
 wax = "0.6.0"
 which = "7.0.1"
@@ -134,19 +134,19 @@ rattler_virtual_packages = { version = "2.0.2", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.6" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.13"
 zip = { version = "2.2.2", default-features = false }
@@ -210,7 +210,6 @@ performance = ["pixi_allocator"]
 
 [dependencies]
 ahash = { workspace = true }
-anyhow = { workspace = true }
 assert_matches = { workspace = true }
 async-fd-lock = { workspace = true }
 async-once-cell = { workspace = true }
@@ -335,6 +334,7 @@ uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-python = { workspace = true }
 uv-requirements = { workspace = true }
+uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
