@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: parsed.tool
+---
+Some(
+    PixiSpanned {
+        span: None,
+        value: {
+            "foobar": Object {
+                "configuration": String("blabla"),
+            },
+        },
+    },
+)

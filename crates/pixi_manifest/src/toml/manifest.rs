@@ -10,7 +10,7 @@ use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Platform, Version};
 use toml_span::{
     de_helpers::{expected, TableHelper},
-    value::ValueInner,
+    value::{Table, ValueInner},
     DeserError, Spanned, Value,
 };
 use url::Url;
@@ -50,6 +50,8 @@ pub struct TomlManifest {
 
     /// Target specific tasks to run in the environment
     pub tasks: Option<PixiSpanned<HashMap<TaskName, Task>>>,
+
+    pub tool: Option<PixiSpanned<HashMap<String, serde_json::Value>>>,
 
     /// The features defined in the project.
     pub feature: Option<PixiSpanned<IndexMap<PixiSpanned<FeatureName>, TomlFeature>>>,
@@ -452,6 +454,41 @@ impl TomlManifest {
     }
 }
 
+fn parse_value_to_serde(value: &mut Value) -> Result<serde_json::Value, DeserError> {
+    Ok(match value.take() {
+        ValueInner::String(s) => serde_json::Value::String(s.to_string()),
+        ValueInner::Integer(i) => serde_json::Value::Number(i.into()),
+        ValueInner::Float(f) => serde_json::Number::from_f64(f)
+            .map(serde_json::Value::Number)
+            .unwrap(),
+        ValueInner::Boolean(b) => serde_json::Value::Bool(b),
+        ValueInner::Array(mut arr) => {
+            let mut json_arr = Vec::new();
+            for item in &mut arr {
+                json_arr.push(parse_value_to_serde(item)?);
+            }
+            serde_json::Value::Array(json_arr)
+        }
+        ValueInner::Table(table) => {
+            let mut map = HashMap::new();
+            for (key, mut val) in table {
+                map.insert(key.to_string(), parse_value_to_serde(&mut val)?);
+            }
+            serde_json::Value::Object(map.into_iter().collect())
+        }
+    })
+}
+
+fn parse_table_to_serde(
+    value: &mut Table,
+) -> Result<HashMap<String, serde_json::Value>, DeserError> {
+    let mut result = HashMap::new();
+    for (key, mut val) in std::mem::take(value) {
+        result.insert(key.to_string(), parse_value_to_serde(&mut val)?);
+    }
+    Ok(result)
+}
+
 impl<'de> toml_span::Deserialize<'de> for TomlManifest {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
@@ -507,14 +544,19 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let system_requirements = th.optional("system-requirements");
 
         // Parse the tool section by ignoring it.
-        if let Some(mut tool) = th.table.remove("tool") {
+        let tool = if let Some(mut tool) = th.table.remove("tool") {
             match tool.take() {
-                ValueInner::Table(_) => {}
+                ValueInner::Table(mut table) => {
+                    // Parse all tool entries into serde_json::Value
+                    Some(parse_table_to_serde(&mut table)?).map(PixiSpanned::from)
+                }
                 other => {
                     return Err(expected("a table", other, tool.span).into());
                 }
             }
-        }
+        } else {
+            None
+        };
 
         // Parse the $schema section by ignoring it.
         if let Some(mut schema) = th.table.remove("$schema") {
@@ -543,13 +585,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             environments,
             pypi_options,
             warnings,
+            tool,
         })
     }
 }
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
+    use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
 
     use super::*;
@@ -896,6 +939,23 @@ mod test {
         foobar = ["foo", "bar"]
         "#,
         ));
+    }
+
+    #[test]
+    fn test_tool_parsing() {
+        let pixi_toml = r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [tool.foobar]
+        configuration = "blabla"
+        "#;
+
+        let parsed = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml).unwrap();
+
+        assert_debug_snapshot!(parsed.tool);
     }
 }
 
