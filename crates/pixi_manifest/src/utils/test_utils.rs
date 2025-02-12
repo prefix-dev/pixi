@@ -49,6 +49,9 @@ pub(crate) fn format_diagnostic(error: &dyn Diagnostic) -> String {
         .to_string();
     s = s.replace(&cargo_root, "<CARGO_ROOT>");
 
+    // Replace backslashes with forward slashes
+    s = s.replace("\\", "/");
+
     // Remove trailing whitespace in the error message.
     s.lines()
         .map(|line| line.trim_end())
