@@ -886,16 +886,14 @@ impl Project {
         // First clean up binaries that are not listed as exposed
         state_changes |= self.prune_exposed(env_name).await?;
 
+        let all_executables = self.executables_all_dependencies(env_name).await?;
+
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
-
-        let prefix_records = &prefix.find_installed_packages()?;
-
-        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
         let exposed: HashSet<&str> = environment
             .exposed
