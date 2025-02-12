@@ -90,7 +90,7 @@ typos = ">=1.23.1,<2"
 
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
-cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings -A clippy::literal_string_with_formatting_args"
+cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings"
 cargo-fmt = "cargo fmt --all"
 check-openssl = "python tests/scripts/check-openssl.py"
 lint = "pre-commit run --all-files --hook-stage=manual"
