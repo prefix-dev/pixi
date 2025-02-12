@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use itertools::Either;
 use pixi_spec::TomlSpec;
 use pixi_toml::{TomlFromStr, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
-use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
+use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, Spanned, Value};
 
 use crate::{
     build_system::BuildBackend,
@@ -16,6 +18,7 @@ pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
+    pub configuration: Option<serde_json::Value>,
 }
 
 #[derive(Debug)]
@@ -74,8 +77,34 @@ impl TomlPackageBuild {
             },
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
+            configuration: self.configuration,
         })
     }
+}
+
+fn parse_value_to_serde(value: &mut Value) -> Result<serde_json::Value, DeserError> {
+    Ok(match value.take() {
+        ValueInner::String(s) => serde_json::Value::String(s.to_string()),
+        ValueInner::Integer(i) => serde_json::Value::Number(i.into()),
+        ValueInner::Float(f) => serde_json::Number::from_f64(f)
+            .map(serde_json::Value::Number)
+            .unwrap(),
+        ValueInner::Boolean(b) => serde_json::Value::Bool(b),
+        ValueInner::Array(mut arr) => {
+            let mut json_arr = Vec::new();
+            for item in &mut arr {
+                json_arr.push(parse_value_to_serde(item)?);
+            }
+            serde_json::Value::Array(json_arr)
+        }
+        ValueInner::Table(table) => {
+            let mut map = HashMap::new();
+            for (key, mut val) in table {
+                map.insert(key.to_string(), parse_value_to_serde(&mut val)?);
+            }
+            serde_json::Value::Object(map.into_iter().collect())
+        }
+    })
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
@@ -107,11 +136,18 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
                 span: Some(s.span.start..s.span.end),
             });
         let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
+
+        let configuration = th
+            .take("configuration")
+            .map(|(_, mut value)| parse_value_to_serde(&mut value))
+            .transpose()?;
+
         th.finalize(None)?;
         Ok(Self {
             backend: build_backend,
             channels,
             additional_dependencies,
+            configuration,
         })
     }
 }

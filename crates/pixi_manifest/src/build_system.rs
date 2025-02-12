@@ -20,6 +20,9 @@ pub struct PackageBuild {
     /// The channels to use for fetching build tools. If this is `None` the
     /// channels from the containing workspace should be used.
     pub channels: Option<Vec<NamedChannelOrUrl>>,
+
+    /// Additional configuration for the build backend.
+    pub configuration: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -34,7 +37,7 @@ pub struct BuildBackend {
 impl PackageBuild {
     /// Parses the specified string as a toml representation of a build system.
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        TomlPackageBuild::from_toml_str(source).and_then(TomlPackageBuild::into_build_system)
+        TomlPackageBuild::from_toml_str(source).and_then(|t| t.into_build_system())
     }
 }
 
