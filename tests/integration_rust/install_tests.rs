@@ -4,22 +4,38 @@ use crate::common::{
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use pixi::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
-use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
+use pixi::{
+    build::BuildContext,
+    cli::{
+        run::{self, Args},
+        LockFileUsageArgs,
+    },
+    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
+};
+use pixi::{
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
+};
 use pixi::{UpdateLockFileOptions, Workspace};
+use pixi_build_frontend::ToolContext;
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
-use rattler_conda_types::Platform;
+use pixi_record::PixiRecord;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
 use std::{
     fs::File,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::Arc,
 };
 use tempfile::{tempdir, TempDir};
+use tokio::{fs, task::JoinSet};
+use url::Url;
 use uv_python::PythonEnvironment;
 
 /// Should add a python version to the environment and lock file that matches
@@ -852,6 +868,128 @@ async fn conda_pypi_override_correct_per_platform() {
         Platform::Linux64,
         pep508_rs::Requirement::from_str("boltons").unwrap(),
     ));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_multiple_prefix_update() {
+    let current_platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(
+        format!(
+            r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["conda-forge"]
+    platforms = ["{platform}"]
+    "#,
+            platform = current_platform
+        )
+        .as_str(),
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+
+    let python_package = Package::build("python", "3.13.1").finish();
+
+    #[cfg(target_os = "windows")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/win-64/python-3.13.1-h071d269_105_cp313.conda";
+    #[cfg(target_os = "linux")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/linux-64/python-3.13.1-ha99a958_105_cp313.conda";
+    #[cfg(target_os = "macos")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/osx-64/python-3.13.1-h2334245_105_cp313.conda";
+
+    let python_repo_data_record = RepoDataRecord {
+        package_record: python_package.package_record,
+        file_name: "python".to_owned(),
+        url: Url::parse(package_url).unwrap(),
+        channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
+    };
+
+    let boltons_package = Package::build("wheel", "0.45.1").finish();
+
+    let boltons_repo_data_record = RepoDataRecord {
+        package_record: boltons_package.package_record,
+        file_name: "wheel".to_owned(),
+        url: Url::parse(
+            "https://repo.prefix.dev/conda-forge/noarch/wheel-0.45.1-pyhd8ed1ab_1.conda",
+        )
+        .unwrap(),
+        channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
+    };
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+
+    let group = GroupedEnvironment::from(project.default_environment().clone());
+
+    let channels = group
+        .channel_urls(&group.workspace().channel_config())
+        .unwrap();
+    let name = group.name();
+    let client = group.workspace().authenticated_client().clone();
+    let prefix = group.prefix();
+    let virtual_packages = group.virtual_packages(current_platform);
+
+    let conda_prefix_updater = CondaPrefixUpdater::new(
+        channels,
+        name,
+        client,
+        prefix,
+        virtual_packages,
+        current_platform,
+        PackageCache::new(tmp_dir.path().to_path_buf()),
+        IoConcurrencyLimit::default(),
+        BuildContext::new(
+            tmp_dir.path().to_path_buf(),
+            tmp_dir.path().to_path_buf(),
+            ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
+            Default::default(),
+            Arc::new(ToolContext::default()),
+        )
+        .unwrap(),
+    );
+
+    let pixi_records = Vec::from([
+        PixiRecord::Binary(boltons_repo_data_record),
+        PixiRecord::Binary(python_repo_data_record),
+    ]);
+
+    let mut sets = JoinSet::new();
+
+    // spawn multiple tokio tasks to update the prefix
+    for _ in 0..4 {
+        let pixi_records = pixi_records.clone();
+        // tasks.push(conda_prefix_updater.update(pixi_records));
+        let updater = conda_prefix_updater.clone();
+        sets.spawn(async move { updater.update(pixi_records).await.cloned() });
+    }
+
+    let mut first_modified = None;
+
+    while let Some(result) = sets.join_next().await {
+        let prefix_updated = result.unwrap().unwrap();
+
+        let prefix = prefix_updated.prefix.root();
+
+        assert_eq!(
+            prefix_updated
+                .prefix
+                .find_installed_packages()
+                .unwrap()
+                .len(),
+            2
+        );
+
+        let prefix_metadata = fs::metadata(prefix).await.unwrap();
+
+        let first_modified_date = first_modified.get_or_insert(prefix_metadata.modified().unwrap());
+
+        // verify that the prefix was updated only once, meaning that we instantiated prefix only once
+        assert_eq!(*first_modified_date, prefix_metadata.modified().unwrap());
+    }
 }
 
 /// Should download a package from an S3 bucket and install it

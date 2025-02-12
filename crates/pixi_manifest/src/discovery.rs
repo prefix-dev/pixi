@@ -179,6 +179,9 @@ pub enum WorkspaceDiscoveryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ExplicitManifestError(#[from] ExplicitManifestError),
+
+    #[error("cannot canonicalize path '{1}' while searching for a manifest.")]
+    Canonicalize(#[source] std::io::Error, PathBuf),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -241,50 +244,67 @@ impl WorkspaceDiscoverer {
     pub fn discover(
         self,
     ) -> Result<Option<WithWarnings<Manifests, WarningWithSource>>, WorkspaceDiscoveryError> {
-        enum SearchPath<'a> {
-            Explicit(&'a Path),
-            Directory(&'a Path),
+        #[derive(Clone)]
+        enum SearchPath {
+            Explicit(PathBuf),
+            Directory(PathBuf),
         }
 
         // Walk up the directory tree until we find a workspace manifest.
         let mut warnings = Vec::new();
         let mut closest_package_manifest = None;
-        let (mut next_search_path, root_dir) = match &self.start {
-            DiscoveryStart::SearchRoot(root) => (Some(SearchPath::Directory(root)), root.as_path()),
-            DiscoveryStart::ExplicitManifest(manifest_path) => (
-                Some(SearchPath::Explicit(manifest_path)),
-                manifest_path.as_path(),
-            ),
+        let mut next_search_path = match &self.start {
+            DiscoveryStart::SearchRoot(root) => Some(SearchPath::Directory(
+                dunce::canonicalize(root)
+                    .map_err(|e| WorkspaceDiscoveryError::Canonicalize(e, root.clone()))?,
+            )),
+            DiscoveryStart::ExplicitManifest(manifest_path) => Some(SearchPath::Explicit(
+                dunce::canonicalize(manifest_path)
+                    .map_err(|e| WorkspaceDiscoveryError::Canonicalize(e, manifest_path.clone()))?,
+            )),
         };
         while let Some(search_path) = next_search_path {
             let (next, provenance) = match search_path {
-                SearchPath::Explicit(explicit) => {
+                SearchPath::Explicit(ref explicit) => {
                     if !explicit.exists() {
                         return Err(
                             ExplicitManifestError::MissingManifest(explicit.to_path_buf()).into(),
                         );
                     }
                     if explicit.is_file() {
-                        let provenance = ManifestProvenance::from_path(explicit.to_path_buf())
+                        let provenance = ManifestProvenance::from_path(explicit.clone())
                             .map_err(ExplicitManifestError::InvalidManifest)?;
                         let next_dir = explicit
                             .parent()
                             .expect("the manifest itself must have a parent directory")
                             .parent();
-                        (next_dir, Some(provenance))
+                        (next_dir.map(ToOwned::to_owned), Some(provenance))
                     } else {
                         let provenance = Self::provenance_from_dir(explicit).ok_or(
                             ExplicitManifestError::InvalidManifest(
                                 ProvenanceError::UnrecognizedManifestFormat,
                             ),
                         )?;
-                        (explicit.parent(), Some(provenance))
+                        tracing::info!(
+                            "Found manifest in directory: {:?}, continuing further.",
+                            provenance.path
+                        );
+                        (explicit.parent().map(ToOwned::to_owned), Some(provenance))
                     }
                 }
-                SearchPath::Directory(manifest_dir_path) => {
+                SearchPath::Directory(ref manifest_dir_path) => {
                     // Check if a pixi.toml file exists in the current directory.
                     let provenance = Self::provenance_from_dir(manifest_dir_path);
-                    (manifest_dir_path.parent(), provenance)
+                    if provenance.is_some() {
+                        tracing::info!(
+                            "Found manifest in directory: {:?}, continuing further.",
+                            manifest_dir_path
+                        );
+                    }
+                    (
+                        manifest_dir_path.parent().map(ToOwned::to_owned),
+                        provenance,
+                    )
                 }
             };
 
@@ -300,16 +320,14 @@ impl WorkspaceDiscoverer {
 
             // Cheap check to see if the manifest contains a pixi section.
             if let ManifestSource::PyProjectToml(source) = &contents {
-                if !source.contains("[tool.pixi") && !matches!(search_path, SearchPath::Explicit(_))
+                if !source.contains("[tool.pixi")
+                    && !matches!(search_path.clone(), SearchPath::Explicit(_))
                 {
                     continue;
                 }
             }
 
-            let path_diff = pathdiff::diff_paths(&provenance.path, root_dir)
-                .unwrap_or_else(|| provenance.path.clone());
-            let file_name = path_diff.to_string_lossy();
-            let source = contents.into_named(file_name);
+            let source = contents.into_named(provenance.absolute_path().to_string_lossy());
 
             // Parse the TOML from the manifest
             let mut toml = match toml_span::parse(source.inner()) {
@@ -499,7 +517,6 @@ mod test {
 
     #[rstest]
     #[case::root("")]
-    #[case::non_existing("non-existing")]
     #[case::empty("empty")]
     #[case::package_a("package_a")]
     #[case::package_b("package_a/package_b")]
@@ -517,8 +534,10 @@ mod test {
     #[case::non_pixi_build("non-pixi-build")]
     #[case::non_pixi_build_project("non-pixi-build/project")]
     fn test_workspace_discoverer(#[case] subdir: &str) {
-        let test_data_root =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery");
+        let test_data_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
+        )
+        .unwrap();
 
         let snapshot =
             match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(test_data_root.join(subdir)))
@@ -532,7 +551,6 @@ mod test {
                     let rel_path =
                         pathdiff::diff_paths(&discovered.workspace.provenance.path, test_data_root)
                             .unwrap_or(discovered.workspace.provenance.path);
-
                     let mut snapshot = String::new();
                     writeln!(
                         &mut snapshot,
@@ -569,8 +587,10 @@ mod test {
     #[case::empty("empty")]
     #[case::package_specific("package_a/pixi.toml")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
-        let test_data_root =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery");
+        let test_data_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
+        )
+        .unwrap();
 
         let snapshot = match WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(
             test_data_root.join(subdir),
@@ -614,5 +634,23 @@ mod test {
         }, {
             insta::assert_snapshot!(snapshot);
         });
+    }
+
+    #[test]
+    fn test_non_existing_discovery() {
+        // Split from the previous rstests, to avoid insta snapshot path conflicts in the error.
+        let test_data_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
+        )
+        .unwrap();
+
+        let err = WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(
+            test_data_root.join("non-existing"),
+        ))
+        .with_closest_package(true)
+        .discover()
+        .expect_err("Expected an error");
+
+        assert!(matches!(err, WorkspaceDiscoveryError::Canonicalize(_, _)));
     }
 }

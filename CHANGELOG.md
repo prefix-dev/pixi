@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.41.3] - 2025-02-12
+#### Changed
+- Added `--dry-run` flag to pixi run by @noamgot in [#3107](https://github.com/prefix-dev/pixi/pull/3107)
+
+#### Fixed
+- Make prefix creation during solve thread-safe by @nichmor in [#3099](https://github.com/prefix-dev/pixi/pull/3099)
+- Passing a file as `--manifest-path` by @tdejager in [#3111](https://github.com/prefix-dev/pixi/pull/3111)
+
+#### New Contributors
+* @noamgot made their first contribution in [#3107](https://github.com/prefix-dev/pixi/pull/3107)
+
+### [0.41.2] - 2025-02-11
+#### ✨ Highlights
+
+This release introduces the ability to add environment variables to the `init --import` command.
+We also upgraded the `uv` crate to `v0.5.29`.
+
+#### Changed
+
+- Add environment variables to `init --import` by @zklaus in [#3083](https://github.com/prefix-dev/pixi/pull/3083)
+- Upgrade uv to `v0.5.29` by @tdejager in [#3075](https://github.com/prefix-dev/pixi/pull/3075)
+
+#### Documentation
+
+- Add Bodo to Community.md by @IsaacWarren in [#3103](https://github.com/prefix-dev/pixi/pull/3103)
+
+#### Fixed
+
+- Json Schema by @Hofer-Julian in [#3082](https://github.com/prefix-dev/pixi/pull/3082)
+- Getting records for wrong platform by @tdejager in [#3084](https://github.com/prefix-dev/pixi/pull/3084)
+
+#### Refactor
+
+- Split workspace and package manifests by @baszalmstra in [#3043](https://github.com/prefix-dev/pixi/pull/3043)
+- Env module by @tdejager in [#3074](https://github.com/prefix-dev/pixi/pull/3074)
+
+#### New Contributors
+
+* @IsaacWarren made their first contribution in [#3103](https://github.com/prefix-dev/pixi/pull/3103)
+* @zklaus made their first contribution in [#3083](https://github.com/prefix-dev/pixi/pull/3083)
+
 ### [0.41.1] - 2025-02-07
 #### Fixed
 - Pixi authentication by @ruben-arts in [#3070](https://github.com/prefix-dev/pixi/pull/3070)

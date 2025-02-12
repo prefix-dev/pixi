@@ -65,6 +65,13 @@ pub enum WorkspaceLocatorError {
     )]
     WorkspaceNotFound(PathBuf),
 
+    #[error("unable to canonicalize '{}'", .path.display())]
+    Canonicalize {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
     /// The manifest file could not be loaded.
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -124,7 +131,7 @@ impl WorkspaceLocator {
             DiscoveryStart::SearchRoot(path) => pixi_manifest::DiscoveryStart::SearchRoot(path),
         };
 
-        let root = discovery_start.root().to_path_buf();
+        let discovery_source = discovery_start.root().to_path_buf();
 
         // Discover the workspace manifest for the current path.
         let workspace_manifests = match pixi_manifest::WorkspaceDiscoverer::new(discovery_start)
@@ -138,6 +145,9 @@ impl WorkspaceLocator {
             Err(WorkspaceDiscoveryError::Io(err)) => return Err(WorkspaceLocatorError::Io(err)),
             Err(WorkspaceDiscoveryError::ExplicitManifestError(err)) => {
                 return Err(WorkspaceLocatorError::ExplicitManifestError(err))
+            }
+            Err(WorkspaceDiscoveryError::Canonicalize(source, path)) => {
+                return Err(WorkspaceLocatorError::Canonicalize { path, source })
             }
         };
 
@@ -165,7 +175,7 @@ impl WorkspaceLocator {
 
         // Early out if discovery failed.
         let Some(discovered_manifests) = workspace_manifests else {
-            return Err(WorkspaceLocatorError::WorkspaceNotFound(root));
+            return Err(WorkspaceLocatorError::WorkspaceNotFound(discovery_source));
         };
 
         // Emit any warnings that were encountered during the discovery process.
@@ -222,5 +232,62 @@ impl WorkspaceLocator {
         }
 
         Ok(discovered_workspace.map(WithWarnings::from))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn test_workspace_locator() {
+        let workspace_locator = WorkspaceLocator::default();
+        let workspace = workspace_locator.locate().unwrap();
+        let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        assert_eq!(workspace.root, PathBuf::from(project_root));
+    }
+
+    #[test]
+    fn test_workspace_locator_cli() {
+        // Equivalent to `pixi xxx` where xxx is any command
+        let workspace_locator = WorkspaceLocator::for_cli();
+        let workspace = workspace_locator.locate().unwrap();
+        let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        assert_eq!(workspace.root, PathBuf::from(project_root));
+    }
+
+    #[test]
+    fn test_workspace_locator_explicit() {
+        // Equivalent to `pixi xxx --manifest /absolute/path/to/pixi.toml`
+        let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let workspace_locator =
+            WorkspaceLocator::default().with_search_start(DiscoveryStart::ExplicitManifest(
+                Path::new(&project_root).join("pixi.toml").to_path_buf(),
+            ));
+        let workspace = workspace_locator.locate().unwrap();
+        assert_eq!(workspace.root, PathBuf::from(project_root));
+    }
+
+    #[test]
+    fn test_workspace_locator_explicit_simple() {
+        // Equivalent to `pixi xxx --manifest pixi.toml`
+        let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let workspace_locator = WorkspaceLocator::default().with_search_start(
+            DiscoveryStart::ExplicitManifest(Path::new("pixi.toml").to_path_buf()),
+        );
+        let workspace = workspace_locator.locate().unwrap();
+        assert_eq!(workspace.root, PathBuf::from(project_root));
+    }
+
+    #[test]
+    fn test_workspace_locator_explicit_path() {
+        // Equivalent to `pixi xxx --manifest /absolute/path/to/folder`
+        let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let workspace_locator = WorkspaceLocator::default().with_search_start(
+            DiscoveryStart::ExplicitManifest(Path::new(&project_root).to_path_buf()),
+        );
+        let workspace = workspace_locator.locate().unwrap();
+        assert_eq!(workspace.root, PathBuf::from(project_root));
     }
 }

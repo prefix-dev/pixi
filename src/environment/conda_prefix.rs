@@ -20,6 +20,8 @@ use rattler_conda_types::{
 };
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
+
+use async_once_cell::OnceCell as AsyncOnceCell;
 use uv_configuration::RAYON_INITIALIZE;
 
 use super::conda_metadata::{create_history_file, create_prefix_location_file};
@@ -27,6 +29,8 @@ use super::reporters::CondaBuildProgress;
 use super::try_increase_rlimit_to_sensible;
 
 /// A struct that contains the result of updating a conda prefix.
+
+#[derive(Clone)]
 pub struct CondaPrefixUpdated {
     /// The name of the group that was updated.
     pub group: GroupedEnvironmentName,
@@ -36,18 +40,62 @@ pub struct CondaPrefixUpdated {
     pub python_status: Box<PythonStatus>,
 }
 
-#[derive(Clone)]
 /// A task that updates the prefix for a given environment.
-pub struct CondaPrefixUpdater<'a> {
-    pub group: GroupedEnvironment<'a>,
+pub struct CondaPrefixUpdaterInner {
+    pub channels: Vec<ChannelUrl>,
+    pub name: GroupedEnvironmentName,
+    pub client: ClientWithMiddleware,
+    pub prefix: Prefix,
+    pub virtual_packages: Vec<GenericVirtualPackage>,
     pub platform: Platform,
     pub package_cache: PackageCache,
     pub io_concurrency_limit: IoConcurrencyLimit,
     pub build_context: BuildContext,
+
+    /// A flag that indicates if the prefix was created.
+    created: AsyncOnceCell<CondaPrefixUpdated>,
 }
 
-impl<'a> CondaPrefixUpdater<'a> {
+impl CondaPrefixUpdaterInner {
     /// Creates a new prefix task.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        channels: Vec<ChannelUrl>,
+        name: GroupedEnvironmentName,
+        client: ClientWithMiddleware,
+        prefix: Prefix,
+        virtual_packages: Vec<GenericVirtualPackage>,
+        platform: Platform,
+        package_cache: PackageCache,
+        io_concurrency_limit: IoConcurrencyLimit,
+        build_context: BuildContext,
+    ) -> Self {
+        Self {
+            channels,
+            name,
+            client,
+            prefix,
+            virtual_packages,
+            platform,
+            package_cache,
+            io_concurrency_limit,
+            build_context,
+            created: AsyncOnceCell::new(),
+        }
+    }
+}
+
+/// A builder for creating a new conda prefix updater.
+pub struct CondaPrefixUpdaterBuilder<'a> {
+    group: GroupedEnvironment<'a>,
+    platform: Platform,
+    package_cache: PackageCache,
+    io_concurrency_limit: IoConcurrencyLimit,
+    build_context: BuildContext,
+}
+
+impl<'a> CondaPrefixUpdaterBuilder<'a> {
+    /// Creates a new builder.
     pub fn new(
         group: GroupedEnvironment<'a>,
         platform: Platform,
@@ -57,75 +105,139 @@ impl<'a> CondaPrefixUpdater<'a> {
     ) -> Self {
         Self {
             group,
+            platform,
             package_cache,
             io_concurrency_limit,
             build_context,
-            platform,
         }
     }
 
-    /// Updates the prefix for the given environment.
-    pub(crate) async fn update(
-        &self,
-        pixi_records: Vec<PixiRecord>,
-    ) -> miette::Result<CondaPrefixUpdated> {
-        tracing::debug!(
-            "updating prefix for '{}'",
-            self.group.name().fancy_display()
-        );
-
+    /// Builds the conda prefix updater by extracting the necessary information from the group.
+    pub fn build(self) -> miette::Result<CondaPrefixUpdater> {
         let channels = self
             .group
             .channel_urls(&self.group.workspace().channel_config())
             .into_diagnostic()?;
-
-        // Spawn a task to determine the currently installed packages.
-        let prefix_clone = self.group.prefix().clone();
-        let installed_packages_future =
-            tokio::task::spawn_blocking(move || prefix_clone.find_installed_packages())
-                .unwrap_or_else(|e| match e.try_into_panic() {
-                    Ok(panic) => std::panic::resume_unwind(panic),
-                    Err(_err) => Err(miette::miette!("the operation was cancelled")),
-                });
-
-        // Wait until the conda records are available and until the installed packages
-        // for this prefix are available.
-        let installed_packages = installed_packages_future.await?;
-
-        let has_existing_packages = !installed_packages.is_empty();
-        let group_name = self.group.name().clone();
-        let client = self.group.workspace().authenticated_client()?.clone();
+        let name = self.group.name();
         let prefix = self.group.prefix();
+        let virtual_packages = self.group.virtual_packages(self.platform);
+        let client = self.group.workspace().authenticated_client().clone();
 
-        let python_status = update_prefix_conda(
-            &prefix,
-            self.package_cache.clone(),
-            client,
-            installed_packages,
-            pixi_records,
-            self.group.virtual_packages(self.platform),
+        Ok(CondaPrefixUpdater::new(
             channels,
-            self.platform,
-            &format!(
-                "{} conda prefix '{}'",
-                if has_existing_packages {
-                    "updating"
-                } else {
-                    "creating"
-                },
-                group_name.fancy_display()
-            ),
-            "  ",
-            self.io_concurrency_limit.clone().into(),
-            self.build_context.clone(),
-        )
-        .await?;
-
-        Ok(CondaPrefixUpdated {
-            group: group_name,
+            name,
+            client,
             prefix,
-            python_status: Box::new(python_status),
-        })
+            virtual_packages,
+            self.platform,
+            self.package_cache,
+            self.io_concurrency_limit,
+            self.build_context,
+        ))
+    }
+}
+
+#[derive(Clone)]
+/// A task that updates the prefix for a given environment.
+pub struct CondaPrefixUpdater {
+    inner: Arc<CondaPrefixUpdaterInner>,
+}
+
+impl CondaPrefixUpdater {
+    /// Creates a new prefix task.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        channels: Vec<ChannelUrl>,
+        name: GroupedEnvironmentName,
+        client: ClientWithMiddleware,
+        prefix: Prefix,
+        virtual_packages: Vec<GenericVirtualPackage>,
+        platform: Platform,
+        package_cache: PackageCache,
+        io_concurrency_limit: IoConcurrencyLimit,
+        build_context: BuildContext,
+    ) -> Self {
+        let inner = CondaPrefixUpdaterInner::new(
+            channels,
+            name,
+            client,
+            prefix,
+            virtual_packages,
+            platform,
+            package_cache,
+            io_concurrency_limit,
+            build_context,
+        );
+
+        Self {
+            inner: Arc::new(inner),
+        }
+    }
+
+    /// Updates the prefix for the given environment.
+    pub async fn update(
+        &self,
+        pixi_records: Vec<PixiRecord>,
+    ) -> miette::Result<&CondaPrefixUpdated> {
+        self.inner
+            .created
+            .get_or_try_init(async {
+                tracing::debug!("updating prefix for '{}'", self.inner.name.fancy_display());
+
+                let channels = self.inner.channels.clone();
+
+                // Spawn a task to determine the currently installed packages.
+                let prefix_clone = self.inner.prefix.clone();
+                let installed_packages_future =
+                    tokio::task::spawn_blocking(move || prefix_clone.find_installed_packages())
+                        .unwrap_or_else(|e| match e.try_into_panic() {
+                            Ok(panic) => std::panic::resume_unwind(panic),
+                            Err(_err) => Err(miette::miette!("the operation was cancelled")),
+                        });
+
+                // Wait until the conda records are available and until the installed packages
+                // for this prefix are available.
+                let installed_packages = installed_packages_future.await?;
+
+                let has_existing_packages = !installed_packages.is_empty();
+                let group_name = self.inner.name.clone();
+                let client = self.inner.client.clone();
+
+                let python_status = update_prefix_conda(
+                    &self.inner.prefix,
+                    self.inner.package_cache.clone(),
+                    client,
+                    installed_packages,
+                    pixi_records,
+                    self.inner.virtual_packages.clone(),
+                    channels,
+                    self.inner.platform,
+                    &format!(
+                        "{} conda prefix '{}'",
+                        if has_existing_packages {
+                            "updating"
+                        } else {
+                            "creating"
+                        },
+                        group_name.fancy_display()
+                    ),
+                    "  ",
+                    self.inner.io_concurrency_limit.clone().into(),
+                    self.inner.build_context.clone(),
+                )
+                .await?;
+
+                Ok(CondaPrefixUpdated {
+                    group: group_name,
+                    prefix: self.inner.prefix.clone(),
+                    python_status: Box::new(python_status),
+                })
+            })
+            .await
+    }
+
+    pub(crate) fn name(&self) -> &GroupedEnvironmentName {
+        &self.inner.name
     }
 }
 
