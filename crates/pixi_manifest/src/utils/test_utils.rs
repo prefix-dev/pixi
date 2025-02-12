@@ -1,5 +1,6 @@
 use itertools::Itertools;
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme, NamedSource, Report};
+use std::path::Path;
 
 use crate::toml::ExternalWorkspaceProperties;
 use crate::toml::{FromTomlStr, TomlManifest};
@@ -37,6 +38,16 @@ pub(crate) fn format_diagnostic(error: &dyn Diagnostic) -> String {
         .with_break_words(false)
         .with_theme(GraphicalTheme::unicode_nocolor());
     report_handler.render_report(&mut s, error).unwrap();
+
+    // Strip machine specific paths
+    let cargo_root = Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    s = s.replace(&cargo_root, "<CARGO_ROOT>");
 
     // Remove trailing whitespace in the error message.
     s.lines()
