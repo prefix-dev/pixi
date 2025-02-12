@@ -426,7 +426,7 @@ impl Workspace {
 
     /// Construct a [`ChannelConfig`] that is specific to this project. This
     /// ensures that the root directory is set correctly.
-    pub(crate) fn channel_config(&self) -> ChannelConfig {
+    pub fn channel_config(&self) -> ChannelConfig {
         ChannelConfig {
             root_dir: self.root.clone(),
             ..self.config.global_channel_config().clone()

@@ -31,7 +31,7 @@ use crate::{
     Workspace,
 };
 
-pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater};
+pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
 pub use pypi_prefix::update_prefix_pypi;
 pub use python_status::PythonStatus;
 

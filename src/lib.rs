@@ -15,7 +15,7 @@ pub mod workspace;
 
 mod uv_reporter;
 
-mod build;
+pub mod build;
 mod rlimit;
 mod utils;
 
