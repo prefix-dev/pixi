@@ -57,7 +57,6 @@ use std::{
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::OnceLock,
 };
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
