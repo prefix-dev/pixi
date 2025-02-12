@@ -640,7 +640,8 @@ jobs:
           repository: nerfstudio-project/nerfstudio
           path: nerfstudio
       - name: "Install nerfstudio-project/nerfstudio"
-        run: pixi install -vvv --locked
+        # Not using locked as their lockfile is not in sync
+        run: pixi install -vvv
         working-directory: nerfstudio
 
       - name: "Checkout Deltares/Ribasim"
