@@ -32,7 +32,9 @@ use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
-use rattler_lock::{LockFile, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{
+    LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
+};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
@@ -52,7 +54,6 @@ use crate::{
         LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
         PythonStatus,
     },
-    load_lock_file,
     lock_file::{
         self,
         records_by_name::HasNameVersion,
@@ -69,20 +70,121 @@ use crate::{
 };
 
 impl Workspace {
-    /// Ensures that the lock-file is up-to-date with the project information.
+    /// Ensures that the lock-file is up-to-date with the project.
     ///
-    /// Returns the lock-file and any potential derived data that was computed
-    /// as part of this operation.
+    /// This function will return a `LockFileDerivedData` struct that contains the
+    /// lock-file and any potential derived data that was computed as part of this
+    /// function. The derived data might be usable by other functions to avoid
+    /// recomputing the same data.
+    ///
+    /// This function starts by checking if the lock-file is up-to-date. If it is
+    /// not up-to-date it will construct a task graph of all the work that needs to
+    /// be done to update the lock-file. The tasks are awaited in a specific order
+    /// to make sure that we can start instantiating prefixes as soon as possible.
     pub async fn update_lock_file(
         &self,
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
-        update_lock_file(self, options).await
+        let lock_file = self.load_lock_file().await?;
+        let package_cache =
+            PackageCache::new(pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR));
+        let glob_hash_cache = GlobHashCache::default();
+
+        // should we check the lock-file in the first place?
+        if !options.lock_file_usage.should_check_if_out_of_date() {
+            tracing::info!("skipping check if lock-file is up-to-date");
+
+            return Ok(LockFileDerivedData {
+                workspace: self,
+                lock_file,
+                package_cache,
+                updated_conda_prefixes: Default::default(),
+                updated_pypi_prefixes: Default::default(),
+                uv_context: None,
+                io_concurrency_limit: IoConcurrencyLimit::default(),
+                build_context: BuildContext::from_workspace(self)?,
+                glob_hash_cache,
+            });
+        }
+
+        // Check which environments are out of date.
+        let outdated = OutdatedEnvironments::from_workspace_and_lock_file(
+            self,
+            &lock_file,
+            glob_hash_cache.clone(),
+        )
+        .await;
+        if outdated.is_empty() {
+            tracing::info!("the lock-file is up-to-date");
+
+            // If no-environment is outdated we can return early.
+            return Ok(LockFileDerivedData {
+                workspace: self,
+                lock_file,
+                package_cache,
+                updated_conda_prefixes: Default::default(),
+                updated_pypi_prefixes: Default::default(),
+                uv_context: None,
+                io_concurrency_limit: IoConcurrencyLimit::default(),
+                build_context: BuildContext::from_workspace(self)?,
+                glob_hash_cache,
+            });
+        }
+
+        // If the lock-file is out of date, but we're not allowed to update it, we
+        // should exit.
+        if !options.lock_file_usage.allows_lock_file_updates() {
+            miette::bail!("lock-file not up-to-date with the workspace");
+        }
+
+        // Construct an update context and perform the actual update.
+        let lock_file_derived_data = UpdateContext::builder(self)
+            .with_package_cache(package_cache)
+            .with_no_install(options.no_install)
+            .with_outdated_environments(outdated)
+            .with_lock_file(lock_file)
+            .with_glob_hash_cache(glob_hash_cache)
+            .finish()
+            .await?
+            .update()
+            .await?;
+
+        // Write the lock-file to disk
+        lock_file_derived_data.write_to_disk()?;
+
+        Ok(lock_file_derived_data)
     }
 
-    /// Get lockfile without checking
-    pub async fn get_lock_file(&self) -> miette::Result<LockFile> {
-        load_lock_file(self).await
+    /// Loads the lockfile for the workspace or returns `Lockfile::default` if none
+    /// could be found.
+    pub async fn load_lock_file(&self) -> miette::Result<LockFile> {
+        let lock_file_path = self.lock_file_path();
+        if lock_file_path.is_file() {
+            // Spawn a background task because loading the file might be IO bound.
+            tokio::task::spawn_blocking(move || {
+            LockFile::from_path(&lock_file_path)
+                .map_err(|err| match err {
+                    ParseCondaLockError::IncompatibleVersion{ lock_file_version, max_supported_version} => {
+                        miette::miette!(
+                            help="Please update pixi to the latest version and try again.",
+                            "The lock file version is {}, but only up to including version {} is supported by the current version.",
+                            lock_file_version, max_supported_version
+                        )
+                    }
+                    _ => miette::miette!(err),
+                })
+                .wrap_err_with(|| {
+                    format!(
+                        "Failed to load lock file from `{}`",
+                        lock_file_path.display()
+                    )
+                })
+        })
+            .await
+            .unwrap_or_else(|e| Err(e).into_diagnostic())
+        } else {
+            Ok(LockFile::default())
+        }
     }
 }
 
@@ -647,91 +749,6 @@ fn determine_pypi_solve_permits(project: &Workspace) -> usize {
     project.config().max_concurrent_solves()
 }
 
-/// Ensures that the lock-file is up-to-date with the project.
-///
-/// This function will return a [`LockFileDerivedData`] struct that contains the
-/// lock-file and any potential derived data that was computed as part of this
-/// function. The derived data might be usable by other functions to avoid
-/// recomputing the same data.
-///
-/// This function starts by checking if the lock-file is up-to-date. If it is
-/// not up-to-date it will construct a task graph of all the work that needs to
-/// be done to update the lock-file. The tasks are awaited in a specific order
-/// to make sure that we can start instantiating prefixes as soon as possible.
-pub async fn update_lock_file(
-    project: &Workspace,
-    options: UpdateLockFileOptions,
-) -> miette::Result<LockFileDerivedData<'_>> {
-    let lock_file = load_lock_file(project).await?;
-    let package_cache =
-        PackageCache::new(pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR));
-    let glob_hash_cache = GlobHashCache::default();
-
-    // should we check the lock-file in the first place?
-    if !options.lock_file_usage.should_check_if_out_of_date() {
-        tracing::info!("skipping check if lock-file is up-to-date");
-
-        return Ok(LockFileDerivedData {
-            workspace: project,
-            lock_file,
-            package_cache,
-            updated_conda_prefixes: Default::default(),
-            updated_pypi_prefixes: Default::default(),
-            uv_context: None,
-            io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::from_workspace(project)?,
-            glob_hash_cache,
-        });
-    }
-
-    // Check which environments are out of date.
-    let outdated = OutdatedEnvironments::from_project_and_lock_file(
-        project,
-        &lock_file,
-        glob_hash_cache.clone(),
-    )
-    .await;
-    if outdated.is_empty() {
-        tracing::info!("the lock-file is up-to-date");
-
-        // If no-environment is outdated we can return early.
-        return Ok(LockFileDerivedData {
-            workspace: project,
-            lock_file,
-            package_cache,
-            updated_conda_prefixes: Default::default(),
-            updated_pypi_prefixes: Default::default(),
-            uv_context: None,
-            io_concurrency_limit: IoConcurrencyLimit::default(),
-            build_context: BuildContext::from_workspace(project)?,
-            glob_hash_cache,
-        });
-    }
-
-    // If the lock-file is out of date, but we're not allowed to update it, we
-    // should exit.
-    if !options.lock_file_usage.allows_lock_file_updates() {
-        miette::bail!("lock-file not up-to-date with the project");
-    }
-
-    // Construct an update context and perform the actual update.
-    let lock_file_derived_data = UpdateContext::builder(project)
-        .with_package_cache(package_cache)
-        .with_no_install(options.no_install)
-        .with_outdated_environments(outdated)
-        .with_lock_file(lock_file)
-        .with_glob_hash_cache(glob_hash_cache)
-        .finish()
-        .await?
-        .update()
-        .await?;
-
-    // Write the lock-file to disk
-    lock_file_derived_data.write_to_disk()?;
-
-    Ok(lock_file_derived_data)
-}
-
 pub struct UpdateContextBuilder<'p> {
     /// The project
     project: &'p Workspace,
@@ -829,7 +846,7 @@ impl<'p> UpdateContextBuilder<'p> {
         let outdated = match self.outdated_environments {
             Some(outdated) => outdated,
             None => {
-                OutdatedEnvironments::from_project_and_lock_file(
+                OutdatedEnvironments::from_workspace_and_lock_file(
                     project,
                     &lock_file,
                     glob_hash_cache.clone(),

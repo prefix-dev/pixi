@@ -61,8 +61,8 @@ impl<'p> DisregardLockedContent<'p> {
 impl<'p> OutdatedEnvironments<'p> {
     /// Constructs a new instance of this struct by examining the project and
     /// lock-file and finding any mismatches.
-    pub(crate) async fn from_project_and_lock_file(
-        project: &'p Workspace,
+    pub(crate) async fn from_workspace_and_lock_file(
+        workspace: &'p Workspace,
         lock_file: &LockFile,
         glob_hash_cache: GlobHashCache,
     ) -> Self {
@@ -71,7 +71,7 @@ impl<'p> OutdatedEnvironments<'p> {
             mut outdated_conda,
             mut outdated_pypi,
             disregard_locked_content,
-        } = find_unsatisfiable_targets(project, lock_file, glob_hash_cache).await;
+        } = find_unsatisfiable_targets(workspace, lock_file, glob_hash_cache).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -80,7 +80,7 @@ impl<'p> OutdatedEnvironments<'p> {
         // Find all the solve groups that have inconsistent dependencies between
         // environments.
         find_inconsistent_solve_groups(
-            project,
+            workspace,
             lock_file,
             &outdated_conda,
             &mut conda_solve_groups_out_of_date,
