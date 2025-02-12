@@ -9,3 +9,5 @@ __pycache__
 site/
 .cache
 pytest-temp
+robostack
+mirror.py
