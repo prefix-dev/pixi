@@ -517,7 +517,6 @@ mod test {
 
     #[rstest]
     #[case::root("")]
-    #[case::non_existing("non-existing")]
     #[case::empty("empty")]
     #[case::package_a("package_a")]
     #[case::package_b("package_a/package_b")]
@@ -635,5 +634,23 @@ mod test {
         }, {
             insta::assert_snapshot!(snapshot);
         });
+    }
+
+    #[test]
+    fn test_non_existing_discovery() {
+        // Split from the previous rstests, to avoid insta snapshot path conflicts in the error.
+        let test_data_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
+        )
+        .unwrap();
+
+        let err = WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(
+            test_data_root.join("non-existing"),
+        ))
+        .with_closest_package(true)
+        .discover()
+        .expect_err("Expected an error");
+
+        assert!(matches!(err, WorkspaceDiscoveryError::Canonicalize(_, _)));
     }
 }
