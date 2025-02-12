@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    environment::CondaPrefixUpdated,
+    environment::{CondaPrefixUpdated, CondaPrefixUpdaterBuilder},
     workspace::{get_activated_environment_variables, EnvironmentVars},
 };
 use barrier_cell::BarrierCell;
@@ -401,13 +401,15 @@ impl<'p> LockFileDerivedData<'p> {
         // Create object to update the prefix
         let group = GroupedEnvironment::Environment(environment.clone());
         let platform = environment.best_platform();
-        let conda_prefix_updater = CondaPrefixUpdater::new(
+
+        let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
             group,
             platform,
             self.package_cache.clone(),
             self.io_concurrency_limit.clone(),
             self.build_context.clone(),
-        );
+        )
+        .build()?;
 
         // Get the locked environment from the lock-file.
         let records = self
@@ -427,7 +429,7 @@ impl<'p> LockFileDerivedData<'p> {
             (prefix.clone(), *python_status.clone()),
         );
 
-        Ok((prefix, *python_status.clone()))
+        Ok((prefix.clone(), *python_status.clone()))
     }
 }
 
@@ -1172,13 +1174,14 @@ impl<'p> UpdateContext<'p> {
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
 
             // Creates an object to initiate an update at a later point
-            let conda_prefix_updater = CondaPrefixUpdater::new(
+            let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
                 group.clone(),
                 environment.best_platform(),
                 self.package_cache.clone(),
                 self.io_concurrency_limit.clone(),
                 self.build_context.clone(),
-            );
+            )
+            .build()?;
 
             // Get the uv context
             let uv_context = match uv_context.as_ref() {
@@ -1331,27 +1334,6 @@ impl<'p> UpdateContext<'p> {
                         }
                     }
                 }
-                // TaskResult::CondaPrefixUpdated(
-                //     group_name,
-                //     prefix,
-                //     python_status,
-                //     duration,
-                // ) => {
-                //     let group = GroupedEnvironment::from_name(project, &group_name)
-                //         .expect("grouped environment should exist");
-
-                //     self.instantiated_conda_prefixes
-                //         .get_mut(&group)
-                //         .expect("the entry for this environment should exists")
-                //         .set(Arc::new((prefix, *python_status, status, prefix_task)))
-                //         .expect("prefix should not be instantiated twice");
-
-                //     tracing::info!(
-                //         "updated conda packages in the '{}' prefix in {}",
-                //         group.name().fancy_display(),
-                //         humantime::format_duration(duration)
-                //     );
-                // }
                 TaskResult::PypiGroupSolved(
                     group_name,
                     platform,
@@ -2004,7 +1986,7 @@ async fn spawn_solve_pypi_task<'p>(
     platform: Platform,
     repodata_solve_records: impl Future<Output = Arc<PixiRecordsByName>>,
     repodata_current_records: impl Future<Output = Arc<PixiRecordsByName>>,
-    prefix_task: CondaPrefixUpdater<'p>,
+    prefix_task: CondaPrefixUpdater,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,

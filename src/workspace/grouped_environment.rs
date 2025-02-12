@@ -76,7 +76,7 @@ impl<'p> GroupedEnvironment<'p> {
     }
 
     /// Returns the prefix of this group.
-    pub(crate) fn prefix(&self) -> Prefix {
+    pub fn prefix(&self) -> Prefix {
         Prefix::new(self.dir())
     }
 
@@ -89,7 +89,7 @@ impl<'p> GroupedEnvironment<'p> {
     }
 
     /// Returns the name of the group.
-    pub(crate) fn name(&self) -> GroupedEnvironmentName {
+    pub fn name(&self) -> GroupedEnvironmentName {
         match self {
             GroupedEnvironment::Group(group) => {
                 GroupedEnvironmentName::Group(group.name().to_string())
@@ -109,7 +109,7 @@ impl<'p> GroupedEnvironment<'p> {
 
     /// Returns the virtual packages from the group based on the system
     /// requirements.
-    pub(crate) fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
+    pub fn virtual_packages(&self, platform: Platform) -> Vec<GenericVirtualPackage> {
         get_minimal_virtual_packages(platform, &self.system_requirements())
             .into_iter()
             .map(GenericVirtualPackage::from)

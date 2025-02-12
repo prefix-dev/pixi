@@ -172,7 +172,7 @@ pub async fn resolve_pypi(
     platform: rattler_conda_types::Platform,
     pb: &ProgressBar,
     project_root: &Path,
-    prefix_updater: CondaPrefixUpdater<'_>,
+    prefix_updater: CondaPrefixUpdater,
     platform_repodata_records: Arc<PixiRecordsByName>,
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment_name: Environment<'_>,

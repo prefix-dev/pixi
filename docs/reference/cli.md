@@ -297,6 +297,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 - `--skip-deps`: Skip the dependencies of the task, which where defined in the `depends-on` field of the task.
+- `--dry-run (-n)`: Run the task in dry-run mode (only print the command that would run)
 
 ```shell
 pixi run python
@@ -310,6 +311,8 @@ pixi run build
 pixi run task argument1 argument2
 # Skip dependencies of the task
 pixi run --skip-deps task
+# Run in dry-run mode to see the commands that would be run
+pixi run --dry-run task
 
 # If you have multiple environments you can select the right one with the --environment flag.
 pixi run --environment cuda python
