@@ -31,6 +31,7 @@ use is_executable::IsExecutable;
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
+use once_cell::sync::OnceCell;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_config::{default_channel_config, pixi_home, Config};
@@ -84,11 +85,13 @@ pub struct Project {
     /// Binary directory
     pub(crate) bin_dir: BinDir,
     /// Reqwest client shared for this project.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
     /// The repodata gateway to use for answering queries about repodata.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    repodata_gateway: OnceLock<Gateway>,
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    repodata_gateway: OnceCell<Gateway>,
 }
 
 impl Debug for Project {
@@ -256,8 +259,8 @@ impl Project {
 
         let config = Config::load(&root);
 
-        let client = OnceLock::new();
-        let repodata_gateway = OnceLock::new();
+        let client = OnceCell::new();
+        let repodata_gateway = OnceCell::new();
         Self {
             root,
             manifest,

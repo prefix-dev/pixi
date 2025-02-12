@@ -128,11 +128,13 @@ pub struct Workspace {
 
     /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
 
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    repodata_gateway: OnceLock<Gateway>,
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    repodata_gateway: OnceCell<Gateway>,
 
     /// The manifest for the workspace
     pub workspace: WithProvenance<WorkspaceManifest>,

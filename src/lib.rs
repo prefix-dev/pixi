@@ -1,4 +1,3 @@
-#![feature(once_cell_try)]
 #![deny(clippy::dbg_macro, clippy::unwrap_used)]
 
 pub mod activation;
