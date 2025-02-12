@@ -929,7 +929,7 @@ async fn test_multiple_prefix_update() {
         .channel_urls(&group.workspace().channel_config())
         .unwrap();
     let name = group.name();
-    let client = group.workspace().authenticated_client().clone();
+    let client = group.workspace().authenticated_client().unwrap().clone();
     let prefix = group.prefix();
     let virtual_packages = group.virtual_packages(current_platform);
 

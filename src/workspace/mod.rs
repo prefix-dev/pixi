@@ -200,7 +200,7 @@ impl Workspace {
                     },
                 )
             })
-            .collect::<HashMap<String, s3_middleware::S3Config>>();    
+            .collect::<HashMap<String, s3_middleware::S3Config>>();
 
         let config = Config::load(&root);
         Self {
