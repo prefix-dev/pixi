@@ -28,7 +28,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         // See what executables were installed prior to update
-        let env_binaries = project.executables_direct_dependencies(env_name).await?;
+        let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
 
         // Get the exposed binaries from mapping
         let exposed_mapping_binaries = project

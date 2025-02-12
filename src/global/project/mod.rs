@@ -662,7 +662,8 @@ impl Project {
         Ok(state_changes)
     }
 
-    pub async fn executables_all_dependencies(
+    /// Gets all installed executables of a specific environment.
+    pub async fn executables_of_all_dependencies(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<Vec<Executable>> {
@@ -676,8 +677,8 @@ impl Project {
         Ok(all_executables)
     }
 
-    /// Get all installed executables of direct dependencies of a specific environment.
-    pub async fn executables_direct_dependencies(
+    /// Get installed executables of direct dependencies of a specific environment.
+    pub async fn executables_of_direct_dependencies(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<IndexMap<PackageName, Vec<Executable>>> {
@@ -724,7 +725,7 @@ impl Project {
         expose_type: ExposedType,
     ) -> miette::Result<()> {
         // Get env executables
-        let execs_all = self.executables_all_dependencies(env_name).await?;
+        let execs_all = self.executables_of_all_dependencies(env_name).await?;
 
         // Get the parsed environment
         let environment = self
@@ -752,7 +753,7 @@ impl Project {
             self.manifest.remove_exposed_name(env_name, exposed_name)?;
         }
 
-        let execs_direct_deps = self.executables_direct_dependencies(env_name).await?;
+        let execs_direct_deps = self.executables_of_direct_dependencies(env_name).await?;
 
         match expose_type {
             ExposedType::All => {
@@ -886,7 +887,7 @@ impl Project {
         // First clean up binaries that are not listed as exposed
         state_changes |= self.prune_exposed(env_name).await?;
 
-        let all_executables = self.executables_all_dependencies(env_name).await?;
+        let all_executables = self.executables_of_all_dependencies(env_name).await?;
 
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let prefix = Prefix::new(env_dir.path());
