@@ -58,6 +58,11 @@ impl ManifestProvenance {
             ManifestKind::Pyproject => Ok(ManifestSource::PyProjectToml(contents)),
         }
     }
+
+    /// Returns the absolute path to the manifest file.
+    pub fn absolute_path(&self) -> PathBuf {
+        dunce::canonicalize(self.path.clone()).unwrap_or(self.path.to_path_buf())
+    }
 }
 
 impl From<ManifestKind> for ManifestProvenance {
