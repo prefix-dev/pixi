@@ -114,7 +114,7 @@ pub fn as_uv_req(
             precise: rev
                 .as_ref()
                 .map(|s| s.as_full_commit())
-                .and_then(|s| s.map(uv_git::GitSha::from_str))
+                .and_then(|s| s.map(uv_git::GitOid::from_str))
                 .transpose()
                 .expect("could not parse sha"),
             reference: rev
@@ -194,6 +194,7 @@ pub fn as_uv_req(
             .map(|e| uv_pep508::ExtraName::new(e.to_string()).expect("conversion failed"))
             .collect(),
         marker: Default::default(),
+        groups: Default::default(),
         source,
         origin: None,
     })

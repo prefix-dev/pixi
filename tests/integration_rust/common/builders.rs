@@ -23,7 +23,7 @@
 //! }
 //! ```
 
-use pixi::cli::cli_config::{GitRev, PrefixUpdateConfig, ProjectConfig};
+use pixi::cli::cli_config::{GitRev, PrefixUpdateConfig, WorkspaceConfig};
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -208,6 +208,11 @@ impl AddBuilder {
         self
     }
 
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.args.dependency_config.platforms.push(platform);
+        self
+    }
+
     pub fn with_git_url(mut self, url: Url) -> Self {
         self.args.dependency_config.git = Some(url);
         self
@@ -325,13 +330,14 @@ impl TaskAddBuilder {
     }
 
     /// Execute the CLI command
-    pub fn execute(self) -> miette::Result<()> {
+    pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Add(self.args),
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
         })
+        .await
     }
 }
 
@@ -348,13 +354,14 @@ impl TaskAliasBuilder {
     }
 
     /// Execute the CLI command
-    pub fn execute(self) -> miette::Result<()> {
+    pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
             operation: task::Operation::Alias(self.args),
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
         })
+        .await
     }
 }
 
@@ -486,7 +493,7 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
         project::environment::execute(project::environment::Args {
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
             command: project::environment::Command::Add(self.args),

@@ -626,7 +626,11 @@ class BaseManifest(StrictBaseModel):
             "$id": SCHEMA_URI,
             "$schema": SCHEMA_DRAFT,
             "title": "`pixi.toml` manifest file",
-            "oneOf": [{"required": ["project"]}, {"required": ["workspace"]}],
+            "anyOf": [
+                {"required": ["project"]},
+                {"required": ["workspace"]},
+                {"required": ["package"]},
+            ],
         }
 
     schema_: str | None = Field(
@@ -696,7 +700,8 @@ class SchemaJsonEncoder(json.JSONEncoder):
         "required",
         "additionalProperties",
         "default",
-        "items" "properties",
+        "items",
+        "properties",
         "patternProperties",
         "allOf",
         "anyOf",

@@ -33,7 +33,7 @@ pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, Inv
         NoBuild::All => uv_configuration::NoBuild::All,
         NoBuild::Packages(ref vec) => uv_configuration::NoBuild::Packages(
             vec.iter()
-                .map(|s| PackageName::new(s.clone()))
+                .map(|s| PackageName::new(s.to_string()))
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     };
@@ -210,30 +210,29 @@ pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git::GitReference 
     match git_ref {
         PixiGitReference::Branch(branch) => uv_git::GitReference::Branch(branch),
         PixiGitReference::Tag(tag) => uv_git::GitReference::Tag(tag),
-        PixiGitReference::ShortCommit(rev) => uv_git::GitReference::ShortCommit(rev),
+        PixiGitReference::ShortCommit(rev) | PixiGitReference::FullCommit(rev) => {
+            uv_git::GitReference::BranchOrTagOrCommit(rev)
+        }
         PixiGitReference::BranchOrTag(rev) => uv_git::GitReference::BranchOrTag(rev),
         PixiGitReference::BranchOrTagOrCommit(rev) => {
             uv_git::GitReference::BranchOrTagOrCommit(rev)
         }
         PixiGitReference::NamedRef(rev) => uv_git::GitReference::NamedRef(rev),
-        PixiGitReference::FullCommit(rev) => uv_git::GitReference::FullCommit(rev),
         PixiGitReference::DefaultBranch => uv_git::GitReference::DefaultBranch,
     }
 }
 
-pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitSha {
-    uv_git::GitSha::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
+pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitOid {
+    uv_git::GitOid::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
 }
 
 pub fn into_pixi_reference(git_reference: uv_git::GitReference) -> PixiReference {
     match git_reference {
         uv_git::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
         uv_git::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
-        uv_git::GitReference::ShortCommit(rev) => PixiReference::Rev(rev.to_string()),
         uv_git::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
         uv_git::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
         uv_git::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
-        uv_git::GitReference::FullCommit(rev) => PixiReference::Rev(rev.to_string()),
         uv_git::GitReference::DefaultBranch => PixiReference::DefaultBranch,
     }
 }

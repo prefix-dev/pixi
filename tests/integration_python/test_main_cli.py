@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import shutil
 
 from .common import cwd, verify_cli_command, ExitCode, PIXI_VERSION, CURRENT_PLATFORM
 import tomllib
@@ -960,3 +961,80 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
         ExitCode.SUCCESS,
         stdout_contains=["Linux: 10.1"],
     )
+
+
+def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    lock_file_path = tmp_pixi_workspace / "pixi.lock"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    # Add a dependency
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "dummy-a"])
+
+    # Read the original lock file content
+    original_lock_content = lock_file_path.read_text()
+
+    # Remove the lock file
+    lock_file_path.unlink()
+
+    # Remove the .pixi folder
+    dot_pixi = tmp_pixi_workspace / ".pixi"
+    shutil.rmtree(dot_pixi)
+
+    # Run pixi lock to recreate the lock file
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest_path], stderr_contains=["+", "dummy-a"]
+    )
+
+    # Read the recreated lock file content
+    recreated_lock_content = lock_file_path.read_text()
+
+    # Check if the recreated lock file is the same as the original
+    assert original_lock_content == recreated_lock_content
+
+    # Ensure the .pixi folder does not exist
+    assert not dot_pixi.exists()
+
+
+def test_pixi_auth(pixi: Path) -> None:
+    verify_cli_command([pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"])
+    verify_cli_command(
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"]
+    )
+    verify_cli_command(
+        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "auth",
+            "login",
+            "--username",
+            "DUMMY_USER",
+            "--password",
+            "DUMMY_PASS",
+            "https://host.org",
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "auth",
+            "login",
+            "--s3-access-key-id",
+            "DUMMY_ID",
+            "--s3-secret-access-key",
+            "DUMMY_KEY",
+            "--s3-session-token",
+            "DUMMY_TOKEN",
+            "s3://amazon-aws.com",
+        ]
+    )
+
+    verify_cli_command([pixi, "auth", "logout", "https://prefix.dev/"])
+    verify_cli_command([pixi, "auth", "logout", "https://repo.prefix.dev/"])
+    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"])
+    verify_cli_command([pixi, "auth", "logout", "https://host.org"])
+    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"])

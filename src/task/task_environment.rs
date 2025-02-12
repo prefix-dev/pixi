@@ -4,11 +4,11 @@ use rattler_conda_types::Platform;
 use thiserror::Error;
 
 use crate::{
-    project::{
+    task::error::{AmbiguousTaskError, MissingTaskError},
+    workspace::{
         virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
     },
-    task::error::{AmbiguousTaskError, MissingTaskError},
-    Project,
+    Workspace,
 };
 
 /// Defines where the task was defined when looking for a task.
@@ -44,7 +44,7 @@ impl<'p, F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>> TaskDisamb
 
 /// An object to help with searching for tasks.
 pub struct SearchEnvironments<'p, D: TaskDisambiguation<'p> = NoDisambiguation> {
-    pub project: &'p Project,
+    pub project: &'p Workspace,
     pub explicit_environment: Option<Environment<'p>>,
     pub platform: Option<Platform>,
     pub disambiguate: D,
@@ -89,7 +89,7 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
     // If the user did not specify an environment, look for tasks in any
     // environment.
     pub fn from_opt_env(
-        project: &'p Project,
+        project: &'p Workspace,
         explicit_environment: Option<Environment<'p>>,
         platform: Option<Platform>,
     ) -> Self {
@@ -239,7 +239,7 @@ mod tests {
             [environments]
             test = ["test"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let env = project.default_environment();
         let search = SearchEnvironments::from_opt_env(&project, None, Some(env.best_platform()));
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
@@ -264,7 +264,7 @@ mod tests {
             [environments]
             test = ["test"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
@@ -293,7 +293,7 @@ mod tests {
             [system-requirements]
             macos = "10.6"
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None)
             .with_ignore_system_requirements(true);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
@@ -329,7 +329,7 @@ mod tests {
             [system-requirements]
             macos = "10.6"
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
         assert!(result.unwrap().0.name().is_default());
@@ -362,7 +362,7 @@ mod tests {
             [environments]
             other = ["other"]
         "#;
-        let project = Project::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None)
             .with_ignore_system_requirements(true);
         let result = search.find_task("bla".into(), FindTaskSource::CmdArgs);

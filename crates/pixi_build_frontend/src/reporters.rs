@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 /// Reporter trait for reporting the progress of metadata operations.
 pub trait CondaMetadataReporter: Send + Sync {
-    /// Reports the start of the get_conda_metadata operation.
+    /// Reports the start of the conda_get_metadata operation.
     /// Returns a unique identifier for the operation.
     fn on_metadata_start(&self, build_id: usize) -> usize;
 
-    /// Reports the end of the get_conda_metadata operation.
+    /// Reports the end of the conda_get_metadata operation.
     fn on_metadata_end(&self, operation: usize);
 }
 

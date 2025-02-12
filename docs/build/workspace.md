@@ -45,8 +45,24 @@ In the case of `rich_example` we choose to do both, so the only thing we have to
 --8<-- "docs/source_files/pixi_projects/pixi_build_workspace/pixi.toml:workspace"
 ```
 
-Only the `workspace` table of the top-level manifest is used.
-Therefore, we could remove the workspace section in `packages/python_bindings/pixi.toml`, but if we leave it, it will just be ignored.
+We only want to use the `workspace` table of the top-level manifest.
+Therefore, we can remove the workspace section in the manifest of `python_bindings`.
+
+```diff title="packages/python_bindings/pixi.toml"
+-[workspace]
+-channels = [
+-  "https://prefix.dev/pixi-build-backends",
+-  "https://prefix.dev/conda-forge",
+-]
+-platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
+-preview = ["pixi-build"]
+-
+-[dependencies]
+-python_bindings = { path = "." }
+-
+-[tasks]
+-start = "python -c 'import python_bindings as b; print(b.add(1, 2))'"
+```
 
 
 There is actually one problem with `rich_example`.

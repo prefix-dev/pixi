@@ -1,17 +1,20 @@
 use std::str::FromStr;
 
+use pixi::{cli::cli_config::GitRev, DependencyType, Workspace};
+use pixi_consts::consts;
+use pixi_manifest::{
+    pypi::{PyPiPackageName, VersionOrStar},
+    FeaturesExt, PyPiRequirement, SpecType,
+};
+use rattler_conda_types::{PackageName, Platform};
+use tempfile::TempDir;
+use url::Url;
+
 use crate::common::{
     builders::{HasDependencyConfig, HasPrefixUpdateConfig},
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
-use pixi::{cli::cli_config::GitRev, DependencyType, Project};
-use pixi_consts::consts;
-use pixi_manifest::pypi::VersionOrStar;
-use pixi_manifest::{pypi::PyPiPackageName, FeaturesExt, PyPiRequirement, SpecType};
-use rattler_conda_types::{PackageName, Platform};
-use tempfile::TempDir;
-use url::Url;
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
@@ -93,7 +96,7 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
         .default_environment()
         .combined_dependencies(Some(Platform::current()))
@@ -155,7 +158,7 @@ async fn add_functionality_union() {
     // by checking if we get the correct values back in the manifest
     // We know this works because we test the manifest in another test
     // Where we check if the sections are put in the correct variables
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
     // Should contain all added dependencies
     let dependencies = project
@@ -249,17 +252,11 @@ async fn add_pypi_functionality() {
         .await
         .unwrap();
 
-    // Add a pypi package but without installing should fail
-    pixi.add("pipx")
+    // Add a pypi package that is a wheel
+    // without installing should succeed
+    pixi.add("pipx==1.7.1")
         .set_type(DependencyType::PypiDependency)
         .with_install(false)
-        .await
-        .unwrap_err();
-
-    // Add a pypi package
-    pixi.add("pipx")
-        .set_type(DependencyType::PypiDependency)
-        .with_install(true)
         .await
         .unwrap();
 
@@ -280,7 +277,7 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     // Read project from file and check if the dev extras are added.
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -388,7 +385,7 @@ async fn add_pypi_extra_functionality() {
         .unwrap();
 
     // Check if the extras are added
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -410,7 +407,7 @@ async fn add_pypi_extra_functionality() {
         .unwrap();
 
     // Check if the extras are removed
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -429,7 +426,7 @@ async fn add_pypi_extra_functionality() {
         .unwrap();
 
     // Check if the extras added and the version is set
-    let project = Project::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -487,11 +484,12 @@ async fn add_unconstrained_dependency() {
     pixi.add("foobar").await.unwrap();
     pixi.add("bar").with_feature("unreferenced").await.unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
     // Get the specs for the `foobar` package
     let foo_spec = project
-        .manifest()
+        .workspace
+        .value
         .default_feature()
         .combined_dependencies(None)
         .unwrap_or_default()
@@ -503,7 +501,8 @@ async fn add_unconstrained_dependency() {
 
     // Get the specs for the `bar` package
     let bar_spec = project
-        .manifest()
+        .workspace
+        .value
         .feature("unreferenced")
         .expect("feature 'unreferenced' is missing")
         .combined_dependencies(None)
@@ -537,11 +536,12 @@ async fn pinning_dependency() {
     pixi.add("foobar").await.unwrap();
     pixi.add("python").await.unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
     // Get the specs for the `python` package
     let python_spec = project
-        .manifest()
+        .workspace
+        .value
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
@@ -556,7 +556,8 @@ async fn pinning_dependency() {
 
     // Get the specs for the `foobar` package
     let foobar_spec = project
-        .manifest()
+        .workspace
+        .value
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
@@ -569,9 +570,10 @@ async fn pinning_dependency() {
 
     // Add the `python` package with a specific version
     pixi.add("python==3.13").await.unwrap();
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
     let python_spec = project
-        .manifest()
+        .workspace
+        .value
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
@@ -602,11 +604,12 @@ async fn add_dependency_pinning_strategy() {
         .await
         .unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
     // Get the specs for the `foo` package
     let foo_spec = project
-        .manifest()
+        .workspace
+        .value
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
@@ -619,7 +622,8 @@ async fn add_dependency_pinning_strategy() {
 
     // Get the specs for the `python` package
     let python_spec = project
-        .manifest()
+        .workspace
+        .value
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
@@ -634,7 +638,8 @@ async fn add_dependency_pinning_strategy() {
 
     // Get the specs for the `bar` package
     let bar_spec = project
-        .manifest()
+        .workspace
+        .value
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
@@ -657,7 +662,7 @@ async fn add_git_deps() {
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
+platforms = ["win-64"]
 preview = ['pixi-build']
 "#,
     )
@@ -679,7 +684,14 @@ preview = ['pixi-build']
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    insta::assert_snapshot!(pixi
+        .workspace()
+        .unwrap()
+        .workspace
+        .provenance
+        .read()
+        .unwrap()
+        .into_inner());
 }
 
 /// Test adding git dependencies with credentials
@@ -719,7 +731,14 @@ preview = ['pixi-build']
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    insta::assert_snapshot!(pixi
+        .workspace()
+        .unwrap()
+        .modify()
+        .unwrap()
+        .manifest()
+        .document
+        .to_string());
 }
 
 /// Test adding a git dependency with a specific commit
@@ -731,7 +750,7 @@ async fn add_git_with_specific_commit() {
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
+platforms = ["win-64"]
 preview = ['pixi-build']"#,
     )
     .unwrap();
@@ -753,7 +772,14 @@ preview = ['pixi-build']"#,
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    insta::assert_snapshot!(pixi
+        .workspace()
+        .unwrap()
+        .workspace
+        .provenance
+        .read()
+        .unwrap()
+        .into_inner());
 }
 
 /// Test adding a git dependency with a specific tag
@@ -765,7 +791,7 @@ async fn add_git_with_tag() {
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
+platforms = ["win-64"]
 preview = ['pixi-build']"#,
     )
     .unwrap();
@@ -787,7 +813,14 @@ preview = ['pixi-build']"#,
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    insta::assert_snapshot!(pixi
+        .workspace()
+        .unwrap()
+        .workspace
+        .provenance
+        .read()
+        .unwrap()
+        .into_inner());
 }
 
 /// Test adding a git dependency using ssh url
@@ -811,7 +844,14 @@ preview = ['pixi-build']"#,
         .unwrap();
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+    insta::assert_snapshot!(pixi
+        .workspace()
+        .unwrap()
+        .workspace
+        .provenance
+        .read()
+        .unwrap()
+        .into_inner());
 }
 
 /// Test adding a git dependency using ssh url
@@ -840,7 +880,7 @@ platforms = ["linux-64"]
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(pixi.project().unwrap().manifest().source.to_string());
+        insta::assert_snapshot!(pixi.workspace().unwrap().workspace.provenance.read().unwrap().into_inner());
     });
 }
 
@@ -872,12 +912,12 @@ preview = ['pixi-build']
     // Add the `packages` to the project
     pixi.add("foo").await.unwrap();
 
-    let project = pixi.project().unwrap();
+    let workspace = pixi.workspace().unwrap();
 
     // filter out local channels from the insta
     insta::with_settings!({filters => vec![
         (local_channel_str.as_str(), "file://<LOCAL_CHANNEL>/"),
     ]}, {
-        insta::assert_snapshot!(project.manifest().source.to_string());
+        insta::assert_snapshot!(workspace.workspace.provenance.read().unwrap().into_inner());
     });
 }

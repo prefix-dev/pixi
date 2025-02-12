@@ -1,17 +1,21 @@
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
     lock_file::UpdateMode,
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, WorkspaceLocator,
 };
+use miette::IntoDiagnostic;
 
 use super::AddRemoveArgs;
 
 pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
-    let mut project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
-        .with_cli_config(args.clone().prefix_update_config.config);
+    let mut workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?
+        .with_cli_config(args.clone().prefix_update_config.config)
+        .modify()?;
 
     // Add the channels to the manifest
-    project.manifest.add_channels(
+    workspace.manifest().add_channels(
         args.prioritized_channels(),
         &args.feature_name(),
         args.prepend,
@@ -19,19 +23,20 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
 
     // TODO: Update all environments touched by the features defined.
     get_update_lock_file_and_prefix(
-        &project.default_environment(),
+        &workspace.workspace().default_environment(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
             no_install: args.prefix_update_config.no_install(),
-            max_concurrent_solves: project.config().max_concurrent_solves(),
+            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
     )
     .await?;
-    project.save()?;
+
+    let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
-    args.report("Added", &project.channel_config())?;
+    args.report("Added", &workspace.channel_config())?;
 
     Ok(())
 }

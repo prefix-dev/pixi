@@ -1,0 +1,7 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+Discovered workspace at: pixi.toml
+- Name: workspace-discovery
+Package: package_a @ 0.1.0

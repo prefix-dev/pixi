@@ -1,6 +1,6 @@
 use std::{fmt::Display, path::PathBuf};
 
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 use chrono::{DateTime, Local};
 use clap::Parser;
 use itertools::Itertools;
@@ -22,7 +22,7 @@ use crate::{
     global,
     global::{BinDir, EnvRoot},
     task::TaskName,
-    Project,
+    WorkspaceLocator,
 };
 use fancy_display::FancyDisplay;
 
@@ -41,11 +41,11 @@ pub struct Args {
     json: bool,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 }
 
 #[derive(Serialize)]
-pub struct ProjectInfo {
+pub struct WorkspaceInfo {
     name: String,
     manifest_path: PathBuf,
     last_updated: Option<String>,
@@ -229,7 +229,7 @@ pub struct Info {
     cache_size: Option<String>,
     auth_dir: PathBuf,
     global_info: Option<GlobalInfo>,
-    project_info: Option<ProjectInfo>,
+    project_info: Option<WorkspaceInfo>,
     environments_info: Vec<EnvironmentInfo>,
     config_locations: Vec<PathBuf>,
 }
@@ -370,10 +370,13 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.project_config.workspace_locator_start())
+        .locate()
+        .ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
-        let env_dir = project.as_ref().map(|p| p.pixi_dir());
+        let env_dir = workspace.as_ref().map(|p| p.pixi_dir());
         let cache_dir = pixi_config::get_cache_dir()?;
         await_in_progress("fetching directory sizes", |_| {
             spawn_blocking(move || {
@@ -388,18 +391,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (None, None)
     };
 
-    let project_info = project.clone().map(|p| ProjectInfo {
+    let project_info = workspace.clone().map(|p| WorkspaceInfo {
         name: p.name().to_string(),
-        manifest_path: p.manifest_path(),
+        manifest_path: p.workspace.provenance.path.clone(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
-        version: p.version().clone().map(|v| v.to_string()),
+        version: p
+            .workspace
+            .value
+            .workspace
+            .version
+            .clone()
+            .map(|v| v.to_string()),
     });
 
-    let environments_info: Vec<EnvironmentInfo> = project
+    let environments_info: Vec<EnvironmentInfo> = workspace
         .as_ref()
-        .map(|p| {
-            p.environments()
+        .map(|ws| {
+            ws.environments()
                 .iter()
                 .map(|env| {
                     let tasks = env
@@ -449,7 +458,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(GenericVirtualPackage::from)
         .collect::<Vec<_>>();
 
-    let config = project
+    let config = workspace
         .map(|p| p.config().clone())
         .unwrap_or_else(pixi_config::Config::load_global);
 
@@ -478,13 +487,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
-
-        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
-        Ok(())
     } else {
         println!("{}", info);
-
-        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
-        Ok(())
     }
+
+    Ok(())
 }

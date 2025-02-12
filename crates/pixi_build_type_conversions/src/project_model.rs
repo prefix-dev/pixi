@@ -190,11 +190,14 @@ mod tests {
         ($manifest_path:expr) => {{
             use std::ffi::OsStr;
 
-            let manifest = pixi_manifest::Manifest::from_path(&$manifest_path)
-                .expect("could not load manifest");
+            let manifest = pixi_manifest::Manifests::from_workspace_manifest_path($manifest_path)
+                .expect("could not load manifest")
+                .value;
             if let Some(package_manifest) = manifest.package {
                 // To create different snapshot files for the same function
-                let name = $manifest_path
+                let name = package_manifest
+                    .provenance
+                    .path
                     .parent()
                     .unwrap()
                     .file_name()
@@ -203,7 +206,7 @@ mod tests {
 
                 // Convert the manifest to the project model
                 let project_model: VersionedProjectModel =
-                    super::to_project_model_v1(&package_manifest, &some_channel_config())
+                    super::to_project_model_v1(&package_manifest.value, &some_channel_config())
                         .unwrap()
                         .into();
                 let mut settings = insta::Settings::clone_current();

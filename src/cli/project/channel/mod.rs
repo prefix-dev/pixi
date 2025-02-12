@@ -2,7 +2,7 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
+use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_manifest::{FeatureName, PrioritizedChannel};
@@ -19,7 +19,7 @@ pub struct Args {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct AddRemoveArgs {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
     /// The channel name or URL
     #[clap(required = true, num_args=1..)]
     pub channel: Vec<NamedChannelOrUrl>,

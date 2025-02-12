@@ -1,5 +1,6 @@
 use std::{
     cmp::PartialEq,
+    collections::HashMap,
     fs,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
@@ -21,7 +22,7 @@ use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
 
-use crate::Project;
+use crate::workspace::WorkspaceMut;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -29,7 +30,7 @@ pub enum ManifestFormat {
     Pyproject,
 }
 
-/// Creates a new project
+/// Creates a new workspace
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Where to place the project (defaults to current path)
@@ -84,6 +85,12 @@ version = "{{ version }}"
 [tasks]
 
 [dependencies]
+
+{%- if env_vars %}
+
+[activation]
+env = { {{ env_vars }} }
+{%- endif %}
 
 "#;
 
@@ -223,10 +230,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or(default_name.clone().as_str())
             .to_string();
 
+        let env_vars = env_file.variables();
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
-        let rv = render_project(
+        let rendered_workspace_template = render_project(
             &env,
             name,
             version,
@@ -235,9 +243,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &platforms,
             None,
             &vec![],
+            Some(&env_vars),
         );
-        let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
-        let channel_config = project.channel_config();
+        let mut workspace =
+            WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
+        let channel_config = workspace.workspace().channel_config();
         for spec in conda_deps {
             // Determine the name of the package to add
             let (Some(name), spec) = spec.clone().into_nameless() else {
@@ -247,7 +257,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             };
             let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
-            project.manifest.add_dependency(
+            workspace.manifest().add_dependency(
                 &name,
                 &spec,
                 SpecType::Run,
@@ -258,7 +268,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )?;
         }
         for requirement in pypi_deps {
-            project.manifest.add_pep508_dependency(
+            workspace.manifest().add_pep508_dependency(
                 &requirement,
                 // No platforms required as you can't define them in the yaml
                 &[],
@@ -268,14 +278,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &None,
             )?;
         }
-        project.save()?;
+        let workspace = workspace.save().await.into_diagnostic()?;
 
         eprintln!(
             "{}Created {}",
             console::style(console::Emoji("✔ ", "")).green(),
             // Canonicalize the path to make it more readable, but if it fails just use the path as
             // is.
-            project.manifest_path().display()
+            workspace.workspace.provenance.path.display()
         );
     } else {
         let channels = if let Some(channels) = args.channels {
@@ -349,7 +359,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             } else {
                 // Inform about the addition of the package itself as an editable dependency of
-                // the project
+                // the workspace
                 eprintln!(
                     "{}Added package '{}' as an editable dependency.",
                     console::style(console::Emoji("✔ ", "")).green(),
@@ -433,6 +443,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &platforms,
                 index_url.as_ref(),
                 &extra_index_urls,
+                None,
             );
             save_manifest_file(&pixi_manifest_path, rv)?;
         };
@@ -471,21 +482,23 @@ fn render_project(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
+    env_vars: Option<&HashMap<String, String>>,
 ) -> String {
-    env.render_named_str(
-        consts::PROJECT_MANIFEST,
-        PROJECT_TEMPLATE,
-        context! {
-            name,
-            version,
-            author,
-            channels,
-            platforms,
-            index_url,
-            extra_index_urls,
-        },
-    )
-    .expect("should be able to render the template")
+    let ctx = context! {
+        name,
+        version,
+        author,
+        channels,
+        platforms,
+        index_url,
+        extra_index_urls,
+        env_vars => {if let Some(env_vars) = env_vars {
+            env_vars.iter().map(|(k, v)| format!("{} = \"{}\"", k, v)).collect::<Vec<String>>().join(", ")
+        } else {String::new()}},
+    };
+
+    env.render_named_str(consts::PROJECT_MANIFEST, PROJECT_TEMPLATE, ctx)
+        .expect("should be able to render the template")
 }
 
 /// Save the rendered template to a file, and print a message to the user.

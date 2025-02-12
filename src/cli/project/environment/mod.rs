@@ -2,14 +2,14 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
 use clap::Parser;
 
 /// Commands to manage project environments.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     /// The subcommand to execute
     #[clap(subcommand)]
@@ -30,11 +30,13 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?;
 
     match args.command {
-        Command::Add(args) => add::execute(project, args).await,
-        Command::List => list::execute(project).await,
-        Command::Remove(args) => remove::execute(project, args).await,
+        Command::Add(args) => add::execute(workspace, args).await,
+        Command::List => list::execute(workspace).await,
+        Command::Remove(args) => remove::execute(workspace, args).await,
     }
 }

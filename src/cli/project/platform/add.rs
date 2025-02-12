@@ -3,7 +3,7 @@ use std::str::FromStr;
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
     lock_file::UpdateMode,
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, Workspace,
 };
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -26,7 +26,7 @@ pub struct Args {
     pub feature: Option<String>,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     let feature_name = args
         .feature
         .map_or(FeatureName::Default, FeatureName::Named);
@@ -39,23 +39,25 @@ pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
+    let mut workspace = workspace.modify()?;
+
     // Add the platforms to the lock-file
-    project
-        .manifest
+    workspace
+        .manifest()
         .add_platforms(platforms.iter(), &feature_name)?;
 
     // Try to update the lock-file with the new channels
     get_update_lock_file_and_prefix(
-        &project.default_environment(),
+        &workspace.workspace().default_environment(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
             no_install: args.no_install,
-            max_concurrent_solves: project.config().max_concurrent_solves(),
+            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
     )
     .await?;
-    project.save()?;
+    workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     for platform in platforms {

@@ -16,7 +16,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
     cli::{
         add,
-        cli_config::{ChannelsConfig, PrefixUpdateConfig, ProjectConfig},
+        cli_config::{ChannelsConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
         project, remove, run, search,
@@ -28,7 +28,7 @@ use pixi::{
         get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
         TaskGraphError, TaskName,
     },
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, Workspace,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -169,6 +169,7 @@ impl LockFileExt for LockFile {
         requirement: pep508_rs::Requirement,
     ) -> bool {
         let Some(env) = self.environment(environment) else {
+            eprintln!("environment not found: {}", environment);
             return false;
         };
         let package_found = env
@@ -243,36 +244,48 @@ impl PixiControl {
         Ok(())
     }
 
-    /// Loads the project manifest and returns it.
-    pub fn project(&self) -> miette::Result<Project> {
-        Project::load_or_else_discover(Some(&self.manifest_path())).into_diagnostic()
+    /// Loads the workspace manifest and returns it.
+    pub fn workspace(&self) -> miette::Result<Workspace> {
+        Workspace::from_path(&self.manifest_path()).into_diagnostic()
     }
 
-    /// Get the path to the project
-    pub fn project_path(&self) -> &Path {
+    /// Get the path to the workspace
+    pub fn workspace_path(&self) -> &Path {
         self.tmpdir.path()
     }
 
     /// Get path to default environment
     pub fn default_env_path(&self) -> miette::Result<PathBuf> {
-        let project = self.project()?;
+        let project = self.workspace()?;
         let env = project.environment("default");
         let env = env.ok_or_else(|| miette::miette!("default environment not found"))?;
         Ok(self.tmpdir.path().join(env.dir()))
     }
 
+    /// Get path to default environment
+    pub fn env_path(&self, env_name: &str) -> miette::Result<PathBuf> {
+        let workspace = self.workspace()?;
+        let env = workspace.environment(env_name);
+        let env = env.ok_or_else(|| miette::miette!("{} environment not found", env_name))?;
+        Ok(self.tmpdir.path().join(env.dir()))
+    }
+
     pub fn manifest_path(&self) -> PathBuf {
         // Either pixi.toml or pyproject.toml
-        if self.project_path().join(consts::PROJECT_MANIFEST).exists() {
-            self.project_path().join(consts::PROJECT_MANIFEST)
+        if self
+            .workspace_path()
+            .join(consts::PROJECT_MANIFEST)
+            .exists()
+        {
+            self.workspace_path().join(consts::PROJECT_MANIFEST)
         } else if self
-            .project_path()
+            .workspace_path()
             .join(consts::PYPROJECT_MANIFEST)
             .exists()
         {
-            self.project_path().join(consts::PYPROJECT_MANIFEST)
+            self.workspace_path().join(consts::PYPROJECT_MANIFEST)
         } else {
-            self.project_path().join(consts::PROJECT_MANIFEST)
+            self.workspace_path().join(consts::PROJECT_MANIFEST)
         }
     }
 
@@ -290,7 +303,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.project_path().to_path_buf(),
+                path: self.workspace_path().to_path_buf(),
                 channels: None,
                 platforms: Vec::new(),
                 env_file: None,
@@ -302,13 +315,13 @@ impl PixiControl {
     }
 
     /// Initialize pixi project inside a temporary directory. Returns a
-    /// [`InitBuilder`]. To execute the command and await the result call
+    /// [`InitBuilder`]. To execute the command and await the result, call
     /// `.await` on the return value.
     pub fn init_with_platforms(&self, platforms: Vec<String>) -> InitBuilder {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.project_path().to_path_buf(),
+                path: self.workspace_path().to_path_buf(),
                 channels: None,
                 platforms,
                 env_file: None,
@@ -320,17 +333,17 @@ impl PixiControl {
     }
 
     /// Add a dependency to the project. Returns an [`AddBuilder`].
-    /// the command and await the result call `.await` on the return value.
+    /// To execute the command and await the result, call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         self.add_multiple(vec![spec])
     }
 
     /// Add dependencies to the project. Returns an [`AddBuilder`].
-    /// the command and await the result call `.await` on the return value.
+    /// To execute the command and await the result, call `.await` on the return value.
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
-                project_config: ProjectConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
@@ -352,7 +365,7 @@ impl PixiControl {
         SearchBuilder {
             args: search::Args {
                 package: name,
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 platform: Platform::current(),
@@ -366,7 +379,7 @@ impl PixiControl {
     pub fn remove(&self, spec: &str) -> RemoveBuilder {
         RemoveBuilder {
             args: remove::Args {
-                project_config: ProjectConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
@@ -385,7 +398,7 @@ impl PixiControl {
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
             args: project::channel::AddRemoveArgs {
-                project_config: ProjectConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
@@ -408,7 +421,7 @@ impl PixiControl {
         ProjectChannelRemoveBuilder {
             manifest_path: Some(self.manifest_path()),
             args: project::channel::AddRemoveArgs {
-                project_config: ProjectConfig {
+                workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
@@ -441,13 +454,13 @@ impl PixiControl {
 
     /// Run a command
     pub async fn run(&self, mut args: run::Args) -> miette::Result<RunOutput> {
-        args.project_config.manifest_path = args
-            .project_config
+        args.workspace_config.manifest_path = args
+            .workspace_config
             .manifest_path
             .or_else(|| Some(self.manifest_path()));
 
         // Load the project
-        let project = self.project()?;
+        let project = self.workspace()?;
 
         // Extract the passed in environment name.
         let explicit_environment = args
@@ -519,7 +532,7 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 lock_file_usage: LockFileUsageArgs {
@@ -538,7 +551,7 @@ impl PixiControl {
         UpdateBuilder {
             args: update::Args {
                 config: Default::default(),
-                project_config: ProjectConfig {
+                project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 no_install: true,
@@ -554,14 +567,14 @@ impl PixiControl {
     /// If you want to lock-file to be up-to-date with the project call
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
-        let project = Project::load_or_else_discover(Some(&self.manifest_path()))?;
-        pixi::load_lock_file(&project).await
+        let workspace = Workspace::from_path(&self.manifest_path())?;
+        workspace.load_lock_file().await
     }
 
     /// Load the current lock-file and makes sure that its up to date with the
     /// project.
     pub async fn update_lock_file(&self) -> miette::Result<LockFile> {
-        let project = self.project()?;
+        let project = self.workspace()?;
         Ok(project
             .update_lock_file(UpdateLockFileOptions::default())
             .await?
@@ -611,7 +624,7 @@ impl TasksControl<'_> {
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
-            project_config: ProjectConfig {
+            workspace_config: WorkspaceConfig {
                 manifest_path: Some(self.pixi.manifest_path()),
             },
             operation: task::Operation::Remove(task::RemoveArgs {
@@ -620,6 +633,7 @@ impl TasksControl<'_> {
                 feature: feature_name,
             }),
         })
+        .await
     }
 
     /// Alias one or multiple tasks

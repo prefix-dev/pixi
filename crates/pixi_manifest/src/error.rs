@@ -72,6 +72,11 @@ impl GenericError {
         self
     }
 
+    pub fn with_labels(mut self, labels: impl IntoIterator<Item = LabeledSpan>) -> Self {
+        self.labels.extend(labels);
+        self
+    }
+
     pub fn with_opt_label(mut self, text: impl Into<String>, range: Option<Range<usize>>) -> Self {
         if let Some(range) = range {
             self.labels.push(LabeledSpan::new_with_span(
@@ -195,7 +200,7 @@ pub struct FeatureNotEnabled {
 impl FeatureNotEnabled {
     pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFeature) -> Self {
         Self {
-            feature: feature.as_str().into(),
+            feature: <&'static str>::from(feature).into(),
             message: message.into(),
             span: None,
         }
@@ -440,5 +445,20 @@ impl Diagnostic for InvalidNonPackageDependencies {
         Some(Box::new(self.invalid_dependency_sections.iter().map(
             |range| LabeledSpan::new_with_span(None, SourceSpan::from(range.clone())),
         )))
+    }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error("an error occurred while parsing the manifest")]
+pub struct MultiTomlError {
+    #[related]
+    pub errors: Vec<TomlError>,
+}
+
+impl From<DeserError> for MultiTomlError {
+    fn from(value: DeserError) -> Self {
+        Self {
+            errors: value.errors.into_iter().map(Into::into).collect(),
+        }
     }
 }

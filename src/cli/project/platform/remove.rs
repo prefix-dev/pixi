@@ -1,11 +1,13 @@
-use crate::lock_file::UpdateMode;
-use crate::{
-    environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    Project, UpdateLockFileOptions,
-};
 use clap::Parser;
+use miette::IntoDiagnostic;
 use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
+
+use crate::{
+    environment::{get_update_lock_file_and_prefix, LockFileUsage},
+    lock_file::UpdateMode,
+    UpdateLockFileOptions, Workspace,
+};
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -23,27 +25,29 @@ pub struct Args {
     pub feature: Option<String>,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     let feature_name = args
         .feature
         .map_or(FeatureName::Default, FeatureName::Named);
 
+    let mut workspace = workspace.modify()?;
+
     // Remove the platform(s) from the manifest
-    project
-        .manifest
+    workspace
+        .manifest()
         .remove_platforms(args.platforms.clone(), &feature_name)?;
 
     get_update_lock_file_and_prefix(
-        &project.default_environment(),
+        &workspace.workspace().default_environment(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
             no_install: args.no_install,
-            max_concurrent_solves: project.config().max_concurrent_solves(),
+            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
     )
     .await?;
-    project.save()?;
+    workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     for platform in args.platforms {

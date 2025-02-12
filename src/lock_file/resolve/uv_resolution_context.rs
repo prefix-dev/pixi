@@ -1,10 +1,11 @@
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
 use uv_configuration::{Concurrency, SourceStrategy, TrustedHost};
+use uv_dispatch::SharedState;
 use uv_distribution_types::IndexCapabilities;
 use uv_types::{HashStrategy, InFlight};
 
-use crate::Project;
+use crate::Workspace;
 use pixi_config::{self, get_cache_dir};
 use pixi_consts::consts;
 use pixi_uv_conversions::{to_uv_trusted_host, ConversionError};
@@ -21,10 +22,11 @@ pub struct UvResolutionContext {
     pub source_strategy: SourceStrategy,
     pub capabilities: IndexCapabilities,
     pub allow_insecure_host: Vec<TrustedHost>,
+    pub shared_state: SharedState,
 }
 
 impl UvResolutionContext {
-    pub(crate) fn from_project(project: &Project) -> miette::Result<Self> {
+    pub(crate) fn from_workspace(project: &Workspace) -> miette::Result<Self> {
         let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
         if !uv_cache.exists() {
             fs_err::create_dir_all(&uv_cache)
@@ -70,6 +72,7 @@ impl UvResolutionContext {
             source_strategy: SourceStrategy::Disabled,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
+            shared_state: SharedState::default(),
         })
     }
 }

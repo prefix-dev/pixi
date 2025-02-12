@@ -8,7 +8,7 @@ use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{preview::Preview, utils::PixiSpanned, PrioritizedChannel, Targets};
+use crate::{preview::Preview, PrioritizedChannel, Targets};
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
 #[derive(Debug, Clone)]
@@ -32,9 +32,7 @@ pub struct Workspace {
     pub channel_priority: Option<ChannelPriority>,
 
     /// The platforms this project supports
-    // TODO: This is actually slightly different from the rattler_conda_types::Platform because it
-    //     should not include noarch.
-    pub platforms: PixiSpanned<IndexSet<Platform>>,
+    pub platforms: IndexSet<Platform>,
 
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
     pub license: Option<String>,

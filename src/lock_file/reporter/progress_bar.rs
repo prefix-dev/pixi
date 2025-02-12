@@ -7,7 +7,7 @@ use pypi_mapping::Reporter;
 use rattler_conda_types::Platform;
 
 use super::PurlAmendReporter;
-use crate::{build::BuildMetadataReporter, project::grouped_environment::GroupedEnvironmentName};
+use crate::{build::BuildMetadataReporter, workspace::grouped_environment::GroupedEnvironmentName};
 
 /// A helper struct that manages a progress-bar for solving an environment.
 #[derive(Clone)]

@@ -24,6 +24,7 @@ pub mod info;
 pub mod init;
 pub mod install;
 pub mod list;
+pub mod lock;
 pub mod project;
 pub mod remove;
 pub mod run;
@@ -107,6 +108,7 @@ pub enum Command {
     Install(install::Args),
     Update(update::Args),
     Upgrade(upgrade::Args),
+    Lock(lock::Args),
 
     #[clap(visible_alias = "r")]
     Run(run::Args),
@@ -219,22 +221,6 @@ pub async fn execute() -> miette::Result<()> {
             format!("resolvo={}", low_level_filter)
                 .parse()
                 .into_diagnostic()?,
-        )
-        .add_directive(
-            format!(
-                "rattler_networking::authentication_storage::backends::file={}",
-                LevelFilter::OFF
-            )
-            .parse()
-            .into_diagnostic()?,
-        )
-        .add_directive(
-            format!(
-                "rattler_networking::authentication_storage::storage={}",
-                LevelFilter::OFF
-            )
-            .parse()
-            .into_diagnostic()?,
         );
 
     // Set up the tracing subscriber
@@ -267,7 +253,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::ShellHook(cmd) => shell_hook::execute(cmd).await,
-        Command::Task(cmd) => task::execute(cmd),
+        Command::Task(cmd) => task::execute(cmd).await,
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
@@ -281,6 +267,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
         Command::Upgrade(cmd) => upgrade::execute(cmd).await,
+        Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
     }

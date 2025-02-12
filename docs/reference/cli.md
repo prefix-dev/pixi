@@ -255,6 +255,24 @@ pixi upgrade --dry-run
     - `url`
     - `subdir`.
 
+## `lock`
+
+The `lock` command updates the `pixi.lock` file without modifying the environment.
+It ensures the lockfile is accurate by performing minimal tasks, such as solving the environment only if the lockfile is outdated or installing the necessary dependencies to resolve the lockfile for PyPI dependencies.
+
+The output is similar to the `update` command, displaying the changes made to the lockfile.
+
+##### Options
+
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+- `--json` Output the changes in json format.
+
+```shell
+pixi lock
+pixi lock --manifest-path ~/myproject/pixi.toml
+pixi lock --json
+```
+
 ## `run`
 
 The `run` commands first checks if the environment is ready to use.
@@ -279,6 +297,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 - `--skip-deps`: Skip the dependencies of the task, which where defined in the `depends-on` field of the task.
+- `--dry-run (-n)`: Run the task in dry-run mode (only print the command that would run)
 
 ```shell
 pixi run python
@@ -292,6 +311,8 @@ pixi run build
 pixi run task argument1 argument2
 # Skip dependencies of the task
 pixi run --skip-deps task
+# Run in dry-run mode to see the commands that would be run
+pixi run --dry-run task
 
 # If you have multiple environments you can select the right one with the --environment flag.
 pixi run --environment cuda python
