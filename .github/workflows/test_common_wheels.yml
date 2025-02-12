@@ -31,13 +31,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha }}
-      # - name: Create Dev Drive using ReFS
-      #   if: ${{ contains(inputs.arch, 'windows') }}
-      #   run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      # - name: Copy Git Repo to Dev Drive
-      #   if: ${{ contains(inputs.arch, 'windows') }}
-      #   run: |
-      #     Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
+      - name: Create Dev Drive using ReFS
+        if: ${{ contains(inputs.arch, 'windows') }}
+        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+      - name: Copy Git Repo to Dev Drive
+        if: ${{ contains(inputs.arch, 'windows') }}
+        run: |
+          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
       - name: Download binary from build
         uses: actions/download-artifact@v4
         with:

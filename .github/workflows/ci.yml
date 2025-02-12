@@ -355,9 +355,6 @@ jobs:
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
-      - name: Add pixi to PATH
-        run: |
-          echo "${{ github.workspace }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Verify pixi installation
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi info
