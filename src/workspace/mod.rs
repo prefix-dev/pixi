@@ -177,7 +177,7 @@ impl Workspace {
         // Canonicalize the root path
         let root = &manifest.workspace.provenance.path;
         let root = dunce::canonicalize(root).unwrap_or(root.to_path_buf());
-        // Take the parent after conicalizing to ensure this works even when the manifest
+        // Take the parent after canonicalizing to ensure this works even when the manifest
         let root = root
             .parent()
             .expect("manifest path should always have a parent")
