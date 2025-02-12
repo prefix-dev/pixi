@@ -72,7 +72,7 @@ use crate::{
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
     ///
-    /// This function will return a [`LockFileDerivedData`] struct that contains the
+    /// This function will return a `LockFileDerivedData` struct that contains the
     /// lock-file and any potential derived data that was computed as part of this
     /// function. The derived data might be usable by other functions to avoid
     /// recomputing the same data.
