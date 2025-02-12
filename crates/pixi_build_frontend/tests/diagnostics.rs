@@ -71,7 +71,10 @@ async fn test_invalid_manifest() {
         .unwrap_err();
 
     let snapshot = error_to_snapshot(&err);
-    let snapshot = replace_source_dir(&snapshot, source_dir.path());
+    let snapshot = replace_source_dir(
+        &snapshot,
+        dunce::canonicalize(source_dir.path()).unwrap().as_path(),
+    );
 
     insta::assert_snapshot!(snapshot);
 }

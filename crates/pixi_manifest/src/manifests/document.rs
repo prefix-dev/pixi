@@ -119,7 +119,7 @@ impl ManifestDocument {
             Err(err) => {
                 return Err(Box::new(WithSourceCode {
                     source: NamedSource::new(
-                        provenance.path.to_string_lossy(),
+                        provenance.absolute_path().to_string_lossy(),
                         Arc::from(contents),
                     ),
                     error: TomlError::from(err),

@@ -253,21 +253,15 @@ impl WorkspaceDiscoverer {
         // Walk up the directory tree until we find a workspace manifest.
         let mut warnings = Vec::new();
         let mut closest_package_manifest = None;
-        let (mut next_search_path, root_dir) = match &self.start {
-            DiscoveryStart::SearchRoot(root) => (
-                Some(SearchPath::Directory(dunce::canonicalize(root).map_err(
-                    |e| WorkspaceDiscoveryError::Canonicalize(e, root.clone()),
-                )?)),
-                root.as_path(),
-            ),
-            DiscoveryStart::ExplicitManifest(manifest_path) => (
-                Some(SearchPath::Explicit(
-                    dunce::canonicalize(manifest_path).map_err(|e| {
-                        WorkspaceDiscoveryError::Canonicalize(e, manifest_path.clone())
-                    })?,
-                )),
-                manifest_path.as_path(),
-            ),
+        let mut next_search_path = match &self.start {
+            DiscoveryStart::SearchRoot(root) => Some(SearchPath::Directory(
+                dunce::canonicalize(root)
+                    .map_err(|e| WorkspaceDiscoveryError::Canonicalize(e, root.clone()))?,
+            )),
+            DiscoveryStart::ExplicitManifest(manifest_path) => Some(SearchPath::Explicit(
+                dunce::canonicalize(manifest_path)
+                    .map_err(|e| WorkspaceDiscoveryError::Canonicalize(e, manifest_path.clone()))?,
+            )),
         };
         while let Some(search_path) = next_search_path {
             let (next, provenance) = match search_path {
@@ -333,10 +327,7 @@ impl WorkspaceDiscoverer {
                 }
             }
 
-            let path_diff = pathdiff::diff_paths(&provenance.path, root_dir)
-                .unwrap_or_else(|| provenance.path.clone());
-            let file_name = path_diff.to_string_lossy();
-            let source = contents.into_named(file_name);
+            let source = contents.into_named(provenance.absolute_path().to_string_lossy());
 
             // Parse the TOML from the manifest
             let mut toml = match toml_span::parse(source.inner()) {
