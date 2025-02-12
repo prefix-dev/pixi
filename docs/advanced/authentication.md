@@ -61,9 +61,9 @@ pixi auth login myserver.com --username user --password password
 Login to an S3 bucket:
 
 ```shell
-pixi auth login s3://my-bucket --access-key-id <access-key-id> --secret-access-key <secret-access-key>
+pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-access-key <secret-access-key>
 # if your key uses a session token, you can also use:
-pixi auth login s3://my-bucket --access-key-id <access-key-id> --secret-access-key <secret-access-key> --session-token <session-token>
+pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-access-key <secret-access-key> --s3-session-token <session-token>
 ```
 
 !!!note
