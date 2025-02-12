@@ -146,6 +146,9 @@ impl WorkspaceLocator {
             Err(WorkspaceDiscoveryError::ExplicitManifestError(err)) => {
                 return Err(WorkspaceLocatorError::ExplicitManifestError(err))
             }
+            Err(WorkspaceDiscoveryError::Canonicalize(source, path)) => {
+                return Err(WorkspaceLocatorError::Canonicalize { path, source })
+            }
         };
 
         // Extract the warnings from the discovered workspace.
