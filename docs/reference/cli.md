@@ -919,11 +919,15 @@ Store authentication information for given host.
 - `--username <USERNAME>`: The username to use for basic HTTP authentication
 - `--password <PASSWORD>`: The password to use for basic HTTP authentication.
 - `--conda-token <CONDA_TOKEN>`: The token to use on `anaconda.org` / `quetz` authentication.
+- `--s3-access-key-id`: The S3 access key ID
+- `--s3-secret-access-key`: The S3 secret access key
+- `--s3-session-token`: The S3 session token (optional for S3 authentication)
 
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
 pixi auth login https://myquetz.server --username john --password xxxxxx
+pixi auth login s3://my-bucket --s3-access-key-id $AWS_ACCESS_KEY_ID --s3-access-key-id $AWS_SECRET_KEY_ID
 ```
 
 ### `auth logout`
@@ -938,6 +942,7 @@ Remove authentication information for a given host.
 pixi auth logout <HOST>
 pixi auth logout repo.prefix.dev
 pixi auth logout anaconda.org
+pixi auth logout s3://my-bucket
 ```
 
 ## `config`
@@ -1031,6 +1036,7 @@ pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://pref
 pixi config set repodata-config.disable-zstd true --system
 pixi config set --global detached-environments "/opt/pixi/envs"
 pixi config set detached-environments false
+pixi config set s3-options.my-bucket '{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}'
 ```
 
 ### `config unset`

@@ -1,7 +1,7 @@
 ---
 source: crates/pixi_config/src/lib.rs
+assertion_line: 1698
 expression: debug
-snapshot_kind: text
 ---
 Config {
     default_channels: [
@@ -96,6 +96,27 @@ Config {
         extra_index_urls: [],
         keyring_provider: None,
         allow_insecure_host: [],
+    },
+    s3_options: {
+        "bucket1": S3Options {
+            endpoint_url: Url {
+                scheme: "https",
+                cannot_be_a_base: false,
+                username: "",
+                password: None,
+                host: Some(
+                    Domain(
+                        "my-s3-host",
+                    ),
+                ),
+                port: None,
+                path: "/",
+                query: None,
+                fragment: None,
+            },
+            region: "us-east-1",
+            force_path_style: false,
+        },
     },
     detached_environments: Some(
         Boolean(

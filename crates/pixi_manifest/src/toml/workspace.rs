@@ -16,7 +16,7 @@ use crate::{
     toml::{platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
     workspace::ChannelPriority,
-    PrioritizedChannel, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
+    PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
 };
 
 #[derive(Debug, Clone)]
@@ -45,6 +45,7 @@ pub struct TomlWorkspace {
     pub documentation: Option<Url>,
     pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
     pub pypi_options: Option<PypiOptions>,
+    pub s3_options: Option<HashMap<String, S3Options>>,
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
@@ -129,6 +130,7 @@ impl TomlWorkspace {
             platforms: self.platforms.value,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
+            s3_options: self.s3_options,
             preview,
             build_variants: Targets::from_default_and_user_defined(
                 self.build_variants,
@@ -180,6 +182,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlHashMap<_, _>>("conda-pypi-map")
             .map(TomlHashMap::into_inner);
         let pypi_options = th.optional("pypi-options");
+        let s3_options = th
+            .optional::<TomlHashMap<_, _>>("s3-options")
+            .map(TomlHashMap::into_inner);
         let preview = th.optional("preview").unwrap_or_default();
         let target = th
             .optional::<TomlIndexMap<_, _>>("target")
@@ -206,6 +211,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             documentation,
             conda_pypi_map,
             pypi_options,
+            s3_options,
             preview,
             target: target.unwrap_or_default(),
             build_variants,

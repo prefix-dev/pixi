@@ -54,7 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut command_args = args.command.iter();
     let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
-    let (_, client) = build_reqwest_clients(Some(&config));
+    let (_, client) = build_reqwest_clients(Some(&config), None)?;
 
     // Create the environment to run the command in.
     let prefix = create_exec_prefix(&args, &cache_dir, &config, &client).await?;

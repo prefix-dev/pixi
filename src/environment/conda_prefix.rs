@@ -121,7 +121,7 @@ impl<'a> CondaPrefixUpdaterBuilder<'a> {
         let name = self.group.name();
         let prefix = self.group.prefix();
         let virtual_packages = self.group.virtual_packages(self.platform);
-        let client = self.group.workspace().authenticated_client().clone();
+        let client = self.group.workspace().authenticated_client()?.clone();
 
         Ok(CondaPrefixUpdater::new(
             channels,
