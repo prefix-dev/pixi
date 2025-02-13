@@ -164,7 +164,7 @@ impl<'a> UvBuildDispatchParams<'a> {
 /// Both the [`BuildDispatch`] and the conda prefix are instantiated on demand.
 pub struct LazyBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
-    pub prefix_updater: CondaPrefixUpdater<'a>,
+    pub prefix_updater: CondaPrefixUpdater,
     pub repodata_records: Vec<PixiRecord>,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
@@ -229,7 +229,7 @@ impl<'a> LazyBuildDispatch<'a> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         params: UvBuildDispatchParams<'a>,
-        prefix_updater: CondaPrefixUpdater<'a>,
+        prefix_updater: CondaPrefixUpdater,
         project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
         environment: Environment<'a>,
         repodata_records: Vec<PixiRecord>,
@@ -251,6 +251,8 @@ impl<'a> LazyBuildDispatch<'a> {
         }
     }
 
+    /// Lazy initialization of the `BuildDispatch`. This also implies
+    /// initializing the conda prefix.
     async fn get_or_try_init(&self) -> Result<&BuildDispatch, LazyBuildDispatchError> {
         Box::pin(self.build_dispatch.get_or_try_init(async {
             // Disallow installing if the flag is set.
@@ -259,7 +261,7 @@ impl<'a> LazyBuildDispatch<'a> {
             }
             tracing::debug!(
                 "PyPI solve requires instantiation of conda prefix for '{}'",
-                self.prefix_updater.group.name().as_str()
+                self.prefix_updater.name().as_str()
             );
             let prefix = self
                 .prefix_updater

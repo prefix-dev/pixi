@@ -3604,7 +3604,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.41.1"
+version = "0.41.3"
 dependencies = [
  "ahash",
  "assert_matches",
@@ -3742,6 +3742,7 @@ version = "0.1.0"
 dependencies = [
  "bytes",
  "dashmap",
+ "dunce",
  "fs-err",
  "futures",
  "insta",

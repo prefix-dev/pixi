@@ -53,3 +53,21 @@ outputs:
           else:
             - echo "package3$PKG_VERSION on unix" > $PREFIX/bin/package3
             - chmod +x $PREFIX/bin/package3
+
+  - package:
+      name: package4
+      version: ${{ version }}
+
+    requirements:
+      run:
+        - package3 == ${{ version }}
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "package4$PKG_VERSION on windows" > $PREFIX/bin/package4.bat
+          else:
+            - echo "package4$PKG_VERSION on unix" > $PREFIX/bin/package4
+            - chmod +x $PREFIX/bin/package4

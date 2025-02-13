@@ -373,7 +373,11 @@ impl BuildContext {
                     .is_immutable()
                     .not()
                     .then_some(SourceInfo {
-                        globs: build_result.input_globs,
+                        globs: protocol
+                            .manifests()
+                            .into_iter()
+                            .chain(build_result.input_globs)
+                            .collect_vec(),
                     }),
                 record: record.clone(),
             })
@@ -664,7 +668,18 @@ impl BuildContext {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
-            let input_globs = metadata.input_globs.clone().unwrap_or(protocol.manifests());
+            let input_globs = protocol
+                .manifests()
+                .into_iter()
+                .chain(
+                    metadata
+                        .input_globs
+                        .clone()
+                        .into_iter()
+                        .flat_map(|glob| glob.into_iter()),
+                )
+                .collect_vec();
+
             let input_hash = self
                 .glob_hash_cache
                 .compute_hash(GlobHashKey {

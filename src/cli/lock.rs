@@ -27,7 +27,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?;
 
     // Save the original lockfile to compare with the new one.
-    let original_lock_file = workspace.get_lock_file().await?;
+    let original_lock_file = workspace.load_lock_file().await?;
     let new_lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,

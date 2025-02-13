@@ -68,3 +68,4 @@ When you want to show your users and contributors that they can use pixi in your
 - [marray](https://github.com/mdhaber/marray):
 Masked versions of Python array API standard compatible arrays.
 - [quantity-array](https://github.com/quantity-dev/quantity-array): Quantities with Python array API standard arrays.
+- [Bodo](https://github.com/bodo-ai/bodo):  High-Performance Python Compute Engine for Data and AI.
