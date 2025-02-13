@@ -210,7 +210,13 @@ async fn setup_environment(
         .collect::<miette::Result<Vec<_>>>()?;
 
     // Sync exposed binaries
-    let expose_type = ExposedType::new(args.expose.clone(), with_package_names);
+    let expose_type = if !args.expose.is_empty() {
+        ExposedType::Mappings(args.expose.clone())
+    } else if with_package_names.is_empty() {
+        ExposedType::All
+    } else {
+        ExposedType::Ignore(with_package_names)
+    };
 
     project.sync_exposed_names(env_name, expose_type).await?;
 

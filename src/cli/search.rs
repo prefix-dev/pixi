@@ -138,10 +138,12 @@ pub async fn execute_impl<W: Write>(
 
     let package_name_filter = args.package;
 
-    let client = project
-        .as_ref()
-        .map(|p| p.authenticated_client().clone())
-        .unwrap_or_else(|| build_reqwest_clients(None).1);
+    let project = project.as_ref();
+    let client = if let Some(project) = project {
+        project.authenticated_client()?.clone()
+    } else {
+        build_reqwest_clients(None, None)?.1
+    };
 
     let config = Config::load_global();
 

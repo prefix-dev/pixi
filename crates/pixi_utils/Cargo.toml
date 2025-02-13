@@ -33,7 +33,7 @@ pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_networking = { workspace = true, features = ["gcs"] }
+rattler_networking = { workspace = true, features = ["gcs", "s3"] }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }

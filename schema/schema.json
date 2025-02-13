@@ -295,6 +295,11 @@
               }
             ]
           }
+        },
+        "configuration": {
+          "title": "Configuration",
+          "description": "The configuration of the build backend",
+          "type": "object"
         }
       }
     },
@@ -1292,6 +1297,42 @@
         }
       }
     },
+    "S3Options": {
+      "title": "S3Options",
+      "description": "Options related to S3 for this project",
+      "type": "object",
+      "required": [
+        "endpoint-url",
+        "region",
+        "force-path-style"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "endpoint-url": {
+          "title": "Endpoint-Url",
+          "description": "The endpoint URL to use for the S3 client",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "https://s3.eu-central-1.amazonaws.com"
+          ]
+        },
+        "force-path-style": {
+          "title": "Force-Path-Style",
+          "description": "Whether to force path style for the S3 client",
+          "type": "boolean"
+        },
+        "region": {
+          "title": "Region",
+          "description": "The region to use for the S3 client",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "eu-central-1"
+          ]
+        }
+      }
+    },
     "SystemRequirements": {
       "title": "SystemRequirements",
       "description": "Platform-specific requirements",
@@ -1775,6 +1816,14 @@
           "type": "string",
           "format": "uri",
           "minLength": 1
+        },
+        "s3-options": {
+          "title": "S3-Options",
+          "description": "Options related to S3 for this project",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/S3Options"
+          }
         },
         "version": {
           "title": "Version",

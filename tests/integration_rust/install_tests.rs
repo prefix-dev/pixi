@@ -33,7 +33,7 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use tempfile::TempDir;
+use tempfile::{tempdir, TempDir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_python::PythonEnvironment;
@@ -929,7 +929,7 @@ async fn test_multiple_prefix_update() {
         .channel_urls(&group.workspace().channel_config())
         .unwrap();
     let name = group.name();
-    let client = group.workspace().authenticated_client().clone();
+    let client = group.workspace().authenticated_client().unwrap().clone();
     let prefix = group.prefix();
     let virtual_packages = group.virtual_packages(current_platform);
 
@@ -990,4 +990,82 @@ async fn test_multiple_prefix_update() {
         // verify that the prefix was updated only once, meaning that we instantiated prefix only once
         assert_eq!(*first_modified_date, prefix_metadata.modified().unwrap());
     }
+}
+
+/// Should download a package from an S3 bucket and install it
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_s3() {
+    let r2_access_key_id = std::env::var("PIXI_TEST_R2_ACCESS_KEY_ID").ok();
+    let r2_secret_access_key = std::env::var("PIXI_TEST_R2_SECRET_ACCESS_KEY").ok();
+    if r2_access_key_id.is_none()
+        || r2_access_key_id.clone().unwrap().is_empty()
+        || r2_secret_access_key.is_none()
+        || r2_secret_access_key.clone().unwrap().is_empty()
+    {
+        eprintln!(
+            "Skipping test as PIXI_TEST_R2_ACCESS_KEY_ID or PIXI_TEST_R2_SECRET_ACCESS_KEY is not set"
+        );
+        return;
+    }
+
+    let r2_access_key_id = r2_access_key_id.unwrap();
+    let r2_secret_access_key = r2_secret_access_key.unwrap();
+
+    let credentials = format!(
+        r#"
+    {{
+        "s3://rattler-s3-testing/channel": {{
+            "S3Credentials": {{
+                "access_key_id": "{}",
+                "secret_access_key": "{}"
+            }}
+        }}
+    }}
+    "#,
+        r2_access_key_id, r2_secret_access_key
+    );
+    let temp_dir = tempdir().unwrap();
+    let credentials_path = temp_dir.path().join("credentials.json");
+    let mut file = File::create(credentials_path.clone()).unwrap();
+    file.write_all(credentials.as_bytes()).unwrap();
+
+    let manifest = format!(
+        r#"
+    [project]
+    name = "s3-test"
+    channels = ["s3://rattler-s3-testing/channel", "conda-forge"]
+    platforms = ["{platform}"]
+
+    [project.s3.rattler-s3-testing]
+    endpoint-url = "https://e1a7cde76f1780ec06bac859036dbaf7.eu.r2.cloudflarestorage.com"
+    region = "auto"
+    force-path-style = true
+
+    [dependencies]
+    my-webserver = {{ version = "0.1.0", build = "pyh4616a5c_0" }}
+    "#,
+        platform = Platform::current(),
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    temp_env::async_with_vars(
+        [(
+            "RATTLER_AUTH_FILE",
+            Some(credentials_path.to_str().unwrap()),
+        )],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
+
+    // Test for existence of conda-meta/my-webserver-0.1.0-pyh4616a5c_0.json file
+    assert!(pixi
+        .default_env_path()
+        .unwrap()
+        .join("conda-meta")
+        .join("my-webserver-0.1.0-pyh4616a5c_0.json")
+        .exists());
 }

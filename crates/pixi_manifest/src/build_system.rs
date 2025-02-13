@@ -20,6 +20,9 @@ pub struct PackageBuild {
     /// The channels to use for fetching build tools. If this is `None` the
     /// channels from the containing workspace should be used.
     pub channels: Option<Vec<NamedChannelOrUrl>>,
+
+    /// Additional configuration for the build backend.
+    pub configuration: Option<serde_value::Value>,
 }
 
 #[derive(Debug, Clone)]

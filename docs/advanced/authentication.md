@@ -131,6 +131,7 @@ Note: if you use a wildcard in the host, any subdomain will match (e.g. `*.prefi
 Lastly you can set the authentication override file in the [global configuration file](./../reference/pixi_configuration.md).
 
 ## PyPI authentication
+
 Currently, we support the following methods for authenticating against PyPI:
 
 1. [keyring](https://pypi.org/project/keyring/) authentication.
@@ -143,6 +144,7 @@ We want to add more methods in the future, so if you have a specific method you 
 Currently, pixi supports the uv method of authentication through the python [keyring](https://pypi.org/project/keyring/) library.
 
 #### Installing keyring
+
 To install keyring you can use pixi global install:
 
 === "Basic Auth"
@@ -213,13 +215,13 @@ For other registries, you will need to adapt these instructions to add the right
     ```
 
 #### Installing your environment
+
 Either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`:
 
 ```shell
 # From an existing pixi project
 pixi install --pypi-keyring-provider subprocess
 ```
-
 
 ### `.netrc` file
 
@@ -237,4 +239,5 @@ machine registry-name
 login admin
 password admin
 ```
+
 For more details, you can access the [.netrc docs](https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip).

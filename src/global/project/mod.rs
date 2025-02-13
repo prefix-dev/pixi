@@ -31,6 +31,7 @@ use is_executable::IsExecutable;
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
+use once_cell::sync::OnceCell;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_config::{default_channel_config, pixi_home, Config};
@@ -56,7 +57,6 @@ use std::{
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::OnceLock,
 };
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
@@ -84,11 +84,13 @@ pub struct Project {
     /// Binary directory
     pub(crate) bin_dir: BinDir,
     /// Reqwest client shared for this project.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
     /// The repodata gateway to use for answering queries about repodata.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    repodata_gateway: OnceLock<Gateway>,
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    repodata_gateway: OnceCell<Gateway>,
 }
 
 impl Debug for Project {
@@ -256,8 +258,8 @@ impl Project {
 
         let config = Config::load(&root);
 
-        let client = OnceLock::new();
-        let repodata_gateway = OnceLock::new();
+        let client = OnceCell::new();
+        let repodata_gateway = OnceCell::new();
         Self {
             root,
             manifest,
@@ -457,13 +459,15 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
-        &self.client_and_authenticated_client().1
+    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
+        Ok(&self.client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
+    fn client_and_authenticated_client(
+        &self,
+    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
         self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
+            .get_or_try_init(|| build_reqwest_clients(Some(&self.config), None))
     }
 
     pub(crate) fn config(&self) -> &Config {
@@ -516,7 +520,7 @@ impl Project {
                 env_name.fancy_display()
             ),
             |_| async {
-                self.repodata_gateway()
+                self.repodata_gateway()?
                     .query(channels, [platform, Platform::NoArch], match_specs.clone())
                     .recursive(true)
                     .await
@@ -572,6 +576,7 @@ impl Project {
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
+        let authenticated_client = self.authenticated_client()?.clone();
         let result = await_in_progress(
             format!(
                 "Creating virtual environment for {}",
@@ -579,7 +584,7 @@ impl Project {
             ),
             |pb| {
                 Installer::new()
-                    .with_download_client(self.authenticated_client().clone())
+                    .with_download_client(authenticated_client)
                     .with_execute_link_scripts(false)
                     .with_package_cache(package_cache)
                     .with_target_platform(platform)
@@ -662,8 +667,23 @@ impl Project {
         Ok(state_changes)
     }
 
-    /// Get all installed executables for specific environment.
-    pub async fn executables(
+    /// Gets all installed executables of a specific environment.
+    pub async fn executables_of_all_dependencies(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<Vec<Executable>> {
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        let prefix = Prefix::new(env_dir.path());
+
+        let prefix_records = &prefix.find_installed_packages()?;
+
+        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
+
+        Ok(all_executables)
+    }
+
+    /// Get installed executables of direct dependencies of a specific environment.
+    pub async fn executables_of_direct_dependencies(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<IndexMap<PackageName, Vec<Executable>>> {
@@ -698,7 +718,7 @@ impl Project {
 
     /// Sync the `exposed` field in manifest based on the executables in the
     /// environment and the expose type. Expose type can be either:
-    /// * If the user initially chooses to auto-exposed everything, we will add
+    /// * If the user initially chooses to auto-expose everything, we will add
     ///   new binaries that are not exposed in the `exposed` field.
     ///
     /// * If the use chose to expose only a subset of binaries, we will remove
@@ -710,7 +730,7 @@ impl Project {
         expose_type: ExposedType,
     ) -> miette::Result<()> {
         // Get env executables
-        let env_executables = self.executables(env_name).await?;
+        let execs_all = self.executables_of_all_dependencies(env_name).await?;
 
         // Get the parsed environment
         let environment = self
@@ -722,15 +742,14 @@ impl Project {
             .exposed
             .iter()
             .filter_map(|mapping| {
-                // If the executable is still requested, do not remove the mapping
-                if env_executables.values().flatten().any(|executable| {
-                    executable_from_path(&executable.path) == mapping.executable_relname()
+                // If the executable isn't requested, remove the mapping
+                if execs_all.iter().all(|executable| {
+                    executable_from_path(&executable.path) != mapping.executable_relname()
                 }) {
-                    tracing::debug!("Not removing mapping to: {}", mapping.executable_relname());
-                    return None;
+                    Some(mapping.exposed_name().clone())
+                } else {
+                    None
                 }
-                // Else do remove the mapping
-                Some(mapping.exposed_name().clone())
             })
             .collect_vec();
 
@@ -739,11 +758,12 @@ impl Project {
             self.manifest.remove_exposed_name(env_name, exposed_name)?;
         }
 
-        // auto-expose the executables if necessary
+        let execs_direct_deps = self.executables_of_direct_dependencies(env_name).await?;
+
         match expose_type {
             ExposedType::All => {
                 // Add new binaries that are not yet exposed
-                let executable_names = env_executables
+                let executable_names = execs_direct_deps
                     .into_iter()
                     .flat_map(|(_, executables)| executables)
                     .map(|executable| executable.name);
@@ -755,13 +775,14 @@ impl Project {
                     self.manifest.add_exposed_mapping(env_name, &mapping)?;
                 }
             }
-            ExposedType::Filter(filter) => {
+            ExposedType::Nothing => {}
+            ExposedType::Ignore(ignore) => {
                 // Add new binaries that are not yet exposed and that don't come from one of the
-                // packages we filter on
-                let executable_names = env_executables
+                // packages we ignore
+                let executable_names = execs_direct_deps
                     .into_iter()
                     .filter_map(|(package_name, executable)| {
-                        if filter.contains(&package_name) {
+                        if ignore.contains(&package_name) {
                             None
                         } else {
                             Some(executable)
@@ -856,6 +877,7 @@ impl Project {
         }
         Ok(in_sync)
     }
+
     /// Expose executables from the environment to the global bin directory.
     ///
     /// This function will first remove all binaries that are not listed as
@@ -870,16 +892,14 @@ impl Project {
         // First clean up binaries that are not listed as exposed
         state_changes |= self.prune_exposed(env_name).await?;
 
+        let all_executables = self.executables_of_all_dependencies(env_name).await?;
+
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
-
-        let prefix_records = &prefix.find_installed_packages()?;
-
-        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
         let exposed: HashSet<&str> = environment
             .exposed
@@ -1054,9 +1074,11 @@ impl Project {
 
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
-    fn repodata_gateway(&self) -> &Gateway {
-        self.repodata_gateway
-            .get_or_init(|| self.config().gateway(self.authenticated_client().clone()))
+    fn repodata_gateway(&self) -> miette::Result<&Gateway> {
+        self.repodata_gateway.get_or_try_init(|| {
+            let client = self.authenticated_client()?.clone();
+            Ok(self.config().gateway(client))
+        })
     }
 }
 

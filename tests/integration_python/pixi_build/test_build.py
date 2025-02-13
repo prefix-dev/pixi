@@ -24,9 +24,10 @@ def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path, build_data: P
     )
 
     # really make sure that conda package was built
-    package_to_be_built = next(manifest_path.parent.glob("*.conda"))
+    built_packages = list(manifest_path.parent.glob("*.conda"))
 
-    assert package_to_be_built.exists()
+    assert len(built_packages) == 1
+    assert built_packages[0].exists()
 
 
 @pytest.mark.extra_slow

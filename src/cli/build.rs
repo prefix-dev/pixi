@@ -89,8 +89,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let channel_config = workspace.channel_config();
 
     let tool_context = pixi_build_frontend::ToolContext::builder()
-        .with_gateway(workspace.repodata_gateway().clone())
-        .with_client(workspace.authenticated_client().clone())
+        .with_gateway(workspace.repodata_gateway()?.clone())
+        .with_client(workspace.authenticated_client()?.clone())
         .build();
 
     let protocol = pixi_build_frontend::BuildFrontend::default()
