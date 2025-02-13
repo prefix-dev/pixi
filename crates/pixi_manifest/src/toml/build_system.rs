@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use itertools::Either;
 use pixi_spec::TomlSpec;
@@ -18,7 +18,7 @@ pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
-    pub configuration: Option<serde_json::Value>,
+    pub configuration: Option<serde_value::Value>,
 }
 
 #[derive(Debug)]
@@ -82,27 +82,28 @@ impl TomlPackageBuild {
     }
 }
 
-fn parse_value_to_serde(value: &mut Value) -> Result<serde_json::Value, DeserError> {
+fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
     Ok(match value.take() {
-        ValueInner::String(s) => serde_json::Value::String(s.to_string()),
-        ValueInner::Integer(i) => serde_json::Value::Number(i.into()),
-        ValueInner::Float(f) => serde_json::Number::from_f64(f)
-            .map(serde_json::Value::Number)
-            .unwrap(),
-        ValueInner::Boolean(b) => serde_json::Value::Bool(b),
+        ValueInner::String(s) => serde_value::Value::String(s.to_string()),
+        ValueInner::Integer(i) => serde_value::Value::I64(i),
+        ValueInner::Float(f) => serde_value::Value::F64(f),
+        ValueInner::Boolean(b) => serde_value::Value::Bool(b),
         ValueInner::Array(mut arr) => {
             let mut json_arr = Vec::new();
             for item in &mut arr {
-                json_arr.push(parse_value_to_serde(item)?);
+                json_arr.push(convert_toml_to_serde(item)?);
             }
-            serde_json::Value::Array(json_arr)
+            serde_value::Value::Seq(json_arr)
         }
         ValueInner::Table(table) => {
-            let mut map = HashMap::new();
+            let mut map = BTreeMap::new();
             for (key, mut val) in table {
-                map.insert(key.to_string(), parse_value_to_serde(&mut val)?);
+                map.insert(
+                    serde_value::Value::String(key.to_string()),
+                    convert_toml_to_serde(&mut val)?,
+                );
             }
-            serde_json::Value::Object(map.into_iter().collect())
+            serde_value::Value::Map(map)
         }
     })
 }
@@ -139,7 +140,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
 
         let configuration = th
             .take("configuration")
-            .map(|(_, mut value)| parse_value_to_serde(&mut value))
+            .map(|(_, mut value)| convert_toml_to_serde(&mut value))
             .transpose()?;
 
         th.finalize(None)?;

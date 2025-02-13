@@ -22,7 +22,7 @@ pub struct PackageBuild {
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
     /// Additional configuration for the build backend.
-    pub configuration: Option<serde_json::Value>,
+    pub configuration: Option<serde_value::Value>,
 }
 
 #[derive(Debug, Clone)]
