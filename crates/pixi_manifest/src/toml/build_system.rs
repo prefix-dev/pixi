@@ -169,6 +169,18 @@ mod test {
     }
 
     #[test]
+    fn test_configuration_parsing() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            configuration = { key = "value", other = ["foo", "bar"], integer = 1234, nested = { abc = "def" } }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .expect("parsing should succeed");
+
+        insta::assert_debug_snapshot!(parsed);
+    }
+
+    #[test]
     fn test_disallow_source() {
         assert_snapshot!(expect_parse_failure(
             r#"
