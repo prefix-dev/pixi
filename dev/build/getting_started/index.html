@@ -1880,7 +1880,8 @@ The vision is to enable building of packages from source, for any language, on a
 </ol>
 </div>
 <h2 id="setting-up-the-manifest">Setting up the Manifest<a class="headerlink" href="#setting-up-the-manifest" title="Permanent link">#</a></h2>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Specifies properties for the whole workspace</span>
+<p>This is an overview of the pixi manifest using <code>pixi-build</code>.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Specifies properties for the whole workspace</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">[workspace]</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
@@ -1909,10 +1910,13 @@ The vision is to enable building of packages from source, for any language, on a
 </span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="c1"># We add our package as dependency to the workspace</span>
 </span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="k">[dependencies]</span>
 </span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="n">simple_python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="k">[package.run-dependencies]</span>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="c1"># pixi also support git dependencies</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a><span class="n">boost-check</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/wolfv/pixi-build-examples&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">branch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;main&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">subdirectory</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;boost-check&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
 </span></code></pre></div>
+<p>Under the <code>[workspace]</code> section, you can specify properties like the name, channels, and platforms. This is currently an alias for <code>project</code>.</p>
 <p>Since the build feature is still in preview, you have to add "pixi-build" to <code>workspace.preview</code>.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
@@ -1924,7 +1928,8 @@ The vision is to enable building of packages from source, for any language, on a
 </span></code></pre></div>
 <p>Packages are built by using build backends.
 By specifying <code>package.build-system.build-backend</code> and <code>package.build-system.channels</code> you determine which backend is used and from which channel it will be downloaded.
-In this example, we are using <code>pixi-build-python</code> in order to build a Python package.</p>
+There are different build backends. Pixi backends can describe how to build a conda package, for a certain language or build tool.
+In this example, we are using <code>pixi-build-python</code> backend in order to build a Python package.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[package.build]</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-python&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.1.*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
@@ -1932,21 +1937,27 @@ In this example, we are using <code>pixi-build-python</code> in order to build a
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">,</span>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">]</span>
 </span></code></pre></div>
-<ol>
-<li>Specifies workspace properties like the name, channels, and platforms. This is currently an alias for <code>project</code>.</li>
-<li>Since the build feature is still in preview, you have to add "pixi-build" to <code>workspace.preview</code>.</li>
-<li>We need to add our package as dependency to the workspace.</li>
-<li>In <code>package</code> you specify properties specific to the package you want to build.</li>
-<li>Packages are built by using build backends.
-   By specifying <code>build-system.build-backend</code> and <code>build-system.channels</code> you determine which backend is used and from which channel it will be downloaded.</li>
-<li>There are different build backends.
-   Pixi backends can describe how to build a conda package, for a certain language or build tool.
-   For example, <code>pixi-build-python</code>, allows building a Python package into a conda package.</li>
-<li><code>simple_python</code> uses <code>hatchling</code> as Python build backend so this needs to be mentioned in <code>host-dependencies</code>.
-   Read up on host-dependencies in the <a href="../dependency_types/#host-dependencies">Dependency Types</a></li>
-<li>Python PEP517 backends like <code>hatchling</code> know how to build a Python package.
-   So <code>hatchling</code> creates a Python package, and <code>pixi-build-python</code> turns the Python package into a conda package.</li>
-</ol>
+<p>We need to add our package <code>simple_python</code> as dependency to the workspace.</p>
+<p><code>pixi</code> also supports <code>git</code> dependencies, allowing you to specify a <code>branch</code>, <code>tag</code>, or <code>rev</code> to pin the dependency.
+If none are specified, the latest commit on the default branch is used. The <code>subdirectory</code> is optional and specifies the location of the package within the repository.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># We add our package as dependency to the workspace</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">[dependencies]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">simple_python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># pixi also support git dependencies</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">boost-check</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/wolfv/pixi-build-examples&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">branch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;main&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">subdirectory</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;boost-check&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p><code>simple_python</code> uses <code>hatchling</code> as Python build backend, so this needs to be mentioned in <code>host-dependencies</code>.</p>
+<p>Python PEP517 backends like <code>hatchling</code> know how to build a Python package.
+So <code>hatchling</code> creates a Python package, and <code>pixi-build-python</code> turns the Python package into a conda package.</p>
+<p>Read up on host-dependencies in the <a href="../dependency_types/#host-dependencies">dependency types chapter</a></p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">hatchling</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span></code></pre></div>
+<p>We add <code>rich</code> as a run dependency to the package. This is necessary because the package uses <code>rich</code> during runtime.
+You can read up on run-dependencies in the <a href="../dependency_types/#dependencies-run-dependencies">dependency types chapter</a></p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
+</span></code></pre></div>
 <h2 id="cli-commands">CLI Commands<a class="headerlink" href="#cli-commands" title="Permanent link">#</a></h2>
 <p>Using the preview feature you can now build packages from source.</p>
 <ul>

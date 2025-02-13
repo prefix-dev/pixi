@@ -295,6 +295,11 @@
               }
             ]
           }
+        },
+        "configuration": {
+          "title": "Configuration",
+          "description": "The configuration of the build backend",
+          "type": "object"
         }
       }
     },
