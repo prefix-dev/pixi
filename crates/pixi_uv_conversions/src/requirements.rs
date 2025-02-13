@@ -87,7 +87,6 @@ pub fn as_uv_req(
     project_root: &Path,
 ) -> Result<uv_pypi_types::Requirement, AsPep508Error> {
     let name = PackageName::new(name.to_owned())?;
-    eprintln!("req is {:?}", req);
     let source = match req {
         PyPiRequirement::Version { version, index, .. } => {
             // TODO: implement index later
