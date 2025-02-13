@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
+
 use itertools::Either;
 use pixi_spec::TomlSpec;
 use pixi_toml::{TomlFromStr, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
-use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
+use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, Spanned, Value};
 
 use crate::{
     build_system::BuildBackend,
@@ -16,6 +18,7 @@ pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
+    pub configuration: Option<serde_value::Value>,
 }
 
 #[derive(Debug)]
@@ -74,8 +77,35 @@ impl TomlPackageBuild {
             },
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
+            configuration: self.configuration,
         })
     }
+}
+
+fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
+    Ok(match value.take() {
+        ValueInner::String(s) => serde_value::Value::String(s.to_string()),
+        ValueInner::Integer(i) => serde_value::Value::I64(i),
+        ValueInner::Float(f) => serde_value::Value::F64(f),
+        ValueInner::Boolean(b) => serde_value::Value::Bool(b),
+        ValueInner::Array(mut arr) => {
+            let mut json_arr = Vec::new();
+            for item in &mut arr {
+                json_arr.push(convert_toml_to_serde(item)?);
+            }
+            serde_value::Value::Seq(json_arr)
+        }
+        ValueInner::Table(table) => {
+            let mut map = BTreeMap::new();
+            for (key, mut val) in table {
+                map.insert(
+                    serde_value::Value::String(key.to_string()),
+                    convert_toml_to_serde(&mut val)?,
+                );
+            }
+            serde_value::Value::Map(map)
+        }
+    })
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
@@ -107,11 +137,18 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
                 span: Some(s.span.start..s.span.end),
             });
         let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
+
+        let configuration = th
+            .take("configuration")
+            .map(|(_, mut value)| convert_toml_to_serde(&mut value))
+            .transpose()?;
+
         th.finalize(None)?;
         Ok(Self {
             backend: build_backend,
             channels,
             additional_dependencies,
+            configuration,
         })
     }
 }
@@ -129,6 +166,18 @@ mod test {
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
+    }
+
+    #[test]
+    fn test_configuration_parsing() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            configuration = { key = "value", other = ["foo", "bar"], integer = 1234, nested = { abc = "def" } }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .expect("parsing should succeed");
+
+        insta::assert_debug_snapshot!(parsed);
     }
 
     #[test]
