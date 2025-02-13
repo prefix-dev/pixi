@@ -3,7 +3,7 @@ import shutil
 import json
 import pytest
 
-from ..common import verify_cli_command
+from ..common import ExitCode, verify_cli_command
 
 
 @pytest.mark.slow
@@ -171,6 +171,7 @@ def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace
     env = {
         "BUILD_EDITABLE_PYTHON": "false",
         "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
+        "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-python=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-python",
     }
 
     verify_cli_command(
@@ -192,6 +193,7 @@ def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace
             manifest_path,
             "check-editable",
         ],
+        ExitCode.FAILURE,
         env=env,
         stdout_contains="The package is not installed as editable.",
     )
