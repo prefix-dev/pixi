@@ -601,6 +601,9 @@ class Build(StrictBaseModel):
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
     )
+    configuration: dict[str, Any] = Field(
+        None, description="The configuration of the build backend"
+    )
 
 
 class BuildBackend(MatchspecTable):
