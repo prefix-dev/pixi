@@ -22,9 +22,9 @@ The vision is to enable building of packages from source, for any language, on a
 
 ## Setting up the Manifest
 
-This is an overview of the `pixi.toml` file with the build feature enabled.
+This is an overview of the pixi manifest using `pixi-build`.
 
-```toml
+```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:full"
 ```
 
@@ -47,12 +47,9 @@ In `package` you specify properties specific to the package you want to build.
 
 
 Packages are built by using build backends.
-
 By specifying `package.build-system.build-backend` and `package.build-system.channels` you determine which backend is used and from which channel it will be downloaded.
-
 There are different build backends. Pixi backends can describe how to build a conda package, for a certain language or build tool.
-
-In this example, we are using `pixi-build-python` in order to build a Python package.
+In this example, we are using `pixi-build-python` backend in order to build a Python package.
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
@@ -69,19 +66,19 @@ If none are specified, the latest commit on the default branch is used. The `sub
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:dependencies"
 ```
 
-`simple_python` uses `hatchling` as Python build backend so this needs to be mentioned in `host-dependencies`.
+`simple_python` uses `hatchling` as Python build backend, so this needs to be mentioned in `host-dependencies`.
 
 Python PEP517 backends like `hatchling` know how to build a Python package.
 So `hatchling` creates a Python package, and `pixi-build-python` turns the Python package into a conda package.
 
-Read up on host-dependencies in the [Dependency Types](./dependency_types.md#host-dependencies)
+Read up on host-dependencies in the [dependency types chapter](./dependency_types.md#host-dependencies)
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:host-dependencies"
 ```
 
 We add `rich` as a run dependency to the package. This is necessary because the package uses `rich` during runtime.
-You can read up on run-dependencies in the [Dependency Types](./dependency_types.md#dependencies-run-dependencies)
+You can read up on run-dependencies in the [dependency types chapter](./dependency_types.md#dependencies-run-dependencies)
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:run-dependencies"
