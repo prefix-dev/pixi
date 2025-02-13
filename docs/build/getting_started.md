@@ -60,6 +60,7 @@ In this example, we are using `pixi-build-python` in order to build a Python pac
    Read up on host-dependencies in the [Dependency Types](./dependency_types.md#host-dependencies)
 8. Python PEP517 backends like `hatchling` know how to build a Python package.
    So `hatchling` creates a Python package, and `pixi-build-python` turns the Python package into a conda package.
+9. `pixi` supports `git` dependencies, allowing you to specify a `branch`, `tag`, or `rev` to pin the dependency. If none are specified, the latest commit on the default branch is used. The `subdirectory` is optional and specifies the location of the package within the repository.
 
 ## CLI Commands
 Using the preview feature you can now build packages from source.
