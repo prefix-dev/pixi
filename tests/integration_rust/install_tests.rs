@@ -1037,7 +1037,7 @@ async fn install_s3() {
     channels = ["s3://rattler-s3-testing/channel", "conda-forge"]
     platforms = ["{platform}"]
 
-    [project.s3.rattler-s3-testing]
+    [project.s3-options.rattler-s3-testing]
     endpoint-url = "https://e1a7cde76f1780ec06bac859036dbaf7.eu.r2.cloudflarestorage.com"
     region = "auto"
     force-path-style = true
