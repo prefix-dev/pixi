@@ -118,6 +118,10 @@ pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" 
 pixi add --pypi "project @ file:///absolute/path/to/project" # (20)!
 pixi add --pypi "project@file:///absolute/path/to/project" --editable # (21)!
 pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (22)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --branch main --pypi # (23)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --rev e50d4a1 --pypi # (24)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi # (25)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi --subdir boltons # (26)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
@@ -141,7 +145,11 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (22)!
 19. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
 20. This will add the `project` package with the given `file` url as `pypi` dependency.
 21. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
-22. This will add the `boltons` package with the given `git` url as `pypi` dependency. `branch`, `tag`, and `rev` are not yet supported.
+22. This will add the `boltons` package with the given `git` url as `pypi` dependency.
+23. This will add the `boltons` package with the given `git` url and `main` branch as `pypi` dependency.
+24. This will add the `boltons` package with the given `git` url and `e50d4a1` revision as `pypi` dependency.
+25. This will add the `boltons` package with the given `git` url and `v0.1.0` tag as `pypi` dependency.
+26. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
 
 !!! tip
     If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).

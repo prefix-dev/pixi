@@ -149,15 +149,15 @@ impl PrefixUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
-    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev", "pypi"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"])]
     pub branch: Option<String>,
 
     /// The git tag
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev", "pypi"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"])]
     pub tag: Option<String>,
 
     /// The git revision
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag", "pypi"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"])]
     pub rev: Option<String>,
 }
 
@@ -362,7 +362,12 @@ fn build_vcs_requirement(
     rev: Option<&GitRev>,
     subdir: Option<String>,
 ) -> String {
-    let mut vcs_req = format!("{} @ {}", package_name, git);
+    let scheme = if git.scheme().starts_with("git+") {
+        ""
+    } else {
+        "git+"
+    };
+    let mut vcs_req = format!("{} @ {}{}", package_name, scheme, git);
     if let Some(rev_str) = rev.and_then(|rev| rev.as_str().map(|s| s.to_string())) {
         vcs_req.push_str(&format!("@{}", rev_str));
     }
@@ -388,7 +393,7 @@ mod tests {
         );
         assert_eq!(
             result,
-            "mypackage @ https://github.com/user/repo@v1.0.0#subdirectory=subdir"
+            "mypackage @ git+https://github.com/user/repo@v1.0.0#subdirectory=subdir"
         );
     }
 
@@ -402,7 +407,7 @@ mod tests {
         );
         assert_eq!(
             result,
-            "mypackage @ https://github.com/user/repo#subdirectory=subdir"
+            "mypackage @ git+https://github.com/user/repo#subdirectory=subdir"
         );
     }
 
@@ -414,7 +419,10 @@ mod tests {
             Some(&GitRev::new().with_tag("v1.0.0".to_string())),
             None,
         );
-        assert_eq!(result, "mypackage @ https://github.com/user/repo@v1.0.0");
+        assert_eq!(
+            result,
+            "mypackage @ git+https://github.com/user/repo@v1.0.0"
+        );
     }
 
     #[test]
@@ -425,6 +433,6 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(result, "mypackage @ https://github.com/user/repo");
+        assert_eq!(result, "mypackage @ git+https://github.com/user/repo");
     }
 }
