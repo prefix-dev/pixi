@@ -18,6 +18,7 @@ use uv_configuration::RAYON_INITIALIZE;
 #[derive(Error, Debug, Diagnostic)]
 pub enum PrefixError {
     #[error("failed to collect prefix records from '{1}'")]
+    #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
     PrefixRecordCollectionError(#[source] std::io::Error, PathBuf),
 
     #[error("failed to find the designated package '{0}' in the prefix: '{1}'")]
