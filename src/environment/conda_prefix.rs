@@ -3,7 +3,7 @@ use std::sync::{Arc, LazyLock};
 use crate::build::{BuildContext, SourceCheckoutReporter};
 use crate::environment::PythonStatus;
 use crate::lock_file::IoConcurrencyLimit;
-use crate::prefix::Prefix;
+use crate::prefix::{Prefix, PrefixError};
 use crate::workspace::grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
 use crate::workspace::HasWorkspaceRef;
 use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
@@ -192,7 +192,9 @@ impl CondaPrefixUpdater {
                     tokio::task::spawn_blocking(move || prefix_clone.find_installed_packages())
                         .unwrap_or_else(|e| match e.try_into_panic() {
                             Ok(panic) => std::panic::resume_unwind(panic),
-                            Err(_err) => Err(miette::miette!("the operation was cancelled")),
+                            Err(e) => {
+                                std::panic::resume_unwind(Box::new(PrefixError::JoinError(e)))
+                            }
                         });
 
                 // Wait until the conda records are available and until the installed packages
