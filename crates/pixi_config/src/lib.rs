@@ -944,6 +944,7 @@ impl Config {
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
             "s3-options",
+            "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
             "s3-options.<bucket>.region",
             "s3-options.<bucket>.force-path-style",
@@ -1234,10 +1235,9 @@ impl Config {
                         }
                     }
                 } else {
-                    return Err(miette!(
-                        "Key needs to be of form s3-options.<bucket>.<option> but got '{}'",
-                        key
-                    ));
+                    let value = value.ok_or_else(|| miette!("s3-options requires a value"))?;
+                    let s3_options: S3Options = serde_json::de::from_str(&value).into_diagnostic()?;
+                    self.s3_options.insert(subkey.to_string(), s3_options);
                 }
             }
             key if key.starts_with(EXPERIMENTAL) => {
@@ -1871,6 +1871,12 @@ UNUSED = "unused"
             .unwrap();
 
         assert_eq!(config.max_concurrent_downloads(), 1);
+
+        config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
+        let s3_options = config.s3_options.get("my-bucket").unwrap();
+        assert!(s3_options.endpoint_url.to_string().contains("http://localhost:9000"));
+        assert!(s3_options.force_path_style);
+        assert_eq!(s3_options.region, "auto");
 
         config.set("unknown-key", None).unwrap_err();
     }

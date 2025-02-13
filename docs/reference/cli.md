@@ -1036,6 +1036,7 @@ pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://pref
 pixi config set repodata-config.disable-zstd true --system
 pixi config set --global detached-environments "/opt/pixi/envs"
 pixi config set detached-environments false
+pixi config set s3-options.my-bucket '{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}'
 ```
 
 ### `config unset`
