@@ -159,9 +159,10 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
 
     // Write custom prompt to the env file
     temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
 
     let mut command = std::process::Command::new(shell.executable());
-    command.args(args);
+    command.args(&args);
 
     // Space added before `source` to automatically ignore it in history.
     let mut source_command = " ".to_string();
@@ -173,6 +174,13 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
     let source_command = source_command
         .strip_suffix('\n')
         .unwrap_or(source_command.as_str());
+
+    tracing::debug!(
+        "Starting shell '{} {}' with source command: '{}'",
+        shell.executable(),
+        args.join(" "),
+        source_command
+    );
 
     // Start process and send env activation to the shell.
     let mut process = PtySession::new(command).into_diagnostic()?;
