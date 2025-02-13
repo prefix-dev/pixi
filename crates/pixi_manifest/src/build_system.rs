@@ -37,7 +37,7 @@ pub struct BuildBackend {
 impl PackageBuild {
     /// Parses the specified string as a toml representation of a build system.
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        TomlPackageBuild::from_toml_str(source).and_then(|t| t.into_build_system())
+        TomlPackageBuild::from_toml_str(source).and_then(TomlPackageBuild::into_build_system)
     }
 }
 

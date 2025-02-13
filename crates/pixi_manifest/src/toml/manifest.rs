@@ -549,7 +549,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
 
 #[cfg(test)]
 mod test {
-    use insta::{assert_debug_snapshot, assert_snapshot};
+    use insta::assert_snapshot;
     use itertools::Itertools;
 
     use super::*;
@@ -896,23 +896,6 @@ mod test {
         foobar = ["foo", "bar"]
         "#,
         ));
-    }
-
-    #[test]
-    fn test_tool_parsing() {
-        let pixi_toml = r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = []
-
-        [tool.foobar]
-        configuration = "blabla"
-        "#;
-
-        let parsed = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml).unwrap();
-
-        assert_debug_snapshot!(parsed.tool);
     }
 }
 

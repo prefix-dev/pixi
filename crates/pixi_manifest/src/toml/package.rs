@@ -239,7 +239,6 @@ impl TomlPackage {
                 repository: self.repository.or(external.repository),
                 documentation: self.documentation.or(external.documentation),
             },
-            // TODO: Add support for parsing `tool` section here!
             build: self.build.into_build_system()?,
             targets: Targets::from_default_and_user_defined(default_package_target, targets),
         })
