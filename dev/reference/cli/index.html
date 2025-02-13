@@ -3871,10 +3871,14 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 <li><code>--username &lt;USERNAME&gt;</code>: The username to use for basic HTTP authentication</li>
 <li><code>--password &lt;PASSWORD&gt;</code>: The password to use for basic HTTP authentication.</li>
 <li><code>--conda-token &lt;CONDA_TOKEN&gt;</code>: The token to use on <code>anaconda.org</code> / <code>quetz</code> authentication.</li>
+<li><code>--s3-access-key-id</code>: The S3 access key ID</li>
+<li><code>--s3-secret-access-key</code>: The S3 secret access key</li>
+<li><code>--s3-session-token</code>: The S3 session token (optional for S3 authentication)</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>repo.prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>ABCDEFGHIJKLMNOP
 </span><span id="__span-33-3"><a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>https://myquetz.server<span class="w"> </span>--username<span class="w"> </span>john<span class="w"> </span>--password<span class="w"> </span>xxxxxx
+</span><span id="__span-33-4"><a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span><span class="nv">$AWS_ACCESS_KEY_ID</span><span class="w"> </span>--s3-access-key-id<span class="w"> </span><span class="nv">$AWS_SECRET_KEY_ID</span>
 </span></code></pre></div>
 <h3 id="auth-logout"><code>auth logout</code><a class="headerlink" href="#auth-logout" title="Permanent link">#</a></h3>
 <p>Remove authentication information for a given host.</p>
@@ -3885,6 +3889,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-34-1"><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>&lt;HOST&gt;
 </span><span id="__span-34-2"><a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>repo.prefix.dev
 </span><span id="__span-34-3"><a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>anaconda.org
+</span><span id="__span-34-4"><a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a>pixi<span class="w"> </span>auth<span class="w"> </span><span class="nb">logout</span><span class="w"> </span>s3://my-bucket
 </span></code></pre></div>
 <h2 id="config"><code>config</code><a class="headerlink" href="#config" title="Permanent link">#</a></h2>
 <p>Use this command to manage the configuration.</p>
@@ -3954,6 +3959,7 @@ Use the <code>cache</code> subcommand to clean the cache</p>
 </span><span id="__span-39-3"><a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>repodata-config.disable-zstd<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--system
 </span><span id="__span-39-4"><a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--global<span class="w"> </span>detached-environments<span class="w"> </span><span class="s2">&quot;/opt/pixi/envs&quot;</span>
 </span><span id="__span-39-5"><a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>detached-environments<span class="w"> </span><span class="nb">false</span>
+</span><span id="__span-39-6"><a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>s3-options.my-bucket<span class="w"> </span><span class="s1">&#39;{&quot;endpoint-url&quot;: &quot;http://localhost:9000&quot;, &quot;force-path-style&quot;: true, &quot;region&quot;: &quot;auto&quot;}&#39;</span>
 </span></code></pre></div>
 <h3 id="config-unset"><code>config unset</code><a class="headerlink" href="#config-unset" title="Permanent link">#</a></h3>
 <p>Unset a configuration key.</p>
