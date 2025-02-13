@@ -171,7 +171,6 @@ def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace
     env = {
         "BUILD_EDITABLE_PYTHON": "false",
         "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
-        "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-python=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-python",
     }
 
     verify_cli_command(
