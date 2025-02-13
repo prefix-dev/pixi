@@ -166,13 +166,15 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
     temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
     temp_file.flush().into_diagnostic()?;
 
+    let temp_path = temp_file.into_temp_path();
+
     let mut command = std::process::Command::new(shell.executable());
     command.args(&args);
 
     // Space added before `source` to automatically ignore it in history.
     let mut source_command = " ".to_string();
     shell
-        .run_script(&mut source_command, temp_file.path())
+        .run_script(&mut source_command, temp_path.as_ref())
         .into_diagnostic()?;
 
     // Remove automatically added `\n`, if for some reason this fails, just ignore.
