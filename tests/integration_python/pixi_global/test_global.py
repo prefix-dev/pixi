@@ -1471,7 +1471,7 @@ def test_global_update_single_package(
 
     # Test update of a single package
     verify_cli_command(
-        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package 0.1.0"],
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package==0.1.0"],
         env=env,
     )
     # Replace the version with a "*"
@@ -1503,7 +1503,7 @@ def test_global_update_single_package_with_transient_dependency(
 
     # Test update of a single package
     verify_cli_command(
-        [pixi, "global", "install", "--channel", non_self_expose_channel_1, "jupyter 0.1.0"],
+        [pixi, "global", "install", "--channel", non_self_expose_channel_1, "jupyter==0.1.0"],
         env=env,
     )
     # Replace the version with a "*"
@@ -1518,6 +1518,47 @@ def test_global_update_single_package_with_transient_dependency(
         env=env,
         stderr_contains="Updated environment jupyter.",
     )
+
+
+def test_global_update_doesnt_remove_exposed_key_of_transient_dependencies(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: Path
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+
+    package3 = tmp_pixi_workspace / "bin" / exec_extension("package3")
+    package4 = tmp_pixi_workspace / "bin" / exec_extension("package4")
+
+    # Install package4 which depends on package3
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package4==0.1.0"],
+        env=env,
+    )
+    assert not package3.is_file()
+    assert package4.is_file()
+
+    # Expose package3
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment", "package4", "package3"],
+        env=env,
+    )
+
+    assert package3.is_file()
+    assert package4.is_file()
+
+    # Replace the version with a "*"
+    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
+    manifest.write_text(manifest.read_text().replace("==0.1.0", "*"))
+
+    # Update environment
+    verify_cli_command(
+        [pixi, "global", "update", "package4"],
+        env=env,
+        stderr_contains=["Updated", "package4", "0.1.0", "0.2.0"],
+    )
+
+    # package3 should still be exposed
+    assert package3.is_file()
+    assert package4.is_file()
 
 
 def test_global_update_all_packages(

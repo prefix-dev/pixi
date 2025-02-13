@@ -25,9 +25,6 @@ pytestmark = pytest.mark.skipif(
 def test_doc_pixi_projects(
     pixi_project: Path, pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
 ) -> None:
-    # TODO: Setting the cache dir shouldn't be necessary!
-    env = {"PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache"))}
-
     # Remove existing .pixi folders
     shutil.rmtree(pixi_project.joinpath(".pixi"), ignore_errors=True)
 
@@ -39,7 +36,7 @@ def test_doc_pixi_projects(
 
     # Run task 'start'
     output = verify_cli_command(
-        [pixi, "run", "--locked", "--manifest-path", manifest, "start"], env=env
+        [pixi, "run", "--locked", "--manifest-path", manifest, "start"],
     )
     assert output.stdout == snapshot
 
