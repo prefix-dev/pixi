@@ -81,6 +81,47 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     assert metadata["name"] == "smokey"
 
 
+def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Path) -> None:
+    # Setting PIXI_CACHE_DIR shouldn't be necessary
+    env = {
+        "PIXI_CACHE_DIR": str(simple_workspace.parent.joinpath("pixi_cache")),
+        "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-rattler-build=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-rattler-build",
+    }
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            simple_workspace,
+        ],
+        env=env,
+    )
+
+    conda_metadata_params = simple_workspace.parent.joinpath("conda_metadata_params.json")
+    conda_build_params = simple_workspace.parent.joinpath("conda_build_params.json")
+
+    assert conda_metadata_params.is_file()
+    assert conda_build_params.is_file()
+
+    # Remove the files to get a clean state
+    conda_metadata_params.unlink()
+    conda_build_params.unlink()
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            simple_workspace,
+        ],
+        env=env,
+    )
+
+    # Everything should be cached, so no getMetadata or build call
+    assert not conda_metadata_params.is_file()
+    assert not conda_build_params.is_file()
+
+
 def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Path) -> None:
     env = {
         "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-rattler-build=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-rattler-build",
