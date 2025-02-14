@@ -239,7 +239,7 @@ async fn add_functionality_os() {
 
 /// Test the `pixi add --pypi` functionality
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+// #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_functionality() {
     let pixi = PixiControl::new().unwrap();
 

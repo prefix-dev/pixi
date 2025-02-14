@@ -106,18 +106,36 @@ pub fn as_uv_req(
                 },
             ..
         } => RequirementSource::Git {
-            repository: git.clone(),
+            // Url is already a git url, should look like:
+            // - 'ssh://git@github.com/user/repo'
+            // - 'https://github.com/user/repo'
+            repository: {
+                if git.scheme().strip_prefix("git+").is_some() {
+                    // Setting the scheme might fail, so using string manipulation instead
+                    let url_str = git.to_string();
+                    let stripped = url_str.strip_prefix("git+").unwrap_or(&url_str);
+                    // Reparse the url with the new scheme, should be safe but could fail so fall back to the original.
+                    Url::parse(stripped).unwrap_or(git.clone())
+                } else {
+                    git.clone()
+                }
+            },
+            // Unique identifier for the commit, as Git object identifier
             precise: rev
                 .as_ref()
                 .map(|s| s.as_full_commit())
                 .and_then(|s| s.map(uv_git::GitOid::from_str))
                 .transpose()
                 .expect("could not parse sha"),
+            // The reference to the commit to use, which could be a branch, tag or revision.
             reference: rev
                 .as_ref()
                 .map(|rev| into_uv_git_reference(rev.clone().into()))
                 .unwrap_or(uv_git::GitReference::DefaultBranch),
             subdirectory: subdirectory.as_ref().and_then(|s| s.parse().ok()),
+            // The full url used to clone, comparable to the git+ url in pip. e.g:
+            // - 'git+SCHEMA://HOST/PATH@REF#subdirectory=SUBDIRECTORY'
+            // - 'git+ssh://github.com/user/repo@d099af3b1028b00c232d8eda28a997984ae5848b'
             url: VerbatimUrl::from_url(
                 create_uv_url(git, rev.as_ref(), subdirectory.as_deref()).map_err(|e| {
                     AsPep508Error::UrlParseError {
@@ -194,4 +212,64 @@ pub fn as_uv_req(
         source,
         origin: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_git_url() {
+        let pypi_req = PyPiRequirement::Git {
+            url: GitSpec {
+                git: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
+                rev: Some(GitReference::Rev(
+                    "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
+                )),
+                subdirectory: None,
+            },
+            extras: vec![],
+        };
+        let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
+
+        let expected_uv_req = RequirementSource::Git {
+            repository: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
+            precise: Some(uv_git::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
+            reference: uv_git::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
+            subdirectory: None,
+            url: VerbatimUrl::from_url(Url::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
+        };
+
+        assert_eq!(uv_req.source, expected_uv_req);
+
+        // With git+ prefix
+        let pypi_req = PyPiRequirement::Git {
+            url: GitSpec {
+                git: Url::parse("git+https://github.com/user/test.git").unwrap(),
+                rev: Some(GitReference::Rev(
+                    "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
+                )),
+                subdirectory: None,
+            },
+            extras: vec![],
+        };
+        let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
+        let expected_uv_req = RequirementSource::Git {
+            repository: Url::parse("https://github.com/user/test.git").unwrap(),
+            precise: Some(
+                uv_git::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap(),
+            ),
+            reference: uv_git::GitReference::BranchOrTagOrCommit(
+                "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
+            ),
+            subdirectory: None,
+            url: VerbatimUrl::from_url(
+                Url::parse(
+                    "git+https://github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b",
+                )
+                .unwrap(),
+            ),
+        };
+        assert_eq!(uv_req.source, expected_uv_req);
+    }
 }
