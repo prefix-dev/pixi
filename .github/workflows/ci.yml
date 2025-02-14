@@ -301,7 +301,7 @@ jobs:
 
   build-binary-windows-aarch64:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
     runs-on: 16core_windows_latest_runner
     name: "build binary | windows aarch64"
     steps:
