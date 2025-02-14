@@ -9,7 +9,7 @@ use crate::{ChannelConfiguration, PlatformAndVirtualPackages};
 pub const METHOD_NAME: &str = "conda/build";
 
 /// Parameters for the `conda/build` request.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildParams {
     /// The build platform is always the current platform, but the virtual
@@ -50,7 +50,7 @@ pub struct CondaBuildParams {
 }
 
 /// Identifier of an output.
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
 pub struct CondaOutputIdentifier {
     pub name: Option<String>,
     pub version: Option<String>,
@@ -59,13 +59,13 @@ pub struct CondaOutputIdentifier {
 }
 
 /// Contains the result of the `conda/build` request.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CondaBuildResult {
     /// The packages that were built.
     pub packages: Vec<CondaBuiltPackage>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CondaBuiltPackage {
     /// The location on disk where the built package is located.
     pub output_file: PathBuf,
