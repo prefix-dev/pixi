@@ -58,11 +58,16 @@ Login to a basic HTTP secured server:
 pixi auth login myserver.com --username user --password password
 ```
 
-Login to a S3 bucket:
+Login to an S3 bucket:
 
 ```shell
-pixi auth login s3://my-bucket --s3-access-key-id accesskey --s3-secret-access-key secretkey
+pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-access-key <secret-access-key>
+# if your key uses a session token, you can also use:
+pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-access-key <secret-access-key> --s3-session-token <session-token>
 ```
+
+!!!note
+    S3 authentication is also supported through AWS's typical `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, see the [S3 section](../advanced/s3.md) for more details.
 
 ## Where does pixi store the authentication information?
 
@@ -110,6 +115,13 @@ The JSON should follow the following format:
     },
     "conda.anaconda.org": {
         "CondaToken": "your_token"
+    },
+    "s3://my-bucket": {
+        "S3Credentials": {
+            "access_key_id": "my-access-key-id",
+            "secret_access_key": "my-secret-access-key",
+            "session_token": null
+        }
     }
 }
 ```
