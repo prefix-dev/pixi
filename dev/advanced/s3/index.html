@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/tutorials/ros2/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/s3/">
       
       
-        <link rel="prev" href="../python/">
+        <link rel="prev" href="../pyproject_toml/">
       
       
-        <link rel="next" href="../rust/">
+        <link rel="next" href="../../reference/pixi_manifest/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>ROS 2 - Pixi by prefix.dev</title>
+        <title>S3 - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="ROS 2 - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="S3 - Pixi by prefix.dev" >
       
         <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/ros2.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/s3.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/tutorials/ros2/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/s3/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="ROS 2 - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="S3 - Pixi by prefix.dev" >
       
         <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/ros2.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/s3.png" >
       
     
     
@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-develop-a-ros-2-package-with-pixi" class="md-skip">
+        <a href="#use-s3-with-pixi" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              ROS 2
+              S3
             
           </span>
         </div>
@@ -330,8 +330,6 @@
       
   
   
-    
-  
   
   
     
@@ -343,11 +341,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -361,7 +359,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -375,7 +373,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python/" class="md-nav__link">
+      <a href="../../tutorials/python/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -393,30 +391,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    ROS 2
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -425,131 +403,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    <span class="md-ellipsis">
-      Prerequisites
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
-    <span class="md-ellipsis">
-      Create a pixi project.
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-ros-2-dependencies" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add ROS 2 dependencies
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#add-a-custom-python-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Add a custom Python node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#simplify-the-user-experience" class="md-nav__link">
-    <span class="md-ellipsis">
-      Simplify the user experience
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-a-c-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build a C++ node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Conclusion
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#show-off-your-work" class="md-nav__link">
-    <span class="md-ellipsis">
-      Show Off Your Work!
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#frequently-asked-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frequently asked questions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Frequently asked questions">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-happens-with-rosdep" class="md-nav__link">
-    <span class="md-ellipsis">
-      What happens with rosdep?
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#community-examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      Community examples
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -562,7 +415,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rust/" class="md-nav__link">
+      <a href="../../tutorials/rust/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -583,7 +436,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multi_environment/" class="md-nav__link">
+      <a href="../../tutorials/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1392,8 +1245,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -1403,11 +1258,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
@@ -1421,7 +1276,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -1435,7 +1290,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/authentication/" class="md-nav__link">
+      <a href="../authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1456,7 +1311,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/channel_priority/" class="md-nav__link">
+      <a href="../channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1477,7 +1332,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/github_actions/" class="md-nav__link">
+      <a href="../github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1498,7 +1353,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1519,7 +1374,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
+      <a href="../updates_github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1540,7 +1395,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/lockfile_diffs/" class="md-nav__link">
+      <a href="../lockfile_diffs/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1561,7 +1416,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/production_deployment/" class="md-nav__link">
+      <a href="../production_deployment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1582,7 +1437,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
+      <a href="../pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1600,10 +1455,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../advanced/s3/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    S3
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1612,6 +1487,122 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#using-aws-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using AWS configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-pixis-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using pixi's configuration
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#public-s3-buckets" class="md-nav__link">
+    <span class="md-ellipsis">
+      Public S3 buckets
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#s3-compatible-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      S3-compatible storage
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="S3-compatible storage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#minio" class="md-nav__link">
+    <span class="md-ellipsis">
+      MinIO
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cloudflare-r2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cloudflare R2
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wasabi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Wasabi
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backblaze-b2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backblaze B2
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#google-cloud-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Google Cloud Storage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hetzner-object-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hetzner Object Storage
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1913,100 +1904,91 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
+  <a href="#using-aws-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Prerequisites
+      Using AWS configuration
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
+  <a href="#using-pixis-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi project.
+      Using pixi's configuration
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#add-ros-2-dependencies" class="md-nav__link">
+  <a href="#public-s3-buckets" class="md-nav__link">
     <span class="md-ellipsis">
-      Add ROS 2 dependencies
+      Public S3 buckets
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#add-a-custom-python-node" class="md-nav__link">
+  <a href="#s3-compatible-storage" class="md-nav__link">
     <span class="md-ellipsis">
-      Add a custom Python node
+      S3-compatible storage
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#simplify-the-user-experience" class="md-nav__link">
-    <span class="md-ellipsis">
-      Simplify the user experience
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#build-a-c-node" class="md-nav__link">
-    <span class="md-ellipsis">
-      Build a C++ node
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Conclusion
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#show-off-your-work" class="md-nav__link">
-    <span class="md-ellipsis">
-      Show Off Your Work!
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#frequently-asked-questions" class="md-nav__link">
-    <span class="md-ellipsis">
-      Frequently asked questions
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Frequently asked questions">
+    <nav class="md-nav" aria-label="S3-compatible storage">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#what-happens-with-rosdep" class="md-nav__link">
+  <a href="#minio" class="md-nav__link">
     <span class="md-ellipsis">
-      What happens with rosdep?
+      MinIO
     </span>
   </a>
   
 </li>
         
           <li class="md-nav__item">
-  <a href="#community-examples" class="md-nav__link">
+  <a href="#cloudflare-r2" class="md-nav__link">
     <span class="md-ellipsis">
-      Community examples
+      Cloudflare R2
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wasabi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Wasabi
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backblaze-b2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backblaze B2
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#google-cloud-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Google Cloud Storage
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hetzner-object-storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hetzner Object Storage
     </span>
   </a>
   
@@ -2032,7 +2014,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/tutorials/ros2.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/s3.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -2040,174 +2022,210 @@
   
 
 
-<h1 id="tutorial-develop-a-ros-2-package-with-pixi">Tutorial: Develop a ROS 2 package with <code>pixi</code><a class="headerlink" href="#tutorial-develop-a-ros-2-package-with-pixi" title="Permanent link">#</a></h1>
-<p>In this tutorial, we will show you how to develop a ROS 2 package using <code>pixi</code>.
-The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
-<p>The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try pixi for their development workflow.</p>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
-<ul>
-<li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
-  The crux of this tutorial is to show you only need pixi!</li>
-<li>On Windows, it's advised to enable Developer mode. Go to Settings -&gt; Update &amp; Security -&gt; For developers -&gt; Developer mode.</li>
-</ul>
+<h1 id="use-s3-with-pixi">Use S3 with pixi<a class="headerlink" href="#use-s3-with-pixi" title="Permanent link">#</a></h1>
+<p>If you want to use S3 object storage to fetch your packages, you can use the <code>s3://</code> protocol as a channel.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[project]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># ...</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;s3://my-bucket/custom-channel&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+<p>In the bucket, your objects need to adhere to the standard conda repository structure:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>my-bucket/
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    custom-channel/
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        noarch/
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>            repodata.json
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>            ...
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        linux-64/
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>            repodata.json
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>            ...
+</span></code></pre></div>
+<p>Pixi supports two ways to configure access to your S3 bucket:</p>
+<ol>
+<li>Using AWS credentials from environment variables or AWS configuration files, like in any other AWS tool</li>
+<li>Using pixi's configuration in combination with storing the credentials in pixi's authentication storage</li>
+</ol>
+<div class="admonition warning">
+<p>These two options are mutually exclusive!
+Specifying <code>s3-options</code> (see below) will deactivate the AWS credentials fetching.
+You can either use the AWS credentials from the conventional locations (by not specifying <code>s3-options</code>) or from pixi's authentication storage (by specifying <code>s3-options</code>).</p>
+</div>
+<h2 id="using-aws-configuration">Using AWS configuration<a class="headerlink" href="#using-aws-configuration" title="Permanent link">#</a></h2>
+<p>You can specify <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> in your environment variables for pixi to use them.</p>
+<p>You can also specify <code>AWS_CONFIG_FILE</code> and <code>AWS_PROFILE</code> to use a custom AWS configuration file and profile.</p>
+<div class="language-cfg highlight"><span class="filename">aws.config</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[profile conda]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="na">sso_account_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">123456789012</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="na">sso_role_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">PowerUserAccess</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="na">sso_start_url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">https://my-company.awsapps.com/start</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="na">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">eu-central-1</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="na">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">json</span>
+</span></code></pre></div>
+<div class="language-bash highlight"><span class="filename">CLI usage</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>$<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="nv">AWS_CONFIG_FILE</span><span class="o">=</span>/path/to/aws.config
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>$<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="nv">AWS_PROFILE</span><span class="o">=</span>conda
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>$<span class="w"> </span>aws<span class="w"> </span>sso<span class="w"> </span>login
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Attempting<span class="w"> </span>to<span class="w"> </span>automatically<span class="w"> </span>open<span class="w"> </span>the<span class="w"> </span>SSO<span class="w"> </span>authorization<span class="w"> </span>page<span class="w"> </span><span class="k">in</span><span class="w"> </span>your<span class="w"> </span>default<span class="w"> </span>browser.
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>If<span class="w"> </span>the<span class="w"> </span>browser<span class="w"> </span>does<span class="w"> </span>not<span class="w"> </span>open<span class="w"> </span>or<span class="w"> </span>you<span class="w"> </span>wish<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>a<span class="w"> </span>different<span class="w"> </span>device<span class="w"> </span>to<span class="w"> </span>authorize<span class="w"> </span>this<span class="w"> </span>request,<span class="w"> </span>open<span class="w"> </span>the<span class="w"> </span>following<span class="w"> </span>URL:
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>https://my-company.awsapps.com/start/#/device
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>Then<span class="w"> </span>enter<span class="w"> </span>the<span class="w"> </span>code:
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>DTBC-WFXC
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>Successfully<span class="w"> </span>logged<span class="w"> </span>into<span class="w"> </span>Start<span class="w"> </span>URL:<span class="w"> </span>https://my-company.awsapps.com/start
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>$<span class="w"> </span>pixi<span class="w"> </span>search<span class="w"> </span>-c<span class="w"> </span>s3://my-s3-bucket/channel<span class="w"> </span>my-private-package
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># ...</span>
+</span></code></pre></div>
+<div class="language-yaml highlight"><span class="filename">ci.yml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">jobs</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">ci</span><span class="p">:</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Check out repository</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">      </span><span class="c1"># temporary credentials via OIDC</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Log in to AWS</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws-actions/configure-aws-credentials@v4</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">          </span><span class="nt">role-to-assume</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/github-poweruser</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">          </span><span class="nt">aws-region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eu-central-1</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Set up pixi</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">        </span><span class="c1"># AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set by aws-actions/configure-aws-credentials</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.3</span>
+</span></code></pre></div>
+<h2 id="using-pixis-configuration">Using pixi's configuration<a class="headerlink" href="#using-pixis-configuration" title="Permanent link">#</a></h2>
+<p>You can specify the <code>project.s3-options</code> in your <code>pixi.toml</code> file.
+This might be useful when you want to use a custom S3-compatible host and not AWS's configuration.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project.s3-options.my-bucket]</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://my-s3-host&quot;</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</span></code></pre></div>
 <div class="admonition note">
-<p>If you're new to pixi, you can check out the <a href="../../basic_usage/">basic usage</a> guide.
-This will teach you the basics of pixi project within 3 minutes.</p>
+<p>You need to configure this per bucket you use, i.e. use <code>[project.s3-options.&lt;bucket-name&gt;]</code>.</p>
 </div>
-<h2 id="create-a-pixi-project">Create a pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_ros2_project<span class="w"> </span>-c<span class="w"> </span>robostack-staging<span class="w"> </span>-c<span class="w"> </span>conda-forge
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--aws-access-key-id<span class="o">=</span>...<span class="w"> </span>--aws-secret-access-key<span class="o">=</span>...<span class="w"> </span>s3://my-s3-bucket
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Authenticating<span class="w"> </span>with<span class="w"> </span>s3://my-s3-bucket
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>$<span class="w"> </span>pixi<span class="w"> </span>search<span class="w"> </span>my-private-package
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># ...</span>
 </span></code></pre></div>
-<p>It should have created a directory structure like this:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>my_ros2_project
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>.gitattributes
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>.gitignore
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>└──<span class="w"> </span>pixi.toml
+<p>You can also specify the <code>s3-options</code> in your <a href="../../reference/pixi_configuration/">pixi configuration</a>.</p>
+<div class="language-toml highlight"><span class="filename">Global configuration</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[s3-options.my-bucket]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://my-s3-host&quot;</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
-<p>The <code>pixi.toml</code> file is the manifest file for your project. It should look like this:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_ros2_project&quot;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Add a short description here&quot;</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;User Name &lt;user.name@email.url&gt;&quot;</span><span class="p">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;robostack-staging&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Your project can support multiple platforms, the current platform will be automatically added.</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">[tasks]</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[dependencies]</span>
+<div class="language-yaml highlight"><span class="filename">ci.yml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">jobs</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">ci</span><span class="p">:</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Check out repository</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">      </span><span class="c1"># temporary credentials via OIDC</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Log in to AWS</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws-actions/configure-aws-credentials@v4</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">        </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">          </span><span class="nt">role-to-assume</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/github-poweruser</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">          </span><span class="nt">aws-region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eu-central-1</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Set up pixi</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">        </span><span class="c1"># AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set by aws-actions/configure-aws-credentials</span>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.3</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">          </span><span class="nt">auth-s3-access-key-id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ steps.aws.outputs.aws-access-key-id }}</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">          </span><span class="nt">auth-s3-secret-access-key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ steps.aws.outputs.aws-secret-access-key }}</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">          </span><span class="nt">auth-s3-session-token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ steps.aws.outputs.aws-session-token }}</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">          </span><span class="nt">auth-host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3://my-s3-bucket</span>
 </span></code></pre></div>
-<p>The <code>channels</code> you added to the <code>init</code> command are repositories of packages, you can search in these repositories through our <a href="https://prefix.dev/channels">prefix.dev</a> website.
-The <code>platforms</code> are the systems you want to support, in pixi you can support multiple platforms, but you have to define which platforms, so pixi can test if those are supported for your dependencies.
-For the rest of the fields, you can fill them in as you see fit.</p>
-<h2 id="add-ros-2-dependencies">Add ROS 2 dependencies<a class="headerlink" href="#add-ros-2-dependencies" title="Permanent link">#</a></h2>
-<p>To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.</p>
-<p>Let's start with the <code>turtlesim</code> example</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-desktop<span class="w"> </span>ros-humble-turtlesim
+<h2 id="public-s3-buckets">Public S3 buckets<a class="headerlink" href="#public-s3-buckets" title="Permanent link">#</a></h2>
+<p>Public buckets that don't need authentication can be used by just specifying the endpoint as a regular <code>https</code> URL.
+For example, on AWS, you might have a bucket that is publicly accessible via <code>https://my-public-bucket.s3.eu-central-1.amazonaws.com</code>.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[project]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://my-public-bucket.s3.eu-central-1.amazonaws.com/channel&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>This will add the <code>ros-humble-desktop</code> and <code>ros-humble-turtlesim</code> packages to your manifest.
-Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (<code>.pixi</code>).</p>
-<p>Now run the <code>turtlesim</code> example.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtlesim_node
+<p>Note that for this, you need to configure your S3 bucket in such a way that it allows public access.
+On AWS, you need the <code>GetObject</code> and <code>ListBucket</code> permissions for this.
+Here is an example policy for AWS S3:</p>
+<div class="language-json highlight"><span class="filename">Bucket policy</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">    </span><span class="nt">&quot;Version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2012-10-17&quot;</span><span class="p">,</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">&quot;Statement&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">        </span><span class="p">{</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">            </span><span class="nt">&quot;Sid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PublicReadGetObject&quot;</span><span class="p">,</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">            </span><span class="nt">&quot;Effect&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Allow&quot;</span><span class="p">,</span>
+</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">            </span><span class="nt">&quot;Principal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span>
+</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">            </span><span class="nt">&quot;Action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;s3:GetObject&quot;</span><span class="p">,</span>
+</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">            </span><span class="nt">&quot;Resource&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;arn:aws:s3:::my-public-bucket/*&quot;</span>
+</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">        </span><span class="p">},</span>
+</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">        </span><span class="p">{</span>
+</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">            </span><span class="nt">&quot;Sid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PublicReadListBucket&quot;</span><span class="p">,</span>
+</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">            </span><span class="nt">&quot;Effect&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Allow&quot;</span><span class="p">,</span>
+</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">            </span><span class="nt">&quot;Principal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span>
+</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">            </span><span class="nt">&quot;Action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;s3:ListBucket&quot;</span><span class="p">,</span>
+</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">            </span><span class="nt">&quot;Resource&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;arn:aws:s3:::my-public-bucket&quot;</span>
+</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">    </span><span class="p">]</span>
+</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="p">}</span>
 </span></code></pre></div>
-<p><strong>Or</strong> use the <code>shell</code> command to start an activated environment in your terminal.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>shell
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtlesim_node
+<p>Cloudflare R2 also supports public buckets through a Cloudflare-managed <code>r2.dev</code> subdomain or a custom domain under your control, see <a href="https://developers.cloudflare.com/r2/buckets/public-buckets/">here</a>.</p>
+<h2 id="s3-compatible-storage">S3-compatible storage<a class="headerlink" href="#s3-compatible-storage" title="Permanent link">#</a></h2>
+<p>Many other cloud providers offer S3-compatible storage APIs.
+You can use them with pixi by specifying the <code>s3-options</code> in your manifest file.</p>
+<h3 id="minio">MinIO<a class="headerlink" href="#minio" title="Permanent link">#</a></h3>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[project.s3-options]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://minio.example.com&quot;</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
-<p>Congratulations you have ROS 2 running on your machine with pixi!</p>
-<details class="example">
-<summary>Some more fun with the turtle</summary>
-<p>To control the turtle you can run the following command in a new terminal
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>turtlesim<span class="w"> </span>turtle_teleop_key
+<h3 id="cloudflare-r2">Cloudflare R2<a class="headerlink" href="#cloudflare-r2" title="Permanent link">#</a></h3>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://&lt;account-id&gt;.eu.r2.cloudflarestorage.com&quot;</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;WEUR&quot;</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
-Now you can control the turtle with the arrow keys on your keyboard.</p>
-</details>
-<p><img alt="Turtlesim control" src="https://github.com/user-attachments/assets/9424c44b-b7c0-48f4-8e7d-501131e9e9e5" /></p>
-<h2 id="add-a-custom-python-node">Add a custom Python node<a class="headerlink" href="#add-a-custom-python-node" title="Permanent link">#</a></h2>
-<p>As ros works with custom nodes, let's add a custom node to our project.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>pkg<span class="w"> </span>create<span class="w"> </span>--build-type<span class="w"> </span>ament_python<span class="w"> </span>--destination-directory<span class="w"> </span>src<span class="w"> </span>--node-name<span class="w"> </span>my_node<span class="w"> </span>my_package
+<h3 id="wasabi">Wasabi<a class="headerlink" href="#wasabi" title="Permanent link">#</a></h3>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://s3.de-1.wasabisys.com&quot;</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;de-1&quot;</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
-<p>To build the package we need some more dependencies:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>colcon-common-extensions<span class="w"> </span><span class="s2">&quot;setuptools&lt;=58.2.0&quot;</span>
+<h3 id="backblaze-b2">Backblaze B2<a class="headerlink" href="#backblaze-b2" title="Permanent link">#</a></h3>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://s3.us-west-004.backblazeb2.com&quot;</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-west-004&quot;</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
-<p>Add the created initialization script for the ros workspace to your manifest file.</p>
-<p>Then run the build command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>colcon<span class="w"> </span>build
+<h3 id="google-cloud-storage">Google Cloud Storage<a class="headerlink" href="#google-cloud-storage" title="Permanent link">#</a></h3>
+<p>Note pixi also supports <code>gcs://</code> URLs.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://storage.googleapis.com&quot;</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
-<p>This will create a sourceable script in the <code>install</code> folder, you can source this script through an activation script to use your custom node.
-Normally this would be the script you add to your <code>.bashrc</code> but instead you tell pixi to use it by adding the following to <code>pixi.toml</code>:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[activation]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
+<h3 id="hetzner-object-storage">Hetzner Object Storage<a class="headerlink" href="#hetzner-object-storage" title="Permanent link">#</a></h3>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://fsn1.your-objectstorage.com&quot;</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;US&quot;</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[activation]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.bat&quot;</span><span class="p">]</span>
+<!-- TODO: uncomment once implemented
+
+## Uploading to S3
+
+You can upload to S3 using `rattler-build upload s3`.
+For more information, see [rattler-build's documentation](https://rattler.build/latest/authentication_and_upload/#s3).
+
+### Re-indexing S3 buckets after uploading new packages
+
+Every time you upload new packages to your package repository, the `repodata.json` file needs to be updated.
+This is done automatically for conda package servers like anaconda.org or prefix.dev.
+For S3 buckets, on the other hand, we need to do this manually since an S3 bucket is only a storage system and not a package server.
+
+To re-index an S3 bucket, you can use the `rattler-index` package which is available on [conda-forge](https://prefix.dev/channels/conda-forge/packages/rattler-index).
+
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>rattler-index<span class="w"> </span>s3<span class="w"> </span>s3://my-s3-bucket/my-channel<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">    </span>--endpoint-url<span class="w"> </span>https://my-s3-host<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>--region<span class="w"> </span>us-east-1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>--force-path-style<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span>--access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span>--secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;
 </span></code></pre></div>
-</div>
-</div>
-</div>
-<details class="tip">
-<summary>Multi platform support</summary>
-<p>You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
-Use the following example to add support for both Linux and Windows, using the <a href="../../features/multi_platform_configuration/#activation">target</a> syntax.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[project]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
-</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="k">[activation]</span>
-</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="k">[target.win-64.activation]</span>
-</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.bat&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</details>
-<p>Now you can run your custom node with the following command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>my_package<span class="w"> </span>my_node
-</span></code></pre></div>
-<h2 id="simplify-the-user-experience">Simplify the user experience<a class="headerlink" href="#simplify-the-user-experience" title="Permanent link">#</a></h2>
-<p>In <code>pixi</code> we have a feature called <code>tasks</code>, this allows you to define a task in your manifest file and run it with a simple command.
-Let's add a task to run the <code>turtlesim</code> example and the custom node.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>sim<span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>build<span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>hello<span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span>
-</span></code></pre></div>
-<p>Now you can run these task by simply running</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>sim
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>build
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>hello
-</span></code></pre></div>
-<details class="tip" open="open">
-<summary>Advanced task usage</summary>
-<p>Tasks are a powerful feature in pixi.</p>
-<ul>
-<li>You can add <a href="../../features/advanced_tasks/#depends-on"><code>depends-on</code></a> to the tasks to create a task chain.</li>
-<li>You can add <a href="../../features/advanced_tasks/#working-directory"><code>cwd</code></a> to the tasks to run the task in a different directory from the root of the project.</li>
-<li>You can add <a href="../../features/advanced_tasks/#caching"><code>inputs</code> and <code>outputs</code></a> to the tasks to create a task that only runs when the inputs are changed.</li>
-<li>You can use the <a href="../../reference/pixi_manifest/#the-target-table"><code>target</code></a> syntax to run specific tasks on specific machines.</li>
-</ul>
-</details>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">sim</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;src&quot;</span><span class="p">]}</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">hello</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">depends-on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
-</span></code></pre></div>
-<h2 id="build-a-c-node">Build a C++ node<a class="headerlink" href="#build-a-c-node" title="Permanent link">#</a></h2>
-<p>To build a C++ node you need to add the <code>ament_cmake</code> and some other build dependencies to your manifest file.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-ament-cmake-auto<span class="w"> </span>compilers<span class="w"> </span>pkg-config<span class="w"> </span>cmake<span class="w"> </span>ninja
-</span></code></pre></div>
-<p>Now you can create a C++ node with the following command</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>pkg<span class="w"> </span>create<span class="w"> </span>--build-type<span class="w"> </span>ament_cmake<span class="w"> </span>--destination-directory<span class="w"> </span>src<span class="w"> </span>--node-name<span class="w"> </span>my_cpp_node<span class="w"> </span>my_cpp_package
-</span></code></pre></div>
-<p>Now you can build it again and run it with the following commands</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Passing arguments to the build command to build with Ninja, add them to the manifest if you want to default to ninja.</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>build<span class="w"> </span>--cmake-args<span class="w"> </span>-G<span class="w"> </span>Ninja
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>ros2<span class="w"> </span>run<span class="w"> </span>my_cpp_package<span class="w"> </span>my_cpp_node
-</span></code></pre></div>
-<details class="tip">
-<summary>Tip</summary>
-<p>Add the cpp task to the manifest file to simplify the user experience.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>hello-cpp<span class="w"> </span><span class="s2">&quot;ros2 run my_cpp_package my_cpp_node&quot;</span>
-</span></code></pre></div>
-</details>
-<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we showed you how to create a Python &amp; CMake ROS2 project using <code>pixi</code>.
-We also showed you how to <strong>add dependencies</strong> to your project using <code>pixi</code>, and how to <strong>run your project</strong> using <code>pixi run</code>.
-This way you can make sure that your project is <strong>reproducible</strong> on all your machines that have <code>pixi</code> installed.</p>
-<h2 id="show-off-your-work">Show Off Your Work!<a class="headerlink" href="#show-off-your-work" title="Permanent link">#</a></h2>
-<p>Finished with your project?
-We'd love to see what you've created!
-Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
-Let's inspire the community together!</p>
-<h2 id="frequently-asked-questions">Frequently asked questions<a class="headerlink" href="#frequently-asked-questions" title="Permanent link">#</a></h2>
-<h3 id="what-happens-with-rosdep">What happens with <code>rosdep</code>?<a class="headerlink" href="#what-happens-with-rosdep" title="Permanent link">#</a></h3>
-<p>Currently, we don't support <code>rosdep</code> in a pixi environment, so you'll have to add the packages using <code>pixi add</code>.
-<code>rosdep</code> will call <code>conda install</code> which isn't supported in a pixi environment.</p>
-<h3 id="community-examples">Community examples<a class="headerlink" href="#community-examples" title="Permanent link">#</a></h3>
-<p>ROS 2 Humble on macOS,<a href="https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655">Simulating differential drive using Gazebo</a>.</p>
+
+-->
 
 
 
@@ -2279,9 +2297,9 @@ Let's inspire the community together!</p>
           
             
             <a
-              href="../python/"
+              href="../pyproject_toml/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Python"
+              aria-label="Previous: Pyproject.toml"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2292,7 +2310,7 @@ Let's inspire the community together!</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Python
+                  Pyproject.toml
                 </div>
               </div>
             </a>
@@ -2302,16 +2320,16 @@ Let's inspire the community together!</p>
           
             
             <a
-              href="../rust/"
+              href="../../reference/pixi_manifest/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Rust"
+              aria-label="Next: Pixi Manifest"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Rust
+                  Pixi Manifest
                 </div>
               </div>
               <div class="md-footer__button md-icon">

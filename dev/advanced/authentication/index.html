@@ -1558,6 +1558,27 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../s3/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    S3
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1982,9 +2003,15 @@ A Bearer Token is sent with every request as an additional header of the form <c
 <p>Login to a basic HTTP secured server:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>myserver.com<span class="w"> </span>--username<span class="w"> </span>user<span class="w"> </span>--password<span class="w"> </span>password
 </span></code></pre></div>
-<p>Login to a S3 bucket:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>accesskey<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>secretkey
+<p>Login to an S3 bucket:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># if your key uses a session token, you can also use:</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;<span class="w"> </span>--s3-session-token<span class="w"> </span>&lt;session-token&gt;
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>S3 authentication is also supported through AWS's typical <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> environment variables, see the <a href="../s3/">S3 section</a> for more details.</p>
+</div>
 <h2 id="where-does-pixi-store-the-authentication-information">Where does pixi store the authentication information?<a class="headerlink" href="#where-does-pixi-store-the-authentication-information" title="Permanent link">#</a></h2>
 <p>The storage location for the authentication information is system-dependent. By default, pixi tries to use the keychain to store this sensitive information securely on your machine.</p>
 <p>On Windows, the credentials are stored in the "credentials manager". Searching for <code>rattler</code> (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).</p>
@@ -2018,8 +2045,15 @@ When this environment variable is set, it provides the only source of authentica
 </span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="p">},</span>
 </span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nt">&quot;conda.anaconda.org&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">        </span><span class="nt">&quot;CondaToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="p">}</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="nt">&quot;s3://my-bucket&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">        </span><span class="nt">&quot;S3Credentials&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">            </span><span class="nt">&quot;access_key_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-access-key-id&quot;</span><span class="p">,</span>
+</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">            </span><span class="nt">&quot;secret_access_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-secret-access-key&quot;</span><span class="p">,</span>
+</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">            </span><span class="nt">&quot;session_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>Note: if you use a wildcard in the host, any subdomain will match (e.g. <code>*.prefix.dev</code> also matches <code>repo.prefix.dev</code>).</p>
 <p>Lastly you can set the authentication override file in the <a href="../../reference/pixi_configuration/">global configuration file</a>.</p>
