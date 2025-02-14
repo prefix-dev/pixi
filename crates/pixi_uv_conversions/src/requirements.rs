@@ -1,13 +1,9 @@
+use pixi_manifest::{pypi::VersionOrStar, PyPiRequirement};
+use pixi_spec::{GitReference, GitSpec};
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
-
-// use pep440_rs::VersionSpecifiers;
-
-use pixi_git::url::RepositoryUrl;
-use pixi_manifest::{pypi::VersionOrStar, PyPiRequirement};
-use pixi_spec::{GitReference, GitSpec};
 use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::DistExtension;
@@ -24,8 +20,13 @@ fn create_uv_url(
     rev: Option<&GitReference>,
     subdir: Option<&str>,
 ) -> Result<Url, url::ParseError> {
-    // Create the url.
-    let url = format!("git+{url}");
+    // Add the git+ prefix if it doesn't exist.
+    let url = url.to_string();
+    let url = match url.strip_prefix("git+") {
+        Some(_) => url,
+        None => format!("git+{}", url),
+    };
+
     // Add the tag or rev if it exists.
     let url = rev.as_ref().map_or_else(
         || url.clone(),
@@ -105,12 +106,7 @@ pub fn as_uv_req(
                 },
             ..
         } => RequirementSource::Git {
-            repository: RepositoryUrl::parse(git.as_str())
-                .map_err(|err| AsPep508Error::UrlParseError {
-                    source: err,
-                    url: git.to_string(),
-                })?
-                .into(),
+            repository: git.clone(),
             precise: rev
                 .as_ref()
                 .map(|s| s.as_full_commit())

@@ -2065,12 +2065,12 @@ async fn spawn_solve_pypi_task<'p>(
             .collect::<Result<_, ConversionError>>()
             .into_diagnostic()?;
 
-        let index_map = IndexMap::from_iter(dependencies);
+        let requirements = IndexMap::from_iter(dependencies);
 
         let (records, prefix_task_result) = lock_file::resolve_pypi(
             resolution_context,
             &pypi_options,
-            index_map,
+            requirements,
             system_requirements,
             &pixi_solve_records,
             &locked_pypi_records,
