@@ -81,52 +81,49 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     assert metadata["name"] == "smokey"
 
 
-@pytest.mark.slow
-def test_source_change_trigger_rebuild(
-    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
-) -> None:
-    project = "simple-pyproject"
-    test_data = build_data.joinpath(project)
+def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Path) -> None:
+    env = {
+        "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-rattler-build=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-rattler-build",
+    }
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            simple_workspace,
+        ],
+        env=env,
+    )
 
-    target_dir = tmp_pixi_workspace.joinpath(project)
-    shutil.copytree(test_data, target_dir)
-    manifest_path = target_dir.joinpath("pyproject.toml")
+    conda_build_params = simple_workspace.parent.joinpath("conda_build_params.json")
+
+    assert conda_build_params.is_file()
+
+    # Remove the conda build params to get a clean state
+    conda_build_params.unlink()
+
+    # Touch the recipe
+    simple_workspace.parent.joinpath("recipe.yaml").touch()
 
     verify_cli_command(
         [
             pixi,
-            "run",
+            "install",
             "--manifest-path",
-            manifest_path,
-            "get-version",
+            simple_workspace,
         ],
-        stdout_contains="The version of simple-pyproject is 1.0.0",
+        env=env,
     )
 
-    # Bump version from 1.0.0 to 2.0.0
-    init_file = target_dir.joinpath("src", "simple_pyproject", "__init__.py")
-    init_file.write_text(init_file.read_text().replace("1.0.0", "2.0.0"))
-
-    # Since we modified the source this should trigger a rebuild and therefore report 2.0.0
-    verify_cli_command(
-        [
-            pixi,
-            "run",
-            "--manifest-path",
-            manifest_path,
-            "get-version",
-        ],
-        stdout_contains="The version of simple-pyproject is 2.0.0",
-    )
+    # Touching the recipe should trigger a rebuild and therefore create the file
+    assert conda_build_params.is_file()
 
 
 def test_host_dependency_change_trigger_rebuild(
     pixi: Path, simple_workspace: Path, dummy_channel_1: Path
 ) -> None:
-    # Setting PIXI_CACHE_DIR shouldn't be necessary
     env = {
         "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-rattler-build=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-rattler-build",
-        "PIXI_CACHE_DIR": str(simple_workspace.parent.joinpath(".cache")),
     }
     verify_cli_command(
         [
