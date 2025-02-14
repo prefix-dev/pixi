@@ -687,9 +687,20 @@ impl BuildContext {
                     globs: input_globs.clone(),
                 })
                 .await?;
+
+            // Add in extra data to the glob hash
+            if let Some(extra_data) = &metadata.additional_hash {
+                // let mut hasher = Xxh3::with_seed(0);
+                // input_hash.hash(&mut hasher);
+                // extra_data.hash(&mut hasher);
+                print!("extra_data: {}", extra_data);
+                // input_hash = hasher.finish();
+            };
+
             Some(InputHash {
                 hash: input_hash.hash,
                 globs: input_globs,
+                extra_data: metadata.additional_hash,
             })
         };
 

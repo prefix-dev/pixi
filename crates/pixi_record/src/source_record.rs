@@ -34,6 +34,8 @@ pub struct InputHash {
     )]
     pub hash: Sha256Hash,
     pub globs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_data: Option<String>
 }
 
 impl From<SourceRecord> for CondaPackageData {
@@ -59,6 +61,8 @@ impl TryFrom<CondaSourceData> for SourceRecord {
             input_hash: value.input.map(|hash| InputHash {
                 hash: hash.hash,
                 globs: hash.globs,
+                // TODO?
+                extra_data: None,
             }),
         })
     }

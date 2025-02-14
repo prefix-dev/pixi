@@ -107,6 +107,7 @@ impl Protocol {
                 })
                 .collect::<miette::Result<_>>()?,
             input_globs: None,
+            additional_hash: None,
         };
 
         Ok(metadata)

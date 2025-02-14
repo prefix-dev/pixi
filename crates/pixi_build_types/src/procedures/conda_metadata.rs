@@ -52,4 +52,10 @@ pub struct CondaMetadataResult {
     /// If this field is not present, the input manifest will be used.
     #[serde(default)]
     pub input_globs: Option<Vec<String>>,
+
+    /// Additional information that will be added to the hash of the lock-file.
+    /// This can be extra information (like a JSON string), or an arbitrary hash
+    /// that the backend produces in order to break the cache when needed.
+    #[serde(default)]
+    pub additional_hash: Option<String>,
 }
