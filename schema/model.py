@@ -154,6 +154,9 @@ class Workspace(StrictBaseModel):
     pypi_options: PyPIOptions | None = Field(
         None, description="Options related to PyPI indexes for this project"
     )
+    s3_options: dict[str, S3Options] | None = Field(
+        None, description="Options related to S3 for this project"
+    )
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
     )
@@ -507,6 +510,22 @@ class FindLinksURL(StrictBaseModel):
     )
 
 
+class S3Options(StrictBaseModel):
+    """Options related to S3 for this project"""
+
+    endpoint_url: NonEmptyStr = Field(
+        description="The endpoint URL to use for the S3 client",
+        examples=["https://s3.eu-central-1.amazonaws.com"],
+    )
+    region: NonEmptyStr = Field(
+        description="The region to use for the S3 client",
+        examples=["eu-central-1"],
+    )
+    force_path_style: bool = Field(
+        description="Whether to force path style for the S3 client",
+    )
+
+
 class PyPIOptions(StrictBaseModel):
     """Options that determine the behavior of PyPI package resolution and installation"""
 
@@ -601,6 +620,9 @@ class Build(StrictBaseModel):
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
     )
+    configuration: dict[str, Any] = Field(
+        None, description="The configuration of the build backend"
+    )
 
 
 class BuildBackend(MatchspecTable):
@@ -626,7 +648,11 @@ class BaseManifest(StrictBaseModel):
             "$id": SCHEMA_URI,
             "$schema": SCHEMA_DRAFT,
             "title": "`pixi.toml` manifest file",
-            "oneOf": [{"required": ["project"]}, {"required": ["workspace"]}],
+            "anyOf": [
+                {"required": ["project"]},
+                {"required": ["workspace"]},
+                {"required": ["package"]},
+            ],
         }
 
     schema_: str | None = Field(
@@ -696,7 +722,8 @@ class SchemaJsonEncoder(json.JSONEncoder):
         "required",
         "additionalProperties",
         "default",
-        "items" "properties",
+        "items",
+        "properties",
         "patternProperties",
         "allOf",
         "anyOf",

@@ -315,7 +315,7 @@ impl PixiControl {
     }
 
     /// Initialize pixi project inside a temporary directory. Returns a
-    /// [`InitBuilder`]. To execute the command and await the result call
+    /// [`InitBuilder`]. To execute the command and await the result, call
     /// `.await` on the return value.
     pub fn init_with_platforms(&self, platforms: Vec<String>) -> InitBuilder {
         InitBuilder {
@@ -333,13 +333,13 @@ impl PixiControl {
     }
 
     /// Add a dependency to the project. Returns an [`AddBuilder`].
-    /// the command and await the result call `.await` on the return value.
+    /// To execute the command and await the result, call `.await` on the return value.
     pub fn add(&self, spec: &str) -> AddBuilder {
         self.add_multiple(vec![spec])
     }
 
     /// Add dependencies to the project. Returns an [`AddBuilder`].
-    /// the command and await the result call `.await` on the return value.
+    /// To execute the command and await the result, call `.await` on the return value.
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
         AddBuilder {
             args: add::Args {
@@ -569,7 +569,7 @@ impl PixiControl {
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let workspace = Workspace::from_path(&self.manifest_path())?;
-        pixi::load_lock_file(&workspace).await
+        workspace.load_lock_file().await
     }
 
     /// Load the current lock-file and makes sure that its up to date with the

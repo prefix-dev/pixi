@@ -298,6 +298,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 - `--skip-deps`: Skip the dependencies of the task, which where defined in the `depends-on` field of the task.
+- `--dry-run (-n)`: Run the task in dry-run mode (only print the command that would run)
 
 ```shell
 pixi run python
@@ -311,6 +312,8 @@ pixi run build
 pixi run task argument1 argument2
 # Skip dependencies of the task
 pixi run --skip-deps task
+# Run in dry-run mode to see the commands that would be run
+pixi run --dry-run task
 
 # If you have multiple environments you can select the right one with the --environment flag.
 pixi run --environment cuda python
@@ -917,11 +920,15 @@ Store authentication information for given host.
 - `--username <USERNAME>`: The username to use for basic HTTP authentication
 - `--password <PASSWORD>`: The password to use for basic HTTP authentication.
 - `--conda-token <CONDA_TOKEN>`: The token to use on `anaconda.org` / `quetz` authentication.
+- `--s3-access-key-id`: The S3 access key ID
+- `--s3-secret-access-key`: The S3 secret access key
+- `--s3-session-token`: The S3 session token (optional for S3 authentication)
 
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
 pixi auth login https://myquetz.server --username john --password xxxxxx
+pixi auth login s3://my-bucket --s3-access-key-id $AWS_ACCESS_KEY_ID --s3-access-key-id $AWS_SECRET_KEY_ID
 ```
 
 ### `auth logout`
@@ -936,6 +943,7 @@ Remove authentication information for a given host.
 pixi auth logout <HOST>
 pixi auth logout repo.prefix.dev
 pixi auth logout anaconda.org
+pixi auth logout s3://my-bucket
 ```
 
 ## `config`
@@ -1029,6 +1037,7 @@ pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://pref
 pixi config set repodata-config.disable-zstd true --system
 pixi config set --global detached-environments "/opt/pixi/envs"
 pixi config set detached-environments false
+pixi config set s3-options.my-bucket '{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}'
 ```
 
 ### `config unset`

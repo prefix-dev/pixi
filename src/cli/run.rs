@@ -66,6 +66,10 @@ pub struct Args {
     #[arg(long)]
     pub skip_deps: bool,
 
+    /// Run the task in dry-run mode (only print the command that would run)
+    #[clap(short = 'n', long)]
+    pub dry_run: bool,
+
     #[clap(long, action = clap::ArgAction::HelpLong)]
     pub help: Option<bool>,
 
@@ -151,6 +155,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     tracing::info!("Task graph: {}", task_graph);
 
+    // Print dry-run message if dry-run mode is enabled
+    if args.dry_run {
+        eprintln!(
+            "{}{}",
+            console::Emoji("🌵 ", ""),
+            console::style("Dry-run mode enabled - no tasks will be executed.")
+                .yellow()
+                .bold(),
+        );
+        eprintln!();
+    }
+
     // Traverse the task graph in topological order and execute each individual
     // task.
     let mut task_idx = 0;
@@ -194,6 +210,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     console::style("".to_string()).yellow()
                 }
             );
+        }
+
+        // on dry-run mode, we just print the command and skip the execution
+        if args.dry_run {
+            task_idx += 1;
+            continue;
         }
 
         // check task cache

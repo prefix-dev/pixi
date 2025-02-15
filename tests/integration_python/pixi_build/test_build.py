@@ -3,7 +3,7 @@ import shutil
 import json
 import pytest
 
-from ..common import verify_cli_command
+from ..common import ExitCode, verify_cli_command
 
 
 @pytest.mark.slow
@@ -24,9 +24,10 @@ def test_build_conda_package(pixi: Path, tmp_pixi_workspace: Path, build_data: P
     )
 
     # really make sure that conda package was built
-    package_to_be_built = next(manifest_path.parent.glob("*.conda"))
+    built_packages = list(manifest_path.parent.glob("*.conda"))
 
-    assert package_to_be_built.exists()
+    assert len(built_packages) == 1
+    assert built_packages[0].exists()
 
 
 @pytest.mark.extra_slow
@@ -120,6 +121,10 @@ def test_source_change_trigger_rebuild(
 
 @pytest.mark.slow
 def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    This one tries to run the Python based rich example project,
+    installed as a normal package by overriding with an environment variable.
+    """
     project = "editable-pyproject"
     test_data = build_data.joinpath(project)
 
@@ -146,4 +151,48 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
             "check-editable",
         ],
         stdout_contains="The package is installed as editable.",
+    )
+
+
+@pytest.mark.slow
+def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    This one tries to run the Python based rich example project,
+    installed as a normal package by overriding with an environment variable.
+    """
+    project = "editable-pyproject"
+    test_data = build_data.joinpath(project)
+
+    target_dir = tmp_pixi_workspace.joinpath(project)
+    shutil.copytree(test_data, target_dir)
+    manifest_path = target_dir.joinpath("pyproject.toml")
+
+    # TODO: Setting the cache dir shouldn't be necessary!
+    env = {
+        "BUILD_EDITABLE_PYTHON": "false",
+        "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
+    }
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+        env=env,
+    )
+
+    # Verify that package is installed as editable
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "check-editable",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stdout_contains="The package is not installed as editable.",
     )

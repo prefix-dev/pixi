@@ -50,6 +50,13 @@ keyring-provider = "subprocess"
 allow-insecure-host = ["localhost:8080"]
 #  --8<-- [end:pypi-config]
 
+#  --8<-- [start:s3-options]
+[s3-options.my-bucket]
+endpoint-url = "https://my-s3-compatible-host.com"
+force-path-style = true
+region = "us-east-1"
+#  --8<-- [end:s3-options]
+
 #  --8<-- [start:concurrency]
 [concurrency]
 # The maximum number of concurrent downloads
@@ -78,6 +85,8 @@ use-environment-activation-cache = true
   "https://conda.anaconda.org/bioconda",
   # OCI registries are also supported
   "oci://ghcr.io/channel-mirrors/bioconda",
+  # S3-compatible storage is also supported
+  "s3://my-s3-bucket/bioconda",
   "https://prefix.dev/bioconda",
 ]
 #  --8<-- [end:mirrors]

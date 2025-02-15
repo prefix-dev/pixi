@@ -28,7 +28,7 @@ impl Prefix {
     }
 
     /// Returns the root directory of the prefix
-    pub(crate) fn root(&self) -> &Path {
+    pub fn root(&self) -> &Path {
         &self.root
     }
 

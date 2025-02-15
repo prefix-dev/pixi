@@ -37,6 +37,8 @@ hatchling = "*"
 # We add our package as dependency to the workspace
 [dependencies]
 simple_python = { path = "." }
+# pixi also support git dependencies
+boost-check = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "boost-check" }
 # --8<-- [end:dependencies]
 
 # --8<-- [start:run-dependencies]

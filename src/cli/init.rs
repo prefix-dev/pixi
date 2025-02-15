@@ -1,5 +1,6 @@
 use std::{
     cmp::PartialEq,
+    collections::HashMap,
     fs,
     io::{ErrorKind, Write},
     path::{Path, PathBuf},
@@ -81,9 +82,34 @@ version = "{{ version }}"
 {% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
 {%- endif %}
 
+{%- if s3 %}
+{%- for key in s3 %}
+
+[project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
+{%- endif %}
+{%- if s3[key].region %}
+{%- endif %}
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
+{%- endif %}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
+{%- endif %}
+
+{%- endfor %}
+{%- endif %}
+
 [tasks]
 
 [dependencies]
+
+{%- if env_vars %}
+
+[activation]
+env = { {{ env_vars }} }
+{%- endif %}
 
 "#;
 
@@ -108,6 +134,25 @@ default = { solve-group = "default" }
 {%- endif %}
 {{env}} = { features = {{ features }}, solve-group = "default" }
 {%- endfor %}
+
+{%- if s3 %}
+{%- for key in s3 %}
+
+[tool.pixi.project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
+{%- endif %}
+{%- if s3[key].region %}
+{%- endif %}
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
+{%- endif %}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
+{%- endif %}
+
+{%- endfor %}
+{%- endif %}
 
 [tool.pixi.tasks]
 
@@ -139,6 +184,25 @@ platforms = {{ platforms }}
 [tool.pixi.pypi-options]
 {% if index_url %}index-url = "{{ index_url }}"{% endif %}
 {% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
+
+{%- if s3 %}
+{%- for key in s3 %}
+
+[tool.pixi.project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
+{%- endif %}
+{%- if s3[key].region %}
+{%- endif %}
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
+{%- endif %}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
+{%- endif %}
+
+{%- endfor %}
 {%- endif %}
 
 [tool.pixi.pypi-dependencies]
@@ -223,6 +287,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or(default_name.clone().as_str())
             .to_string();
 
+        let env_vars = env_file.variables();
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
@@ -235,6 +300,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &platforms,
             None,
             &vec![],
+            config.s3_options,
+            Some(&env_vars),
         );
         let mut workspace =
             WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
@@ -334,6 +401,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         channels,
                         platforms,
                         environments,
+                        s3 => relevant_s3_options(config.s3_options, channels),
                     },
                 )
                 .expect("should be able to render the template");
@@ -389,6 +457,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         platforms,
                         index_url => index_url.as_ref(),
                         extra_index_urls => &extra_index_urls,
+                        s3 => relevant_s3_options(config.s3_options, channels),
                     },
                 )
                 .expect("should be able to render the template");
@@ -434,6 +503,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &platforms,
                 index_url.as_ref(),
                 &extra_index_urls,
+                config.s3_options,
+                None,
             );
             save_manifest_file(&pixi_manifest_path, rv)?;
         };
@@ -472,21 +543,51 @@ fn render_project(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
+    s3_options: HashMap<String, pixi_config::S3Options>,
+    env_vars: Option<&HashMap<String, String>>,
 ) -> String {
-    env.render_named_str(
-        consts::PROJECT_MANIFEST,
-        PROJECT_TEMPLATE,
-        context! {
-            name,
-            version,
-            author,
-            channels,
-            platforms,
-            index_url,
-            extra_index_urls,
-        },
-    )
-    .expect("should be able to render the template")
+    let ctx = context! {
+        name,
+        version,
+        author,
+        channels,
+        platforms,
+        index_url,
+        extra_index_urls,
+        s3 => relevant_s3_options(s3_options, channels),
+        env_vars => {if let Some(env_vars) = env_vars {
+            env_vars.iter().map(|(k, v)| format!("{} = \"{}\"", k, v)).collect::<Vec<String>>().join(", ")
+        } else {String::new()}},
+    };
+
+    env.render_named_str(consts::PROJECT_MANIFEST, PROJECT_TEMPLATE, ctx)
+        .expect("should be able to render the template")
+}
+
+fn relevant_s3_options(
+    s3_options: HashMap<String, pixi_config::S3Options>,
+    channels: Vec<NamedChannelOrUrl>,
+) -> HashMap<String, pixi_config::S3Options> {
+    // only take s3 options in manifest if they are used in the default channels
+    let s3_buckets = channels
+        .iter()
+        .filter_map(|channel| match channel {
+            NamedChannelOrUrl::Name(_) => None,
+            NamedChannelOrUrl::Path(_) => None,
+            NamedChannelOrUrl::Url(url) => {
+                if url.scheme() == "s3" {
+                    url.host().map(|host| host.to_string())
+                } else {
+                    None
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+
+    s3_options
+        .into_iter()
+        .filter(|(key, _)| s3_buckets.contains(key))
+        .collect()
 }
 
 /// Save the rendered template to a file, and print a message to the user.

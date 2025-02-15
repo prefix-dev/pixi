@@ -1,6 +1,7 @@
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
 use uv_configuration::{Concurrency, SourceStrategy, TrustedHost};
+use uv_dispatch::SharedState;
 use uv_distribution_types::IndexCapabilities;
 use uv_types::{HashStrategy, InFlight};
 
@@ -21,6 +22,7 @@ pub struct UvResolutionContext {
     pub source_strategy: SourceStrategy,
     pub capabilities: IndexCapabilities,
     pub allow_insecure_host: Vec<TrustedHost>,
+    pub shared_state: SharedState,
 }
 
 impl UvResolutionContext {
@@ -64,12 +66,13 @@ impl UvResolutionContext {
             cache,
             in_flight: InFlight::default(),
             hash_strategy: HashStrategy::None,
-            client: project.client().clone(),
+            client: project.client()?.clone(),
             keyring_provider,
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Disabled,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
+            shared_state: SharedState::default(),
         })
     }
 }

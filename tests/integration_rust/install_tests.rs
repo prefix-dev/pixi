@@ -4,22 +4,38 @@ use crate::common::{
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use pixi::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
-use pixi::cli::{run, run::Args, LockFileUsageArgs};
 use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
+use pixi::{
+    build::BuildContext,
+    cli::{
+        run::{self, Args},
+        LockFileUsageArgs,
+    },
+    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
+};
+use pixi::{
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
+};
 use pixi::{UpdateLockFileOptions, Workspace};
+use pixi_build_frontend::ToolContext;
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
-use rattler_conda_types::Platform;
+use pixi_record::PixiRecord;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
 use std::{
     fs::File,
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::Arc,
 };
-use tempfile::TempDir;
+use tempfile::{tempdir, TempDir};
+use tokio::{fs, task::JoinSet};
+use url::Url;
 use uv_pep508::PackageName;
 use uv_python::PythonEnvironment;
 
@@ -871,4 +887,263 @@ async fn pypi_prefix_is_not_created_when_whl() {
 
     // Check that the prefix is not created
     assert!(!default_env_prefix.exists());
+}
+
+/// This test checks that the override of a conda package is correctly done per platform.
+/// There have been issues in the past that the wrong repodata was used for the override.
+/// What this test does is recreate this situation by adding a conda package that is only
+/// available on linux and then adding a PyPI dependency on the same package for both linux
+/// and osxarm64.
+/// This should result in the PyPI package being overridden on linux and not on osxarm64.
+#[tokio::test]
+async fn conda_pypi_override_correct_per_platform() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init_with_platforms(vec![
+        Platform::OsxArm64.to_string(),
+        Platform::Linux64.to_string(),
+        Platform::Win64.to_string(),
+        Platform::Osx64.to_string(),
+    ])
+    .await
+    .unwrap();
+    pixi.add("python==3.12").with_install(false).await.unwrap();
+
+    // Add a conda package that is only available on linux
+    pixi.add("boltons")
+        .with_platform(Platform::Linux64)
+        .with_install(false)
+        .await
+        .unwrap();
+
+    // Add a PyPI dependency on boltons as well
+    pixi.add("boltons")
+        .set_pypi(true)
+        .with_install(false)
+        .await
+        .unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    // Check that the conda package is only available on linux
+    assert!(lock.contains_conda_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        "boltons"
+    ));
+    // Sanity check that the conda package is not available on osxarm64
+    assert!(!lock.contains_conda_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::OsxArm64,
+        "boltons"
+    ));
+    // Check that the PyPI package is available on osxarm64 only
+    assert!(lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::OsxArm64,
+        pep508_rs::Requirement::from_str("boltons").unwrap(),
+    ));
+    assert!(!lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::Linux64,
+        pep508_rs::Requirement::from_str("boltons").unwrap(),
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_multiple_prefix_update() {
+    let current_platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(
+        format!(
+            r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["conda-forge"]
+    platforms = ["{platform}"]
+    "#,
+            platform = current_platform
+        )
+        .as_str(),
+    )
+    .unwrap();
+
+    let project = pixi.workspace().unwrap();
+
+    let python_package = Package::build("python", "3.13.1").finish();
+
+    #[cfg(target_os = "windows")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/win-64/python-3.13.1-h071d269_105_cp313.conda";
+    #[cfg(target_os = "linux")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/linux-64/python-3.13.1-ha99a958_105_cp313.conda";
+    #[cfg(target_os = "macos")]
+    let package_url =
+        "https://repo.prefix.dev/conda-forge/osx-64/python-3.13.1-h2334245_105_cp313.conda";
+
+    let python_repo_data_record = RepoDataRecord {
+        package_record: python_package.package_record,
+        file_name: "python".to_owned(),
+        url: Url::parse(package_url).unwrap(),
+        channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
+    };
+
+    let boltons_package = Package::build("wheel", "0.45.1").finish();
+
+    let boltons_repo_data_record = RepoDataRecord {
+        package_record: boltons_package.package_record,
+        file_name: "wheel".to_owned(),
+        url: Url::parse(
+            "https://repo.prefix.dev/conda-forge/noarch/wheel-0.45.1-pyhd8ed1ab_1.conda",
+        )
+        .unwrap(),
+        channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
+    };
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+
+    let group = GroupedEnvironment::from(project.default_environment().clone());
+
+    let channels = group
+        .channel_urls(&group.workspace().channel_config())
+        .unwrap();
+    let name = group.name();
+    let client = group.workspace().authenticated_client().unwrap().clone();
+    let prefix = group.prefix();
+    let virtual_packages = group.virtual_packages(current_platform);
+
+    let conda_prefix_updater = CondaPrefixUpdater::new(
+        channels,
+        name,
+        client,
+        prefix,
+        virtual_packages,
+        current_platform,
+        PackageCache::new(tmp_dir.path().to_path_buf()),
+        IoConcurrencyLimit::default(),
+        BuildContext::new(
+            tmp_dir.path().to_path_buf(),
+            tmp_dir.path().to_path_buf(),
+            ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
+            Default::default(),
+            Arc::new(ToolContext::default()),
+        )
+        .unwrap(),
+    );
+
+    let pixi_records = Vec::from([
+        PixiRecord::Binary(boltons_repo_data_record),
+        PixiRecord::Binary(python_repo_data_record),
+    ]);
+
+    let mut sets = JoinSet::new();
+
+    // spawn multiple tokio tasks to update the prefix
+    for _ in 0..4 {
+        let pixi_records = pixi_records.clone();
+        // tasks.push(conda_prefix_updater.update(pixi_records));
+        let updater = conda_prefix_updater.clone();
+        sets.spawn(async move { updater.update(pixi_records).await.cloned() });
+    }
+
+    let mut first_modified = None;
+
+    while let Some(result) = sets.join_next().await {
+        let prefix_updated = result.unwrap().unwrap();
+
+        let prefix = prefix_updated.prefix.root();
+
+        assert_eq!(
+            prefix_updated
+                .prefix
+                .find_installed_packages()
+                .unwrap()
+                .len(),
+            2
+        );
+
+        let prefix_metadata = fs::metadata(prefix).await.unwrap();
+
+        let first_modified_date = first_modified.get_or_insert(prefix_metadata.modified().unwrap());
+
+        // verify that the prefix was updated only once, meaning that we instantiated prefix only once
+        assert_eq!(*first_modified_date, prefix_metadata.modified().unwrap());
+    }
+}
+
+/// Should download a package from an S3 bucket and install it
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_s3() {
+    let r2_access_key_id = std::env::var("PIXI_TEST_R2_ACCESS_KEY_ID").ok();
+    let r2_secret_access_key = std::env::var("PIXI_TEST_R2_SECRET_ACCESS_KEY").ok();
+    if r2_access_key_id.is_none()
+        || r2_access_key_id.clone().unwrap().is_empty()
+        || r2_secret_access_key.is_none()
+        || r2_secret_access_key.clone().unwrap().is_empty()
+    {
+        eprintln!(
+            "Skipping test as PIXI_TEST_R2_ACCESS_KEY_ID or PIXI_TEST_R2_SECRET_ACCESS_KEY is not set"
+        );
+        return;
+    }
+
+    let r2_access_key_id = r2_access_key_id.unwrap();
+    let r2_secret_access_key = r2_secret_access_key.unwrap();
+
+    let credentials = format!(
+        r#"
+    {{
+        "s3://rattler-s3-testing/channel": {{
+            "S3Credentials": {{
+                "access_key_id": "{}",
+                "secret_access_key": "{}"
+            }}
+        }}
+    }}
+    "#,
+        r2_access_key_id, r2_secret_access_key
+    );
+    let temp_dir = tempdir().unwrap();
+    let credentials_path = temp_dir.path().join("credentials.json");
+    let mut file = File::create(credentials_path.clone()).unwrap();
+    file.write_all(credentials.as_bytes()).unwrap();
+
+    let manifest = format!(
+        r#"
+    [project]
+    name = "s3-test"
+    channels = ["s3://rattler-s3-testing/channel", "conda-forge"]
+    platforms = ["{platform}"]
+
+    [project.s3-options.rattler-s3-testing]
+    endpoint-url = "https://e1a7cde76f1780ec06bac859036dbaf7.eu.r2.cloudflarestorage.com"
+    region = "auto"
+    force-path-style = true
+
+    [dependencies]
+    my-webserver = {{ version = "0.1.0", build = "pyh4616a5c_0" }}
+    "#,
+        platform = Platform::current(),
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    temp_env::async_with_vars(
+        [(
+            "RATTLER_AUTH_FILE",
+            Some(credentials_path.to_str().unwrap()),
+        )],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
+
+    // Test for existence of conda-meta/my-webserver-0.1.0-pyh4616a5c_0.json file
+    assert!(pixi
+        .default_env_path()
+        .unwrap()
+        .join("conda-meta")
+        .join("my-webserver-0.1.0-pyh4616a5c_0.json")
+        .exists());
 }

@@ -84,7 +84,7 @@ impl<'a> CondaPrefixUpdater<'a> {
 
         let has_existing_packages = !installed_packages.is_empty();
         let group_name = self.group.name().clone();
-        let client = self.group.workspace().authenticated_client().clone();
+        let client = self.group.workspace().authenticated_client()?.clone();
         let prefix = self.group.prefix();
 
         let python_status = environment::update_prefix_conda(

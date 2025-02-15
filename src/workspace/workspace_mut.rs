@@ -25,7 +25,6 @@ use crate::{
     cli::cli_config::PrefixUpdateConfig,
     diff::LockFileDiff,
     environment::LockFileUsage,
-    load_lock_file,
     lock_file::{LockFileDerivedData, UpdateContext, UpdateMode},
     workspace::{
         grouped_environment::GroupedEnvironment, MatchSpecs, PypiDeps, SourceSpecs, UpdateDeps,
@@ -307,7 +306,7 @@ impl WorkspaceMut {
             return Ok(None);
         }
 
-        let original_lock_file = load_lock_file(self.workspace()).await?;
+        let original_lock_file = self.workspace().load_lock_file().await?;
         let affected_environments = self
             .workspace()
             .environments()
