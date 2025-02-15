@@ -443,6 +443,10 @@ impl InstallBuilder {
         self.args.lock_file_usage.frozen = true;
         self
     }
+    pub fn with_no_path_dependencies(mut self) -> Self {
+        self.args.no_path_dependencies = true;
+        self
+    }
 }
 
 impl IntoFuture for InstallBuilder {

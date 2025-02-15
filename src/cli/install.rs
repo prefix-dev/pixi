@@ -6,6 +6,7 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
+use std::fmt::Write;
 
 /// Install all dependencies
 #[derive(Parser, Debug)]
@@ -75,28 +76,38 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Message what's installed
-    let detached_envs_message =
-        if let Ok(Some(path)) = workspace.config().detached_environments().path() {
-            format!(" in '{}'", console::style(path.display()).bold())
-        } else {
-            "".to_string()
-        };
+    let mut message = console::style(console::Emoji("✔ ", "")).green().to_string();
 
     if installed_envs.len() == 1 {
-        eprintln!(
-            "{}The {} environment has been installed{}.",
-            console::style(console::Emoji("✔ ", "")).green(),
+        write!(
+            &mut message,
+            "The {} environment has been installed",
             installed_envs[0].fancy_display(),
-            detached_envs_message
-        );
+        )
+        .unwrap();
     } else {
-        eprintln!(
-            "{}The following environments have been installed: {}\t{}",
-            console::style(console::Emoji("✔ ", "")).green(),
+        write!(
+            &mut message,
+            "The following environments have been installed: {}",
             installed_envs.iter().map(|n| n.fancy_display()).join(", "),
-            detached_envs_message
-        );
+        )
+        .unwrap();
     }
+
+    if let Ok(Some(path)) = workspace.config().detached_environments().path() {
+        write!(
+            &mut message,
+            " in '{}'",
+            console::style(path.display()).bold()
+        )
+        .unwrap()
+    }
+
+    if args.no_path_dependencies {
+        write!(&mut message, " without path dependencies").unwrap()
+    }
+
+    eprintln!("{}.", message);
 
     Ok(())
 }

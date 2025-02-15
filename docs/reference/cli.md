@@ -174,6 +174,7 @@ E.g. `pixi run`, `pixi shell`, `pixi shell-hook`, `pixi add`, `pixi remove` to n
 - `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided the default environment will be used.
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
+- `--no-path-dependencies`: Do not install local path dependencies. Requires --frozen.
 
 ```shell
 pixi install

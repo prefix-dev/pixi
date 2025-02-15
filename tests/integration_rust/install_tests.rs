@@ -20,6 +20,7 @@ use std::{
     str::FromStr,
 };
 use tempfile::TempDir;
+use uv_pep508::PackageName;
 use uv_python::PythonEnvironment;
 
 /// Should add a python version to the environment and lock file that matches
@@ -300,6 +301,82 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     // Current interpreter and venv
     let interpreter = uv_python::Interpreter::query(python, cache).unwrap();
     uv_python::PythonEnvironment::from_interpreter(interpreter)
+}
+
+/// Test `pixi install --frozen --no-path-dependencies` functionality
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_frozen_no_path_dependencies() {
+    // Create a project with a local python dependency 'no-build-editable'
+    // and a local conda dependency 'smokey
+    let current_platform = Platform::current();
+    let manifest = format!(
+        r#"
+        [workspace]
+        channels = ["conda-forge"]
+        description = "Add a short description here"
+        name = "pyproject"
+        platforms = ["{platform}"]
+        preview = ["pixi-build"]
+        version = "0.1.0"
+
+        [dependencies]
+        python = "*"
+        smokey = {{ path = "./smokey" }}
+
+        [pypi-dependencies]
+        no-build-editable = {{path = "./no-build-editable"}}
+        "#,
+        platform = current_platform,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    fs_extra::dir::copy(
+        "tests/data/satisfiability/no-build-editable",
+        pixi.workspace_path(),
+        &fs_extra::dir::CopyOptions::new(),
+    )
+    .unwrap();
+
+    fs_extra::dir::copy(
+        "tests/data/pixi_build/rattler-build-backend/recipes/smokey",
+        pixi.workspace_path(),
+        &fs_extra::dir::CopyOptions::new(),
+    )
+    .unwrap();
+
+    pixi.update_lock_file().await.unwrap();
+
+    // Check that 'no-build-editable' nor 'smokey' are installed when --no-path-dependencies is used
+    pixi.install()
+        .with_frozen()
+        .with_no_path_dependencies()
+        .await
+        .unwrap();
+    let prefix = pixi.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix, &cache);
+    let packages = uv_installer::SitePackages::from_environment(&env).unwrap();
+    packages.get_packages(&PackageName::new("no-build-editable".to_string()).unwrap());
+    assert!(packages.iter().count() == 0);
+
+    let conda_prefix = pixi::prefix::Prefix::new(prefix);
+    let smokey = conda_prefix
+        .find_designated_package(&rattler_conda_types::PackageName::try_from("smokey").unwrap())
+        .await;
+    assert!(smokey.is_err());
+
+    // Check that 'no-build-editable' and 'smokey' are installed after a normal install
+    pixi.install().with_frozen().await.unwrap();
+    let packages = uv_installer::SitePackages::from_environment(&env).unwrap();
+    packages.get_packages(&PackageName::new("no-build-editable".to_string()).unwrap());
+    assert!(packages.iter().count() > 0);
+
+    let smokey = conda_prefix
+        .find_designated_package(&rattler_conda_types::PackageName::try_from("smokey").unwrap())
+        .await;
+    assert!(smokey.is_ok());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
