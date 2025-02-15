@@ -324,7 +324,7 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_frozen_no_path_dependencies() {
     // Create a project with a local python dependency 'no-build-editable'
-    // and a local conda dependency 'smokey
+    // and a local conda dependency 'smokey'
     let current_platform = Platform::current();
     let manifest = format!(
         r#"
@@ -364,7 +364,7 @@ async fn install_frozen_no_path_dependencies() {
 
     pixi.update_lock_file().await.unwrap();
 
-    // Check that 'no-build-editable' nor 'smokey' are installed when --no-path-dependencies is used
+    // Check that neither 'no-build-editable' nor 'smokey' are installed when --no-path-dependencies is used
     pixi.install()
         .with_frozen()
         .with_no_path_dependencies()
@@ -383,7 +383,7 @@ async fn install_frozen_no_path_dependencies() {
         .await;
     assert!(smokey.is_err());
 
-    // Check that 'no-build-editable' and 'smokey' are installed after a normal install
+    // Check that 'no-build-editable' and 'smokey' are installed after a followup normal install
     pixi.install().with_frozen().await.unwrap();
     let packages = uv_installer::SitePackages::from_environment(&env).unwrap();
     packages.get_packages(&PackageName::new("no-build-editable".to_string()).unwrap());

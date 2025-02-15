@@ -19,7 +19,7 @@ use pixi_manifest::{FeaturesExt, PyPiRequirement};
 use pixi_progress::await_in_progress;
 use pixi_spec::{GitSpec, PixiSpec};
 use rattler_conda_types::Platform;
-use rattler_lock::LockedPackageRef;
+use rattler_lock::{LockedPackageRef, UrlOrPath};
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
 

@@ -34,7 +34,8 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
 use rattler_lock::{
     LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
-, UrlOrPath};
+    UrlOrPath,
+};
 use rattler_repodata_gateway::{Gateway, RepoData};
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
