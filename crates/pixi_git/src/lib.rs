@@ -82,19 +82,37 @@ impl TryFrom<Url> for GitUrl {
     fn try_from(mut url: Url) -> Result<Self, Self::Error> {
         // Remove any query parameters and fragments.
         url.set_fragment(None);
-        url.set_query(None);
+        // url.set_query(None);
+
+        tracing::debug!("==== TRY FROM URL {}", url);
 
         // If the URL ends with a reference, like `https://git.example.com/MyProject.git@v1.0`,
         // extract it.
+        // The URL can also be enriched with the reference type, like `https://git.example.com/MyProject.git@v1.0?rev_type=tag`.
+        // so we can extract the reference and the reference type.
         let mut reference = GitReference::DefaultBranch;
         if let Some((prefix, suffix)) = url
             .path()
             .rsplit_once('@')
             .map(|(prefix, suffix)| (prefix.to_string(), suffix.to_string()))
         {
-            reference = GitReference::from_rev(suffix);
+            if let Some((_, rev_type)) = url.query_pairs().find(|(key, _)| key == "rev_type") {
+                tracing::debug!("====URL WITH QUERY PAIRS {}", url);
+                match rev_type.into_owned().as_str() {
+                    "tag" => reference = GitReference::Tag(suffix),
+                    "branch" => reference = GitReference::Branch(suffix),
+                    "rev" => reference = GitReference::from_rev(suffix),
+                    // a custom reference type is not supported
+                    _ => return Err(OidParseError::UrlParse(url.to_string())),
+                }
+            } else {
+                // try to guess it
+                reference = GitReference::from_rev(suffix);
+            }
+
             url.set_path(&prefix);
         }
+        url.set_query(None);
 
         Ok(Self::from_reference(url, reference))
     }

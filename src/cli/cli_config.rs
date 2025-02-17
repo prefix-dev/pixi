@@ -22,6 +22,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
 
+pub const GIT_URL_REV_TYPE: &str = "rev_type";
+
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
@@ -185,6 +187,7 @@ impl GitRev {
         self
     }
 
+    /// Get the reference as a string
     pub fn as_str(&self) -> Option<&str> {
         if let Some(branch) = &self.branch {
             Some(branch)
@@ -192,6 +195,19 @@ impl GitRev {
             Some(tag)
         } else if let Some(rev) = &self.rev {
             Some(rev)
+        } else {
+            None
+        }
+    }
+
+    /// Get the type of the reference
+    pub fn reference_type(&self) -> Option<&str> {
+        if self.branch.is_some() {
+            Some("branch")
+        } else if self.tag.is_some() {
+            Some("tag")
+        } else if self.rev.is_some() {
+            Some("rev")
         } else {
             None
         }
@@ -337,6 +353,7 @@ impl DependencyConfig {
                         );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
+                        tracing::debug!("====Parsed requirement: {:?}", dep);
                         let name = PyPiPackageName::from_normalized(dep.clone().name);
 
                         Ok((name, dep))
@@ -355,7 +372,11 @@ impl HasSpecs for DependencyConfig {
     }
 }
 
-/// Builds a PEP 508 compliant VCS requirement string
+/// Builds a PEP 508 compliant VCS requirement string.
+/// Main difference between a simple VCS requirement is that it encode
+/// in a separate query parameter the reference type.
+/// This is used to differentiate between a branch, a tag or a revision
+/// which is lost in the simple VCS requirement.
 fn build_vcs_requirement(
     package_name: &str,
     git: &Url,
@@ -368,12 +389,21 @@ fn build_vcs_requirement(
         "git+"
     };
     let mut vcs_req = format!("{} @ {}{}", package_name, scheme, git);
-    if let Some(rev_str) = rev.and_then(|rev| rev.as_str().map(|s| s.to_string())) {
-        vcs_req.push_str(&format!("@{}", rev_str));
+    if let Some(revision) = rev {
+        if let Some(rev_str) = revision.as_str().map(|s| s.to_string()) {
+            vcs_req.push_str(&format!("@{}", rev_str));
+
+            if let Some(rev_type) = revision.reference_type() {
+                vcs_req.push_str(&format!("?{GIT_URL_REV_TYPE}={}", rev_type));
+            }
+        }
     }
     if let Some(subdir) = subdir {
         vcs_req.push_str(&format!("#subdirectory={}", subdir));
     }
+
+    tracing::debug!("====VCS requirement: {}", vcs_req);
+
     vcs_req
 }
 
