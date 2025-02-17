@@ -1779,7 +1779,7 @@ async fn spawn_solve_conda_environment_task(
             // Add purl's for the conda packages that are also available as pypi packages if
             // we need them.
             if has_pypi_dependencies {
-                pb.set_message("extracting pypi packages");
+                pb.set_message("mapping conda to pypi packages");
                 pypi_mapping::amend_pypi_purls(
                     client,
                     &pypi_name_mapping_location,
