@@ -170,7 +170,6 @@ impl Feature {
             channel_priority: None,
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
-
             targets: <Targets<WorkspaceTarget> as Default>::default(),
         }
     }

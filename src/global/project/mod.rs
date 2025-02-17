@@ -31,6 +31,7 @@ use is_executable::IsExecutable;
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
 use miette::{miette, Context, IntoDiagnostic};
+use once_cell::sync::OnceCell;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_config::{default_channel_config, pixi_home, Config};
@@ -56,7 +57,6 @@ use std::{
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::OnceLock,
 };
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
@@ -84,11 +84,13 @@ pub struct Project {
     /// Binary directory
     pub(crate) bin_dir: BinDir,
     /// Reqwest client shared for this project.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
     /// The repodata gateway to use for answering queries about repodata.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    repodata_gateway: OnceLock<Gateway>,
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    repodata_gateway: OnceCell<Gateway>,
 }
 
 impl Debug for Project {
@@ -256,8 +258,8 @@ impl Project {
 
         let config = Config::load(&root);
 
-        let client = OnceLock::new();
-        let repodata_gateway = OnceLock::new();
+        let client = OnceCell::new();
+        let repodata_gateway = OnceCell::new();
         Self {
             root,
             manifest,
@@ -457,13 +459,15 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
-        &self.client_and_authenticated_client().1
+    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
+        Ok(&self.client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
+    fn client_and_authenticated_client(
+        &self,
+    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
         self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
+            .get_or_try_init(|| build_reqwest_clients(Some(&self.config), None))
     }
 
     pub(crate) fn config(&self) -> &Config {
@@ -516,7 +520,7 @@ impl Project {
                 env_name.fancy_display()
             ),
             |_| async {
-                self.repodata_gateway()
+                self.repodata_gateway()?
                     .query(channels, [platform, Platform::NoArch], match_specs.clone())
                     .recursive(true)
                     .await
@@ -572,6 +576,7 @@ impl Project {
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
+        let authenticated_client = self.authenticated_client()?.clone();
         let result = await_in_progress(
             format!(
                 "Creating virtual environment for {}",
@@ -579,7 +584,7 @@ impl Project {
             ),
             |pb| {
                 Installer::new()
-                    .with_download_client(self.authenticated_client().clone())
+                    .with_download_client(authenticated_client)
                     .with_execute_link_scripts(false)
                     .with_package_cache(package_cache)
                     .with_target_platform(platform)
@@ -1069,9 +1074,11 @@ impl Project {
 
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
-    fn repodata_gateway(&self) -> &Gateway {
-        self.repodata_gateway
-            .get_or_init(|| self.config().gateway(self.authenticated_client().clone()))
+    fn repodata_gateway(&self) -> miette::Result<&Gateway> {
+        self.repodata_gateway.get_or_try_init(|| {
+            let client = self.authenticated_client()?.clone();
+            Ok(self.config().gateway(client))
+        })
     }
 }
 

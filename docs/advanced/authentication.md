@@ -15,13 +15,18 @@ Arguments:
   <HOST>  The host to authenticate with (e.g. repo.prefix.dev)
 
 Options:
-      --token <TOKEN>              The token to use (for authentication with prefix.dev)
-      --username <USERNAME>        The username to use (for basic HTTP authentication)
-      --password <PASSWORD>        The password to use (for basic HTTP authentication)
-      --conda-token <CONDA_TOKEN>  The token to use on anaconda.org / quetz authentication
-  -v, --verbose...                 More output per occurrence
-  -q, --quiet...                   Less output per occurrence
-  -h, --help                       Print help
+      --token <TOKEN>                                The token to use (for authentication with prefix.dev)
+      --username <USERNAME>                          The username to use (for basic HTTP authentication)
+      --password <PASSWORD>                          The password to use (for basic HTTP authentication)
+      --conda-token <CONDA_TOKEN>                    The token to use on anaconda.org / quetz authentication
+      --s3-access-key-id <S3_ACCESS_KEY_ID>          The S3 access key ID
+      --s3-secret-access-key <S3_SECRET_ACCESS_KEY>  The S3 secret access key
+      --s3-session-token <S3_SESSION_TOKEN>          The S3 session token
+  -v, --verbose...                                   Increase logging verbosity
+  -q, --quiet...                                     Decrease logging verbosity
+      --color <COLOR>                                Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]
+      --no-progress                                  Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
+  -h, --help                                         Print help
 ```
 
 The different options are "token", "conda-token" and "username + password".
@@ -52,6 +57,17 @@ Login to a basic HTTP secured server:
 ```shell
 pixi auth login myserver.com --username user --password password
 ```
+
+Login to an S3 bucket:
+
+```shell
+pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-access-key <secret-access-key>
+# if your key uses a session token, you can also use:
+pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-access-key <secret-access-key> --s3-session-token <session-token>
+```
+
+!!!note
+    S3 authentication is also supported through AWS's typical `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, see the [S3 section](../advanced/s3.md) for more details.
 
 ## Where does pixi store the authentication information?
 
@@ -99,6 +115,13 @@ The JSON should follow the following format:
     },
     "conda.anaconda.org": {
         "CondaToken": "your_token"
+    },
+    "s3://my-bucket": {
+        "S3Credentials": {
+            "access_key_id": "my-access-key-id",
+            "secret_access_key": "my-secret-access-key",
+            "session_token": null
+        }
     }
 }
 ```
@@ -108,6 +131,7 @@ Note: if you use a wildcard in the host, any subdomain will match (e.g. `*.prefi
 Lastly you can set the authentication override file in the [global configuration file](./../reference/pixi_configuration.md).
 
 ## PyPI authentication
+
 Currently, we support the following methods for authenticating against PyPI:
 
 1. [keyring](https://pypi.org/project/keyring/) authentication.
@@ -120,6 +144,7 @@ We want to add more methods in the future, so if you have a specific method you 
 Currently, pixi supports the uv method of authentication through the python [keyring](https://pypi.org/project/keyring/) library.
 
 #### Installing keyring
+
 To install keyring you can use pixi global install:
 
 === "Basic Auth"
@@ -190,13 +215,13 @@ For other registries, you will need to adapt these instructions to add the right
     ```
 
 #### Installing your environment
+
 Either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`:
 
 ```shell
 # From an existing pixi project
 pixi install --pypi-keyring-provider subprocess
 ```
-
 
 ### `.netrc` file
 
@@ -214,4 +239,5 @@ machine registry-name
 login admin
 password admin
 ```
+
 For more details, you can access the [.netrc docs](https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip).
