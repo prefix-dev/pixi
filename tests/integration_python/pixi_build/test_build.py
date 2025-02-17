@@ -67,7 +67,8 @@ def test_build_conda_package_variants(
     # Ensure that exactly two conda packages have been built
     built_packages = list(simple_workspace.path.glob("*.conda"))
     assert len(built_packages) == 2
-    assert built_packages[0].exists()
+    for package in built_packages:
+        assert package.exists()
 
 
 def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
