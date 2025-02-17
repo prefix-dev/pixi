@@ -12,7 +12,8 @@ pub mod sha;
 pub mod source;
 pub mod url;
 
-// use resolver::GitResolver;
+/// The query parameter used to specify the type of reference in a Git URL.
+pub const GIT_URL_QUERY_REV_TYPE: &str = "rev_type";
 
 /// A URL reference to a Git repository.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord)]
@@ -82,9 +83,6 @@ impl TryFrom<Url> for GitUrl {
     fn try_from(mut url: Url) -> Result<Self, Self::Error> {
         // Remove any query parameters and fragments.
         url.set_fragment(None);
-        // url.set_query(None);
-
-        tracing::debug!("==== TRY FROM URL {}", url);
 
         // If the URL ends with a reference, like `https://git.example.com/MyProject.git@v1.0`,
         // extract it.
@@ -96,8 +94,10 @@ impl TryFrom<Url> for GitUrl {
             .rsplit_once('@')
             .map(|(prefix, suffix)| (prefix.to_string(), suffix.to_string()))
         {
-            if let Some((_, rev_type)) = url.query_pairs().find(|(key, _)| key == "rev_type") {
-                tracing::debug!("====URL WITH QUERY PAIRS {}", url);
+            if let Some((_, rev_type)) = url
+                .query_pairs()
+                .find(|(key, _)| key == GIT_URL_QUERY_REV_TYPE)
+            {
                 match rev_type.into_owned().as_str() {
                     "tag" => reference = GitReference::Tag(suffix),
                     "branch" => reference = GitReference::Branch(suffix),

@@ -22,7 +22,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
 
-pub const GIT_URL_REV_TYPE: &str = "rev_type";
+use pixi_git::GIT_URL_QUERY_REV_TYPE;
 
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
@@ -353,7 +353,6 @@ impl DependencyConfig {
                         );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
-                        tracing::debug!("====Parsed requirement: {:?}", dep);
                         let name = PyPiPackageName::from_normalized(dep.clone().name);
 
                         Ok((name, dep))
@@ -394,15 +393,13 @@ fn build_vcs_requirement(
             vcs_req.push_str(&format!("@{}", rev_str));
 
             if let Some(rev_type) = revision.reference_type() {
-                vcs_req.push_str(&format!("?{GIT_URL_REV_TYPE}={}", rev_type));
+                vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={}", rev_type));
             }
         }
     }
     if let Some(subdir) = subdir {
         vcs_req.push_str(&format!("#subdirectory={}", subdir));
     }
-
-    tracing::debug!("====VCS requirement: {}", vcs_req);
 
     vcs_req
 }
