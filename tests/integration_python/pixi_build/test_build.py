@@ -6,9 +6,9 @@ import pytest
 from ..common import ExitCode, verify_cli_command
 import tomllib
 import tomli_w
+import yaml
 
 
-@pytest.mark.slow
 def test_build_conda_package(
     pixi: Path,
     simple_workspace: Path,
@@ -24,10 +24,47 @@ def test_build_conda_package(
         ],
     )
 
-    # really make sure that conda package was built
+    # Ensure that exactly one conda package has been built
     built_packages = list(simple_workspace.parent.glob("*.conda"))
-
     assert len(built_packages) == 1
+    assert built_packages[0].exists()
+
+
+def test_build_conda_package_variants(
+    pixi: Path, simple_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    # Add package3 to build dependencies of recipe
+    recipe_yaml = simple_workspace.parent.joinpath("recipe.yaml")
+    data = yaml.safe_load(recipe_yaml.read_text())
+    data.setdefault("requirements", {}).setdefault("build", []).append("package3")
+    recipe_yaml.write_text(yaml.dump(data))
+
+    # Add package3 to build-variants
+    variants = ["0.1.0", "0.2.0"]
+    manifest_data = tomllib.loads(simple_workspace.read_text())
+    manifest_data["workspace"].setdefault("channels", []).insert(0, multiple_versions_channel_1)
+    manifest_data["workspace"].setdefault("build-variants", {})["package3"] = variants
+    simple_workspace.write_text(tomli_w.dumps(manifest_data))
+
+    verify_cli_command(
+        [
+            pixi,
+            "build",
+            "--manifest-path",
+            simple_workspace,
+            "--output-dir",
+            simple_workspace.parent,
+        ],
+    )
+
+    # Ensure that the correct variants are requested
+    conda_build_params_file = simple_workspace.parent.joinpath("conda_build_params.json")
+    conda_build_params = json.loads(conda_build_params_file.read_text())
+    assert conda_build_params["variantConfiguration"]["package3"] == variants
+
+    # Ensure that exactly two conda packages have been built
+    built_packages = list(simple_workspace.parent.glob("*.conda"))
+    assert len(built_packages) == 2
     assert built_packages[0].exists()
 
 
@@ -85,7 +122,6 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Path) ->
     # Setting PIXI_CACHE_DIR shouldn't be necessary
     env = {
         "PIXI_CACHE_DIR": str(simple_workspace.parent.joinpath("pixi_cache")),
-        "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-rattler-build=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-rattler-build",
     }
     verify_cli_command(
         [
@@ -123,9 +159,6 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Path) ->
 
 
 def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Path) -> None:
-    env = {
-        "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-rattler-build=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-rattler-build",
-    }
     verify_cli_command(
         [
             pixi,
@@ -133,7 +166,6 @@ def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Path) -> No
             "--manifest-path",
             simple_workspace,
         ],
-        env=env,
     )
 
     conda_build_params = simple_workspace.parent.joinpath("conda_build_params.json")
@@ -153,7 +185,6 @@ def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Path) -> No
             "--manifest-path",
             simple_workspace,
         ],
-        env=env,
     )
 
     # Touching the recipe should trigger a rebuild and therefore create the file
@@ -163,9 +194,6 @@ def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Path) -> No
 def test_host_dependency_change_trigger_rebuild(
     pixi: Path, simple_workspace: Path, dummy_channel_1: Path
 ) -> None:
-    env = {
-        "PIXI_BUILD_BACKEND_OVERRIDE": "pixi-build-rattler-build=/var/home/julian/Projekte/github.com/prefix-dev/pixi-build-backends/target/release/pixi-build-rattler-build",
-    }
     verify_cli_command(
         [
             pixi,
@@ -173,7 +201,6 @@ def test_host_dependency_change_trigger_rebuild(
             "--manifest-path",
             simple_workspace,
         ],
-        env=env,
     )
 
     conda_build_params = simple_workspace.parent.joinpath("conda_build_params.json")
@@ -197,7 +224,6 @@ def test_host_dependency_change_trigger_rebuild(
             "--manifest-path",
             simple_workspace,
         ],
-        env=env,
     )
 
     # modifying the host-dependencies should trigger a rebuild and therefore create a file
