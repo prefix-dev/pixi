@@ -73,7 +73,7 @@ pub enum AsPep508Error {
     #[error("using an editable flag for a path that is not a directory: {path}")]
     EditableIsNotDir { path: PathBuf },
     #[error("error while canonicalization {0}")]
-    VerabatimUrlError(#[from] uv_pep508::VerbatimUrlError),
+    VerbatimUrlError(#[from] uv_pep508::VerbatimUrlError),
     #[error("error in extension parsing")]
     ExtensionError(#[from] uv_distribution_filename::ExtensionError),
     #[error("error in parsing version specifiers")]
