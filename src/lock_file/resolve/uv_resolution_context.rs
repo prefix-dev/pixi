@@ -66,7 +66,7 @@ impl UvResolutionContext {
             cache,
             in_flight: InFlight::default(),
             hash_strategy: HashStrategy::None,
-            client: project.client().clone(),
+            client: project.client()?.clone(),
             keyring_provider,
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Disabled,

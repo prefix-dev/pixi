@@ -90,6 +90,7 @@ strsim = "0.11.1"
 strum = "0.26.3"
 tabwriter = "1.4.0"
 tar = "0.4.43"
+temp-env = { version = "0.3.6", features = ["async_closure"] }
 tempfile = "3.14.0"
 thiserror = "2.0.9"
 tokio = "1.42.0"
@@ -311,6 +312,7 @@ shlex = { workspace = true }
 strsim = { workspace = true }
 tabwriter = { workspace = true, features = ["ansi_formatting"] }
 tar = { workspace = true }
+temp-env = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }

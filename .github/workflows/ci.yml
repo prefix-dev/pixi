@@ -123,6 +123,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow
+        env:
+          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
+          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   cargo-test-macos-aarch64:
     name: "cargo test | macos aarch64"
@@ -142,6 +145,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow
+        env:
+          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
+          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   cargo-test-macos-x86_64:
     name: "cargo test | macos x86_64"
@@ -161,6 +167,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow
+        env:
+          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
+          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   cargo-test-windows:
     name: "cargo test | windows"
@@ -182,6 +191,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow
+        env:
+          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
+          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   #
   # Builds the binary artifacts on different platforms
@@ -289,7 +301,7 @@ jobs:
 
   build-binary-windows-aarch64:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
     runs-on: 16core_windows_latest_runner
     name: "build binary | windows aarch64"
     steps:
