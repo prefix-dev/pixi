@@ -47,7 +47,7 @@ def simple_workspace(tmp_pixi_workspace: Path, request: pytest.FixtureRequest) -
     version = "0.1.*"
 
     [package.build.configuration]
-    debug-dir = "{tmp_pixi_workspace}"
+    debug-dir = '{tmp_pixi_workspace}'
     """
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest_path.write_text(manifest)
