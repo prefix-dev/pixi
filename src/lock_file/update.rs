@@ -431,8 +431,8 @@ impl<'p> LockFileDerivedData<'p> {
         .await
         .with_context(|| {
             format!(
-                "{}: error installing/updating PyPI dependencies",
-                environment.name()
+                "Failed to update PyPI packages for environment '{}'",
+                environment.name().fancy_display()
             )
         })?;
 

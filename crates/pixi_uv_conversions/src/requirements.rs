@@ -58,7 +58,7 @@ fn manifest_version_to_version_specifiers(
 
 #[derive(Error, Debug)]
 pub enum AsPep508Error {
-    #[error("error while canonicalizing {path}")]
+    #[error("error while canonicalization {path}")]
     CanonicalizeError {
         source: std::io::Error,
         path: PathBuf,
@@ -72,11 +72,11 @@ pub enum AsPep508Error {
     NameError(#[from] InvalidNameError),
     #[error("using an editable flag for a path that is not a directory: {path}")]
     EditableIsNotDir { path: PathBuf },
-    #[error("error while canonicalizing {0}")]
+    #[error("error while canonicalization {0}")]
     VerabatimUrlError(#[from] uv_pep508::VerbatimUrlError),
     #[error("error in extension parsing")]
     ExtensionError(#[from] uv_distribution_filename::ExtensionError),
-    #[error("error in parsing version specificers")]
+    #[error("error in parsing version specifiers")]
     VersionSpecifiersError(#[from] uv_pep440::VersionSpecifiersParseError),
 }
 
@@ -114,8 +114,11 @@ pub fn as_uv_req(
                     // Setting the scheme might fail, so using string manipulation instead
                     let url_str = git.to_string();
                     let stripped = url_str.strip_prefix("git+").unwrap_or(&url_str);
-                    // Reparse the url with the new scheme, should be safe but could fail so fall back to the original.
-                    Url::parse(stripped).unwrap_or(git.clone())
+                    // Reparse the url with the new scheme.
+                    Url::parse(stripped).map_err(|e| AsPep508Error::UrlParseError {
+                        source: e,
+                        url: stripped.to_string(),
+                    })?
                 } else {
                     git.clone()
                 }
