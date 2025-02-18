@@ -453,36 +453,40 @@ impl<'p> LockFileDerivedData<'p> {
         Ok(prefix)
     }
 
+    fn locked_env(
+        &self,
+        environment: &Environment<'p>,
+    ) -> Result<rattler_lock::Environment<'_>, UpdateError> {
+        self.lock_file
+            .environment(environment.name().as_str())
+            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))
+    }
+
     fn pypi_records(
         &self,
         environment: &Environment<'p>,
         platform: Platform,
         no_path_dependencies: bool,
     ) -> Result<Option<Vec<(PypiPackageData, PypiPackageEnvironmentData)>>, UpdateError> {
-        let locked_env = self
-            .lock_file
-            .environment(environment.name().as_str())
-            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
-
-        let packages = locked_env.pypi_packages(platform).map(|packages| {
-            packages
-                .filter(|(p, _)| !no_path_dependencies || matches!(p.location, UrlOrPath::Url(_)))
-        });
-        Ok(packages.map(|iter| {
-            iter.map(|(data, env_data)| (data.clone(), env_data.clone()))
-                .collect()
-        }))
+        Ok(self
+            .locked_env(environment)?
+            .pypi_packages(platform)
+            .map(|packages| {
+                packages.filter(|(p, _)| {
+                    !no_path_dependencies || matches!(p.location, UrlOrPath::Url(_))
+                })
+            })
+            .map(|iter| {
+                iter.map(|(data, env_data)| (data.clone(), env_data.clone()))
+                    .collect()
+            }))
     }
 
     fn pypi_indexes(
         &self,
         environment: &Environment<'p>,
     ) -> Result<Option<PypiIndexes>, UpdateError> {
-        let locked_env = self
-            .lock_file
-            .environment(environment.name().as_str())
-            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
-        Ok(locked_env.pypi_indexes().cloned())
+        Ok(self.locked_env(environment)?.pypi_indexes().cloned())
     }
 
     fn pixi_records(
@@ -491,23 +495,22 @@ impl<'p> LockFileDerivedData<'p> {
         platform: Platform,
         no_path_dependencies: bool,
     ) -> Result<Option<Vec<PixiRecord>>, UpdateError> {
-        let locked_env = self
-            .lock_file
-            .environment(environment.name().as_str())
-            .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
-
-        Ok(locked_env
+        Ok(self
+            .locked_env(environment)?
             .conda_packages(platform)
-            .map(|packages| {
-                packages
-                    .filter(|p| !no_path_dependencies || matches!(p.location(), UrlOrPath::Url(_)))
-            })
             .map(|iter| {
                 iter.cloned()
                     .map(PixiRecord::try_from)
                     .collect::<Result<Vec<_>, _>>()
             })
-            .transpose()?)
+            .transpose()?
+            // Filter out source records
+            .map(|packages| {
+                packages
+                    .into_iter()
+                    .filter(|p| !no_path_dependencies || p.as_source().is_none())
+                    .collect()
+            }))
     }
 
     async fn conda_prefix(
