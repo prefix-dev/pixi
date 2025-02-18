@@ -1,12 +1,10 @@
 ---
 source: crates/pixi_build_frontend/tests/diagnostics.rs
 expression: snapshot
+snapshot_kind: text
 ---
-  × failed to setup a build backend, failed to parse [SOURCE_DIR]/pixi.toml
-  ╰─▶   × missing field 'channels' in table
-         ╭─[pixi.toml:1:1]
-       1 │ [workspace]
-         · ───────────
-         ╰────
-      
-  help: Ensure that the manifest at '[SOURCE_DIR]/pixi.toml' is a valid pixi project manifest
+  × missing field 'channels' in table
+   ╭─[[SOURCE_DIR]/pixi.toml:1:1]
+ 1 │ [workspace]
+   · ───────────
+   ╰────

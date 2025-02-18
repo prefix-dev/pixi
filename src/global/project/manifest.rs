@@ -515,30 +515,15 @@ impl FromStr for Mapping {
     }
 }
 
+/// Describes which executables should be (additionally) exposed
+/// Only executables by direct dependencies are taken into account
 #[derive(Default)]
 pub enum ExposedType {
     #[default]
     All,
-    Filter(Vec<PackageName>),
+    Nothing,
+    Ignore(Vec<PackageName>),
     Mappings(Vec<Mapping>),
-}
-
-impl ExposedType {
-    pub fn new(mappings: Vec<Mapping>, filter: Vec<PackageName>) -> Self {
-        if !mappings.is_empty() {
-            return Self::Mappings(mappings);
-        }
-
-        if filter.is_empty() {
-            Self::All
-        } else {
-            Self::Filter(filter)
-        }
-    }
-
-    pub fn subset() -> Self {
-        Self::Mappings(Default::default())
-    }
 }
 
 #[cfg(test)]

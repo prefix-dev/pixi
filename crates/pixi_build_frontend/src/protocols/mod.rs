@@ -1,6 +1,9 @@
 //! Implementations of the [`crate::Protocol`] type for various backends.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use error::BackendError;
 use futures::TryFutureExt;
@@ -12,34 +15,32 @@ use jsonrpsee::{
     },
     types::ErrorCode,
 };
-use pixi_build_type_conversions::to_project_model_v1;
-use pixi_manifest::PackageManifest;
-use rattler_conda_types::ChannelConfig;
-
-use crate::{
-    jsonrpc::{stdio_transport, RpcParams},
-    tool::Tool,
-    CondaBuildReporter, CondaMetadataReporter,
-};
 use miette::Diagnostic;
-use pixi_build_types::procedures::negotiate_capabilities::{
-    NegotiateCapabilitiesParams, NegotiateCapabilitiesResult,
-};
+use pixi_build_type_conversions::to_project_model_v1;
 use pixi_build_types::{
     procedures::{
         self,
         conda_build::{CondaBuildParams, CondaBuildResult},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         initialize::{InitializeParams, InitializeResult},
+        negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
     BackendCapabilities, FrontendCapabilities,
 };
+use pixi_manifest::PackageManifest;
+use rattler_conda_types::ChannelConfig;
 use stderr::{stderr_null, stderr_stream};
 use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::ChildStderr,
     sync::{oneshot, Mutex},
+};
+
+use crate::{
+    jsonrpc::{stdio_transport, RpcParams},
+    tool::Tool,
+    CondaBuildReporter, CondaMetadataReporter,
 };
 
 pub mod builders;
@@ -89,9 +90,16 @@ pub enum ProtocolError {
 }
 
 impl ProtocolError {
-    pub fn from_client_error(backend_identifier: String, err: ClientError, method: &str) -> Self {
+    pub fn from_client_error(
+        backend_identifier: String,
+        err: ClientError,
+        method: &str,
+        root_dir: &Path,
+    ) -> Self {
         match err {
-            Error::Call(err) if err.code() > -32001 => Self::BackendError(BackendError::from(err)),
+            Error::Call(err) if err.code() > -32001 => {
+                Self::BackendError(BackendError::from_json_rpc(err, root_dir))
+            }
             Error::Call(err) if err.code() == ErrorCode::MethodNotFound.code() => {
                 Self::MethodNotImplemented(backend_identifier, method.to_string())
             }
@@ -101,11 +109,11 @@ impl ProtocolError {
     }
 }
 
-/// Protocol trait that is responsible for setting up and communicate with the backend.
-/// This allows us to hide the JSON-RPC communication hidden in this protocol.
-/// This protocol is generic over the manifest what are passed to the build backends.
-/// This means that, for rattler-build, the manifest is a recipe.yaml file,
-/// and for pixi it's a pixi.toml or a pyproject.toml file.
+/// Protocol trait that is responsible for setting up and communicate with the
+/// backend. This allows us to hide the JSON-RPC communication hidden in this
+/// protocol. This protocol is generic over the manifest what are passed to the
+/// build backends. This means that, for rattler-build, the manifest is a
+/// recipe.yaml file, and for pixi it's a pixi.toml or a pyproject.toml file.
 #[derive(Debug)]
 pub struct JsonRPCBuildProtocol {
     /// The identifier of the backend.
@@ -116,7 +124,7 @@ pub struct JsonRPCBuildProtocol {
     build_id: usize,
     /// The directory that contains the source files.
     source_dir: PathBuf,
-    /// The directory that contains the `recipe.yaml` or `pixi.toml` in the source directory.
+    /// The path to the manifest that is passed to the backend.
     manifest_path: PathBuf,
     /// Record the capabilities supported by the backend
     _backend_capabilities: BackendCapabilities,
@@ -148,7 +156,8 @@ impl JsonRPCBuildProtocol {
     }
 
     /// Set up a new protocol instance.
-    /// This will spawn a new backend process and establish a JSON-RPC connection.
+    /// This will spawn a new backend process and establish a JSON-RPC
+    /// connection.
     #[allow(clippy::too_many_arguments)]
     async fn setup(
         source_dir: PathBuf,
@@ -235,6 +244,7 @@ impl JsonRPCBuildProtocol {
                     backend_identifier.clone(),
                     err,
                     procedures::negotiate_capabilities::METHOD_NAME,
+                    manifest_path.parent().unwrap_or(&manifest_path),
                 )
             })?;
 
@@ -261,6 +271,7 @@ impl JsonRPCBuildProtocol {
                     backend_identifier.clone(),
                     err,
                     procedures::initialize::METHOD_NAME,
+                    manifest_path.parent().unwrap_or(&manifest_path),
                 )
             })?;
 
@@ -276,7 +287,7 @@ impl JsonRPCBuildProtocol {
     }
 
     /// Extract metadata from the recipe.
-    pub async fn get_conda_metadata(
+    pub async fn conda_get_metadata(
         &self,
         request: &CondaMetadataParams,
         reporter: &dyn CondaMetadataReporter,
@@ -305,6 +316,7 @@ impl JsonRPCBuildProtocol {
                     self.backend_identifier.clone(),
                     err,
                     procedures::conda_metadata::METHOD_NAME,
+                    self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 )
             });
 
@@ -353,6 +365,7 @@ impl JsonRPCBuildProtocol {
                     self.backend_identifier.clone(),
                     err,
                     procedures::conda_build::METHOD_NAME,
+                    self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 )
             });
 

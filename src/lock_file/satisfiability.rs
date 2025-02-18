@@ -7,21 +7,17 @@ use std::{
     str::FromStr,
 };
 
-use super::{
-    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
-};
-use crate::project::{grouped_environment::GroupedEnvironment, Environment, HasProjectRef};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{pypi::pypi_options::NoBuild, FeaturesExt};
 use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{
-    as_uv_req, as_uv_specifiers, as_uv_version, into_pixi_reference, to_normalize,
-    to_uv_marker_tree, to_uv_version_specifiers, AsPep508Error,
+    as_uv_req, into_pixi_reference, to_normalize, to_uv_marker_tree, to_uv_specifiers,
+    to_uv_version, to_uv_version_specifiers, AsPep508Error,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
@@ -34,23 +30,39 @@ use rattler_lock::{
 };
 use thiserror::Error;
 use url::Url;
-use uv_distribution_filename::DistExtension;
+use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_git::GitReference;
 use uv_pypi_types::{
     ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
 use uv_resolver::RequiresPython;
 
+use super::{
+    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
+};
+use crate::workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef};
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
+
+    #[error("platform(s) '{platforms}' present in the lock-file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", "))]
+    AdditionalPlatformsInLockFile(HashSet<Platform>),
 
     #[error(transparent)]
     IndexesMismatch(#[from] IndexesMismatch),
 
     #[error(transparent)]
     InvalidChannel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    InvalidDistExtensionInNoBuild(#[from] ExtensionError),
+
+    #[error(
+        "the lock-file contains non-binary package: '{0}', but the pypi-option `no-build` is set"
+    )]
+    NoBuildWithNonBinaryPackages(String),
 }
 
 #[derive(Debug, Error)]
@@ -128,7 +140,7 @@ impl Display for SourceTreeHashMismatch {
 #[derive(Debug, Error, Diagnostic)]
 pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableMatchSpec(MatchSpec, String),
+    UnsatisfiableMatchSpec(Box<MatchSpec>, String),
 
     #[error("no package named exists '{0}' (required by '{1}')")]
     SourcePackageMissing(String, String),
@@ -402,7 +414,7 @@ pub fn verify_environment_satisfiability(
     // Check if the channels in the lock file match our current configuration. Note
     // that the order matters here. If channels are added in a different order,
     // the solver might return a different result.
-    let config = environment.project().channel_config();
+    let config = environment.workspace().channel_config();
     let channels: Vec<ChannelUrl> = grouped_env
         .channels()
         .into_iter()
@@ -422,39 +434,163 @@ pub fn verify_environment_satisfiability(
         return Err(EnvironmentUnsat::ChannelsMismatch);
     }
 
-    // Check if the indexes in the lock file match our current configuration.
+    let platforms = environment.platforms();
+    let locked_platforms = locked_environment.platforms().collect::<HashSet<_>>();
+    let additional_platforms = locked_platforms
+        .difference(&platforms)
+        .map(|p| p.to_owned())
+        .collect::<HashSet<_>>();
+    if !additional_platforms.is_empty() {
+        return Err(EnvironmentUnsat::AdditionalPlatformsInLockFile(
+            additional_platforms,
+        ));
+    }
+
+    // Do some more checks if we have pypi dependencies
+    // 1. Check if the PyPI indexes are present and match
+    // 2. Check if we have a no-build option set, that we only have binary packages,
+    //    or an editable source
     if !environment.pypi_dependencies(None).is_empty() {
-        let indexes = rattler_lock::PypiIndexes::from(grouped_env.pypi_options());
-        match locked_environment.pypi_indexes() {
-            None => {
-                // Mismatch when there should be an index but there is not
-                if locked_environment
-                    .lock_file()
-                    .version()
-                    .should_pypi_indexes_be_present()
-                    && locked_environment
-                        .pypi_packages_by_platform()
-                        .any(|(_platform, mut packages)| packages.next().is_some())
-                {
-                    return Err(IndexesMismatch {
-                        current: indexes,
-                        previous: None,
-                    }
-                    .into());
-                }
-            }
-            Some(locked_indexes) => {
-                if locked_indexes != &indexes {
-                    return Err(IndexesMismatch {
-                        current: indexes,
-                        previous: Some(locked_indexes.clone()),
-                    }
-                    .into());
-                }
-            }
+        let group_pypi_options = grouped_env.pypi_options();
+        let indexes = rattler_lock::PypiIndexes::from(group_pypi_options.clone());
+
+        // Check if the indexes in the lock file match our current configuration.
+        verify_pypi_indexes(locked_environment, indexes)?;
+
+        // Check that if `no-build` is set, we only have binary packages
+        // or that the package that we disallow are not built from source
+        if let Some(no_build) = group_pypi_options.no_build.as_ref() {
+            verify_pypi_no_build(no_build, locked_environment)?;
         }
     }
 
+    Ok(())
+}
+
+fn verify_pypi_no_build(
+    no_build: &NoBuild,
+    locked_environment: rattler_lock::Environment<'_>,
+) -> Result<(), EnvironmentUnsat> {
+    // Check if we are disallowing all source packages or only a subset
+    #[derive(Eq, PartialEq)]
+    enum Check {
+        All,
+        Packages(HashSet<pep508_rs::PackageName>),
+    }
+
+    let check = match no_build {
+        // Ok, so we are allowed to build any source package
+        NoBuild::None => return Ok(()),
+        // We are not allowed to build any source package
+        NoBuild::All => Check::All,
+        // We are not allowed to build a subset of source packages
+        NoBuild::Packages(hash_set) => {
+            let packages = hash_set
+                .iter()
+                .filter_map(|name| pep508_rs::PackageName::new(name.to_string()).ok())
+                .collect();
+            Check::Packages(packages)
+        }
+    };
+
+    // Small helper function to get the dist extension from a url
+    fn pypi_dist_extension_from_url(url: &Url) -> Result<DistExtension, ExtensionError> {
+        // Take the file name from the url
+        let path = url.path_segments().and_then(|s| s.last()).unwrap_or("");
+        // Convert the path to a dist extension
+        DistExtension::from_path(Path::new(path))
+    }
+
+    // Determine if we do not accept non-wheels for all packages or only for a
+    // subset Check all the currently locked packages if we are making any
+    // violations
+    for (_, packages) in locked_environment.pypi_packages_by_platform() {
+        for (package, _) in packages {
+            let extension = match &package.location {
+                // Get the extension from the url
+                UrlOrPath::Url(url) => {
+                    if url.scheme().starts_with("git+") {
+                        // Just choose some source extension, does not really matter, cause it is
+                        // actually a directory, this is just for the check
+                        Ok(DistExtension::Source(SourceDistExtension::TarGz))
+                    } else {
+                        pypi_dist_extension_from_url(url)
+                    }
+                }
+                UrlOrPath::Path(path) => {
+                    let path = Path::new(path.as_str());
+                    if path.is_dir() {
+                        // Editables are allowed with no-build
+                        if package.editable {
+                            continue;
+                        } else {
+                            // Non-editable source packages might not be allowed
+                            Ok(DistExtension::Source(SourceDistExtension::TarGz))
+                        }
+                    } else {
+                        // Could be a reference to a wheel or sdist
+                        DistExtension::from_path(path)
+                    }
+                }
+            }?;
+
+            match extension {
+                // Wheels are fine
+                DistExtension::Wheel => continue,
+                // Check if we have a source package that we are not allowed to build
+                // it could be that we are only disallowing for certain source packages
+                DistExtension::Source(_) => match check {
+                    Check::All => {
+                        return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
+                            package.name.to_string(),
+                        ))
+                    }
+                    Check::Packages(ref hash_set) => {
+                        if hash_set.contains(&package.name) {
+                            return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
+                                package.name.to_string(),
+                            ));
+                        }
+                    }
+                },
+            }
+        }
+    }
+    Ok(())
+}
+
+fn verify_pypi_indexes(
+    locked_environment: rattler_lock::Environment<'_>,
+    indexes: PypiIndexes,
+) -> Result<(), EnvironmentUnsat> {
+    match locked_environment.pypi_indexes() {
+        None => {
+            // Mismatch when there should be an index but there is not
+            if locked_environment
+                .lock_file()
+                .version()
+                .should_pypi_indexes_be_present()
+                && locked_environment
+                    .pypi_packages_by_platform()
+                    .any(|(_platform, mut packages)| packages.next().is_some())
+            {
+                return Err(IndexesMismatch {
+                    current: indexes,
+                    previous: None,
+                }
+                .into());
+            }
+        }
+        Some(locked_indexes) => {
+            if locked_indexes != &indexes {
+                return Err(IndexesMismatch {
+                    current: indexes,
+                    previous: Some(locked_indexes.clone()),
+                }
+                .into());
+            }
+        }
+    }
     Ok(())
 }
 
@@ -776,7 +912,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     project_root: &Path,
     input_hash_cache: GlobHashCache,
 ) -> Result<(), Box<PlatformUnsat>> {
-    let channel_config = environment.project().channel_config();
+    let channel_config = environment.workspace().channel_config();
 
     // Determine the dependencies requested by the environment
     let environment_dependencies = environment
@@ -1062,20 +1198,20 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                     // Ensure that the record matches the currently selected interpreter.
                     if let Some(requires_python) = &record.0.requires_python {
-                        let uv_specifier_requires_python = as_uv_specifiers(requires_python)
+                        let uv_specifier_requires_python = to_uv_specifiers(requires_python)
                             .expect("pep440 conversion should never fail");
 
                         let marker_version = pep440_rs::Version::from_str(
                             &marker_environment.python_full_version().version.to_string(),
                         )
                         .expect("cannot parse version");
-                        let uv_maker_version = as_uv_version(&marker_version)
+                        let uv_maker_version = to_uv_version(&marker_version)
                             .expect("cannot convert python marker version to uv_pep440");
 
                         let marker_requires_python =
                             RequiresPython::greater_than_equal_version(&uv_maker_version);
-                        // Use the function of RequiresPython object as it implements the lower bound logic
-                        // Related issue https://github.com/astral-sh/uv/issues/4022
+                        // Use the function of RequiresPython object as it implements the lower
+                        // bound logic Related issue https://github.com/astral-sh/uv/issues/4022
                         if !marker_requires_python.is_contained_by(&uv_specifier_requires_python) {
                             return Err(Box::new(PlatformUnsat::PythonVersionMismatch(
                                 record.0.name.clone(),
@@ -1234,7 +1370,7 @@ fn find_matching_package(
                 None => {
                     // No records match the spec.
                     return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                        spec,
+                        Box::new(spec),
                         source.into_owned(),
                     )));
                 }
@@ -1251,7 +1387,7 @@ fn find_matching_package(
                     // The record does not match the spec, the lock-file is
                     // inconsistent.
                     return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                        spec,
+                        Box::new(spec),
                         source.into_owned(),
                     )));
                 }
@@ -1266,7 +1402,7 @@ fn find_matching_package(
                             // The record does not match the spec, the lock-file is
                             // inconsistent.
                             return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                                spec,
+                                Box::new(spec),
                                 source.into_owned(),
                             )));
                         }
@@ -1274,7 +1410,7 @@ fn find_matching_package(
                         // The record does not match the spec, the lock-file is
                         // inconsistent.
                         return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-                            spec,
+                            Box::new(spec),
                             source.into_owned(),
                         )));
                     }
@@ -1437,7 +1573,7 @@ mod tests {
     use rstest::rstest;
 
     use super::*;
-    use crate::Project;
+    use crate::Workspace;
 
     #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
@@ -1454,7 +1590,7 @@ mod tests {
     }
 
     async fn verify_lockfile_satisfiability(
-        project: &Project,
+        project: &Workspace,
         lock_file: &LockFile,
     ) -> Result<(), LockfileUnsat> {
         for env in project.environments() {
@@ -1495,7 +1631,7 @@ mod tests {
             return;
         }
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -1509,7 +1645,8 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_example_satisfiability(#[files("examples/*/p*.toml")] manifest_path: PathBuf) {
-        // If a pyproject.toml is present check for `tool.pixi` in the file to avoid testing of non-pixi files
+        // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
+        // testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {
             let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
             if !manifest_str.contains("tool.pixi") {
@@ -1517,7 +1654,7 @@ mod tests {
             }
         }
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         match verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -1535,7 +1672,7 @@ mod tests {
     ) {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 
-        let project = Project::from_path(&manifest_path).unwrap();
+        let project = Workspace::from_path(&manifest_path).unwrap();
         let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
         let err = verify_lockfile_satisfiability(&project, &lock_file)
             .await
@@ -1578,7 +1715,8 @@ mod tests {
             .into_uv_requirement()
             .unwrap();
         let project_root = PathBuf::from_str("/").unwrap();
-        // This will not satisfy because the rev length is different, even being resolved to the same one
+        // This will not satisfy because the rev length is different, even being
+        // resolved to the same one
         pypi_satifisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
 
         let locked_data = PypiPackageData {

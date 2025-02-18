@@ -1,5 +1,0 @@
----
-source: src/project/mod.rs
-expression: project.pypi_name_mapping_source().unwrap_err()
----
-conda-pypi-map is defined: the non-existing-channel is missing from the channels array, which currently are: conda-forge, pytorch

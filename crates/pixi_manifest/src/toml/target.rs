@@ -8,10 +8,10 @@ use toml_span::{de_helpers::TableHelper, DeserError, Value};
 use crate::{
     error::GenericError,
     pypi::PyPiPackageName,
-    toml::{preview::TomlPreview, task::TomlTask, warning::WithWarnings, Warning},
+    toml::{preview::TomlPreview, task::TomlTask},
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, KnownPreviewFeature, PyPiRequirement, SpecType, TargetSelector, Task, TaskName,
-    TomlError, WorkspaceTarget,
+    TomlError, Warning, WithWarnings, WorkspaceTarget,
 };
 
 #[derive(Debug, Default)]
@@ -69,11 +69,14 @@ impl TomlTarget {
 
         Ok(WithWarnings {
             value: WorkspaceTarget {
-                dependencies: combine_target_dependencies([
-                    (SpecType::Run, self.dependencies),
-                    (SpecType::Host, self.host_dependencies),
-                    (SpecType::Build, self.build_dependencies),
-                ]),
+                dependencies: combine_target_dependencies(
+                    [
+                        (SpecType::Run, self.dependencies),
+                        (SpecType::Host, self.host_dependencies),
+                        (SpecType::Build, self.build_dependencies),
+                    ],
+                    pixi_build_enabled,
+                )?,
                 pypi_dependencies: self.pypi_dependencies,
                 activation: self.activation,
                 tasks: self.tasks,
@@ -86,9 +89,16 @@ impl TomlTarget {
 /// Combines different target dependencies into a single map.
 pub(super) fn combine_target_dependencies(
     iter: impl IntoIterator<Item = (SpecType, Option<PixiSpanned<UniquePackageMap>>)>,
-) -> HashMap<SpecType, IndexMap<rattler_conda_types::PackageName, PixiSpec>> {
+    is_pixi_build_enabled: bool,
+) -> Result<HashMap<SpecType, IndexMap<rattler_conda_types::PackageName, PixiSpec>>, TomlError> {
     iter.into_iter()
-        .filter_map(|(ty, deps)| deps.map(|deps| (ty, deps.value.into())))
+        .filter_map(|(ty, deps)| {
+            deps.map(|deps| {
+                deps.value
+                    .into_inner(is_pixi_build_enabled)
+                    .map(|deps| (ty, deps))
+            })
+        })
         .collect()
 }
 

@@ -7,7 +7,7 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_git::url::RepositoryUrl;
 use pixi_record::LockedGitUrl;
-use pixi_uv_conversions::{into_parsed_git_url, to_uv_version};
+use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use url::Url;
 use uv_cache::Cache;
@@ -155,6 +155,11 @@ pub(crate) enum NeedReinstall {
         installed_url: String,
         locked_url: Option<String>,
     },
+    /// Package is installed by registry, but we want a non registry location.
+    SourceMismatch {
+        locked_location: String,
+        installed_location: String,
+    },
 }
 
 impl std::fmt::Display for NeedReinstall {
@@ -234,7 +239,11 @@ impl std::fmt::Display for NeedReinstall {
             ),
             NeedReinstall::UnableToConvertLockedPath { path } => {
                 write!(f, "Unable to convert locked path to url: {}", path)
-            }
+            },
+            NeedReinstall::SourceMismatch{locked_location, installed_location} => write!(
+                f,
+                "Installed from registry from '{installed_location}' but locked to a non-registry location from '{locked_location}'",
+            ),
         }
     }
 }
@@ -255,6 +264,15 @@ fn need_reinstall(
     // Check if the installed version is the same as the required version
     match installed {
         InstalledDist::Registry(reg) => {
+            if !matches!(locked.location, UrlOrPath::Url(_)) {
+                return Ok(ValidateCurrentInstall::Reinstall(
+                    NeedReinstall::SourceMismatch {
+                        locked_location: locked.location.to_string(),
+                        installed_location: "registry".to_string(),
+                    },
+                ));
+            }
+
             let specifier = to_uv_version(&locked.version).into_diagnostic()?;
 
             if reg.version != specifier {
@@ -415,7 +433,7 @@ fn need_reinstall(
                             // is it a git url?
                             if LockedGitUrl::is_locked_git_url(url) {
                                 let locked_git_url = LockedGitUrl::new(url.clone());
-                                into_parsed_git_url(&locked_git_url)
+                                to_parsed_git_url(&locked_git_url)
                             } else {
                                 // it is not a git url, so we fallback to use the url as is
                                 ParsedGitUrl::try_from(url.clone()).into_diagnostic()

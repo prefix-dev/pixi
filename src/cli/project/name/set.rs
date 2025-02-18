@@ -1,5 +1,6 @@
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
+use miette::IntoDiagnostic;
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -8,18 +9,20 @@ pub struct Args {
     pub name: String,
 }
 
-pub async fn execute(mut project: Project, args: Args) -> miette::Result<()> {
-    // Set the new project name
-    project.manifest.set_name(&args.name)?;
+pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
+    let mut workspace = workspace.modify()?;
 
-    // Save project
-    project.save()?;
+    // Set the new project name
+    workspace.manifest().set_name(&args.name)?;
+
+    // Save workspace
+    let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     eprintln!(
-        "{}Updated project name to '{}'.",
+        "{}Updated workspace name to '{}'.",
         console::style(console::Emoji("✔ ", "")).green(),
-        project.manifest.workspace.workspace.name
+        workspace.workspace.value.workspace.name
     );
 
     Ok(())

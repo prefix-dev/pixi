@@ -13,17 +13,23 @@ async fn init_creates_project_manifest() {
     pixi.init().await.unwrap();
 
     // There should be a loadable project manifest in the directory
-    let project = pixi.project().unwrap();
+    let workspace = pixi.workspace().unwrap();
 
     // Default configuration should be present in the file
-    assert!(!project.name().is_empty());
+    assert!(!workspace.name().is_empty());
     assert_eq!(
-        project.name(),
-        &pixi.project_path().file_stem().unwrap().to_string_lossy(),
+        workspace.name(),
+        &pixi.workspace_path().file_stem().unwrap().to_string_lossy(),
         "project name should match the directory name"
     );
     assert_eq!(
-        project.version().as_ref().unwrap(),
+        workspace
+            .workspace
+            .value
+            .workspace
+            .version
+            .as_ref()
+            .unwrap(),
         &Version::from_str("0.1.0").unwrap()
     );
 }
@@ -41,11 +47,11 @@ async fn specific_channel() {
         .await
         .unwrap();
 
-    // Load the project
-    let project = pixi.project().unwrap();
+    // Load the workspace
+    let workspace = pixi.workspace().unwrap();
 
     // The only channel should be the "random" channel
-    let channels = Vec::from_iter(project.default_environment().channels());
+    let channels = Vec::from_iter(workspace.default_environment().channels());
     assert_eq!(
         channels,
         [
@@ -60,9 +66,9 @@ async fn specific_channel() {
 async fn init_from_existing_pyproject_toml() {
     let pixi = PixiControl::new().unwrap();
 
-    // Copy the pyproject.toml file to the project directory
-    let project_path = pixi.project_path();
-    let pyproject_toml = project_path.join("pyproject.toml");
+    // Copy the pyproject.toml file to the workspace directory
+    let workspace_path = pixi.workspace_path();
+    let pyproject_toml = workspace_path.join("pyproject.toml");
     let pyproject_toml_contents = include_str!("../data/pixi_tomls/pyproject_no_pixi.toml");
     fs_err::write(&pyproject_toml, pyproject_toml_contents).unwrap();
 
@@ -79,8 +85,8 @@ async fn init_from_existing_pyproject_toml() {
         .contains(pyproject_toml_contents));
 
     // Check if the new manifest is readable by pixi and contains the default values
-    let project = pixi.project().unwrap();
-    assert!(project
+    let workspace = pixi.workspace().unwrap();
+    assert!(workspace
         .default_environment()
         .platforms()
         .contains(&Platform::current()));
@@ -100,7 +106,7 @@ async fn init_from_existing_pyproject_toml() {
 // Config::default();     config.pypi_config = pypi_config;
 //     pixi.init().await.unwrap();
 
-//     // Load the project
+//     // Load the workspace
 //     let project = pixi.project().unwrap();
 //     let options = project.environment("default").unwrap().pypi_options();
 //     assert_eq!(options.index_url, Some(index_url.clone()));

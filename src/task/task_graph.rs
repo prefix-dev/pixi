@@ -15,13 +15,13 @@ use pixi_manifest::{
 use thiserror::Error;
 
 use crate::{
-    project::Environment,
     task::{
         error::{AmbiguousTaskError, MissingTaskError},
         task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
         TaskDisambiguation,
     },
-    Project,
+    workspace::Environment,
+    Workspace,
 };
 
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
@@ -67,7 +67,7 @@ impl fmt::Display for TaskNode<'_> {
     }
 }
 
-impl<'p> TaskNode<'p> {
+impl TaskNode<'_> {
     /// Returns the full command that should be executed for this task. This
     /// includes any additional arguments that should be passed to the
     /// command.
@@ -99,7 +99,7 @@ impl<'p> TaskNode<'p> {
 #[derive(Debug)]
 pub struct TaskGraph<'p> {
     /// The project that this graph references
-    project: &'p Project,
+    project: &'p Workspace,
 
     /// The tasks in the graph
     nodes: Vec<TaskNode<'p>>,
@@ -124,13 +124,13 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
 }
 
 impl<'p> TaskGraph<'p> {
-    pub(crate) fn project(&self) -> &'p Project {
+    pub(crate) fn project(&self) -> &'p Workspace {
         self.project
     }
 
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
     pub fn from_cmd_args<D: TaskDisambiguation<'p>>(
-        project: &'p Project,
+        project: &'p Workspace,
         search_envs: &SearchEnvironments<'p, D>,
         args: Vec<String>,
         skip_deps: bool,
@@ -227,7 +227,7 @@ impl<'p> TaskGraph<'p> {
 
     /// Constructs a new instance of a [`TaskGraph`] from a root task.
     fn from_root<D: TaskDisambiguation<'p>>(
-        project: &'p Project,
+        project: &'p Workspace,
         search_environments: &SearchEnvironments<'p, D>,
         root: TaskNode<'p>,
     ) -> Result<Self, TaskGraphError> {
@@ -355,7 +355,7 @@ mod test {
 
     use crate::{
         task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
-        Project,
+        Workspace,
     };
 
     fn commands_in_order(
@@ -365,7 +365,7 @@ mod test {
         environment_name: Option<EnvironmentName>,
         skip_deps: bool,
     ) -> Vec<String> {
-        let project = Project::from_str(Path::new("pixi.toml"), project_str).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
         let environment = environment_name.map(|name| project.environment(&name).unwrap());
         let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform);

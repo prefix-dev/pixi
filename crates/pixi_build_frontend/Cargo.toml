@@ -47,6 +47,7 @@ which = { workspace = true }
 
 [dev-dependencies]
 bytes = { workspace = true }
+dunce = { workspace = true }
 insta = { workspace = true, features = ["yaml", "filters", "json"] }
 rstest = { workspace = true }
 tempfile = { workspace = true }

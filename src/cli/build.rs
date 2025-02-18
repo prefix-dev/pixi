@@ -12,17 +12,18 @@ use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 
 use crate::{
-    cli::cli_config::ProjectConfig,
+    build::BuildContext,
+    cli::cli_config::WorkspaceConfig,
     repodata::Repodata,
     utils::{move_file, MoveError},
-    Project,
+    WorkspaceLocator,
 };
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub config_cli: ConfigCli,
@@ -77,35 +78,44 @@ impl CondaBuildReporter for ProgressReporter {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.project_config.workspace_locator_start())
+        .locate()?
         .with_cli_config(args.config_cli);
 
     // TODO: Implement logic to take the source code from a VCS instead of from a
     // local channel so that that information is also encoded in the manifest.
 
     // Instantiate a protocol for the source directory.
-    let channel_config = project.channel_config();
+    let channel_config = workspace.channel_config();
 
     let tool_context = pixi_build_frontend::ToolContext::builder()
-        .with_gateway(project.repodata_gateway().clone())
-        .with_client(project.authenticated_client().clone())
+        .with_gateway(workspace.repodata_gateway()?.clone())
+        .with_client(workspace.authenticated_client()?.clone())
         .build();
 
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
         .with_tool_context(Arc::new(tool_context))
         .setup_protocol(SetupRequest {
-            source_dir: project.root().to_path_buf(),
+            source_dir: workspace
+                .package
+                .as_ref()
+                .map(|pkg| &pkg.provenance.path)
+                .unwrap_or(&workspace.workspace.provenance.path)
+                .parent()
+                .expect("a manifest must have parent directory")
+                .to_path_buf(),
             build_tool_override: BackendOverride::from_env(),
             build_id: 0,
         })
         .await
         .into_diagnostic()
-        .wrap_err("unable to setup the build-backend to build the project")?;
+        .wrap_err("unable to setup the build-backend to build the workspace")?;
 
     // Construct a temporary directory to build the package in. This path is also
     // automatically removed after the build finishes.
-    let pixi_dir = &project.pixi_dir();
+    let pixi_dir = &workspace.pixi_dir();
     tokio::fs::create_dir_all(pixi_dir)
         .await
         .into_diagnostic()
@@ -118,13 +128,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let work_dir = tempfile::Builder::new()
         .prefix("pixi-build-")
-        .tempdir_in(project.pixi_dir())
+        .tempdir_in(workspace.pixi_dir())
         .into_diagnostic()
         .context("failed to create temporary working directory in the .pixi directory")?;
 
-    let progress = Arc::new(ProgressReporter::new(project.name()));
+    let progress = Arc::new(ProgressReporter::new(workspace.name()));
     // Build platform virtual packages
-    let build_platform_virtual_packages: Vec<GenericVirtualPackage> = project
+    let build_platform_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
         .virtual_packages(Platform::current())
         .into_iter()
@@ -132,12 +142,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect();
 
     // Host platform virtual packages
-    let host_platform_virtual_packages: Vec<GenericVirtualPackage> = project
+    let host_platform_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
         .virtual_packages(args.target_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
+
+    let build_context = BuildContext::from_workspace(&workspace)?;
 
     // Build the individual packages.
     let result = protocol
@@ -149,7 +161,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     virtual_packages: Some(host_platform_virtual_packages),
                 }),
                 channel_base_urls: Some(
-                    project
+                    workspace
                         .default_environment()
                         .channel_urls(&channel_config)
                         .into_diagnostic()?
@@ -163,7 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 outputs: None,
                 editable: false,
                 work_directory: work_dir.path().to_path_buf(),
-                variant_configuration: Some(Default::default()),
+                variant_configuration: Some(build_context.resolve_variant(args.target_platform)),
             },
             progress.clone(),
         )

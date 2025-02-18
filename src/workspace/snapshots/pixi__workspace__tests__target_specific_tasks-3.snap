@@ -1,0 +1,11 @@
+---
+source: src/workspace/mod.rs
+expression: "workspace.workspace.value.tasks(Some(Platform::Linux64),\n&FeatureName::Default).unwrap()"
+---
+{
+    TaskName(
+        "test",
+    ): Plain(
+        "test linux",
+    ),
+}

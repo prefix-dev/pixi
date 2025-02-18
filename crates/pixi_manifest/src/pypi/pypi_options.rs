@@ -1,4 +1,4 @@
-use std::{hash::Hash, path::PathBuf};
+use std::{collections::HashSet, hash::Hash, path::PathBuf};
 
 use indexmap::IndexSet;
 use serde::Serialize;
@@ -48,6 +48,40 @@ pub enum FindLinksUrlOrPath {
     Url(Url),
 }
 
+/// Don't build sdist for all or certain packages
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum NoBuild {
+    /// Build any sdist we come across
+    #[default]
+    None,
+    /// Don't build any sdist
+    All,
+    /// Don't build sdist for specific packages
+    // Todo: would be nice to check if these are actually used at some point
+    Packages(HashSet<pep508_rs::PackageName>),
+}
+
+impl NoBuild {
+    /// Merges two `NoBuild` together, according to the following rules
+    /// - If either is `All`, the result is `All`
+    /// - If either is `None`, the result is the other
+    /// - If both are `Packages`, the result is the union of the two
+    pub fn union(&self, other: &NoBuild) -> NoBuild {
+        match (self, other) {
+            (NoBuild::All, _) | (_, NoBuild::All) => NoBuild::All,
+            (NoBuild::None, _) => other.clone(),
+            (_, NoBuild::None) => self.clone(),
+            (NoBuild::Packages(packages), NoBuild::Packages(other_packages)) => {
+                let mut packages = packages.clone();
+                packages.extend(other_packages.iter().cloned());
+                NoBuild::Packages(packages)
+            }
+        }
+    }
+}
+
 /// Specific options for a PyPI registries
 #[derive(Debug, Clone, PartialEq, Serialize, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -63,6 +97,8 @@ pub struct PypiOptions {
     pub no_build_isolation: Option<Vec<String>>,
     /// The strategy to use when resolving against multiple index URLs.
     pub index_strategy: Option<IndexStrategy>,
+    /// Don't build sdist for all or certain packages
+    pub no_build: Option<NoBuild>,
 }
 
 /// Clones and deduplicates two iterators of values
@@ -85,6 +121,7 @@ impl PypiOptions {
         flat_indexes: Option<Vec<FindLinksUrlOrPath>>,
         no_build_isolation: Option<Vec<String>>,
         index_strategy: Option<IndexStrategy>,
+        no_build: Option<NoBuild>,
     ) -> Self {
         Self {
             index_url: index,
@@ -92,6 +129,7 @@ impl PypiOptions {
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
+            no_build,
         }
     }
 
@@ -190,12 +228,21 @@ impl PypiOptions {
             })
             .or_else(|| other.no_build_isolation.clone());
 
+        // Set the no-build option
+        let no_build = match (self.no_build.as_ref(), other.no_build.as_ref()) {
+            (Some(a), Some(b)) => Some(a.union(b)),
+            (Some(a), None) => Some(a.clone()),
+            (None, Some(b)) => Some(b.clone()),
+            (None, None) => None,
+        };
+
         Ok(PypiOptions {
             index_url: index,
             extra_index_urls: extra_indexes,
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
+            no_build,
         })
     }
 }
@@ -278,6 +325,7 @@ mod tests {
             ]),
             no_build_isolation: Some(vec!["foo".to_string(), "bar".to_string()]),
             index_strategy: None,
+            no_build: None,
         };
 
         // Create the second set of options
@@ -290,12 +338,51 @@ mod tests {
             ]),
             no_build_isolation: Some(vec!["foo".to_string()]),
             index_strategy: None,
+            no_build: Some(NoBuild::All),
         };
 
         // Merge the two options
         // This should succeed and values should be merged
         let merged_opts = opts.union(&opts2).unwrap();
         insta::assert_yaml_snapshot!(merged_opts);
+    }
+
+    #[test]
+    fn test_no_build_union() {
+        let pkg1 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+        let pkg2 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+        let pkg3 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+
+        // Case 1: One is `All`, result should be `All`
+        assert_eq!(NoBuild::All.union(&NoBuild::None), NoBuild::All);
+        assert_eq!(NoBuild::None.union(&NoBuild::All), NoBuild::All);
+        assert_eq!(
+            NoBuild::All.union(&NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))),
+            NoBuild::All
+        );
+
+        // Case 2: One is `None`, result should be the other
+        assert_eq!(NoBuild::None.union(&NoBuild::None), NoBuild::None);
+        assert_eq!(
+            NoBuild::None.union(&NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))),
+            NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))
+        );
+        assert_eq!(
+            NoBuild::Packages(HashSet::from_iter([pkg1.clone()])).union(&NoBuild::None),
+            NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))
+        );
+
+        // Case 3: Both are `Packages`, result should be the union of the two
+        assert_eq!(
+            NoBuild::Packages(HashSet::from_iter([pkg1.clone(), pkg2.clone()])).union(
+                &NoBuild::Packages(HashSet::from_iter([pkg2.clone(), pkg3.clone()]))
+            ),
+            NoBuild::Packages(HashSet::from_iter([
+                pkg1.clone(),
+                pkg2.clone(),
+                pkg3.clone()
+            ]))
+        );
     }
 
     #[test]
@@ -307,6 +394,7 @@ mod tests {
             find_links: None,
             no_build_isolation: None,
             index_strategy: None,
+            no_build: Default::default(),
         };
 
         // Create the second set of options
@@ -316,6 +404,7 @@ mod tests {
             find_links: None,
             no_build_isolation: None,
             index_strategy: None,
+            no_build: Default::default(),
         };
 
         // Merge the two options
@@ -333,6 +422,7 @@ mod tests {
             find_links: None,
             no_build_isolation: None,
             index_strategy: Some(IndexStrategy::FirstIndex),
+            no_build: Default::default(),
         };
 
         // Create the second set of options
@@ -342,6 +432,7 @@ mod tests {
             find_links: None,
             no_build_isolation: None,
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
+            no_build: Default::default(),
         };
 
         // Merge the two options

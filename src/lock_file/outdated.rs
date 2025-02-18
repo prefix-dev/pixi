@@ -11,8 +11,8 @@ use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
     build::GlobHashCache,
     lock_file::satisfiability::EnvironmentUnsat,
-    project::{Environment, SolveGroup},
-    Project,
+    workspace::{Environment, SolveGroup},
+    Workspace,
 };
 
 /// A struct that contains information about specific outdated environments.
@@ -61,25 +61,17 @@ impl<'p> DisregardLockedContent<'p> {
 impl<'p> OutdatedEnvironments<'p> {
     /// Constructs a new instance of this struct by examining the project and
     /// lock-file and finding any mismatches.
-    pub(crate) async fn from_project_and_lock_file(
-        project: &'p Project,
+    pub(crate) async fn from_workspace_and_lock_file(
+        workspace: &'p Workspace,
         lock_file: &LockFile,
         glob_hash_cache: GlobHashCache,
     ) -> Self {
-        let mut outdated_conda: HashMap<_, HashSet<_>> = HashMap::new();
-        let mut outdated_pypi: HashMap<_, HashSet<_>> = HashMap::new();
-        let mut disregard_locked_content = DisregardLockedContent::default();
-
         // Find all targets that are not satisfied by the lock-file
-        find_unsatisfiable_targets(
-            project,
-            lock_file,
-            &mut outdated_conda,
-            &mut outdated_pypi,
-            &mut disregard_locked_content,
-            glob_hash_cache,
-        )
-        .await;
+        let UnsatisfiableTargets {
+            mut outdated_conda,
+            mut outdated_pypi,
+            disregard_locked_content,
+        } = find_unsatisfiable_targets(workspace, lock_file, glob_hash_cache).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -88,7 +80,7 @@ impl<'p> OutdatedEnvironments<'p> {
         // Find all the solve groups that have inconsistent dependencies between
         // environments.
         find_inconsistent_solve_groups(
-            project,
+            workspace,
             lock_file,
             &outdated_conda,
             &mut conda_solve_groups_out_of_date,
@@ -137,16 +129,21 @@ impl<'p> OutdatedEnvironments<'p> {
     }
 }
 
+#[derive(Debug, Default)]
+struct UnsatisfiableTargets<'p> {
+    outdated_conda: HashMap<Environment<'p>, HashSet<Platform>>,
+    outdated_pypi: HashMap<Environment<'p>, HashSet<Platform>>,
+    disregard_locked_content: DisregardLockedContent<'p>,
+}
+
 /// Find all targets (combination of environment and platform) who's
 /// requirements in the `project` are not satisfied by the `lock_file`.
 async fn find_unsatisfiable_targets<'p>(
-    project: &'p Project,
+    project: &'p Workspace,
     lock_file: &LockFile,
-    outdated_conda: &mut HashMap<Environment<'p>, HashSet<Platform>>,
-    outdated_pypi: &mut HashMap<Environment<'p>, HashSet<Platform>>,
-    disregard_locked_content: &mut DisregardLockedContent<'p>,
     glob_hash_cache: GlobHashCache,
-) {
+) -> UnsatisfiableTargets<'p> {
+    let mut unsatisfiable_targets = UnsatisfiableTargets::default();
     for environment in project.environments() {
         let platforms = environment.platforms();
 
@@ -157,7 +154,8 @@ async fn find_unsatisfiable_targets<'p>(
                 environment.name().fancy_display()
             );
 
-            outdated_conda
+            unsatisfiable_targets
+                .outdated_conda
                 .entry(environment.clone())
                 .or_default()
                 .extend(platforms);
@@ -172,20 +170,49 @@ async fn find_unsatisfiable_targets<'p>(
                 environment.name().fancy_display()
             );
 
-            outdated_conda
+            unsatisfiable_targets
+                .outdated_conda
                 .entry(environment.clone())
                 .or_default()
                 .extend(platforms);
 
             match unsat {
+                EnvironmentUnsat::AdditionalPlatformsInLockFile(platforms) => {
+                    // If the there are additional platforms in the lock file, then we have to remove them
+                    for platform in platforms {
+                        unsatisfiable_targets
+                            .outdated_conda
+                            .entry(environment.clone())
+                            .or_default()
+                            .insert(platform);
+                    }
+                }
                 EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::InvalidChannel(_) => {
-                    // If the channels mismatched we also cannot trust any of the locked content.
-                    disregard_locked_content.conda.insert(environment.clone());
+                    // If the channels mismatched we cannot trust any of the locked content.
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .conda
+                        .insert(environment.clone());
                 }
 
                 EnvironmentUnsat::IndexesMismatch(_) => {
-                    // If the indexes mismatched we also cannot trust any of the locked content.
-                    disregard_locked_content.pypi.insert(environment.clone());
+                    // If the indexes mismatched we cannot trust any of the locked content.
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .pypi
+                        .insert(environment.clone());
+                }
+                EnvironmentUnsat::InvalidDistExtensionInNoBuild(_) => {
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .pypi
+                        .insert(environment.clone());
+                }
+                EnvironmentUnsat::NoBuildWithNonBinaryPackages(_) => {
+                    unsatisfiable_targets
+                        .disregard_locked_content
+                        .pypi
+                        .insert(environment.clone());
                 }
             }
 
@@ -210,7 +237,8 @@ async fn find_unsatisfiable_targets<'p>(
                         environment.name().fancy_display()
                     );
 
-                    outdated_pypi
+                    unsatisfiable_targets
+                        .outdated_pypi
                         .entry(environment.clone())
                         .or_default()
                         .insert(platform);
@@ -221,7 +249,8 @@ async fn find_unsatisfiable_targets<'p>(
                         environment.name().fancy_display()
                     );
 
-                    outdated_conda
+                    unsatisfiable_targets
+                        .outdated_conda
                         .entry(environment.clone())
                         .or_default()
                         .insert(platform);
@@ -229,6 +258,7 @@ async fn find_unsatisfiable_targets<'p>(
             }
         }
     }
+    unsatisfiable_targets
 }
 
 /// Given a mapping of outdated targets, construct a new mapping of all the
@@ -283,7 +313,7 @@ fn map_outdated_targets_to_solve_groups<'p>(
 /// its environments are the same. For each package name, only one candidate is
 /// allowed.
 fn find_inconsistent_solve_groups<'p>(
-    project: &'p Project,
+    project: &'p Workspace,
     lock_file: &LockFile,
     outdated_conda: &HashMap<Environment<'p>, HashSet<Platform>>,
     conda_solve_groups_out_of_date: &mut HashMap<SolveGroup<'p>, HashSet<Platform>>,

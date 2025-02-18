@@ -1,0 +1,12 @@
+[workspace]
+channels = []
+name = "workspace-discovery"
+platforms = []
+preview = ["pixi-build"]
+
+[package]
+# name is inherited from the workspace in the same folder.
+version = "0.1.0"
+
+[package.build]
+backend = { name = "bla", version = "*" }

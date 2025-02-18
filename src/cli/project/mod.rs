@@ -1,4 +1,4 @@
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 use clap::Parser;
 
 pub mod channel;
@@ -29,7 +29,7 @@ pub struct Args {
     command: Command,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 }
 
 pub async fn execute(cmd: Args) -> miette::Result<()> {

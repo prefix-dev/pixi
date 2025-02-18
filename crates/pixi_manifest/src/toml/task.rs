@@ -7,8 +7,8 @@ use toml_span::{
 
 use crate::{
     task::{Alias, CmdArgs, Execute},
-    toml::{deprecation::Deprecation, warning::WithWarnings},
-    Task, TaskName,
+    warning::Deprecation,
+    Task, TaskName, WithWarnings,
 };
 
 /// A task defined in the manifest.

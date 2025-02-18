@@ -405,7 +405,12 @@ mod tests {
             .await
             .unwrap();
 
-        tool.command().arg("--version").spawn().unwrap();
+        tool.command()
+            .arg("--version")
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

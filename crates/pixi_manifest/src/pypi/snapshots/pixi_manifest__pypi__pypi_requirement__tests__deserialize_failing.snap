@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_manifest/src/pypi/pypi_requirement.rs
 expression: "snapshot.into_iter().map(|Snapshot { input, result }|\nformat!(\"input: {input}\\nresult: {} \",\nresult.as_object().unwrap().get(\"error\").unwrap().as_str().unwrap())).join(\"\\n\")"
+snapshot_kind: text
 ---
 input: pkg = { ver = "1.2.3" }
 result: 
@@ -86,9 +87,9 @@ result:
    ╰──── 
 input: pkg = "\\path\\style"
 result: 
-  × it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = "\path\style" }'
+  × it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = "/path/style" }'
    ╭─[pixi.toml:1:8]
- 1 │ pkg = "\\path\\style"
+ 1 │ pkg = "//path//style"
    ·        ─────────────
    ╰──── 
 input: pkg = "~/path/style"

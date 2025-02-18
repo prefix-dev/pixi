@@ -4,6 +4,7 @@ use std::{
     future::ready,
     rc::Rc,
     str::FromStr,
+    sync::Arc,
 };
 
 use futures::{Future, FutureExt};
@@ -32,7 +33,7 @@ pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) package_requests: Rc<RefCell<HashMap<uv_normalize::PackageName, u32>>>,
 }
 
-impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, Context> {
+impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Context> {
     fn get_package_versions<'io>(
         &'io self,
         package_name: &'io uv_normalize::PackageName,
@@ -145,6 +146,7 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
                         requires_python: None,
                         provides_extras: iden.extras.iter().cloned().collect(),
                         dependency_groups: Default::default(),
+                        dynamic: false,
                     },
                     hashes: vec![],
                 })))
@@ -158,10 +160,17 @@ impl<'a, Context: BuildContext> ResolverProvider for CondaResolverProvider<'a, C
             .right_future()
     }
 
-    fn with_reporter(self, reporter: impl uv_distribution::Reporter + 'static) -> Self {
+    fn with_reporter(self, reporter: Arc<dyn uv_distribution::Reporter>) -> Self {
         Self {
             fallback: self.fallback.with_reporter(reporter),
             ..self
         }
+    }
+
+    fn get_installed_metadata<'io>(
+        &'io self,
+        dist: &'io uv_distribution_types::InstalledDist,
+    ) -> impl Future<Output = WheelMetadataResult> + 'io {
+        self.fallback.get_installed_metadata(dist)
     }
 }

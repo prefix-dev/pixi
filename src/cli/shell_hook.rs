@@ -11,13 +11,13 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::activation::CurrentEnvVarBehavior;
-use crate::environment::get_update_lock_file_and_prefix;
 use crate::{
-    activation::get_activator,
-    cli::cli_config::{PrefixUpdateConfig, ProjectConfig},
-    project::{Environment, HasProjectRef},
-    prompt, Project, UpdateLockFileOptions,
+    activation::{get_activator, CurrentEnvVarBehavior},
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    environment::get_update_lock_file_and_prefix,
+    prompt,
+    workspace::{get_activated_environment_variables, Environment, HasWorkspaceRef},
+    UpdateLockFileOptions, Workspace, WorkspaceLocator,
 };
 
 /// Print the pixi environment activation script.
@@ -32,7 +32,7 @@ pub struct Args {
     shell: Option<ShellEnum>,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
@@ -61,7 +61,7 @@ struct ShellEnv<'a> {
 async fn generate_activation_script(
     shell: Option<ShellEnum>,
     environment: &Environment<'_>,
-    project: &Project,
+    project: &Workspace,
 ) -> miette::Result<String> {
     // Get shell from the arguments or from the current process or use default if
     // all fails
@@ -107,16 +107,15 @@ async fn generate_environment_json(
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<String> {
-    let environment_variables = environment
-        .project()
-        .get_activated_environment_variables(
-            environment,
-            CurrentEnvVarBehavior::Exclude,
-            Some(lock_file),
-            force_activate,
-            experimental_cache,
-        )
-        .await?;
+    let environment_variables = get_activated_environment_variables(
+        environment.workspace().env_vars(),
+        environment,
+        CurrentEnvVarBehavior::Exclude,
+        Some(lock_file),
+        force_activate,
+        experimental_cache,
+    )
+    .await?;
 
     let shell_env = ShellEnv {
         environment_variables,
@@ -131,9 +130,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .prompt_config
         .merge_config(args.activation_config.into())
         .merge_config(args.prefix_update_config.config.clone().into());
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.project_config.workspace_locator_start())
+        .locate()?
         .with_cli_config(config);
-    let environment = project.environment_from_name_or_env_var(args.environment)?;
+
+    let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
@@ -141,7 +143,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install(),
-            max_concurrent_solves: project.config().max_concurrent_solves(),
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
     )
     .await?;
@@ -151,14 +153,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             generate_environment_json(
                 &environment,
                 &lock_file_data.lock_file,
-                project.config().force_activate(),
-                project.config().experimental_activation_cache_usage(),
+                workspace.config().force_activate(),
+                workspace.config().experimental_activation_cache_usage(),
             )
             .await?
         }
         // Skipping the activated environment caching for the script.
         // As it can still run scripts.
-        false => generate_activation_script(args.shell, &environment, &project).await?,
+        false => generate_activation_script(args.shell, &environment, &workspace).await?,
     };
 
     // Print the output - either a JSON object or a shell script
@@ -178,7 +180,7 @@ mod tests {
     async fn test_shell_hook() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Platform::current());
-        let project = Project::discover().unwrap();
+        let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
         let script =
             generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)

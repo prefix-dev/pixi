@@ -8,11 +8,12 @@ use rattler_shell::{
     shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
+use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::UpdateMode;
+use crate::workspace::get_activated_environment_variables;
 use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
-    Project, UpdateLockFileOptions,
+    UpdateLockFileOptions, WorkspaceLocator,
 };
 use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 #[cfg(target_family = "unix")]
@@ -22,7 +23,7 @@ use pixi_pty::unix::PtySession;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    project_config: ProjectConfig,
+    workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
@@ -229,10 +230,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.prompt_config.into())
         .merge_config(args.prefix_update_config.config.clone().into());
 
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?
         .with_cli_config(config);
 
-    let environment = project.environment_from_name_or_env_var(args.environment)?;
+    let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
@@ -241,21 +244,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install(),
-            max_concurrent_solves: project.config().max_concurrent_solves(),
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
     )
     .await?;
 
     // Get the environment variables we need to set activate the environment in the shell.
-    let env = project
-        .get_activated_environment_variables(
-            &environment,
-            CurrentEnvVarBehavior::Exclude,
-            Some(&lock_file_data.lock_file),
-            project.config().force_activate(),
-            project.config().experimental_activation_cache_usage(),
-        )
-        .await?;
+    let env = get_activated_environment_variables(
+        workspace.env_vars(),
+        &environment,
+        CurrentEnvVarBehavior::Exclude,
+        Some(&lock_file_data.lock_file),
+        workspace.config().force_activate(),
+        workspace.config().experimental_activation_cache_usage(),
+    )
+    .await?;
 
     tracing::debug!("Pixi environment activation:\n{:?}", env);
 
@@ -266,8 +269,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     tracing::info!("Starting shell: {:?}", interactive_shell);
 
-    let prompt_hook = if project.config().change_ps1() {
-        let prompt_name = prompt::prompt_name(project.name(), environment.name());
+    let prompt_hook = if workspace.config().change_ps1() {
+        let prompt_name = prompt::prompt_name(workspace.name(), environment.name());
         [
             prompt::shell_prompt(&interactive_shell, prompt_name.as_str()),
             prompt::shell_hook(&interactive_shell)

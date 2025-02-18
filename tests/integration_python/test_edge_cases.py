@@ -38,6 +38,55 @@ def test_python_mismatch(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+@pytest.mark.slow
+def test_prefix_only_created_when_sdist(
+    pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path
+) -> None:
+    """Test that the prefix is only created when the source distribution is used"""
+    test_data = Path(__file__).parent.parent / "data/pixi_tomls/two_envs_one_sdist.toml"
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = test_data.read_text()
+    manifest.write_text(toml)
+
+    # Install
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+        # We need the an uncached version, otherwise it might skip prefix creation
+        env={"PIXI_CACHE_DIR": str(tmp_path)},
+    )
+
+    # Test if the `py310` prefix is created but the `py39` is not
+    py39 = tmp_pixi_workspace / ".pixi" / "envs" / "py39"
+    py310 = tmp_pixi_workspace / ".pixi" / "envs" / "py310"
+
+    assert not py39.exists()
+    assert py310.exists()
+
+
+def test_error_on_conda_meta_file_error(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """Break the meta file and check if the error is caught and printed to the user"""
+    verify_cli_command([pixi, "init", "-c", dummy_channel_1, tmp_pixi_workspace], ExitCode.SUCCESS)
+
+    # Install a package
+    verify_cli_command([pixi, "add", "dummy-a", "--manifest-path", tmp_pixi_workspace])
+
+    # Create a conda meta file and path with an error
+    meta_file = tmp_pixi_workspace.joinpath(
+        ".pixi/envs/default/conda-meta/ca-certificates-2024.12.14-hf0a4a13_0.json"
+    )
+    meta_file.parent.mkdir(parents=True, exist_ok=True)
+    meta_file.write_text("")
+
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", tmp_pixi_workspace],
+        ExitCode.FAILURE,
+        stderr_contains=["failed to collect prefix records", "pixi clean"],
+    )
+
+
 def test_cuda_on_macos(pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str) -> None:
     """Test that we can install an environment that has cuda dependencies for linux on a macOS machine. This mimics the behavior of the pytorch installation where the linux environment should have cuda but the macOS environment should not."""
     verify_cli_command([pixi, "init", tmp_pixi_workspace, "--channel", virtual_packages_channel])

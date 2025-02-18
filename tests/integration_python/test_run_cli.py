@@ -352,3 +352,23 @@ def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [pixi, "run", "python", "--help"],
         stdout_contains="python",
     )
+
+
+def test_run_dry_run(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+    {EMPTY_BOILERPLATE_PROJECT}
+    [activation.env]
+    DRY_RUN_TEST_VAR = "WET"
+    [tasks]
+    dry-run-task = "echo $DRY_RUN_TEST_VAR"
+    """
+    manifest.write_text(toml)
+
+    # Run the task with --dry-run flag
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--dry-run", "dry-run-task"],
+        stderr_contains="$DRY_RUN_TEST_VAR",
+        stdout_excludes="WET",
+        stderr_excludes="WET",
+    )

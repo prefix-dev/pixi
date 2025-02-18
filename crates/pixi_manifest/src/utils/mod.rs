@@ -3,9 +3,11 @@ mod spanned;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
+mod with_source_code;
 
 pub use spanned::PixiSpanned;
 use url::Url;
+pub use with_source_code::WithSourceCode;
 
 /// If the URL points to a subdirectory, extract it, as in (git):
 ///   `git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir`

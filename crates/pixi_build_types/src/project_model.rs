@@ -152,7 +152,7 @@ pub struct TargetV1 {
 #[serde(rename_all = "camelCase")]
 pub enum PackageSpecV1 {
     /// This is a binary dependency
-    Binary(BinaryPackageSpecV1),
+    Binary(Box<BinaryPackageSpecV1>),
     /// This is a dependency on a source package
     Source(SourcePackageSpecV1),
 }

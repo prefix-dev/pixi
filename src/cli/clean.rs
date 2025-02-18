@@ -1,12 +1,11 @@
-use crate::Project;
-/// Command to clean the parts of your system which are touched by pixi.
+use crate::WorkspaceLocator;
 use pixi_config;
 use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::cli::cli_config::ProjectConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
@@ -15,6 +14,7 @@ use miette::IntoDiagnostic;
 use pixi_progress::{global_multi_progress, long_running_progress_style};
 use std::str::FromStr;
 
+/// Command to clean the parts of your system which are touched by pixi.
 #[derive(Parser, Debug)]
 #[clap(group(clap::ArgGroup::new("command")))]
 pub enum Command {
@@ -28,7 +28,7 @@ pub enum Command {
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -79,61 +79,57 @@ pub struct CacheArgs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    match args.command {
-        Some(Command::Cache(args)) => clean_cache(args).await?,
-        None => {
-            let project =
-                Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?; // Extract the passed in environment name.
+    if let Some(Command::Cache(args)) = args.command {
+        clean_cache(args).await?;
+        return Ok(());
+    }
 
-            let explicit_environment = args
-                .environment
-                .map(|n| EnvironmentName::from_str(n.as_str()))
-                .transpose()?
-                .map(|n| {
-                    project.environment(&n).ok_or_else(|| {
-                        miette::miette!(
-                            "unknown environment '{n}' in {}",
-                            project
-                                .manifest_path()
-                                .to_str()
-                                .expect("expected to have a manifest_path")
-                        )
-                    })
-                })
-                .transpose()?;
+    let workspace = WorkspaceLocator::for_cli()
+        .with_closest_package(false)
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?;
 
-            if let Some(explicit_env) = explicit_environment {
-                if args.activation_cache {
-                    remove_file(explicit_env.activation_cache_file_path(), false).await?;
-                    tracing::info!(
-                        "Only removing activation cache for explicit environment '{}'",
-                        explicit_env.name().fancy_display()
-                    );
-                } else {
-                    remove_folder_with_progress(explicit_env.dir(), true).await?;
-                    remove_file(explicit_env.activation_cache_file_path(), false).await?;
-                    tracing::info!("Skipping removal of task cache and solve group environments for explicit environment '{}'", explicit_env.name().fancy_display());
-                }
-            } else {
-                // Remove all pixi related work from the project.
-                if !project.environments_dir().starts_with(project.pixi_dir())
-                    && project.default_environments_dir().exists()
-                {
-                    remove_folder_with_progress(project.default_environments_dir(), false).await?;
-                    remove_folder_with_progress(
-                        project.default_solve_group_environments_dir(),
-                        false,
-                    )
-                    .await?;
-                }
-                remove_folder_with_progress(project.environments_dir(), true).await?;
-                remove_folder_with_progress(project.solve_group_environments_dir(), false).await?;
-                remove_folder_with_progress(project.task_cache_folder(), false).await?;
-                remove_folder_with_progress(project.activation_env_cache_folder(), false).await?;
-            }
+    let explicit_environment = args
+        .environment
+        .map(|n| EnvironmentName::from_str(n.as_str()))
+        .transpose()?
+        .map(|n| {
+            workspace.environment(&n).ok_or_else(|| {
+                miette::miette!(
+                    "unknown environment '{n}' in {}",
+                    workspace.workspace.provenance.path.display()
+                )
+            })
+        })
+        .transpose()?;
 
-            Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref())
+    if let Some(explicit_env) = explicit_environment {
+        if args.activation_cache {
+            remove_file(explicit_env.activation_cache_file_path(), false).await?;
+            tracing::info!(
+                "Only removing activation cache for explicit environment '{}'",
+                explicit_env.name().fancy_display()
+            );
+        } else {
+            remove_folder_with_progress(explicit_env.dir(), true).await?;
+            remove_file(explicit_env.activation_cache_file_path(), false).await?;
+            tracing::info!("Skipping removal of task cache and solve group environments for explicit environment '{}'", explicit_env.name().fancy_display());
         }
+    } else {
+        // Remove all pixi related work from the project.
+        if !workspace
+            .environments_dir()
+            .starts_with(workspace.pixi_dir())
+            && workspace.default_environments_dir().exists()
+        {
+            remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
+            remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
+                .await?;
+        }
+        remove_folder_with_progress(workspace.environments_dir(), true).await?;
+        remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
+        remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
+        remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
     }
     Ok(())
 }

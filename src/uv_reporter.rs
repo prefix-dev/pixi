@@ -96,6 +96,10 @@ impl UvReporter {
         }
     }
 
+    pub(crate) fn new_arc(options: UvReporterOptions) -> Arc<Self> {
+        Arc::new(Self::new(options))
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<Vec<Option<ScopedTask>>> {
         self.scoped_tasks.lock().expect("progress lock poison")
     }
@@ -141,7 +145,12 @@ impl uv_installer::PrepareReporter for UvReporter {
     }
 
     fn on_build_start(&self, dist: &BuildableSource) -> usize {
-        self.start(format!("building {}", dist))
+        let name: String = if let Some(name) = dist.name() {
+            name.to_string()
+        } else {
+            dist.to_string()
+        };
+        self.start(format!("building {}", name))
     }
 
     fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
@@ -157,13 +166,15 @@ impl uv_installer::PrepareReporter for UvReporter {
     }
 
     // TODO: figure out how to display this nicely
-    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
-        0
+    fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
+        self.start(format!("downloading {}", name))
     }
 
     fn on_download_progress(&self, _index: usize, _bytes: u64) {}
 
-    fn on_download_complete(&self, _name: &PackageName, _index: usize) {}
+    fn on_download_complete(&self, _name: &PackageName, id: usize) {
+        self.finish(id);
+    }
 }
 
 impl uv_installer::InstallReporter for UvReporter {
@@ -206,13 +217,15 @@ impl uv_resolver::ResolverReporter for UvReporter {
     }
 
     // TODO: figure out how to display this nicely
-    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
-        0
+    fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
+        self.start(format!("downloading {}", name))
     }
 
     fn on_download_progress(&self, _id: usize, _bytes: u64) {}
 
-    fn on_download_complete(&self, _name: &PackageName, _id: usize) {}
+    fn on_download_complete(&self, _name: &PackageName, id: usize) {
+        self.finish(id);
+    }
 }
 
 impl uv_distribution::Reporter for UvReporter {
@@ -233,11 +246,13 @@ impl uv_distribution::Reporter for UvReporter {
     }
 
     // TODO: figure out how to display this nicely
-    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
-        0
+    fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
+        self.start(format!("downloading {}", name))
     }
 
     fn on_download_progress(&self, _id: usize, _bytes: u64) {}
 
-    fn on_download_complete(&self, _name: &PackageName, _id: usize) {}
+    fn on_download_complete(&self, _name: &PackageName, id: usize) {
+        self.finish(id);
+    }
 }

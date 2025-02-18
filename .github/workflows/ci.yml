@@ -123,6 +123,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow
+        env:
+          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
+          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   cargo-test-macos-aarch64:
     name: "cargo test | macos aarch64"
@@ -142,6 +145,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow
+        env:
+          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
+          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   cargo-test-macos-x86_64:
     name: "cargo test | macos x86_64"
@@ -161,6 +167,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow
+        env:
+          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
+          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   cargo-test-windows:
     name: "cargo test | windows"
@@ -182,6 +191,9 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow
+        env:
+          PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
+          PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   #
   # Builds the binary artifacts on different platforms
@@ -289,7 +301,7 @@ jobs:
 
   build-binary-windows-aarch64:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
     runs-on: 16core_windows_latest_runner
     name: "build binary | windows aarch64"
     steps:
@@ -529,7 +541,7 @@ jobs:
 
       - name: Install pixi's pixi project
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi install -vv
+        run: pixi install -vvv --locked
 
       - name: Checkout Deltares/Ribasim
         uses: actions/checkout@v4
@@ -539,7 +551,7 @@ jobs:
       - name: Copy Deltares/Ribasim to Dev Drive
         run: Copy-Item -Path "${{ github.workspace }}/ribasim" -Destination "${{ env.PIXI_WORKSPACE }}/ribasim" -Recurse
       - name: Install Deltares/Ribasim
-        run: pixi install
+        run: pixi install -vvv --locked
         working-directory: ${{ env.PIXI_WORKSPACE }}/ribasim
 
       - name: Checkout quantco/polarify
@@ -550,7 +562,14 @@ jobs:
       - name: Copy quantco/polarify to Dev Drive
         run: Copy-Item -Path "${{ github.workspace }}/polarify" -Destination "${{ env.PIXI_WORKSPACE }}/polarify" -Recurse
       - name: Install quantco/polarify
-        run: pixi install
+        run: pixi install -vvv --locked
+        working-directory: ${{ env.PIXI_WORKSPACE }}/polarify
+      - run: pixi info
+        working-directory: ${{ env.PIXI_WORKSPACE }}/polarify
+      - run: pixi list
+        working-directory: ${{ env.PIXI_WORKSPACE }}/polarify
+      - name: Run downstream polarify environment
+        run: pixi run --locked echo "Running downstream polarify environment"
         working-directory: ${{ env.PIXI_WORKSPACE }}/polarify
 
   test-downstream-macos-aarch64:
@@ -576,7 +595,8 @@ jobs:
         run: pixi info
 
       - name: Install pixi
-        run: pixi install -v
+        # Using locked to validate that the lock file is correct
+        run: pixi install -vvv --locked
 
       - name: "Checkout Deltares/Ribasim"
         uses: actions/checkout@v4
@@ -584,7 +604,7 @@ jobs:
           repository: Deltares/Ribasim
           path: ribasim
       - name: "Install Deltares/Ribasim"
-        run: pixi install
+        run: pixi install -vvv --locked
         working-directory: ribasim
 
       - name: "Checkout quantco/polarify"
@@ -593,8 +613,12 @@ jobs:
           repository: quantco/polarify
           path: polarify
       - name: "Install quantco/polarify"
-        run: pixi install
+        run: pixi install -vvv --locked
         working-directory: polarify
+      - run: pixi info
+      - run: pixi list
+      - name: Run downstream polarify environment
+        run: pixi run --locked echo "Running downstream polarify environment"
 
   test-downstream-linux-x86_64:
     timeout-minutes: 15
@@ -620,7 +644,7 @@ jobs:
 
       - name: Install pixi
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi install -v
+        run: pixi install -vvv --locked
 
       - name: "Checkout nerfstudio-project/nerfstudio"
         uses: actions/checkout@v4
@@ -628,7 +652,8 @@ jobs:
           repository: nerfstudio-project/nerfstudio
           path: nerfstudio
       - name: "Install nerfstudio-project/nerfstudio"
-        run: pixi install
+        # Not using locked as their lockfile is not in sync
+        run: pixi install -vvv
         working-directory: nerfstudio
 
       - name: "Checkout Deltares/Ribasim"
@@ -637,7 +662,7 @@ jobs:
           repository: Deltares/Ribasim
           path: ribasim
       - name: "Install Deltares/Ribasim"
-        run: pixi install
+        run: pixi install -vvv --locked
         working-directory: ribasim
 
       - name: "Checkout quantco/polarify"
@@ -646,8 +671,12 @@ jobs:
           repository: quantco/polarify
           path: polarify
       - name: "Install quantco/polarify"
-        run: pixi install
+        run: pixi install -vvv --locked
         working-directory: polarify
+      - run: pixi info
+      - run: pixi list
+      - name: Run downstream polarify environment
+        run: pixi run --locked echo "Running downstream polarify environment"
   #
   # Install a number of common wheels on some platforms
   #

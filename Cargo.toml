@@ -62,6 +62,7 @@ minijinja = "2.5.0"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.20.2"
 parking_lot = "0.12.3"
+pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
 pep508_rs = "0.9.1"
 percent-encoding = "2.3.1"
@@ -89,6 +90,7 @@ strsim = "0.11.1"
 strum = "0.26.3"
 tabwriter = "1.4.0"
 tar = "0.4.43"
+temp-env = { version = "0.3.6", features = ["async_closure"] }
 tempfile = "3.14.0"
 thiserror = "2.0.9"
 tokio = "1.42.0"
@@ -99,50 +101,52 @@ toml_edit = "0.22.22"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 typed-path = "0.10.0"
-uv-distribution-filename = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-distribution-types = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-install-wheel = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-pep440 = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-pep508 = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-platform-tags = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-pypi-types = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-requirements-txt = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
 
 wax = "0.6.0"
 which = "7.0.1"
 
 # Rattler crates
 file_url = "0.2.2"
-rattler = { version = "0.28.12", default-features = false }
-rattler_cache = { version = "0.3.4", default-features = false }
-rattler_conda_types = { version = "0.29.10", default-features = false, features = [
+rattler = { version = "0.31.1", default-features = false }
+rattler_cache = { version = "0.3.8", default-features = false }
+rattler_conda_types = { version = "0.30.2", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.0.5", default-features = false }
-rattler_lock = { version = "0.22.39", default-features = false }
-rattler_networking = { version = "0.21.10", default-features = false, features = [
+rattler_lock = { version = "0.22.42", default-features = false }
+rattler_networking = { version = "0.22.3", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { version = "0.21.32", default-features = false }
-rattler_shell = { version = "0.22.15", default-features = false }
-rattler_solve = { version = "1.3.4", default-features = false }
-rattler_virtual_packages = { version = "1.2.0", default-features = false }
+rattler_repodata_gateway = { version = "0.21.36", default-features = false }
+rattler_shell = { version = "0.22.18", default-features = false }
+rattler_solve = { version = "1.3.7", default-features = false }
+rattler_virtual_packages = { version = "2.0.2", default-features = false }
+
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
-uv-auth = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-cache = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-client = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-configuration = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-dispatch = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-distribution = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-git = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-installer = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-normalize = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-python = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-requirements = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-resolver = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
-uv-types = { git = "https://github.com/wolfv/uv", branch = "ignore-rayon-init" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.13"
 zip = { version = "2.2.2", default-features = false }
@@ -177,7 +181,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.40.3"
+version = "0.41.3"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -247,6 +251,7 @@ minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rstest = { workspace = true }
+uv-build-frontend = { workspace = true }
 uv-distribution-filename = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-install-wheel = { workspace = true }
@@ -307,6 +312,7 @@ shlex = { workspace = true }
 strsim = { workspace = true }
 tabwriter = { workspace = true, features = ["ansi_formatting"] }
 tar = { workspace = true }
+temp-env = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
@@ -328,6 +334,7 @@ uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-python = { workspace = true }
 uv-requirements = { workspace = true }
+uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 xxhash-rust = { workspace = true }

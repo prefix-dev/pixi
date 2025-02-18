@@ -195,6 +195,14 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
     Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml` file and are not globally interpreted when not present in the manifest.
     This is because we want to keep the manifest file as complete and reproducible as possible.
 
+### `s3-options`
+
+Configuration for S3 authentication. This will lead to pixi not using AWS's default credentials but instead use the credentials from the pixi authentication storage, see the [S3 section](../advanced/s3.md) for more information.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:s3-options"
+```
+
 ### `concurrency`
 Configure multiple settings to limit or extend the concurrency of pixi.
 ```toml title="config.toml"

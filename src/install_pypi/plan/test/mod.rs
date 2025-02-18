@@ -228,6 +228,34 @@ fn test_installed_one_none_required() {
     assert_eq!(install_plan.extraneous.len(), 1);
 }
 
+/// When a package was previously installed from a registry, but we now require it from a local source
+/// we should reinstall it.
+#[test]
+fn test_installed_registry_required_local_source() {
+    let (temp_dir, _) = harness::fake_pyproject_toml(None);
+    let site_packages = MockedSitePackages::new().add_registry(
+        "aiofiles",
+        "0.6.0",
+        InstalledDistOptions::default(),
+    );
+    let required = RequiredPackages::new().add_directory(
+        "aiofiles",
+        "0.6.0",
+        temp_dir.path().to_path_buf(),
+        false,
+    );
+
+    let plan = harness::install_planner();
+    let install_plan = plan
+        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .expect("should install");
+
+    assert_matches!(
+        install_plan.reinstalls[0].1,
+        NeedReinstall::SourceMismatch { .. }
+    );
+}
+
 /// When requiring a package from the registry that is currently installed as a directory
 /// it should be re-installed
 #[test]

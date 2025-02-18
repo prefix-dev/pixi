@@ -3,6 +3,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic, NamedSource, SourceSpan};
 use pixi_config::Config;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::{io::BufRead, path::Path, str::FromStr};
 use thiserror::Error;
@@ -56,6 +57,8 @@ pub struct CondaEnvFile {
     #[serde(default)]
     channels: Vec<NamedChannelOrUrl>,
     dependencies: Vec<CondaEnvDep>,
+    #[serde(default)]
+    variables: HashMap<String, String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -82,6 +85,10 @@ impl CondaEnvFile {
 
     fn dependencies(&self) -> &Vec<CondaEnvDep> {
         &self.dependencies
+    }
+
+    pub fn variables(&self) -> HashMap<String, String> {
+        self.variables.clone()
     }
 
     pub fn from_path(path: &Path) -> miette::Result<Self> {
@@ -321,6 +328,7 @@ mod tests {
         file.write_all(example_conda_env_file.as_bytes()).unwrap();
 
         let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
+        let vars = conda_env_file_data.variables();
         let (conda_deps, pip_deps, _) =
             parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
 
@@ -332,6 +340,42 @@ mod tests {
         assert_eq!(
             pip_deps,
             vec![pep508_rs::Requirement::from_str("requests").unwrap()]
+        );
+
+        let empty_map = HashMap::<String, String>::new();
+
+        assert_eq!(vars, empty_map);
+    }
+
+    #[test]
+    fn test_parse_conda_env_file_with_variables() {
+        let example_conda_env_file = r#"
+        name: pixi_example_project
+        channels:
+          - conda-forge
+        dependencies:
+          - pip==24.0
+        variables:
+          MY_VAR: my_value
+          MY_OTHER_VAR: 123
+          MY_EMPTY_VAR:
+        "#;
+
+        let f = tempfile::NamedTempFile::new().unwrap();
+        let path = f.path();
+        let mut file = fs_err::File::create(path).unwrap();
+        file.write_all(example_conda_env_file.as_bytes()).unwrap();
+
+        let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
+        let vars = conda_env_file_data.variables();
+
+        assert_eq!(
+            vars,
+            HashMap::from([
+                ("MY_VAR".to_string(), "my_value".to_string()),
+                ("MY_OTHER_VAR".to_string(), "123".to_string()),
+                ("MY_EMPTY_VAR".to_string(), "".to_string())
+            ])
         );
     }
 }

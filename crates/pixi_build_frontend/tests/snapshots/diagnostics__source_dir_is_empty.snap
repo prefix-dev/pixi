@@ -2,5 +2,5 @@
 source: crates/pixi_build_frontend/tests/diagnostics.rs
 expression: snapshot
 ---
-  × unable to discover communication protocol, the source directory does not contain a supported manifest
+  × the source directory does not contain a supported manifest
   help: Ensure that the source directory contains a valid pixi.toml or meta.yaml file.

@@ -4,16 +4,19 @@ use std::str::FromStr;
 use pixi_git::sha::GitSha as PixiGitSha;
 use pixi_git::url::RepositoryUrl;
 use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
-use pixi_manifest::pypi::pypi_options::{IndexStrategy, PypiOptions};
+use pixi_manifest::pypi::pypi_options::{IndexStrategy, NoBuild, PypiOptions};
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
 
 use pixi_git::git::GitReference as PixiGitReference;
 
 use pep440_rs::VersionSpecifiers;
+use uv_configuration::BuildOptions;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
+
+use crate::VersionError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -21,6 +24,23 @@ pub enum ConvertFlatIndexLocationError {
     VerbatimUrlError(#[source] VerbatimUrlError, PathBuf),
     #[error("base path is not absolute: {path}", path = .0.display())]
     NotAbsolute(PathBuf),
+}
+
+/// Convert PyPI options to build options
+pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, InvalidNameError> {
+    let uv_no_build = match no_build {
+        NoBuild::None => uv_configuration::NoBuild::None,
+        NoBuild::All => uv_configuration::NoBuild::All,
+        NoBuild::Packages(ref vec) => uv_configuration::NoBuild::Packages(
+            vec.iter()
+                .map(|s| PackageName::new(s.to_string()))
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+    };
+    Ok(BuildOptions::new(
+        uv_configuration::NoBinary::default(),
+        uv_no_build,
+    ))
 }
 
 /// Convert the subset of pypi-options to index locations
@@ -141,11 +161,11 @@ fn packages_to_build_isolation<'a>(
     names: Option<&'a [PackageName]>,
     python_environment: &'a PythonEnvironment,
 ) -> uv_types::BuildIsolation<'a> {
-    return if let Some(package_names) = names {
+    if let Some(package_names) = names {
         uv_types::BuildIsolation::SharedPackage(python_environment, package_names)
     } else {
         uv_types::BuildIsolation::default()
-    };
+    }
 }
 
 /// Convert optional list of strings to package names
@@ -190,30 +210,29 @@ pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git::GitReference 
     match git_ref {
         PixiGitReference::Branch(branch) => uv_git::GitReference::Branch(branch),
         PixiGitReference::Tag(tag) => uv_git::GitReference::Tag(tag),
-        PixiGitReference::ShortCommit(rev) => uv_git::GitReference::ShortCommit(rev),
+        PixiGitReference::ShortCommit(rev) | PixiGitReference::FullCommit(rev) => {
+            uv_git::GitReference::BranchOrTagOrCommit(rev)
+        }
         PixiGitReference::BranchOrTag(rev) => uv_git::GitReference::BranchOrTag(rev),
         PixiGitReference::BranchOrTagOrCommit(rev) => {
             uv_git::GitReference::BranchOrTagOrCommit(rev)
         }
         PixiGitReference::NamedRef(rev) => uv_git::GitReference::NamedRef(rev),
-        PixiGitReference::FullCommit(rev) => uv_git::GitReference::FullCommit(rev),
         PixiGitReference::DefaultBranch => uv_git::GitReference::DefaultBranch,
     }
 }
 
-pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitSha {
-    uv_git::GitSha::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
+pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitOid {
+    uv_git::GitOid::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
 }
 
 pub fn into_pixi_reference(git_reference: uv_git::GitReference) -> PixiReference {
     match git_reference {
         uv_git::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
         uv_git::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
-        uv_git::GitReference::ShortCommit(rev) => PixiReference::Rev(rev.to_string()),
         uv_git::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
         uv_git::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
         uv_git::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
-        uv_git::GitReference::FullCommit(rev) => PixiReference::Rev(rev.to_string()),
         uv_git::GitReference::DefaultBranch => PixiReference::DefaultBranch,
     }
 }
@@ -250,7 +269,7 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
 ///
 /// So we need to convert the locked git url into a parsed git url.
 /// which is used in the uv crate.
-pub fn into_parsed_git_url(
+pub fn to_parsed_git_url(
     locked_git_url: &LockedGitUrl,
 ) -> miette::Result<uv_pypi_types::ParsedGitUrl> {
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
@@ -265,16 +284,138 @@ pub fn into_parsed_git_url(
     Ok(parsed_git_url)
 }
 
-/// uv_pep440 and pep440 are very similar but not the same, this can convert to uv_pep440::VersionSpecifiers
-pub fn as_uv_specifiers(
+/// Converts from the open-source variant to the uv-specific variant,
+/// these are incompatible types
+pub fn to_uv_specifiers(
     specifiers: &VersionSpecifiers,
 ) -> Result<uv_pep440::VersionSpecifiers, uv_pep440::VersionSpecifiersParseError> {
     uv_pep440::VersionSpecifiers::from_str(specifiers.to_string().as_str())
 }
 
-/// uv_pep440 and pep440 are very similar but not the same, this can convert to uv_pep440::Version
-pub fn as_uv_version(
+pub fn to_requirements<'req>(
+    requirements: impl Iterator<Item = &'req uv_pypi_types::Requirement>,
+) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
+    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requirements
+        .map(|requirement| {
+            let requirement: uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl> =
+                uv_pep508::Requirement::from(requirement.clone());
+            pep508_rs::Requirement::from_str(&requirement.to_string())
+                .map_err(crate::Pep508Error::Pep508Error)
+        })
+        .collect();
+
+    Ok(requirements?)
+}
+
+/// Convert back to PEP508 without the VerbatimParsedUrl
+/// We need this function because we need to convert to the introduced
+/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
+pub fn convert_uv_requirements_to_pep508<'req>(
+    requires_dist: impl Iterator<Item = &'req uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>>,
+) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
+    // Convert back top PEP508 Requirement<VerbatimUrl>
+    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requires_dist
+        .map(|r| {
+            let requirement = r.to_string();
+            pep508_rs::Requirement::from_str(&requirement).map_err(crate::Pep508Error::Pep508Error)
+        })
+        .collect();
+
+    Ok(requirements?)
+}
+
+/// Converts `uv_normalize::PackageName` to `pep508_rs::PackageName`
+pub fn to_normalize(
+    normalise: &uv_normalize::PackageName,
+) -> Result<pep508_rs::PackageName, crate::ConversionError> {
+    Ok(pep508_rs::PackageName::from_str(normalise.as_str())
+        .map_err(crate::NameError::PepNameError)?)
+}
+
+/// Converts `pe508::PackageName` to  `uv_normalize::PackageName`
+pub fn to_uv_normalize(
+    normalise: &pep508_rs::PackageName,
+) -> Result<uv_normalize::PackageName, crate::ConversionError> {
+    Ok(
+        uv_normalize::PackageName::from_str(normalise.to_string().as_str())
+            .map_err(crate::NameError::UvNameError)?,
+    )
+}
+
+/// Converts `pep508_rs::ExtraName` to `uv_normalize::ExtraName`
+pub fn to_uv_extra_name(
+    extra_name: &pep508_rs::ExtraName,
+) -> Result<uv_normalize::ExtraName, crate::ConversionError> {
+    Ok(
+        uv_normalize::ExtraName::from_str(extra_name.to_string().as_str())
+            .map_err(crate::NameError::UvExtraNameError)?,
+    )
+}
+
+/// Converts `uv_normalize::ExtraName` to `pep508_rs::ExtraName`
+pub fn to_extra_name(
+    extra_name: &uv_normalize::ExtraName,
+) -> Result<pep508_rs::ExtraName, crate::ConversionError> {
+    Ok(
+        pep508_rs::ExtraName::from_str(extra_name.to_string().as_str())
+            .map_err(crate::NameError::PepExtraNameError)?,
+    )
+}
+
+/// Converts `pep440_rs::Version` to `uv_pep440::Version`
+pub fn to_uv_version(
     version: &pep440_rs::Version,
-) -> Result<uv_pep440::Version, uv_pep440::VersionParseError> {
-    uv_pep440::Version::from_str(version.to_string().as_str())
+) -> Result<uv_pep440::Version, crate::ConversionError> {
+    Ok(
+        uv_pep440::Version::from_str(version.to_string().as_str())
+            .map_err(VersionError::UvError)?,
+    )
+}
+
+/// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
+pub fn to_uv_marker_tree(
+    marker_tree: &pep508_rs::MarkerTree,
+) -> Result<uv_pep508::MarkerTree, crate::ConversionError> {
+    let serialized = marker_tree.try_to_string();
+    if let Some(serialized) = serialized {
+        Ok(uv_pep508::MarkerTree::from_str(serialized.as_str())
+            .map_err(crate::Pep508Error::UvPep508)?)
+    } else {
+        Ok(uv_pep508::MarkerTree::default())
+    }
+}
+
+/// Converts `uv_pep508::MarkerTree` to `pep508_rs::MarkerTree`
+pub fn to_marker_environment(
+    marker_env: &uv_pep508::MarkerEnvironment,
+) -> Result<pep508_rs::MarkerEnvironment, crate::ConversionError> {
+    let serde_str = serde_json::to_string(marker_env).expect("its valid");
+    serde_json::from_str(&serde_str).map_err(crate::ConversionError::MarkerEnvironmentSerialization)
+}
+
+/// Converts `pep440_rs::VersionSpecifiers` to `uv_pep440::VersionSpecifiers`
+pub fn to_uv_version_specifiers(
+    version_specifier: &pep440_rs::VersionSpecifiers,
+) -> Result<uv_pep440::VersionSpecifiers, crate::ConversionError> {
+    Ok(
+        uv_pep440::VersionSpecifiers::from_str(&version_specifier.to_string())
+            .map_err(crate::VersionSpecifiersError::UvVersionError)?,
+    )
+}
+
+/// Converts `uv_pep440::VersionSpecifiers` to `pep440_rs::VersionSpecifiers`
+pub fn to_version_specifiers(
+    version_specifier: &uv_pep440::VersionSpecifiers,
+) -> Result<pep440_rs::VersionSpecifiers, crate::ConversionError> {
+    Ok(
+        pep440_rs::VersionSpecifiers::from_str(&version_specifier.to_string())
+            .map_err(crate::VersionSpecifiersError::PepVersionError)?,
+    )
+}
+
+/// Converts trusted_host `string` to `uv_configuration::TrustedHost`
+pub fn to_uv_trusted_host(
+    trusted_host: &str,
+) -> Result<uv_configuration::TrustedHost, crate::ConversionError> {
+    Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
 }

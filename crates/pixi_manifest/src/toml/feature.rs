@@ -3,23 +3,23 @@ use std::collections::HashMap;
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::Platform;
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
 
 use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
-        platform::TomlPlatform, preview::TomlPreview, task::TomlTask, warning::WithWarnings,
-        TomlPrioritizedChannel, TomlTarget, Warning,
+        create_unsupported_selector_error, platform::TomlPlatform, preview::TomlPreview,
+        task::TomlTask, PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     workspace::ChannelPriority,
     Activation, Feature, FeatureName, PyPiRequirement, SystemRequirements, TargetSelector, Targets,
-    Task, TaskName, TomlError,
+    Task, TaskName, TomlError, Warning, WithWarnings,
 };
 
 #[derive(Debug)]
 pub struct TomlFeature {
-    pub platforms: Option<PixiSpanned<IndexSet<Platform>>>,
+    pub platforms: Option<Spanned<IndexSet<Platform>>>,
     pub channels: Option<Vec<TomlPrioritizedChannel>>,
     pub channel_priority: Option<ChannelPriority>,
     pub system_requirements: SystemRequirements,
@@ -47,6 +47,7 @@ impl TomlFeature {
         self,
         name: FeatureName,
         preview: &TomlPreview,
+        workspace: &TomlWorkspace,
     ) -> Result<WithWarnings<Feature>, TomlError> {
         let WithWarnings {
             value: default_target,
@@ -64,6 +65,36 @@ impl TomlFeature {
 
         let mut targets = IndexMap::new();
         for (selector, target) in self.target {
+            // Verify that the target selector matches at least one of the platforms of the
+            // feature and/or workspace.
+            let matching_platforms = Platform::all()
+                .filter(|p| selector.value.matches(*p))
+                .collect::<Vec<_>>();
+
+            if let Some(feature_platforms) = self.platforms.as_ref() {
+                if !matching_platforms
+                    .iter()
+                    .any(|p| feature_platforms.value.contains(p))
+                {
+                    return Err(create_unsupported_selector_error(
+                        PlatformSpan::Feature(name.to_string(), feature_platforms.span),
+                        &selector,
+                        &matching_platforms,
+                    )
+                    .into());
+                }
+            } else if !matching_platforms
+                .iter()
+                .any(|p| workspace.platforms.value.contains(p))
+            {
+                return Err(create_unsupported_selector_error(
+                    PlatformSpan::Workspace(workspace.platforms.span),
+                    &selector,
+                    &matching_platforms,
+                )
+                .into());
+            }
+
             let WithWarnings {
                 value: target,
                 warnings: mut target_warnings,
@@ -74,7 +105,7 @@ impl TomlFeature {
 
         Ok(WithWarnings::from(Feature {
             name,
-            platforms: self.platforms,
+            platforms: self.platforms.map(|platforms| platforms.value),
             channels: self
                 .channels
                 .map(|channels| channels.into_iter().map(|channel| channel.into()).collect()),
@@ -93,7 +124,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
         let mut warnings = Vec::new();
 
         let platforms = th
-            .optional::<TomlWith<_, PixiSpanned<TomlIndexSet<TomlPlatform>>>>("platforms")
+            .optional::<TomlWith<_, Spanned<TomlIndexSet<TomlPlatform>>>>("platforms")
             .map(TomlWith::into_inner);
         let channels = th.optional("channels");
         let channel_priority = th.optional("channel-priority");
@@ -142,5 +173,41 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             pypi_options,
             warnings,
         })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use insta::assert_snapshot;
+
+    use crate::utils::test_utils::expect_parse_failure;
+
+    #[test]
+    fn test_mismatching_target_selector() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = ['win-64']
+
+        [feature.foo.target.osx-64.dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_mismatching_excluded_target_selector() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = ['win-64', 'osx-arm64']
+
+        [feature.foo]
+        platforms = ['win-64']
+
+        [feature.foo.target.osx.dependencies]
+        "#,
+        ));
     }
 }

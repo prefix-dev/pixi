@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_utils/src/conda_environment_file.rs
-expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n    parse_channels(env_info.channels().clone()), env_info.name())"
+assertion_line: 295
+expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\nparse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
     (
@@ -26,6 +27,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -52,6 +54,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -80,6 +83,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -106,6 +110,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -132,6 +137,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -158,6 +164,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -184,6 +191,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,
@@ -202,6 +210,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\n   
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
                 channel: None,
                 subdir: None,
                 namespace: None,

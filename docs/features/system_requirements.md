@@ -8,8 +8,9 @@ For example, you might require a specific Linux kernel version or a minimum glib
 If your machine doesn’t meet these requirements, `pixi run` will fail because the environment can’t work reliably on your system.
 
 When resolving dependencies, pixi combines:
-•	The default requirements for the operating system.
-•	Any custom requirements you’ve added for your project through the `[system-requirements]`.
+
+- The default requirements for the operating system.
+- Any custom requirements you’ve added for your project through the `[system-requirements]`.
 
 This way, pixi guarantees your environment is consistent and compatible with your machine.
 

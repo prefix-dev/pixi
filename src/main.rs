@@ -31,7 +31,7 @@ pub fn main() -> miette::Result<()> {
         .max(4 * 1024 * 1024);
 
     let main2 = move || {
-        let runtime = tokio::runtime::Builder::new_current_thread()
+        let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("Failed building the Runtime");

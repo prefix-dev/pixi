@@ -1,8 +1,9 @@
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
 use crate::lock_file::UpdateMode;
+use crate::workspace::DiscoveryStart;
 use crate::DependencyType;
-use crate::Project;
+use crate::Workspace;
 use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
@@ -21,12 +22,22 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
 
-/// Project configuration
+/// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
-pub struct ProjectConfig {
+pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the project directory
     #[arg(long, global = true)]
     pub manifest_path: Option<PathBuf>,
+}
+
+impl WorkspaceConfig {
+    /// Returns the start location when trying to discover a workspace.
+    pub fn workspace_locator_start(&self) -> DiscoveryStart {
+        match &self.manifest_path {
+            Some(path) => DiscoveryStart::ExplicitManifest(path.clone()),
+            None => DiscoveryStart::CurrentDir,
+        }
+    }
 }
 
 /// Channel configuration
@@ -52,7 +63,7 @@ impl ChannelsConfig {
     /// Parses the channels, getting channel config and default channels from project
     pub(crate) fn resolve_from_project(
         &self,
-        project: Option<&Project>,
+        project: Option<&Workspace>,
     ) -> miette::Result<IndexSet<Channel>> {
         match project {
             Some(project) => {
@@ -306,7 +317,7 @@ impl DependencyConfig {
 
     pub fn vcs_pep508_requirements(
         &self,
-        project: &Project,
+        project: &Workspace,
     ) -> Option<miette::Result<IndexMap<PyPiPackageName, Requirement>>> {
         match &self.git {
             Some(git) => {

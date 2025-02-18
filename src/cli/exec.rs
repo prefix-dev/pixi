@@ -1,4 +1,4 @@
-use std::{path::Path, str::FromStr};
+use std::{path::Path, str::FromStr, sync::LazyLock};
 
 use clap::{Parser, ValueHint};
 use miette::{Context, IntoDiagnostic};
@@ -13,6 +13,7 @@ use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platfor
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use uv_configuration::RAYON_INITIALIZE;
 
 use super::cli_config::ChannelsConfig;
 use crate::prefix::Prefix;
@@ -53,7 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut command_args = args.command.iter();
     let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
-    let (_, client) = build_reqwest_clients(Some(&config));
+    let (_, client) = build_reqwest_clients(Some(&config), None)?;
 
     // Create the environment to run the command in.
     let prefix = create_exec_prefix(&args, &cache_dir, &config, &client).await?;
@@ -187,6 +188,10 @@ pub async fn create_exec_prefix(
     .into_diagnostic()
     .context("failed to solve environment")?;
 
+    // Force the initialization of the rayon thread pool to avoid implicit creation
+    // by the Installer.
+    LazyLock::force(&RAYON_INITIALIZE);
+
     // Install the environment
     Installer::new()
         .with_target_platform(args.platform)
@@ -200,7 +205,7 @@ pub async fn create_exec_prefix(
         .with_package_cache(PackageCache::new(
             cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
         ))
-        .install(prefix.root(), solved_records)
+        .install(prefix.root(), solved_records.records)
         .await
         .into_diagnostic()
         .context("failed to create environment")?;

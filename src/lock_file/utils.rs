@@ -6,8 +6,8 @@ use rattler_lock::{LockFile, LockFileBuilder, LockedPackageRef};
 use tokio::sync::Semaphore;
 
 use crate::{
-    project::{grouped_environment::GroupedEnvironment, Environment},
-    Project,
+    workspace::{grouped_environment::GroupedEnvironment, Environment},
+    Workspace,
 };
 
 /// Wraps a semaphore to limit the number of concurrent IO operations. The
@@ -33,7 +33,7 @@ pub fn filter_lock_file<
     'lock,
     F: FnMut(&Environment<'p>, Platform, LockedPackageRef<'lock>) -> bool,
 >(
-    project: &'p Project,
+    workspace: &'p Workspace,
     lock_file: &'lock LockFile,
     mut filter: F,
 ) -> LockFile {
@@ -41,7 +41,7 @@ pub fn filter_lock_file<
 
     for (environment_name, environment) in lock_file.environments() {
         // Find the environment in the project
-        let Some(project_env) = project.environment(environment_name) else {
+        let Some(project_env) = workspace.environment(environment_name) else {
             continue;
         };
 

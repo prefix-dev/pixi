@@ -9,7 +9,7 @@ use std::{
 use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{IntoDiagnostic, Report};
 use pixi_config::{default_channel_config, Config};
 use pixi_progress::await_in_progress;
 use pixi_utils::reqwest::build_reqwest_clients;
@@ -21,7 +21,8 @@ use tracing::{debug, error};
 use url::Url;
 
 use super::cli_config::ChannelsConfig;
-use crate::{cli::cli_config::ProjectConfig, project::ProjectError, Project};
+use crate::workspace::WorkspaceLocatorError;
+use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
 
 /// Search a conda package
 ///
@@ -37,7 +38,7 @@ pub struct Args {
     pub channels: ChannelsConfig,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 
     /// The platform to search for, defaults to current platform
     #[arg(short, long, default_value_t = Platform::current())]
@@ -110,26 +111,20 @@ pub async fn execute_impl<W: Write>(
     args: Args,
     out: &mut W,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>> {
-    let project = match Project::load_or_else_discover(args.project_config.manifest_path.as_deref())
+    let project = match WorkspaceLocator::for_cli()
+        .with_search_start(args.project_config.workspace_locator_start())
+        .locate()
     {
         Ok(project) => Some(project),
-        Err(e) => {
-            match e {
-                ProjectError::FileNotFound(_)
-                | ProjectError::FileNotFoundInDirectory(_)
-                | ProjectError::NoFileFound => {
-                    debug!(
-                        "No project file found, continuing without project configuration. {}",
-                        e
-                    );
-                }
-                _ => {
-                    error!(
-                        "Error loading project configuration, continuing without: {}",
-                        e
-                    );
-                }
-            };
+        Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
+            debug!("No project file found, continuing without project configuration.",);
+            None
+        }
+        Err(err) => {
+            error!(
+                "Error loading project configuration, continuing without:\n{:?}",
+                Report::from(err)
+            );
             None
         }
     };
@@ -143,10 +138,12 @@ pub async fn execute_impl<W: Write>(
 
     let package_name_filter = args.package;
 
-    let client = project
-        .as_ref()
-        .map(|p| p.authenticated_client().clone())
-        .unwrap_or_else(|| build_reqwest_clients(None).1);
+    let project = project.as_ref();
+    let client = if let Some(project) = project {
+        project.authenticated_client()?.clone()
+    } else {
+        build_reqwest_clients(None, None)?.1
+    };
 
     let config = Config::load_global();
 
@@ -193,11 +190,9 @@ pub async fn execute_impl<W: Write>(
     // package info (if any package is found)
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
-
         search_exact_package(package_name, all_names, repodata_query_func, out).await?
     };
 
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(packages)
 }
 

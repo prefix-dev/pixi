@@ -17,7 +17,6 @@ use crate::{
     consts,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     target::Targets,
-    utils::PixiSpanned,
     workspace::ChannelPriority,
     PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
 };
@@ -138,7 +137,7 @@ pub struct Feature {
     ///
     /// This value is `None` if this feature does not specify any platforms and
     /// the default platforms from the project should be used.
-    pub platforms: Option<PixiSpanned<IndexSet<Platform>>>,
+    pub platforms: Option<IndexSet<Platform>>,
 
     /// Channels specific to this feature.
     ///
@@ -171,7 +170,6 @@ impl Feature {
             channel_priority: None,
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
-
             targets: <Targets<WorkspaceTarget> as Default>::default(),
         }
     }
@@ -184,9 +182,7 @@ impl Feature {
     /// Returns a mutable reference to the platforms of the feature. Create them
     /// if needed
     pub fn platforms_mut(&mut self) -> &mut IndexSet<Platform> {
-        self.platforms
-            .get_or_insert_with(Default::default)
-            .get_mut()
+        self.platforms.get_or_insert_with(Default::default)
     }
 
     /// Returns a mutable reference to the channels of the feature. Create them
@@ -391,17 +387,15 @@ impl Feature {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
 
     use assert_matches::assert_matches;
 
     use super::*;
-    use crate::Manifest;
+    use crate::WorkspaceManifest;
 
     #[test]
     fn test_dependencies_borrowed() {
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
+        let manifest = WorkspaceManifest::from_toml_str(
             r#"
         [project]
         name = "foo"
@@ -451,7 +445,6 @@ mod tests {
         );
 
         let bla_feature = manifest
-            .workspace
             .features
             .get(&FeatureName::Named(String::from("bla")))
             .unwrap();
@@ -470,8 +463,7 @@ mod tests {
 
     #[test]
     fn test_activation() {
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
+        let manifest = WorkspaceManifest::from_toml_str(
             r#"
         [project]
         name = "foo"
@@ -504,8 +496,7 @@ mod tests {
 
     #[test]
     pub fn test_pypi_options_manifest() {
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
+        let manifest = WorkspaceManifest::from_toml_str(
             r#"
         [project]
         name = "foo"
@@ -525,6 +516,6 @@ mod tests {
         // and should now be none, previously this was added
         // to the default feature
         assert!(manifest.default_feature().pypi_options().is_some());
-        assert!(manifest.workspace.workspace.pypi_options.is_some());
+        assert!(manifest.workspace.pypi_options.is_some());
     }
 }

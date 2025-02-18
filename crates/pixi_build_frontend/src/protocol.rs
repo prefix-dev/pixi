@@ -6,9 +6,13 @@ use pixi_build_types::procedures::{
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
 
-use crate::protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
-
-use crate::{protocols::JsonRPCBuildProtocol, CondaBuildReporter, CondaMetadataReporter};
+use crate::{
+    protocols::{
+        builders::{conda_protocol, pixi_protocol, rattler_build_protocol},
+        JsonRPCBuildProtocol,
+    },
+    CondaBuildReporter, CondaMetadataReporter,
+};
 
 /// Top-level error type for protocol errors.
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -32,10 +36,11 @@ pub enum DiscoveryError {
         "failed to discover a valid project manifest, the source does not refer to a directory"
     )]
     NotADirectory,
+
     #[error("failed to discover a valid project manifest, the source path '{}' could not be found", .0.display())]
     NotFound(PathBuf),
 
-    #[error("unable to discover communication protocol, the source directory does not contain a supported manifest")]
+    #[error("the source directory does not contain a supported manifest")]
     #[diagnostic(help(
         "Ensure that the source directory contains a valid pixi.toml or meta.yaml file."
     ))]
@@ -107,17 +112,16 @@ impl Protocol {
         }
     }
 
-    pub async fn get_conda_metadata(
+    pub async fn conda_get_metadata(
         &self,
         request: &CondaMetadataParams,
         reporter: Arc<dyn CondaMetadataReporter>,
     ) -> miette::Result<CondaMetadataResult> {
         match self {
-            Self::PixiBuild(protocol) => protocol
-                .get_conda_metadata(request, reporter.as_ref())
-                .await
-                .into_diagnostic(),
-            Self::CondaBuild(protocol) => protocol.get_conda_metadata(request),
+            Self::PixiBuild(protocol) => Ok(protocol
+                .conda_get_metadata(request, reporter.as_ref())
+                .await?),
+            Self::CondaBuild(protocol) => protocol.conda_get_metadata(request),
         }
     }
 
