@@ -266,7 +266,7 @@ pub enum InstallChange {
     Installed(Version),
     Upgraded(Version, Version),
     TransitiveUpgraded(Version, Version),
-    Reinstalled(Version),
+    Reinstalled(Version, Version),
     Removed,
 }
 
@@ -294,9 +294,11 @@ impl InstallChange {
                 version_style.apply_to(old.to_string()),
                 version_style.apply_to(new.to_string())
             ))),
-            InstallChange::Reinstalled(version) => {
-                Some(version_style.apply_to(version.to_string()))
-            }
+            InstallChange::Reinstalled(old, new) => Some(default_style.apply_to(format!(
+                "{} -> {}",
+                version_style.apply_to(old.to_string()),
+                version_style.apply_to(new.to_string())
+            ))),
             InstallChange::Removed => None,
         }
     }
@@ -824,17 +826,13 @@ pub(crate) fn get_install_changes(
 
                 (pkg_name, change)
             }
-            TransactionOperation::Reinstall(package) => {
-                let pkg_name = package.repodata_record.package_record.name;
+            TransactionOperation::Reinstall { old, new } => {
+                let pkg_name = new.package_record.name;
                 (
                     pkg_name,
                     InstallChange::Reinstalled(
-                        package
-                            .repodata_record
-                            .package_record
-                            .version
-                            .version()
-                            .clone(),
+                        old.repodata_record.package_record.version.version().clone(),
+                        new.package_record.version.version().clone(),
                     ),
                 )
             }
