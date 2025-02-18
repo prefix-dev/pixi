@@ -1,4 +1,5 @@
 use clap::Parser;
+use clap_markdown::MarkdownOptions;
 use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
@@ -48,6 +49,7 @@ Pixi is a versatile developer workflow tool designed to streamline the managemen
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
 
 Basic Usage:
+
     Initialize pixi for a project:
     $ pixi init
     $ pixi add python numpy pytest
@@ -143,6 +145,10 @@ pub enum Command {
 
     // Build
     Build(build::Args),
+
+    // Generate cli documentation
+    #[clap(hide = true)]
+    Documentation,
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
@@ -270,6 +276,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
+        Command::Documentation => generate_documentation(),
     }
 }
 
@@ -307,4 +314,13 @@ fn set_console_colors(args: &Args) {
         }
         ColorOutput::Auto => {} // Let `console` detect if colors should be enabled
     };
+}
+
+fn generate_documentation() -> miette::Result<()> {
+    let options = MarkdownOptions::new()
+        .show_table_of_contents(false)
+        .show_footer(false);
+    let help = clap_markdown::help_markdown_custom::<Args>(&options);
+    println!("{}", help);
+    Ok(())
 }

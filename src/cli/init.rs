@@ -31,13 +31,35 @@ pub enum ManifestFormat {
 }
 
 /// Creates a new workspace
+///
+/// It initializes a `pixi.toml` file and also prepares a `.gitignore`
+/// to prevent the environment from being added to `git`.
+///
+/// If you have a `pyproject.toml` file in the directory where you run `pixi init`,
+/// it appends the pixi data to the `pyproject.toml` file instead of creating a new `pixi.toml` file.
+///
+/// When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
+/// The `pixi.lock` will be created when you install the environment.
+/// We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`,
+/// `r` and `msys2` as the default channels.
+///
+///     pixi init myproject
+///     pixi init ~/myproject
+///     pixi init  # Initializes directly in the current directory.
+///     pixi init --channel conda-forge --channel bioconda myproject
+///     pixi init --platform osx-64 --platform linux-64 myproject
+///     pixi init --import environment.yml
+///     pixi init --format pyproject
+///     pixi init --format pixi --scm gitlab
+///
 #[derive(Parser, Debug)]
+#[clap(verbatim_doc_comment)]
 pub struct Args {
-    /// Where to place the project (defaults to current path)
+    /// Where to place the project
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
-    /// Channels to use in the project.
+    /// Channels to use in the project. Defaults to `conda-forge`. (Allowed to be used more than once)
     #[arg(short, long = "channel", id = "channel", conflicts_with = "env_file")]
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 

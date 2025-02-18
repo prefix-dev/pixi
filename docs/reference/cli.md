@@ -1,1612 +1,1827 @@
----
-part: pixi
-title: Commands
-description: All pixi cli subcommands
----
+# Command-Line Help for `pixi`
 
-## Global options
+This document contains the help content for the `pixi` command-line program.
 
-- `--verbose (-v|vv|vvv)` Increase the verbosity of the output messages, the -v|vv|vvv increases the level of verbosity respectively.
-- `--help (-h)` Shows help information, use `-h` to get the short version of the help.
-- `--version (-V)`: shows the version of pixi that is used.
-- `--quiet (-q)`: Decreases the amount of output.
-- `--color <COLOR>`: Whether the log needs to be colored [env: `PIXI_COLOR=`] [default: `auto`] [possible values: `always`, `never`, `auto`].
-  Pixi also honors the `FORCE_COLOR` and `NO_COLOR` environment variables.
-  They both take precedence over `--color` and `PIXI_COLOR`.
-- `--no-progress`: Disables the progress bar.[env: `PIXI_NO_PROGRESS`] [default: `false`]
+## `pixi`
 
-## `init`
 
-This command is used to create a new project.
-It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent the environment from being added to `git`.
+Pixi [version 0.41.3] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
-It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if you have a `pyproject.toml` file in the directory where you run `pixi init`, it appends the pixi data to the `pyproject.toml` instead of a new `pixi.toml` file.
+Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
+Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
 
-##### Arguments
+Basic Usage:
 
-1. `[PATH]`: Where to place the project (defaults to current path) [default: `.`]
+    Initialize pixi for a project:
+    $ pixi init
+    $ pixi add python numpy pytest
 
-##### Options
+    Run a task:
+    $ pixi task add test 'pytest -s'
+    $ pixi run test
 
-- `--channel <CHANNEL> (-c)`: Specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
-- `--platform <PLATFORM> (-p)`: Specify a platform that the project supports. (Allowed to be used more than once)
-- `--import <ENV_FILE> (-i)`: Import an existing conda environment file, e.g. `environment.yml`.
-- `--format <FORMAT>`: Specify the format of the project file, either `pyproject` or `pixi`. [default: `pixi`]
-- `--scm <SCM>`: Specify the SCM used to manage the project with. Possible values: github, gitlab, codeberg. [default: `github`]
+Found a Bug or Have a Feature Request?
+Open an issue at: https://github.com/prefix-dev/pixi/issues
 
-!!! info "Importing an environment.yml"
-  When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
-  The `pixi.lock` will be created when you install the environment.
-  We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`, `r` and `msys2` as the default channels.
+Need Help?
+Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 
-```shell
-pixi init myproject
-pixi init ~/myproject
-pixi init  # Initializes directly in the current directory.
-pixi init --channel conda-forge --channel bioconda myproject
-pixi init --platform osx-64 --platform linux-64 myproject
-pixi init --import environment.yml
-pixi init --format pyproject
-pixi init --format pixi --scm gitlab
-```
+For more information, see the documentation at: https://pixi.sh
 
-## `add`
 
-Adds dependencies to the [manifest file](pixi_manifest.md).
-It will only add dependencies compatible with the rest of the dependencies in the project.
-[More info](../features/multi_platform_configuration.md) on multi-platform configuration.
+**Usage:** `pixi [OPTIONS] <COMMAND>`
 
-If the project manifest is a `pyproject.toml`, by default, adding a pypi dependency will add it to the native `project.dependencies` array, or to the native `dependency-groups` table if a feature is specified:
+###### **Subcommands:**
 
-- `pixi add --pypi boto3` would add `boto3` to the `project.dependencies` array
-- `pixi add --pypi boto3 --feature aws` would add `boto3` to the `dependency-groups.aws` array
+* `init` — Creates a new workspace
+* `add` — Adds dependencies to the project
+* `remove` — Removes dependencies from the project
+* `install` — Install all dependencies
+* `update` — Update dependencies as recorded in the local lock file
+* `upgrade` — Update the version of packages to the latest possible version, disregarding the manifest version constraints
+* `lock` — Solve environment and update the lock file
+* `run` — Runs task in project
+* `exec` — Run a command in a temporary environment
+* `shell` — Start a shell in the pixi environment of the project
+* `shell-hook` — Print the pixi environment activation script
+* `project` — Modify the project configuration file through the command line
+* `task` — Interact with tasks in the project
+* `list` — List project's packages
+* `tree` — Show a tree of project dependencies
+* `global` — Subcommand for global package management actions
+* `auth` — Login to prefix.dev or anaconda.org servers to access private channels
+* `config` — Configuration management
+* `info` — Information about the system, project and environments for the current machine
+* `upload` — Upload a conda package
+* `search` — Search a conda package
+* `clean` — Clean the parts of your system which are touched by pixi. Defaults to cleaning the environments and task cache. Use the `cache` subcommand to clean the cache
+* `completion` — Generates a completion script for a shell
+* `build` — Workspace configuration
+
+###### **Options:**
+
+* `-v`, `--verbose` — Increase logging verbosity
+* `-q`, `--quiet` — Decrease logging verbosity
+* `--color <COLOR>` — Whether the log needs to be colored
+
+  Default value: `auto`
+
+  Possible values: `always`, `never`, `auto`
+
+* `--no-progress` — Hide all progress bars, always turned on if stderr is not a terminal
+
+  Default value: `false`
+
+
+
+## `pixi init`
+
+Creates a new workspace
+
+It initializes a `pixi.toml` file and also prepares a `.gitignore`
+to prevent the environment from being added to `git`.
+
+If you have a `pyproject.toml` file in the directory where you run `pixi init`,
+it appends the pixi data to the `pyproject.toml` file instead of creating a new `pixi.toml` file.
+
+When importing an environment, the `pixi.toml` will be created with the dependencies from the environment file.
+The `pixi.lock` will be created when you install the environment.
+We don't support `git+` urls as dependencies for pip packages and for the `defaults` channel we use `main`,
+`r` and `msys2` as the default channels.
+
+    pixi init myproject
+    pixi init ~/myproject
+    pixi init  # Initializes directly in the current directory.
+    pixi init --channel conda-forge --channel bioconda myproject
+    pixi init --platform osx-64 --platform linux-64 myproject
+    pixi init --import environment.yml
+    pixi init --format pyproject
+    pixi init --format pixi --scm gitlab
+
+**Usage:** `pixi init [OPTIONS] [PATH]`
+
+###### **Arguments:**
+
+* `<PATH>` — Where to place the project
+
+  Default value: `.`
+
+###### **Options:**
+
+* `-c`, `--channel <channel>` — Channels to use in the project. Defaults to `conda-forge`. (Allowed to be used more than once)
+* `-p`, `--platform <platform>` — Platforms that the project supports
+* `-i`, `--import <ENV_FILE>` — Environment.yml file to bootstrap the project
+* `--format <FORMAT>` — The manifest format to create
+
+  Possible values: `pixi`, `pyproject`
+
+* `-s`, `--scm <SCM>` — Source Control Management used for this project
+
+  Possible values: `github`, `gitlab`, `codeberg`
+
+
+
+
+## `pixi add`
+
+Adds dependencies to the project
+
+The dependencies should be defined as MatchSpec for conda package, or a PyPI
+requirement for the `--pypi` dependencies. If no specific version is
+provided, the latest version compatible with your project will be chosen
+automatically or a * will be used.
+
+Example usage:
+
+- `pixi add python=3.9`: This will select the latest minor version that
+  complies with 3.9.*, i.e., python version 3.9.0, 3.9.1, 3.9.2, etc.
+- `pixi add python`: In absence of a specified version, the latest version
+  will be chosen. For instance, this could resolve to python version
+  3.11.3.* at the time of writing.
+
+Adding multiple dependencies at once is also supported:
+- `pixi add python pytest`: This will add both `python` and `pytest` to the
+  project's dependencies.
+
+The `--platform` and `--build/--host` flags make the dependency target
+specific.
+- `pixi add python --platform linux-64 --platform osx-arm64`: Will add the
+  latest version of python for linux-64 and osx-arm64 platforms.
+- `pixi add python --build`: Will add the latest version of python for as a
+  build dependency.
+
+Mixing `--platform` and `--build`/`--host` flags is supported
+
+The `--pypi` option will add the package as a pypi dependency. This cannot
+be mixed with the conda dependencies
+- `pixi add --pypi boto3`
+- `pixi add --pypi "boto3==version"
+
+If the project manifest is a `pyproject.toml`, adding a pypi dependency will
+add it to the native pyproject `project.dependencies` array or to the native
+`dependency-groups` table if a feature is specified:
+- `pixi add --pypi boto3` will add `boto3` to the `project.dependencies`
+  array
+- `pixi add --pypi boto3 --feature aws` will add `boto3` to the
+  `dependency-groups.aws` array
 
 Note that if `--platform` or `--editable` are specified, the pypi dependency
 will be added to the `tool.pixi.pypi-dependencies` table instead as native
 arrays have no support for platform-specific or editable dependencies.
 
-These dependencies will be read by pixi as if they had been added to the pixi `pypi-dependencies` tables of the default or a named feature.
-
-##### Arguments
-
-1. `[SPECS]`: The package(s) to add, space separated. The version constraint is optional.
-
-##### Options
-
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--host`: Specifies a host dependency, important for building a package.
-- `--build`: Specifies a build dependency, important for building a package.
-- `--pypi`: Specifies a PyPI dependency, not a conda package.
-  Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
-  See [configuration](pixi_manifest.md) for details.
-- `--git`: Specifies a git dependency, the package will be installed from the git repository.
-  The `--git` flag can be used with the following options:
-  - `--branch <BRANCH>`: The branch to use when installing the package.
-  - `--tag <TAG>`: The tag to use when installing the package.
-  - `--rev <REV>`: The revision to use when installing the package.
-  - `--subdir <SUBDIR>`: The subdirectory to use when installing the package.
-- `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
-- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
-- `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
-- `--feature <FEATURE> (-f)`: The feature for which the dependency should be added.
-- `--editable`: Specifies an editable dependency; only used in combination with `--pypi`.
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-
-```shell
-pixi add numpy # (1)!
-pixi add numpy pandas "pytorch>=1.8" # (2)!
-pixi add "numpy>=1.22,<1.24" # (3)!
-pixi add --manifest-path ~/myproject/pixi.toml numpy # (4)!
-pixi add --host "python>=3.9.0" # (5)!
-pixi add --build cmake # (6)!
-pixi add --platform osx-64 clang # (7)!
-pixi add --no-install numpy # (8)!
-pixi add --no-lockfile-update numpy # (9)!
-pixi add --feature featurex numpy # (10)!
-pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (11)!
-pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (12)!
-pixi add --git https://github.com/wolfv/pixi-build-examples --tag v0.1.0 boost-check # (13)!
-pixi add --git https://github.com/wolfv/pixi-build-examples --rev e50d4a1 boost-check # (14)!
-
-# Add a pypi dependency
-pixi add --pypi requests[security] # (15)!
-pixi add --pypi Django==5.1rc1 # (16)!
-pixi add --pypi "boltons>=24.0.0" --feature lint # (17)!
-pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (18)!
-pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (19)!
-pixi add --pypi "project @ file:///absolute/path/to/project" # (20)!
-pixi add --pypi "project@file:///absolute/path/to/project" --editable # (21)!
-pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (22)!
-```
-
-1. This will add the `numpy` package to the project with the latest available for the solved environment.
-2. This will add multiple packages to the project solving them all together.
-3. This will add the `numpy` package with the version constraint.
-4. This will add the `numpy` package to the project of the manifest file at the given path.
-5. This will add the `python` package as a host dependency. There is currently no different behavior for host dependencies.
-6. This will add the `cmake` package as a build dependency. There is currently no different behavior for build dependencies.
-7. This will add the `clang` package only for the `osx-64` platform.
-8. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
-9. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
-10. This will add the `numpy` package in the feature `featurex`.
-11. This will add the `boost-check` source package to the dependencies from the git repository.
-12. This will add the `boost-check` source package to the dependencies from the git repository using `main` branch and the `boost-check` folder in the repository.
-13. This will add the `boost-check` source package to the dependencies from the git repository using `v0.1.0` tag.
-14. This will add the `boost-check` source package to the dependencies from the git repository using `e50d4a1` revision.
-15. This will add the `requests` package as `pypi` dependency with the `security` extra.
-16. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
-17. This will add the `boltons` package in the feature `lint` as `pypi` dependency.
-18. This will add the `boltons` package with the given `url` as `pypi` dependency.
-19. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
-20. This will add the `project` package with the given `file` url as `pypi` dependency.
-21. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
-22. This will add the `boltons` package with the given `git` url as `pypi` dependency. `branch`, `tag`, and `rev` are not yet supported.
-
-!!! tip
-    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
-    ```
-    pixi config set pinning-strategy no-pin --global
-    ```
-    The default is `semver` which will pin the dependencies to the latest major version or minor for `v0` versions.
-    !!! note
-        There is an exception to this rule when you add a package we defined as non `semver`, then we'll use the `minor` strategy.
-        These are the packages we defined as non `semver`:
-        Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
-
-
-## `install`
-
-Installs an environment based on the [manifest file](pixi_manifest.md).
-If there is no `pixi.lock` file or it is not up-to-date with the [manifest file](pixi_manifest.md), it will (re-)generate the lock file.
-
-`pixi install` only installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag.
-If you don't provide an environment, the `default` environment will be installed.
-
-Running `pixi install` is not required before running other commands.
-As all commands interacting with the environment will first run the `install` command if the environment is not ready, to make sure you always run in a correct state.
-E.g. `pixi run`, `pixi shell`, `pixi shell-hook`, `pixi add`, `pixi remove` to name a few.
-
-##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided the default environment will be used.
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-
-```shell
-pixi install
-pixi install --manifest-path ~/myproject/pixi.toml
-pixi install --frozen
-pixi install --locked
-pixi install --environment lint
-pixi install -e lint
-```
-
-## `update`
-
-The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
-It will only update the lock file if the dependencies in the [manifest file](pixi_manifest.md) are still compatible with the new versions.
-
-##### Arguments
-
-1. `[PACKAGES]...` The packages to update, space separated. If no packages are provided, all packages will be updated.
-
-##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided all the environments are updated.
-- `--platform <PLATFORM> (-p)`: The platform for which the dependencies should be updated.
-- `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
-- `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
-- `--json`: Output the changes in json format.
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-
-```shell
-pixi update numpy
-pixi update numpy pandas
-pixi update --manifest-path ~/myproject/pixi.toml numpy
-pixi update --environment lint python
-pixi update -e lint -e schema -e docs pre-commit
-pixi update --platform osx-arm64 mlx
-pixi update -p linux-64 -p osx-64 numpy
-pixi update --dry-run
-pixi update --no-install boto3
-```
-
-## `upgrade`
-
-The `upgrade` command checks if there are newer versions of the dependencies and upgrades them in the [manifest file](pixi_manifest.md).
-`update` updates dependencies in the lock file while still fulfilling the version requirements set in the manifest.
-`upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
-
-##### Arguments
-
-1. `[PACKAGES]...` The packages to upgrade, space separated. If no packages are provided, all packages will be upgraded.
-
-##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--feature <FEATURE> (-e)`: The feature to upgrade, if none are provided the default feature will be used.
-- `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
-- `--json`: Output the changes in json format.
-- `--dry-run (-n)`: Only show the changes that would be made, without actually updating the manifest, lock file, or environment.
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-
-```shell
-pixi upgrade
-pixi upgrade numpy
-pixi upgrade numpy pandas
-pixi upgrade --manifest-path ~/myproject/pixi.toml numpy
-pixi upgrade --feature lint python
-pixi upgrade --json
-pixi upgrade --dry-run
-```
-
-!!! note
-    The `pixi upgrade` command will only update `version`s, except when you specify the exact package name (`pixi upgrade numpy`).
-
-    Then it will remove all fields, apart from:
-
-    - `build` field containing a wildcard `*`
-    - `channel`
-    - `file_name`
-    - `url`
-    - `subdir`.
-
-## `lock`
-
-The `lock` command updates the `pixi.lock` file without modifying the environment.
-It ensures the lockfile is accurate by performing minimal tasks, such as solving the environment only if the lockfile is outdated or installing the necessary dependencies to resolve the lockfile for PyPI dependencies.
-
-The output is similar to the `update` command, displaying the changes made to the lockfile.
-
-##### Options
-
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--json` Output the changes in json format.
-
-```shell
-pixi lock
-pixi lock --manifest-path ~/myproject/pixi.toml
-pixi lock --json
-```
-
-## `run`
-
-The `run` commands first checks if the environment is ready to use.
-When you didn't run `pixi install` the run command will do that for you.
-The custom tasks defined in the [manifest file](pixi_manifest.md) are also available through the run command.
-
-You cannot run `pixi run source setup.bash` as `source` is not available in the `deno_task_shell` commandos and not an executable.
-
-##### Arguments
-
-1. `[TASK]...` The task you want to run in the projects environment, this can also be a normal command. And all arguments after the task will be passed to the task.
-
-##### Options
-
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
-- `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON `Windows`.
-- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
-- `--revalidate`: Revalidate the full environment, instead of checking the lock file hash. [more info](../features/environment.md#environment-installation-metadata)
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-- `--skip-deps`: Skip the dependencies of the task, which where defined in the `depends-on` field of the task.
-- `--dry-run (-n)`: Run the task in dry-run mode (only print the command that would run)
-
-```shell
-pixi run python
-pixi run cowpy "Hey pixi user"
-pixi run --manifest-path ~/myproject/pixi.toml python
-pixi run --frozen python
-pixi run --locked python
-# If you have specified a custom task in the pixi.toml you can run it with run as well
-pixi run build
-# Extra arguments will be passed to the tasks command.
-pixi run task argument1 argument2
-# Skip dependencies of the task
-pixi run --skip-deps task
-# Run in dry-run mode to see the commands that would be run
-pixi run --dry-run task
-
-# If you have multiple environments you can select the right one with the --environment flag.
-pixi run --environment cuda python
-
-# THIS DOESN'T WORK ON WINDOWS
-# If you want to run a command in a clean environment you can use the --clean-env flag.
-# The PATH should only contain the pixi environment here.
-pixi run --clean-env "echo \$PATH"
-
-```
-
-!!! info
-    In `pixi` the [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) is the underlying runner of the run command.
-    Checkout their [documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner) for the syntax and available commands.
-    This is done so that the run commands can be run across all platforms.
-
-!!! tip "Cross environment tasks"
-    If you're using the `depends-on` feature of the `tasks`, the tasks will be run in the order you specified them.
-    The `depends-on` can be used cross environment, e.g. you have this `pixi.toml`:
-    ??? "pixi.toml"
-        ```toml
-        [tasks]
-        start = { cmd = "python start.py", depends-on = ["build"] }
-
-        [feature.build.tasks]
-        build = "cargo build"
-        [feature.build.dependencies]
-        rust = ">=1.74"
-
-        [environments]
-        build = ["build"]
-        ```
-
-        Then you're able to run the `build` from the `build` environment and `start` from the default environment.
-        By only calling:
-        ```shell
-        pixi run start
-        ```
-
-## `exec`
-
-Runs a command in a temporary environment disconnected from any project.
-This can be useful to quickly test out a certain package or version.
-
-Temporary environments are cached. If the same command is run again, the same environment will be reused.
-
-??? note "Cleaning temporary environments"
-    Currently, temporary environments can only be cleaned up manually.
-    Environments for `pixi exec` are stored under `cached-envs-v0/` in the cache directory.
-    Run `pixi info` to find the cache directory.
-
-##### Arguments
-
-1. `<COMMAND>`: The command to run.
-
-#### Options:
-- `--spec <SPECS> (-s)`: Matchspecs of packages to install. If this is not provided, the package is guessed from the command.
-- `--channel <CHANNELS> (-c)`: The channel to install the packages from. If not specified the default channel is used.
-- `--force-reinstall` If specified a new environment is always created even if one already exists.
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-
-```shell
-pixi exec python
-
-# Add a constraint to the python version
-pixi exec -s python=3.9 python
-
-# Run ipython and include the py-rattler package in the environment
-pixi exec -s ipython -s py-rattler ipython
-
-# Force reinstall to recreate the environment and get the latest package versions
-pixi exec --force-reinstall -s ipython -s py-rattler ipython
-```
-
-## `remove`
-
-Removes dependencies from the [manifest file](pixi_manifest.md).
-
-If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
-
-- the native pyproject `project.dependencies` array or the native `project.optional-dependencies` table (if a feature is specified)
-- pixi `pypi-dependencies` tables of the default or a named feature (if a feature is specified)
-
-##### Arguments
-
-1. `<DEPS>...`: List of dependencies you wish to remove from the project.
-
-##### Options
-
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--host`: Specifies a host dependency, important for building a package.
-- `--build`: Specifies a build dependency, important for building a package.
-- `--pypi`: Specifies a PyPI dependency, not a conda package.
-- `--platform <PLATFORM> (-p)`: The platform from which the dependency should be removed.
-- `--feature <FEATURE> (-f)`: The feature from which the dependency should be removed.
-- `--no-install`: Don't install the environment, only remove the package from the lock-file and manifest.
-- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
-
-```shell
-pixi remove numpy
-pixi remove numpy pandas pytorch
-pixi remove --manifest-path ~/myproject/pixi.toml numpy
-pixi remove --host python
-pixi remove --build cmake
-pixi remove --pypi requests
-pixi remove --platform osx-64 --build clang
-pixi remove --feature featurex clang
-pixi remove --feature featurex --platform osx-64 clang
-pixi remove --feature featurex --platform osx-64 --build clang
-pixi remove --no-install numpy
-```
+These dependencies will then be read by pixi as if they had been added to
+the pixi `pypi-dependencies` tables of the default or of a named feature.
 
-## `task`
+The versions will be automatically added with a pinning strategy based on
+semver or the pinning strategy set in the config. There is a list of
+packages that are not following the semver versioning scheme but will use
+the minor version by default:
+Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 
-If you want to make a shorthand for a specific command you can add a task for it.
+**Usage:** `pixi add [OPTIONS] <SPECS>...`
 
-##### Options
+###### **Arguments:**
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+* `<SPECS>` — The dependencies as names, conda MatchSpecs or PyPi requirements
 
-### `task add`
+###### **Options:**
 
-Add a task to the [manifest file](pixi_manifest.md), use `--depends-on` to add tasks you want to run before this task, e.g. build before an execute task.
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--host` — The specified dependencies are host dependencies. Conflicts with `build` and `pypi`
+* `--build` — The specified dependencies are build dependencies. Conflicts with `host` and `pypi`
+* `--pypi` — The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
+* `-p`, `--platform <PLATFORMS>` — The platform(s) for which the dependency should be modified
+* `-f`, `--feature <FEATURE>` — The feature for which the dependency should be modified
 
-##### Arguments
+  Default value: `default`
+* `-g`, `--git <GIT>` — The git url to use when adding a git dependency
+* `--branch <BRANCH>` — The git branch
+* `--tag <TAG>` — The git tag
+* `--rev <REV>` — The git revision
+* `-s`, `--subdir <SUBDIR>` — The subdirectory of the git repository to use
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
 
-1. `<NAME>`: The name of the task.
-2. `<COMMAND>`: The command to run. This can be more than one word.
-!!! info
-    If you are using `$` for env variables they will be resolved before adding them to the task.
-    If you want to use `$` in the task you need to escape it with a `\`, e.g. `echo \$HOME`.
+  Possible values: `disabled`, `subprocess`
 
-##### Options
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `--editable` — Whether the pypi requirement should be editable
 
-- `--platform <PLATFORM> (-p)`: the platform for which this task should be added.
-- `--feature <FEATURE> (-f)`: the feature for which the task is added, if non provided the default tasks will be added.
-- `--depends-on <DEPENDS_ON>`: the task it depends on to be run before the one your adding.
-- `--cwd <CWD>`: the working directory for the task relative to the root of the project.
-- `--env <ENV>`: the environment variables as `key=value` pairs for the task, can be used multiple times, e.g. `--env "VAR1=VALUE1" --env "VAR2=VALUE2"`.
-- `--description <DESCRIPTION>`: a description of the task.
 
-```shell
-pixi task add cow cowpy "Hello User"
-pixi task add tls ls --cwd tests
-pixi task add test cargo t --depends-on build
-pixi task add build-osx "METAL=1 cargo build" --platform osx-64
-pixi task add train python train.py --feature cuda
-pixi task add publish-pypi "hatch publish --yes --repo main" --feature build --env HATCH_CONFIG=config/hatch.toml --description "Publish the package to pypi"
-```
 
-This adds the following to the [manifest file](pixi_manifest.md):
+## `pixi remove`
 
-```toml
-[tasks]
-cow = "cowpy \"Hello User\""
-tls = { cmd = "ls", cwd = "tests" }
-test = { cmd = "cargo t", depends-on = ["build"] }
+Removes dependencies from the project
 
-[target.osx-64.tasks]
-build-osx = "METAL=1 cargo build"
+If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either - the native pyproject `project.dependencies` array or, if a feature is specified, the native `project.optional-dependencies` table - pixi `pypi-dependencies` tables of the default feature or, if a feature is specified, a named feature
 
-[feature.cuda.tasks]
-train = "python train.py"
+**Usage:** `pixi remove [OPTIONS] <SPECS>...`
 
-[feature.build.tasks]
-publish-pypi = { cmd = "hatch publish --yes --repo main", env = { HATCH_CONFIG = "config/hatch.toml" }, description = "Publish the package to pypi" }
-```
+###### **Arguments:**
 
-Which you can then run with the `run` command:
+* `<SPECS>` — The dependencies as names, conda MatchSpecs or PyPi requirements
 
-```shell
-pixi run cow
-# Extra arguments will be passed to the tasks command.
-pixi run test --test test1
-```
-
-### `task remove`
-
-Remove the task from the [manifest file](pixi_manifest.md)
-
-##### Arguments
-
-- `<NAMES>`: The names of the tasks, space separated.
-
-##### Options
-
-- `--platform <PLATFORM> (-p)`: the platform for which this task is removed.
-- `--feature <FEATURE> (-f)`: the feature for which the task is removed.
-
-```shell
-pixi task remove cow
-pixi task remove --platform linux-64 test
-pixi task remove --feature cuda task
-```
-
-### `task alias`
-
-Create an alias for a task.
-
-##### Arguments
-
-1. `<ALIAS>`: The alias name
-2. `<DEPENDS_ON>`: The names of the tasks you want to execute on this alias, order counts, first one runs first.
-
-##### Options
-
-- `--platform <PLATFORM> (-p)`: the platform for which this alias is created.
-
-```shell
-pixi task alias test-all test-py test-cpp test-rust
-pixi task alias --platform linux-64 test test-linux
-pixi task alias moo cow
-```
-
-### `task list`
-
-List all tasks in the project.
-
-##### Options
-
-- `--environment`(`-e`): the environment's tasks list, if non is provided the default tasks will be listed.
-- `--summary`(`-s`): list the tasks per environment.
-
-```shell
-pixi task list
-pixi task list --environment cuda
-pixi task list --summary
-```
-
-## `list`
-
-List project's packages. Highlighted packages are explicit dependencies.
-
-##### Arguments
-
-1. `[REGEX]`: List only packages matching a regular expression (optional).
-
-##### Options
-
-- `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
-- `--json`: Whether to output in json format.
-- `--json-pretty`: Whether to output in pretty json format
-- `--sort-by <SORT_BY>`: Sorting strategy [default: name] [possible values: size, name, type]
-- `--explicit (-x)`: Only list the packages that are explicitly added to the [manifest file](pixi_manifest.md).
-- `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
-- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
-- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
-
-```shell
-pixi list
-pixi list py
-pixi list --json-pretty
-pixi list --explicit
-pixi list --sort-by size
-pixi list --platform win-64
-pixi list --environment cuda
-pixi list --frozen
-pixi list --locked
-pixi list --no-install
-```
-
-Output will look like this, where `python` will be green as it is the package that was explicitly added to the [manifest file](pixi_manifest.md):
-
-```shell
-➜ pixi list
- Package           Version     Build               Size       Kind   Source
- _libgcc_mutex     0.1         conda_forge         2.5 KiB    conda  _libgcc_mutex-0.1-conda_forge.tar.bz2
- _openmp_mutex     4.5         2_gnu               23.1 KiB   conda  _openmp_mutex-4.5-2_gnu.tar.bz2
- bzip2             1.0.8       hd590300_5          248.3 KiB  conda  bzip2-1.0.8-hd590300_5.conda
- ca-certificates   2023.11.17  hbcca054_0          150.5 KiB  conda  ca-certificates-2023.11.17-hbcca054_0.conda
- ld_impl_linux-64  2.40        h41732ed_0          688.2 KiB  conda  ld_impl_linux-64-2.40-h41732ed_0.conda
- libexpat          2.5.0       hcb278e6_1          76.2 KiB   conda  libexpat-2.5.0-hcb278e6_1.conda
- libffi            3.4.2       h7f98852_5          56.9 KiB   conda  libffi-3.4.2-h7f98852_5.tar.bz2
- libgcc-ng         13.2.0      h807b86a_4          755.7 KiB  conda  libgcc-ng-13.2.0-h807b86a_4.conda
- libgomp           13.2.0      h807b86a_4          412.2 KiB  conda  libgomp-13.2.0-h807b86a_4.conda
- libnsl            2.0.1       hd590300_0          32.6 KiB   conda  libnsl-2.0.1-hd590300_0.conda
- libsqlite         3.44.2      h2797004_0          826 KiB    conda  libsqlite-3.44.2-h2797004_0.conda
- libuuid           2.38.1      h0b41bf4_0          32.8 KiB   conda  libuuid-2.38.1-h0b41bf4_0.conda
- libxcrypt         4.4.36      hd590300_1          98 KiB     conda  libxcrypt-4.4.36-hd590300_1.conda
- libzlib           1.2.13      hd590300_5          60.1 KiB   conda  libzlib-1.2.13-hd590300_5.conda
- ncurses           6.4         h59595ed_2          863.7 KiB  conda  ncurses-6.4-h59595ed_2.conda
- openssl           3.2.0       hd590300_1          2.7 MiB    conda  openssl-3.2.0-hd590300_1.conda
- python            3.12.1      hab00c5b_1_cpython  30.8 MiB   conda  python-3.12.1-hab00c5b_1_cpython.conda
- readline          8.2         h8228510_1          274.9 KiB  conda  readline-8.2-h8228510_1.conda
- tk                8.6.13      noxft_h4845f30_101  3.2 MiB    conda  tk-8.6.13-noxft_h4845f30_101.conda
- tzdata            2023d       h0c530f3_0          116.8 KiB  conda  tzdata-2023d-h0c530f3_0.conda
- xz                5.2.6       h166bdaf_0          408.6 KiB  conda  xz-5.2.6-h166bdaf_0.tar.bz2
-```
-
-## `tree`
-
-Display the project's packages in a tree. Highlighted packages are those specified in the manifest.
-
-The package tree can also be inverted (`-i`), to see which packages require a specific dependencies.
-
-##### Arguments
-
-- `REGEX` optional regex of which dependencies to filter the tree to, or which dependencies to start with when inverting the tree.
-
-##### Options
-
-- `--invert (-i)`: Invert the dependency tree, that is given a `REGEX` pattern that matches some packages, show all the packages that depend on those.
-- `--platform <PLATFORM> (-p)`: The platform to list packages for. Defaults to the current platform
-- `--manifest-path <MANIFEST_PATH>`: The path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--environment (-e)`: The environment's packages to list, if non is provided the default environment's packages will be listed.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: Only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--no-install`: Don't install the environment for pypi solving, only update the lock-file if it can solve without installing. (Implied by `--frozen` and `--locked`)
-- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
-- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
-
-```shell
-pixi tree
-pixi tree pre-commit
-pixi tree -i yaml
-pixi tree --environment docs
-pixi tree --platform win-64
-```
-
-!!! warning
-    Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
-
-Output will look like this, where direct packages in the [manifest file](pixi_manifest.md) will be green.
-Once a package has been displayed once, the tree won't continue to recurse through its dependencies (compare the first time `python` appears, vs the rest), and it will instead be marked with a star `(*)`.
-
-Version numbers are colored by the package type, yellow for Conda packages and blue for PyPI.
-
-```shell
-➜ pixi tree
-├── pre-commit v3.3.3
-│   ├── cfgv v3.3.1
-│   │   └── python v3.12.2
-│   │       ├── bzip2 v1.0.8
-│   │       ├── libexpat v2.6.2
-│   │       ├── libffi v3.4.2
-│   │       ├── libsqlite v3.45.2
-│   │       │   └── libzlib v1.2.13
-│   │       ├── libzlib v1.2.13 (*)
-│   │       ├── ncurses v6.4.20240210
-│   │       ├── openssl v3.2.1
-│   │       ├── readline v8.2
-│   │       │   └── ncurses v6.4.20240210 (*)
-│   │       ├── tk v8.6.13
-│   │       │   └── libzlib v1.2.13 (*)
-│   │       └── xz v5.2.6
-│   ├── identify v2.5.35
-│   │   └── python v3.12.2 (*)
-...
-└── tbump v6.9.0
-...
-    └── tomlkit v0.12.4
-        └── python v3.12.2 (*)
-```
-
-A regex pattern can be specified to filter the tree to just those that show a specific direct, or transitive dependency:
-
-```shell
-➜ pixi tree pre-commit
-└── pre-commit v3.3.3
-    ├── virtualenv v20.25.1
-    │   ├── filelock v3.13.1
-    │   │   └── python v3.12.2
-    │   │       ├── libexpat v2.6.2
-    │   │       ├── readline v8.2
-    │   │       │   └── ncurses v6.4.20240210
-    │   │       ├── libsqlite v3.45.2
-    │   │       │   └── libzlib v1.2.13
-    │   │       ├── bzip2 v1.0.8
-    │   │       ├── libzlib v1.2.13 (*)
-    │   │       ├── libffi v3.4.2
-    │   │       ├── tk v8.6.13
-    │   │       │   └── libzlib v1.2.13 (*)
-    │   │       ├── xz v5.2.6
-    │   │       ├── ncurses v6.4.20240210 (*)
-    │   │       └── openssl v3.2.1
-    │   ├── platformdirs v4.2.0
-    │   │   └── python v3.12.2 (*)
-    │   ├── distlib v0.3.8
-    │   │   └── python v3.12.2 (*)
-    │   └── python v3.12.2 (*)
-    ├── pyyaml v6.0.1
-...
-```
-
-Additionally, the tree can be inverted, and it can show which packages depend on a regex pattern.
-The packages specified in the manifest will also be highlighted (in this case `cffconvert` and `pre-commit` would be).
-
-```shell
-➜ pixi tree -i yaml
-
-ruamel.yaml v0.18.6
-├── pykwalify v1.8.0
-│   └── cffconvert v2.0.0
-└── cffconvert v2.0.0
-
-pyyaml v6.0.1
-└── pre-commit v3.3.3
-
-ruamel.yaml.clib v0.2.8
-└── ruamel.yaml v0.18.6
-    ├── pykwalify v1.8.0
-    │   └── cffconvert v2.0.0
-    └── cffconvert v2.0.0
-
-yaml v0.2.5
-└── pyyaml v6.0.1
-    └── pre-commit v3.3.3
-```
-
-## `shell`
-
-This command starts a new shell in the project's environment.
-To exit the pixi shell, simply run `exit`.
-
-##### Options
-
-- `--change-ps1 <true or false>`: When set to false, the `(pixi)` prefix in the shell prompt is removed (default: `true`). The default behavior can be [configured globally](pixi_configuration.md#change-ps1).
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--no-install`: Don't install the environment, only activate the environment.
-- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
-- `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
-- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
-- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
-- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-
-```shell
-pixi shell
-exit
-pixi shell --manifest-path ~/myproject/pixi.toml
-exit
-pixi shell --frozen
-exit
-pixi shell --locked
-exit
-pixi shell --environment cuda
-exit
-```
-
-## `shell-hook`
-
-This command prints the activation script of an environment.
-
-##### Options
-
-- `--shell <SHELL> (-s)`: The shell for which the activation script should be printed. Defaults to the current shell.
-  Currently supported variants: [`bash`, `zsh`, `xonsh`, `cmd`, `powershell`, `fish`, `nushell`]
-- `--manifest-path`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
-- `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
-  this option, `--shell` is ignored.
-- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
-- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-
-```shell
-pixi shell-hook
-pixi shell-hook --shell bash
-pixi shell-hook --shell zsh
-pixi shell-hook -s powershell
-pixi shell-hook --manifest-path ~/myproject/pixi.toml
-pixi shell-hook --frozen
-pixi shell-hook --locked
-pixi shell-hook --environment cuda
-pixi shell-hook --json
-```
-
-Example use-case, when you want to get rid of the `pixi` executable in a Docker container.
-
-```shell
-pixi shell-hook --shell bash > /etc/profile.d/pixi.sh
-rm ~/.pixi/bin/pixi # Now the environment will be activated without the need for the pixi executable.
-```
-
-## `search`
-
-Search a package, output will list the latest version of the package.
-
-##### Arguments
-
-1. `<PACKAGE>`: Name of package to search, it's possible to use wildcards (`*`).
-
-###### Options
-
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
-- `--limit <LIMIT> (-l)`: optionally limit the number of search results
-- `--platform <PLATFORM> (-p)`: specify a platform that you want to search for. (default: current platform)
-
-```zsh
-pixi search pixi
-pixi search --limit 30 "py*"
-# search in a different channel and for a specific platform
-pixi search -c robostack --platform linux-64 "plotjuggler*"
-```
-
-## `self-update`
-
-Update pixi to the latest version or a specific version. If pixi was installed using another package manager this feature might not
-be available and pixi should be updated using the package manager used to install it.
-
-##### Options
-
-- `--version <VERSION>`: The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
-
-```shell
-pixi self-update
-pixi self-update --version 0.13.0
-```
-
-## `info`
-
-Shows helpful information about the pixi installation, cache directories, disk usage, and more.
-More information [here](../advanced/explain_info_command.md).
-
-##### Options
-
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--extended`: extend the information with more slow queries to the system, like directory sizes.
-- `--json`: Get a machine-readable version of the information as output.
-
-```shell
-pixi info
-pixi info --json --extended
-```
-## `clean`
-
-Clean the parts of your system which are touched by pixi.
-Defaults to cleaning the environments and task cache.
-Use the `cache` subcommand to clean the cache
-
-##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--environment <ENVIRONMENT> (-e)`: The environment to clean, if none are provided all environments will be removed.
-
-```shell
-pixi clean
-```
-
-### `clean cache`
-
-Clean the pixi cache on your system.
-
-##### Options
-- `--pypi`: Clean the pypi cache.
-- `--conda`: Clean the conda cache.
-- `--mapping`: Clean the mapping cache.
-- `--exec`: Clean the `exec` cache.
-- `--repodata`: Clean the repodata cache.
-- `--yes`: Skip the confirmation prompt.
-
-```shell
-pixi clean cache # clean all pixi caches
-pixi clean cache --pypi # clean only the pypi cache
-pixi clean cache --conda # clean only the conda cache
-pixi clean cache --mapping # clean only the mapping cache
-pixi clean cache --exec # clean only the `exec` cache
-pixi clean cache --repodata # clean only the `repodata` cache
-pixi clean cache --yes # skip the confirmation prompt
-```
-
-## `upload`
-
-Upload a package to a prefix.dev channel
-
-##### Arguments
-
-1. `<HOST>`: The host + channel to upload to.
-2. `<PACKAGE_FILE>`: The package file to upload.
-
-```shell
-pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda
-```
-
-## `auth`
-
-This command is used to authenticate the user's access to remote hosts such as `prefix.dev` or `anaconda.org` for private channels.
-
-### `auth login`
-
-Store authentication information for given host.
-
-!!! tip
-    The host is real hostname not a channel.
-
-##### Arguments
-
-1. `<HOST>`: The host to authenticate with.
-
-##### Options
-
-- `--token <TOKEN>`: The token to use for authentication with prefix.dev.
-- `--username <USERNAME>`: The username to use for basic HTTP authentication
-- `--password <PASSWORD>`: The password to use for basic HTTP authentication.
-- `--conda-token <CONDA_TOKEN>`: The token to use on `anaconda.org` / `quetz` authentication.
-- `--s3-access-key-id`: The S3 access key ID
-- `--s3-secret-access-key`: The S3 secret access key
-- `--s3-session-token`: The S3 session token (optional for S3 authentication)
-
-```shell
-pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
-pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
-pixi auth login https://myquetz.server --username john --password xxxxxx
-pixi auth login s3://my-bucket --s3-access-key-id $AWS_ACCESS_KEY_ID --s3-access-key-id $AWS_SECRET_KEY_ID
-```
-
-### `auth logout`
-
-Remove authentication information for a given host.
-
-##### Arguments
-
-1. `<HOST>`: The host to authenticate with.
-
-```shell
-pixi auth logout <HOST>
-pixi auth logout repo.prefix.dev
-pixi auth logout anaconda.org
-pixi auth logout s3://my-bucket
-```
-
-## `config`
-
-Use this command to manage the configuration.
-
-##### Options
-
-- `--system (-s)`: Specify management scope to system configuration.
-- `--global (-g)`: Specify management scope to global configuration.
-- `--local (-l)`: Specify management scope to local configuration.
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-
-Checkout the [pixi configuration](./pixi_configuration.md) for more information about the locations.
-
-### `config edit`
-
-Edit the configuration file in the default editor.
-
-
-##### Arguments
-
-1. `[EDITOR]`: The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
-
-```shell
-pixi config edit --system
-pixi config edit --local
-pixi config edit -g
-pixi config edit --global code
-pixi config edit --system vim
-```
-
-### `config list`
-
-List the configuration
-
-##### Arguments
-
-1. `[KEY]`: The key to list the value of. (all if not provided)
-
-##### Options
-
-- `--json`: Output the configuration in JSON format.
-
-```shell
-pixi config list default-channels
-pixi config list --json
-pixi config list --system
-pixi config list -g
-```
-
-### `config prepend`
-
-Prepend a value to a list configuration key.
-
-##### Arguments
-
-1. `<KEY>`: The key to prepend the value to.
-2. `<VALUE>`: The value to prepend.
-
-```shell
-pixi config prepend default-channels conda-forge
-```
-
-### `config append`
-
-Append a value to a list configuration key.
-
-##### Arguments
-
-1. `<KEY>`: The key to append the value to.
-2. `<VALUE>`: The value to append.
-
-```shell
-pixi config append default-channels robostack
-pixi config append default-channels bioconda --global
-```
-
-### `config set`
-
-Set a configuration key to a value.
-
-##### Arguments
-
-1. `<KEY>`: The key to set the value of.
-2. `[VALUE]`: The value to set. (if not provided, the key will be removed)
-
-```shell
-pixi config set default-channels '["conda-forge", "bioconda"]'
-pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://prefix.dev/conda-forge"]}'
-pixi config set repodata-config.disable-zstd true --system
-pixi config set --global detached-environments "/opt/pixi/envs"
-pixi config set detached-environments false
-pixi config set s3-options.my-bucket '{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}'
-```
-
-### `config unset`
-
-Unset a configuration key.
-
-##### Arguments
-
-1. `<KEY>`: The key to unset.
-
-```shell
-pixi config unset default-channels
-pixi config unset --global mirrors
-pixi config unset repodata-config.disable-zstd --system
-```
-
-## `global`
-
-Global is the main entry point for the part of pixi that executes on the global(system) level.
-All commands in this section are used to manage global installations of packages and environments through the global manifest.
-More info on the global manifest can be found [here](../features/global_tools.md).
-
-!!! tip
-    Binaries and environments installed globally are stored in `~/.pixi`
-    by default, this can be changed by setting the `PIXI_HOME` environment
-    variable.
-### `global add`
-
-Adds dependencies to a global environment.
-Without exposing the binaries of that package to the system by default.
-
-##### Arguments
-1. `[PACKAGE]`: The packages to add, this excepts the matchspec format. (e.g. `python=3.9.*`, `python [version='3.11.0', build_number=1]`)
-
-##### Options
-- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into.
-- `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system.
-
-```shell
-pixi global add python=3.9.* --environment my-env
-pixi global add python=3.9.* --expose py39=python3.9 --environment my-env
-pixi global add numpy matplotlib --environment my-env
-pixi global add numpy matplotlib --expose np=python3.9 --environment my-env
-```
-
-### `global edit`
-Edit the global manifest file in the default editor.
-
-Will try to use the `EDITOR` environment variable, if not set it will use `nano` on Unix systems and `notepad` on Windows.
-
-##### Arguments
-1. `<EDITOR>`: The editor to use. (optional)
-```shell
-pixi global edit
-pixi global edit code
-pixi global edit vim
-```
-
-### `global install`
-
-This command installs package(s) into its own environment and adds the binary to `PATH`.
-Allowing you to access it anywhere on your system without activating the environment.
-
-##### Arguments
-
-1.`[PACKAGE]`: The package(s) to install, this can also be a version constraint.
-
-##### Options
-
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
-- `--platform <PLATFORM> (-p)`: specify a platform that you want to install the package for. (default: current platform)
-- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
-- `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system. (default: name of the tool)
-- `--with <WITH>`: Add additional dependencies to the environment. Their executables will not be exposed.
-
-```shell
-pixi global install ruff
-# Multiple packages can be installed at once
-pixi global install starship rattler-build
-# Specify the channel(s)
-pixi global install --channel conda-forge --channel bioconda trackplot
-# Or in a more concise form
-pixi global install -c conda-forge -c bioconda trackplot
-
-# Support full conda matchspec
-pixi global install python=3.9.*
-pixi global install "python [version='3.11.0', build_number=1]"
-pixi global install "python [version='3.11.0', build=he550d4f_1_cpython]"
-pixi global install python=3.11.0=h10a6764_1_cpython
-
-# Install for a specific platform, only useful on osx-arm64
-pixi global install --platform osx-64 ruff
-
-# Install a package with all its executables exposed, together with additional packages that don't expose anything
-pixi global install ipython --with numpy --with scipy
-
-# Install into a specific environment name and expose all executables
-pixi global install --environment data-science ipython jupyterlab numpy matplotlib
-
-# Expose the binary under a different name
-pixi global install --expose "py39=python3.9" "python=3.9.*"
-```
-
-!!! tip
-    Running `osx-64` on Apple Silicon will install the Intel binary but run it using [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment)
-    ```
-    pixi global install --platform osx-64 ruff
-    ```
-
-After using global install, you can use the package you installed anywhere on your system.
-
-### `global uninstall`
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--host` — The specified dependencies are host dependencies. Conflicts with `build` and `pypi`
+* `--build` — The specified dependencies are build dependencies. Conflicts with `host` and `pypi`
+* `--pypi` — The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
+* `-p`, `--platform <PLATFORMS>` — The platform(s) for which the dependency should be modified
+* `-f`, `--feature <FEATURE>` — The feature for which the dependency should be modified
+
+  Default value: `default`
+* `-g`, `--git <GIT>` — The git url to use when adding a git dependency
+* `--branch <BRANCH>` — The git branch
+* `--tag <TAG>` — The git tag
+* `--rev <REV>` — The git revision
+* `-s`, `--subdir <SUBDIR>` — The subdirectory of the git repository to use
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+
+
+
+## `pixi install`
+
+Install all dependencies
+
+**Usage:** `pixi install [OPTIONS]`
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `-e`, `--environment <ENVIRONMENT>` — The environment to install
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `-a`, `--all`
+
+
+
+## `pixi update`
+
+Update dependencies as recorded in the local lock file
+
+**Usage:** `pixi update [OPTIONS] [PACKAGES]...`
+
+###### **Arguments:**
+
+* `<PACKAGES>` — The packages to update
+
+###### **Options:**
+
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--no-install` — Don't install the (solve) environments needed for pypi-dependencies solving
+* `-n`, `--dry-run` — Don't actually write the lockfile or update any environment
+* `-e`, `--environment <ENVIRONMENTS>` — The environments to update. If none is specified, all environments are updated
+* `-p`, `--platform <PLATFORMS>` — The platforms to update. If none is specified, all platforms are updated
+* `--json` — Output the changes in JSON format
+
+
+
+## `pixi upgrade`
+
+Update the version of packages to the latest possible version, disregarding the manifest version constraints
+
+**Usage:** `pixi upgrade [OPTIONS] [PACKAGES]...`
+
+###### **Arguments:**
+
+* `<PACKAGES>` — The packages to upgrade
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `-f`, `--feature <FEATURE>` — The feature to update
+
+  Default value: `default`
+* `--exclude <EXCLUDE>` — The packages which should be excluded
+* `--json` — Output the changes in JSON format
+* `-n`, `--dry-run` — Only show the changes that would be made, without actually updating the manifest, lock file, or environment
+
+
+
+## `pixi lock`
+
+Solve environment and update the lock file
+
+**Usage:** `pixi lock [OPTIONS]`
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--json` — Output the changes in JSON format
+
+
+
+## `pixi run`
+
+Runs task in project
+
+**Usage:** `pixi run [OPTIONS] [TASK]...`
+
+###### **Arguments:**
+
+* `<TASK>` — The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `--force-activate` — Do not use the environment activation cache. (default: true except in experimental mode)
+* `-e`, `--environment <ENVIRONMENT>` — The environment to run the task in
+* `--clean-env` — Use a clean environment to run the task
+
+   Using this flag will ignore your current shell environment and use bare minimum environment to activate the pixi environment in.
+* `--skip-deps` — Don't run the dependencies of the task ('depends-on' field in the task definition)
+* `-n`, `--dry-run` — Run the task in dry-run mode (only print the command that would run)
+* `--help`
+
+  Possible values: `true`, `false`
+
+* `-h`
+
+  Possible values: `true`, `false`
+
+
+
+
+## `pixi exec`
+
+Run a command in a temporary environment
+
+**Usage:** `pixi exec [OPTIONS] [COMMAND]...`
+
+###### **Arguments:**
+
+* `<COMMAND>` — The executable to run
+
+###### **Options:**
+
+* `-s`, `--spec <SPECS>` — Matchspecs of packages to install. If this is not provided, the package is guessed from the command
+* `-c`, `--channel <CHANNEL>` — The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times.
+
+   When specifying a channel, it is common that the selected channel also depends on the `conda-forge` channel.
+
+   By default, if no channel is provided, `conda-forge` is used.
+* `-p`, `--platform <PLATFORM>` — The platform to create the environment for
+
+  Default value: `linux-64`
+* `--force-reinstall` — If specified a new environment is always created even if one already exists
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+
+
+
+## `pixi shell`
+
+Start a shell in the pixi environment of the project
+
+**Usage:** `pixi shell [OPTIONS]`
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `-e`, `--environment <ENVIRONMENT>` — The environment to activate in the shell
+* `--change-ps1 <CHANGE_PS1>` — Do not change the PS1 variable when starting a prompt
+
+  Possible values: `true`, `false`
+
+* `--force-activate` — Do not use the environment activation cache. (default: true except in experimental mode)
+
+
+
+## `pixi shell-hook`
+
+Print the pixi environment activation script.
+
+You can source the script to activate the environment without needing pixi itself.
+
+**Usage:** `pixi shell-hook [OPTIONS]`
+
+###### **Options:**
+
+* `-s`, `--shell <SHELL>` — Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`, `powershell`,  `fish`,  `nushell`]
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `--force-activate` — Do not use the environment activation cache. (default: true except in experimental mode)
+* `-e`, `--environment <ENVIRONMENT>` — The environment to activate in the script
+* `--json` — Emit the environment variables set by running the activation as JSON
+
+  Default value: `false`
+* `--change-ps1 <CHANGE_PS1>` — Do not change the PS1 variable when starting a prompt
+
+  Possible values: `true`, `false`
+
+
+
+
+## `pixi project`
+
+Modify the project configuration file through the command line
+
+**Usage:** `pixi project [OPTIONS] <COMMAND>`
+
+###### **Subcommands:**
+
+* `channel` — Commands to manage project channels
+* `description` — Commands to manage project description
+* `platform` — Commands to manage project platforms
+* `version` — Commands to manage project version
+* `environment` — Commands to manage project environments
+* `export` — Commands to export projects to other formats
+* `name` — Commands to manage project name
+* `system-requirements` — Commands to manage project environments
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi project channel`
+
+Commands to manage project channels
+
+**Usage:** `pixi project channel <COMMAND>`
+
+###### **Subcommands:**
+
+* `add` — Adds a channel to the project file and updates the lockfile
+* `list` — List the channels in the project file
+* `remove` — Remove channel(s) from the project file and updates the lockfile
+
+
+
+## `pixi project channel add`
+
+Adds a channel to the project file and updates the lockfile
+
+**Usage:** `pixi project channel add [OPTIONS] <CHANNEL>...`
+
+###### **Arguments:**
+
+* `<CHANNEL>` — The channel name or URL
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--priority <PRIORITY>` — Specify the channel priority
+* `--prepend` — Add the channel(s) to the beginning of the channels list, making them the highest priority
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `-f`, `--feature <FEATURE>` — The name of the feature to modify
+
+
+
+## `pixi project channel list`
+
+List the channels in the project file
+
+**Usage:** `pixi project channel list [OPTIONS]`
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--urls` — Whether to display the channel's names or urls
+
+
+
+## `pixi project channel remove`
+
+Remove channel(s) from the project file and updates the lockfile
+
+**Usage:** `pixi project channel remove [OPTIONS] <CHANNEL>...`
+
+###### **Arguments:**
+
+* `<CHANNEL>` — The channel name or URL
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--priority <PRIORITY>` — Specify the channel priority
+* `--prepend` — Add the channel(s) to the beginning of the channels list, making them the highest priority
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `-f`, `--feature <FEATURE>` — The name of the feature to modify
+
+
+
+## `pixi project description`
+
+Commands to manage project description
+
+**Usage:** `pixi project description [OPTIONS] <COMMAND>`
+
+###### **Subcommands:**
+
+* `get` — Get the project description
+* `set` — Set the project description
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi project description get`
+
+Get the project description
+
+**Usage:** `pixi project description get`
+
+
+
+## `pixi project description set`
+
+Set the project description
+
+**Usage:** `pixi project description set <DESCRIPTION>`
+
+###### **Arguments:**
+
+* `<DESCRIPTION>` — The project description
+
+
+
+## `pixi project platform`
+
+Commands to manage project platforms
+
+**Usage:** `pixi project platform [OPTIONS] <COMMAND>`
+
+###### **Subcommands:**
+
+* `add` — Adds a platform(s) to the project file and updates the lockfile
+* `list` — List the platforms in the project file
+* `remove` — Remove platform(s) from the project file and updates the lockfile
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi project platform add`
+
+Adds a platform(s) to the project file and updates the lockfile
+
+**Usage:** `pixi project platform add [OPTIONS] <PLATFORM>...`
+
+###### **Arguments:**
+
+* `<PLATFORM>` — The platform name(s) to add
+
+###### **Options:**
+
+* `--no-install` — Don't update the environment, only add changed packages to the lock-file
+* `-f`, `--feature <FEATURE>` — The name of the feature to add the platform to
+
+
+
+## `pixi project platform list`
+
+List the platforms in the project file
+
+**Usage:** `pixi project platform list`
+
+
+
+## `pixi project platform remove`
+
+Remove platform(s) from the project file and updates the lockfile
+
+**Usage:** `pixi project platform remove [OPTIONS] <PLATFORMS>...`
+
+###### **Arguments:**
+
+* `<PLATFORMS>` — The platform name(s) to remove
+
+###### **Options:**
+
+* `--no-install` — Don't update the environment, only remove the platform(s) from the lock-file
+* `-f`, `--feature <FEATURE>` — The name of the feature to remove the platform from
+
+
+
+## `pixi project version`
+
+Commands to manage project version
+
+**Usage:** `pixi project version [OPTIONS] <COMMAND>`
+
+###### **Subcommands:**
+
+* `get` — Get the workspace version
+* `set` — Set the workspace version
+* `major` — Bump the workspace version to MAJOR
+* `minor` — Bump the workspace version to MINOR
+* `patch` — Bump the workspace version to PATCH
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi project version get`
+
+Get the workspace version
+
+**Usage:** `pixi project version get`
+
+
+
+## `pixi project version set`
+
+Set the workspace version
+
+**Usage:** `pixi project version set <VERSION>`
+
+###### **Arguments:**
+
+* `<VERSION>` — The new project version
+
+
+
+## `pixi project version major`
+
+Bump the workspace version to MAJOR
+
+**Usage:** `pixi project version major`
+
+
+
+## `pixi project version minor`
+
+Bump the workspace version to MINOR
+
+**Usage:** `pixi project version minor`
+
+
+
+## `pixi project version patch`
+
+Bump the workspace version to PATCH
+
+**Usage:** `pixi project version patch`
+
+
+
+## `pixi project environment`
+
+Commands to manage project environments
+
+**Usage:** `pixi project environment [OPTIONS] <COMMAND>`
+
+###### **Subcommands:**
+
+* `add` — Adds an environment to the manifest file
+* `list` — List the environments in the manifest file
+* `remove` — Remove an environment from the manifest file
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi project environment add`
+
+Adds an environment to the manifest file
+
+**Usage:** `pixi project environment add [OPTIONS] <NAME>`
+
+###### **Arguments:**
+
+* `<NAME>` — The name of the environment to add
+
+###### **Options:**
+
+* `-f`, `--feature <FEATURES>` — Features to add to the environment
+* `--solve-group <SOLVE_GROUP>` — The solve-group to add the environment to
+* `--no-default-feature` — Don't include the default feature in the environment
+
+  Default value: `false`
+* `--force` — Update the manifest even if the environment already exists
+
+  Default value: `false`
+
+
+
+## `pixi project environment list`
+
+List the environments in the manifest file
+
+**Usage:** `pixi project environment list`
+
+
+
+## `pixi project environment remove`
+
+Remove an environment from the manifest file
+
+**Usage:** `pixi project environment remove <NAME>`
+
+###### **Arguments:**
+
+* `<NAME>` — The name of the environment to remove
+
+
+
+## `pixi project export`
+
+Commands to export projects to other formats
+
+**Usage:** `pixi project export <COMMAND>`
+
+###### **Subcommands:**
+
+* `conda-explicit-spec` — Export project environment to a conda explicit specification file
+* `conda-environment` — Export project environment to a conda environment.yaml file
+
+
+
+## `pixi project export conda-explicit-spec`
+
+Export project environment to a conda explicit specification file
+
+**Usage:** `pixi project export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>`
+
+###### **Arguments:**
+
+* `<OUTPUT_DIR>` — Output directory for rendered explicit environment spec files
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `-e`, `--environment <ENVIRONMENT>`
+* `-p`, `--platform <PLATFORM>` — The platform to render. Can be repeated for multiple platforms. Defaults to all platforms available for selected environments
+* `--ignore-pypi-errors` — PyPI dependencies are not supported in the conda explicit spec file
+
+  Default value: `false`
+* `--ignore-source-errors` — Source dependencies are not supported in the conda explicit spec file
+
+  Default value: `false`
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+
+
+
+## `pixi project export conda-environment`
+
+Export project environment to a conda environment.yaml file
+
+**Usage:** `pixi project export conda-environment [OPTIONS] [OUTPUT_PATH]`
+
+###### **Arguments:**
+
+* `<OUTPUT_PATH>` — Explicit path to export the environment to
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `-p`, `--platform <PLATFORM>` — The platform to render the environment file for. Defaults to the current platform
+* `-e`, `--environment <ENVIRONMENT>` — The environment to render the environment file for. Defaults to the default environment
+
+
+
+## `pixi project name`
+
+Commands to manage project name
+
+**Usage:** `pixi project name [OPTIONS] <COMMAND>`
+
+###### **Subcommands:**
+
+* `get` — Get the project name
+* `set` — Set the project name
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi project name get`
+
+Get the project name
+
+**Usage:** `pixi project name get`
+
+
+
+## `pixi project name set`
+
+Set the project name
+
+**Usage:** `pixi project name set <NAME>`
+
+###### **Arguments:**
+
+* `<NAME>` — The project name
+
+
+
+## `pixi project system-requirements`
+
+Commands to manage project environments
+
+**Usage:** `pixi project system-requirements [OPTIONS] <COMMAND>`
+
+###### **Subcommands:**
+
+* `add` — Adds an environment to the manifest file
+* `list` — List the environments in the manifest file
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi project system-requirements add`
+
+Adds an environment to the manifest file
+
+**Usage:** `pixi project system-requirements add [OPTIONS] <REQUIREMENT> <VERSION>`
+
+###### **Arguments:**
+
+* `<REQUIREMENT>` — The name of the system requirement to add
+
+  Possible values:
+  - `linux`:
+    The version of the linux kernel (Find with `uname -r`)
+  - `cuda`:
+    The version of the CUDA driver (Find with `nvidia-smi`)
+  - `macos`:
+    The version of MacOS (Find with `sw_vers`)
+  - `glibc`:
+    The version of the glibc library (Find with `ldd --version`)
+  - `other-libc`:
+    Non Glibc libc family and version (Find with `ldd --version`)
+
+* `<VERSION>` — The version of the requirement
+
+###### **Options:**
+
+* `--family <FAMILY>` — The Libc family, this can only be specified for requirement `other-libc`
+* `-f`, `--feature <FEATURE>` — The name of the feature to modify
+
+
+
+## `pixi project system-requirements list`
+
+List the environments in the manifest file
+
+**Usage:** `pixi project system-requirements list [OPTIONS]`
+
+###### **Options:**
+
+* `--json`
+* `-e`, `--environment <ENVIRONMENT>`
+
+
+
+## `pixi task`
+
+Interact with tasks in the project
+
+**Usage:** `pixi task [OPTIONS] <COMMAND>`
+
+###### **Subcommands:**
+
+* `add` — Add a command to the project
+* `remove` — Remove a command from the project
+* `alias` — Alias another specific command
+* `list` — List all tasks in the project
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi task add`
+
+Add a command to the project
+
+**Usage:** `pixi task add [OPTIONS] <NAME> <COMMANDS>...`
+
+###### **Arguments:**
+
+* `<NAME>` — Task name
+* `<COMMANDS>` — One or more commands to actually execute
+
+###### **Options:**
+
+* `--depends-on <DEPENDS_ON>` — Depends on these other commands
+* `-p`, `--platform <PLATFORM>` — The platform for which the task should be added
+* `-f`, `--feature <FEATURE>` — The feature for which the task should be added
+* `--cwd <CWD>` — The working directory relative to the root of the project
+* `--env <ENV>` — The environment variable to set, use --env key=value multiple times for more than one variable
+* `--description <DESCRIPTION>` — A description of the task to be added
+* `--clean-env` — Isolate the task from the shell environment, and only use the pixi environment to run the task
+
+
+
+## `pixi task remove`
+
+Remove a command from the project
+
+**Usage:** `pixi task remove [OPTIONS] [NAMES]...`
+
+###### **Arguments:**
+
+* `<NAMES>` — Task names to remove
+
+###### **Options:**
+
+* `-p`, `--platform <PLATFORM>` — The platform for which the task should be removed
+* `-f`, `--feature <FEATURE>` — The feature for which the task should be removed
+
+
+
+## `pixi task alias`
+
+Alias another specific command
+
+**Usage:** `pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...`
+
+###### **Arguments:**
+
+* `<ALIAS>` — Alias name
+* `<DEPENDS_ON>` — Depends on these tasks to execute
+
+###### **Options:**
+
+* `-p`, `--platform <PLATFORM>` — The platform for which the alias should be added
+* `--description <DESCRIPTION>` — The description of the alias task
+
+
+
+## `pixi task list`
+
+List all tasks in the project
+
+**Usage:** `pixi task list [OPTIONS]`
+
+###### **Options:**
+
+* `-s`, `--summary` — Tasks available for this machine per environment
+* `-e`, `--environment <ENVIRONMENT>` — The environment the list should be generated for. If not specified, the default environment is used
+* `--json` — List as json instead of a tree If not specified, the default environment is used
+
+
+
+## `pixi list`
+
+List project's packages.
+
+Highlighted packages are explicit dependencies.
+
+**Usage:** `pixi list [OPTIONS] [REGEX]`
+
+###### **Arguments:**
+
+* `<REGEX>` — List only packages matching a regular expression
+
+###### **Options:**
+
+* `--platform <PLATFORM>` — The platform to list packages for. Defaults to the current platform
+* `--json` — Whether to output in json format
+* `--json-pretty` — Whether to output in pretty json format
+* `--sort-by <SORT_BY>` — Sorting strategy
+
+  Default value: `name`
+
+  Possible values: `size`, `name`, `kind`
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `-e`, `--environment <ENVIRONMENT>` — The environment to list packages for. Defaults to the default environment
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `-x`, `--explicit` — Only list packages that are explicitly defined in the project
+
+
+
+## `pixi tree`
+
+Show a tree of project dependencies
+
+Dependency names highlighted in green are directly specified in the manifest. Yellow version numbers are conda packages, PyPI version numbers are blue.
+    
+
+**Usage:** `pixi tree [OPTIONS] [REGEX]`
+
+###### **Arguments:**
+
+* `<REGEX>` — List only packages matching a regular expression
+
+###### **Options:**
+
+* `-p`, `--platform <PLATFORM>` — The platform to list packages for. Defaults to the current platform
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `-e`, `--environment <ENVIRONMENT>` — The environment to list packages for. Defaults to the default environment
+* `--no-lockfile-update` — Don't update lockfile, implies the no-install as well
+* `--frozen` — Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+* `--locked` — Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+* `--no-install` — Don't modify the environment, only modify the lock-file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--revalidate` — Run the complete environment validation. This will reinstall a broken environment
+* `-i`, `--invert` — Invert tree and show what depends on given package in the regex argument
+
+
+
+## `pixi global`
+
+Subcommand for global package management actions
+
+Install packages on the user level. Example: pixi global install my_package pixi global remove my_package
+
+**Usage:** `pixi global <COMMAND>`
+
+###### **Subcommands:**
+
+* `add` — Adds dependencies to an environment
+* `edit` — Edit the global manifest file
+* `install` — Installs the defined packages in a globally accessible location and exposes their command line applications.
+* `uninstall` — Uninstalls environments from the global environment.
+* `remove` — Removes dependencies from an environment
+* `list` — Lists all packages previously installed into a globally accessible location via `pixi global install`.
+* `sync` — Sync global manifest with installed environments
+* `expose` — Interact with the exposure of binaries in the global environment
+* `update` — Updates environments in the global environment
+
+
+
+## `pixi global add`
+
+Adds dependencies to an environment
+
+Example:
+- pixi global add --environment python numpy
+- pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest
+
+**Usage:** `pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGES>...`
+
+###### **Arguments:**
+
+* `<PACKAGES>` — Specifies the packages that are to be added to the environment
+
+###### **Options:**
+
+* `-e`, `--environment <ENVIRONMENT>` — Specifies the environment that the dependencies need to be added to
+* `--expose <EXPOSE>` — Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+
+
+
+## `pixi global edit`
+
+Edit the global manifest file
+
+Opens your editor to edit the global manifest file.
+
+**Usage:** `pixi global edit [EDITOR]`
+
+###### **Arguments:**
+
+* `<EDITOR>` — The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
+
+
+
+## `pixi global install`
+
+Installs the defined packages in a globally accessible location and exposes their command line applications.
+
+Example:
+- pixi global install starship nushell ripgrep bat
+- pixi global install jupyter --with polars
+- pixi global install --expose python3.8=python python=3.8
+- pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars
+
+**Usage:** `pixi global install [OPTIONS] <PACKAGES>...`
+
+###### **Arguments:**
+
+* `<PACKAGES>` — Specifies the packages that are to be installed
+
+###### **Options:**
+
+* `-c`, `--channel <CHANNEL>` — The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times.
+
+   When specifying a channel, it is common that the selected channel also depends on the `conda-forge` channel.
+
+   By default, if no channel is provided, `conda-forge` is used.
+* `-p`, `--platform <PLATFORM>`
+* `-e`, `--environment <ENVIRONMENT>` — Ensures that all packages will be installed in the same environment
+* `--expose <EXPOSE>` — Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
+* `--with <WITH>` — Add additional dependencies to the environment. Their executables will not be exposed
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `--force-reinstall` — Specifies that the packages should be reinstalled even if they are already installed
+
+
+
+## `pixi global uninstall`
+
 Uninstalls environments from the global environment.
-This will remove the environment and all its dependencies from the global environment.
-It will also remove the related binaries from the system.
 
-##### Arguments
-1. `[ENVIRONMENT]`: The environments to uninstall.
-
-```shell
-pixi global uninstall my-env
+Example:
 pixi global uninstall pixi-pack rattler-build
-```
-
-### `global remove`
-
-Removes a package from a global environment.
-
-##### Arguments
-
-1. `[PACKAGE]`: The packages to remove.
-
-##### Options
-
-- `--environment <ENVIRONMENT> (-e)`: The environment to remove the package from.
-
-```shell
-pixi global remove -e my-env package1 package2
-```
-
 
-### `global list`
+**Usage:** `pixi global uninstall [OPTIONS] <ENVIRONMENT>...`
 
-This command shows the current installed global environments including what binaries come with it.
-A global installed package/environment can possibly contain multiple exposed binaries and they will be listed out in the command output.
+###### **Arguments:**
 
-##### Options
-- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
+* `<ENVIRONMENT>` — Specifies the environments that are to be removed
 
-We'll only show the dependencies and exposed binaries of the environment if they differ from the environment name.
-Here is an example of a few installed packages:
+###### **Options:**
 
-```
-pixi global list
-```
-Results in:
-```
-Global environments at /home/user/.pixi:
-├── gh: 2.57.0
-├── pixi-pack: 0.1.8
-├── python: 3.11.0
-│   └─ exposes: 2to3, 2to3-3.11, idle3, idle3.11, pydoc, pydoc3, pydoc3.11, python, python3, python3-config, python3.1, python3.11, python3.11-config
-├── rattler-build: 0.22.0
-├── ripgrep: 14.1.0
-│   └─ exposes: rg
-├── vim: 9.1.0611
-│   └─ exposes: ex, rview, rvim, view, vim, vimdiff, vimtutor, xxd
-└── zoxide: 0.9.6
-```
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
 
-Here is an example of list of a single environment:
-```
-pixi g list -e pixi-pack
-```
-Results in:
-```
-The 'pixi-pack' environment has 8 packages:
-Package          Version    Build        Size
-_libgcc_mutex    0.1        conda_forge  2.5 KiB
-_openmp_mutex    4.5        2_gnu        23.1 KiB
-ca-certificates  2024.8.30  hbcca054_0   155.3 KiB
-libgcc           14.1.0     h77fa898_1   826.5 KiB
-libgcc-ng        14.1.0     h69a702a_1   50.9 KiB
-libgomp          14.1.0     h77fa898_1   449.4 KiB
-openssl          3.3.2      hb9d3cd8_0   2.8 MiB
-pixi-pack        0.1.8      hc762bcd_0   4.3 MiB
-Package          Version    Build        Size
+  Possible values: `disabled`, `subprocess`
 
-Exposes:
-pixi-pack
-Channels:
-conda-forge
-Platform: linux-64
-```
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
 
 
-### `global sync`
-As the global manifest can be manually edited, this command will sync the global manifest with the current state of the global environment.
-You can modify the manifest in `$HOME/manifests/pixi_global.toml`.
 
-```shell
-pixi global sync
-```
+## `pixi global remove`
 
-### `global expose`
-Modify the exposed binaries of a global environment.
+Removes dependencies from an environment
 
-#### `global expose add`
-Add exposed binaries from an environment to your global environment.
+Use `pixi global uninstall` to remove the whole environment
 
-##### Arguments
-1. `[MAPPING]`: The binaries to expose (`python`), or give a map to expose a binary under a different name. (e.g. `py310=python3.10`)
-The mapping is mapped as `exposed_name=binary_name`.
-Where the exposed name is the one you will be able to use in the terminal, and the binary name is the name of the binary in the environment.
+Example:
+- pixi global remove --environment python numpy
 
-##### Options
-- `--environment <ENVIRONMENT> (-e)`: The environment to expose the binaries from.
+**Usage:** `pixi global remove [OPTIONS] <PACKAGES>...`
 
-```shell
-pixi global expose add python --environment my-env
-pixi global expose add py310=python3.10 --environment python
-```
+###### **Arguments:**
 
-#### `global expose remove`
-Remove exposed binaries from the global environment.
+* `<PACKAGES>` — Specifies the packages that are to be removed
 
-##### Arguments
-1. `[EXPOSED_NAME]`: The binaries to remove from the main global environment.
+###### **Options:**
 
-```shell
-pixi global expose remove python
-pixi global expose remove py310 python3
-```
+* `-e`, `--environment <ENVIRONMENT>` — Specifies the environment that the dependencies need to be removed from
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
 
-### `global update`
+  Possible values: `disabled`, `subprocess`
 
-Update all environments or specify an environment to update to the version.
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
 
-##### Arguments
 
-1. `[ENVIRONMENT]`: The environment(s) to update.
 
-```shell
-pixi global update
-pixi global update pixi-pack
-pixi global update bat rattler-build
-```
+## `pixi global list`
 
-## `project`
+Lists all packages previously installed into a globally accessible location via `pixi global install`.
 
-This subcommand allows you to modify the project configuration through the command line interface.
+All environments:
+- Yellow: the binaries that are exposed.
+- Green: the packages that are explicit dependencies of the environment.
+- Blue: the version of the installed package.
+- Cyan: the name of the environment.
 
-##### Options
+Per environment:
+- Green: packages that are explicitly installed.
 
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+**Usage:** `pixi global list [OPTIONS] [REGEX]`
 
-### `project channel add`
+###### **Arguments:**
 
-Add channels to the channel list in the project configuration.
-When you add channels, the channels are tested for existence, added to the lock file and the environment is reinstalled.
+* `<REGEX>` — List only packages matching a regular expression. Without regex syntax it acts like a `contains` filter
 
-##### Arguments
+###### **Options:**
 
-1. `<CHANNEL>`: The channels to add, name or URL.
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
 
-##### Options
+  Possible values: `disabled`, `subprocess`
 
-- `--no-install`: do not update the environment, only add changed packages to the lock-file.
-- `--feature <FEATURE> (-f)`: The feature for which the channel is added.
-- `--prepend`: Prepend the channel to the list of channels.
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `-e`, `--environment <ENVIRONMENT>` — The name of the environment to list
+* `--sort-by <SORT_BY>` — Sorting strategy for the package table of an environment
 
-```
-pixi project channel add robostack
-pixi project channel add bioconda conda-forge robostack
-pixi project channel add file:///home/user/local_channel
-pixi project channel add https://repo.prefix.dev/conda-forge
-pixi project channel add --no-install robostack
-pixi project channel add --feature cuda nvidia
-pixi project channel add --prepend pytorch
-```
+  Default value: `name`
 
-### `project channel list`
+  Possible values: `size`, `name`
 
-List the channels in the manifest file
 
-##### Options
 
-- `urls`: show the urls of the channels instead of the names.
 
-```sh
-$ pixi project channel list
-Environment: default
-- conda-forge
+## `pixi global sync`
 
-$ pixi project channel list --urls
-Environment: default
-- https://conda.anaconda.org/conda-forge/
+Sync global manifest with installed environments
 
-```
+**Usage:** `pixi global sync [OPTIONS]`
 
-### `project channel remove`
+###### **Options:**
 
-List the channels in the manifest file
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
 
-##### Arguments
+  Possible values: `disabled`, `subprocess`
 
-1. `<CHANNEL>...`: The channels to remove, name(s) or URL(s).
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
 
-##### Options
 
-- `--no-install`: do not update the environment, only add changed packages to the lock-file.
-- `--feature <FEATURE> (-f)`: The feature for which the channel is removed.
 
-```sh
-pixi project channel remove conda-forge
-pixi project channel remove https://conda.anaconda.org/conda-forge/
-pixi project channel remove --no-install conda-forge
-pixi project channel remove --feature cuda nvidia
-```
+## `pixi global expose`
 
-### `project description get`
+Interact with the exposure of binaries in the global environment
 
-Get the project description.
+`pixi global expose add python310=python3.10 --environment myenv` will expose the `python3.10` executable as `python310` from the environment `myenv`
 
-```sh
-$ pixi project description get
-Package management made easy!
-```
+`pixi global expose remove python310 --environment myenv` will remove the exposed name `python310` from the environment `myenv`
 
-### `project description set`
+**Usage:** `pixi global expose <COMMAND>`
 
-Set the project description.
+###### **Subcommands:**
 
-##### Arguments
+* `add` — Add exposed binaries from an environment to your global environment
+* `remove` — Remove exposed binaries from the global environment
 
-1. `<DESCRIPTION>`: The description to set.
 
-```sh
-pixi project description set "my new description"
-```
 
-### `project environment add`
+## `pixi global expose add`
 
-Add an environment to the manifest file.
+Add exposed binaries from an environment to your global environment
 
-##### Arguments
+Example:
+- pixi global expose add python310=python3.10 python3=python3 --environment myenv
+- pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest
 
-1. `<NAME>`: The name of the environment to add.
+**Usage:** `pixi global expose add [OPTIONS] --environment <ENVIRONMENT> [MAPPINGS]...`
 
-##### Options
+###### **Arguments:**
 
-- `-f, --feature <FEATURES>`: Features to add to the environment.
-- `--solve-group <SOLVE_GROUP>`: The solve-group to add the environment to.
-- `--no-default-feature`: Don't include the default feature in the environment.
-- `--force`:  Update the manifest even if the environment already exists.
+* `<MAPPINGS>` — Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
 
-```sh
-pixi project environment add env1 --feature feature1 --feature feature2
-pixi project environment add env2 -f feature1 --solve-group test
-pixi project environment add env3 -f feature1 --no-default-feature
-pixi project environment add env3 -f feature1 --force
-```
+###### **Options:**
 
-### `project environment remove`
+* `-e`, `--environment <ENVIRONMENT>` — The environment to which the binaries should be exposed
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
 
-Remove an environment from the manifest file.
+  Possible values: `disabled`, `subprocess`
 
-##### Arguments
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
 
-1. `<NAME>`: The name of the environment to remove.
 
-```shell
-pixi project environment remove env1
-```
 
-### `project environment list`
+## `pixi global expose remove`
 
-List the environments in the manifest file.
+Remove exposed binaries from the global environment
 
-```shell
-pixi project environment list
-```
+`pixi global expose remove python310 python3 --environment myenv` will remove the exposed names `python310` and `python3` from the environment `myenv`
 
-### `project export conda-environment`
+**Usage:** `pixi global expose remove [OPTIONS] [EXPOSED_NAMES]...`
 
-Exports a conda [`environment.yml` file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#creating-an-environment-from-an-environment-yml-file). The file can be used to create a conda environment using conda/mamba:
+###### **Arguments:**
 
-```shell
-pixi project export conda-environment environment.yml
-mamba create --name <env> --file environment.yml
-```
+* `<EXPOSED_NAMES>` — The exposed names that should be removed
 
-##### Arguments
+###### **Options:**
 
-1. `<OUTPUT_PATH>`: Optional path to render environment.yml to. Otherwise it will be printed to standard out.
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
 
-##### Options
+  Possible values: `disabled`, `subprocess`
 
-- `--environment <ENVIRONMENT> (-e)`: Environment to render.
-- `--platform <PLATFORM> (-p)`: The platform to render.
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
 
-```sh
-pixi project export conda-environment --environment lint
-pixi project export conda-environment --platform linux-64 environment.linux-64.yml
-```
 
-### `project export conda-explicit-spec`
 
-Render a platform-specific conda [explicit specification file](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#building-identical-conda-environments)
-for an environment. The file can be then used to create a conda environment using conda/mamba:
+## `pixi global update`
 
-```shell
-mamba create --name <env> --file <explicit spec file>
-```
+Updates environments in the global environment
 
-As the explicit specification file format does not support pypi-dependencies, use the `--ignore-pypi-errors` option to ignore those dependencies.
+**Usage:** `pixi global update [OPTIONS] [ENVIRONMENTS]...`
 
-##### Arguments
+###### **Arguments:**
 
-1. `<OUTPUT_DIR>`:  Output directory for rendered explicit environment spec files.
+* `<ENVIRONMENTS>` — Specifies the environments that are to be updated
 
-##### Options
+###### **Options:**
 
-- `--environment <ENVIRONMENT> (-e)`: Environment to render. Can be repeated for multiple envs. Defaults to all environments.
-- `--platform <PLATFORM> (-p)`: The platform to render. Can be repeated for multiple platforms. Defaults to all platforms available for selected environments.
-- `--ignore-pypi-errors`: PyPI dependencies are not supported in the conda explicit spec file. This flag allows creating the spec file even if PyPI dependencies are present.
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
 
-```sh
-pixi project export conda-explicit-spec output
-pixi project export conda-explicit-spec -e default -e test -p linux-64 output
-```
+  Possible values: `disabled`, `subprocess`
 
-### `project name get`
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
 
-Get the project name.
 
-```sh
-$ pixi project name get
-my project name
-```
 
-### `project name set`
+## `pixi auth`
 
-Set the project name.
+Login to prefix.dev or anaconda.org servers to access private channels
 
-##### Arguments
+**Usage:** `pixi auth <COMMAND>`
 
-1. `<NAME>`: The name to set.
+###### **Subcommands:**
 
-```sh
-pixi project name set "my new project name"
-```
+* `login` — Store authentication information for a given host
+* `logout` — Remove authentication information for a given host
 
-### `project platform add`
 
-Adds a platform(s) to the manifest file and updates the lock file.
 
-##### Arguments
+## `pixi auth login`
 
-1. `<PLATFORM>...`: The platforms to add.
+Store authentication information for a given host
 
-##### Options
+**Usage:** `pixi auth login [OPTIONS] <HOST>`
 
-- `--no-install`: do not update the environment, only add changed packages to the lock-file.
-- `--feature <FEATURE> (-f)`: The feature for which the platform will be added.
+###### **Arguments:**
 
-```sh
-pixi project platform add win-64
-pixi project platform add --feature test win-64
-```
+* `<HOST>` — The host to authenticate with (e.g. repo.prefix.dev)
 
-### `project platform list`
+###### **Options:**
 
-List the platforms in the manifest file.
+* `--token <TOKEN>` — The token to use (for authentication with prefix.dev)
+* `--username <USERNAME>` — The username to use (for basic HTTP authentication)
+* `--password <PASSWORD>` — The password to use (for basic HTTP authentication)
+* `--conda-token <CONDA_TOKEN>` — The token to use on anaconda.org / quetz authentication
+* `--s3-access-key-id <S3_ACCESS_KEY_ID>` — The S3 access key ID
+* `--s3-secret-access-key <S3_SECRET_ACCESS_KEY>` — The S3 secret access key
+* `--s3-session-token <S3_SESSION_TOKEN>` — The S3 session token
 
-```sh
-$ pixi project platform list
-osx-64
-linux-64
-win-64
-osx-arm64
-```
 
-### `project platform remove`
 
-Remove platform(s) from the manifest file and updates the lock file.
+## `pixi auth logout`
 
-##### Arguments
+Remove authentication information for a given host
 
-1. `<PLATFORM>...`: The platforms to remove.
+**Usage:** `pixi auth logout <HOST>`
 
-##### Options
+###### **Arguments:**
 
-- `--no-install`: do not update the environment, only add changed packages to the lock-file.
-- `--feature <FEATURE> (-f)`: The feature for which the platform will be removed.
+* `<HOST>` — The host to remove authentication for
 
-```sh
-pixi project platform remove win-64
-pixi project platform remove --feature test win-64
-```
 
-### `project version get`
 
-Get the project version.
+## `pixi config`
 
-```sh
-$ pixi project version get
-0.11.0
-```
+Configuration management
 
-### `project version set`
+**Usage:** `pixi config <COMMAND>`
 
-Set the project version.
+###### **Subcommands:**
 
-##### Arguments
+* `edit` — Edit the configuration file
+* `list` — List configuration values
+* `prepend` — Prepend a value to a list configuration key
+* `append` — Append a value to a list configuration key
+* `set` — Set a configuration value
+* `unset` — Unset a configuration value
 
-1. `<VERSION>`: The version to set.
 
-```sh
-pixi project version set "0.13.0"
-```
 
-### `project version {major|minor|patch}`
+## `pixi config edit`
 
-Bump the project version to {MAJOR|MINOR|PATCH}.
+Edit the configuration file
 
-```sh
-pixi project version major
-pixi project version minor
-pixi project version patch
-```
+**Usage:** `pixi config edit [OPTIONS] [EDITOR]`
 
-### `project system-requirement add`
+###### **Arguments:**
 
-Add a system requirement to the project configuration.
+* `<EDITOR>` — The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
 
-##### Arguments
-1. `<REQUIREMENT>`: The name of the system requirement.
-2. `<VERSION>`: The version of the system requirement.
+###### **Options:**
 
-##### Options
-- `--family <FAMILY>`: The family of the system requirement. Only used for `other-libc`.
-- `--feature <FEATURE> (-f)`: The feature for which the system requirement is added.
+* `-l`, `--local` — Operation on project-local configuration
+* `-g`, `--global` — Operation on global configuration
+* `-s`, `--system` — Operation on system configuration
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
 
-```shell
-pixi project system-requirements add cuda 12.6
-pixi project system-requirements add linux 5.15.2
-pixi project system-requirements add macos 15.2
-pixi project system-requirements add glibc 2.34
-pixi project system-requirements add other-libc 1.2.3 --family musl
-pixi project system-requirements add --feature cuda cuda 12.0
-```
 
-### `project system-requirement list`
 
-List the system requirements in the project configuration.
+## `pixi config list`
 
-##### Options
-- `--environment <ENVIRONMENT> (-e)`: The environment to list the system requirements for.
+List configuration values
 
-```shell
-pixi project system-requirements list
-pixi project system-requirements list --environment test
-```
+Example: pixi config list default-channels
 
-[^1]:
-    An **up-to-date** lock file means that the dependencies in the lock file are allowed by the dependencies in the manifest file.
-    For example
+**Usage:** `pixi config list [OPTIONS] [KEY]`
 
-    - a manifest with `python = ">= 3.11"` is up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
-    - a manifest with `python = ">= 3.12"` is **not** up-to-date with a `name: python, version: 3.11.0` in the `pixi.lock`.
+###### **Arguments:**
 
-    Being up-to-date does **not** mean that the lock file holds the latest version available on the channel for the given dependency.
+* `<KEY>` — Configuration key to show (all if not provided)
+
+###### **Options:**
+
+* `--json` — Output in JSON format
+* `-l`, `--local` — Operation on project-local configuration
+* `-g`, `--global` — Operation on global configuration
+* `-s`, `--system` — Operation on system configuration
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi config prepend`
+
+Prepend a value to a list configuration key
+
+Example: pixi config prepend default-channels bioconda
+
+**Usage:** `pixi config prepend [OPTIONS] <KEY> <VALUE>`
+
+###### **Arguments:**
+
+* `<KEY>` — Configuration key to set
+* `<VALUE>` — Configuration value to (pre|ap)pend
+
+###### **Options:**
+
+* `-l`, `--local` — Operation on project-local configuration
+* `-g`, `--global` — Operation on global configuration
+* `-s`, `--system` — Operation on system configuration
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi config append`
+
+Append a value to a list configuration key
+
+Example: pixi config append default-channels bioconda
+
+**Usage:** `pixi config append [OPTIONS] <KEY> <VALUE>`
+
+###### **Arguments:**
+
+* `<KEY>` — Configuration key to set
+* `<VALUE>` — Configuration value to (pre|ap)pend
+
+###### **Options:**
+
+* `-l`, `--local` — Operation on project-local configuration
+* `-g`, `--global` — Operation on global configuration
+* `-s`, `--system` — Operation on system configuration
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi config set`
+
+Set a configuration value
+
+Example: pixi config set default-channels '["conda-forge", "bioconda"]'
+
+**Usage:** `pixi config set [OPTIONS] <KEY> [VALUE]`
+
+###### **Arguments:**
+
+* `<KEY>` — Configuration key to set
+* `<VALUE>` — Configuration value to set (key will be unset if value not provided)
+
+###### **Options:**
+
+* `-l`, `--local` — Operation on project-local configuration
+* `-g`, `--global` — Operation on global configuration
+* `-s`, `--system` — Operation on system configuration
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi config unset`
+
+Unset a configuration value
+
+Example: pixi config unset default-channels
+
+**Usage:** `pixi config unset [OPTIONS] <KEY>`
+
+###### **Arguments:**
+
+* `<KEY>` — Configuration key to unset
+
+###### **Options:**
+
+* `-l`, `--local` — Operation on project-local configuration
+* `-g`, `--global` — Operation on global configuration
+* `-s`, `--system` — Operation on system configuration
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi info`
+
+Information about the system, project and environments for the current machine
+
+**Usage:** `pixi info [OPTIONS]`
+
+###### **Options:**
+
+* `--extended` — Show cache and environment size
+* `--json` — Whether to show the output as JSON or not
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+
+
+## `pixi upload`
+
+Upload a conda package
+
+With this command, you can upload a conda package to a channel. Example: pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda
+
+Use `pixi auth login` to authenticate with the server.
+
+**Usage:** `pixi upload <HOST> <PACKAGE_FILE>`
+
+###### **Arguments:**
+
+* `<HOST>` — The host + channel to upload to
+* `<PACKAGE_FILE>` — The file to upload
+
+
+
+## `pixi search`
+
+Search a conda package
+
+Its output will list the latest version of package.
+
+**Usage:** `pixi search [OPTIONS] <PACKAGE>`
+
+###### **Arguments:**
+
+* `<PACKAGE>` — Name of package to search
+
+###### **Options:**
+
+* `-c`, `--channel <CHANNEL>` — The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times.
+
+   When specifying a channel, it is common that the selected channel also depends on the `conda-forge` channel.
+
+   By default, if no channel is provided, `conda-forge` is used.
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `-p`, `--platform <PLATFORM>` — The platform to search for, defaults to current platform
+
+  Default value: `linux-64`
+* `-l`, `--limit <LIMIT>` — Limit the number of search results
+
+
+
+## `pixi clean`
+
+Clean the parts of your system which are touched by pixi. Defaults to cleaning the environments and task cache. Use the `cache` subcommand to clean the cache
+
+**Usage:** `pixi clean [OPTIONS] [COMMAND]`
+
+###### **Subcommands:**
+
+* `cache` — Clean the cache of your system which are touched by pixi
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `-e`, `--environment <ENVIRONMENT>` — The environment directory to remove
+* `--activation-cache` — Only remove the activation cache
+
+
+
+## `pixi clean cache`
+
+Clean the cache of your system which are touched by pixi
+
+**Usage:** `pixi clean cache [OPTIONS]`
+
+###### **Options:**
+
+* `--pypi` — Clean only the pypi related cache
+* `--conda` — Clean only the conda related cache
+* `--mapping` — Clean only the mapping cache
+* `--exec` — Clean only `exec` cache
+* `--repodata` — Clean only the repodata cache
+* `--tool` — Clean only the build backend tools cache
+* `-y`, `--yes` — Answer yes to all questions
+
+
+
+## `pixi completion`
+
+Generates a completion script for a shell
+
+**Usage:** `pixi completion --shell <SHELL>`
+
+###### **Options:**
+
+* `-s`, `--shell <SHELL>` — The shell to generate a completion script for
+
+  Possible values:
+  - `bash`:
+    Bourne Again SHell (bash)
+  - `elvish`:
+    Elvish shell
+  - `fish`:
+    Friendly Interactive SHell (fish)
+  - `nushell`:
+    Nushell
+  - `powershell`:
+    PowerShell
+  - `zsh`:
+    Z SHell (zsh)
+
+
+
+
+## `pixi build`
+
+Workspace configuration
+
+**Usage:** `pixi build [OPTIONS]`
+
+###### **Options:**
+
+* `--manifest-path <MANIFEST_PATH>` — The path to `pixi.toml`, `pyproject.toml`, or the project directory
+* `--tls-no-verify` — Do not verify the TLS certificate of the server
+* `--auth-file <AUTH_FILE>` — Path to the file containing the authentication token
+* `--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>` — Specifies if we want to use uv keyring provider
+
+  Possible values: `disabled`, `subprocess`
+
+* `--concurrent-solves <CONCURRENT_SOLVES>` — Max concurrent solves, default is the number of CPUs
+* `--concurrent-downloads <CONCURRENT_DOWNLOADS>` — Max concurrent network requests, default is 50
+* `-t`, `--target-platform <TARGET_PLATFORM>` — The target platform to build for (defaults to the current platform)
+
+  Default value: `linux-64`
+* `-o`, `--output-dir <OUTPUT_DIR>` — The output directory to place the build artifacts
+
+  Default value: `.`
+
+
+
+
