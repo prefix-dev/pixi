@@ -1145,7 +1145,7 @@ Highlighted packages are explicit dependencies.
 Show a tree of project dependencies
 
 Dependency names highlighted in green are directly specified in the manifest. Yellow version numbers are conda packages, PyPI version numbers are blue.
-    
+
 
 **Usage:** `pixi tree [OPTIONS] [REGEX]`
 
@@ -1821,7 +1821,3 @@ Workspace configuration
 * `-o`, `--output-dir <OUTPUT_DIR>` — The output directory to place the build artifacts
 
   Default value: `.`
-
-
-
-
