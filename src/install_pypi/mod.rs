@@ -277,7 +277,11 @@ pub async fn update_python_distributions(
         for (dist, reason) in &reinstalls {
             // Only log the re-install reason if it is not an installer mismatch
             if !matches!(reason, NeedReinstall::InstallerMismatch { .. }) {
-                tracing::debug!("re-installing {} because: {}", dist.name(), reason);
+                tracing::info!(
+                    "re-installing '{}' because: '{}'",
+                    console::style(dist.name()).blue(),
+                    reason
+                );
             }
         }
     }

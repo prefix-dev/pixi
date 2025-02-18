@@ -189,7 +189,7 @@ impl BuildContext {
         }
     }
 
-    fn resolve_variant(&self, platform: Platform) -> HashMap<String, Vec<String>> {
+    pub fn resolve_variant(&self, platform: Platform) -> HashMap<String, Vec<String>> {
         let mut result = HashMap::new();
 
         // Resolves from most specific to least specific.
