@@ -26,7 +26,7 @@ pub enum PrefixError {
 
     #[error("executing prefix related task failed")]
     #[diagnostic(help("try running the command again, or `pixi clean` to reset the environment"))]
-    JoinError(#[from] tokio::task::JoinError),
+    JoinError,
 }
 
 /// Points to a directory that serves as a Conda prefix.

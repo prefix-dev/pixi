@@ -192,9 +192,7 @@ impl CondaPrefixUpdater {
                     tokio::task::spawn_blocking(move || prefix_clone.find_installed_packages())
                         .unwrap_or_else(|e| match e.try_into_panic() {
                             Ok(panic) => std::panic::resume_unwind(panic),
-                            Err(e) => {
-                                std::panic::resume_unwind(Box::new(PrefixError::JoinError(e)))
-                            }
+                            Err(_e) => Err(PrefixError::JoinError),
                         });
 
                 // Wait until the conda records are available and until the installed packages
