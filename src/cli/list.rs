@@ -77,13 +77,34 @@ fn serde_skip_is_editable(editable: &bool) -> bool {
     !(*editable)
 }
 
+#[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+enum KindPackage {
+    Conda,
+    Pypi,
+}
+impl KindPackage {
+    fn color(&self) -> Color {
+        match self {
+            KindPackage::Conda => Color::Green,
+            KindPackage::Pypi => Color::Blue,
+        }
+    }
+    fn fancy_display(&self) -> console::StyledObject<&str> {
+        match self {
+            KindPackage::Conda => console::style("conda").fg(self.color()).bold(),
+            KindPackage::Pypi => console::style("pypi").fg(self.color()).bold(),
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct PackageToOutput {
     name: String,
     version: String,
     build: Option<String>,
     size_bytes: Option<u64>,
-    kind: String,
+    kind: KindPackage,
     source: Option<String>,
     is_explicit: bool,
     #[serde(skip_serializing_if = "serde_skip_is_editable")]
@@ -310,7 +331,9 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
             write!(
                 writer,
                 "{}",
-                console::style(&package.name).fg(Color::Green).bold()
+                console::style(&package.name)
+                    .fg(package.kind.color())
+                    .bold()
             )?
         } else {
             write!(writer, "{}", &package.name)?;
@@ -328,7 +351,7 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
             &package.version,
             package.build.as_deref().unwrap_or(""),
             size_human,
-            &package.kind,
+            &package.kind.fancy_display(),
             package.source.as_deref().unwrap_or(""),
             if package.is_editable {
                 format!(" {}", console::style("(editable)").fg(Color::Yellow))
@@ -372,8 +395,8 @@ fn create_package_to_output<'a, 'b>(
     let version = package.version().into_owned();
 
     let kind = match package {
-        PackageExt::Conda(_) => "conda".to_string(),
-        PackageExt::PyPI(_, _) => "pypi".to_string(),
+        PackageExt::Conda(_) => KindPackage::Conda,
+        PackageExt::PyPI(_, _) => KindPackage::Pypi,
     };
     let build = match package {
         PackageExt::Conda(pkg) => Some(pkg.record().build.clone()),
@@ -383,7 +406,10 @@ fn create_package_to_output<'a, 'b>(
     let (size_bytes, source) = match package {
         PackageExt::Conda(pkg) => (
             pkg.record().size,
-            Some(pkg.record().name.as_source().to_owned()),
+            match pkg {
+                CondaPackageData::Source(source) => Some(source.location.to_string()),
+                CondaPackageData::Binary(binary) => binary.channel.as_ref().map(|c| c.to_string()),
+            },
         ),
         PackageExt::PyPI(p, name) => {
             // Check the hash to avoid non index packages to be handled by the registry index as wheels
