@@ -182,13 +182,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
 mod test {
     use insta::assert_snapshot;
 
-    use crate::utils::test_utils::expect_parse_failure;
+    use crate::utils::test_utils::expect_parse_warnings;
 
     #[test]
     fn test_mismatching_target_selector() {
-        assert_snapshot!(expect_parse_failure(
+        assert_snapshot!(expect_parse_warnings(
             r#"
         [workspace]
+        name = "test"
         channels = []
         platforms = ['win-64']
 
@@ -199,9 +200,10 @@ mod test {
 
     #[test]
     fn test_mismatching_excluded_target_selector() {
-        assert_snapshot!(expect_parse_failure(
+        assert_snapshot!(expect_parse_warnings(
             r#"
         [workspace]
+        name = "test"
         channels = []
         platforms = ['win-64', 'osx-arm64']
 
