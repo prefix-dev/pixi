@@ -988,7 +988,7 @@ mod tests {
             as_pypi_req,
             PyPiRequirement::Git {
                 url: GitSpec {
-                    git: Url::parse("git+https://github.com/ecederstrand/exchangelib").unwrap(),
+                    git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
                     subdirectory: None,
                 },
@@ -1002,7 +1002,7 @@ mod tests {
             as_pypi_req,
             PyPiRequirement::Git {
                 url: GitSpec {
-                    git: Url::parse("git+https://github.com/ecederstrand/exchangelib").unwrap(),
+                    git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                     rev: Some(GitReference::Rev(
                         "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
                     )),
