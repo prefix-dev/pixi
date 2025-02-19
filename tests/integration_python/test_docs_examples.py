@@ -71,4 +71,5 @@ def test_pytorch_documentation_examples(
         # Run the installation
         verify_cli_command(
             [pixi, "install", "--manifest-path", manifest],
+            env={"CONDA_OVERRIDE_CUDA": "12.0"},
         )
