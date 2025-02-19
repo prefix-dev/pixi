@@ -21,7 +21,7 @@ use crate::{
     manifests::PackageManifest,
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
-        create_unsupported_selector_error, environment::TomlEnvironmentList, task::TomlTask,
+        create_unsupported_selector_warning, environment::TomlEnvironmentList, task::TomlTask,
         ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
         TomlWorkspace,
     },
@@ -158,12 +158,12 @@ impl TomlManifest {
                 .iter()
                 .any(|p| workspace.value.platforms.value.contains(p))
             {
-                return Err(create_unsupported_selector_error(
+                let warning = create_unsupported_selector_warning(
                     PlatformSpan::Workspace(workspace.value.platforms.span),
                     &selector,
                     &matching_platforms,
-                )
-                .into());
+                );
+                warnings.push(warning.into());
             }
 
             let WithWarnings {

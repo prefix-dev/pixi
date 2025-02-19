@@ -8,7 +8,7 @@ use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
 use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
-        create_unsupported_selector_error, platform::TomlPlatform, preview::TomlPreview,
+        create_unsupported_selector_warning, platform::TomlPlatform, preview::TomlPreview,
         task::TomlTask, PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
@@ -76,23 +76,25 @@ impl TomlFeature {
                     .iter()
                     .any(|p| feature_platforms.value.contains(p))
                 {
-                    return Err(create_unsupported_selector_error(
+                    // Print the warning if the selector does not match any of the feature platforms
+                    let warning = create_unsupported_selector_warning(
                         PlatformSpan::Feature(name.to_string(), feature_platforms.span),
                         &selector,
                         &matching_platforms,
-                    )
-                    .into());
+                    );
+                    warnings.push(warning.into());
                 }
             } else if !matching_platforms
                 .iter()
                 .any(|p| workspace.platforms.value.contains(p))
             {
-                return Err(create_unsupported_selector_error(
+                // Print the warning if the selector does not match any of the feature platforms
+                let warning = create_unsupported_selector_warning(
                     PlatformSpan::Workspace(workspace.platforms.span),
                     &selector,
                     &matching_platforms,
-                )
-                .into());
+                );
+                warnings.push(warning.into());
             }
 
             let WithWarnings {

@@ -60,7 +60,7 @@ enum PlatformSpan {
     Workspace(Span),
 }
 
-fn create_unsupported_selector_error(
+fn create_unsupported_selector_warning(
     platform_span: PlatformSpan,
     selector: &PixiSpanned<TargetSelector>,
     matching_platforms: &[Platform],
@@ -85,12 +85,16 @@ fn create_unsupported_selector_error(
     ))
     .with_help(match matching_platforms.len() {
         0 => unreachable!("There should be at least one matching platform"),
-        1 => format!("Add {} to the supported platforms", matching_platforms[0]),
+        1 => format!(
+            "Add {0} to the supported platforms, using `pixi project platform add {0}`",
+            matching_platforms[0]
+        ),
         _ => format!(
-            "Add one of {} to the supported platforms",
+            "Add one of {0} to the supported platforms, using `pixi project platform add {1}`",
             matching_platforms
                 .iter()
-                .format_with(", ", |p, f| f(&format_args!("'{p}'")))
+                .format_with(", ", |p, f| f(&format_args!("'{p}'"))),
+            matching_platforms[0]
         ),
     })
 }
