@@ -91,7 +91,7 @@ def test_cuda_on_macos(pixi: Path, tmp_pixi_workspace: Path, virtual_packages_ch
     """Test that we can install an environment that has cuda dependencies for linux on a macOS machine. This mimics the behavior of the pytorch installation where the linux environment should have cuda but the macOS environment should not."""
     verify_cli_command([pixi, "init", tmp_pixi_workspace, "--channel", virtual_packages_channel])
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-
+    env = {"CONDA_OVERRIDE_CUDA": "12.0"}
     # Add multiple platforms
     verify_cli_command(
         [
@@ -121,26 +121,25 @@ def test_cuda_on_macos(pixi: Path, tmp_pixi_workspace: Path, virtual_packages_ch
             "cuda",
             "12.1",
         ],
-        ExitCode.SUCCESS,
     )
 
     # Add the dependency
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest, "noarch_package", "--no-install"],
-        ExitCode.SUCCESS,
+        env=env,
     )
 
     # Install important to run on all platforms!
     # It should succeed even though we are on macOS
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
+        env=env,
     )
 
     # Add the dependency even though the system requirements can not be satisfied on the machine
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest, "no-deps", "--no-install"],
-        ExitCode.SUCCESS,
+        env=env,
     )
 
 
