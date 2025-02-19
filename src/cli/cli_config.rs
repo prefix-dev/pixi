@@ -376,6 +376,7 @@ impl HasSpecs for DependencyConfig {
 /// in a separate query parameter the reference type.
 /// This is used to differentiate between a branch, a tag or a revision
 /// which is lost in the simple VCS requirement.
+/// return a string in the format `name @ git+url@rev#subdirectory=subdir`
 fn build_vcs_requirement(
     package_name: &str,
     git: &Url,
@@ -420,7 +421,7 @@ mod tests {
         );
         assert_eq!(
             result,
-            "mypackage @ git+https://github.com/user/repo@v1.0.0#subdirectory=subdir"
+            "mypackage @ git+https://github.com/user/repo@v1.0.0?rev_type=tag#subdirectory=subdir"
         );
     }
 
@@ -448,7 +449,7 @@ mod tests {
         );
         assert_eq!(
             result,
-            "mypackage @ git+https://github.com/user/repo@v1.0.0"
+            "mypackage @ git+https://github.com/user/repo@v1.0.0?rev_type=tag"
         );
     }
 

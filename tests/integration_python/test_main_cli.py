@@ -1071,7 +1071,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
     # we want to make sure that the lock file contains the branch information
-    assert "pypi: git+https://github.com/mahmoud/boltons?branch=master" in lock_file.read_text()
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?branch=master" in lock_file.read_text()
     # and that the manifest contains the branch information
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["branch"] == "master"
@@ -1093,7 +1093,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
     # we want to make sure that the lock file contains the tag information
-    assert "pypi: git+https://github.com/mahmoud/boltons?tag=25.0.0" in lock_file.read_text()
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?tag=25.0.0" in lock_file.read_text()
     # and that the manifest contains the tag information
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["tag"] == "25.0.0"
@@ -1115,7 +1115,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
     # we want to make sure that the lock file contains the rev information
-    assert "pypi: git+https://github.com/mahmoud/boltons?rev=d70669a" in lock_file.read_text()
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?rev=d70669a" in lock_file.read_text()
     # and that the manifest contains the rev information
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
