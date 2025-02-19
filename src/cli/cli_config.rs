@@ -376,7 +376,8 @@ impl HasSpecs for DependencyConfig {
 /// in a separate query parameter the reference type.
 /// This is used to differentiate between a branch, a tag or a revision
 /// which is lost in the simple VCS requirement.
-/// return a string in the format `name @ git+url@rev#subdirectory=subdir`
+/// Return a string in the format `name @ git+url@rev?rev_type=type#subdirectory=subdir`
+/// where `rev_type` is added only if reference is present.
 fn build_vcs_requirement(
     package_name: &str,
     git: &Url,
