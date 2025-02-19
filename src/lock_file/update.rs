@@ -374,9 +374,12 @@ impl<'p> LockFileDerivedData<'p> {
             environment.name(),
             None,
         )
-        .into_diagnostic()?;
+        .wrap_err(format!(
+            "Cannot install environment '{}'",
+            environment.name().fancy_display()
+        ))?;
 
-        tracing::info!("Updating prefix");
+        tracing::info!("Updating prefix: '{}'", environment.dir().display());
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;

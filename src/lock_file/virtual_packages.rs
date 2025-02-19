@@ -16,17 +16,61 @@ use thiserror::Error;
 use uv_distribution_filename::WheelFilename;
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum MachineValidationError {
-    #[error("Virtual package: {spec} not found on the system")]
-    #[diagnostic(help("You can mock a virtual package by setting the override environment variable, e.g.: `CONDA_OVERRIDE_GLIBC=2.17`"))]
-    VirtualPackageNotFound { spec: String },
+#[error("{msg}")]
+pub struct VirtualPackageNotFoundError {
+    msg: String,
+    #[help]
+    help: Option<String>,
+}
 
-    #[diagnostic(help("You can mock a virtual package by setting the override environment variable, e.g.: `CONDA_OVERRIDE_GLIBC=2.17`"))]
-    #[error("Virtual package: {generic_virtual_pkg} does not match the required version: {spec}")]
-    VirtualPackageVersionMismatch {
-        generic_virtual_pkg: String,
-        spec: String,
-    },
+impl VirtualPackageNotFoundError {
+    pub fn new(
+        required_package: &MatchSpec,
+        system_virtual_packages: &Vec<&GenericVirtualPackage>,
+    ) -> Self {
+        let override_var = if required_package
+            .name
+            .as_ref()
+            .is_some_and(|name| name.as_normalized() == "__glibc")
+        {
+            // TODO: would be awesome to set the version based on the required version.
+            // 2.17 is used as it's a good default
+            Some("`CONDA_OVERRIDE_GLIBC=2.17`")
+        } else if required_package
+            .name
+            .as_ref()
+            .is_some_and(|name| name.as_normalized() == "__cuda")
+        {
+            Some("`CONDA_OVERRIDE_CUDA=12.0`")
+        } else if required_package
+            .name
+            .as_ref()
+            .is_some_and(|name| name.as_normalized() == "__osx")
+        {
+            Some("`CONDA_OVERRIDE_OSX=10.15`")
+        } else {
+            None
+        };
+
+        let help = override_var.map(|override_var| format!(
+               " You can mock the virtual package by overriding the environment variable, e.g.: '{}'",
+                override_var
+           ));
+
+        let msg = format!(
+            "Virtual package '{}' does not match any of the available virtual packages on your machine: [{}]",
+            required_package,
+            system_virtual_packages.iter().map(|vpkg| vpkg.to_string()).join(", "),
+        );
+        VirtualPackageNotFoundError { msg, help }
+    }
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum MachineValidationError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    VirtualPackageNotFound(#[from] VirtualPackageNotFoundError),
 
     #[error("Couldn't get the virtual packages from the system")]
     VirtualPackageDetectionError(#[from] DetectVirtualPackageError),
@@ -41,6 +85,7 @@ pub enum MachineValidationError {
     EnvironmentNotFound(String),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PyPITagError(#[from] PyPITagError),
 
     #[error("Wheel: {0} doesn't match this systems virtual capabilities")]
@@ -162,16 +207,19 @@ pub(crate) fn validate_system_meets_environment_requirements(
                 .expect("Virtual packages should have a name"),
         ) {
             if !required.matches(local_vpkg) {
-                return Err(MachineValidationError::VirtualPackageVersionMismatch {
-                    generic_virtual_pkg: local_vpkg.clone().to_string(),
-                    spec: required.clone().to_string(),
-                });
+                return Err(VirtualPackageNotFoundError::new(
+                    &required,
+                    &generic_system_virtual_packages.values().collect(),
+                )
+                .into());
             }
             tracing::debug!("Required virtual package: {} matches the system", required);
         } else {
-            return Err(MachineValidationError::VirtualPackageNotFound {
-                spec: required.clone().to_string(),
-            });
+            return Err(VirtualPackageNotFoundError::new(
+                &required,
+                &generic_system_virtual_packages.values().collect(),
+            )
+            .into());
         }
     }
 
@@ -209,8 +257,21 @@ pub(crate) fn validate_system_meets_environment_requirements(
 #[cfg(test)]
 mod test {
     use super::*;
+    use insta::assert_snapshot;
+    use miette::{GraphicalReportHandler, GraphicalTheme};
+    use rattler_conda_types::ParseStrictness;
     use rattler_virtual_packages::Override;
     use std::path::Path;
+
+    fn error_to_snapshot(diag: &impl Diagnostic) -> String {
+        let mut report_str = String::new();
+        GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
+            .without_syntax_highlighting()
+            .with_width(100)
+            .render_report(&mut report_str, diag)
+            .unwrap();
+        report_str
+    }
 
     #[test]
     fn test_get_minimal_virtual_packages() {
@@ -318,6 +379,61 @@ mod test {
         } else {
             // It's hard to make the wheels fail on windows
             assert!(result.is_ok(), "{:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_virtual_package_not_found_error() {
+        // Create a test MatchSpec for glibc
+        let spec = MatchSpec::from_str("__glibc >= 2.28", ParseStrictness::Strict).unwrap();
+
+        // Define some available virtual packages
+        let libc = GenericVirtualPackage {
+            name: "__glibc".parse().unwrap(),
+            version: "2.17".parse().unwrap(),
+            build_string: "".to_string(),
+        };
+        let cuda = GenericVirtualPackage {
+            name: "__cuda".parse().unwrap(),
+            version: "11.8".parse().unwrap(),
+            build_string: "".to_string(),
+        };
+        let osx = GenericVirtualPackage {
+            name: "__osx".parse().unwrap(),
+            version: "10.14".parse().unwrap(),
+            build_string: "".to_string(),
+        };
+        let system_virtual_packages = vec![&libc, &cuda, &osx];
+
+        let error1 = VirtualPackageNotFoundError::new(&spec, &system_virtual_packages);
+
+        // Create a test MatchSpec for win which doesn't have an override
+        let spec = MatchSpec::from_str("__win >= 1.2.3", ParseStrictness::Strict).unwrap();
+        let error2 = VirtualPackageNotFoundError::new(&spec, &system_virtual_packages);
+
+        assert_snapshot!(format!(
+            "With override:\n{}\nWithout override:\n{}",
+            error_to_snapshot(&error1),
+            error_to_snapshot(&error2)
+        ));
+    }
+    #[test]
+    fn test_virtual_package_not_found_error_with_overrides() {
+        // Check all overrides
+        let overrides = vec![
+            ("__glibc >= 2.17", "`CONDA_OVERRIDE_GLIBC=2.17`"),
+            ("__cuda >= 12.0", "`CONDA_OVERRIDE_CUDA=12.0`"),
+            ("__osx >= 10.15", "`CONDA_OVERRIDE_OSX=10.15`"),
+        ];
+
+        let system_virtual_packages = vec![];
+
+        for (spec, msg) in overrides {
+            let error = VirtualPackageNotFoundError::new(
+                &MatchSpec::from_str(spec, ParseStrictness::Strict).unwrap(),
+                &system_virtual_packages,
+            );
+            assert!(error.help.unwrap().contains(msg));
         }
     }
 }
