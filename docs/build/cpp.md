@@ -54,6 +54,7 @@ Use the following `pixi.toml` file, you can hover over the annotations to see wh
 6. We use the [nanobind](https://github.com/wjakob/nanobind) package to build our bindings.
 7. We need python to build the bindings, so we add a host dependency on the `python` package.
 8. We override the cmake version to ensure it matches our `CMakeLists.txt` file.
+9. Optionally, we can add extra arguments to the CMake invocation (e.g. `-DCMAKE_BUILD_TYPE=Release` or `-DUSE_FOOBAR=True`). This totally depends on the specific project / CMakeLists.txt file.
 
 ### The `CMakeLists.txt` file
 
