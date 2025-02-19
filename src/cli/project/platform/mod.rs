@@ -32,6 +32,10 @@ pub enum Command {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
+        // Avoid throwing warning messages as we're modifying the workspace
+        .with_emit_warnings(
+            !matches!(args.command, Command::Add(_)) && !matches!(args.command, Command::Remove(_)),
+        )
         .locate()?;
 
     match args.command {
