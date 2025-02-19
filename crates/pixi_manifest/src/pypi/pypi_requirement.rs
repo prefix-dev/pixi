@@ -1057,7 +1057,7 @@ mod tests {
             PyPiRequirement::try_from(parsed).unwrap(),
             PyPiRequirement::Git {
                 url: GitSpec {
-                    git: Url::parse("git+ssh://git@github.com/python-attrs/attrs.git").unwrap(),
+                    git: Url::parse("ssh://git@github.com/python-attrs/attrs.git").unwrap(),
                     rev: Some(GitReference::Rev("main".to_string())),
                     subdirectory: None
                 },
@@ -1075,7 +1075,7 @@ mod tests {
             PyPiRequirement::try_from(parsed).unwrap(),
             PyPiRequirement::Git {
                 url: GitSpec {
-                    git: Url::parse("git+https://github.com/Deltares/Ribasim.git").unwrap(),
+                    git: Url::parse("https://github.com/Deltares/Ribasim.git").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
                     subdirectory: Some("python/ribasim".to_string()),
                 },
