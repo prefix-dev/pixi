@@ -1127,6 +1127,7 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
 
+
 def test_dont_error_on_missing_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
