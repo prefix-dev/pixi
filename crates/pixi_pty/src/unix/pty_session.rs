@@ -22,6 +22,9 @@ pub struct PtySession {
 
     /// A file handle of the stdin of the pty process
     pub process_stdin: File,
+
+    /// Rolling buffer used for the wait_until pattern matching
+    pub rolling_buffer: Vec<u8>,
 }
 
 /// ```
@@ -48,6 +51,7 @@ impl PtySession {
             process,
             process_stdout,
             process_stdin,
+            rolling_buffer: Vec::with_capacity(4096),
         })
     }
 
@@ -93,7 +97,7 @@ impl PtySession {
         fd_set.insert(stdin_fd);
 
         // Create a buffer for reading from the process
-        let mut buf = [0u8; 2048];
+        let mut buf = [0u8; 4096];
 
         // Catch the SIGWINCH signal to handle window resizing
         // and forward the new terminal size to the process
@@ -143,11 +147,27 @@ impl PtySession {
                     let bytes_read = self.process_stdout.read(&mut buf).unwrap_or(0);
                     if !write_stdout {
                         if let Some(wait_until) = wait_until {
-                            if buf[..bytes_read]
+                            // Append new data to rolling buffer
+                            self.rolling_buffer.extend_from_slice(&buf[..bytes_read]);
+
+                            // Check for pattern in the rolling buffer
+                            if self
+                                .rolling_buffer
                                 .windows(wait_until.len())
                                 .any(|window| window == wait_until.as_bytes())
                             {
                                 write_stdout = true;
+                                // Clear the rolling buffer as we don't need it anymore
+                                self.rolling_buffer.clear();
+                            } else {
+                                // Keep only up to 2 * wait_until.len() bytes from the end
+                                // This ensures we don't miss matches across buffer boundaries
+                                let keep_size = wait_until.len() * 2;
+                                if self.rolling_buffer.len() > keep_size {
+                                    self.rolling_buffer = self
+                                        .rolling_buffer
+                                        .split_off(self.rolling_buffer.len() - keep_size);
+                                }
                             }
                         }
                     } else if bytes_read > 0 {
