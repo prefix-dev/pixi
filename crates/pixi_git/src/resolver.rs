@@ -17,7 +17,7 @@ use crate::{
     sha::GitSha,
     source::{cache_digest, Fetch, GitSource},
     url::RepositoryUrl,
-    GitUrl, Reporter,
+    GitError, GitUrl, Reporter,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -54,7 +54,7 @@ impl GitResolver {
         client: ClientWithMiddleware,
         cache: PathBuf,
         reporter: Option<Arc<dyn Reporter>>,
-    ) -> Result<Fetch, GitResolverError> {
+    ) -> Result<Fetch, GitError> {
         debug!("Fetching source distribution from Git: {url}");
 
         let reference = RepositoryReference::from(url);
@@ -90,7 +90,7 @@ impl GitResolver {
 
         let fetch = tokio::task::spawn_blocking(move || source.fetch())
             .await?
-            .map_err(|err| GitResolverError::Git(err.to_string()))?;
+            .inspect_err(|err| tracing::error!("Error fetching Git repository: {err}"))?;
 
         // Insert the resolved URL into the in-memory cache. This ensures that subsequent fetches
         // resolve to the same precise commit.

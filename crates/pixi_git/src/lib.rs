@@ -2,7 +2,7 @@
 /// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/lib.rs
 /// This module expose types and functions to interact with Git repositories.
 use ::url::Url;
-use git::GitReference;
+use git::{GitBinaryError, GitReference};
 use sha::{GitSha, OidParseError};
 
 pub mod credentials;
@@ -166,4 +166,37 @@ pub trait Reporter: Send + Sync {
 
     /// Callback to invoke when a repository checkout completes.
     fn on_checkout_complete(&self, url: &Url, rev: &str, index: usize);
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum GitError {
+    #[error(transparent)]
+    GitBinary(#[from] GitBinaryError),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    FromUtf8(#[from] std::string::FromUtf8Error),
+
+    #[error(transparent)]
+    OidParse(#[from] OidParseError),
+
+    #[error("failed to fetch {0}: {1}")]
+    Fetch(String, String),
+
+    #[error(transparent)]
+    UrlParse(#[from] ::url::ParseError),
+
+    #[error("could not transform original url {0} into a git url: {1}")]
+    GitUrlFormat(String, String),
+
+    #[error(transparent)]
+    ReqwestMiddleware(#[from] reqwest_middleware::Error),
+
+    #[error(transparent)]
+    Reqwest(#[from] reqwest::Error),
+
+    #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
 }

@@ -16,7 +16,7 @@ use crate::{
     git::GitRemote,
     sha::{GitOid, GitSha},
     url::RepositoryUrl,
-    GitUrl, Reporter,
+    GitError, GitUrl, Reporter,
 };
 
 /// A remote Git source that can be checked out locally.
@@ -57,7 +57,7 @@ impl GitSource {
 
     /// Fetch the underlying Git repository at the given revision.
     #[instrument(skip(self), fields(repository = %self.git.repository, rev = ?self.git.precise))]
-    pub fn fetch(self) -> miette::Result<Fetch> {
+    pub fn fetch(self) -> Result<Fetch, GitError> {
         // Compute the canonical URL for the repository.
         let canonical = RepositoryUrl::new(&self.git.repository);
 
