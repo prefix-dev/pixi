@@ -4552,7 +4552,6 @@ dependencies = [
  "dashmap",
  "dunce",
  "fs-err",
- "miette 7.4.0",
  "pixi_utils",
  "reqwest",
  "reqwest-middleware",

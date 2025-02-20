@@ -16,6 +16,7 @@ use pixi_build_types::{
 };
 use pixi_config::get_cache_dir;
 use pixi_consts::consts::CACHED_GIT_DIR;
+use pixi_git::GitError;
 use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl, Reporter};
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
@@ -115,7 +116,7 @@ pub enum BuildError {
     BuildFolderNotWritable(#[from] std::io::Error),
 
     #[error(transparent)]
-    FetchError(Box<dyn Diagnostic + Send + Sync + 'static>),
+    GitFetch(#[from] GitError),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -408,8 +409,7 @@ impl BuildContext {
                         git_spec.clone(),
                         source_reporter.map(|sr| sr.as_git_reporter()),
                     )
-                    .await
-                    .map_err(|err| BuildError::FetchError(err.into()))?;
+                    .await?;
                 //TODO: will be removed when manifest will be merged in pixi-build-backend
                 let path = if let Some(subdir) = git_spec.subdirectory.as_ref() {
                     fetched.clone().into_path().join(subdir)
@@ -516,15 +516,13 @@ impl BuildContext {
         &self,
         git: GitSpec,
         reporter: Option<Arc<dyn Reporter>>,
-    ) -> miette::Result<Fetch> {
+    ) -> Result<Fetch, GitError> {
         let git_reference = git
             .rev
             .map(|rev| rev.into())
             .unwrap_or(GitReference::DefaultBranch);
 
-        let git_url = GitUrl::try_from(git.git)
-            .into_diagnostic()?
-            .with_reference(git_reference);
+        let git_url = GitUrl::try_from(git.git)?.with_reference(git_reference);
 
         let resolver = self
             .git
@@ -534,8 +532,7 @@ impl BuildContext {
                 self.cache_dir.clone().join(CACHED_GIT_DIR),
                 reporter,
             )
-            .await
-            .into_diagnostic()?;
+            .await?;
 
         Ok(resolver)
     }
