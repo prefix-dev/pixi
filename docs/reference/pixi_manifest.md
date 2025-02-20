@@ -495,7 +495,15 @@ pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
 flask = { git = "ssh://git@github.com/pallets/flask" }
 # With https and a specific revision
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
-# TODO: will support later -> branch = '' or tag = '' to specify a branch or tag
+
+# With https and a specific branch
+boltons = { git = "https://github.com/mahmoud/boltons.git", branch = "master" }
+
+# With https and a specific tag
+boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
+
+# With https, specific tag and some subdirectory
+boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
 
 # You can also directly add a source dependency from a path, tip keep this relative to the root of the project.
 minimal-project = { path = "./minimal-project", editable = true}
