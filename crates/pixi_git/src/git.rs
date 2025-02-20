@@ -32,7 +32,7 @@ pub enum GitBinaryError {
     #[error("Git executable not found. Ensure that Git is installed and available.")]
     GitNotFound,
     #[error(transparent)]
-    Other(which::Error),
+    Other(#[from] which::Error),
 }
 
 /// A global cache of the result of `which git`.
