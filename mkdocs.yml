@@ -142,6 +142,7 @@ nav:
       - Lockfile diffs: advanced/lockfile_diffs.md
       - Production Deployment: advanced/production_deployment.md
       - Pyproject.toml: advanced/pyproject_toml.md
+      - S3: advanced/s3.md
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md

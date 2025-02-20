@@ -15,7 +15,7 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::Arc,
 };
 
 use async_once_cell::OnceCell as AsyncCell;
@@ -39,6 +39,7 @@ use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
 use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
@@ -127,11 +128,13 @@ pub struct Workspace {
 
     /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
 
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    repodata_gateway: OnceLock<Gateway>,
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    repodata_gateway: OnceCell<Gateway>,
 
     /// The manifest for the workspace
     pub workspace: WithProvenance<WorkspaceManifest>,
@@ -150,6 +153,8 @@ pub struct Workspace {
 
     /// The global configuration as loaded from the config file(s)
     config: Config,
+    /// The S3 configuration
+    s3_config: HashMap<String, s3_middleware::S3Config>,
 }
 
 impl Debug for Workspace {
@@ -183,6 +188,22 @@ impl Workspace {
             .expect("manifest path should always have a parent")
             .to_owned();
 
+        let s3_options = manifest.workspace.value.workspace.s3_options.clone();
+        let s3_config = s3_options
+            .unwrap_or_default()
+            .iter()
+            .map(|(key, value)| {
+                (
+                    key.clone(),
+                    s3_middleware::S3Config::Custom {
+                        endpoint_url: value.endpoint_url.clone(),
+                        region: value.region.clone(),
+                        force_path_style: value.force_path_style,
+                    },
+                )
+            })
+            .collect::<HashMap<String, s3_middleware::S3Config>>();
+
         let config = Config::load(&root);
         Self {
             root,
@@ -192,6 +213,7 @@ impl Workspace {
             env_vars,
             mapping_source: Default::default(),
             config,
+            s3_config,
             repodata_gateway: Default::default(),
         }
     }
@@ -404,19 +426,22 @@ impl Workspace {
     }
 
     /// Returns the reqwest client used for http networking
-    pub(crate) fn client(&self) -> &reqwest::Client {
-        &self.client_and_authenticated_client().0
+    pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
+        Ok(&self.client_and_authenticated_client()?.0)
     }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
-        &self.client_and_authenticated_client().1
+    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
+        Ok(&self.client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
-        self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
+    fn client_and_authenticated_client(
+        &self,
+    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+        self.client.get_or_try_init(|| {
+            build_reqwest_clients(Some(&self.config), Some(self.s3_config.clone()))
+        })
     }
 
     pub(crate) fn config(&self) -> &Config {

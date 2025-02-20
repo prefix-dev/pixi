@@ -80,12 +80,17 @@ impl ProtocolBuilder {
         workspace_manifest: WorkspaceManifest,
         package_manifest: PackageManifest,
     ) -> Self {
+        let configuration = package_manifest.build.configuration.clone().map(|v| {
+            v.deserialize_into()
+                .expect("Configuration dictionary should be serializable to JSON")
+        });
+
         Self {
             source_dir,
             manifest_path,
             workspace_manifest,
             package_manifest,
-            configuration: None,
+            configuration,
             backend_override: None,
             channel_config: None,
             cache_dir: None,

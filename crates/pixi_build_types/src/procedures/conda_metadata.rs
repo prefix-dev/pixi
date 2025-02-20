@@ -7,7 +7,7 @@ use crate::{ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackag
 pub const METHOD_NAME: &str = "conda/getMetadata";
 
 /// Parameters for the `conda/getMetadata` request.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaMetadataParams {
     /// The platform that will run the build.
@@ -39,7 +39,7 @@ pub struct CondaMetadataParams {
 }
 
 /// Contains the result of the `conda/getMetadata` request.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaMetadataResult {
     /// Metadata of all the packages that can be built.

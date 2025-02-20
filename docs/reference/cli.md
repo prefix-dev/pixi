@@ -118,6 +118,10 @@ pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" 
 pixi add --pypi "project @ file:///absolute/path/to/project" # (20)!
 pixi add --pypi "project@file:///absolute/path/to/project" --editable # (21)!
 pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (22)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --branch main --pypi # (23)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --rev e50d4a1 --pypi # (24)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi # (25)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi --subdir boltons # (26)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
@@ -141,7 +145,11 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (22)!
 19. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
 20. This will add the `project` package with the given `file` url as `pypi` dependency.
 21. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
-22. This will add the `boltons` package with the given `git` url as `pypi` dependency. `branch`, `tag`, and `rev` are not yet supported.
+22. This will add the `boltons` package with the given `git` url as `pypi` dependency.
+23. This will add the `boltons` package with the given `git` url and `main` branch as `pypi` dependency.
+24. This will add the `boltons` package with the given `git` url and `e50d4a1` revision as `pypi` dependency.
+25. This will add the `boltons` package with the given `git` url and `v0.1.0` tag as `pypi` dependency.
+26. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
 
 !!! tip
     If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
@@ -919,11 +927,15 @@ Store authentication information for given host.
 - `--username <USERNAME>`: The username to use for basic HTTP authentication
 - `--password <PASSWORD>`: The password to use for basic HTTP authentication.
 - `--conda-token <CONDA_TOKEN>`: The token to use on `anaconda.org` / `quetz` authentication.
+- `--s3-access-key-id`: The S3 access key ID
+- `--s3-secret-access-key`: The S3 secret access key
+- `--s3-session-token`: The S3 session token (optional for S3 authentication)
 
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
 pixi auth login https://myquetz.server --username john --password xxxxxx
+pixi auth login s3://my-bucket --s3-access-key-id $AWS_ACCESS_KEY_ID --s3-access-key-id $AWS_SECRET_KEY_ID
 ```
 
 ### `auth logout`
@@ -938,6 +950,7 @@ Remove authentication information for a given host.
 pixi auth logout <HOST>
 pixi auth logout repo.prefix.dev
 pixi auth logout anaconda.org
+pixi auth logout s3://my-bucket
 ```
 
 ## `config`
@@ -1031,6 +1044,7 @@ pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://pref
 pixi config set repodata-config.disable-zstd true --system
 pixi config set --global detached-environments "/opt/pixi/envs"
 pixi config set detached-environments false
+pixi config set s3-options.my-bucket '{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}'
 ```
 
 ### `config unset`

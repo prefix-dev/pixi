@@ -12,12 +12,14 @@ pub mod sha;
 pub mod source;
 pub mod url;
 
-// use resolver::GitResolver;
+/// The query parameter used to specify the type of reference in a Git URL.
+pub const GIT_URL_QUERY_REV_TYPE: &str = "rev_type";
 
 /// A URL reference to a Git repository.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord)]
 pub struct GitUrl {
-    /// The URL of the Git repository, with any query parameters, fragments removed.
+    /// The URL of the Git repository, with any query parameters, fragments, and leading `git+`
+    /// removed.
     repository: Url,
     /// The reference to the commit to use, which could be a branch, tag or revision.
     reference: GitReference,
@@ -79,22 +81,47 @@ impl TryFrom<Url> for GitUrl {
     type Error = OidParseError;
 
     /// Initialize a [`GitUrl`] source from a URL.
-    fn try_from(mut url: Url) -> Result<Self, Self::Error> {
+    fn try_from(url: Url) -> Result<Self, Self::Error> {
+        // remove the `git+` prefix if it exists
+        let mut url = if url.scheme().starts_with("git+") {
+            let url_as_str = &url.as_str()[4..];
+            Url::parse(url_as_str).expect("url should be valid")
+        } else {
+            url
+        };
+
         // Remove any query parameters and fragments.
         url.set_fragment(None);
-        url.set_query(None);
 
         // If the URL ends with a reference, like `https://git.example.com/MyProject.git@v1.0`,
         // extract it.
+        // The URL can also be enriched with the reference type, like `https://git.example.com/MyProject.git@v1.0?rev_type=tag`.
+        // so we can extract the reference and the reference type.
         let mut reference = GitReference::DefaultBranch;
         if let Some((prefix, suffix)) = url
             .path()
             .rsplit_once('@')
             .map(|(prefix, suffix)| (prefix.to_string(), suffix.to_string()))
         {
-            reference = GitReference::from_rev(suffix);
+            if let Some((_, rev_type)) = url
+                .query_pairs()
+                .find(|(key, _)| key == GIT_URL_QUERY_REV_TYPE)
+            {
+                match rev_type.into_owned().as_str() {
+                    "tag" => reference = GitReference::Tag(suffix),
+                    "branch" => reference = GitReference::Branch(suffix),
+                    "rev" => reference = GitReference::from_rev(suffix),
+                    // a custom reference type is not supported
+                    _ => return Err(OidParseError::UrlParse(url.to_string())),
+                }
+            } else {
+                // try to guess it
+                reference = GitReference::from_rev(suffix);
+            }
+
             url.set_path(&prefix);
         }
+        url.set_query(None);
 
         Ok(Self::from_reference(url, reference))
     }

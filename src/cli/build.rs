@@ -12,6 +12,7 @@ use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 
 use crate::{
+    build::BuildContext,
     cli::cli_config::WorkspaceConfig,
     repodata::Repodata,
     utils::{move_file, MoveError},
@@ -89,8 +90,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let channel_config = workspace.channel_config();
 
     let tool_context = pixi_build_frontend::ToolContext::builder()
-        .with_gateway(workspace.repodata_gateway().clone())
-        .with_client(workspace.authenticated_client().clone())
+        .with_gateway(workspace.repodata_gateway()?.clone())
+        .with_client(workspace.authenticated_client()?.clone())
         .build();
 
     let protocol = pixi_build_frontend::BuildFrontend::default()
@@ -148,6 +149,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(GenericVirtualPackage::from)
         .collect();
 
+    let build_context = BuildContext::from_workspace(&workspace)?;
+
     // Build the individual packages.
     let result = protocol
         .conda_build(
@@ -172,7 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 outputs: None,
                 editable: false,
                 work_directory: work_dir.path().to_path_buf(),
-                variant_configuration: Some(Default::default()),
+                variant_configuration: Some(build_context.resolve_variant(args.target_platform)),
             },
             progress.clone(),
         )

@@ -22,6 +22,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
 
+use pixi_git::GIT_URL_QUERY_REV_TYPE;
+
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
@@ -149,15 +151,15 @@ impl PrefixUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
-    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev", "pypi"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"])]
     pub branch: Option<String>,
 
     /// The git tag
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev", "pypi"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"])]
     pub tag: Option<String>,
 
     /// The git revision
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag", "pypi"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"])]
     pub rev: Option<String>,
 }
 
@@ -185,6 +187,7 @@ impl GitRev {
         self
     }
 
+    /// Get the reference as a string
     pub fn as_str(&self) -> Option<&str> {
         if let Some(branch) = &self.branch {
             Some(branch)
@@ -192,6 +195,19 @@ impl GitRev {
             Some(tag)
         } else if let Some(rev) = &self.rev {
             Some(rev)
+        } else {
+            None
+        }
+    }
+
+    /// Get the type of the reference
+    pub fn reference_type(&self) -> Option<&str> {
+        if self.branch.is_some() {
+            Some("branch")
+        } else if self.tag.is_some() {
+            Some("tag")
+        } else if self.rev.is_some() {
+            Some("rev")
         } else {
             None
         }
@@ -355,20 +371,38 @@ impl HasSpecs for DependencyConfig {
     }
 }
 
-/// Builds a PEP 508 compliant VCS requirement string
+/// Builds a PEP 508 compliant VCS requirement string.
+/// Main difference between a simple VCS requirement is that it encode
+/// in a separate query parameter the reference type.
+/// This is used to differentiate between a branch, a tag or a revision
+/// which is lost in the simple VCS requirement.
+/// Return a string in the format `name @ git+url@rev?rev_type=type#subdirectory=subdir`
+/// where `rev_type` is added only if reference is present.
 fn build_vcs_requirement(
     package_name: &str,
     git: &Url,
     rev: Option<&GitRev>,
     subdir: Option<String>,
 ) -> String {
-    let mut vcs_req = format!("{} @ {}", package_name, git);
-    if let Some(rev_str) = rev.and_then(|rev| rev.as_str().map(|s| s.to_string())) {
-        vcs_req.push_str(&format!("@{}", rev_str));
+    let scheme = if git.scheme().starts_with("git+") {
+        ""
+    } else {
+        "git+"
+    };
+    let mut vcs_req = format!("{} @ {}{}", package_name, scheme, git);
+    if let Some(revision) = rev {
+        if let Some(rev_str) = revision.as_str().map(|s| s.to_string()) {
+            vcs_req.push_str(&format!("@{}", rev_str));
+
+            if let Some(rev_type) = revision.reference_type() {
+                vcs_req.push_str(&format!("?{GIT_URL_QUERY_REV_TYPE}={}", rev_type));
+            }
+        }
     }
     if let Some(subdir) = subdir {
         vcs_req.push_str(&format!("#subdirectory={}", subdir));
     }
+
     vcs_req
 }
 
@@ -388,7 +422,7 @@ mod tests {
         );
         assert_eq!(
             result,
-            "mypackage @ https://github.com/user/repo@v1.0.0#subdirectory=subdir"
+            "mypackage @ git+https://github.com/user/repo@v1.0.0?rev_type=tag#subdirectory=subdir"
         );
     }
 
@@ -402,7 +436,7 @@ mod tests {
         );
         assert_eq!(
             result,
-            "mypackage @ https://github.com/user/repo#subdirectory=subdir"
+            "mypackage @ git+https://github.com/user/repo#subdirectory=subdir"
         );
     }
 
@@ -414,7 +448,10 @@ mod tests {
             Some(&GitRev::new().with_tag("v1.0.0".to_string())),
             None,
         );
-        assert_eq!(result, "mypackage @ https://github.com/user/repo@v1.0.0");
+        assert_eq!(
+            result,
+            "mypackage @ git+https://github.com/user/repo@v1.0.0?rev_type=tag"
+        );
     }
 
     #[test]
@@ -425,6 +462,6 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(result, "mypackage @ https://github.com/user/repo");
+        assert_eq!(result, "mypackage @ git+https://github.com/user/repo");
     }
 }

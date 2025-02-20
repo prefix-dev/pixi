@@ -8,7 +8,7 @@ use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{preview::Preview, PrioritizedChannel, Targets};
+use crate::{preview::Preview, PrioritizedChannel, S3Options, Targets};
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
 #[derive(Debug, Clone)]
@@ -57,6 +57,9 @@ pub struct Workspace {
 
     /// The pypi options supported in the project
     pub pypi_options: Option<PypiOptions>,
+
+    /// The S3 options supported in the project
+    pub s3_options: Option<HashMap<String, S3Options>>,
 
     /// Preview features
     pub preview: Preview,

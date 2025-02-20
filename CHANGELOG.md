@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.41.4] - 2025-02-18
+#### ✨ Highlights
+This release add support for S3 backends.
+You can configure a custom S3 backend in your `pixi.toml` file.
+This allows you to use a custom S3 bucket as a channel for your project.
+
+```toml
+# pixi.toml
+[project]
+channels = ["s3://my-bucket/custom-channel"]
+
+[project.s3-options.my-bucket]
+endpoint-url = "https://my-s3-host"
+region = "us-east-1"
+force-path-style = false
+```
+
+#### Changed
+
+- Implement `package.build.configuration` parsing by @wolfv in [#3115](https://github.com/prefix-dev/pixi/pull/3115)
+- Add S3 backend support by @delsner in [#2825](https://github.com/prefix-dev/pixi/pull/2825)
+
+#### Documentation
+
+- Add S3 documentation by @pavelzw in [#2835](https://github.com/prefix-dev/pixi/pull/2835)
+- Document git dependencies in pixi build documentation by @nichmor in [#3126](https://github.com/prefix-dev/pixi/pull/3126)
+
+#### Fixed
+
+- Manually exposed executables are removed after `pixi global update` by @Hofer-Julian in [#3109](https://github.com/prefix-dev/pixi/pull/3109)
+- Changing cmake doesn't trigger rebuild by @Hofer-Julian in [#3102](https://github.com/prefix-dev/pixi/pull/3102)
+- `BUILD_EDITABLE_PYTHON` env flag by @Hofer-Julian in [#3128](https://github.com/prefix-dev/pixi/pull/3128)
+- Change the progress message during mapping of packages by @tdejager in [#3155](https://github.com/prefix-dev/pixi/pull/3155)
+- Skip unneeded url parse and only add git+ when needed by @ruben-arts in [#3139](https://github.com/prefix-dev/pixi/pull/3139)
+- Reinstall if required is source and installed is from registry by @ruben-arts in [#3131](https://github.com/prefix-dev/pixi/pull/3131)
+
 ### [0.41.3] - 2025-02-12
 #### Changed
 - Added `--dry-run` flag to pixi run by @noamgot in [#3107](https://github.com/prefix-dev/pixi/pull/3107)
