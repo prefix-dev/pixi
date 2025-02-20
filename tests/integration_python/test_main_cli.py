@@ -2,7 +2,14 @@ import os
 from pathlib import Path
 import shutil
 
-from .common import cwd, verify_cli_command, ExitCode, PIXI_VERSION, CURRENT_PLATFORM
+from .common import (
+    cwd,
+    verify_cli_command,
+    ExitCode,
+    PIXI_VERSION,
+    CURRENT_PLATFORM,
+    EMPTY_BOILERPLATE_PROJECT,
+)
 import tomllib
 import json
 import pytest
@@ -1119,3 +1126,20 @@ def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # and that the manifest contains the rev information
     manifest = tomllib.loads(manifest_path.read_text())
     assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
+
+def test_dont_error_on_missing_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+        {EMPTY_BOILERPLATE_PROJECT}
+        [feature.a.target.zos-z.tasks]
+        nonsense = "echo nonsense"
+
+        [target.zos-z.tasks]
+        nonsense = "echo nonsense"
+        """
+    manifest.write_text(toml)
+    # This should not error, but should spawn a warning with a helping message.
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        stderr_contains=["pixi project platform add zos-z"],
+    )
