@@ -587,18 +587,7 @@ pub(crate) fn fetch(
         }
     };
     tracing::debug!("fetched with cli {:?}", result);
-    match reference {
-        // With the default branch, adding context is confusing
-        GitReference::DefaultBranch => result,
-        // _ => result.with_context(|| {
-        //     format!(
-        //         "failed to fetch {} `{}`",
-        //         reference.kind_str(),
-        //         reference.as_rev()
-        //     )
-        // }),
-        _ => result,
-    }
+    result
 }
 
 /// Attempts to use `git` CLI installed on the system to fetch a repository.
