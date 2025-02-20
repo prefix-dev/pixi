@@ -47,6 +47,14 @@ pub struct Args {
     /// Limit the number of search results
     #[clap(short, long)]
     pub limit: Option<usize>,
+
+    /// Specify a version to query
+    #[arg(long, conflicts_with = "max_displayed_versions")]
+    pub version: Option<String>,
+
+    /// Maximum number of other versions to display
+    #[arg(long, default_value_t = 4, conflicts_with = "version")]
+    pub max_displayed_versions: usize,
 }
 
 /// fetch packages from `repo_data` using `repodata_query_func` based on
@@ -190,7 +198,15 @@ pub async fn execute_impl<W: Write>(
     // package info (if any package is found)
     else {
         let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
-        search_exact_package(package_name, all_names, repodata_query_func, out).await?
+        search_exact_package(
+            package_name,
+            all_names,
+            repodata_query_func,
+            out,
+            args.version,
+            args.max_displayed_versions,
+        )
+        .await?
     };
 
     Ok(packages)
@@ -207,6 +223,8 @@ async fn search_exact_package<W: Write, QF, FR>(
     all_repodata_names: Vec<PackageName>,
     repodata_query_func: QF,
     out: &mut W,
+    version_filter: Option<String>,
+    max_displayed_versions: usize,
 ) -> miette::Result<Option<Vec<RepoDataRecord>>>
 where
     QF: Fn(Vec<MatchSpec>) -> FR,
@@ -222,7 +240,7 @@ where
     )
     .await?;
     // Sort packages by version, build number and build string
-    let packages = packages
+    let mut packages = packages
         .iter()
         .sorted_by(|a, b| {
             Ord::cmp(
@@ -246,20 +264,36 @@ where
         return Err(miette::miette!("Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."));
     }
 
-    let newest_package = packages.last();
-    if let Some(newest_package) = newest_package {
+    // Filter by version if specified
+    if let Some(version) = version_filter {
+        packages.retain(|p| p.package_record.version.to_string() == version);
+        if packages.is_empty() {
+            let normalized_package_name = package_name.as_normalized();
+            return Err(miette::miette!(
+                "Version {version} not found for package {normalized_package_name}"
+            ));
+        }
+    }
+
+    let package_to_display = packages.last();
+    if let Some(package_to_display) = package_to_display {
         let other_versions = packages
             .iter()
-            .filter(|p| p.package_record != newest_package.package_record)
+            .filter(|p| p.package_record != package_to_display.package_record)
             .collect::<Vec<_>>();
-        if let Err(e) = print_package_info(newest_package, &other_versions, out) {
+        if let Err(e) = print_package_info(
+            package_to_display,
+            &other_versions,
+            max_displayed_versions,
+            out,
+        ) {
             if e.kind() != std::io::ErrorKind::BrokenPipe {
                 return Err(e).into_diagnostic();
             }
         }
     }
 
-    Ok(newest_package.map(|package| vec![package.clone()]))
+    Ok(package_to_display.map(|package| vec![package.clone()]))
 }
 
 fn format_additional_builds_string(builds: Option<Vec<&RepoDataRecord>>) -> String {
@@ -274,6 +308,7 @@ fn format_additional_builds_string(builds: Option<Vec<&RepoDataRecord>>) -> Stri
 fn print_package_info<W: Write>(
     package: &RepoDataRecord,
     other_versions: &Vec<&RepoDataRecord>,
+    max_displayed_versions: usize,
     out: &mut W,
 ) -> io::Result<()> {
     writeln!(out)?;
@@ -416,7 +451,6 @@ fn print_package_info<W: Write>(
             version_width = version_width,
             build_width = build_width
         )?;
-        let max_displayed_versions = 4;
         let mut counter = 0;
         for (version, builds) in grouped_by_version.iter().rev() {
             writeln!(

@@ -371,6 +371,8 @@ impl PixiControl {
                 platform: Platform::current(),
                 limit: None,
                 channels: ChannelsConfig::default(),
+                version: None,
+                max_displayed_versions: 4,
             },
         }
     }

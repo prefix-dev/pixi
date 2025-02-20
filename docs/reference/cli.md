@@ -820,12 +820,18 @@ Search a package, output will list the latest version of the package.
 - `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
 - `--limit <LIMIT> (-l)`: optionally limit the number of search results
 - `--platform <PLATFORM> (-p)`: specify a platform that you want to search for. (default: current platform)
+- `--version <VERSION>`: specify a version constraint for the search. If the version is not specified, the latest version will be searched. Conflicts with `--max-displayed-versions`.
+- `--max-displayed-versions <MAX_DISPLAYED_VERSIONS>`: specify the maximum number of versions to display for each package. Conflicts with `--version`.  (default: 4)
 
 ```zsh
 pixi search pixi
 pixi search --limit 30 "py*"
 # search in a different channel and for a specific platform
 pixi search -c robostack --platform linux-64 "plotjuggler*"
+# Show data for pixi==0.40.3
+pixi search pixi --version 0.40.3
+# Show data for last 10 versions
+pixi search pixi --max-displayed-versions 10
 ```
 
 ## `self-update`
