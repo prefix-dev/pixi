@@ -91,7 +91,7 @@ impl Display for EnvironmentInfo {
                 f,
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Solve group"),
-                solve_group
+                consts::SOLVE_GROUP_STYLE.apply_to(solve_group)
             )?;
         }
         // TODO: add environment size when PR 674 is merged
