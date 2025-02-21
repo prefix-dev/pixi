@@ -89,6 +89,8 @@ pub static ENVIRONMENT_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().ma
 pub static EXPOSED_NAME_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
 pub static FEATURE_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
 pub static SOLVE_GROUP_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
+pub static CONDA_PACKAGE_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().green());
+pub static PYPI_PACKAGE_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static DEFAULT_PYPI_INDEX_URL: LazyLock<Url> =
     LazyLock::new(|| Url::parse("https://pypi.org/simple").unwrap());
 

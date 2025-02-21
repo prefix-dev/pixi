@@ -83,17 +83,11 @@ enum KindPackage {
     Conda,
     Pypi,
 }
-impl KindPackage {
-    fn color(&self) -> Color {
-        match self {
-            KindPackage::Conda => Color::Green,
-            KindPackage::Pypi => Color::Blue,
-        }
-    }
+impl FancyDisplay for KindPackage {
     fn fancy_display(&self) -> console::StyledObject<&str> {
         match self {
-            KindPackage::Conda => console::style("conda").fg(self.color()).bold(),
-            KindPackage::Pypi => console::style("pypi").fg(self.color()).bold(),
+            KindPackage::Conda => consts::CONDA_PACKAGE_STYLE.apply_to("conda"),
+            KindPackage::Pypi => consts::PYPI_PACKAGE_STYLE.apply_to("pypi"),
         }
     }
 }
@@ -331,9 +325,11 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
             write!(
                 writer,
                 "{}",
-                console::style(&package.name)
-                    .fg(package.kind.color())
-                    .bold()
+                match package.kind {
+                    KindPackage::Conda =>
+                        consts::CONDA_PACKAGE_STYLE.apply_to(&package.name).bold(),
+                    KindPackage::Pypi => consts::PYPI_PACKAGE_STYLE.apply_to(&package.name).bold(),
+                }
             )?
         } else {
             write!(writer, "{}", &package.name)?;
