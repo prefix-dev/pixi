@@ -27,7 +27,7 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Do not install local path dependencies. Requires --frozen
+    /// Do not install local source dependencies. Requires --frozen
     #[arg(long, requires = "frozen")]
     pub skip_local_sources: bool,
 }
@@ -104,7 +104,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if args.skip_local_sources {
-        write!(&mut message, " without path dependencies").unwrap()
+        write!(&mut message, " without local source dependencies").unwrap()
     }
 
     eprintln!("{}.", message);
