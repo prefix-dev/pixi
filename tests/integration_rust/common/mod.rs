@@ -541,7 +541,7 @@ impl PixiControl {
                 },
                 config: Default::default(),
                 all: false,
-                no_path_dependencies: false,
+                skip_local_sources: false,
             },
         }
     }

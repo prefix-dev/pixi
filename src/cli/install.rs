@@ -29,7 +29,7 @@ pub struct Args {
 
     /// Do not install local path dependencies. Requires --frozen
     #[arg(long, requires = "frozen")]
-    pub no_path_dependencies: bool,
+    pub skip_local_sources: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -68,7 +68,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
-            args.no_path_dependencies,
+            args.skip_local_sources,
         )
         .await?;
 
@@ -103,7 +103,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap()
     }
 
-    if args.no_path_dependencies {
+    if args.skip_local_sources {
         write!(&mut message, " without path dependencies").unwrap()
     }
 

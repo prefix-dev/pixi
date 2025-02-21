@@ -319,10 +319,10 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     uv_python::PythonEnvironment::from_interpreter(interpreter)
 }
 
-/// Test `pixi install --frozen --no-path-dependencies` functionality
+/// Test `pixi install --frozen --skip-local-sources` functionality
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-async fn install_frozen_no_path_dependencies() {
+async fn install_frozen_skip_local_sources() {
     // Create a project with a local python dependency 'no-build-editable'
     // and a local conda dependency 'smokey'
     let current_platform = Platform::current();
@@ -364,10 +364,10 @@ async fn install_frozen_no_path_dependencies() {
 
     pixi.update_lock_file().await.unwrap();
 
-    // Check that neither 'no-build-editable' nor 'smokey' are installed when --no-path-dependencies is used
+    // Check that neither 'no-build-editable' nor 'smokey' are installed when --skip-local-sources is used
     pixi.install()
         .with_frozen()
-        .with_no_path_dependencies()
+        .with_skip_local_sources()
         .await
         .unwrap();
     let prefix = pixi.default_env_path().unwrap();
