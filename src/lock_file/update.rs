@@ -468,18 +468,25 @@ impl<'p> LockFileDerivedData<'p> {
         platform: Platform,
         no_path_dependencies: bool,
     ) -> Result<Option<Vec<(PypiPackageData, PypiPackageEnvironmentData)>>, UpdateError> {
-        Ok(self
-            .locked_env(environment)?
-            .pypi_packages(platform)
-            .map(|packages| {
-                packages.filter(|(p, _)| {
-                    !no_path_dependencies || matches!(p.location, UrlOrPath::Url(_))
-                })
-            })
-            .map(|iter| {
-                iter.map(|(data, env_data)| (data.clone(), env_data.clone()))
-                    .collect()
-            }))
+        match self.locked_env(environment)?.pypi_packages(platform) {
+            Some(packages) => {
+                // A location is deemed a 'local source' if it is a path that is NOT a wheel or an egg file
+                let is_local_source = |p: &PypiPackageData| -> bool {
+                    match &p.location {
+                        UrlOrPath::Url(_) => false,
+                        UrlOrPath::Path(path) if path.extension() == Some("egg") => false,
+                        UrlOrPath::Path(path) if path.extension() == Some("whl") => false,
+                        UrlOrPath::Path(_) => true,
+                    }
+                };
+                let records = packages
+                    .filter(|(p, _)| !no_path_dependencies || !is_local_source(p))
+                    .map(|(data, env_data)| (data.clone(), env_data.clone()))
+                    .collect_vec();
+                Ok(Some(records))
+            }
+            None => Ok(None),
+        }
     }
 
     fn pypi_indexes(
@@ -495,22 +502,20 @@ impl<'p> LockFileDerivedData<'p> {
         platform: Platform,
         no_path_dependencies: bool,
     ) -> Result<Option<Vec<PixiRecord>>, UpdateError> {
-        Ok(self
-            .locked_env(environment)?
-            .conda_packages(platform)
-            .map(|iter| {
-                iter.cloned()
+        match self.locked_env(environment)?.conda_packages(platform) {
+            Some(packages) => {
+                let records = packages
+                    .cloned()
                     .map(PixiRecord::try_from)
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .transpose()?
-            // Filter out source records
-            .map(|packages| {
-                packages
+                    .collect::<Result<Vec<_>, _>>()?
+                    // Filter out source records
                     .into_iter()
                     .filter(|p| !no_path_dependencies || p.as_source().is_none())
-                    .collect()
-            }))
+                    .collect_vec();
+                Ok(Some(records))
+            }
+            None => Ok(None),
+        }
     }
 
     async fn conda_prefix(
