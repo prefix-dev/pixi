@@ -83,6 +83,16 @@ enum KindPackage {
     Conda,
     Pypi,
 }
+
+impl From<&PackageExt> for KindPackage {
+    fn from(package: &PackageExt) -> Self {
+        match package {
+            PackageExt::Conda(_) => KindPackage::Conda,
+            PackageExt::PyPI(_, _) => KindPackage::Pypi,
+        }
+    }
+}
+
 impl FancyDisplay for KindPackage {
     fn fancy_display(&self) -> console::StyledObject<&str> {
         match self {
@@ -389,11 +399,8 @@ fn create_package_to_output<'a, 'b>(
 ) -> miette::Result<PackageToOutput> {
     let name = package.name().to_string();
     let version = package.version().into_owned();
+    let kind = KindPackage::from(package);
 
-    let kind = match package {
-        PackageExt::Conda(_) => KindPackage::Conda,
-        PackageExt::PyPI(_, _) => KindPackage::Pypi,
-    };
     let build = match package {
         PackageExt::Conda(pkg) => Some(pkg.record().build.clone()),
         PackageExt::PyPI(_, _) => None,
