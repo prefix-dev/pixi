@@ -528,7 +528,7 @@ Modify the project configuration file through the command line
 
 
 
-## `pixi project channel`
+### `pixi project channel`
 
 Commands to manage project channels
 
@@ -542,7 +542,7 @@ Commands to manage project channels
 
 
 
-## `pixi project channel add`
+### `pixi project channel add`
 
 Adds a channel to the project file and updates the lockfile
 
@@ -574,7 +574,7 @@ Adds a channel to the project file and updates the lockfile
 
 
 
-## `pixi project channel list`
+### `pixi project channel list`
 
 List the channels in the project file
 
@@ -587,7 +587,7 @@ List the channels in the project file
 
 
 
-## `pixi project channel remove`
+### `pixi project channel remove`
 
 Remove channel(s) from the project file and updates the lockfile
 
@@ -619,7 +619,7 @@ Remove channel(s) from the project file and updates the lockfile
 
 
 
-## `pixi project description`
+### `pixi project description`
 
 Commands to manage project description
 
@@ -636,7 +636,7 @@ Commands to manage project description
 
 
 
-## `pixi project description get`
+### `pixi project description get`
 
 Get the project description
 
@@ -644,7 +644,7 @@ Get the project description
 
 
 
-## `pixi project description set`
+### `pixi project description set`
 
 Set the project description
 
@@ -656,7 +656,7 @@ Set the project description
 
 
 
-## `pixi project platform`
+### `pixi project platform`
 
 Commands to manage project platforms
 
@@ -674,7 +674,7 @@ Commands to manage project platforms
 
 
 
-## `pixi project platform add`
+### `pixi project platform add`
 
 Adds a platform(s) to the project file and updates the lockfile
 
@@ -691,7 +691,7 @@ Adds a platform(s) to the project file and updates the lockfile
 
 
 
-## `pixi project platform list`
+### `pixi project platform list`
 
 List the platforms in the project file
 
@@ -699,7 +699,7 @@ List the platforms in the project file
 
 
 
-## `pixi project platform remove`
+### `pixi project platform remove`
 
 Remove platform(s) from the project file and updates the lockfile
 
@@ -716,7 +716,7 @@ Remove platform(s) from the project file and updates the lockfile
 
 
 
-## `pixi project version`
+### `pixi project version`
 
 Commands to manage project version
 
@@ -736,7 +736,7 @@ Commands to manage project version
 
 
 
-## `pixi project version get`
+### `pixi project version get`
 
 Get the workspace version
 
@@ -744,7 +744,7 @@ Get the workspace version
 
 
 
-## `pixi project version set`
+### `pixi project version set`
 
 Set the workspace version
 
@@ -756,7 +756,7 @@ Set the workspace version
 
 
 
-## `pixi project version major`
+### `pixi project version major`
 
 Bump the workspace version to MAJOR
 
@@ -764,7 +764,7 @@ Bump the workspace version to MAJOR
 
 
 
-## `pixi project version minor`
+### `pixi project version minor`
 
 Bump the workspace version to MINOR
 
@@ -772,7 +772,7 @@ Bump the workspace version to MINOR
 
 
 
-## `pixi project version patch`
+### `pixi project version patch`
 
 Bump the workspace version to PATCH
 
@@ -780,7 +780,7 @@ Bump the workspace version to PATCH
 
 
 
-## `pixi project environment`
+### `pixi project environment`
 
 Commands to manage project environments
 
@@ -798,7 +798,7 @@ Commands to manage project environments
 
 
 
-## `pixi project environment add`
+### `pixi project environment add`
 
 Adds an environment to the manifest file
 
@@ -821,7 +821,7 @@ Adds an environment to the manifest file
 
 
 
-## `pixi project environment list`
+### `pixi project environment list`
 
 List the environments in the manifest file
 
@@ -829,7 +829,7 @@ List the environments in the manifest file
 
 
 
-## `pixi project environment remove`
+### `pixi project environment remove`
 
 Remove an environment from the manifest file
 
@@ -841,7 +841,7 @@ Remove an environment from the manifest file
 
 
 
-## `pixi project export`
+### `pixi project export`
 
 Commands to export projects to other formats
 
@@ -854,7 +854,7 @@ Commands to export projects to other formats
 
 
 
-## `pixi project export conda-explicit-spec`
+### `pixi project export conda-explicit-spec`
 
 Export project environment to a conda explicit specification file
 
@@ -891,7 +891,7 @@ Export project environment to a conda explicit specification file
 
 
 
-## `pixi project export conda-environment`
+### `pixi project export conda-environment`
 
 Export project environment to a conda environment.yaml file
 
@@ -909,7 +909,7 @@ Export project environment to a conda environment.yaml file
 
 
 
-## `pixi project name`
+### `pixi project name`
 
 Commands to manage project name
 
@@ -926,7 +926,7 @@ Commands to manage project name
 
 
 
-## `pixi project name get`
+### `pixi project name get`
 
 Get the project name
 
@@ -934,7 +934,7 @@ Get the project name
 
 
 
-## `pixi project name set`
+### `pixi project name set`
 
 Set the project name
 
@@ -946,7 +946,7 @@ Set the project name
 
 
 
-## `pixi project system-requirements`
+### `pixi project system-requirements`
 
 Commands to manage project environments
 
@@ -963,7 +963,7 @@ Commands to manage project environments
 
 
 
-## `pixi project system-requirements add`
+### `pixi project system-requirements add`
 
 Adds an environment to the manifest file
 
@@ -994,7 +994,7 @@ Adds an environment to the manifest file
 
 
 
-## `pixi project system-requirements list`
+### `pixi project system-requirements list`
 
 List the environments in the manifest file
 
@@ -1026,7 +1026,7 @@ Interact with tasks in the project
 
 
 
-## `pixi task add`
+### `pixi task add`
 
 Add a command to the project
 
@@ -1049,7 +1049,7 @@ Add a command to the project
 
 
 
-## `pixi task remove`
+### `pixi task remove`
 
 Remove a command from the project
 
@@ -1066,7 +1066,7 @@ Remove a command from the project
 
 
 
-## `pixi task alias`
+### `pixi task alias`
 
 Alias another specific command
 
@@ -1084,7 +1084,7 @@ Alias another specific command
 
 
 
-## `pixi task list`
+### `pixi task list`
 
 List all tasks in the project
 
@@ -1145,7 +1145,7 @@ Highlighted packages are explicit dependencies.
 Show a tree of project dependencies
 
 Dependency names highlighted in green are directly specified in the manifest. Yellow version numbers are conda packages, PyPI version numbers are blue.
-
+    
 
 **Usage:** `pixi tree [OPTIONS] [REGEX]`
 
@@ -1197,7 +1197,7 @@ Install packages on the user level. Example: pixi global install my_package pixi
 
 
 
-## `pixi global add`
+### `pixi global add`
 
 Adds dependencies to an environment
 
@@ -1226,7 +1226,7 @@ Example:
 
 
 
-## `pixi global edit`
+### `pixi global edit`
 
 Edit the global manifest file
 
@@ -1240,7 +1240,7 @@ Opens your editor to edit the global manifest file.
 
 
 
-## `pixi global install`
+### `pixi global install`
 
 Installs the defined packages in a globally accessible location and exposes their command line applications.
 
@@ -1279,7 +1279,7 @@ Example:
 
 
 
-## `pixi global uninstall`
+### `pixi global uninstall`
 
 Uninstalls environments from the global environment.
 
@@ -1305,7 +1305,7 @@ pixi global uninstall pixi-pack rattler-build
 
 
 
-## `pixi global remove`
+### `pixi global remove`
 
 Removes dependencies from an environment
 
@@ -1334,7 +1334,7 @@ Example:
 
 
 
-## `pixi global list`
+### `pixi global list`
 
 Lists all packages previously installed into a globally accessible location via `pixi global install`.
 
@@ -1373,7 +1373,7 @@ Per environment:
 
 
 
-## `pixi global sync`
+### `pixi global sync`
 
 Sync global manifest with installed environments
 
@@ -1392,7 +1392,7 @@ Sync global manifest with installed environments
 
 
 
-## `pixi global expose`
+### `pixi global expose`
 
 Interact with the exposure of binaries in the global environment
 
@@ -1409,7 +1409,7 @@ Interact with the exposure of binaries in the global environment
 
 
 
-## `pixi global expose add`
+### `pixi global expose add`
 
 Add exposed binaries from an environment to your global environment
 
@@ -1437,7 +1437,7 @@ Example:
 
 
 
-## `pixi global expose remove`
+### `pixi global expose remove`
 
 Remove exposed binaries from the global environment
 
@@ -1462,7 +1462,7 @@ Remove exposed binaries from the global environment
 
 
 
-## `pixi global update`
+### `pixi global update`
 
 Updates environments in the global environment
 
@@ -1498,7 +1498,7 @@ Login to prefix.dev or anaconda.org servers to access private channels
 
 
 
-## `pixi auth login`
+### `pixi auth login`
 
 Store authentication information for a given host
 
@@ -1520,7 +1520,7 @@ Store authentication information for a given host
 
 
 
-## `pixi auth logout`
+### `pixi auth logout`
 
 Remove authentication information for a given host
 
@@ -1549,7 +1549,7 @@ Configuration management
 
 
 
-## `pixi config edit`
+### `pixi config edit`
 
 Edit the configuration file
 
@@ -1568,7 +1568,7 @@ Edit the configuration file
 
 
 
-## `pixi config list`
+### `pixi config list`
 
 List configuration values
 
@@ -1590,7 +1590,7 @@ Example: pixi config list default-channels
 
 
 
-## `pixi config prepend`
+### `pixi config prepend`
 
 Prepend a value to a list configuration key
 
@@ -1612,7 +1612,7 @@ Example: pixi config prepend default-channels bioconda
 
 
 
-## `pixi config append`
+### `pixi config append`
 
 Append a value to a list configuration key
 
@@ -1634,7 +1634,7 @@ Example: pixi config append default-channels bioconda
 
 
 
-## `pixi config set`
+### `pixi config set`
 
 Set a configuration value
 
@@ -1656,7 +1656,7 @@ Example: pixi config set default-channels '["conda-forge", "bioconda"]'
 
 
 
-## `pixi config unset`
+### `pixi config unset`
 
 Unset a configuration value
 
@@ -1753,7 +1753,7 @@ Clean the parts of your system which are touched by pixi. Defaults to cleaning t
 
 
 
-## `pixi clean cache`
+### `pixi clean cache`
 
 Clean the cache of your system which are touched by pixi
 
@@ -1821,3 +1821,7 @@ Workspace configuration
 * `-o`, `--output-dir <OUTPUT_DIR>` — The output directory to place the build artifacts
 
   Default value: `.`
+
+
+
+

@@ -319,7 +319,8 @@ fn set_console_colors(args: &Args) {
 fn generate_documentation() -> miette::Result<()> {
     let options = MarkdownOptions::new()
         .show_table_of_contents(false)
-        .show_footer(false);
+        .show_footer(false)
+        .with_max_depth(2);
     let help = clap_markdown::help_markdown_custom::<Args>(&options);
     println!("{}", help);
     Ok(())
