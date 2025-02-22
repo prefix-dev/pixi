@@ -2,7 +2,14 @@ import os
 from pathlib import Path
 import shutil
 
-from .common import cwd, verify_cli_command, ExitCode, PIXI_VERSION, CURRENT_PLATFORM
+from .common import (
+    cwd,
+    verify_cli_command,
+    ExitCode,
+    PIXI_VERSION,
+    CURRENT_PLATFORM,
+    EMPTY_BOILERPLATE_PROJECT,
+)
 import tomllib
 import json
 import pytest
@@ -1038,3 +1045,102 @@ def test_pixi_auth(pixi: Path) -> None:
     verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"])
     verify_cli_command([pixi, "auth", "logout", "https://host.org"])
     verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"])
+
+
+@pytest.mark.extra_slow
+def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    lock_file = tmp_pixi_workspace / "pixi.lock"
+
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # we want to add three kinds of pypi dependencies
+    # branch
+    # tag
+    # revision
+    # we will use the same package for all three
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "python"])
+
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "--branch",
+            "master",
+        ]
+    )
+
+    # we want to make sure that the lock file contains the branch information
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?branch=master" in lock_file.read_text()
+    # and that the manifest contains the branch information
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["branch"] == "master"
+
+    # now add a tag
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "--tag",
+            "25.0.0",
+        ]
+    )
+
+    # we want to make sure that the lock file contains the tag information
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?tag=25.0.0" in lock_file.read_text()
+    # and that the manifest contains the tag information
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["tag"] == "25.0.0"
+
+    # now add a simple revision (a commit)
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "--rev",
+            "d70669a",
+        ]
+    )
+
+    # we want to make sure that the lock file contains the rev information
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?rev=d70669a" in lock_file.read_text()
+    # and that the manifest contains the rev information
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
+
+
+def test_dont_error_on_missing_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+        {EMPTY_BOILERPLATE_PROJECT}
+        [feature.a.target.zos-z.tasks]
+        nonsense = "echo nonsense"
+
+        [target.zos-z.tasks]
+        nonsense = "echo nonsense"
+        """
+    manifest.write_text(toml)
+    # This should not error, but should spawn a warning with a helping message.
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        stderr_contains=["pixi project platform add zos-z"],
+    )

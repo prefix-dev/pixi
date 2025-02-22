@@ -431,8 +431,8 @@ impl<'p> LockFileDerivedData<'p> {
         .await
         .with_context(|| {
             format!(
-                "{}: error installing/updating PyPI dependencies",
-                environment.name()
+                "Failed to update PyPI packages for environment '{}'",
+                environment.name().fancy_display()
             )
         })?;
 
@@ -1779,7 +1779,7 @@ async fn spawn_solve_conda_environment_task(
             // Add purl's for the conda packages that are also available as pypi packages if
             // we need them.
             if has_pypi_dependencies {
-                pb.set_message("extracting pypi packages");
+                pb.set_message("mapping conda to pypi packages");
                 pypi_mapping::amend_pypi_purls(
                     client,
                     &pypi_name_mapping_location,
@@ -2065,12 +2065,12 @@ async fn spawn_solve_pypi_task<'p>(
             .collect::<Result<_, ConversionError>>()
             .into_diagnostic()?;
 
-        let index_map = IndexMap::from_iter(dependencies);
+        let requirements = IndexMap::from_iter(dependencies);
 
         let (records, prefix_task_result) = lock_file::resolve_pypi(
             resolution_context,
             &pypi_options,
-            index_map,
+            requirements,
             system_requirements,
             &pixi_solve_records,
             &locked_pypi_records,

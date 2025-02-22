@@ -31,7 +31,12 @@ impl CanonicalUrl {
 
         // Strip credentials.
         let _ = url.set_password(None);
-        let _ = url.set_username("");
+
+        // Only stripping the username if the scheme is not `ssh`. This is because `ssh` URLs should
+        // have the `git` username.
+        if !url.scheme().contains("ssh") {
+            let _ = url.set_username("");
+        }
 
         // Strip a trailing slash.
         if url.path().ends_with('/') {

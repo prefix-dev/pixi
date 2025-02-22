@@ -62,3 +62,26 @@ def test_prefix_only_created_when_sdist(
 
     assert not py39.exists()
     assert py310.exists()
+
+
+def test_error_on_conda_meta_file_error(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """Break the meta file and check if the error is caught and printed to the user"""
+    verify_cli_command([pixi, "init", "-c", dummy_channel_1, tmp_pixi_workspace], ExitCode.SUCCESS)
+
+    # Install a package
+    verify_cli_command([pixi, "add", "dummy-a", "--manifest-path", tmp_pixi_workspace])
+
+    # Create a conda meta file and path with an error
+    meta_file = tmp_pixi_workspace.joinpath(
+        ".pixi/envs/default/conda-meta/ca-certificates-2024.12.14-hf0a4a13_0.json"
+    )
+    meta_file.parent.mkdir(parents=True, exist_ok=True)
+    meta_file.write_text("")
+
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", tmp_pixi_workspace],
+        ExitCode.FAILURE,
+        stderr_contains=["failed to collect prefix records", "pixi clean"],
+    )

@@ -5,7 +5,7 @@ This document contains the help content for the `pixi` command-line program.
 ## `pixi`
 
 
-Pixi [version 0.41.3] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version 0.41.4] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
 
 Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
