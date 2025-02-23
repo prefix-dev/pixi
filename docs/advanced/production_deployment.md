@@ -135,6 +135,23 @@ pixi-pack pack --inject local-package-1.0.0-hbefa133_0.conda --manifest-pack pix
 
 This can be particularly useful if you build the project itself and want to include the built package in the environment but still want to use `pixi.lock` from the project.
 
+### Cache downloaded packages
+
+You can cache downloaded packages to speed up subsequent pack operations by using the `--use-cache` flag:
+
+```bash
+pixi-pack pack --use-cache ~/.pixi-pack/cache
+```
+
+This will store all downloaded packages in the specified directory and reuse them in future pack operations. The cache follows the same structure as conda channels, organizing packages by platform subdirectories (e.g., linux-64, win-64, etc.).
+
+Using a cache is particularly useful when:
+
+- Creating multiple packs with overlapping dependencies
+- Working with large packages that take time to download
+- Operating in environments with limited bandwidth
+- Running CI/CD pipelines where package caching can significantly improve build times
+
 ### Unpacking without pixi-pack
 
 If you don't have `pixi-pack` available on your target system, you can still install the environment if you have `conda` or `micromamba` available.
