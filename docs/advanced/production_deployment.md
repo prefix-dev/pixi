@@ -155,7 +155,7 @@ conda env create -p ./env --file environment.yml
 !!!note ""
     Both `conda` and `mamba` are always installing pip as a side effect when they install python, see [`conda`'s documentation](https://docs.conda.io/projects/conda/en/25.1.x/user-guide/configuration/settings.html#add-pip-as-python-dependency-add-pip-as-python-dependency).
     This is not different from how `pixi` works and can lead to solver errors when using `pixi-pack`'s compatibility mode since `pixi-pack` doesn't include `pip` by default.
-    You can fix this issues in two ways:
+    You can fix this issue in two ways:
 
     - Add `pip` to your `pixi.lock` file using `pixi add pip`.
     - Configuring `conda` (or `mamba`) to not install `pip` by default by running `conda config --set add_pip_as_python_dependency false` (or by adding `add_pip_as_python_dependency: False` to your `~/.condarc`)
