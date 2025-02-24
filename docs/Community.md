@@ -63,5 +63,9 @@ When you want to show your users and contributors that they can use pixi in your
 - [LFortran](https://github.com/lfortran/lfortran): A modern cross-platform Fortran compiler
 - [Rerun](https://www.rerun.io/): Rerun is an SDK for building time aware visualizations of multimodal data.
 - [conda-auth](https://github.com/conda-incubator/conda-auth): a conda plugin providing more secure authentication support to conda.
-- [py-rattler](https://github.com/mamba-org/rattler/tree/main/py-rattler): Build your own conda environment manager using the python wrapper of our Rattler backend.
+- [py-rattler](https://github.com/conda/rattler/tree/main/py-rattler): Build your own conda environment manager using the python wrapper of our Rattler backend.
 - [array-api-extra](https://github.com/data-apis/array-api-extra): Extra array functions built on top of the Python array API standard.
+- [marray](https://github.com/mdhaber/marray):
+Masked versions of Python array API standard compatible arrays.
+- [quantity-array](https://github.com/quantity-dev/quantity-array): Quantities with Python array API standard arrays.
+- [Bodo](https://github.com/bodo-ai/bodo):  High-Performance Python Compute Engine for Data and AI.

@@ -132,7 +132,7 @@ or:
 --8<-- "docs/source_files/pixi_config_tomls/detached_environments_path_config.toml:detached-environments-path"
 ```
 
-The environments will be stored in the [cache directory](../features/environment.md#caching) when this option is `true`.
+The environments will be stored in the [cache directory](../features/environment.md#caching-packages) when this option is `true`.
 When you specify a custom path the environments will be stored in that directory.
 
 The resulting directory structure will look like this:
@@ -194,6 +194,14 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 !!! Note "`index-url` and `extra-index-urls` are *not* globals"
     Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml` file and are not globally interpreted when not present in the manifest.
     This is because we want to keep the manifest file as complete and reproducible as possible.
+
+### `s3-options`
+
+Configuration for S3 authentication. This will lead to pixi not using AWS's default credentials but instead use the credentials from the pixi authentication storage, see the [S3 section](../advanced/s3.md) for more information.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:s3-options"
+```
 
 ### `concurrency`
 Configure multiple settings to limit or extend the concurrency of pixi.

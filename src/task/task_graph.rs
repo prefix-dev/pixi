@@ -15,18 +15,18 @@ use pixi_manifest::{
 use thiserror::Error;
 
 use crate::{
-    project::{
-        virtual_packages::{
-            verify_current_platform_has_required_virtual_packages, VerifyCurrentPlatformError,
-        },
-        Environment,
-    },
     task::{
         error::{AmbiguousTaskError, MissingTaskError},
         task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
         TaskDisambiguation,
     },
-    Project,
+    workspace::{
+        virtual_packages::{
+            verify_current_platform_has_required_virtual_packages, VerifyCurrentPlatformError,
+        },
+        Environment,
+    },
+    Workspace,
 };
 
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
@@ -72,7 +72,7 @@ impl fmt::Display for TaskNode<'_> {
     }
 }
 
-impl<'p> TaskNode<'p> {
+impl TaskNode<'_> {
     /// Returns the full command that should be executed for this task. This
     /// includes any additional arguments that should be passed to the
     /// command.
@@ -104,7 +104,7 @@ impl<'p> TaskNode<'p> {
 #[derive(Debug)]
 pub struct TaskGraph<'p> {
     /// The project that this graph references
-    project: &'p Project,
+    project: &'p Workspace,
 
     /// The tasks in the graph
     nodes: Vec<TaskNode<'p>>,
@@ -129,15 +129,16 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
 }
 
 impl<'p> TaskGraph<'p> {
-    pub(crate) fn project(&self) -> &'p Project {
+    pub(crate) fn project(&self) -> &'p Workspace {
         self.project
     }
 
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
     pub fn from_cmd_args<D: TaskDisambiguation<'p>>(
-        project: &'p Project,
+        project: &'p Workspace,
         search_envs: &SearchEnvironments<'p, D>,
         args: Vec<String>,
+        skip_deps: bool,
     ) -> Result<Self, TaskGraphError> {
         // Split 'args' into arguments if it's a single string, supporting commands
         // like: `"test 1 == 0 || echo failed"` or `"echo foo && echo bar"` or
@@ -165,6 +166,18 @@ impl<'p> TaskGraph<'p> {
                         Some(explicit_env) if task_env.is_default() => explicit_env,
                         _ => task_env,
                     };
+                    if skip_deps {
+                        return Ok(Self {
+                            project,
+                            nodes: vec![TaskNode {
+                                name: Some(args.remove(0).into()),
+                                task: Cow::Borrowed(task),
+                                run_environment: run_env,
+                                additional_args: args,
+                                dependencies: vec![],
+                            }],
+                        });
+                    }
                     return Self::from_root(
                         project,
                         search_envs,
@@ -220,7 +233,7 @@ impl<'p> TaskGraph<'p> {
 
     /// Constructs a new instance of a [`TaskGraph`] from a root task.
     fn from_root<D: TaskDisambiguation<'p>>(
-        project: &'p Project,
+        project: &'p Workspace,
         search_environments: &SearchEnvironments<'p, D>,
         root: TaskNode<'p>,
     ) -> Result<Self, TaskGraphError> {
@@ -352,7 +365,7 @@ mod test {
 
     use crate::{
         task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
-        Project,
+        Workspace,
     };
 
     fn commands_in_order(
@@ -360,8 +373,9 @@ mod test {
         run_args: &[&str],
         platform: Option<Platform>,
         environment_name: Option<EnvironmentName>,
+        skip_deps: bool,
     ) -> Vec<String> {
-        let project = Project::from_str(Path::new("pixi.toml"), project_str).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
         let environment = environment_name.map(|name| project.environment(&name).unwrap());
         let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform)
@@ -371,6 +385,7 @@ mod test {
             &project,
             &search_envs,
             run_args.iter().map(|arg| arg.to_string()).collect(),
+            skip_deps,
         )
         .unwrap();
 
@@ -389,7 +404,7 @@ mod test {
                 r#"
         [project]
         name = "pixi"
-        channels = ["conda-forge"]
+        channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
         [tasks]
         root = "echo root"
@@ -399,7 +414,8 @@ mod test {
     "#,
                 &["top", "--test"],
                 None,
-                None
+                None,
+                false
             ),
             vec!["echo root", "echo task1", "echo task2", "echo top '--test'"]
         );
@@ -412,7 +428,7 @@ mod test {
                 r#"
         [project]
         name = "pixi"
-        channels = ["conda-forge"]
+        channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
         [tasks]
         root = {cmd="echo root", depends-on=["task1"]}
@@ -422,7 +438,8 @@ mod test {
     "#,
                 &["top"],
                 None,
-                None
+                None,
+                false
             ),
             vec!["echo root", "echo task1", "echo task2", "echo top"]
         );
@@ -435,7 +452,7 @@ mod test {
                 r#"
         [project]
         name = "pixi"
-        channels = ["conda-forge"]
+        channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
         [tasks]
         root = "echo root"
@@ -447,7 +464,8 @@ mod test {
     "#,
                 &["top"],
                 Some(Platform::Linux64),
-                None
+                None,
+                false
             ),
             vec!["echo linux", "echo task1", "echo task2", "echo top",]
         );
@@ -460,12 +478,13 @@ mod test {
                 r#"
         [project]
         name = "pixi"
-        channels = ["conda-forge"]
+        channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
     "#,
                 &["echo bla"],
                 None,
-                None
+                None,
+                false
             ),
             vec![r#"echo bla"#]
         );
@@ -489,7 +508,8 @@ mod test {
     "#,
                 &["build"],
                 None,
-                None
+                None,
+                false
             ),
             vec![r#"echo build"#]
         );
@@ -502,7 +522,7 @@ mod test {
                 r#"
         [project]
         name = "pixi"
-        channels = ["conda-forge"]
+        channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
 
         [tasks]
@@ -516,7 +536,8 @@ mod test {
     "#,
                 &["start"],
                 None,
-                None
+                None,
+                false
             ),
             vec![r#"hello world"#]
         );
@@ -529,7 +550,7 @@ mod test {
                 r#"
         [project]
         name = "pixi"
-        channels = ["conda-forge"]
+        channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
 
         [tasks]
@@ -547,7 +568,8 @@ mod test {
     "#,
                 &["start"],
                 None,
-                Some(EnvironmentName::Named("cuda".to_string()))
+                Some(EnvironmentName::Named("cuda".to_string())),
+                false
             ),
             vec![r#"python train.py --cuda"#, r#"python test.py --cuda"#]
         );
@@ -561,7 +583,7 @@ mod test {
                 r#"
         [project]
         name = "pixi"
-        channels = ["conda-forge"]
+        channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
 
         [tasks]
@@ -576,7 +598,8 @@ mod test {
     "#,
                 &["foobar"],
                 None,
-                None
+                None,
+                false
             ),
             vec![r#"echo foo"#, r#"echo bar"#]
         );
@@ -590,7 +613,7 @@ mod test {
             r#"
         [project]
         name = "pixi"
-        channels = ["conda-forge"]
+        channels = []
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
 
         [tasks]
@@ -607,6 +630,29 @@ mod test {
             &["foobar"],
             None,
             None,
+            false,
+        );
+    }
+
+    #[test]
+    fn test_skip_deps() {
+        let project = r#"
+        [project]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-riscv64"]
+
+        [tasks]
+        foo = "echo foo"
+        bar = { cmd = "echo bar", depends-on = ["foo"] }
+    "#;
+        assert_eq!(
+            commands_in_order(project, &["bar"], None, None, true),
+            vec![r#"echo bar"#]
+        );
+        assert_eq!(
+            commands_in_order(project, &["bar"], None, None, false),
+            vec!["echo foo", "echo bar"]
         );
     }
 }

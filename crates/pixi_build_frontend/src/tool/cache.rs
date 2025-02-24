@@ -92,10 +92,12 @@ pub(crate) async fn find_spec_records(
 
 #[derive(thiserror::Error, Debug)]
 pub enum ToolCacheError {
-    #[error("could not resolve '{}', {1}", .0.display())]
+    #[error("could not resolve '{path}', {1}", path = .0.as_display())]
     Instantiate(PathBuf, which::Error),
+
     #[error("could not install isolated tool '{}'", .0.as_display())]
     Install(miette::Report),
+
     #[error("could not determine default cache dir '{}'", .0.as_display())]
     CacheDir(miette::Report),
 }
@@ -403,7 +405,12 @@ mod tests {
             .await
             .unwrap();
 
-        tool.command().arg("--version").spawn().unwrap();
+        tool.command()
+            .arg("--version")
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

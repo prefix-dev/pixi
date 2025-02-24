@@ -1,12 +1,16 @@
 use clap::Parser;
 use indexmap::IndexMap;
-use pixi_manifest::FeatureName;
+use miette::IntoDiagnostic;
+use pixi_manifest::{FeatureName, SpecType};
+use pixi_spec::{GitSpec, SourceSpec};
+use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::has_specs::HasSpecs;
 use crate::{
-    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, ProjectConfig},
-    environment::verify_prefix_location_unchanged,
-    project::{DependencyType, Project},
+    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
+    environment::sanity_check_project,
+    workspace::DependencyType,
+    WorkspaceLocator,
 };
 
 /// Adds dependencies to the project
@@ -57,16 +61,16 @@ use crate::{
 /// These dependencies will then be read by pixi as if they had been added to
 /// the pixi `pypi-dependencies` tables of the default or of a named feature.
 ///
-/// The versions will be automatically added with a pinning strategy based on semver
-/// or the pinning strategy set in the config. There is a list of packages
-/// that are not following the semver versioning scheme but will use
+/// The versions will be automatically added with a pinning strategy based on
+/// semver or the pinning strategy set in the config. There is a list of
+/// packages that are not following the semver versioning scheme but will use
 /// the minor version by default:
 /// Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub dependency_config: DependencyConfig,
@@ -81,62 +85,106 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let (dependency_config, prefix_update_config, project_config) = (
-        &args.dependency_config,
-        &args.prefix_update_config,
-        &args.project_config,
+        args.dependency_config,
+        args.prefix_update_config,
+        args.workspace_config,
     );
 
-    let mut project = Project::load_or_else_discover(project_config.manifest_path.as_deref())?
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(project_config.workspace_locator_start())
+        .locate()?
         .with_cli_config(prefix_update_config.config.clone());
 
-    // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.default_environment().dir().as_path()).await?;
+    sanity_check_project(&workspace).await?;
+
+    let mut workspace = workspace.modify()?;
 
     // Add the platform if it is not already present
-    project
-        .manifest
+    workspace
+        .manifest()
         .add_platforms(dependency_config.platforms.iter(), &FeatureName::Default)?;
 
-    let (match_specs, pypi_deps) = match dependency_config.dependency_type() {
+    let (match_specs, source_specs, pypi_deps) = match dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
-            let match_specs = dependency_config
+            // if user passed some git configuration
+            // we will use it to create pixi source specs
+            let passed_specs: IndexMap<PackageName, (MatchSpec, SpecType)> = dependency_config
                 .specs()?
                 .into_iter()
                 .map(|(name, spec)| (name, (spec, spec_type)))
                 .collect();
-            let pypi_deps = IndexMap::default();
-            (match_specs, pypi_deps)
+
+            if let Some(git) = &dependency_config.git {
+                let source_specs = passed_specs
+                    .iter()
+                    .map(|(name, (_spec, spec_type))| {
+                        let git_reference =
+                            dependency_config.rev.clone().unwrap_or_default().into();
+
+                        let git_spec = GitSpec {
+                            git: git.clone(),
+                            rev: Some(git_reference),
+                            subdirectory: dependency_config.subdir.clone(),
+                        };
+                        (name.clone(), (SourceSpec::Git(git_spec), *spec_type))
+                    })
+                    .collect();
+                (IndexMap::default(), source_specs, IndexMap::default())
+            } else {
+                (passed_specs, IndexMap::default(), IndexMap::default())
+            }
         }
         DependencyType::PypiDependency => {
             let match_specs = IndexMap::default();
-            let pypi_deps = dependency_config
-                .pypi_deps(&project)?
-                .into_iter()
-                .map(|(name, req)| (name, (req, None)))
-                .collect();
-            (match_specs, pypi_deps)
+            let source_specs = IndexMap::default();
+            let pypi_deps = match dependency_config
+                .vcs_pep508_requirements(workspace.workspace())
+                .transpose()?
+            {
+                Some(vcs_reqs) => vcs_reqs
+                    .into_iter()
+                    .map(|(name, req)| (name, (req, None)))
+                    .collect(),
+                None => dependency_config
+                    .pypi_deps(workspace.workspace())?
+                    .into_iter()
+                    .map(|(name, req)| (name, (req, None)))
+                    .collect(),
+            };
+
+            (match_specs, source_specs, pypi_deps)
         }
     };
     // TODO: add dry_run logic to add
     let dry_run = false;
 
-    let update_deps = project
-        .update_dependencies(
-            match_specs,
-            pypi_deps,
-            prefix_update_config,
-            &args.dependency_config.feature,
-            &args.dependency_config.platforms,
-            args.editable,
-            dry_run,
-        )
-        .await?;
+    let update_deps = match Box::pin(workspace.update_dependencies(
+        match_specs,
+        pypi_deps,
+        source_specs,
+        &prefix_update_config,
+        &dependency_config.feature,
+        &dependency_config.platforms,
+        args.editable,
+        dry_run,
+    ))
+    .await
+    {
+        Ok(update_deps) => {
+            // Write the updated manifest
+            workspace.save().await.into_diagnostic()?;
+            update_deps
+        }
+        Err(e) => {
+            workspace.revert().await.into_diagnostic()?;
+            return Err(e);
+        }
+    };
 
     if let Some(update_deps) = update_deps {
         // Notify the user we succeeded
         dependency_config.display_success("Added", update_deps.implicit_constraints);
     }
 
-    Project::warn_on_discovered_from_env(project_config.manifest_path.as_deref());
     Ok(())
 }

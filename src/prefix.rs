@@ -1,12 +1,5 @@
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
-
-use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_utils::{is_binary_folder, strip_executable_extension};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
@@ -14,7 +7,28 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
 };
-use tokio::task::JoinHandle;
+use std::sync::LazyLock;
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
+use thiserror::Error;
+use uv_configuration::RAYON_INITIALIZE;
+
+#[derive(Error, Debug, Diagnostic)]
+pub enum PrefixError {
+    #[error("failed to collect prefix records from '{1}'")]
+    #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
+    PrefixRecordCollectionError(#[source] std::io::Error, PathBuf),
+
+    #[error("failed to find the designated package '{0}' in the prefix: '{1}'")]
+    DesignatedPackageNotFound(String, PathBuf),
+
+    #[error("executing prefix related task failed")]
+    #[diagnostic(help("try running the command again, or `pixi clean` to reset the environment"))]
+    JoinError,
+}
 
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]
@@ -30,7 +44,7 @@ impl Prefix {
     }
 
     /// Returns the root directory of the prefix
-    pub(crate) fn root(&self) -> &Path {
+    pub fn root(&self) -> &Path {
         &self.root
     }
 
@@ -50,64 +64,12 @@ impl Prefix {
 
     /// Scans the `conda-meta` directory of an environment and returns all the
     /// [`PrefixRecord`]s found in there.
-    pub async fn find_installed_packages(
-        &self,
-        concurrency_limit: Option<usize>,
-    ) -> miette::Result<Vec<PrefixRecord>> {
-        let concurrency_limit = concurrency_limit.unwrap_or(100);
-        let mut meta_futures = FuturesUnordered::<JoinHandle<miette::Result<PrefixRecord>>>::new();
-        let mut result = Vec::new();
-        for entry in fs_err::read_dir(self.root.join("conda-meta"))
-            .into_iter()
-            .flatten()
-        {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-            if !path.is_file() || path.extension() != Some("json".as_ref()) {
-                continue;
-            }
+    pub fn find_installed_packages(&self) -> Result<Vec<PrefixRecord>, PrefixError> {
+        // Initialize rayon explicitly to avoid implicit initialization.
+        LazyLock::force(&RAYON_INITIALIZE);
 
-            // If there are too many pending entries, wait for one to be finished
-            if meta_futures.len() >= concurrency_limit {
-                match meta_futures
-                    .next()
-                    .await
-                    .expect("we know there are pending futures")
-                {
-                    Ok(record) => result.push(record?),
-                    Err(e) => {
-                        if let Ok(panic) = e.try_into_panic() {
-                            std::panic::resume_unwind(panic);
-                        }
-                        // The future was cancelled, we can simply return what we have.
-                        return Ok(result);
-                    }
-                }
-            }
-
-            // Spawn loading on another thread
-            let future = tokio::task::spawn_blocking(move || {
-                PrefixRecord::from_path(&path)
-                    .into_diagnostic()
-                    .with_context(move || format!("failed to parse '{}'", path.display()))
-            });
-            meta_futures.push(future);
-        }
-
-        while let Some(record) = meta_futures.next().await {
-            match record {
-                Ok(record) => result.push(record?),
-                Err(e) => {
-                    if let Ok(panic) = e.try_into_panic() {
-                        std::panic::resume_unwind(panic);
-                    }
-                    // The future was cancelled, we can simply return what we have.
-                    return Ok(result);
-                }
-            }
-        }
-
-        Ok(result)
+        PrefixRecord::collect_from_prefix(&self.root)
+            .map_err(|err| PrefixError::PrefixRecordCollectionError(err, self.root.clone()))
     }
 
     pub async fn find_menu_schema_files(&self) -> miette::Result<Vec<PathBuf>> {
@@ -128,6 +90,8 @@ impl Prefix {
 
     /// Processes prefix records (that you can get by using `find_installed_packages`)
     /// to filter and collect executable files.
+    /// Processes prefix records (that you can get by using
+    /// `find_installed_packages`) to filter and collect executable files.
     pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
         let executables = prefix_packages
             .iter()
@@ -181,12 +145,15 @@ impl Prefix {
     pub async fn find_designated_package(
         &self,
         package_name: &PackageName,
-    ) -> miette::Result<PrefixRecord> {
-        let prefix_records = self.find_installed_packages(None).await?;
+    ) -> Result<PrefixRecord, PrefixError> {
+        let prefix_records = self.find_installed_packages()?;
         prefix_records
             .into_iter()
             .find(|r| r.repodata_record.package_record.name == *package_name)
-            .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
+            .ok_or(PrefixError::DesignatedPackageNotFound(
+                package_name.as_normalized().to_string(),
+                self.root.clone(),
+            ))
     }
 }
 

@@ -79,6 +79,12 @@ These dependencies will be read by pixi as if they had been added to the pixi `p
 - `--pypi`: Specifies a PyPI dependency, not a conda package.
   Parses dependencies as [PEP508](https://peps.python.org/pep-0508/) requirements, supporting extras and versions.
   See [configuration](pixi_manifest.md) for details.
+- `--git`: Specifies a git dependency, the package will be installed from the git repository.
+  The `--git` flag can be used with the following options:
+  - `--branch <BRANCH>`: The branch to use when installing the package.
+  - `--tag <TAG>`: The tag to use when installing the package.
+  - `--rev <REV>`: The revision to use when installing the package.
+  - `--subdir <SUBDIR>`: The subdirectory to use when installing the package.
 - `--no-install`: Don't install the package to the environment, only add the package to the lock-file.
 - `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
 - `--platform <PLATFORM> (-p)`: The platform for which the dependency should be added. (Allowed to be used more than once)
@@ -98,15 +104,24 @@ pixi add --platform osx-64 clang # (7)!
 pixi add --no-install numpy # (8)!
 pixi add --no-lockfile-update numpy # (9)!
 pixi add --feature featurex numpy # (10)!
+pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (11)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (12)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --tag v0.1.0 boost-check # (13)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --rev e50d4a1 boost-check # (14)!
 
 # Add a pypi dependency
-pixi add --pypi requests[security] # (11)!
-pixi add --pypi Django==5.1rc1 # (12)!
-pixi add --pypi "boltons>=24.0.0" --feature lint # (13)!
-pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (14)!
-pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (15)!
-pixi add --pypi "project @ file:///absolute/path/to/project" # (16)!
-pixi add --pypi "project@file:///absolute/path/to/project" --editable # (17)!
+pixi add --pypi requests[security] # (15)!
+pixi add --pypi Django==5.1rc1 # (16)!
+pixi add --pypi "boltons>=24.0.0" --feature lint # (17)!
+pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (18)!
+pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (19)!
+pixi add --pypi "project @ file:///absolute/path/to/project" # (20)!
+pixi add --pypi "project@file:///absolute/path/to/project" --editable # (21)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (22)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --branch main --pypi # (23)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --rev e50d4a1 --pypi # (24)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi # (25)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi --subdir boltons # (26)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
@@ -119,13 +134,22 @@ pixi add --pypi "project@file:///absolute/path/to/project" --editable # (17)!
 8. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
 9. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
 10. This will add the `numpy` package in the feature `featurex`.
-11. This will add the `requests` package as `pypi` dependency with the `security` extra.
-12. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
-13. This will add the `boltons` package in the feature `lint` as `pypi` dependency.
-14. This will add the `boltons` package with the given `url` as `pypi` dependency.
-15. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
-16. This will add the `project` package with the given `file` url as `pypi` dependency.
-17. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
+11. This will add the `boost-check` source package to the dependencies from the git repository.
+12. This will add the `boost-check` source package to the dependencies from the git repository using `main` branch and the `boost-check` folder in the repository.
+13. This will add the `boost-check` source package to the dependencies from the git repository using `v0.1.0` tag.
+14. This will add the `boost-check` source package to the dependencies from the git repository using `e50d4a1` revision.
+15. This will add the `requests` package as `pypi` dependency with the `security` extra.
+16. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
+17. This will add the `boltons` package in the feature `lint` as `pypi` dependency.
+18. This will add the `boltons` package with the given `url` as `pypi` dependency.
+19. This will add the `exchangelib` package with the given `git` url as `pypi` dependency.
+20. This will add the `project` package with the given `file` url as `pypi` dependency.
+21. This will add the `project` package with the given `file` url as an `editable` package as `pypi` dependency.
+22. This will add the `boltons` package with the given `git` url as `pypi` dependency.
+23. This will add the `boltons` package with the given `git` url and `main` branch as `pypi` dependency.
+24. This will add the `boltons` package with the given `git` url and `e50d4a1` revision as `pypi` dependency.
+25. This will add the `boltons` package with the given `git` url and `v0.1.0` tag as `pypi` dependency.
+26. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
 
 !!! tip
     If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
@@ -239,6 +263,24 @@ pixi upgrade --dry-run
     - `url`
     - `subdir`.
 
+## `lock`
+
+The `lock` command updates the `pixi.lock` file without modifying the environment.
+It ensures the lockfile is accurate by performing minimal tasks, such as solving the environment only if the lockfile is outdated or installing the necessary dependencies to resolve the lockfile for PyPI dependencies.
+
+The output is similar to the `update` command, displaying the changes made to the lockfile.
+
+##### Options
+
+- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
+- `--json` Output the changes in json format.
+
+```shell
+pixi lock
+pixi lock --manifest-path ~/myproject/pixi.toml
+pixi lock --json
+```
+
 ## `run`
 
 The `run` commands first checks if the environment is ready to use.
@@ -262,6 +304,8 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--revalidate`: Revalidate the full environment, instead of checking the lock file hash. [more info](../features/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
+- `--skip-deps`: Skip the dependencies of the task, which where defined in the `depends-on` field of the task.
+- `--dry-run (-n)`: Run the task in dry-run mode (only print the command that would run)
 
 ```shell
 pixi run python
@@ -273,6 +317,10 @@ pixi run --locked python
 pixi run build
 # Extra arguments will be passed to the tasks command.
 pixi run task argument1 argument2
+# Skip dependencies of the task
+pixi run --skip-deps task
+# Run in dry-run mode to see the commands that would be run
+pixi run --dry-run task
 
 # If you have multiple environments you can select the right one with the --environment flag.
 pixi run --environment cuda python
@@ -281,6 +329,7 @@ pixi run --environment cuda python
 # If you want to run a command in a clean environment you can use the --clean-env flag.
 # The PATH should only contain the pixi environment here.
 pixi run --clean-env "echo \$PATH"
+
 ```
 
 !!! info
@@ -878,11 +927,15 @@ Store authentication information for given host.
 - `--username <USERNAME>`: The username to use for basic HTTP authentication
 - `--password <PASSWORD>`: The password to use for basic HTTP authentication.
 - `--conda-token <CONDA_TOKEN>`: The token to use on `anaconda.org` / `quetz` authentication.
+- `--s3-access-key-id`: The S3 access key ID
+- `--s3-secret-access-key`: The S3 secret access key
+- `--s3-session-token`: The S3 session token (optional for S3 authentication)
 
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP
 pixi auth login https://myquetz.server --username john --password xxxxxx
+pixi auth login s3://my-bucket --s3-access-key-id $AWS_ACCESS_KEY_ID --s3-access-key-id $AWS_SECRET_KEY_ID
 ```
 
 ### `auth logout`
@@ -897,6 +950,7 @@ Remove authentication information for a given host.
 pixi auth logout <HOST>
 pixi auth logout repo.prefix.dev
 pixi auth logout anaconda.org
+pixi auth logout s3://my-bucket
 ```
 
 ## `config`
@@ -990,6 +1044,7 @@ pixi config set --global mirrors '{"https://conda.anaconda.org/": ["https://pref
 pixi config set repodata-config.disable-zstd true --system
 pixi config set --global detached-environments "/opt/pixi/envs"
 pixi config set detached-environments false
+pixi config set s3-options.my-bucket '{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}'
 ```
 
 ### `config unset`
@@ -1520,6 +1575,39 @@ Bump the project version to {MAJOR|MINOR|PATCH}.
 pixi project version major
 pixi project version minor
 pixi project version patch
+```
+
+### `project system-requirement add`
+
+Add a system requirement to the project configuration.
+
+##### Arguments
+1. `<REQUIREMENT>`: The name of the system requirement.
+2. `<VERSION>`: The version of the system requirement.
+
+##### Options
+- `--family <FAMILY>`: The family of the system requirement. Only used for `other-libc`.
+- `--feature <FEATURE> (-f)`: The feature for which the system requirement is added.
+
+```shell
+pixi project system-requirements add cuda 12.6
+pixi project system-requirements add linux 5.15.2
+pixi project system-requirements add macos 15.2
+pixi project system-requirements add glibc 2.34
+pixi project system-requirements add other-libc 1.2.3 --family musl
+pixi project system-requirements add --feature cuda cuda 12.0
+```
+
+### `project system-requirement list`
+
+List the system requirements in the project configuration.
+
+##### Options
+- `--environment <ENVIRONMENT> (-e)`: The environment to list the system requirements for.
+
+```shell
+pixi project system-requirements list
+pixi project system-requirements list --environment test
 ```
 
 [^1]:

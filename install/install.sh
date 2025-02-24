@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Version: v0.39.2
+# Version: v0.41.4
 
 __wrap__() {
 
@@ -36,10 +36,14 @@ fi
 if [[ $VERSION == "latest" ]]; then
   DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}"
 else
+  # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
+  if [[ ! "$VERSION" =~ ^v ]]; then
+    VERSION="v$VERSION"
+  fi
   DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.${EXTENSION}"
 fi
 
-printf "This script will automatically download and install Pixi (${VERSION}) for you.\nGetting it from this url: $DOWNLOAD_URL\n"
+printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"
 
 if ! hash curl 2> /dev/null && ! hash wget 2> /dev/null; then
   echo "error: you need either 'curl' or 'wget' installed for this script."
@@ -125,10 +129,10 @@ update_shell() {
     LINE="$2"
 
     # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
-    [[ ! -z "${PIXI_NO_PATH_UPDATE:-}" ]] && echo "No path update because PIXI_NO_PATH_UPDATE has a value" && return
+    [[ -n "${PIXI_NO_PATH_UPDATE:-}" ]] && echo "No path update because PIXI_NO_PATH_UPDATE has a value" && return
 
     # Create the file if it doesn't exist
-    if [ -f "$FILE" ]; then
+    if [ ! -f "$FILE" ]; then
         touch "$FILE"
     fi
 

@@ -323,3 +323,52 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
         [pixi, "run", "--manifest-path", manifest, "echo $CONDA_PREFIX"],
         stdout_contains=f"{detached_envs_tmp}",
     )
+
+
+def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(EMPTY_BOILERPLATE_PROJECT)
+
+    help_long = verify_cli_command(
+        [pixi, "run", "--help"],
+        stdout_contains="pixi run",
+    ).stdout
+
+    help_short = verify_cli_command(
+        [pixi, "run", "-h"],
+        stdout_contains="pixi run",
+    ).stdout
+
+    assert len(help_long) > len(help_short)
+
+    help_run = verify_cli_command(
+        [pixi, "help", "run"],
+        stdout_contains="pixi run",
+    ).stdout
+
+    assert help_run == help_long
+
+    verify_cli_command(
+        [pixi, "run", "python", "--help"],
+        stdout_contains="python",
+    )
+
+
+def test_run_dry_run(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+    {EMPTY_BOILERPLATE_PROJECT}
+    [activation.env]
+    DRY_RUN_TEST_VAR = "WET"
+    [tasks]
+    dry-run-task = "echo $DRY_RUN_TEST_VAR"
+    """
+    manifest.write_text(toml)
+
+    # Run the task with --dry-run flag
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--dry-run", "dry-run-task"],
+        stderr_contains="$DRY_RUN_TEST_VAR",
+        stdout_excludes="WET",
+        stderr_excludes="WET",
+    )

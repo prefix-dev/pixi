@@ -4,14 +4,15 @@ use indexmap::IndexMap;
 use pixi_spec::BinarySpec;
 use rattler_conda_types::NamedChannelOrUrl;
 
-use crate::{toml::TomlBuildSystem, TomlError};
+use crate::toml::FromTomlStr;
+use crate::{toml::TomlPackageBuild, TomlError};
 
 /// A build section in the pixi manifest.
 /// that defines what backend is used to build the project.
 #[derive(Debug, Clone)]
-pub struct BuildSystem {
+pub struct PackageBuild {
     /// Information about the build backend
-    pub build_backend: BuildBackend,
+    pub backend: BuildBackend,
 
     /// Additional dependencies that should be installed alongside the backend.
     pub additional_dependencies: IndexMap<rattler_conda_types::PackageName, BinarySpec>,
@@ -19,6 +20,9 @@ pub struct BuildSystem {
     /// The channels to use for fetching build tools. If this is `None` the
     /// channels from the containing workspace should be used.
     pub channels: Option<Vec<NamedChannelOrUrl>>,
+
+    /// Additional configuration for the build backend.
+    pub configuration: Option<serde_value::Value>,
 }
 
 #[derive(Debug, Clone)]
@@ -28,16 +32,12 @@ pub struct BuildBackend {
 
     /// The spec for the backend
     pub spec: BinarySpec,
-
-    /// Additional arguments to pass to the build backend. In the manifest these are read from the
-    /// `[build-backend]` section.
-    pub additional_args: Option<serde_value::Value>,
 }
 
-impl BuildSystem {
+impl PackageBuild {
     /// Parses the specified string as a toml representation of a build system.
     pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
-        TomlBuildSystem::from_toml_str(source).and_then(TomlBuildSystem::into_build_system)
+        TomlPackageBuild::from_toml_str(source).and_then(TomlPackageBuild::into_build_system)
     }
 }
 
@@ -48,10 +48,10 @@ mod tests {
     #[test]
     fn deserialize_build() {
         let toml = r#"
-            build-backend = { name = "pixi-build-python", version = "12.*" }
+            backend = { name = "pixi-build-python", version = "12.*" }
             "#;
 
-        let build = BuildSystem::from_toml_str(toml).unwrap();
-        assert_eq!(build.build_backend.name.as_source(), "pixi-build-python");
+        let build = PackageBuild::from_toml_str(toml).unwrap();
+        assert_eq!(build.backend.name.as_source(), "pixi-build-python");
     }
 }

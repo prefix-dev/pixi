@@ -12,8 +12,9 @@ use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
 
 use crate::{
+    backend_override::BackendOverride,
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
-    BackendOverride, ToolContext,
+    ToolContext,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -74,12 +75,14 @@ impl ProtocolBuilder {
     }
 
     /// Sets an optional backend override.
-    pub fn with_backend_override(self, backend_override: Option<BackendOverride>) -> Self {
-        Self {
-            backend_spec: backend_override
-                .map(BackendOverride::into_spec)
-                .unwrap_or(self.backend_spec),
-            ..self
+    pub fn with_backend_override(self, backend_override: BackendOverride) -> Self {
+        if let Some(tool) = backend_override.overridden_tool("conda-build") {
+            Self {
+                backend_spec: tool.as_spec(),
+                ..self
+            }
+        } else {
+            self
         }
     }
 

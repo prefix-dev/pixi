@@ -5,7 +5,9 @@ use std::{
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
-use pixi_uv_conversions::to_uv_version;
+use pixi_git::url::RepositoryUrl;
+use pixi_record::LockedGitUrl;
+use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use url::Url;
 use uv_cache::Cache;
@@ -132,19 +134,19 @@ pub(crate) enum NeedReinstall {
     ArchiveDistNewerThanCache,
     /// The git archive is still path, could be caused by an old source install
     GitArchiveIsPath,
-    /// The git commit hash is different from the locked version
-    GitCommitsMismatch {
-        installed_commit: String,
-        locked_commit: String,
+    /// The git revision is different from the locked version
+    GitRevMismatch {
+        installed_rev: String,
+        locked_rev: String,
     },
     /// Unable to parse the installed git url
     UnableToParseGitUrl { url: String },
     /// Unable to get the installed dist metadata, something is definitely broken
     UnableToGetInstalledDistMetadata { cause: String },
-    /// The requires-python is different than the installed version
+    /// The to install requires-python is different from the installed version
     RequiredPythonChanged {
-        installed_python_require: uv_pep440::VersionSpecifiers,
-        locked_python_version: uv_pep440::Version,
+        installed_python_require: String,
+        locked_python_version: String,
     },
     /// Re-installing because of an installer mismatch, but we are managing the package
     InstallerMismatch { previous_installer: String },
@@ -152,6 +154,11 @@ pub(crate) enum NeedReinstall {
     UrlMismatch {
         installed_url: String,
         locked_url: Option<String>,
+    },
+    /// Package is installed by registry, but we want a non registry location.
+    SourceMismatch {
+        locked_location: String,
+        installed_location: String,
     },
 }
 
@@ -190,9 +197,9 @@ impl std::fmt::Display for NeedReinstall {
                 write!(f, "Archive dist is newer than the cache")
             }
             NeedReinstall::GitArchiveIsPath => write!(f, "Git archive is a path"),
-            NeedReinstall::GitCommitsMismatch {
-                installed_commit,
-                locked_commit,
+            NeedReinstall::GitRevMismatch {
+                installed_rev: installed_commit,
+                locked_rev: locked_commit,
             } => write!(
                 f,
                 "Git commits mismatch, installed commit: {}, locked commit: {}",
@@ -232,7 +239,11 @@ impl std::fmt::Display for NeedReinstall {
             ),
             NeedReinstall::UnableToConvertLockedPath { path } => {
                 write!(f, "Unable to convert locked path to url: {}", path)
-            }
+            },
+            NeedReinstall::SourceMismatch{locked_location, installed_location} => write!(
+                f,
+                "Installed from registry from '{installed_location}' but locked to a non-registry location from '{locked_location}'",
+            ),
         }
     }
 }
@@ -248,12 +259,20 @@ enum ValidateCurrentInstall {
 fn need_reinstall(
     installed: &InstalledDist,
     locked: &PypiPackageData,
-    python_version: &uv_pep440::Version,
     lock_file_dir: &Path,
 ) -> miette::Result<ValidateCurrentInstall> {
     // Check if the installed version is the same as the required version
     match installed {
         InstalledDist::Registry(reg) => {
+            if !matches!(locked.location, UrlOrPath::Url(_)) {
+                return Ok(ValidateCurrentInstall::Reinstall(
+                    NeedReinstall::SourceMismatch {
+                        locked_location: locked.location.to_string(),
+                        installed_location: "registry".to_string(),
+                    },
+                ));
+            }
+
             let specifier = to_uv_version(&locked.version).into_diagnostic()?;
 
             if reg.version != specifier {
@@ -406,10 +425,20 @@ fn need_reinstall(
                     let installed_git_url =
                         ParsedGitUrl::try_from(Url::parse(url.as_str()).into_diagnostic()?)
                             .into_diagnostic()?;
+
                     // Try to parse the locked git url, this can be any url, so this may fail
                     // in practice it always seems to succeed, even with a non-git url
                     let locked_git_url = match &locked.location {
-                        UrlOrPath::Url(url) => ParsedGitUrl::try_from(url.clone()),
+                        UrlOrPath::Url(url) => {
+                            // is it a git url?
+                            if LockedGitUrl::is_locked_git_url(url) {
+                                let locked_git_url = LockedGitUrl::new(url.clone());
+                                to_parsed_git_url(&locked_git_url)
+                            } else {
+                                // it is not a git url, so we fallback to use the url as is
+                                ParsedGitUrl::try_from(url.clone()).into_diagnostic()
+                            }
+                        }
                         UrlOrPath::Path(_path) => {
                             // Previously
                             return Ok(ValidateCurrentInstall::Reinstall(
@@ -420,7 +449,10 @@ fn need_reinstall(
                     match locked_git_url {
                         Ok(locked_git_url) => {
                             // Check the repository base url with the locked url
-                            if locked_git_url.url.repository() != installed_git_url.url.repository()
+                            let installed_repository_url =
+                                RepositoryUrl::new(installed_git_url.url.repository());
+                            if locked_git_url.url.repository()
+                                != &installed_repository_url.into_url()
                             {
                                 // This happens when this is not a git url
                                 return Ok(ValidateCurrentInstall::Reinstall(
@@ -430,18 +462,20 @@ fn need_reinstall(
                                     },
                                 ));
                             }
-                            if vcs_info.commit_id
-                                != locked_git_url.url.precise().map(|p| p.to_string())
+                            if vcs_info.requested_revision
+                                != locked_git_url
+                                    .url
+                                    .reference()
+                                    .as_str()
+                                    .map(|s| s.to_string())
                             {
                                 // The commit id is different, we need to reinstall
                                 return Ok(ValidateCurrentInstall::Reinstall(
-                                    NeedReinstall::GitCommitsMismatch {
-                                        installed_commit: vcs_info.commit_id.unwrap_or_default(),
-                                        locked_commit: locked_git_url
-                                            .url
-                                            .precise()
-                                            .map(|p| p.to_string())
+                                    NeedReinstall::GitRevMismatch {
+                                        installed_rev: vcs_info
+                                            .requested_revision
                                             .unwrap_or_default(),
+                                        locked_rev: locked_git_url.url.reference().to_string(),
                                     },
                                 ));
                             }
@@ -496,15 +530,35 @@ fn need_reinstall(
     };
 
     if let Some(requires_python) = metadata.requires_python {
-        // If the installed package requires a different python version
-        if !requires_python.contains(python_version) {
-            return Ok(ValidateCurrentInstall::Reinstall(
-                NeedReinstall::RequiredPythonChanged {
-                    installed_python_require: requires_python,
-                    locked_python_version: python_version.clone(),
-                },
-            ));
+        // If the installed package requires a different requires python version of the locked package,
+        // or if one of them is `Some` and the other is `None`.
+        match &locked.requires_python {
+            Some(locked_requires_python) => {
+                if requires_python.to_string() != locked_requires_python.to_string() {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::RequiredPythonChanged {
+                            installed_python_require: requires_python.to_string(),
+                            locked_python_version: locked_requires_python.to_string(),
+                        },
+                    ));
+                }
+            }
+            None => {
+                return Ok(ValidateCurrentInstall::Reinstall(
+                    NeedReinstall::RequiredPythonChanged {
+                        installed_python_require: requires_python.to_string(),
+                        locked_python_version: "None".to_string(),
+                    },
+                ));
+            }
         }
+    } else if let Some(requires_python) = &locked.requires_python {
+        return Ok(ValidateCurrentInstall::Reinstall(
+            NeedReinstall::RequiredPythonChanged {
+                installed_python_require: "None".to_string(),
+                locked_python_version: requires_python.to_string(),
+            },
+        ));
     }
 
     Ok(ValidateCurrentInstall::Keep)
@@ -563,19 +617,13 @@ impl<'a> CachedDistProvider<'a> for RegistryWheelIndex<'a> {
 /// that uv would usually act on.
 pub struct InstallPlanner {
     uv_cache: Cache,
-    python_version: uv_pep440::Version,
     lock_file_dir: PathBuf,
 }
 
 impl InstallPlanner {
-    pub fn new(
-        uv_cache: Cache,
-        python_version: &uv_pep440::Version,
-        lock_file_dir: impl AsRef<Path>,
-    ) -> Self {
+    pub fn new(uv_cache: Cache, lock_file_dir: impl AsRef<Path>) -> Self {
         Self {
             uv_cache,
-            python_version: python_version.clone(),
             lock_file_dir: lock_file_dir.as_ref().to_path_buf(),
         }
     }
@@ -617,6 +665,7 @@ impl InstallPlanner {
                 op_to_reason.missing(),
             ));
         }
+
         Ok(())
     }
 
@@ -672,12 +721,7 @@ impl InstallPlanner {
                         ));
                     } else {
                         // Check if we need to reinstall
-                        match need_reinstall(
-                            dist,
-                            required_pkg,
-                            &self.python_version,
-                            &self.lock_file_dir,
-                        )? {
+                        match need_reinstall(dist, required_pkg, &self.lock_file_dir)? {
                             ValidateCurrentInstall::Keep => {
                                 // No need to reinstall
                                 continue;

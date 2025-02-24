@@ -1,0 +1,75 @@
+---
+source: crates/pixi_build_frontend/src/into_build_types.rs
+expression: project_model
+---
+{
+  "name": "python_bindings",
+  "version": "0.1.0",
+  "description": null,
+  "authors": null,
+  "license": null,
+  "license_file": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "configuration": null,
+  "targets": {
+    "default_target": {
+      "host_dependencies": {
+        "cmake": {
+          "detailedVersion": {
+            "version": ">=3.20,<3.27",
+            "build": null,
+            "build_number": null,
+            "file_name": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        },
+        "nanobind": {
+          "detailedVersion": {
+            "version": ">=2.4.0,<2.5.0",
+            "build": null,
+            "build_number": null,
+            "file_name": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        },
+        "python_abi": {
+          "detailedVersion": {
+            "version": ">=3.12,<3.13",
+            "build": null,
+            "build_number": null,
+            "file_name": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        }
+      },
+      "build_dependencies": {},
+      "run_dependencies": {
+        "python": {
+          "detailedVersion": {
+            "version": ">=3.12,<3.13",
+            "build": null,
+            "build_number": null,
+            "file_name": null,
+            "channel": null,
+            "subdir": null,
+            "md5": null,
+            "sha256": null
+          }
+        }
+      }
+    },
+    "targets": {}
+  }
+}

@@ -1,44 +1,3 @@
-use std::{
-    ffi::OsStr,
-    fmt::{Debug, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::OnceLock,
-};
-
-use ahash::HashSet;
-pub(crate) use environment::EnvironmentName;
-use fancy_display::FancyDisplay;
-use fs::tokio as tokio_fs;
-use fs_err as fs;
-use futures::stream::StreamExt;
-use indexmap::{IndexMap, IndexSet};
-use is_executable::IsExecutable;
-use itertools::Itertools;
-pub(crate) use manifest::{ExposedType, Manifest, Mapping};
-use miette::{miette, Context, IntoDiagnostic};
-use parsed_manifest::ParsedManifest;
-pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
-use pixi_config::{default_channel_config, pixi_home, Config};
-use pixi_consts::consts;
-use pixi_manifest::PrioritizedChannel;
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
-use rattler::{
-    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
-    package_cache::PackageCache,
-};
-use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-};
-use rattler_lock::Matches;
-use rattler_menuinst::MenuMode;
-use rattler_repodata_gateway::Gateway;
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
-use reqwest_middleware::ClientWithMiddleware;
-use toml_edit::DocumentMut;
-
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
     common::{get_install_changes, EnvironmentUpdate},
@@ -61,12 +20,52 @@ use crate::{
     repodata::Repodata,
     rlimit::try_increase_rlimit_to_sensible,
 };
+use ahash::HashSet;
+pub(crate) use environment::EnvironmentName;
+use fancy_display::FancyDisplay;
+use fs::tokio as tokio_fs;
+use fs_err as fs;
+use futures::stream::StreamExt;
+use indexmap::{IndexMap, IndexSet};
+use is_executable::IsExecutable;
+use itertools::Itertools;
+pub(crate) use manifest::{ExposedType, Manifest, Mapping};
+use miette::{miette, Context, IntoDiagnostic};
+use once_cell::sync::OnceCell;
+use parsed_manifest::ParsedManifest;
+pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
+use pixi_config::{default_channel_config, pixi_home, Config};
+use pixi_consts::consts;
+use pixi_manifest::PrioritizedChannel;
+use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
+use rattler::{
+    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
+    package_cache::PackageCache,
+};
+use rattler_conda_types::menuinst::MenuMode;
+use rattler_conda_types::{
+    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
+};
+use rattler_lock::Matches;
+use rattler_repodata_gateway::Gateway;
+use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use reqwest_middleware::ClientWithMiddleware;
+use std::sync::LazyLock;
+use std::{
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+use toml_edit::DocumentMut;
+use uv_configuration::RAYON_INITIALIZE;
 
 mod environment;
 mod manifest;
 mod parsed_manifest;
 
-pub(crate) const MANIFEST_DEFAULT_NAME: &str = "pixi-global.toml";
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
 /// The pixi global project, this main struct to interact with the pixi global
@@ -86,11 +85,13 @@ pub struct Project {
     /// Binary directory
     pub(crate) bin_dir: BinDir,
     /// Reqwest client shared for this project.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    client: OnceLock<(reqwest::Client, ClientWithMiddleware)>,
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
     /// The repodata gateway to use for answering queries about repodata.
-    /// This is wrapped in a `OnceLock` to allow for lazy initialization.
-    repodata_gateway: OnceLock<Gateway>,
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
+    repodata_gateway: OnceCell<Gateway>,
 }
 
 impl Debug for Project {
@@ -153,11 +154,11 @@ impl ExposedData {
 
         // Find all channels used to create the environment
         let all_channels = prefix
-            .find_installed_packages(None)
-            .await?
+            .find_installed_packages()?
             .iter()
             .map(|prefix_record| prefix_record.repodata_record.channel.clone())
             .collect::<HashSet<_>>();
+
         for channel in all_channels.into_iter().flatten() {
             tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
             channels.push(channel_url_to_prioritized_channel(
@@ -258,8 +259,8 @@ impl Project {
 
         let config = Config::load(&root);
 
-        let client = OnceLock::new();
-        let repodata_gateway = OnceLock::new();
+        let client = OnceCell::new();
+        let repodata_gateway = OnceCell::new();
         Self {
             root,
             manifest,
@@ -387,15 +388,18 @@ impl Project {
     /// Get default dir for the pixi global manifest
     pub(crate) fn manifest_dir() -> miette::Result<PathBuf> {
         // Potential directories, with the highest priority coming first
-        let potential_dirs = [pixi_home(), dirs::config_dir().map(|dir| dir.join("pixi"))]
-            .into_iter()
-            .flatten()
-            .map(|dir| dir.join(MANIFESTS_DIR))
-            .collect_vec();
+        let potential_dirs = [
+            pixi_home(),
+            dirs::config_dir().map(|dir| dir.join(consts::CONFIG_DIR)),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|dir| dir.join(MANIFESTS_DIR))
+        .collect_vec();
 
         // First, check if a `pixi-global.toml` already exists
         for dir in &potential_dirs {
-            if dir.join(MANIFEST_DEFAULT_NAME).is_file() {
+            if dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME).is_file() {
                 return Ok(dir.clone());
             }
         }
@@ -409,7 +413,7 @@ impl Project {
 
     /// Get the default path to the global manifest file
     pub(crate) fn default_manifest_path() -> miette::Result<PathBuf> {
-        Self::manifest_dir().map(|dir| dir.join(MANIFEST_DEFAULT_NAME))
+        Self::manifest_dir().map(|dir| dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME))
     }
 
     /// Loads a project from manifest file.
@@ -456,13 +460,15 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> &ClientWithMiddleware {
-        &self.client_and_authenticated_client().1
+    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
+        Ok(&self.client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(&self) -> &(reqwest::Client, ClientWithMiddleware) {
+    fn client_and_authenticated_client(
+        &self,
+    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
         self.client
-            .get_or_init(|| build_reqwest_clients(Some(&self.config)))
+            .get_or_try_init(|| build_reqwest_clients(Some(&self.config), None))
     }
 
     pub(crate) fn config(&self) -> &Config {
@@ -515,7 +521,7 @@ impl Project {
                 env_name.fancy_display()
             ),
             |_| async {
-                self.repodata_gateway()
+                self.repodata_gateway()?
                     .query(channels, [platform, Platform::NoArch], match_specs.clone())
                     .recursive(true)
                     .await
@@ -564,9 +570,14 @@ impl Project {
 
         try_increase_rlimit_to_sensible();
 
+        // Force the initialization of the rayon thread pool to avoid implicit creation
+        // by the Installer.
+        LazyLock::force(&RAYON_INITIALIZE);
+
         // Install the environment
         let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
         let prefix = self.environment_prefix(env_name).await?;
+        let authenticated_client = self.authenticated_client()?.clone();
         let result = await_in_progress(
             format!(
                 "Creating virtual environment for {}",
@@ -574,8 +585,7 @@ impl Project {
             ),
             |pb| {
                 Installer::new()
-                    .with_download_client(self.authenticated_client().clone())
-                    .with_io_concurrency_limit(100)
+                    .with_download_client(authenticated_client)
                     .with_execute_link_scripts(false)
                     .with_package_cache(package_cache)
                     .with_target_platform(platform)
@@ -587,7 +597,7 @@ impl Project {
                             .clear_when_done(true)
                             .finish(),
                     )
-                    .install(prefix.root(), solved_records)
+                    .install(prefix.root(), solved_records.records)
             },
         )
         .await
@@ -661,8 +671,23 @@ impl Project {
         Ok(state_changes)
     }
 
-    /// Get all installed executables for specific environment.
-    pub async fn executables(
+    /// Gets all installed executables of a specific environment.
+    pub async fn executables_of_all_dependencies(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<Vec<Executable>> {
+        let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
+        let prefix = Prefix::new(env_dir.path());
+
+        let prefix_records = &prefix.find_installed_packages()?;
+
+        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
+
+        Ok(all_executables)
+    }
+
+    /// Get installed executables of direct dependencies of a specific environment.
+    pub async fn executables_of_direct_dependencies(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<IndexMap<PackageName, Vec<Executable>>> {
@@ -697,7 +722,7 @@ impl Project {
 
     /// Sync the `exposed` field in manifest based on the executables in the
     /// environment and the expose type. Expose type can be either:
-    /// * If the user initially chooses to auto-exposed everything, we will add
+    /// * If the user initially chooses to auto-expose everything, we will add
     ///   new binaries that are not exposed in the `exposed` field.
     ///
     /// * If the use chose to expose only a subset of binaries, we will remove
@@ -709,7 +734,7 @@ impl Project {
         expose_type: ExposedType,
     ) -> miette::Result<()> {
         // Get env executables
-        let env_executables = self.executables(env_name).await?;
+        let execs_all = self.executables_of_all_dependencies(env_name).await?;
 
         // Get the parsed environment
         let environment = self
@@ -721,15 +746,14 @@ impl Project {
             .exposed
             .iter()
             .filter_map(|mapping| {
-                // If the executable is still requested, do not remove the mapping
-                if env_executables.values().flatten().any(|executable| {
-                    executable_from_path(&executable.path) == mapping.executable_relname()
+                // If the executable isn't requested, remove the mapping
+                if execs_all.iter().all(|executable| {
+                    executable_from_path(&executable.path) != mapping.executable_relname()
                 }) {
-                    tracing::debug!("Not removing mapping to: {}", mapping.executable_relname());
-                    return None;
+                    Some(mapping.exposed_name().clone())
+                } else {
+                    None
                 }
-                // Else do remove the mapping
-                Some(mapping.exposed_name().clone())
             })
             .collect_vec();
 
@@ -738,11 +762,12 @@ impl Project {
             self.manifest.remove_exposed_name(env_name, exposed_name)?;
         }
 
-        // auto-expose the executables if necessary
+        let execs_direct_deps = self.executables_of_direct_dependencies(env_name).await?;
+
         match expose_type {
             ExposedType::All => {
                 // Add new binaries that are not yet exposed
-                let executable_names = env_executables
+                let executable_names = execs_direct_deps
                     .into_iter()
                     .flat_map(|(_, executables)| executables)
                     .map(|executable| executable.name);
@@ -754,13 +779,14 @@ impl Project {
                     self.manifest.add_exposed_mapping(env_name, &mapping)?;
                 }
             }
-            ExposedType::Filter(filter) => {
+            ExposedType::Nothing => {}
+            ExposedType::Ignore(ignore) => {
                 // Add new binaries that are not yet exposed and that don't come from one of the
-                // packages we filter on
-                let executable_names = env_executables
+                // packages we ignore
+                let executable_names = execs_direct_deps
                     .into_iter()
                     .filter_map(|(package_name, executable)| {
-                        if filter.contains(&package_name) {
+                        if ignore.contains(&package_name) {
                             None
                         } else {
                             Some(executable)
@@ -855,6 +881,7 @@ impl Project {
         }
         Ok(in_sync)
     }
+
     /// Expose executables from the environment to the global bin directory.
     ///
     /// This function will first remove all binaries that are not listed as
@@ -869,16 +896,14 @@ impl Project {
         // First clean up binaries that are not listed as exposed
         state_changes |= self.prune_exposed(env_name).await?;
 
+        let all_executables = self.executables_of_all_dependencies(env_name).await?;
+
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let prefix = Prefix::new(env_dir.path());
 
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
-
-        let prefix_records = &prefix.find_installed_packages(None).await?;
-
-        let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
         let exposed: HashSet<&str> = environment
             .exposed
@@ -1044,8 +1069,7 @@ impl Project {
             env_name,
             self.environment_prefix(env_name)
                 .await?
-                .find_installed_packages(None)
-                .await?
+                .find_installed_packages()?
                 .into_iter()
                 .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
                 .map(|r| r.repodata_record.package_record)
@@ -1084,7 +1108,11 @@ impl Project {
                         state_changes.insert_change(
                             env_name,
                             StateChange::InstalledMenuItem(
-                                menu_file.file_name().unwrap().to_string_lossy().to_string(),
+                                menu_file
+                                    .file_name()
+                                    .unwrap_or("menu_file".as_ref())
+                                    .to_string_lossy()
+                                    .to_string(),
                             ),
                         );
                     }
@@ -1095,12 +1123,6 @@ impl Project {
                         tracing::warn!("Please report this issue to the pixi developers.");
                     }
                 }
-                state_changes.insert_change(
-                    env_name,
-                    StateChange::InstalledMenuItem(
-                        menu_file.file_name().unwrap().to_string_lossy().to_string(),
-                    ),
-                );
             }
         }
         Ok(state_changes)
@@ -1112,35 +1134,24 @@ impl Project {
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
-        let environment = self
-            .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
         // Find menu items in the prefix
         let prefix = self.environment_prefix(env_name).await?;
-        let menu_files = prefix.find_menu_schema_files().await?;
+        let prefix_records = prefix.find_installed_packages()?;
 
         // Remove menu items
-        for menu_file in menu_files {
-            match rattler_menuinst::remove_menu_items(
-                menu_file.as_path(),
-                prefix.root(),
-                prefix.root(),
-                environment.platform().unwrap_or(Platform::current()),
-                MenuMode::User,
-            ) {
+        for record in prefix_records {
+            match rattler_menuinst::remove_menu_items(&record.installed_system_menus) {
                 Ok(_) => {
-                    tracing::info!("Uninstalled menu item: {}", menu_file.display());
+                    tracing::info!("Uninstalled menu items for: '{}'", record.file_name());
                     state_changes.insert_change(
                         env_name,
-                        StateChange::UninstalledMenuItem(
-                            menu_file.file_name().unwrap().to_string_lossy().to_string(),
-                        ),
+                        StateChange::UninstalledMenuItem(record.file_name().to_string()),
                     );
                 }
                 // Don't fail on menu install errors, menuinst is too unstable to break the whole process because of issue with it.
                 Err(e) => {
-                    tracing::warn!("Couldn't uninstall menu item: {}", menu_file.display());
+                    tracing::warn!("Couldn't uninstall menu item for: {}", record.file_name());
                     tracing::warn!("{:?}", e);
                     tracing::warn!("Please report this issue to the pixi developers.");
                 }
@@ -1152,13 +1163,10 @@ impl Project {
 
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
-    fn repodata_gateway(&self) -> &Gateway {
-        self.repodata_gateway.get_or_init(|| {
-            Self::repodata_gateway_init(
-                self.authenticated_client().clone(),
-                self.config().clone().into(),
-                self.config().max_concurrent_downloads(),
-            )
+    fn repodata_gateway(&self) -> miette::Result<&Gateway> {
+        self.repodata_gateway.get_or_try_init(|| {
+            let client = self.authenticated_client()?.clone();
+            Ok(self.config().gateway(client))
         })
     }
 }
@@ -1201,7 +1209,7 @@ mod tests {
     #[tokio::test]
     async fn test_project_from_path() {
         let tempdir = tempfile::tempdir().unwrap();
-        let manifest_path = tempdir.path().join(MANIFEST_DEFAULT_NAME);
+        let manifest_path = tempdir.path().join(consts::GLOBAL_MANIFEST_DEFAULT_NAME);
 
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();
@@ -1280,7 +1288,7 @@ mod tests {
             non_exposed_manifest,
         );
 
-        // write it's trampline and manifest
+        // write it's trampoline and manifest
         non_exposed_trampoline.save().await.unwrap();
 
         // Create exposed binary
@@ -1355,7 +1363,7 @@ mod tests {
 
         // Create project with env1 and env3
         let manifest = Manifest::from_str(
-            &env_root.path().join(MANIFEST_DEFAULT_NAME),
+            &env_root.path().join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
             r#"
             [envs.env1]
             channels = ["conda-forge"]

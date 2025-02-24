@@ -7,11 +7,13 @@ use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use uv_configuration::ConfigSettings;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, ProjectConfig};
+use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::Project;
+use crate::WorkspaceLocator;
 use fancy_display::FancyDisplay;
+use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
     pypi_options_to_index_locations, to_uv_normalize, to_uv_version, ConversionError,
@@ -57,7 +59,7 @@ pub struct Args {
     pub sort_by: SortBy,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
 
     /// The environment to list packages for. Defaults to the default environment.
     #[arg(short, long)]
@@ -143,14 +145,17 @@ impl PackageExt {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
-    let environment = project.environment_from_name_or_env_var(args.environment)?;
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?;
 
-    let lock_file = project
+    let environment = workspace.environment_from_name_or_env_var(args.environment)?;
+
+    let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.prefix_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
-            max_concurrent_solves: project.config().max_concurrent_solves(),
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?;
 
@@ -184,11 +189,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let tags;
     let uv_context;
     let index_locations;
+    let config_settings = ConfigSettings::default();
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
-            uv_context = UvResolutionContext::from_project(&project)?;
+            uv_context = UvResolutionContext::from_workspace(&workspace)?;
             index_locations =
-                pypi_options_to_index_locations(&environment.pypi_options(), project.root())
+                pypi_options_to_index_locations(&environment.pypi_options(), workspace.root())
                     .into_diagnostic()?;
             tags = get_pypi_tags(
                 platform,
@@ -200,6 +206,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &tags,
                 &index_locations,
                 &uv_types::HashStrategy::None,
+                &config_settings,
             ))
         } else {
             None
@@ -259,10 +266,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if packages_to_output.is_empty() {
         eprintln!(
-            "{}No packages found.",
+            "{}No packages found in '{}' environment for '{}' platform.",
             console::style(console::Emoji("✘ ", "")).red(),
+            environment.name().fancy_display(),
+            consts::ENVIRONMENT_STYLE.apply_to(platform),
         );
-        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
         return Ok(());
     }
 
@@ -279,7 +287,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         print_packages_as_table(&packages_to_output).expect("an io error occurred");
     }
 
-    Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
     Ok(())
 }
 
@@ -345,6 +352,17 @@ fn json_packages(packages: &Vec<PackageToOutput>, json_pretty: bool) {
     println!("{}", json_string);
 }
 
+/// Return the size and source location of the pypi package
+fn get_pypi_location_information(location: &UrlOrPath) -> (Option<u64>, Option<String>) {
+    match location {
+        UrlOrPath::Url(url) => (None, Some(url.to_string())),
+        UrlOrPath::Path(path) => (
+            get_dir_size(std::path::Path::new(path.as_str())).ok(),
+            Some(path.to_string()),
+        ),
+    }
+}
+
 fn create_package_to_output<'a, 'b>(
     package: &'b PackageExt,
     project_dependency_names: &'a [String],
@@ -368,21 +386,22 @@ fn create_package_to_output<'a, 'b>(
             Some(pkg.record().name.as_source().to_owned()),
         ),
         PackageExt::PyPI(p, name) => {
-            if let Some(registry_index) = registry_index {
-                let entry = registry_index.get(name).find(|i| {
-                    i.dist.filename.version == to_uv_version(&p.version).expect("invalid version")
-                });
-                let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
-                let name = entry.map(|e| e.dist.filename.to_string());
-                (size, name)
-            } else {
-                match &p.location {
-                    UrlOrPath::Url(url) => (None, Some(url.to_string())),
-                    UrlOrPath::Path(path) => (
-                        get_dir_size(std::path::Path::new(path.as_str())).ok(),
-                        Some(path.to_string()),
-                    ),
+            // Check the hash to avoid non index packages to be handled by the registry index as wheels
+            if p.hash.is_some() {
+                if let Some(registry_index) = registry_index {
+                    // Handle case where the registry index is present
+                    let entry = registry_index.get(name).find(|i| {
+                        i.dist.filename.version
+                            == to_uv_version(&p.version).expect("invalid version")
+                    });
+                    let size = entry.and_then(|e| get_dir_size(e.dist.path.clone()).ok());
+                    let name = entry.map(|e| e.dist.filename.to_string());
+                    (size, name)
+                } else {
+                    get_pypi_location_information(&p.location)
                 }
+            } else {
+                get_pypi_location_information(&p.location)
             }
         }
     };

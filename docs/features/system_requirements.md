@@ -1,12 +1,20 @@
 # System Requirements in pixi
+**System requirements** tell pixi the minimum system specifications needed to install and run your project’s environment.
+They ensure that the dependencies match the operating system and hardware of your machine.
 
-**System requirements** define the minimal system specifications necessary during dependency resolution for a project.
-For instance, specifying a Unix system with a particular minimal `libc` version ensures that dependencies are compatible
-with the project's environment.
+Think of it like this:
+You’re defining what “kind of computer” your project can run on.
+For example, you might require a specific Linux kernel version or a minimum glibc version.
+If your machine doesn’t meet these requirements, `pixi run` will fail because the environment can’t work reliably on your system.
 
-System specifications are closely related
-to [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html), allowing for
-flexible and accurate dependency management.
+When resolving dependencies, pixi combines:
+
+- The default requirements for the operating system.
+- Any custom requirements you’ve added for your project through the `[system-requirements]`.
+
+This way, pixi guarantees your environment is consistent and compatible with your machine.
+
+System specifications are closely related to [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html), allowing for flexible and accurate dependency management.
 
 ## Default System Requirements
 
@@ -68,6 +76,11 @@ Example Configuration
 [system-requirements]
 cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
 ```
+
+1. Can `system-requirements` enforce a specific CUDA runtime version?
+    - No. The `system-requirements` field is used to specify the maximum supported CUDA version based on the host’s NVIDIA driver API.
+Adding this field ensures that packages depending on `__cuda >= {version}` are resolved correctly.
+2.
 
 ### Setting System Requirements environment specific
 This can be set per `feature` in the `the manifest` file.

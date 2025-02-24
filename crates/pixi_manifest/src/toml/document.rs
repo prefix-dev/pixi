@@ -31,6 +31,11 @@ impl TomlDocument {
         self.0.as_table_mut()
     }
 
+    /// Returns the manifest as a mutable table
+    pub fn as_table(&self) -> &Table {
+        self.0.as_table()
+    }
+
     /// Get or insert a top-level item
     pub fn get_or_insert<'a>(&'a mut self, key: &str, item: Item) -> &'a Item {
         self.0.entry(key).or_insert(item)

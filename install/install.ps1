@@ -18,7 +18,7 @@
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.39.2
+    Version: v0.41.4
 #>
 param (
     [string] $PixiVersion = 'latest',
@@ -158,6 +158,10 @@ $BINARY = "pixi-$ARCH"
 if ($PixiVersion -eq 'latest') {
     $DOWNLOAD_URL = "https://github.com/$REPO/releases/latest/download/$BINARY.zip"
 } else {
+    # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
+    if ($PixiVersion -notmatch '^v') {
+        $PixiVersion = "v$PixiVersion"
+    }
     $DOWNLOAD_URL = "https://github.com/$REPO/releases/download/$PixiVersion/$BINARY.zip"
 }
 

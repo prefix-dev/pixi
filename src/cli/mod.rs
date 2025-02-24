@@ -17,13 +17,14 @@ pub mod clean;
 pub mod cli_config;
 pub mod completion;
 pub mod config;
-mod exec;
+pub mod exec;
 pub mod global;
 pub mod has_specs;
 pub mod info;
 pub mod init;
 pub mod install;
 pub mod list;
+pub mod lock;
 pub mod project;
 pub mod remove;
 pub mod run;
@@ -107,6 +108,7 @@ pub enum Command {
     Install(install::Args),
     Update(update::Args),
     Upgrade(upgrade::Args),
+    Lock(lock::Args),
 
     #[clap(visible_alias = "r")]
     Run(run::Args),
@@ -173,7 +175,6 @@ pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     set_console_colors(&args);
     let use_colors = console::colors_enabled_stderr();
-
     // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
         Box::new(
@@ -189,22 +190,22 @@ pub async fn execute() -> miette::Result<()> {
     }
 
     let (low_level_filter, level_filter, pixi_level) = match args.verbose.log_level_filter() {
-        clap_verbosity_flag::LevelFilter::Off => {
+        clap_verbosity_flag::log::LevelFilter::Off => {
             (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF)
         }
-        clap_verbosity_flag::LevelFilter::Error => {
+        clap_verbosity_flag::log::LevelFilter::Error => {
             (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN)
         }
-        clap_verbosity_flag::LevelFilter::Warn => {
+        clap_verbosity_flag::log::LevelFilter::Warn => {
             (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO)
         }
-        clap_verbosity_flag::LevelFilter::Info => {
+        clap_verbosity_flag::log::LevelFilter::Info => {
             (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO)
         }
-        clap_verbosity_flag::LevelFilter::Debug => {
+        clap_verbosity_flag::log::LevelFilter::Debug => {
             (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG)
         }
-        clap_verbosity_flag::LevelFilter::Trace => {
+        clap_verbosity_flag::log::LevelFilter::Trace => {
             (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE)
         }
     };
@@ -220,22 +221,6 @@ pub async fn execute() -> miette::Result<()> {
             format!("resolvo={}", low_level_filter)
                 .parse()
                 .into_diagnostic()?,
-        )
-        .add_directive(
-            format!(
-                "rattler_networking::authentication_storage::backends::file={}",
-                LevelFilter::OFF
-            )
-            .parse()
-            .into_diagnostic()?,
-        )
-        .add_directive(
-            format!(
-                "rattler_networking::authentication_storage::storage={}",
-                LevelFilter::OFF
-            )
-            .parse()
-            .into_diagnostic()?,
         );
 
     // Set up the tracing subscriber
@@ -268,7 +253,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Install(cmd) => install::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::ShellHook(cmd) => shell_hook::execute(cmd).await,
-        Command::Task(cmd) => task::execute(cmd),
+        Command::Task(cmd) => task::execute(cmd).await,
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
@@ -282,6 +267,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
         Command::Upgrade(cmd) => upgrade::execute(cmd).await,
+        Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
     }

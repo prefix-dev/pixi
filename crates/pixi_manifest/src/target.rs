@@ -3,8 +3,7 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 use indexmap::{map::Entry, IndexMap};
 use itertools::Either;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform};
-use serde::{Deserialize, Deserializer};
+use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
 use crate::{
@@ -399,20 +398,16 @@ impl From<Platform> for TargetSelector {
     }
 }
 
-impl<'de> Deserialize<'de> for TargetSelector {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        match s.as_str() {
+impl FromStr for TargetSelector {
+    type Err = ParsePlatformError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
             "linux" => Ok(TargetSelector::Linux),
             "unix" => Ok(TargetSelector::Unix),
             "win" => Ok(TargetSelector::Win),
             "osx" => Ok(TargetSelector::MacOs),
-            _ => Platform::from_str(&s)
-                .map(TargetSelector::Platform)
-                .map_err(serde::de::Error::custom),
+            _ => Platform::from_str(s).map(TargetSelector::Platform),
         }
     }
 }
@@ -581,6 +576,11 @@ impl<T> Targets<T> {
         self.targets.keys()
     }
 
+    /// Returns the user defined selectors and their targets
+    pub fn user_defined_targets(&self) -> impl Iterator<Item = (&TargetSelector, &T)> + '_ {
+        self.targets.iter()
+    }
+
     /// Returns the source location of the target selector in the manifest.
     pub fn source_loc(&self, selector: &TargetSelector) -> Option<std::ops::Range<usize>> {
         self.source_locs.get(selector).cloned()
@@ -589,17 +589,14 @@ impl<T> Targets<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use insta::assert_snapshot;
     use itertools::Itertools;
 
-    use crate::Manifest;
+    use crate::WorkspaceManifest;
 
     #[test]
     fn test_targets_overwrite_order() {
-        let manifest = Manifest::from_str(
-            Path::new("pixi.toml"),
+        let manifest = WorkspaceManifest::from_toml_str(
             r#"
         [project]
         name = "test"

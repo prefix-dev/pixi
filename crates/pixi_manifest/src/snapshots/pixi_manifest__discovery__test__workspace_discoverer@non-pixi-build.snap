@@ -1,0 +1,6 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+Discovered workspace at: non-pixi-build/pixi.toml
+- Name: non-build-workspace

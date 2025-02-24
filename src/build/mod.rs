@@ -1,6 +1,37 @@
 mod cache;
 mod reporters;
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use chrono::Utc;
+use itertools::Itertools;
+use miette::Diagnostic;
+use miette::IntoDiagnostic;
+use pixi_build_frontend::{BackendOverride, Protocol, SetupRequest, ToolContext};
+use pixi_build_types::{
+    procedures::{
+        conda_build::{CondaBuildParams, CondaOutputIdentifier},
+        conda_metadata::CondaMetadataParams,
+    },
+    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
+};
+use pixi_config::get_cache_dir;
+use pixi_consts::consts::CACHED_GIT_DIR;
+use pixi_git::GitError;
+use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl, Reporter};
+pub use pixi_glob::{GlobHashCache, GlobHashError};
+use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
+use pixi_manifest::Targets;
+use pixi_record::{
+    InputHash, PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, SourceRecord,
+};
+use pixi_spec::{GitSpec, SourceSpec};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
+};
+use rattler_digest::Sha256;
+use reporters::SourceReporter;
+pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
+use std::sync::LazyLock;
 use std::{
     collections::HashMap,
     ffi::OsStr,
@@ -10,39 +41,23 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use chrono::Utc;
-use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic};
-use pixi_build_frontend::{BackendOverride, SetupRequest, ToolContext};
-use pixi_build_types::{
-    procedures::{
-        conda_build::{CondaBuildParams, CondaOutputIdentifier},
-        conda_metadata::CondaMetadataParams,
-    },
-    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
-};
-use pixi_config::get_cache_dir;
-pub use pixi_glob::{GlobHashCache, GlobHashError};
-use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
-use pixi_record::{InputHash, PinnedPathSpec, PinnedSourceSpec, SourceRecord};
-use pixi_spec::SourceSpec;
-use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
-};
-use rattler_digest::Sha256;
-pub use reporters::{BuildMetadataReporter, BuildReporter};
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
 use url::Url;
+use uv_configuration::RAYON_INITIALIZE;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::build::cache::{
     BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
     SourceMetadataInput,
 };
+use crate::Workspace;
+
+/// A list of globs that should be ignored when calculating any input hash.
+/// These are typically used for build artifacts that should not be included in
+/// the input hash.
+const DEFAULT_BUILD_IGNORE_GLOBS: &[&str] = &["!.pixi/**"];
 
 /// The [`BuildContext`] is used to build packages from source.
 #[derive(Clone)]
@@ -54,24 +69,35 @@ pub struct BuildContext {
     cache_dir: PathBuf,
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
-    variant_config: Option<HashMap<String, Vec<String>>>,
+    variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
+
+    /// The resolved Git references.
+    git: GitResolver,
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum BuildError {
-    #[error("failed to resolve source path {}", &.0)]
-    ResolveSourcePath(Utf8TypedPathBuf, #[source] std::io::Error),
+    #[error("failed to resolve path source {}", &.0)]
+    ResolvePathSource(Utf8TypedPathBuf, #[source] std::io::Error),
+
+    #[error("failed to resolve git source {}", &.0)]
+    ResolveGitSource(Url, #[diagnostic_source] miette::Report),
 
     #[error("error calculating sha for {}", &.0.display())]
     CalculateSha(PathBuf, #[source] std::io::Error),
 
-    #[error(transparent)]
-    BuildFrontendSetup(pixi_build_frontend::BuildFrontendError),
+    #[error("failed to initialize a build backend for {}", &.0.pinned)]
+    BuildFrontendSetup(
+        Box<SourceCheckout>,
+        #[diagnostic_source] pixi_build_frontend::BuildFrontendError,
+    ),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     BackendError(Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FrontendError(Box<dyn Diagnostic + Send + Sync + 'static>),
 
     #[error(transparent)]
@@ -88,6 +114,9 @@ pub enum BuildError {
 
     #[error(transparent)]
     BuildFolderNotWritable(#[from] std::io::Error),
+
+    #[error(transparent)]
+    GitFetch(#[from] GitError),
 }
 
 /// Location of the source code for a package. This will be used as the input
@@ -117,7 +146,7 @@ impl BuildContext {
         cache_dir: PathBuf,
         dot_pixi_dir: PathBuf,
         channel_config: ChannelConfig,
-        variant_config: Option<HashMap<String, Vec<String>>>,
+        variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
         tool_context: Arc<ToolContext>,
     ) -> Result<Self, std::io::Error> {
         Ok(Self {
@@ -129,20 +158,18 @@ impl BuildContext {
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
             variant_config,
+            git: GitResolver::default(),
         })
     }
 
-    pub fn from_project(project: &crate::project::Project) -> miette::Result<Self> {
+    pub fn from_workspace(workspace: &Workspace) -> miette::Result<Self> {
+        let variant = workspace.workspace.value.workspace.build_variants.clone();
+
         Self::new(
             get_cache_dir()?,
-            project.pixi_dir(),
-            project.channel_config(),
-            project
-                .manifest()
-                .workspace
-                .workspace
-                .build_variants
-                .clone(),
+            workspace.pixi_dir(),
+            workspace.channel_config(),
+            variant,
             Arc::new(ToolContext::default()),
         )
         .into_diagnostic()
@@ -163,6 +190,22 @@ impl BuildContext {
         }
     }
 
+    pub fn resolve_variant(&self, platform: Platform) -> HashMap<String, Vec<String>> {
+        let mut result = HashMap::new();
+
+        // Resolves from most specific to least specific.
+        for variants in self.variant_config.resolve(Some(platform)).flatten() {
+            // Update the hash map, but only items that are not already in the map.
+            for (key, value) in variants {
+                result.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
+
+        tracing::info!("resolved variant configuration: {:?}", result);
+
+        result
+    }
+
     /// Extracts the metadata for a package from the given source specification.
     #[allow(clippy::too_many_arguments)]
     pub async fn extract_source_metadata(
@@ -174,9 +217,10 @@ impl BuildContext {
         build_platform: Platform,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
+        source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
-        let source = self.fetch_source(source_spec).await?;
+        let source = self.fetch_source(source_spec, source_reporter).await?;
         let records = self
             .extract_records(
                 &source,
@@ -204,10 +248,13 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         build_reporter: Arc<dyn BuildReporter>,
+        source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
-            path: self.fetch_pinned_source(&source_spec.source).await?,
+            path: self
+                .fetch_pinned_source(&source_spec.source, source_reporter)
+                .await?,
             pinned: source_spec.source.clone(),
         };
 
@@ -240,20 +287,9 @@ impl BuildContext {
             }
         }
 
-        // Instantiate a protocol for the source directory.
-        let protocol = pixi_build_frontend::BuildFrontend::default()
-            .with_channel_config(self.channel_config.clone())
-            .with_cache_dir(self.cache_dir.clone())
-            .with_tool_context(self.tool_context.clone())
-            .setup_protocol(SetupRequest {
-                source_dir: source_checkout.path.clone(),
-                build_tool_override: BackendOverride::from_env(),
-                build_id,
-            })
-            .await
-            .map_err(BuildError::BuildFrontendSetup)?;
+        let protocol = self.setup_protocol(&source_checkout, build_id).await?;
 
-        // Extract the conda metadata for the package.
+        // Build the package
         let build_result = protocol
             .conda_build(
                 &CondaBuildParams {
@@ -266,6 +302,8 @@ impl BuildContext {
                     channel_configuration: ChannelConfiguration {
                         base_url: self.channel_config.channel_alias.clone(),
                     },
+                    // only use editable for build path dependencies
+                    editable: source_spec.source.as_path().is_some(),
                     outputs: Some(vec![CondaOutputIdentifier {
                         name: Some(source_spec.package_record.name.as_normalized().to_string()),
                         version: Some(source_spec.package_record.version.version().to_string()),
@@ -280,7 +318,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
-                    variant_configuration: self.variant_config.clone(),
+                    variant_configuration: Some(self.resolve_variant(host_platform)),
                 },
                 build_reporter.as_conda_build_reporter(),
             )
@@ -336,7 +374,11 @@ impl BuildContext {
                     .is_immutable()
                     .not()
                     .then_some(SourceInfo {
-                        globs: build_result.input_globs,
+                        globs: protocol
+                            .manifests()
+                            .into_iter()
+                            .chain(build_result.input_globs)
+                            .collect_vec(),
                     }),
                 record: record.clone(),
             })
@@ -357,14 +399,44 @@ impl BuildContext {
     pub async fn fetch_source(
         &self,
         source_spec: &SourceSpec,
+        source_reporter: Option<Arc<dyn SourceReporter>>,
     ) -> Result<SourceCheckout, BuildError> {
         match source_spec {
             SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
-            SourceSpec::Git(_) => unimplemented!("fetching Git sources is not yet implemented"),
+            SourceSpec::Git(git_spec) => {
+                let fetched = self
+                    .resolve_git(
+                        git_spec.clone(),
+                        source_reporter.map(|sr| sr.as_git_reporter()),
+                    )
+                    .await?;
+                //TODO: will be removed when manifest will be merged in pixi-build-backend
+                let path = if let Some(subdir) = git_spec.subdirectory.as_ref() {
+                    fetched.clone().into_path().join(subdir)
+                } else {
+                    fetched.clone().into_path()
+                };
+
+                let source_checkout = SourceCheckout {
+                    path,
+                    pinned: PinnedSourceSpec::Git(PinnedGitSpec {
+                        git: fetched.git().repository().clone(),
+                        source: PinnedGitCheckout {
+                            commit: fetched.git().precise().expect("should be precies"),
+                            reference: git_spec
+                                .rev
+                                .clone()
+                                .unwrap_or(pixi_spec::GitReference::DefaultBranch),
+                            subdirectory: git_spec.subdirectory.clone(),
+                        },
+                    }),
+                };
+                Ok(source_checkout)
+            }
             SourceSpec::Path(path) => {
                 let source_path = self
                     .resolve_path(path.path.to_path())
-                    .map_err(|err| BuildError::ResolveSourcePath(path.path.clone(), err))?;
+                    .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err))?;
                 Ok(SourceCheckout {
                     path: source_path,
                     pinned: PinnedPathSpec {
@@ -383,17 +455,32 @@ impl BuildContext {
     pub async fn fetch_pinned_source(
         &self,
         source_spec: &PinnedSourceSpec,
+        source_reporter: Option<Arc<dyn SourceReporter>>,
     ) -> Result<PathBuf, BuildError> {
         match source_spec {
             PinnedSourceSpec::Url(_) => {
                 unimplemented!("fetching URL sources is not yet implemented")
             }
-            PinnedSourceSpec::Git(_) => {
-                unimplemented!("fetching Git sources is not yet implemented")
+            PinnedSourceSpec::Git(pinned_git_spec) => {
+                let fetched = self
+                    .resolve_precise_git(
+                        pinned_git_spec.clone(),
+                        source_reporter.map(|sr| sr.as_git_reporter()),
+                    )
+                    .await
+                    .map_err(|err| {
+                        BuildError::ResolveGitSource(pinned_git_spec.git.clone(), err)
+                    })?;
+                let path = if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
+                    fetched.into_path().join(subdir)
+                } else {
+                    fetched.into_path()
+                };
+                Ok(path)
             }
             PinnedSourceSpec::Path(path) => self
                 .resolve_path(path.path.to_path())
-                .map_err(|err| BuildError::ResolveSourcePath(path.path.clone(), err)),
+                .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err)),
         }
     }
 
@@ -421,6 +508,62 @@ impl BuildContext {
         }
     }
 
+    /// Resolves the source path to a full path.
+    ///
+    /// This function does not check if the path exists and also does not follow
+    /// symlinks.
+    async fn resolve_git(
+        &self,
+        git: GitSpec,
+        reporter: Option<Arc<dyn Reporter>>,
+    ) -> Result<Fetch, GitError> {
+        let git_reference = git
+            .rev
+            .map(|rev| rev.into())
+            .unwrap_or(GitReference::DefaultBranch);
+
+        let git_url = GitUrl::try_from(git.git)?.with_reference(git_reference);
+
+        let resolver = self
+            .git
+            .fetch(
+                &git_url,
+                self.tool_context.clone().client.clone(),
+                self.cache_dir.clone().join(CACHED_GIT_DIR),
+                reporter,
+            )
+            .await?;
+
+        Ok(resolver)
+    }
+
+    /// Resolves the source path to a full path.
+    ///
+    /// This function does not check if the path exists and also does not follow
+    /// symlinks.
+    async fn resolve_precise_git(
+        &self,
+        git: PinnedGitSpec,
+        reporter: Option<Arc<dyn Reporter>>,
+    ) -> miette::Result<Fetch> {
+        let git_reference = git.source.reference.into();
+
+        let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
+
+        let resolver = self
+            .git
+            .fetch(
+                &git_url,
+                self.tool_context.clone().client.clone(),
+                self.cache_dir.clone().join(CACHED_GIT_DIR),
+                reporter,
+            )
+            .await
+            .into_diagnostic()?;
+
+        Ok(resolver)
+    }
+
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
     #[instrument(skip_all, fields(source = %source.pinned, platform = %host_platform))]
@@ -437,6 +580,7 @@ impl BuildContext {
         build_id: usize,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let channel_urls = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
+        let variant_configuration = self.resolve_variant(host_platform);
 
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
@@ -448,6 +592,7 @@ impl BuildContext {
                     build_virtual_packages: build_virtual_packages.clone(),
                     host_platform,
                     host_virtual_packages: host_virtual_packages.clone(),
+                    build_variants: variant_configuration.clone().into_iter().collect(),
                 },
             )
             .await?;
@@ -483,21 +628,11 @@ impl BuildContext {
             }
         }
 
-        // Instantiate a protocol for the source directory.
-        let protocol = pixi_build_frontend::BuildFrontend::default()
-            .with_channel_config(self.channel_config.clone())
-            .with_tool_context(self.tool_context.clone())
-            .setup_protocol(SetupRequest {
-                source_dir: source.path.clone(),
-                build_tool_override: BackendOverride::from_env(),
-                build_id,
-            })
-            .await
-            .map_err(BuildError::BuildFrontendSetup)?;
+        let protocol = self.setup_protocol(source, build_id).await?;
 
-        // Extract the conda metadata for the package.
+        // Extract the conda metadata for the package
         let metadata = protocol
-            .get_conda_metadata(
+            .conda_get_metadata(
                 &CondaMetadataParams {
                     build_platform: Some(PlatformAndVirtualPackages {
                         platform: build_platform,
@@ -519,7 +654,7 @@ impl BuildContext {
                         }
                         .key(),
                     ),
-                    variant_configuration: self.variant_config.clone(),
+                    variant_configuration: Some(variant_configuration),
                 },
                 metadata_reporter.as_conda_metadata_reporter().clone(),
             )
@@ -530,7 +665,18 @@ impl BuildContext {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
-            let input_globs = metadata.input_globs.clone().unwrap_or(protocol.manifests());
+            let input_globs = protocol
+                .manifests()
+                .into_iter()
+                .chain(
+                    metadata
+                        .input_globs
+                        .clone()
+                        .into_iter()
+                        .flat_map(|glob| glob.into_iter()),
+                )
+                .collect_vec();
+
             let input_hash = self
                 .glob_hash_cache
                 .compute_hash(GlobHashKey {
@@ -559,6 +705,31 @@ impl BuildContext {
         ))
     }
 
+    async fn setup_protocol(
+        &self,
+        source: &SourceCheckout,
+        build_id: usize,
+    ) -> Result<Protocol, BuildError> {
+        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
+        LazyLock::force(&RAYON_INITIALIZE);
+
+        // Instantiate a protocol for the source directory.
+        let protocol = pixi_build_frontend::BuildFrontend::default()
+            .with_channel_config(self.channel_config.clone())
+            .with_tool_context(self.tool_context.clone())
+            .setup_protocol(SetupRequest {
+                source_dir: source.path.clone(),
+                build_tool_override: BackendOverride::from_env(),
+                build_id,
+            })
+            .await
+            .map_err(|frontend_error| {
+                BuildError::BuildFrontendSetup(Box::new(source.clone()), frontend_error)
+            })?;
+
+        Ok(protocol)
+    }
+
     fn cached_build_source_record(
         cached_build: CachedBuild,
         source_checkout: &SourceCheckout,
@@ -567,7 +738,11 @@ impl BuildContext {
         if let Some(source_input) = cached_build.source {
             let glob_time = GlobModificationTime::from_patterns(
                 &source_checkout.path,
-                source_input.globs.iter().map(String::as_str),
+                source_input
+                    .globs
+                    .iter()
+                    .map(String::as_str)
+                    .chain(DEFAULT_BUILD_IGNORE_GLOBS.iter().copied()),
             )
             .map_err(BuildError::GlobModificationError)?;
             match glob_time {
@@ -662,6 +837,7 @@ fn source_metadata_to_records(
 
                     // These are not important at this point.
                     run_exports: None,
+                    extra_depends: Default::default(),
                 },
             }
         })

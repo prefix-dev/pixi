@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/workspace.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n        license = \"MIT OR FOOBAR\"\n        \"#,)"
+---
+  × 'license' is not a valid SPDX expression
+   ╭─[pixi.toml:5:20]
+ 4 │         platforms = []
+ 5 │         license = "MIT OR FOOBAR"
+   ·                    ──────┬──────
+   ·                          ╰─┤ MIT OR FOOBAR
+   ·                            │        ^^^^^^ unknown term
+ 6 │
+   ╰────

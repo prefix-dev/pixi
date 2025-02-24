@@ -8,27 +8,28 @@ use std::{
 use deno_task_shell::{
     execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
 };
+use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi_consts::consts;
+use pixi_manifest::{Task, TaskName};
+use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
 use super::task_hash::{InputHashesError, TaskCache, TaskHash};
 use crate::{
+    activation::CurrentEnvVarBehavior,
     lock_file::LockFileDerivedData,
-    project::Environment,
     task::task_graph::{TaskGraph, TaskId},
-    Project,
+    workspace::get_activated_environment_variables,
+    workspace::{
+        virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
+        HasWorkspaceRef,
+    },
+    Workspace,
 };
-use fs_err::tokio as tokio_fs;
-use pixi_consts::consts;
-
-use crate::activation::CurrentEnvVarBehavior;
-use crate::project::virtual_packages::verify_current_platform_has_required_virtual_packages;
-use crate::project::HasProjectRef;
-use pixi_manifest::{Task, TaskName};
-use pixi_progress::await_in_progress;
 
 /// Runs task in project.
 #[derive(Default, Debug)]
@@ -82,7 +83,7 @@ pub enum CanSkip {
 /// tasks.
 #[derive(Clone)]
 pub struct ExecutableTask<'p> {
-    pub project: &'p Project,
+    pub workspace: &'p Workspace,
     pub name: Option<TaskName>,
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
@@ -94,7 +95,7 @@ impl<'p> ExecutableTask<'p> {
     pub fn from_task_graph(task_graph: &TaskGraph<'p>, task_id: TaskId) -> Self {
         let node = &task_graph[task_id];
         Self {
-            project: task_graph.project(),
+            workspace: task_graph.project(),
             name: node.name.clone(),
             task: node.task.clone(),
             run_environment: node.run_environment.clone(),
@@ -113,8 +114,8 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the project in which this task is defined.
-    pub(crate) fn project(&self) -> &'p Project {
-        self.project
+    pub(crate) fn project(&self) -> &'p Workspace {
+        self.workspace
     }
 
     /// Returns the task as script
@@ -167,7 +168,7 @@ impl<'p> ExecutableTask<'p> {
         Ok(match self.task.working_directory() {
             Some(cwd) if cwd.is_absolute() => cwd.to_path_buf(),
             Some(cwd) => {
-                let abs_path = self.project.root().join(cwd);
+                let abs_path = self.workspace.root().join(cwd);
                 if !abs_path.is_dir() {
                     return Err(InvalidWorkingDirectory {
                         path: cwd.to_string_lossy().to_string(),
@@ -175,7 +176,7 @@ impl<'p> ExecutableTask<'p> {
                 }
                 abs_path
             }
-            None => self.project.root().to_path_buf(),
+            None => self.workspace.root().to_path_buf(),
         })
     }
 
@@ -218,17 +219,24 @@ impl<'p> ExecutableTask<'p> {
         let cwd = self.working_directory()?;
         let (stdin, mut stdin_writer) = pipe();
         if let Some(stdin) = input {
-            stdin_writer.write_all(stdin).unwrap();
+            stdin_writer
+                .write_all(stdin)
+                .expect("should be able to write to stdin");
         }
         drop(stdin_writer); // prevent a deadlock by dropping the writer
         let (stdout, stdout_handle) = get_output_writer_and_handle();
         let (stderr, stderr_handle) = get_output_writer_and_handle();
-        let state = ShellState::new(command_env.clone(), &cwd, Default::default());
+        let state = ShellState::new(
+            command_env.clone(),
+            &cwd,
+            Default::default(),
+            Default::default(),
+        );
         let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
         Ok(RunOutput {
             exit_code: code,
-            stdout: stdout_handle.await.unwrap(),
-            stderr: stderr_handle.await.unwrap(),
+            stdout: stdout_handle.await.expect("should be able to get stdout"),
+            stderr: stderr_handle.await.expect("should be able to get stderr"),
         })
     }
 
@@ -302,7 +310,7 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
     task: &'t ExecutableTask<'p>,
 }
 
-impl<'p, 't> Display for ExecutableTaskConsoleDisplay<'p, 't> {
+impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let command = self.task.task.as_single_command();
         write!(
@@ -347,10 +355,11 @@ fn get_export_specific_task_env(task: &Task) -> String {
     export
 }
 
-/// Determine the environment variables to use when executing a command. The method combines the
-/// activation environment with the system environment variables.
-pub async fn get_task_env<'p>(
-    environment: &Environment<'p>,
+/// Determine the environment variables to use when executing a command. The
+/// method combines the activation environment with the system environment
+/// variables.
+pub async fn get_task_env(
+    environment: &Environment<'_>,
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -366,7 +375,8 @@ pub async fn get_task_env<'p>(
         CurrentEnvVarBehavior::Include
     };
     let mut activation_env = await_in_progress("activating environment", |_| {
-        environment.project().get_activated_environment_variables(
+        get_activated_environment_variables(
+            environment.workspace().env_vars(),
             environment,
             env_var_behavior,
             lock_file,
@@ -395,7 +405,6 @@ pub async fn get_task_env<'p>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pixi_manifest::Manifest;
     use std::path::Path;
 
     const PROJECT_BOILERPLATE: &str = r#"
@@ -413,15 +422,13 @@ mod tests {
             [tasks]
             test = {cmd = "test", cwd = "tests", env = {FOO = "bar", BAR = "$FOO"}}
             "#;
-        let manifest = Manifest::from_str(
+        let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
-            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
         )
         .unwrap();
 
-        let project = Project::from_manifest(manifest);
-
-        let task = project
+        let task = workspace
             .default_environment()
             .task(&TaskName::from("test"), None)
             .unwrap();
@@ -437,24 +444,23 @@ mod tests {
             [tasks]
             test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
             "#;
-        let manifest = Manifest::from_str(
+
+        let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
-            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
         )
         .unwrap();
 
-        let project = Project::from_manifest(manifest);
-
-        let task = project
+        let task = workspace
             .default_environment()
             .task(&TaskName::from("test"), None)
             .unwrap();
 
         let executable_task = ExecutableTask {
-            project: &project,
+            workspace: &workspace,
             name: Some("test".into()),
             task: Cow::Borrowed(task),
-            run_environment: project.default_environment(),
+            run_environment: workspace.default_environment(),
             additional_args: vec![],
         };
 
@@ -468,15 +474,13 @@ mod tests {
             [tasks]
             test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
             "#;
-        let manifest = Manifest::from_str(
+        let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
-            format!("{PROJECT_BOILERPLATE}\n{file_contents}").as_str(),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
         )
         .unwrap();
 
-        let project = Project::from_manifest(manifest);
-
-        let environment = project.default_environment();
+        let environment = workspace.default_environment();
         let env = get_task_env(&environment, false, None, false, false)
             .await
             .unwrap();

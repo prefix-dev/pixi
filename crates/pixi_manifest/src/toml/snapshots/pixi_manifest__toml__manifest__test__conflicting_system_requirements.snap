@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [feature.foo.system-requirements]\n        archspec = \"foo\"\n\n        [feature.bar.system-requirements]\n        archspec = \"bar\"\n\n        [environments]\n        foobar = [\"foo\", \"bar\"]\n        \"#,)"
+---
+  × cannot combine archspecs: 'foo' and 'bar'
+    ╭─[pixi.toml:14:18]
+ 13 │         [environments]
+ 14 │         foobar = ["foo", "bar"]
+    ·                  ───────┬──────
+    ·                         ╰── while resolving system requirements of features defined here
+ 15 │
+    ╰────

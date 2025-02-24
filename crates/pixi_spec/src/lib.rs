@@ -11,20 +11,20 @@
 mod detailed;
 mod git;
 mod path;
-mod serde;
+mod toml;
 mod url;
 
 use std::{path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
-pub use git::{GitReference, GitSpec};
+pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
-pub use serde::TomlSpec;
 use thiserror::Error;
+pub use toml::TomlSpec;
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec
@@ -65,7 +65,7 @@ pub enum PixiSpec {
 
     /// The spec is represented by a detailed version spec. The package should
     /// be retrieved from a channel.
-    DetailedVersion(DetailedSpec),
+    DetailedVersion(Box<DetailedSpec>),
 
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
@@ -117,7 +117,7 @@ impl PixiSpec {
         {
             Self::Version(spec.version.unwrap_or(VersionSpec::Any))
         } else {
-            Self::DetailedVersion(DetailedSpec {
+            Self::DetailedVersion(Box::new(DetailedSpec {
                 version: spec.version,
                 build: spec.build,
                 build_number: spec.build_number,
@@ -129,7 +129,7 @@ impl PixiSpec {
                 subdir: spec.subdir,
                 md5: spec.md5,
                 sha256: spec.sha256,
-            })
+            }))
         }
     }
 
@@ -189,9 +189,7 @@ impl PixiSpec {
     pub fn into_version(self) -> Option<VersionSpec> {
         match self {
             Self::Version(v) => Some(v),
-            Self::DetailedVersion(DetailedSpec {
-                version: Some(v), ..
-            }) => Some(v),
+            Self::DetailedVersion(v) => v.version,
             _ => None,
         }
     }
@@ -199,7 +197,7 @@ impl PixiSpec {
     /// Converts this instance into a [`DetailedSpec`] if possible.
     pub fn into_detailed(self) -> Option<DetailedSpec> {
         match self {
-            Self::DetailedVersion(v) => Some(v),
+            Self::DetailedVersion(v) => Some(*v),
             Self::Version(v) => Some(DetailedSpec {
                 version: Some(v),
                 ..DetailedSpec::default()
@@ -332,6 +330,13 @@ pub enum SourceSpec {
     Path(PathSourceSpec),
 }
 
+impl SourceSpec {
+    /// Returns true if this spec represents a git repository.
+    pub fn is_git(&self) -> bool {
+        matches!(self, Self::Git(_))
+    }
+}
+
 impl From<SourceSpec> for PixiSpec {
     fn from(value: SourceSpec) -> Self {
         match value {
@@ -344,7 +349,7 @@ impl From<SourceSpec> for PixiSpec {
 
 impl From<DetailedSpec> for PixiSpec {
     fn from(value: DetailedSpec) -> Self {
-        Self::DetailedVersion(value)
+        Self::DetailedVersion(Box::new(value))
     }
 }
 
@@ -400,7 +405,7 @@ pub enum BinarySpec {
 
     /// The spec is represented by a detailed version spec. The package should
     /// be retrieved from a channel.
-    DetailedVersion(DetailedSpec),
+    DetailedVersion(Box<DetailedSpec>),
 
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can

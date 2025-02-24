@@ -21,7 +21,6 @@ pub struct UvReporterOptions {
     top_level_message: &'static str,
     progress_bar: Option<ProgressBar>,
     starting_tasks: Vec<String>,
-    capacity: Option<usize>,
 }
 
 impl UvReporterOptions {
@@ -31,7 +30,6 @@ impl UvReporterOptions {
             top_level_message: "",
             progress_bar: None,
             starting_tasks: Vec::new(),
-            capacity: None,
         }
     }
 
@@ -47,11 +45,6 @@ impl UvReporterOptions {
 
     pub(crate) fn with_existing(mut self, progress_bar: ProgressBar) -> Self {
         self.progress_bar = Some(progress_bar);
-        self
-    }
-
-    pub(crate) fn with_capacity(mut self, capacity: usize) -> Self {
-        self.capacity = Some(capacity);
         self
     }
 
@@ -84,16 +77,13 @@ impl UvReporter {
         };
 
         // Create the formatter
-        let fmt = ProgressBarMessageFormatter::new_with_capacity(
-            pb.clone(),
-            options.capacity.unwrap_or(20),
-        );
+        let fmt = ProgressBarMessageFormatter::new(pb.clone());
 
         let mut name_to_id = std::collections::HashMap::new();
         let mut starting_tasks = vec![];
         // Add the starting tasks
         for task in options.starting_tasks {
-            let scoped_task = fmt.start_sync(task.clone());
+            let scoped_task = fmt.start(task.clone());
             starting_tasks.push(Some(scoped_task));
             name_to_id.insert(task, starting_tasks.len() - 1);
         }
@@ -106,12 +96,16 @@ impl UvReporter {
         }
     }
 
+    pub(crate) fn new_arc(options: UvReporterOptions) -> Arc<Self> {
+        Arc::new(Self::new(options))
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<Vec<Option<ScopedTask>>> {
         self.scoped_tasks.lock().expect("progress lock poison")
     }
 
-    pub(crate) fn start_sync(&self, message: String) -> usize {
-        let task = self.fmt.start_sync(message);
+    pub(crate) fn start(&self, message: String) -> usize {
+        let task = self.fmt.start(message);
         let mut lock = self.lock();
         lock.push(Some(task));
         lock.len() - 1
@@ -125,7 +119,7 @@ impl UvReporter {
             .unwrap_or_else(|| panic!("progress bar error idx ({id}) > {len}"))
             .take();
         if let Some(task) = task {
-            task.finish_sync();
+            task.finish();
         }
     }
 
@@ -151,7 +145,12 @@ impl uv_installer::PrepareReporter for UvReporter {
     }
 
     fn on_build_start(&self, dist: &BuildableSource) -> usize {
-        self.start_sync(format!("building {}", dist))
+        let name: String = if let Some(name) = dist.name() {
+            name.to_string()
+        } else {
+            dist.to_string()
+        };
+        self.start(format!("building {}", name))
     }
 
     fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
@@ -159,7 +158,7 @@ impl uv_installer::PrepareReporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
-        self.start_sync(format!("cloning {}", url))
+        self.start(format!("cloning {}", url))
     }
 
     fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
@@ -167,13 +166,15 @@ impl uv_installer::PrepareReporter for UvReporter {
     }
 
     // TODO: figure out how to display this nicely
-    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
-        0
+    fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
+        self.start(format!("downloading {}", name))
     }
 
     fn on_download_progress(&self, _index: usize, _bytes: u64) {}
 
-    fn on_download_complete(&self, _name: &PackageName, _index: usize) {}
+    fn on_download_complete(&self, _name: &PackageName, id: usize) {
+        self.finish(id);
+    }
 }
 
 impl uv_installer::InstallReporter for UvReporter {
@@ -196,7 +197,7 @@ impl uv_resolver::ResolverReporter for UvReporter {
     }
 
     fn on_build_start(&self, dist: &BuildableSource) -> usize {
-        self.start_sync(format!("building {}", dist,))
+        self.start(format!("building {}", dist,))
     }
 
     fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
@@ -204,7 +205,7 @@ impl uv_resolver::ResolverReporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
-        self.start_sync(format!("cloning {}", url))
+        self.start(format!("cloning {}", url))
     }
 
     fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
@@ -216,18 +217,20 @@ impl uv_resolver::ResolverReporter for UvReporter {
     }
 
     // TODO: figure out how to display this nicely
-    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
-        0
+    fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
+        self.start(format!("downloading {}", name))
     }
 
     fn on_download_progress(&self, _id: usize, _bytes: u64) {}
 
-    fn on_download_complete(&self, _name: &PackageName, _id: usize) {}
+    fn on_download_complete(&self, _name: &PackageName, id: usize) {
+        self.finish(id);
+    }
 }
 
 impl uv_distribution::Reporter for UvReporter {
     fn on_build_start(&self, dist: &BuildableSource) -> usize {
-        self.start_sync(format!("building {}", dist,))
+        self.start(format!("building {}", dist,))
     }
 
     fn on_build_complete(&self, _dist: &BuildableSource, id: usize) {
@@ -235,7 +238,7 @@ impl uv_distribution::Reporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
-        self.start_sync(format!("cloning {}", url))
+        self.start(format!("cloning {}", url))
     }
 
     fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
@@ -243,11 +246,13 @@ impl uv_distribution::Reporter for UvReporter {
     }
 
     // TODO: figure out how to display this nicely
-    fn on_download_start(&self, _name: &PackageName, _size: Option<u64>) -> usize {
-        0
+    fn on_download_start(&self, name: &PackageName, _size: Option<u64>) -> usize {
+        self.start(format!("downloading {}", name))
     }
 
     fn on_download_progress(&self, _id: usize, _bytes: u64) {}
 
-    fn on_download_complete(&self, _name: &PackageName, _id: usize) {}
+    fn on_download_complete(&self, _name: &PackageName, id: usize) {
+        self.finish(id);
+    }
 }

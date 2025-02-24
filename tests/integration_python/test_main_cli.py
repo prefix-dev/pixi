@@ -1,7 +1,15 @@
 import os
 from pathlib import Path
+import shutil
 
-from .common import verify_cli_command, ExitCode, PIXI_VERSION, ALL_PLATFORMS
+from .common import (
+    cwd,
+    verify_cli_command,
+    ExitCode,
+    PIXI_VERSION,
+    CURRENT_PLATFORM,
+    EMPTY_BOILERPLATE_PROJECT,
+)
 import tomllib
 import json
 import pytest
@@ -116,13 +124,14 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "platform",
             "add",
             "linux-64",
+            "osx-arm64",
         ],
         ExitCode.SUCCESS,
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
         ExitCode.SUCCESS,
-        stdout_contains="linux-64",
+        stdout_contains=["linux-64", "osx-arm64"],
     )
     verify_cli_command(
         [
@@ -137,8 +146,22 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ExitCode.SUCCESS,
     )
     verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            manifest_path,
+            "platform",
+            "remove",
+            "linux-64",
+        ],
+        ExitCode.FAILURE,
+        stderr_contains="linux-64",
+    )
+    verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
         ExitCode.SUCCESS,
+        stdout_contains="osx-arm64",
         stdout_excludes="linux-64",
     )
 
@@ -311,6 +334,37 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ExitCode.SUCCESS,
         stderr_contains=["osx-arm64", "test", "Removed"],
     )
+
+
+def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    # Change directory to workspace
+    with cwd(tmp_pixi_workspace):
+        # Create a new project
+        verify_cli_command([pixi, "init", "."], ExitCode.SUCCESS)
+
+        # Verify that the manifest file is created
+        manifest_path = tmp_pixi_workspace / "pixi.toml"
+        assert manifest_path.exists()
+
+        # Verify that the manifest file contains expected content
+        manifest_content = manifest_path.read_text()
+        assert "[project]" in manifest_content
+
+
+def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    # Specify project dir
+    project_dir = tmp_pixi_workspace / "project_dir"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", project_dir], ExitCode.SUCCESS)
+
+    # Verify that the manifest file is created
+    manifest_path = project_dir / "pixi.toml"
+    assert manifest_path.exists()
+
+    # Verify that the manifest file contains expected content
+    manifest_content = manifest_path.read_text()
+    assert "[project]" in manifest_content
 
 
 @pytest.mark.slow
@@ -570,8 +624,8 @@ cli = ["rich==12"]
 test = ["pytest==6"]
 
 [tool.pixi.project]
-channels = ["conda-forge"]
-platforms = {ALL_PLATFORMS}
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{CURRENT_PLATFORM}"]
 
 [tool.pixi.pypi-dependencies]
 polars = "==0.*"
@@ -713,4 +767,380 @@ def test_concurrency_flags(
             manifest_path,
             "package3",
         ]
+    )
+
+
+def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    manifest_content = tmp_pixi_workspace.joinpath("pixi.toml").read_text()
+
+    # Add a non existing package should error
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "dummy-a=1000000"],
+        ExitCode.FAILURE,
+    )
+
+    # It should not have modified the manifest on failure
+    assert manifest_content == tmp_pixi_workspace.joinpath("pixi.toml").read_text()
+
+
+def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+
+    # Modify project without manifest path
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "description",
+            "set",
+            "blabla",
+        ],
+        ExitCode.SUCCESS,
+        cwd=tmp_pixi_workspace,
+    )
+
+    # Verify project by manifest path to 'pixi.toml'
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", manifest_path, "description", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="blabla",
+    )
+
+    # Verify project by manifest path to workspace
+    verify_cli_command(
+        [pixi, "project", "--manifest-path", tmp_pixi_workspace, "description", "get"],
+        ExitCode.SUCCESS,
+        stdout_contains="blabla",
+    )
+
+
+def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # Add system requirements
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "cuda",
+            "11.8",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "glibc",
+            "2.27",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "macos",
+            "15.4",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "linux",
+            "6.5",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "other-libc",
+            "1.2.3",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="--family",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "other-libc",
+            "1.2.3",
+            "--family",
+            "musl",
+        ],
+        ExitCode.SUCCESS,
+    )
+
+    # List system requirements
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "list",
+        ],
+        ExitCode.SUCCESS,
+        stdout_contains=["CUDA", "macOS", "Linux", "LibC", "musl"],
+    )
+
+    # Add extra environment
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "add",
+            "--feature",
+            "test",
+            "linux",
+            "10.1",
+        ],
+        ExitCode.SUCCESS,
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "environment",
+            "add",
+            "test",
+            "--feature",
+            "test",
+        ],
+        ExitCode.SUCCESS,
+    )
+
+    # List system requirements of environment
+    verify_cli_command(
+        [
+            pixi,
+            "project",
+            "--manifest-path",
+            tmp_pixi_workspace / "pixi.toml",
+            "system-requirements",
+            "list",
+            "--environment",
+            "test",
+        ],
+        ExitCode.SUCCESS,
+        stdout_contains=["Linux: 10.1"],
+    )
+
+
+def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    lock_file_path = tmp_pixi_workspace / "pixi.lock"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    # Add a dependency
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "dummy-a"])
+
+    # Read the original lock file content
+    original_lock_content = lock_file_path.read_text()
+
+    # Remove the lock file
+    lock_file_path.unlink()
+
+    # Remove the .pixi folder
+    dot_pixi = tmp_pixi_workspace / ".pixi"
+    shutil.rmtree(dot_pixi)
+
+    # Run pixi lock to recreate the lock file
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest_path], stderr_contains=["+", "dummy-a"]
+    )
+
+    # Read the recreated lock file content
+    recreated_lock_content = lock_file_path.read_text()
+
+    # Check if the recreated lock file is the same as the original
+    assert original_lock_content == recreated_lock_content
+
+    # Ensure the .pixi folder does not exist
+    assert not dot_pixi.exists()
+
+
+def test_pixi_auth(pixi: Path) -> None:
+    verify_cli_command([pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"])
+    verify_cli_command(
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"]
+    )
+    verify_cli_command(
+        [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "auth",
+            "login",
+            "--username",
+            "DUMMY_USER",
+            "--password",
+            "DUMMY_PASS",
+            "https://host.org",
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "auth",
+            "login",
+            "--s3-access-key-id",
+            "DUMMY_ID",
+            "--s3-secret-access-key",
+            "DUMMY_KEY",
+            "--s3-session-token",
+            "DUMMY_TOKEN",
+            "s3://amazon-aws.com",
+        ]
+    )
+
+    verify_cli_command([pixi, "auth", "logout", "https://prefix.dev/"])
+    verify_cli_command([pixi, "auth", "logout", "https://repo.prefix.dev/"])
+    verify_cli_command([pixi, "auth", "logout", "https://conda.anaconda.org"])
+    verify_cli_command([pixi, "auth", "logout", "https://host.org"])
+    verify_cli_command([pixi, "auth", "logout", "s3://amazon-aws.com"])
+
+
+@pytest.mark.extra_slow
+def test_adding_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    lock_file = tmp_pixi_workspace / "pixi.lock"
+
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # we want to add three kinds of pypi dependencies
+    # branch
+    # tag
+    # revision
+    # we will use the same package for all three
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "python"])
+
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "--branch",
+            "master",
+        ]
+    )
+
+    # we want to make sure that the lock file contains the branch information
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?branch=master" in lock_file.read_text()
+    # and that the manifest contains the branch information
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["branch"] == "master"
+
+    # now add a tag
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "--tag",
+            "25.0.0",
+        ]
+    )
+
+    # we want to make sure that the lock file contains the tag information
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?tag=25.0.0" in lock_file.read_text()
+    # and that the manifest contains the tag information
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["tag"] == "25.0.0"
+
+    # now add a simple revision (a commit)
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--pypi",
+            "--git",
+            "https://github.com/mahmoud/boltons.git",
+            "boltons",
+            "--rev",
+            "d70669a",
+        ]
+    )
+
+    # we want to make sure that the lock file contains the rev information
+    assert "pypi: git+https://github.com/mahmoud/boltons.git?rev=d70669a" in lock_file.read_text()
+    # and that the manifest contains the rev information
+    manifest = tomllib.loads(manifest_path.read_text())
+    assert manifest["pypi-dependencies"]["boltons"]["rev"] == "d70669a"
+
+
+def test_dont_error_on_missing_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+        {EMPTY_BOILERPLATE_PROJECT}
+        [feature.a.target.zos-z.tasks]
+        nonsense = "echo nonsense"
+
+        [target.zos-z.tasks]
+        nonsense = "echo nonsense"
+        """
+    manifest.write_text(toml)
+    # This should not error, but should spawn a warning with a helping message.
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        stderr_contains=["pixi project platform add zos-z"],
     )

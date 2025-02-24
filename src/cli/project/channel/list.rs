@@ -1,14 +1,14 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
 
-use crate::{cli::cli_config::ProjectConfig, Project};
+use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct Args {
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub workspace_config: WorkspaceConfig,
     /// Whether to display the channel's names or urls
     #[clap(long)]
     pub urls: bool,
@@ -16,10 +16,12 @@ pub struct Args {
 
 pub(crate) fn execute(args: Args) -> miette::Result<()> {
     // Project without cli config as it shouldn't be needed here.
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref())?;
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.workspace_config.workspace_locator_start())
+        .locate()?;
 
-    let channel_config = project.channel_config();
-    project
+    let channel_config = workspace.channel_config();
+    workspace
         .environments()
         .iter()
         .map(|e| {

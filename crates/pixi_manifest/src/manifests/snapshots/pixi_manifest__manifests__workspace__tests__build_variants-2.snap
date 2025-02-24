@@ -1,0 +1,21 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: resolved_win
+---
+[
+    Some(
+        {
+            "python": [
+                "1.0.*",
+            ],
+        },
+    ),
+    Some(
+        {
+            "python": [
+                "3.10.*",
+                "3.11.*",
+            ],
+        },
+    ),
+]

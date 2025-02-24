@@ -1,4 +1,4 @@
-[project]
+[workspace]
 channels = ["conda-forge"]
 description = "Add a short description here"
 name = "pyproject"
@@ -6,17 +6,17 @@ platforms = ["osx-arm64", "linux-64", "osx-64", "win-64"]
 preview = ["pixi-build"]
 version = "0.1.0"
 
+[dependencies]
+smokey = { path = "." }
+
 [package]
 
-[build-system]
-build-backend = { name = "pixi-build-rattler-build", version = "*" }
+[package.build]
+backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 
-[dependencies]
-smokey = { path = "." }
-
-[host-dependencies]
+[package.host-dependencies]
 hatchling = "*"

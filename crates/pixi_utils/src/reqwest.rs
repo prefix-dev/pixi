@@ -1,17 +1,20 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{any::Any, path::PathBuf, sync::Arc, time::Duration};
 
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use rattler_networking::{
-    authentication_storage::{self, backends::file::FileStorageError},
+    authentication_storage::{self, AuthenticationStorageError},
     mirror_middleware::Mirror,
     retry_policies::ExponentialBackoff,
     AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
-    OciMiddleware,
+    OciMiddleware, S3Middleware,
 };
 
 use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
+use tracing::debug;
 
 use pixi_config::Config;
 
@@ -21,7 +24,8 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
-fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStorageError> {
+fn auth_store(config: &Config) -> Result<AuthenticationStorage, AuthenticationStorageError> {
+    let mut store = AuthenticationStorage::from_env_and_defaults()?;
     if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
 
@@ -29,15 +33,34 @@ fn auth_middleware(config: &Config) -> Result<AuthenticationMiddleware, FileStor
             tracing::warn!("Authentication file does not exist: {:?}", auth_file);
         }
 
-        let mut store = AuthenticationStorage::new();
-        store.add_backend(Arc::from(
-            authentication_storage::backends::file::FileStorage::new(PathBuf::from(&auth_file))?,
-        ));
-
-        return Ok(AuthenticationMiddleware::new(store));
+        // this should be the first place before the keyring authentication
+        // i.e. either index 0 if RATTLER_AUTH_FILE is not set or index 1 if it is
+        let first_storage = store.backends.first().unwrap();
+        let index = if first_storage.type_id()
+            == std::any::TypeId::of::<authentication_storage::backends::file::FileStorage>()
+        {
+            1
+        } else {
+            0
+        };
+        store.backends.insert(
+            index,
+            Arc::from(
+                authentication_storage::backends::file::FileStorage::from_path(PathBuf::from(
+                    &auth_file,
+                ))?,
+            ),
+        );
     }
+    Ok(store)
+}
 
-    Ok(AuthenticationMiddleware::default())
+fn auth_middleware(
+    config: &Config,
+) -> Result<AuthenticationMiddleware, AuthenticationStorageError> {
+    Ok(AuthenticationMiddleware::from_auth_storage(auth_store(
+        config,
+    )?))
 }
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
@@ -76,7 +99,10 @@ pub fn oci_middleware() -> OciMiddleware {
     OciMiddleware
 }
 
-pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMiddleware) {
+pub fn build_reqwest_clients(
+    config: Option<&Config>,
+    s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
+) -> miette::Result<(Client, ClientWithMiddleware)> {
     let app_user_agent = format!("pixi/{}", consts::PIXI_VERSION);
 
     // If we do not have a config, we will just load the global default.
@@ -96,6 +122,7 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
         .user_agent(app_user_agent)
         .danger_accept_invalid_certs(config.tls_no_verify())
         .read_timeout(Duration::from_secs(timeout))
+        .use_rustls_tls()
         .build()
         .expect("failed to create reqwest Client");
 
@@ -109,11 +136,27 @@ pub fn build_reqwest_clients(config: Option<&Config>) -> (Client, ClientWithMidd
 
     client_builder = client_builder.with(GCSMiddleware);
 
+    let s3_config_global = config.compute_s3_config();
+    let s3_config_project = s3_config_project.unwrap_or_default();
+    let mut s3_config = HashMap::new();
+    s3_config.extend(s3_config_global);
+    s3_config.extend(s3_config_project);
+
+    debug!("Using s3_config: {:?}", s3_config);
+    let store = auth_store(&config).into_diagnostic()?;
+    let s3_middleware = S3Middleware::new(s3_config, store);
+    debug!("s3_middleware: {:?}", s3_middleware);
+    client_builder = client_builder.with(s3_middleware);
+
     client_builder = client_builder.with_arc(Arc::new(
         auth_middleware(&config).expect("could not create auth middleware"),
     ));
 
+    client_builder = client_builder.with(RetryTransientMiddleware::new_with_policy(
+        default_retry_policy(),
+    ));
+
     let authenticated_client = client_builder.build();
 
-    (client, authenticated_client)
+    Ok((client, authenticated_client))
 }

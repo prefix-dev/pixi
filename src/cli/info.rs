@@ -1,12 +1,13 @@
 use std::{fmt::Display, path::PathBuf};
 
+use crate::cli::cli_config::WorkspaceConfig;
 use chrono::{DateTime, Local};
 use clap::Parser;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config;
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeatureName};
+use pixi_manifest::{EnvironmentName, FeatureName, SystemRequirements};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
@@ -15,18 +16,17 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
 use serde_with::{serde_as, DisplayFromStr};
 use tokio::task::spawn_blocking;
-
-use crate::cli::cli_config::ProjectConfig;
+use toml_edit::ser::to_string;
 
 use crate::{
     global,
     global::{BinDir, EnvRoot},
     task::TaskName,
-    Project,
+    WorkspaceLocator,
 };
 use fancy_display::FancyDisplay;
 
-static WIDTH: usize = 18;
+static WIDTH: usize = 19;
 
 /// Information about the system, project and environments for the current
 /// machine.
@@ -41,11 +41,11 @@ pub struct Args {
     json: bool,
 
     #[clap(flatten)]
-    pub project_config: ProjectConfig,
+    pub project_config: WorkspaceConfig,
 }
 
 #[derive(Serialize)]
-pub struct ProjectInfo {
+pub struct WorkspaceInfo {
     name: String,
     manifest_path: PathBuf,
     last_updated: Option<String>,
@@ -65,6 +65,7 @@ pub struct EnvironmentInfo {
     tasks: Vec<TaskName>,
     channels: Vec<String>,
     prefix: PathBuf,
+    system_requirements: SystemRequirements,
 }
 
 impl Display for EnvironmentInfo {
@@ -90,7 +91,7 @@ impl Display for EnvironmentInfo {
                 f,
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Solve group"),
-                solve_group
+                consts::SOLVE_GROUP_STYLE.apply_to(solve_group)
             )?;
         }
         // TODO: add environment size when PR 674 is merged
@@ -145,6 +146,28 @@ impl Display for EnvironmentInfo {
                 platform_list
             )?;
         }
+
+        if !self.system_requirements.is_empty() {
+            let serialized = to_string(&self.system_requirements)
+                .expect("it should always be possible to convert system requirements to a string");
+            let indented = serialized
+                .lines()
+                .enumerate()
+                .map(|(i, line)| {
+                    if i == 0 {
+                        // First line includes the label
+                        format!("{:>WIDTH$}: {}", bold.apply_to("System requirements"), line)
+                    } else {
+                        // Subsequent lines are indented to align
+                        format!("{:>WIDTH$}  {}", "", line)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            writeln!(f, "{}", indented)?;
+        }
+
         if !self.tasks.is_empty() {
             let tasks_list = self
                 .tasks
@@ -206,7 +229,7 @@ pub struct Info {
     cache_size: Option<String>,
     auth_dir: PathBuf,
     global_info: Option<GlobalInfo>,
-    project_info: Option<ProjectInfo>,
+    project_info: Option<WorkspaceInfo>,
     environments_info: Vec<EnvironmentInfo>,
     config_locations: Vec<PathBuf>,
 }
@@ -347,10 +370,13 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let project = Project::load_or_else_discover(args.project_config.manifest_path.as_deref()).ok();
+    let workspace = WorkspaceLocator::for_cli()
+        .with_search_start(args.project_config.workspace_locator_start())
+        .locate()
+        .ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
-        let env_dir = project.as_ref().map(|p| p.pixi_dir());
+        let env_dir = workspace.as_ref().map(|p| p.pixi_dir());
         let cache_dir = pixi_config::get_cache_dir()?;
         await_in_progress("fetching directory sizes", |_| {
             spawn_blocking(move || {
@@ -365,18 +391,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (None, None)
     };
 
-    let project_info = project.clone().map(|p| ProjectInfo {
+    let project_info = workspace.clone().map(|p| WorkspaceInfo {
         name: p.name().to_string(),
-        manifest_path: p.manifest_path(),
+        manifest_path: p.workspace.provenance.path.clone(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
-        version: p.version().clone().map(|v| v.to_string()),
+        version: p
+            .workspace
+            .value
+            .workspace
+            .version
+            .clone()
+            .map(|v| v.to_string()),
     });
 
-    let environments_info: Vec<EnvironmentInfo> = project
+    let environments_info: Vec<EnvironmentInfo> = workspace
         .as_ref()
-        .map(|p| {
-            p.environments()
+        .map(|ws| {
+            ws.environments()
                 .iter()
                 .map(|env| {
                     let tasks = env
@@ -403,6 +435,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),
                         platforms: env.platforms().into_iter().collect(),
+                        system_requirements: env.system_requirements().clone(),
                         channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
                         prefix: env.dir(),
                         tasks,
@@ -415,7 +448,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let global_info = Some(GlobalInfo {
         bin_dir: BinDir::from_env().await?.path().to_path_buf(),
         env_dir: EnvRoot::from_env().await?.path().to_path_buf(),
-        manifest: global::Project::manifest_dir()?.join(global::project::MANIFEST_DEFAULT_NAME),
+        manifest: global::Project::manifest_dir()?.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
     });
 
     let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
@@ -425,18 +458,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(GenericVirtualPackage::from)
         .collect::<Vec<_>>();
 
-    let config = project
+    let config = workspace
         .map(|p| p.config().clone())
         .unwrap_or_else(pixi_config::Config::load_global);
 
-    let auth_file = config
-        .authentication_override_file()
-        .map(|x| x.to_owned())
-        .unwrap_or_else(|| {
-            authentication_storage::backends::file::FileStorage::default()
-                .path
-                .clone()
-        });
+    let auth_file: PathBuf = if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {
+        auth_file.into()
+    } else if let Some(auth_file) = config.authentication_override_file() {
+        auth_file.to_owned()
+    } else {
+        authentication_storage::backends::file::FileStorage::new()
+            .into_diagnostic()?
+            .path
+    };
 
     let info = Info {
         platform: Platform::current().to_string(),
@@ -453,13 +487,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if args.json {
         println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
-
-        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
-        Ok(())
     } else {
         println!("{}", info);
-
-        Project::warn_on_discovered_from_env(args.project_config.manifest_path.as_deref());
-        Ok(())
     }
+
+    Ok(())
 }

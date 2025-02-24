@@ -1,23 +1,28 @@
-use std::fmt;
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
-
-use super::parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest};
-use super::{EnvironmentName, ExposedName, MANIFEST_DEFAULT_NAME};
-use crate::global::project::ParsedEnvironment;
 use pixi_config::Config;
-use pixi_manifest::toml::TomlDocument;
-use pixi_manifest::PrioritizedChannel;
+use pixi_consts::consts;
+use pixi_manifest::{toml::TomlDocument, PrioritizedChannel};
 use pixi_spec::PixiSpec;
+use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
-use serde::{Deserialize, Serialize};
 use toml_edit::{DocumentMut, Item};
+use toml_span::{DeserError, Value};
+
+use super::{
+    parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
+    EnvironmentName, ExposedName,
+};
+use crate::global::project::ParsedEnvironment;
 
 /// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
@@ -56,7 +61,11 @@ impl Manifest {
                 .map_err(ManifestParsingError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy(MANIFEST_DEFAULT_NAME, &contents, manifest_path)?,
+            Err(e) => e.to_fancy(
+                consts::GLOBAL_MANIFEST_DEFAULT_NAME,
+                &contents,
+                manifest_path,
+            )?,
         };
 
         let manifest = Self {
@@ -430,12 +439,32 @@ impl Manifest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct Mapping {
     exposed_name: ExposedName,
-    // The executable_relname is a executable name possibly with a parts of a path in it to match on.
-    // e.g. `dotnet/dotnet` will find `$PREFIX/lib/dotnet/dotnet`
+    // The executable_relname is a executable name possibly with a parts of a path in it to match
+    // on. e.g. `dotnet/dotnet` will find `$PREFIX/lib/dotnet/dotnet`
     executable_relname: String,
+}
+
+pub(super) struct TomlMapping(IndexSet<Mapping>);
+
+impl TomlMapping {
+    pub fn into_inner(self) -> IndexSet<Mapping> {
+        self.0
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlMapping {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        Ok(Self(
+            TomlIndexMap::deserialize(value)?
+                .into_inner()
+                .into_iter()
+                .map(|(key, value)| Mapping::new(key, value))
+                .collect(),
+        ))
+    }
 }
 
 impl Mapping {
@@ -486,30 +515,15 @@ impl FromStr for Mapping {
     }
 }
 
+/// Describes which executables should be (additionally) exposed
+/// Only executables by direct dependencies are taken into account
 #[derive(Default)]
 pub enum ExposedType {
     #[default]
     All,
-    Filter(Vec<PackageName>),
+    Nothing,
+    Ignore(Vec<PackageName>),
     Mappings(Vec<Mapping>),
-}
-
-impl ExposedType {
-    pub fn new(mappings: Vec<Mapping>, filter: Vec<PackageName>) -> Self {
-        if !mappings.is_empty() {
-            return Self::Mappings(mappings);
-        }
-
-        if filter.is_empty() {
-            Self::All
-        } else {
-            Self::Filter(filter)
-        }
-    }
-
-    pub fn subset() -> Self {
-        Self::Mappings(Default::default())
-    }
 }
 
 #[cfg(test)]
@@ -824,7 +838,7 @@ mod tests {
                 Some(
                     DEFAULT_CHANNELS
                         .iter()
-                        .map(|&name| NamedChannelOrUrl::Name(name.to_string()))
+                        .map(|name| NamedChannelOrUrl::Name(name.to_string()))
                         .collect(),
                 ),
             )
@@ -868,7 +882,7 @@ mod tests {
 
         // Add another dependency
         let build_match_spec = MatchSpec::from_str(
-            "python [version='3.11.0', build=he550d4f_1_cpython]",
+            "python [version='==3.11.0', build=he550d4f_1_cpython]",
             ParseStrictness::Strict,
         )
         .unwrap();

@@ -1,7 +1,8 @@
 use std::{
     cmp::PartialEq,
+    collections::HashMap,
     fs,
-    io::{Error, ErrorKind, Write},
+    io::{ErrorKind, Write},
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -14,13 +15,14 @@ use pixi_consts::consts;
 use pixi_manifest::{
     pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
 };
+use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
 
-use crate::Project;
+use crate::workspace::WorkspaceMut;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
@@ -28,7 +30,7 @@ pub enum ManifestFormat {
     Pyproject,
 }
 
-/// Creates a new project
+/// Creates a new workspace
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Where to place the project (defaults to current path)
@@ -69,7 +71,6 @@ const PROJECT_TEMPLATE: &str = r#"[project]
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
 channels = {{ channels }}
-description = "Add a short description here"
 name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
@@ -81,9 +82,34 @@ version = "{{ version }}"
 {% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
 {%- endif %}
 
+{%- if s3 %}
+{%- for key in s3 %}
+
+[project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
+{%- endif %}
+{%- if s3[key].region %}
+{%- endif %}
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
+{%- endif %}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
+{%- endif %}
+
+{%- endfor %}
+{%- endif %}
+
 [tasks]
 
 [dependencies]
+
+{%- if env_vars %}
+
+[activation]
+env = { {{ env_vars }} }
+{%- endif %}
 
 "#;
 
@@ -109,6 +135,25 @@ default = { solve-group = "default" }
 {{env}} = { features = {{ features }}, solve-group = "default" }
 {%- endfor %}
 
+{%- if s3 %}
+{%- for key in s3 %}
+
+[tool.pixi.project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
+{%- endif %}
+{%- if s3[key].region %}
+{%- endif %}
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
+{%- endif %}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
+{%- endif %}
+
+{%- endfor %}
+{%- endif %}
+
 [tool.pixi.tasks]
 
 "#;
@@ -121,7 +166,6 @@ const NEW_PYROJECT_TEMPLATE: &str = r#"[project]
 authors = [{name = "{{ author[0] }}", email = "{{ author[1] }}"}]
 {%- endif %}
 dependencies = []
-description = "Add a short description here"
 name = "{{ name }}"
 requires-python = ">= 3.11"
 version = "{{ version }}"
@@ -140,6 +184,25 @@ platforms = {{ platforms }}
 [tool.pixi.pypi-options]
 {% if index_url %}index-url = "{{ index_url }}"{% endif %}
 {% if extra_index_urls %}extra-index-urls = {{ extra_index_urls }}{% endif %}
+{%- endif %}
+
+{%- if s3 %}
+{%- for key in s3 %}
+
+[tool.pixi.project.s3-options.{{ key }}]
+{%- if s3[key]["endpoint-url"] %}
+endpoint-url = "{{ s3[key]["endpoint-url"] }}"
+{%- endif %}
+{%- if s3[key].region %}
+{%- endif %}
+{%- if s3[key].region %}
+region = "{{ s3[key].region }}"
+{%- endif %}
+{%- if s3[key]["force-path-style"] is not none %}
+force-path-style = {{ s3[key]["force-path-style"] }}
+{%- endif %}
+
+{%- endfor %}
 {%- endif %}
 
 [tool.pixi.pypi-dependencies]
@@ -166,13 +229,13 @@ impl GitAttributes {
     fn template(&self) -> &'static str {
         match self {
             GitAttributes::Github | GitAttributes::Codeberg => {
-                r#"# SCM syntax highlighting
-pixi.lock linguist-language=YAML linguist-generated=true
+                r#"# SCM syntax highlighting & preventing 3-way merges
+pixi.lock merge=binary linguist-language=YAML linguist-generated=true
 "#
             }
             GitAttributes::Gitlab => {
-                r#"# GitLab syntax highlighting
-pixi.lock gitlab-language=yaml gitlab-generated=true
+                r#"# GitLab syntax highlighting & preventing 3-way merges
+pixi.lock merge=binary gitlab-language=yaml gitlab-generated=true
 "#
             }
         }
@@ -181,7 +244,9 @@ pixi.lock gitlab-language=yaml gitlab-generated=true
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
-    let dir = get_dir(args.path).into_diagnostic()?;
+    // Fail silently if the directory already exists or cannot be created.
+    fs_err::create_dir_all(&args.path).ok();
+    let dir = args.path.canonicalize().into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::PROJECT_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
@@ -197,9 +262,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style("--format pyproject").bold().green(),
         );
     }
-
-    // Fail silently if the directory already exists or cannot be created.
-    fs_err::create_dir_all(&dir).ok();
 
     let default_name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project"));
     let version = "0.1.0";
@@ -225,10 +287,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or(default_name.clone().as_str())
             .to_string();
 
+        let env_vars = env_file.variables();
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
-        let rv = render_project(
+        let rendered_workspace_template = render_project(
             &env,
             name,
             version,
@@ -237,22 +300,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &platforms,
             None,
             &vec![],
+            config.s3_options,
+            Some(&env_vars),
         );
-        let mut project = Project::from_str(&pixi_manifest_path, &rv)?;
-        let channel_config = project.channel_config();
+        let mut workspace =
+            WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
+        let channel_config = workspace.workspace().channel_config();
         for spec in conda_deps {
-            project.manifest.add_dependency(
+            // Determine the name of the package to add
+            let (Some(name), spec) = spec.clone().into_nameless() else {
+                miette::bail!(
+                    "{} does not support wildcard dependencies",
+                    pixi_utils::executable_name()
+                );
+            };
+            let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
+            workspace.manifest().add_dependency(
+                &name,
                 &spec,
                 SpecType::Run,
                 // No platforms required as you can't define them in the yaml
                 &[],
                 &FeatureName::default(),
                 DependencyOverwriteBehavior::Overwrite,
-                &channel_config,
             )?;
         }
         for requirement in pypi_deps {
-            project.manifest.add_pep508_dependency(
+            workspace.manifest().add_pep508_dependency(
                 &requirement,
                 // No platforms required as you can't define them in the yaml
                 &[],
@@ -262,14 +336,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &None,
             )?;
         }
-        project.save()?;
+        let workspace = workspace.save().await.into_diagnostic()?;
 
         eprintln!(
             "{}Created {}",
             console::style(console::Emoji("✔ ", "")).green(),
             // Canonicalize the path to make it more readable, but if it fails just use the path as
             // is.
-            project.manifest_path().display()
+            workspace.workspace.provenance.path.display()
         );
     } else {
         let channels = if let Some(channels) = args.channels {
@@ -327,9 +401,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         channels,
                         platforms,
                         environments,
+                        s3 => relevant_s3_options(config.s3_options, channels),
                     },
                 )
-                .unwrap();
+                .expect("should be able to render the template");
             if let Err(e) = {
                 fs::OpenOptions::new()
                     .append(true)
@@ -343,7 +418,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             } else {
                 // Inform about the addition of the package itself as an editable dependency of
-                // the project
+                // the workspace
                 eprintln!(
                     "{}Added package '{}' as an editable dependency.",
                     console::style(console::Emoji("✔ ", "")).green(),
@@ -382,9 +457,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         platforms,
                         index_url => index_url.as_ref(),
                         extra_index_urls => &extra_index_urls,
+                        s3 => relevant_s3_options(config.s3_options, channels),
                     },
                 )
-                .unwrap();
+                .expect("should be able to render the template");
             save_manifest_file(&pyproject_manifest_path, rv)?;
 
             let src_dir = dir.join("src").join(pypi_package_name);
@@ -427,6 +503,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &platforms,
                 index_url.as_ref(),
                 &extra_index_urls,
+                config.s3_options,
+                None,
             );
             save_manifest_file(&pixi_manifest_path, rv)?;
         };
@@ -465,21 +543,51 @@ fn render_project(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
+    s3_options: HashMap<String, pixi_config::S3Options>,
+    env_vars: Option<&HashMap<String, String>>,
 ) -> String {
-    env.render_named_str(
-        consts::PROJECT_MANIFEST,
-        PROJECT_TEMPLATE,
-        context! {
-            name,
-            version,
-            author,
-            channels,
-            platforms,
-            index_url,
-            extra_index_urls,
-        },
-    )
-    .unwrap()
+    let ctx = context! {
+        name,
+        version,
+        author,
+        channels,
+        platforms,
+        index_url,
+        extra_index_urls,
+        s3 => relevant_s3_options(s3_options, channels),
+        env_vars => {if let Some(env_vars) = env_vars {
+            env_vars.iter().map(|(k, v)| format!("{} = \"{}\"", k, v)).collect::<Vec<String>>().join(", ")
+        } else {String::new()}},
+    };
+
+    env.render_named_str(consts::PROJECT_MANIFEST, PROJECT_TEMPLATE, ctx)
+        .expect("should be able to render the template")
+}
+
+fn relevant_s3_options(
+    s3_options: HashMap<String, pixi_config::S3Options>,
+    channels: Vec<NamedChannelOrUrl>,
+) -> HashMap<String, pixi_config::S3Options> {
+    // only take s3 options in manifest if they are used in the default channels
+    let s3_buckets = channels
+        .iter()
+        .filter_map(|channel| match channel {
+            NamedChannelOrUrl::Name(_) => None,
+            NamedChannelOrUrl::Path(_) => None,
+            NamedChannelOrUrl::Url(url) => {
+                if url.scheme() == "s3" {
+                    url.host().map(|host| host.to_string())
+                } else {
+                    None
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+
+    s3_options
+        .into_iter()
+        .filter(|(key, _)| s3_buckets.contains(key))
+        .collect()
 }
 
 /// Save the rendered template to a file, and print a message to the user.
@@ -522,61 +630,13 @@ fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-fn get_dir(path: PathBuf) -> Result<PathBuf, Error> {
-    if path.components().count() == 1 {
-        Ok(std::env::current_dir().unwrap_or_default().join(path))
-    } else {
-        path.canonicalize().map_err(|e| match e.kind() {
-            ErrorKind::NotFound => Error::new(
-                ErrorKind::NotFound,
-                format!(
-                    "Cannot find '{}' please make sure the folder is reachable",
-                    path.to_string_lossy()
-                ),
-            ),
-            _ => Error::new(
-                ErrorKind::InvalidInput,
-                "Cannot canonicalize the given path",
-            ),
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{
-        io::Read,
-        path::{Path, PathBuf},
-    };
+    use std::{io::Read, path::Path};
 
     use tempfile::tempdir;
 
     use super::*;
-    use crate::cli::init::get_dir;
-
-    #[test]
-    fn test_get_name() {
-        assert_eq!(
-            get_dir(PathBuf::from(".")).unwrap(),
-            std::env::current_dir().unwrap()
-        );
-        assert_eq!(
-            get_dir(PathBuf::from("test_folder")).unwrap(),
-            std::env::current_dir().unwrap().join("test_folder")
-        );
-        assert_eq!(
-            get_dir(std::env::current_dir().unwrap()).unwrap(),
-            std::env::current_dir().unwrap().canonicalize().unwrap()
-        );
-    }
-
-    #[test]
-    fn test_get_name_panic() {
-        match get_dir(PathBuf::from("invalid/path")) {
-            Ok(_) => panic!("Expected error, but got OK"),
-            Err(e) => assert_eq!(e.kind(), std::io::ErrorKind::NotFound),
-        }
-    }
 
     #[test]
     fn test_create_or_append_file() {

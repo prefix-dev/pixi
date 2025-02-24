@@ -1,10 +1,6 @@
-use std::fmt::Debug;
-use std::future::Future;
-use std::path::PathBuf;
-
 use pixi_consts::consts::CACHED_BUILD_TOOL_ENVS_DIR;
-use pixi_progress::wrap_in_progress;
-use pixi_utils::{EnvironmentHash, PrefixGuard};
+use pixi_progress::await_in_progress;
+use pixi_utils::{AsyncPrefixGuard, EnvironmentHash};
 use rattler::{install::Installer, package_cache::PackageCache};
 use rattler_conda_types::{Channel, ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::Gateway;
@@ -15,6 +11,9 @@ use rattler_shell::{
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use std::fmt::Debug;
+use std::future::Future;
+use std::path::PathBuf;
 
 use super::{
     cache::ToolCache, IsolatedTool, IsolatedToolSpec, SystemTool, Tool, ToolCacheError, ToolSpec,
@@ -261,16 +260,18 @@ impl ToolInstaller for ToolContext {
             .join(CACHED_BUILD_TOOL_ENVS_DIR)
             .join(cache.name());
 
-        let mut prefix_guard = PrefixGuard::new(&cached_dir).into_diagnostic()?;
+        let prefix_guard = AsyncPrefixGuard::new(&cached_dir).await.into_diagnostic()?;
 
         let mut write_guard =
-            wrap_in_progress("acquiring write lock on prefix", || prefix_guard.write())
+            await_in_progress("acquiring write lock on prefix", |_| prefix_guard.write())
+                .await
                 .into_diagnostic()?;
 
         // If the environment already exists, we can return early.
         if write_guard.is_ready() {
             tracing::info!("reusing existing environment in {}", cached_dir.display());
-            let _ = write_guard.finish();
+
+            write_guard.finish().await.into_diagnostic()?;
 
             // Get the activation scripts
             let activator =
@@ -289,7 +290,7 @@ impl ToolInstaller for ToolContext {
         }
 
         // Update the prefix to indicate that we are installing it.
-        write_guard.begin().into_diagnostic()?;
+        write_guard.begin().await.into_diagnostic()?;
 
         // Install the environment
         Installer::new()
@@ -299,7 +300,7 @@ impl ToolInstaller for ToolContext {
                 self.cache_dir
                     .join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
             ))
-            .install(&cached_dir, solved_records)
+            .install(&cached_dir, solved_records.records)
             .await
             .into_diagnostic()?;
 
@@ -311,7 +312,7 @@ impl ToolInstaller for ToolContext {
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
             .unwrap();
 
-        let _ = write_guard.finish();
+        write_guard.finish().await.into_diagnostic()?;
 
         Ok(IsolatedTool::new(
             spec.command.clone(),

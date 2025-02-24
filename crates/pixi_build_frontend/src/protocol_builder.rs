@@ -7,9 +7,10 @@ use std::{
 use rattler_conda_types::ChannelConfig;
 
 use crate::{
+    backend_override::BackendOverride,
     conda_protocol, pixi_protocol,
     protocol::{DiscoveryError, FinishError},
-    rattler_build_protocol, BackendOverride, BuildFrontendError, Protocol, ToolContext,
+    rattler_build_protocol, BuildFrontendError, Protocol, ToolContext,
 };
 
 /// Configuration to enable or disable certain protocols discovery.
@@ -37,7 +38,7 @@ impl Default for EnabledProtocols {
 #[derive(Debug)]
 pub(crate) enum ProtocolBuilder {
     /// A pixi project.
-    Pixi(pixi_protocol::ProtocolBuilder),
+    Pixi(Box<pixi_protocol::ProtocolBuilder>),
 
     /// A directory containing a `meta.yaml` that can be interpreted by
     /// conda-build.
@@ -50,7 +51,7 @@ pub(crate) enum ProtocolBuilder {
 
 impl From<pixi_protocol::ProtocolBuilder> for ProtocolBuilder {
     fn from(value: pixi_protocol::ProtocolBuilder) -> Self {
-        Self::Pixi(value)
+        Self::Pixi(Box::new(value))
     }
 }
 
@@ -124,7 +125,9 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by the protocol.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         match self {
-            Self::Pixi(protocol) => Self::Pixi(protocol.with_channel_config(channel_config)),
+            Self::Pixi(protocol) => {
+                Self::Pixi(Box::new(protocol.with_channel_config(channel_config)))
+            }
             Self::CondaBuild(protocol) => {
                 Self::CondaBuild(protocol.with_channel_config(channel_config))
             }
@@ -134,20 +137,30 @@ impl ProtocolBuilder {
         }
     }
 
-    pub(crate) fn with_backend_override(self, backend: Option<BackendOverride>) -> Self {
-        match self {
-            Self::Pixi(protocol) => Self::Pixi(protocol.with_backend_override(backend)),
-            Self::CondaBuild(protocol) => Self::CondaBuild(protocol.with_backend_override(backend)),
-            Self::RattlerBuild(protocol) => {
-                Self::RattlerBuild(protocol.with_backend_override(backend))
+    pub(crate) fn with_backend_override(self, backend_override: Option<BackendOverride>) -> Self {
+        if let Some(backend_override) = backend_override {
+            match self {
+                Self::Pixi(protocol) => {
+                    Self::Pixi(Box::new(protocol.with_backend_override(backend_override)))
+                }
+                Self::CondaBuild(protocol) => {
+                    Self::CondaBuild(protocol.with_backend_override(backend_override))
+                }
+                Self::RattlerBuild(protocol) => {
+                    Self::RattlerBuild(protocol.with_backend_override(backend_override))
+                }
             }
+        } else {
+            self
         }
     }
 
     /// Sets the cache directory to use for any caching.
     pub fn with_opt_cache_dir(self, cache_directory: Option<PathBuf>) -> Self {
         match self {
-            Self::Pixi(protocol) => Self::Pixi(protocol.with_opt_cache_dir(cache_directory)),
+            Self::Pixi(protocol) => {
+                Self::Pixi(Box::new(protocol.with_opt_cache_dir(cache_directory)))
+            }
             Self::CondaBuild(protocol) => {
                 Self::CondaBuild(protocol.with_opt_cache_dir(cache_directory))
             }

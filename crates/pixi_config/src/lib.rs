@@ -6,6 +6,7 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
+use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, SourceConfig};
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
@@ -84,8 +85,7 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
         .or_else(|| {
-            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join("pixi"));
-
+            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join(consts::PIXI_DIR));
             // Only use the xdg cache pixi directory when it exists
             pixi_cache_dir.and_then(|d| d.exists().then_some(d))
         })
@@ -99,7 +99,7 @@ pub struct ConfigCli {
     tls_no_verify: bool,
 
     /// Path to the file containing the authentication token.
-    #[arg(long, env = "RATTLER_AUTH_FILE")]
+    #[arg(long)]
     auth_file: Option<PathBuf>,
 
     /// Specifies if we want to use uv keyring provider
@@ -138,7 +138,7 @@ impl ConfigCliPrompt {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct RepodataConfig {
     #[serde(flatten)]
@@ -155,6 +155,7 @@ impl RepodataConfig {
 
     /// Merge the given RepodataConfig into the current one.
     /// `other` is mutable to allow for moving the values out of it.
+    /// The given config will have higher priority
     pub fn merge(&self, mut other: Self) -> Self {
         let mut per_channel: HashMap<_, _> = self
             .per_channel
@@ -198,7 +199,7 @@ impl From<ConfigCliActivation> for Config {
         }
     }
 }
-#[derive(Clone, Default, Debug, Deserialize, Serialize)]
+#[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataChannelConfig {
     /// Disable JLAP compression for repodata.
@@ -256,7 +257,7 @@ pub enum KeyringProvider {
     Subprocess,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
@@ -275,6 +276,19 @@ pub struct PyPIConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub allow_insecure_host: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct S3Options {
+    /// S3 endpoint URL
+    pub endpoint_url: Url,
+
+    /// The name of the S3 region
+    pub region: String,
+
+    /// Force path style URLs instead of subdomain style
+    pub force_path_style: bool,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -436,7 +450,7 @@ impl PyPIConfig {
 }
 
 /// The strategy for that will be used for pinning a version of a package.
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub enum PinningStrategy {
     /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0"
@@ -544,7 +558,7 @@ impl PinningStrategy {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
@@ -597,6 +611,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "PyPIConfig::is_default")]
     pub pypi_config: PyPIConfig,
 
+    /// Configuration for S3.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub s3_options: HashMap<String, S3Options>,
+
     /// The option to specify the directory where detached environments are
     /// stored. When using 'true', it defaults to the cache directory.
     /// When using a path, it uses the specified path.
@@ -633,7 +652,8 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
-            detached_environments: Some(DetachedEnvironments::default()),
+            s3_options: HashMap::new(),
+            detached_environments: None,
             pinning_strategy: None,
             force_activate: None,
             experimental: ExperimentalConfig::default(),
@@ -694,6 +714,18 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum ConfigError {
+    #[error("no file was found at {0}")]
+    FileNotFound(PathBuf),
+    #[error("failed to read config from '{0}'")]
+    ReadError(std::io::Error),
+    #[error("failed to parse config of {1}: {0}")]
+    ParseError(miette::Report, PathBuf),
+    #[error("validation error of {1}: {0}")]
+    ValidationError(miette::Report, PathBuf),
+}
+
 impl Config {
     /// Constructs a new config that is optimized to be used in tests.
     ///
@@ -744,13 +776,21 @@ impl Config {
     /// # Errors
     ///
     /// I/O errors or parsing errors
-    pub fn from_path(path: &Path) -> miette::Result<Config> {
+    pub fn from_path(path: &Path) -> Result<Config, ConfigError> {
         tracing::debug!("Loading config from {}", path.display());
-        let s = fs_err::read_to_string(path)
-            .into_diagnostic()
-            .wrap_err(format!("failed to read config from '{}'", path.display()))?;
+        let s = match fs_err::read_to_string(path) {
+            Ok(content) => content,
+            Err(e)
+                if e.kind() == std::io::ErrorKind::NotFound
+                    || e.kind() == std::io::ErrorKind::NotADirectory =>
+            {
+                return Err(ConfigError::FileNotFound(path.to_path_buf()))
+            }
+            Err(e) => return Err(ConfigError::ReadError(e)),
+        };
 
-        let (mut config, unused_keys) = Config::from_toml(&s)?;
+        let (mut config, unused_keys) =
+            Config::from_toml(&s).map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
 
         if !unused_keys.is_empty() {
             tracing::warn!(
@@ -770,7 +810,9 @@ impl Config {
         config.loaded_from.push(path.to_path_buf());
         tracing::info!("Loaded config from: {}", path.display());
 
-        config.validate()?;
+        config
+            .validate()
+            .map_err(|e| ConfigError::ValidationError(e, path.to_path_buf()))?;
 
         Ok(config)
     }
@@ -784,7 +826,7 @@ impl Config {
     /// # Errors
     ///
     /// I/O errors or parsing errors
-    pub fn try_load_system() -> miette::Result<Config> {
+    pub fn try_load_system() -> Result<Config, ConfigError> {
         Self::from_path(&config_path_system())
     }
 
@@ -795,12 +837,11 @@ impl Config {
     /// The loaded system config
     pub fn load_system() -> Config {
         Self::try_load_system().unwrap_or_else(|e| {
-            let path = config_path_system();
-            tracing::debug!(
-                "Failed to load system config: {} (error: {})",
-                path.display(),
-                e
-            );
+            match e {
+                ConfigError::FileNotFound(_) => (), // it's fine that no file is there
+                e => tracing::error!("{e}"),
+            }
+
             Self::default()
         })
     }
@@ -834,12 +875,10 @@ impl Config {
         let mut config = Self::load_system();
 
         for p in config_path_global() {
-            if !p.is_file() {
-                continue;
-            }
             match Self::from_path(&p) {
                 Ok(c) => config = config.merge_config(c),
-                Err(e) => tracing::warn!(
+                Err(ConfigError::FileNotFound(_)) => (),
+                Err(e) => tracing::error!(
                     "Failed to load global config '{}' with error: {}",
                     p.display(),
                     e
@@ -904,15 +943,21 @@ impl Config {
             "pypi-config.index-url",
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
+            "s3-options",
+            "s3-options.<bucket>",
+            "s3-options.<bucket>.endpoint-url",
+            "s3-options.<bucket>.region",
+            "s3-options.<bucket>.force-path-style",
             "experimental.use-environment-activation-cache",
         ]
     }
 
     /// Merge the given config into the current one.
+    /// The given config will have higher priority
     #[must_use]
-    pub fn merge_config(mut self, other: Config) -> Self {
+    pub fn merge_config(mut self, mut other: Config) -> Self {
         self.mirrors.extend(other.mirrors);
-        self.loaded_from.extend(other.loaded_from);
+        other.loaded_from.extend(self.loaded_from);
 
         Self {
             default_channels: if other.default_channels.is_empty() {
@@ -925,16 +970,23 @@ impl Config {
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
+            // Extended self.mirrors with other.mirrors
             mirrors: self.mirrors,
-            loaded_from: self.loaded_from,
+            loaded_from: other.loaded_from,
             // currently this is always the default so just use the other value
             channel_config: other.channel_config,
-            repodata_config: other.repodata_config.merge(self.repodata_config),
-            pypi_config: other.pypi_config.merge(self.pypi_config),
+            repodata_config: self.repodata_config.merge(other.repodata_config),
+            pypi_config: self.pypi_config.merge(other.pypi_config),
+            s3_options: {
+                let mut merged = HashMap::new();
+                merged.extend(self.s3_options);
+                merged.extend(other.s3_options);
+                merged
+            },
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             force_activate: other.force_activate,
-            experimental: other.experimental.merge(self.experimental),
+            experimental: self.experimental.merge(other.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
         }
@@ -944,10 +996,7 @@ impl Config {
     /// ["conda-forge"]).
     pub fn default_channels(&self) -> Vec<NamedChannelOrUrl> {
         if self.default_channels.is_empty() {
-            consts::DEFAULT_CHANNELS
-                .iter()
-                .map(|s| NamedChannelOrUrl::Name(s.to_string()))
-                .collect()
+            consts::DEFAULT_CHANNELS.clone()
         } else {
             self.default_channels.clone()
         }
@@ -1135,6 +1184,63 @@ impl Config {
                     _ => return Err(err),
                 }
             }
+            key if key.starts_with("s3-options") => {
+                if key == "s3-options" {
+                    if let Some(value) = value {
+                        self.s3_options = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        return Err(miette!("s3-options requires a value"));
+                    }
+                    return Ok(());
+                }
+                let Some(subkey) = key.strip_prefix("s3-options.") else {
+                    return Err(err);
+                };
+                if let Some((bucket, rest)) = subkey.split_once('.') {
+                    if let Some(bucket_config) = self.s3_options.get_mut(bucket) {
+                        match rest {
+                            "endpoint-url" => {
+                                if let Some(value) = value {
+                                    bucket_config.endpoint_url =
+                                        Url::parse(&value).into_diagnostic()?;
+                                } else {
+                                    return Err(miette!(
+                                        "s3-options.{}.endpoint-url requires a value",
+                                        bucket
+                                    ));
+                                }
+                            }
+                            "region" => {
+                                if let Some(value) = value {
+                                    bucket_config.region = value;
+                                } else {
+                                    return Err(miette!(
+                                        "s3-options.{}.region requires a value",
+                                        bucket
+                                    ));
+                                }
+                            }
+                            "force-path-style" => {
+                                if let Some(value) = value {
+                                    bucket_config.force_path_style =
+                                        value.parse().into_diagnostic()?;
+                                } else {
+                                    return Err(miette!(
+                                        "s3-options.{}.force-path-style requires a value",
+                                        bucket
+                                    ));
+                                }
+                            }
+                            _ => return Err(err),
+                        }
+                    }
+                } else {
+                    let value = value.ok_or_else(|| miette!("s3-options requires a value"))?;
+                    let s3_options: S3Options =
+                        serde_json::de::from_str(&value).into_diagnostic()?;
+                    self.s3_options.insert(subkey.to_string(), s3_options);
+                }
+            }
             key if key.starts_with(EXPERIMENTAL) => {
                 if key == EXPERIMENTAL {
                     if let Some(value) = value {
@@ -1227,6 +1333,23 @@ impl Config {
             .with_max_concurrent_requests(self.max_concurrent_downloads())
             .finish()
     }
+
+    pub fn compute_s3_config(&self) -> HashMap<String, s3_middleware::S3Config> {
+        self.s3_options
+            .clone()
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.clone(),
+                    s3_middleware::S3Config::Custom {
+                        endpoint_url: v.endpoint_url.clone(),
+                        region: v.region.clone(),
+                        force_path_style: v.force_path_style,
+                    },
+                )
+            })
+            .collect()
+    }
 }
 
 /// Returns the path to the system-level pixi config file.
@@ -1238,13 +1361,13 @@ pub fn config_path_system() -> PathBuf {
     #[cfg(not(target_os = "windows"))]
     let base_path = PathBuf::from("/etc");
 
-    base_path.join("pixi").join(consts::CONFIG_FILE)
+    base_path.join(consts::CONFIG_DIR).join(consts::CONFIG_FILE)
 }
 
 /// Returns the path(s) to the global pixi config file.
 pub fn config_path_global() -> Vec<PathBuf> {
     vec![
-        dirs::config_dir().map(|d| d.join("pixi").join(consts::CONFIG_FILE)),
+        dirs::config_dir().map(|d| d.join(consts::CONFIG_DIR).join(consts::CONFIG_FILE)),
         pixi_home().map(|d| d.join(consts::CONFIG_FILE)),
     ]
     .into_iter()
@@ -1377,6 +1500,41 @@ UNUSED = "unused"
     }
 
     #[test]
+    fn test_s3_options_parse() {
+        let toml = r#"
+            [s3-options.bucket1]
+            endpoint-url = "https://my-s3-host"
+            region = "us-east-1"
+            force-path-style = false
+        "#;
+        let (config, _) = Config::from_toml(toml).unwrap();
+        let s3_options = config.s3_options;
+        assert_eq!(
+            s3_options["bucket1"].endpoint_url,
+            Url::parse("https://my-s3-host").unwrap()
+        );
+        assert_eq!(s3_options["bucket1"].region, "us-east-1");
+        assert!(!s3_options["bucket1"].force_path_style);
+    }
+
+    #[test]
+    fn test_s3_options_invalid_config() {
+        let toml = r#"
+            [s3-options.bucket1]
+            endpoint-url = "https://my-s3-host"
+            region = "us-east-1"
+            # force-path-style = false
+        "#;
+        let result = Config::from_toml(toml);
+        assert!(result.is_err());
+        assert!(result
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("missing field `force-path-style`"));
+    }
+
+    #[test]
     fn test_default_config() {
         let config = Config::default();
         // This depends on the system so it's hard to test.
@@ -1385,7 +1543,8 @@ UNUSED = "unused"
     }
 
     #[test]
-    fn test_config_merge() {
+    fn test_config_merge_priority() {
+        // If I set every config key, ensure that `other wins`
         let mut config = Config::default();
         let other = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
@@ -1396,6 +1555,81 @@ UNUSED = "unused"
                 solves: 5,
                 ..ConcurrencyConfig::default()
             },
+            change_ps1: Some(false),
+            authentication_override_file: Some(PathBuf::default()),
+            mirrors: HashMap::from([(
+                Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+                Vec::default(),
+            )]),
+            pinning_strategy: Some(PinningStrategy::NoPin),
+            experimental: ExperimentalConfig {
+                use_environment_activation_cache: Some(true),
+            },
+            loaded_from: Vec::from([PathBuf::from_str("test").unwrap()]),
+            force_activate: Some(true),
+            pypi_config: PyPIConfig {
+                allow_insecure_host: Vec::from(["test".to_string()]),
+                extra_index_urls: Vec::from([
+                    Url::parse("https://conda.anaconda.org/conda-forge").unwrap()
+                ]),
+                index_url: Some(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
+                keyring_provider: Some(KeyringProvider::Subprocess),
+            },
+            s3_options: HashMap::from([(
+                "bucket1".into(),
+                S3Options {
+                    endpoint_url: Url::parse("https://my-s3-host").unwrap(),
+                    region: "us-east-1".to_string(),
+                    force_path_style: false,
+                },
+            )]),
+            repodata_config: RepodataConfig {
+                default: RepodataChannelConfig {
+                    disable_bzip2: Some(true),
+                    disable_jlap: Some(true),
+                    disable_sharded: Some(true),
+                    disable_zstd: Some(true),
+                },
+                per_channel: HashMap::from([(
+                    Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+                    RepodataChannelConfig::default(),
+                )]),
+            },
+        };
+        let original_other = other.clone();
+        config = config.merge_config(other);
+        assert_eq!(config, original_other);
+    }
+    #[test]
+    fn test_config_merge_multiple() {
+        let mut config = Config::default();
+        let other = Config {
+            default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
+            tls_no_verify: Some(true),
+            detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
+            concurrency: ConcurrencyConfig {
+                solves: 5,
+                ..ConcurrencyConfig::default()
+            },
+            s3_options: HashMap::from([
+                (
+                    "bucket1".into(),
+                    S3Options {
+                        endpoint_url: Url::parse("https://my-s3-host").unwrap(),
+                        region: "us-east-1".to_string(),
+                        force_path_style: false,
+                    },
+                ),
+                (
+                    "bucket2".into(),
+                    S3Options {
+                        endpoint_url: Url::parse("https://my-s3-host").unwrap(),
+                        region: "us-east-1".to_string(),
+                        force_path_style: false,
+                    },
+                ),
+            ]),
             ..Default::default()
         };
         config = config.merge_config(other);
@@ -1408,6 +1642,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
+        assert!(config.s3_options.contains_key("bucket1"));
 
         let other2 = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("channel").unwrap()],
@@ -1416,6 +1651,14 @@ UNUSED = "unused"
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from(
                 "/path/to/envs2",
             ))),
+            s3_options: HashMap::from([(
+                "bucket2".into(),
+                S3Options {
+                    endpoint_url: Url::parse("https://my-new-s3-host").unwrap(),
+                    region: "us-east-1".to_string(),
+                    force_path_style: false,
+                },
+            )]),
             ..Default::default()
         };
 
@@ -1430,6 +1673,12 @@ UNUSED = "unused"
             Some(PathBuf::from("/path/to/envs2"))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
+        assert!(config.s3_options.contains_key("bucket1"));
+        assert!(config.s3_options.contains_key("bucket2"));
+        assert!(config.s3_options["bucket2"]
+            .endpoint_url
+            .to_string()
+            .contains("my-new-s3-host"));
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -1445,6 +1694,7 @@ UNUSED = "unused"
 
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);
+        assert!(merged.s3_options.contains_key("bucket1"));
 
         let debug = format!("{:#?}", merged);
         let debug = debug.replace("\\\\", "/");
@@ -1622,6 +1872,15 @@ UNUSED = "unused"
             .unwrap();
 
         assert_eq!(config.max_concurrent_downloads(), 1);
+
+        config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
+        let s3_options = config.s3_options.get("my-bucket").unwrap();
+        assert!(s3_options
+            .endpoint_url
+            .to_string()
+            .contains("http://localhost:9000"));
+        assert!(s3_options.force_path_style);
+        assert_eq!(s3_options.region, "auto");
 
         config.set("unknown-key", None).unwrap_err();
     }

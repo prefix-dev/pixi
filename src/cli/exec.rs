@@ -1,10 +1,10 @@
-use std::{path::Path, str::FromStr};
+use std::{path::Path, str::FromStr, sync::LazyLock};
 
 use clap::{Parser, ValueHint};
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{reqwest::build_reqwest_clients, EnvironmentHash, PrefixGuard};
+use pixi_utils::{reqwest::build_reqwest_clients, AsyncPrefixGuard, EnvironmentHash};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -13,6 +13,7 @@ use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platfor
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use uv_configuration::RAYON_INITIALIZE;
 
 use super::cli_config::ChannelsConfig;
 use crate::prefix::Prefix;
@@ -46,14 +47,14 @@ pub struct Args {
     pub config: ConfigCli,
 }
 
-/// CLI entry point for `pixi runx`
+/// CLI entry point for `pixi exec`
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
     let mut command_args = args.command.iter();
     let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
-    let (_, client) = build_reqwest_clients(Some(&config));
+    let (_, client) = build_reqwest_clients(Some(&config), None)?;
 
     // Create the environment to run the command in.
     let prefix = create_exec_prefix(&args, &cache_dir, &config, &client).await?;
@@ -100,11 +101,13 @@ pub async fn create_exec_prefix(
             .join(environment_hash.name()),
     );
 
-    let mut guard = PrefixGuard::new(prefix.root())
+    let guard = AsyncPrefixGuard::new(prefix.root())
+        .await
         .into_diagnostic()
         .context("failed to create prefix guard")?;
 
-    let mut write_guard = wrap_in_progress("acquiring write lock on prefix", || guard.write())
+    let mut write_guard = await_in_progress("acquiring write lock on prefix", |_| guard.write())
+        .await
         .into_diagnostic()
         .context("failed to acquire write lock to prefix guard")?;
 
@@ -115,13 +118,14 @@ pub async fn create_exec_prefix(
             "reusing existing environment in {}",
             prefix.root().display()
         );
-        let _ = write_guard.finish();
+        write_guard.finish().await.into_diagnostic()?;
         return Ok(prefix);
     }
 
     // Update the prefix to indicate that we are installing it.
     write_guard
         .begin()
+        .await
         .into_diagnostic()
         .context("failed to write lock status to prefix guard")?;
 
@@ -184,6 +188,10 @@ pub async fn create_exec_prefix(
     .into_diagnostic()
     .context("failed to solve environment")?;
 
+    // Force the initialization of the rayon thread pool to avoid implicit creation
+    // by the Installer.
+    LazyLock::force(&RAYON_INITIALIZE);
+
     // Install the environment
     Installer::new()
         .with_target_platform(args.platform)
@@ -197,12 +205,12 @@ pub async fn create_exec_prefix(
         .with_package_cache(PackageCache::new(
             cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
         ))
-        .install(prefix.root(), solved_records)
+        .install(prefix.root(), solved_records.records)
         .await
         .into_diagnostic()
         .context("failed to create environment")?;
 
-    let _ = write_guard.finish();
+    write_guard.finish().await.into_diagnostic()?;
     Ok(prefix)
 }
 

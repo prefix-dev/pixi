@@ -7,7 +7,7 @@ use pypi_mapping::Reporter;
 use rattler_conda_types::Platform;
 
 use super::PurlAmendReporter;
-use crate::{build::BuildMetadataReporter, project::grouped_environment::GroupedEnvironmentName};
+use crate::{build::BuildMetadataReporter, workspace::grouped_environment::GroupedEnvironmentName};
 
 /// A helper struct that manages a progress-bar for solving an environment.
 #[derive(Clone)]
@@ -27,7 +27,10 @@ impl SolveProgressBar {
             consts::PLATFORM_STYLE.apply_to(platform)
         );
 
-        pb.set_style(indicatif::ProgressStyle::with_template("    {prefix:20!} ..").unwrap());
+        pb.set_style(
+            indicatif::ProgressStyle::with_template("    {prefix:20!} ..")
+                .expect("should be able to create a progress bar style"),
+        );
         pb.enable_steady_tick(Duration::from_millis(100));
         pb.set_prefix(name_and_platform);
         Self { pb }
@@ -56,7 +59,7 @@ impl SolveProgressBar {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(
                 "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {pos:>4}/{len:4} {msg:.dim}")
-                .unwrap()
+                .expect("should be able to create a progress bar style")
                 .progress_chars("━━╾─"),
         );
     }
@@ -67,7 +70,7 @@ impl SolveProgressBar {
         self.pb.set_style(
             indicatif::ProgressStyle::with_template(
                 "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] [{bar:20!.bright.yellow/dim.white}] {bytes:>8} @ {smoothed_bytes_per_sec:8} {msg:.dim}")
-                .unwrap()
+                .expect("should be able to create a progress bar style")
                 .progress_chars("━━╾─")
                 .with_key(
                     "smoothed_bytes_per_sec",
@@ -86,7 +89,7 @@ impl SolveProgressBar {
             indicatif::ProgressStyle::with_template(
                 "  {spinner:.dim} {prefix:20!} [{elapsed_precise}] {msg:.dim}",
             )
-            .unwrap(),
+            .expect("should be able to create a progress bar style"),
         );
     }
 
@@ -96,7 +99,7 @@ impl SolveProgressBar {
                 "  {} {{prefix:20!}} [{{elapsed_precise}}]",
                 console::style(console::Emoji("✔", "↳")).green(),
             ))
-            .unwrap(),
+            .expect("should be able to create a progress bar style"),
         );
         self.pb.finish_and_clear();
     }

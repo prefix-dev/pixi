@@ -2,8 +2,4 @@
 source: src/global/project/parsed_manifest.rs
 expression: manifest.unwrap_err()
 ---
-TOML parse error at line 7, column 9
-  |
-7 |         pixi = "python"
-  |         ^^^^
 'pixi' is not allowed as exposed name in the map

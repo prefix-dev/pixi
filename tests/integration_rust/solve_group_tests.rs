@@ -163,12 +163,13 @@ async fn test_purl_are_added_for_pypi() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_purl_are_missing_for_non_conda_forge() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
-    let client = project.authenticated_client();
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
@@ -206,12 +207,13 @@ async fn test_purl_are_missing_for_non_conda_forge() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_purl_are_generated_using_custom_mapping() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
-    let client = project.authenticated_client();
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
     let foo_bar_package = Package::build("foo-bar-car", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
@@ -250,12 +252,13 @@ async fn test_purl_are_generated_using_custom_mapping() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
-    let client = project.authenticated_client();
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
     let foo_bar_package = Package::build("pandoc", "2").finish();
 
     let mut repo_data_record = RepoDataRecord {
@@ -290,12 +293,13 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_dont_record_not_present_package_as_purl() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
-    let project = pixi.project().unwrap();
-    let client = project.authenticated_client();
+    let project = pixi.workspace().unwrap();
+    let client = project.authenticated_client().unwrap();
     // We use one package that is present in our mapping: `boltons`
     // and another one that is missing from conda and our mapping:
     // `pixi-something-new-for-test` because `pixi-something-new-for-test` is
@@ -387,9 +391,9 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
     )
     .unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
-    let client = project.authenticated_client();
+    let client = project.authenticated_client().unwrap();
 
     // We use one package that is present in our mapping: `boltons`
     // and another one that is missing from conda and our mapping:
@@ -473,9 +477,9 @@ async fn test_custom_mapping_channel_with_suffix() {
     )
     .unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
-    let client = project.authenticated_client();
+    let client = project.authenticated_client().unwrap();
 
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
@@ -524,9 +528,9 @@ async fn test_repo_data_record_channel_with_suffix() {
     )
     .unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
-    let client = project.authenticated_client();
+    let client = project.authenticated_client().unwrap();
 
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
@@ -575,9 +579,9 @@ async fn test_path_channel() {
     )
     .unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
-    let client = project.authenticated_client();
+    let client = project.authenticated_client().unwrap();
 
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
@@ -649,9 +653,9 @@ async fn test_file_url_as_mapping_location() {
     )
     .unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
-    let client = project.authenticated_client();
+    let client = project.authenticated_client().unwrap();
 
     let foo_bar_package = Package::build("pixi-something-new", "2").finish();
 
@@ -700,9 +704,9 @@ async fn test_disabled_mapping() {
     )
     .unwrap();
 
-    let project = pixi.project().unwrap();
+    let project = pixi.workspace().unwrap();
 
-    let client = project.authenticated_client();
+    let client = project.authenticated_client().unwrap();
 
     let blocking_middleware = OfflineMiddleware;
 

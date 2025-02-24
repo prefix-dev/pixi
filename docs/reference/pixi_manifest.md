@@ -94,7 +94,7 @@ This should be a valid version based on the conda Version Spec.
 See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 
 ```toml
--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_version"
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_version"
 ```
 
 ### `authors` (optional)
@@ -281,6 +281,7 @@ The options that can be defined are:
 - `extra-index-urls`: adds an extra index url.
 - `find-links`: similar to `--find-links` option in `pip`.
 - `no-build-isolation`: disables build isolation, can only be set per package.
+- `no-build`: don't build source distributions.
 - `index-strategy`: allows for specifying the index strategy to use.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
@@ -335,6 +336,26 @@ detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev =
 !!! tip "Conda dependencies define the build environment"
     To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
 
+### No Build
+When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error.
+
+Can be either set per package or globally.
+```toml
+[pypi-options]
+# No sdists allowed
+no-build = true # default is false
+```
+or:
+```toml
+[pypi-options]
+no-build = ["package1", "package2"]
+```
+
+When features are merged, the following priority is adhered:
+`no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
+So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+
+
 ### Index Strategy
 
 The strategy to use when resolving against multiple index URLs. Description modified from the [uv](https://docs.astral.sh/uv/reference/settings/#index-strategy) documentation:
@@ -354,6 +375,8 @@ By default, `uv` and thus `pixi`, will stop at the first index on which a given 
     The `index-strategy` only changes PyPI package resolution and not conda package resolution.
 
 ## The `dependencies` table(s)
+??? info "Details regarding the dependencies"
+    For more detail regarding the dependency types, make sure to check the [Run, Host, Build](../build/dependency_types.md) dependency documentation.
 
 This section defines what dependencies you would like to use for your project.
 
@@ -363,11 +386,12 @@ The default is `[dependencies]`, which are dependencies that are shared across p
 Dependencies are defined using a [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html).
 A `VersionSpec` combines a [Version](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html) with an optional operator.
 
+
 Some examples are:
 
 ```toml
 # Use this exact package version
-package0 = "1.2.3"
+package0 = "==1.2.3"
 # Use 1.2.3 up to 1.3.0
 package1 = "~=1.2.3"
 # Use larger than 1.2 lower and equal to 1.4
@@ -399,8 +423,31 @@ Even if the dependency defines a channel that channel should be added to the `pr
 ```toml
 [dependencies]
 python = ">3.9,<=3.11"
-rust = "1.72"
+rust = "==1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
+```
+
+
+### `host-dependencies`
+
+```toml
+[host-dependencies]
+python = "~=3.10.3"
+```
+Typical examples of host dependencies are:
+
+- Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
+- Libraries your project links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
+
+### `build-dependencies`
+
+This table contains dependencies that are needed to build the project.
+Different from `dependencies` and `host-dependencies` these packages are installed for the architecture of the _build_ machine.
+This enables cross-compiling from one machine architecture to another.
+
+```toml
+[build-dependencies]
+cmake = "~=3.24"
 ```
 
 ### `pypi-dependencies`
@@ -448,7 +495,15 @@ pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
 flask = { git = "ssh://git@github.com/pallets/flask" }
 # With https and a specific revision
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
-# TODO: will support later -> branch = '' or tag = '' to specify a branch or tag
+
+# With https and a specific branch
+boltons = { git = "https://github.com/mahmoud/boltons.git", branch = "master" }
+
+# With https and a specific tag
+boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
+
+# With https, specific tag and some subdirectory
+boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
 
 # You can also directly add a source dependency from a path, tip keep this relative to the root of the project.
 minimal-project = { path = "./minimal-project", editable = true}
@@ -499,6 +554,7 @@ torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 ```
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
+Learn more about installing PyTorch [here](../features/pytorch.md).
 
 ##### `git`
 
@@ -514,7 +570,7 @@ Use `git` in combination with `rev` or `subdirectory`:
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
-py-rattler = { git = "ssh://git@github.com/mamba-org/rattler.git", subdirectory = "py-rattler" }
+py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
 ```
 
 ##### `path`
@@ -551,46 +607,6 @@ Sdists usually depend on system packages to be built, especially when compiling 
 Think for example of Python SDL2 bindings depending on the C library: SDL2.
 To help built these dependencies we activate the conda environment that includes these pypi dependencies before resolving.
 This way when a source distribution depends on `gcc` for example, it's used from the conda environment instead of the system.
-
-### `host-dependencies`
-
-This table contains dependencies that are needed to build your project but which should not be included when your project is installed as part of another project.
-In other words, these dependencies are available during the build but are no longer available when your project is installed.
-Dependencies listed in this table are installed for the architecture of the target machine.
-
-```toml
-[host-dependencies]
-python = "~=3.10.3"
-```
-
-Typical examples of host dependencies are:
-
-- Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
-- Libraries your project links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
-
-### `build-dependencies`
-
-This table contains dependencies that are needed to build the project.
-Different from `dependencies` and `host-dependencies` these packages are installed for the architecture of the _build_ machine.
-This enables cross-compiling from one machine architecture to another.
-
-```toml
-[build-dependencies]
-cmake = "~=3.24"
-```
-
-Typical examples of build dependencies are:
-
-- Compilers are invoked on the build machine, but they generate code for the target machine.
-  If the project is cross-compiled, the architecture of the build and target machine might differ.
-- `cmake` is invoked on the build machine to generate additional code- or project-files which are then include in the compilation process.
-
-!!! info
-    The _build_ target refers to the machine that will execute the build.
-    Programs and libraries installed by these dependencies will be executed on the build machine.
-
-    For example, if you compile on a MacBook with an Apple Silicon chip but target Linux x86_64 then your *build* platform is `osx-arm64` and your *host* platform is `linux-64`.
-
 ## The `activation` table
 
 The activation table is used for specialized activation operations that need to be run when the environment is activated.
@@ -800,22 +816,71 @@ When an environment comprises several features (including the default feature):
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
 - The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
 
+## Global configuration
+
+The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
+
+
 ## Preview features
 Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
 
 An example of a preview feature in the project manifest:
 
-```toml title="Example preview features in the project manifest"
-[project]
-name = "foo"
-channels = []
-platforms = []
-preview = ["new-resolve"]
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
 ```
 
 Preview features in the documentation will be marked as such on the relevant pages.
 
+## Pixi Build
 
-## Global configuration
+Pixi build is an experimental feature that requires `preview = ["pixi-build"]` to be set in `[workspace]`
 
-The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
+### Workspace section
+
+Currently, `workspace` is an alias for `project` and we recommend using `workspace` instead of `project`,
+when making use of the `pixi-build` preview feature.
+To use this keyword the preview feature *does not* need to be enabled, but for now we do recommend it for that use-case solely.
+
+### Package section
+
+The package section is used to define the package that is built by the project.
+Pixi only allows this table if `preview = ["pixi-build"]` is set in `[workspace]`.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:package"
+```
+
+### Host, Build, dependencies
+
+The package section re-uses the `host-dependencies` and `build-dependencies`,
+which you can read about here: [host-build-dependencies](#host-dependencies) and [build-dependencies](#build-dependencies).
+If you have the `preview = ["pixi-build"]` enabled these are interpreted as part of the package.
+
+### Run dependencies
+
+Run dependencies are dependencies that are required at runtime by your package.
+For Python packages, these are the most common dependency types.
+For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:run-dependencies"
+```
+
+### The `build-system`
+
+The build system specifies how the package can be built.
+The build system is a table that can contain the following fields:
+
+- `channels`: specifies the channels to get the build backend from.
+- `build-backend`: specifies the build backend to use. This is a table that can contain the following fields:
+  - `name`: the name of the build backend to use. This will also be the executable name.
+  - `version`: the version of the build backend to use.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
+```
+
+!!! note
+    We are currently not publishing the backends on conda-forge, but will do so in the future.
+    For now the backends are published at [conda channel](https://prefix.dev/channels/pixi-build-backends).
