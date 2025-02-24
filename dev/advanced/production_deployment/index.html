@@ -1523,6 +1523,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#cache-downloaded-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cache downloaded packages
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unpacking-without-pixi-pack" class="md-nav__link">
     <span class="md-ellipsis">
       Unpacking without pixi-pack
@@ -1944,6 +1953,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#cache-downloaded-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cache downloaded packages
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#unpacking-without-pixi-pack" class="md-nav__link">
     <span class="md-ellipsis">
       Unpacking without pixi-pack
@@ -2083,15 +2101,27 @@ It also makes use of <code>pixi shell-hook</code> to not rely on pixi being inst
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>--manifest-pack<span class="w"> </span>pixi.toml
 </span></code></pre></div>
 <p>This can be particularly useful if you build the project itself and want to include the built package in the environment but still want to use <code>pixi.lock</code> from the project.</p>
+<h3 id="cache-downloaded-packages">Cache downloaded packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
+<p>You can cache downloaded packages to speed up subsequent pack operations by using the <code>--use-cache</code> flag:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
+</span></code></pre></div>
+<p>This will store all downloaded packages in the specified directory and reuse them in future pack operations. The cache follows the same structure as conda channels, organizing packages by platform subdirectories (e.g., linux-64, win-64, etc.).</p>
+<p>Using a cache is particularly useful when:</p>
+<ul>
+<li>Creating multiple packs with overlapping dependencies</li>
+<li>Working with large packages that take time to download</li>
+<li>Operating in environments with limited bandwidth</li>
+<li>Running CI/CD pipelines where package caching can significantly improve build times</li>
+</ul>
 <h3 id="unpacking-without-pixi-pack">Unpacking without pixi-pack<a class="headerlink" href="#unpacking-without-pixi-pack" title="Permanent link">#</a></h3>
 <p>If you don't have <code>pixi-pack</code> available on your target system, you can still install the environment if you have <code>conda</code> or <code>micromamba</code> available.
 Just unarchive the <code>environment.tar</code>, then you have a local channel on your system where all necessary packages are available.
 Next to this local channel, you will find an <code>environment.yml</code> file that contains the environment specification.
 You can then install the environment using <code>conda</code> or <code>micromamba</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># or</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="c1"># or</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
 </span></code></pre></div>
 <div class="admonition note">
 <p>The <code>environment.yml</code> and <code>repodata.json</code> files are only for this use case, <code>pixi-pack unpack</code> does not use them.</p>
