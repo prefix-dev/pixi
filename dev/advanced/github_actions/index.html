@@ -1475,6 +1475,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#only-install-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Only install pixi
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2017,6 +2026,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#only-install-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Only install pixi
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2363,6 +2381,12 @@ This can be overwritten by setting the <code>manifest-path</code> input argument
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.3</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">with</span><span class="p">:</span>
 </span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="nt">manifest-path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pyproject.toml</span>
+</span></code></pre></div>
+<h3 id="only-install-pixi">Only install pixi<a class="headerlink" href="#only-install-pixi" title="Permanent link">#</a></h3>
+<p>If you only want to install pixi and not install the current project, you can use the <code>run-install</code> option.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>- uses: prefix-dev/setup-pixi@v0.8.3
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>  with:
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    run-install: false
 </span></code></pre></div>
 <h2 id="more-examples">More examples<a class="headerlink" href="#more-examples" title="Permanent link">#</a></h2>
 <p>If you want to see more examples, you can take a look at the <a href="https://github.com/prefix-dev/setup-pixi/blob/main/.github/workflows/test.yml">GitHub Workflows of the <code>setup-pixi</code> repository</a>.</p>
