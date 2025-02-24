@@ -2126,6 +2126,15 @@ You can then install the environment using <code>conda</code> or <code>micromamb
 <div class="admonition note">
 <p>The <code>environment.yml</code> and <code>repodata.json</code> files are only for this use case, <code>pixi-pack unpack</code> does not use them.</p>
 </div>
+<div class="admonition note">
+<p>Both <code>conda</code> and <code>mamba</code> are always installing pip as a side effect when they install python, see <a href="https://docs.conda.io/projects/conda/en/25.1.x/user-guide/configuration/settings.html#add-pip-as-python-dependency-add-pip-as-python-dependency"><code>conda</code>'s documentation</a>.
+This is not different from how <code>pixi</code> works and can lead to solver errors when using <code>pixi-pack</code>'s compatibility mode since <code>pixi-pack</code> doesn't include <code>pip</code> by default.
+You can fix this issue in two ways:</p>
+<ul>
+<li>Add <code>pip</code> to your <code>pixi.lock</code> file using <code>pixi add pip</code>.</li>
+<li>Configuring <code>conda</code> (or <code>mamba</code>) to not install <code>pip</code> by default by running <code>conda config --set add_pip_as_python_dependency false</code> (or by adding <code>add_pip_as_python_dependency: False</code> to your <code>~/.condarc</code>)</li>
+</ul>
+</div>
 
 
 
