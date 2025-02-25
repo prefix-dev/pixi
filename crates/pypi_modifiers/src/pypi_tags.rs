@@ -290,11 +290,11 @@ fn get_pypi_platform_from_virtual_packages(
         let minor = u64::try_into(minor).map_err(|_| PyPITagError::VersionCastError(minor))?;
 
         return match libc.family.to_lowercase().as_str() {
-            "glibc" => Ok(uv_platform_tags::Platform::new(
+            pixi_manifest::GLIBC_FAMILY => Ok(uv_platform_tags::Platform::new(
                 uv_platform_tags::Os::Manylinux { major, minor },
                 get_arch_tags(platform)?,
             )),
-            "musl" => Ok(uv_platform_tags::Platform::new(
+            pixi_manifest::MUSL_FAMILY => Ok(uv_platform_tags::Platform::new(
                 uv_platform_tags::Os::Musllinux { major, minor },
                 get_arch_tags(platform)?,
             )),

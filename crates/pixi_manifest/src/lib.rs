@@ -51,7 +51,9 @@ pub use pypi::pypi_requirement::PyPiRequirement;
 use rattler_conda_types::Platform;
 pub use s3::S3Options;
 pub use spec_type::SpecType;
-pub use system_requirements::{LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
+pub use system_requirements::{
+    LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements, GLIBC_FAMILY, MUSL_FAMILY,
+};
 pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
