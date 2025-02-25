@@ -95,6 +95,8 @@ jobs:
   cargo-machete:
     name: Cargo Machete
     runs-on: ubuntu-latest
+    # disabled until this issue is fixed https://github.com/bnjbvr/cargo-machete/issues/158
+    if: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
