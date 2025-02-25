@@ -26,10 +26,7 @@ use crate::{
         get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
         InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
     },
-    workspace::{
-        errors::UnsupportedPlatformError,
-        virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
-    },
+    workspace::{errors::UnsupportedPlatformError, Environment},
     Workspace, WorkspaceLocator,
 };
 
@@ -111,13 +108,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     sanity_check_project(&workspace).await?;
 
     let best_platform = environment.best_platform();
-
-    // Verify that the current platform has the required virtual packages for the
-    // environment.
-    if let Some(ref explicit_environment) = explicit_environment {
-        verify_current_platform_has_required_virtual_packages(explicit_environment)
-            .into_diagnostic()?;
-    }
 
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = workspace
@@ -301,7 +291,6 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
             workspace
                 .environments()
                 .into_iter()
-                .filter(|env| verify_current_platform_has_required_virtual_packages(env).is_ok())
                 .flat_map(|env| env.get_filtered_tasks())
                 .collect()
         };

@@ -18,12 +18,10 @@ use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
 
+use crate::workspace::virtual_packages::verify_current_platform_can_run_environment;
 use crate::{
     cli::cli_config::WorkspaceConfig,
-    workspace::{
-        virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
-        WorkspaceMut,
-    },
+    workspace::{Environment, WorkspaceMut},
     Workspace, WorkspaceLocator,
 };
 
@@ -243,7 +241,7 @@ fn print_heading(value: &str) {
     eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
 }
 
-fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, Task>>, summary: bool) {
+fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary: bool) {
     if summary {
         print_heading("Tasks per environment:");
         for (env, tasks) in task_map {
@@ -288,16 +286,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
-
     match args.operation {
         Operation::Add(args) => add_task(workspace.modify()?, args).await,
         Operation::Remove(args) => remove_tasks(workspace.modify()?, args).await,
         Operation::Alias(args) => alias_task(workspace.modify()?, args).await,
-        Operation::List(args) => list_tasks(workspace, args),
+        Operation::List(args) => list_tasks(workspace, args).await,
     }
 }
 
-fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> {
+async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> {
     if args.json {
         print_tasks_json(&workspace);
         return Ok(());
@@ -314,6 +311,8 @@ fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> {
         })
         .transpose()?;
 
+    let lockfile = workspace.load_lock_file().await.ok();
+
     let env_task_map: HashMap<Environment, HashSet<TaskName>> =
         if let Some(explicit_environment) = explicit_environment {
             HashMap::from([(
@@ -325,7 +324,7 @@ fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> {
                 .environments()
                 .iter()
                 .filter_map(|env| {
-                    if verify_current_platform_has_required_virtual_packages(env).is_ok() {
+                    if verify_current_platform_can_run_environment(env, lockfile.as_ref()).is_ok() {
                         Some((env.clone(), env.get_filtered_tasks()))
                     } else {
                         None
@@ -354,15 +353,16 @@ fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> {
     let tasks_per_env = env_task_map
         .into_iter()
         .map(|(env, task_names)| {
-            let tasks: HashMap<TaskName, Task> = task_names
+            let task_map = task_names
                 .into_iter()
-                .filter_map(|task_name| {
-                    env.task(&task_name, Some(env.best_platform()))
-                        .ok()
-                        .map(|task| (task_name, task.clone()))
+                .map(|task_name| {
+                    let task = env
+                        .task(&task_name, None)
+                        .expect("task should be available here");
+                    (task_name, task)
                 })
                 .collect();
-            (env, tasks)
+            (env, task_map)
         })
         .collect();
 
@@ -484,12 +484,7 @@ fn build_env_feature_task_map(project: &Workspace) -> Vec<EnvTasks> {
         .environments()
         .iter()
         .sorted_by_key(|env| env.name().to_string())
-        .filter_map(|env: &Environment<'_>| {
-            if verify_current_platform_has_required_virtual_packages(env).is_err() {
-                return None;
-            }
-            Some(EnvTasks::from(env))
-        })
+        .map(EnvTasks::from)
         .collect()
 }
 

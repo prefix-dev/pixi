@@ -7,7 +7,8 @@ use serde::Serialize;
 use serde_value::Value;
 use thiserror::Error;
 
-const GLIBC_FAMILY: &str = "glibc";
+pub const GLIBC_FAMILY: &str = "glibc";
+pub const MUSL_FAMILY: &str = "musl";
 
 /// Describes the minimal system requirements to be able to run a certain environment.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -468,7 +469,7 @@ mod tests {
             }
         );
 
-        assert_matches!(eglibc_2_17.union(&glibc_2_12).unwrap_err(), SystemRequirementsUnionError::DifferentLibcFamilies(fam_a, fam_b) if fam_a == "eglibc" && fam_b == "glibc");
+        assert_matches!(eglibc_2_17.union(&glibc_2_12).unwrap_err(), SystemRequirementsUnionError::DifferentLibcFamilies(fam_a, fam_b) if fam_a == "eglibc" && fam_b == GLIBC_FAMILY);
     }
 
     #[test]
@@ -494,7 +495,7 @@ mod tests {
             linux: Some(Version::from_str("5.11").unwrap()),
             cuda: Some(Version::from_str("12.2").unwrap()),
             libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
-                family: Some("glibc".to_string()),
+                family: Some(GLIBC_FAMILY.to_string()),
                 version: Version::from_str("2.12").unwrap(),
             })),
             archspec: Some("x86_64".to_string()),
@@ -544,7 +545,7 @@ mod tests {
             linux: None,
             cuda: None,
             libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
-                family: Some("musl".to_string()),
+                family: Some(MUSL_FAMILY.to_string()),
                 version: Version::from_str("2.13").unwrap(),
             })),
             archspec: None,
@@ -558,7 +559,7 @@ mod tests {
         assert_eq!(
             e.libc,
             Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
-                family: Some("musl".to_string()),
+                family: Some(MUSL_FAMILY.to_string()),
                 version: Version::from_str("2.13").unwrap(),
             }))
         );
