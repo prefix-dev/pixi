@@ -252,19 +252,27 @@ where
 #[derive(Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
+    /// The channels to use for this environment.
+    #[serde(default, skip_serializing_if = "IndexSet::is_empty")]
     pub channels: IndexSet<PrioritizedChannel>,
 
     /// Platform used by the environment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<Platform>,
 
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "UniquePackageMap::is_empty")]
     pub(crate) dependencies: UniquePackageMap,
-    #[serde(default, serialize_with = "serialize_expose_mappings")]
+
+    #[serde(
+        default,
+        serialize_with = "serialize_expose_mappings",
+        skip_serializing_if = "IndexSet::is_empty"
+    )]
     pub(crate) exposed: IndexSet<Mapping>,
 
     /// Whether to install the menuitems for the environment, using the Menuinst technology
     /// True means we install the item for the package of the toplevel dependencies.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) menu_install: Option<bool>,
 }
 
@@ -296,13 +304,46 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
     }
 }
 
+impl From<&ParsedEnvironment> for toml_edit::Value {
+    /// Converts this instance into a [`toml_edit::Value`].
+    fn from(env: &ParsedEnvironment) -> Self {
+        ::serde::Serialize::serialize(env, toml_edit::ser::ValueSerializer::new())
+            .expect("conversion to toml cannot fail")
+    }
+}
+
 impl ParsedEnvironment {
-    // Create empty parsed environment
-    pub(crate) fn new(channels: impl IntoIterator<Item = PrioritizedChannel>) -> Self {
-        Self {
-            channels: channels.into_iter().collect(),
-            ..Default::default()
-        }
+    /// Creates a default environment, add more fields with the builder pattern.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the channels for this environment
+    pub fn with_channels<C>(mut self, channels: C) -> Self
+    where
+        C: IntoIterator,
+        C::Item: Into<PrioritizedChannel>,
+    {
+        self.channels.extend(channels.into_iter().map(Into::into));
+        self
+    }
+
+    /// Sets the platform for this environment
+    pub fn with_platform(mut self, platform: Option<Platform>) -> Self {
+        self.platform = platform;
+        self
+    }
+
+    /// Sets the dependencies for this environment
+    pub fn with_dependency(mut self, dependencies: IndexMap<PackageName, PixiSpec>) -> Self {
+        self.dependencies.specs.extend(dependencies);
+        self
+    }
+
+    /// Sets the menu install flag for this environment
+    pub fn with_menu_install(mut self, menu_install: Option<bool>) -> Self {
+        self.menu_install = menu_install;
+        self
     }
     /// Returns the platform associated with this platform, `None` means current
     /// platform
@@ -383,9 +424,17 @@ pub struct ParseExposedKeyError {}
 
 #[cfg(test)]
 mod tests {
-    use insta::assert_snapshot;
-
     use super::ParsedManifest;
+    use crate::global::project::ParsedEnvironment;
+    use indexmap::IndexMap;
+    use insta::assert_snapshot;
+    use itertools::Itertools;
+    use pixi_manifest::PrioritizedChannel;
+    use pixi_spec::PixiSpec;
+    use rattler_conda_types::{
+        NamedChannelOrUrl, PackageName, ParseStrictness, Platform, VersionSpec,
+    };
+    use std::str::FromStr;
 
     #[test]
     fn test_invalid_key() {
@@ -521,5 +570,36 @@ mod tests {
         menu-install = true
         "#;
         let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+    }
+
+    #[test]
+    fn test_serialization() {
+        let channels = vec!["bioconda", "https://prefix.dev/conda-forge"]
+            .into_iter()
+            .map(|channel| PrioritizedChannel::from(NamedChannelOrUrl::from_str(channel).unwrap()))
+            .collect_vec();
+
+        let dependencies: IndexMap<PackageName, PixiSpec> =
+            vec![("python", "==3.13.0"), ("pixi", "*")]
+                .into_iter()
+                .map(|(package, version)| {
+                    (
+                        PackageName::from_str(package).unwrap(),
+                        PixiSpec::from(
+                            VersionSpec::from_str(version, ParseStrictness::Strict).unwrap(),
+                        ),
+                    )
+                })
+                .collect();
+
+        let platform = Some(Platform::Win64);
+        let parsed_env = ParsedEnvironment::new()
+            .with_channels(channels)
+            .with_dependency(dependencies)
+            .with_platform(platform)
+            .with_menu_install(Some(true));
+
+        assert_snapshot!(::serde::Serialize::serialize(&parsed_env, toml_edit::ser::ValueSerializer::new()).unwrap(),
+            @r#"{ channels = ["bioconda", "https://prefix.dev/conda-forge"], platform = "win-64", dependencies = { python = "==3.13.0", pixi = "*" }, menu-install = true }"#);
     }
 }

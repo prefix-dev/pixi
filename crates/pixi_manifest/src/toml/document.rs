@@ -129,6 +129,47 @@ impl TomlDocument {
         Ok(current_table)
     }
 
+    /// Inserts a value into a certain table.
+    /// If the most inner table doesn't exist, a normal table will be created.
+    /// If it already exists, the formatting of the table will be preserved.
+    pub fn insert_into_table<'a>(
+        &'a mut self,
+        table_name: &str,
+        value: impl Into<Item>,
+    ) -> Result<&'a mut dyn TableLike, TomlError> {
+        let mut parts: Vec<&str> = table_name.split('.').collect();
+        let last = parts.pop();
+
+        let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
+
+        // Making sure the table is not an inline table
+        for part in parts {
+            let entry = current_table.entry(part);
+            let item = entry.or_insert(Item::Table(Table::new()));
+
+            // Ensure it's a standard table, not an inline one
+            if let Some(table) = item.as_table_mut() {
+                table.set_dotted(true);
+            }
+
+            current_table = item
+                .as_table_like_mut()
+                .ok_or_else(|| TomlError::table_error(part, table_name))?;
+        }
+
+        // Insert the content into the table
+        if let Some(last) = last {
+            let item = value.into();
+            let table_content = item
+                .into_table()
+                .map_err(|_| TomlError::table_error(last, table_name))?;
+
+            current_table.insert(last, Item::Table(table_content.to_owned()));
+        }
+
+        Ok(current_table)
+    }
+
     /// Retrieves a mutable reference to a target array `array_name`
     /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
     ///
@@ -180,8 +221,8 @@ impl TomlDocument {
 
 #[cfg(test)]
 mod tests {
+    use serde::Serialize;
     use std::str::FromStr;
-
     use toml_edit::{DocumentMut, Item};
 
     use crate::toml::document::TomlDocument;
@@ -251,5 +292,115 @@ channels = ["dummy-channel"]
 
         // No empty table is being created
         assert!(!manifest.0.to_string().contains("[test]"));
+    }
+
+    #[derive(Serialize)]
+    struct DummyConfig {
+        version: String,
+        enabled: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        optional: Option<String>,
+    }
+    impl DummyConfig {
+        fn as_value(&self) -> toml_edit::Value {
+            Serialize::serialize(self, toml_edit::ser::ValueSerializer::new()).unwrap()
+        }
+    }
+
+    #[test]
+    fn test_insert_optional_struct_into_table() {
+        let mut manifest = TomlDocument::new(DocumentMut::new());
+        let table_name = "settings.config";
+        let config = DummyConfig {
+            version: "1.2.3".to_string(),
+            enabled: true,
+            optional: None,
+        };
+
+        // Insert into the document
+        manifest
+            .insert_into_table(table_name, config.as_value())
+            .unwrap();
+
+        // Ensure the table is created properly
+        let toml_output = manifest.to_string();
+        assert!(toml_output.contains("[settings.config]"));
+        assert!(toml_output.contains("version = \"1.2.3\""));
+        assert!(toml_output.contains("enabled = true"));
+        assert!(!toml_output.contains("optional"));
+    }
+
+    #[test]
+    fn test_insert_struct_into_table() {
+        let mut manifest = TomlDocument::new(DocumentMut::new());
+        let table_name = "settings.config";
+        let config = DummyConfig {
+            version: "1.2.3".to_string(),
+            enabled: true,
+            optional: Some("foo".to_string()),
+        };
+
+        // Insert into the document
+        manifest
+            .insert_into_table(table_name, config.as_value())
+            .unwrap();
+
+        // Ensure the table is created properly
+        let toml_output = manifest.to_string();
+        assert!(toml_output.contains("[settings.config]"));
+        assert!(toml_output.contains("version = \"1.2.3\""));
+        assert!(toml_output.contains("enabled = true"));
+        assert!(toml_output.contains("optional = \"foo\""));
+    }
+
+    #[test]
+    fn test_insertion_of_multiple_tables() {
+        let mut manifest = TomlDocument::new(DocumentMut::new());
+        let table_name = "settings.config";
+        let config = DummyConfig {
+            version: "1.2.3".to_string(),
+            enabled: true,
+            optional: Some("foo".to_string()),
+        };
+
+        // Insert into the document, and override it
+        manifest
+            .insert_into_table(table_name, config.as_value())
+            .unwrap();
+        manifest
+            .insert_into_table(table_name, config.as_value())
+            .unwrap();
+
+        let config = DummyConfig {
+            version: "4.5.6".to_string(),
+            enabled: false,
+            optional: None,
+        };
+
+        // Replace with new table
+        manifest
+            .insert_into_table(table_name, config.as_value())
+            .unwrap();
+        assert!(!manifest.to_string().contains("version = \"1.2.3\""));
+        assert!(manifest.to_string().contains("version = \"4.5.6\""));
+        assert!(manifest.to_string().contains("enabled = false"));
+        assert!(!manifest.to_string().contains("optional"));
+
+        let table_name = "settings.config2";
+        let config = DummyConfig {
+            version: "7.8.9".to_string(),
+            enabled: true,
+            optional: Some("bar".to_string()),
+        };
+        // Add second table, and validate both exist
+        manifest
+            .insert_into_table(table_name, config.as_value())
+            .unwrap();
+        assert!(manifest.to_string().contains("[settings.config2]"));
+        assert!(manifest.to_string().contains("version = \"7.8.9\""));
+        assert!(manifest.to_string().contains("enabled = true"));
+        assert!(manifest.to_string().contains("optional = \"bar\""));
+        assert!(manifest.to_string().contains("[settings.config]"));
+        assert!(manifest.to_string().contains("version = \"4.5.6\""));
     }
 }

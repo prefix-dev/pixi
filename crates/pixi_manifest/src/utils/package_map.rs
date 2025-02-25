@@ -45,6 +45,12 @@ impl UniquePackageMap {
         }
         Ok(self.specs)
     }
+
+    /// Check if the specs are empty, we don't care about the other collections,
+    /// as this object would be useless without the specs.
+    pub fn is_empty(&self) -> bool {
+        self.specs.is_empty()
+    }
 }
 
 impl IntoIterator for UniquePackageMap {

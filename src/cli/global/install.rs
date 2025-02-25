@@ -1,9 +1,11 @@
 use clap::Parser;
 use fancy_display::FancyDisplay;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
+use crate::global::project::ParsedEnvironment;
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{
@@ -12,6 +14,7 @@ use crate::{
     },
 };
 use pixi_config::{self, Config, ConfigCli};
+use pixi_spec::PixiSpec;
 
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
 ///
@@ -62,9 +65,9 @@ pub struct Args {
     #[arg(action, long)]
     force_reinstall: bool,
 
-    /// Specify that the menu items of the environment should be installed, defaults to true.
-    #[arg(long, default_value_t = true)]
-    menu_install: bool,
+    /// Specify that the menu items of the exposed packages should not be installed.
+    #[arg(long)]
+    no_menu_install: bool,
 }
 
 impl HasSpecs for Args {
@@ -169,27 +172,45 @@ async fn setup_environment(
         args.channels.clone()
     };
 
+    // Convert the specs
+    let spec_map: IndexMap<rattler_conda_types::PackageName, PixiSpec> = specs
+        .iter()
+        .map(|spec| {
+            let (name, nameless_spec) = spec.clone().into_nameless();
+            let package_name =
+                name.expect("Package name should always exist in a MatchSpec from the arguments");
+            (
+                package_name,
+                PixiSpec::from_nameless_matchspec(
+                    nameless_spec,
+                    project.config().global_channel_config(),
+                ),
+            )
+        })
+        .collect();
+
+    // If the flag is set, we set it to false, otherwise we default to None.
+    let menu_install = if args.no_menu_install {
+        Some(false)
+    } else {
+        None
+    };
+
     // Modify the project to include the new environment
-    if !project.manifest.parsed.envs.contains_key(env_name) {
-        project.manifest.add_environment(env_name, Some(channels))?;
-        state_changes.insert_change(env_name, StateChange::AddedEnvironment);
-    }
+    let env = ParsedEnvironment::new()
+        .with_channels(channels)
+        .with_platform(args.platform)
+        .with_dependency(spec_map)
+        // Default to None except if the flag is set, then we set false.
+        .with_menu_install(menu_install);
+    project.manifest.add_environment(env_name, &env)?;
+    state_changes.insert_change(env_name, StateChange::AddedEnvironment);
 
-    if let Some(platform) = args.platform {
-        project.manifest.set_platform(env_name, platform)?;
-    }
-
-    // Add the dependencies to the environment
-    for spec in specs.iter().chain(&args.with) {
-        project.manifest.add_dependency(
-            env_name,
-            spec,
-            project.clone().config().global_channel_config(),
-        )?;
-    }
-
+    // Sanitize and validate before adding the expose mappings
+    // This is separately from the environment creation because the mapping needs to be validated against the full manifest.
     if !args.expose.is_empty() {
         project.manifest.remove_all_exposed_mappings(env_name)?;
+
         // Only add the exposed mappings that were requested
         for mapping in &args.expose {
             project.manifest.add_exposed_mapping(env_name, mapping)?;

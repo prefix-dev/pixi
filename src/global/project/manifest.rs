@@ -8,14 +8,13 @@ use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
-use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{toml::TomlDocument, PrioritizedChannel};
 use pixi_spec::PixiSpec;
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
-use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
-use toml_edit::{DocumentMut, Item};
+use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName};
+use toml_edit::DocumentMut;
 use toml_span::{DeserError, Value};
 
 use super::{
@@ -82,28 +81,21 @@ impl Manifest {
     pub fn add_environment(
         &mut self,
         env_name: &EnvironmentName,
-        channels: Option<Vec<NamedChannelOrUrl>>,
+        parsed_environment: &ParsedEnvironment,
     ) -> miette::Result<()> {
-        let channels = channels
-            .filter(|c| !c.is_empty())
-            .unwrap_or_else(|| Config::load_global().default_channels());
-
-        // Update self.parsed
+        // Bail when it already exists
         if self.parsed.envs.get(env_name).is_some() {
             miette::bail!("Environment {} already exists.", env_name.fancy_display());
         }
-        self.parsed.envs.insert(
-            env_name.clone(),
-            ParsedEnvironment::new(channels.clone().into_iter().map(PrioritizedChannel::from)),
-        );
+
+        // Update self.parsed
+        self.parsed
+            .envs
+            .insert(env_name.clone(), parsed_environment.clone());
 
         // Update self.document
-        let channels_array = self
-            .document
-            .get_or_insert_toml_array_mut(&format!("envs.{env_name}"), "channels")?;
-        for channel in channels {
-            channels_array.push(channel.as_str());
-        }
+        self.document
+            .insert_into_table(&format!("envs.{env_name}"), parsed_environment)?;
 
         tracing::debug!(
             "Added environment {} to toml document",
@@ -212,43 +204,6 @@ impl Manifest {
             env_name.fancy_display()
         );
         Ok(name)
-    }
-
-    /// Sets the platform of a specific environment in the manifest
-    pub fn set_platform(
-        &mut self,
-        env_name: &EnvironmentName,
-        platform: Platform,
-    ) -> miette::Result<()> {
-        // Ensure the environment exists
-        if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
-        }
-
-        // Update self.parsed
-        self.parsed
-            .envs
-            .get_mut(env_name)
-            .ok_or_else(|| {
-                miette::miette!("Can't find environment {} yet", env_name.fancy_display())
-            })?
-            .platform
-            .replace(platform);
-
-        // Update self.document
-        self.document
-            .get_or_insert_nested_table(&format!("envs.{env_name}"))?
-            .insert(
-                "platform",
-                Item::Value(toml_edit::Value::from(platform.to_string())),
-            );
-
-        tracing::debug!(
-            "Set platform {} for environment {} in toml document",
-            platform,
-            env_name
-        );
-        Ok(())
     }
 
     #[allow(dead_code)]
@@ -530,13 +485,13 @@ pub enum ExposedType {
 mod tests {
     use std::str::FromStr;
 
+    use super::*;
     use indexmap::IndexSet;
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_config::Config;
     use pixi_consts::consts::DEFAULT_CHANNELS;
-    use rattler_conda_types::ParseStrictness;
-
-    use super::*;
+    use rattler_conda_types::{ParseStrictness, Platform};
 
     #[test]
     fn test_mapping_executable_names() {
@@ -575,7 +530,8 @@ mod tests {
         let executable_name = "test_executable".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        manifest.add_environment(&env_name, None).unwrap();
+        let env = ParsedEnvironment::new();
+        manifest.add_environment(&env_name, &env).unwrap();
 
         let result = manifest.add_exposed_mapping(&env_name, &mapping);
         assert!(result.is_ok());
@@ -614,7 +570,8 @@ mod tests {
         let executable_relname1 = "test_executable1".to_string();
         let mapping1 = Mapping::new(exposed_name1.clone(), executable_relname1);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        manifest.add_environment(&env_name, None).unwrap();
+        let env = ParsedEnvironment::new();
+        manifest.add_environment(&env_name, &env).unwrap();
 
         manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
 
@@ -684,7 +641,8 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        let env = ParsedEnvironment::new();
+        manifest.add_environment(&env_name, &env).unwrap();
 
         // Add and remove mapping again
         manifest.add_exposed_mapping(&env_name, &mapping).unwrap();
@@ -728,7 +686,8 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        let env = ParsedEnvironment::new().with_channels(Config::load_global().default_channels());
+        manifest.add_environment(&env_name, &env).unwrap();
 
         // Check document
         let actual_value = manifest
@@ -762,9 +721,8 @@ mod tests {
         ]);
 
         // Add environment
-        manifest
-            .add_environment(&env_name, Some(channels.clone()))
-            .unwrap();
+        let env = ParsedEnvironment::new().with_channels(channels.clone());
+        manifest.add_environment(&env_name, &env).unwrap();
 
         // Check document
         let actual_value = manifest
@@ -792,7 +750,8 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        let env = ParsedEnvironment::new();
+        manifest.add_environment(&env_name, &env).unwrap();
 
         // Remove environment
         manifest.remove_environment(&env_name).unwrap();
@@ -832,17 +791,8 @@ mod tests {
             MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
 
         // Add environment
-        manifest
-            .add_environment(
-                &env_name,
-                Some(
-                    DEFAULT_CHANNELS
-                        .iter()
-                        .map(|name| NamedChannelOrUrl::Name(name.to_string()))
-                        .collect(),
-                ),
-            )
-            .unwrap();
+        let env = ParsedEnvironment::new().with_channels(DEFAULT_CHANNELS.iter().cloned());
+        manifest.add_environment(&env_name, &env).unwrap();
 
         // Add dependency
         manifest
@@ -906,7 +856,8 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        let env = ParsedEnvironment::new();
+        manifest.add_environment(&env_name, &env).unwrap();
 
         // Add dependency
         manifest
@@ -951,16 +902,14 @@ mod tests {
     }
 
     #[test]
-    fn test_set_platform() {
+    fn test_with_platform() {
         let mut manifest = Manifest::default();
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         let platform = Platform::LinuxRiscv64;
 
-        // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
-
-        // Set platform
-        manifest.set_platform(&env_name, platform).unwrap();
+        // Add environment with platform
+        let env = ParsedEnvironment::new().with_platform(Some(platform));
+        manifest.add_environment(&env_name, &env).unwrap();
 
         // Check document
         let actual_platform = manifest
@@ -991,7 +940,8 @@ mod tests {
         channels.push(channel.clone());
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        let env = ParsedEnvironment::new().with_channels(channels.iter().cloned());
+        manifest.add_environment(&env_name, &env).unwrap();
 
         // Add channel
         manifest.add_channel(&env_name, &channel).unwrap();
