@@ -287,7 +287,7 @@ The `run` commands first checks if the environment is ready to use.
 When you didn't run `pixi install` the run command will do that for you.
 The custom tasks defined in the [manifest file](pixi_manifest.md) are also available through the run command.
 
-You cannot run `pixi run source setup.bash` as `source` is not available in the `deno_task_shell` commandos and not an executable.
+You cannot run `pixi run source setup.bash` as `source` is not available in the `deno_task_shell` commands and not an executable.
 
 ##### Arguments
 
