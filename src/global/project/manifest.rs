@@ -83,11 +83,6 @@ impl Manifest {
         env_name: &EnvironmentName,
         parsed_environment: &ParsedEnvironment,
     ) -> miette::Result<()> {
-        // Bail when it already exists
-        if self.parsed.envs.get(env_name).is_some() {
-            miette::bail!("Environment {} already exists.", env_name.fancy_display());
-        }
-
         // Update self.parsed
         self.parsed
             .envs
