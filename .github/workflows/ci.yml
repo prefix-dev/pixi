@@ -95,13 +95,11 @@ jobs:
   cargo-machete:
     name: Cargo Machete
     runs-on: ubuntu-latest
-    # disabled until this issue is fixed https://github.com/bnjbvr/cargo-machete/issues/158
-    if: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Machete
-        uses: bnjbvr/cargo-machete@main
+        uses: bnjbvr/cargo-machete@v0.7.1
 
   # Checks for duplicate version of package
   cargo-vendor:
