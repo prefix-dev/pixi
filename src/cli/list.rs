@@ -77,13 +77,38 @@ fn serde_skip_is_editable(editable: &bool) -> bool {
     !(*editable)
 }
 
+#[derive(Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+enum KindPackage {
+    Conda,
+    Pypi,
+}
+
+impl From<&PackageExt> for KindPackage {
+    fn from(package: &PackageExt) -> Self {
+        match package {
+            PackageExt::Conda(_) => KindPackage::Conda,
+            PackageExt::PyPI(_, _) => KindPackage::Pypi,
+        }
+    }
+}
+
+impl FancyDisplay for KindPackage {
+    fn fancy_display(&self) -> console::StyledObject<&str> {
+        match self {
+            KindPackage::Conda => consts::CONDA_PACKAGE_STYLE.apply_to("conda"),
+            KindPackage::Pypi => consts::PYPI_PACKAGE_STYLE.apply_to("pypi"),
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct PackageToOutput {
     name: String,
     version: String,
     build: Option<String>,
     size_bytes: Option<u64>,
-    kind: String,
+    kind: KindPackage,
     source: Option<String>,
     is_explicit: bool,
     #[serde(skip_serializing_if = "serde_skip_is_editable")]
@@ -310,7 +335,11 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
             write!(
                 writer,
                 "{}",
-                console::style(&package.name).fg(Color::Green).bold()
+                match package.kind {
+                    KindPackage::Conda =>
+                        consts::CONDA_PACKAGE_STYLE.apply_to(&package.name).bold(),
+                    KindPackage::Pypi => consts::PYPI_PACKAGE_STYLE.apply_to(&package.name).bold(),
+                }
             )?
         } else {
             write!(writer, "{}", &package.name)?;
@@ -328,7 +357,7 @@ fn print_packages_as_table(packages: &Vec<PackageToOutput>) -> io::Result<()> {
             &package.version,
             package.build.as_deref().unwrap_or(""),
             size_human,
-            &package.kind,
+            &package.kind.fancy_display(),
             package.source.as_deref().unwrap_or(""),
             if package.is_editable {
                 format!(" {}", console::style("(editable)").fg(Color::Yellow))
@@ -370,11 +399,8 @@ fn create_package_to_output<'a, 'b>(
 ) -> miette::Result<PackageToOutput> {
     let name = package.name().to_string();
     let version = package.version().into_owned();
+    let kind = KindPackage::from(package);
 
-    let kind = match package {
-        PackageExt::Conda(_) => "conda".to_string(),
-        PackageExt::PyPI(_, _) => "pypi".to_string(),
-    };
     let build = match package {
         PackageExt::Conda(pkg) => Some(pkg.record().build.clone()),
         PackageExt::PyPI(_, _) => None,
@@ -383,7 +409,10 @@ fn create_package_to_output<'a, 'b>(
     let (size_bytes, source) = match package {
         PackageExt::Conda(pkg) => (
             pkg.record().size,
-            Some(pkg.record().name.as_source().to_owned()),
+            match pkg {
+                CondaPackageData::Source(source) => Some(source.location.to_string()),
+                CondaPackageData::Binary(binary) => binary.channel.as_ref().map(|c| c.to_string()),
+            },
         ),
         PackageExt::PyPI(p, name) => {
             // Check the hash to avoid non index packages to be handled by the registry index as wheels

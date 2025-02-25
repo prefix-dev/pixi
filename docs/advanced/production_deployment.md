@@ -135,6 +135,23 @@ pixi-pack pack --inject local-package-1.0.0-hbefa133_0.conda --manifest-pack pix
 
 This can be particularly useful if you build the project itself and want to include the built package in the environment but still want to use `pixi.lock` from the project.
 
+### Cache downloaded packages
+
+You can cache downloaded packages to speed up subsequent pack operations by using the `--use-cache` flag:
+
+```bash
+pixi-pack pack --use-cache ~/.pixi-pack/cache
+```
+
+This will store all downloaded packages in the specified directory and reuse them in future pack operations. The cache follows the same structure as conda channels, organizing packages by platform subdirectories (e.g., linux-64, win-64, etc.).
+
+Using a cache is particularly useful when:
+
+- Creating multiple packs with overlapping dependencies
+- Working with large packages that take time to download
+- Operating in environments with limited bandwidth
+- Running CI/CD pipelines where package caching can significantly improve build times
+
 ### Unpacking without pixi-pack
 
 If you don't have `pixi-pack` available on your target system, you can still install the environment if you have `conda` or `micromamba` available.
@@ -151,3 +168,11 @@ conda env create -p ./env --file environment.yml
 
 !!!note ""
     The `environment.yml` and `repodata.json` files are only for this use case, `pixi-pack unpack` does not use them.
+
+!!!note ""
+    Both `conda` and `mamba` are always installing pip as a side effect when they install python, see [`conda`'s documentation](https://docs.conda.io/projects/conda/en/25.1.x/user-guide/configuration/settings.html#add-pip-as-python-dependency-add-pip-as-python-dependency).
+    This is not different from how `pixi` works and can lead to solver errors when using `pixi-pack`'s compatibility mode since `pixi-pack` doesn't include `pip` by default.
+    You can fix this issue in two ways:
+
+    - Add `pip` to your `pixi.lock` file using `pixi add pip`.
+    - Configuring `conda` (or `mamba`) to not install `pip` by default by running `conda config --set add_pip_as_python_dependency false` (or by adding `add_pip_as_python_dependency: False` to your `~/.condarc`)
