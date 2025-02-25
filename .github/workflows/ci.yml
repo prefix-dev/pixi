@@ -69,7 +69,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@v0.8.1
+        uses: prefix-dev/setup-pixi@v0.8.3
         with:
           environments: lint
       - name: pre-commit
@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: prefix-dev/setup-pixi@v0.8.1
+      - uses: prefix-dev/setup-pixi@v0.8.3
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@v2
@@ -132,7 +132,7 @@ jobs:
     runs-on: 8core_ubuntu_latest_runner
     steps:
       - uses: actions/checkout@v4
-      - uses: prefix-dev/setup-pixi@v0.8.1
+      - uses: prefix-dev/setup-pixi@v0.8.3
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@v2
@@ -154,7 +154,7 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - uses: prefix-dev/setup-pixi@v0.8.1
+      - uses: prefix-dev/setup-pixi@v0.8.3
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@v2
@@ -176,7 +176,7 @@ jobs:
     runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
-      - uses: prefix-dev/setup-pixi@v0.8.1
+      - uses: prefix-dev/setup-pixi@v0.8.3
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@v2
@@ -200,7 +200,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Create Dev Drive using ReFS
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      - uses: prefix-dev/setup-pixi@v0.8.1
+      - uses: prefix-dev/setup-pixi@v0.8.3
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
       - uses: Swatinem/rust-cache@v2
