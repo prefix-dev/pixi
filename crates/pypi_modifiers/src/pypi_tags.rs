@@ -6,8 +6,6 @@ use rattler_conda_types::{Arch, PackageRecord, Platform};
 use rattler_virtual_packages::VirtualPackage;
 use regex::Regex;
 use std::sync::OnceLock;
-use uv_platform_tags::Os as UvOs;
-use uv_platform_tags::Tags;
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 #[error("failed to determine pypi tags")]
@@ -58,7 +56,7 @@ pub fn get_pypi_tags(
     platform: Platform,
     system_requirements: &SystemRequirements,
     python_record: &PackageRecord,
-) -> Result<Tags, PyPITagError> {
+) -> Result<uv_platform_tags::Tags, PyPITagError> {
     let platform = get_platform_tags(platform, system_requirements)?;
     let python_version = get_python_version(python_record)?;
     let implementation_name = get_implementation_name(python_record)?;
@@ -100,7 +98,7 @@ fn get_linux_platform_tags(
                 .as_major_minor()
                 .expect("default glibc version should be valid");
             Ok(uv_platform_tags::Platform::new(
-                UvOs::Manylinux {
+                uv_platform_tags::Os::Manylinux {
                     major: major as _,
                     minor: minor as _,
                 },
@@ -115,7 +113,7 @@ fn get_linux_platform_tags(
                 ));
             };
             Ok(uv_platform_tags::Platform::new(
-                UvOs::Manylinux {
+                uv_platform_tags::Os::Manylinux {
                     major: major as _,
                     minor: minor as _,
                 },
@@ -130,7 +128,7 @@ fn get_linux_platform_tags(
                 ));
             };
             Ok(uv_platform_tags::Platform::new(
-                UvOs::Musllinux {
+                uv_platform_tags::Os::Musllinux {
                     major: major as _,
                     minor: minor as _,
                 },
@@ -146,7 +144,10 @@ fn get_windows_platform_tags(
     platform: Platform,
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let arch = get_arch_tags(platform)?;
-    Ok(uv_platform_tags::Platform::new(UvOs::Windows, arch))
+    Ok(uv_platform_tags::Platform::new(
+        uv_platform_tags::Os::Windows,
+        arch,
+    ))
 }
 
 /// Get macos specific platform tags
@@ -168,7 +169,7 @@ fn get_macos_platform_tags(
     let arch = get_arch_tags(platform)?;
 
     Ok(uv_platform_tags::Platform::new(
-        UvOs::Macos {
+        uv_platform_tags::Os::Macos {
             major: major as _,
             minor: minor as _,
         },
@@ -245,8 +246,8 @@ fn create_tags(
     python_version: (u8, u8),
     implementation_name: &str,
     gil_disabled: bool,
-) -> Result<Tags, PyPITagError> {
-    Tags::from_env(
+) -> Result<uv_platform_tags::Tags, PyPITagError> {
+    uv_platform_tags::Tags::from_env(
         &platform,
         python_version,
         implementation_name,
@@ -290,11 +291,11 @@ fn get_pypi_platform_from_virtual_packages(
 
         return match libc.family.to_lowercase().as_str() {
             "glibc" => Ok(uv_platform_tags::Platform::new(
-                UvOs::Manylinux { major, minor },
+                uv_platform_tags::Os::Manylinux { major, minor },
                 get_arch_tags(platform)?,
             )),
             "musl" => Ok(uv_platform_tags::Platform::new(
-                UvOs::Musllinux { major, minor },
+                uv_platform_tags::Os::Musllinux { major, minor },
                 get_arch_tags(platform)?,
             )),
             // TODO: Add more libc families for support of other linux distributions
@@ -304,7 +305,7 @@ fn get_pypi_platform_from_virtual_packages(
 
     if platform.is_windows() {
         return Ok(uv_platform_tags::Platform::new(
-            UvOs::Windows,
+            uv_platform_tags::Os::Windows,
             get_arch_tags(platform)?,
         ));
     }
@@ -333,7 +334,7 @@ fn get_pypi_platform_from_virtual_packages(
         let minor = u64::try_into(minor).map_err(|_| PyPITagError::VersionCastError(minor))?;
 
         return Ok(uv_platform_tags::Platform::new(
-            UvOs::Macos { major, minor },
+            uv_platform_tags::Os::Macos { major, minor },
             get_arch_tags(platform.to_owned())?,
         ));
     }
@@ -347,7 +348,7 @@ pub fn get_tags_from_machine(
     virtual_packages: &[VirtualPackage],
     platform: Platform,
     python_record: &PackageRecord,
-) -> Result<Tags, PyPITagError> {
+) -> Result<uv_platform_tags::Tags, PyPITagError> {
     let platform = get_pypi_platform_from_virtual_packages(virtual_packages, platform)?;
     create_tags(
         platform,
@@ -376,7 +377,7 @@ mod tests {
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
-            &UvOs::Macos {
+            &uv_platform_tags::Os::Macos {
                 major: 15,
                 minor: 1
             }
@@ -391,7 +392,7 @@ mod tests {
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
-            &UvOs::Macos {
+            &uv_platform_tags::Os::Macos {
                 major: 12,
                 minor: 1
             }
@@ -410,7 +411,7 @@ mod tests {
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
-            &UvOs::Manylinux {
+            &uv_platform_tags::Os::Manylinux {
                 major: 2,
                 minor: 33
             }
@@ -424,13 +425,19 @@ mod tests {
         let platform = Platform::Linux64;
         let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
-        assert_eq!(platform.os(), &UvOs::Musllinux { major: 1, minor: 2 });
+        assert_eq!(
+            platform.os(),
+            &uv_platform_tags::Os::Musllinux { major: 1, minor: 2 }
+        );
         assert_eq!(platform.arch(), UvArch::X86_64);
 
         let platform = Platform::LinuxAarch64;
         let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
-        assert_eq!(platform.os(), &UvOs::Musllinux { major: 1, minor: 2 });
+        assert_eq!(
+            platform.os(),
+            &uv_platform_tags::Os::Musllinux { major: 1, minor: 2 }
+        );
         assert_eq!(platform.arch(), UvArch::Aarch64);
 
         let vpkgs = vec![VirtualPackage::LibC(LibC {
@@ -440,7 +447,10 @@ mod tests {
         let platform = Platform::LinuxPpc64le;
         let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
-        assert_eq!(platform.os(), &UvOs::Musllinux { major: 1, minor: 2 });
+        assert_eq!(
+            platform.os(),
+            &uv_platform_tags::Os::Musllinux { major: 1, minor: 2 }
+        );
         assert_eq!(platform.arch(), UvArch::Powerpc64Le);
     }
 
@@ -450,13 +460,13 @@ mod tests {
         let platform = Platform::Win64;
         let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
-        assert_eq!(platform.os(), &UvOs::Windows);
+        assert_eq!(platform.os(), &uv_platform_tags::Os::Windows);
         assert_eq!(platform.arch(), UvArch::X86_64);
 
         let platform = Platform::WinArm64;
         let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
         let platform = res.unwrap();
-        assert_eq!(platform.os(), &UvOs::Windows);
+        assert_eq!(platform.os(), &uv_platform_tags::Os::Windows);
         assert_eq!(platform.arch(), UvArch::Aarch64);
     }
 

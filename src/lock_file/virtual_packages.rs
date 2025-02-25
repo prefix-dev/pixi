@@ -52,10 +52,12 @@ impl VirtualPackageNotFoundError {
             None
         };
 
-        let help = override_var.map(|override_var| format!(
-               " You can mock the virtual package by overriding the environment variable, e.g.: '{}'",
-                override_var
-           ));
+        let help = override_var.map(|override_var| {
+            format!(
+            " You can mock the virtual package by overriding the environment variable, e.g.: '{}'",
+            override_var
+        )
+        });
 
         let msg = format!(
             "Virtual package '{}' does not match any of the available virtual packages on your machine: [{}]",
@@ -67,6 +69,7 @@ impl VirtualPackageNotFoundError {
 }
 
 #[derive(Debug, Error, Diagnostic)]
+#[error("Failed to validate that machine meets the requirements of the environment")]
 pub enum MachineValidationError {
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -91,7 +94,10 @@ pub enum MachineValidationError {
     #[error("Wheel: {0} doesn't match this systems virtual capabilities")]
     WheelTagsMismatch(String),
 
-    #[error("No Python record found in the lockfile for platform: {0}. This is not your fault, but a bug, please report it.")]
+    #[error("No Python record found in the lockfile for platform: {0}.")]
+    #[diagnostic(
+        help = "Please make sure that 'python' is added in conda dependencies. Otherwise , please report this issue to the developers."
+    )]
     NoPythonRecordFound(Platform),
 }
 
@@ -116,7 +122,8 @@ pub(crate) fn get_required_virtual_packages_from_conda_records(
         .map_err(MachineValidationError::DependencyParsingError)
 }
 
-fn get_wheels_from_lockfile(pypi_packages: Vec<PypiPackageData>) -> Vec<WheelFilename> {
+/// Get the wheel filenames from the lockfile pypi package data
+fn get_wheels_from_pypi_package_data(pypi_packages: Vec<PypiPackageData>) -> Vec<WheelFilename> {
     pypi_packages
         .into_iter()
         .map(|package| package.location.clone())
@@ -160,7 +167,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
     let conda_records: Vec<&PackageRecord> = conda_data
         .iter()
-        .map(|binding| &binding.package_record)
+        .map(|record| &record.package_record)
         .collect();
 
     // Get the virtual packages required by the conda records
@@ -200,12 +207,13 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
     // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
-        if let Some(local_vpkg) = generic_system_virtual_packages.get(
-            &required
-                .name
-                .clone()
-                .expect("Virtual packages should have a name"),
-        ) {
+        let name = if let Some(name) = required.name.as_ref() {
+            name
+        } else {
+            continue;
+        };
+
+        if let Some(local_vpkg) = generic_system_virtual_packages.get(name) {
             if !required.matches(local_vpkg) {
                 return Err(VirtualPackageNotFoundError::new(
                     &required,
@@ -224,7 +232,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
     }
 
     // Check if the wheel tags match the system virtual packages if there are any
-    if environment.has_pypi_packages(platform) {
+    if let Some(pypi_packages) = environment.pypi_packages(platform) {
         // Get python record from conda packages
         let python_record = conda_records
             .iter()
@@ -232,19 +240,18 @@ pub(crate) fn validate_system_meets_environment_requirements(
             .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
 
         // Check if all the wheel tags match the system virtual packages
-        let pypi_packages = environment
-            .pypi_packages(platform)
-            .expect("environment should have pypi packages")
-            .map(|(pkg_data, _env_data)| pkg_data.clone())
+        let pypi_packages = pypi_packages
+            .map(|(pkg_data, _)| pkg_data.clone())
             .collect_vec();
 
-        let wheels = get_wheels_from_lockfile(pypi_packages);
+        let wheels = get_wheels_from_pypi_package_data(pypi_packages);
 
-        let system_tags = get_tags_from_machine(&system_virtual_packages, platform, python_record)?;
+        let uv_system_tags =
+            get_tags_from_machine(&system_virtual_packages, platform, python_record)?;
 
         // Check if all the wheel tags match the system virtual packages
         for wheel in wheels {
-            if !wheel.is_compatible(&system_tags) {
+            if !wheel.is_compatible(&uv_system_tags) {
                 return Err(MachineValidationError::WheelTagsMismatch(wheel.to_string()));
             }
             tracing::debug!("Wheel: {} matches the system", wheel);
