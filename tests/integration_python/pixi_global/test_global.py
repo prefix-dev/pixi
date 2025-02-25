@@ -1892,7 +1892,7 @@ def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1
     )
 
 
-def test_menuinst_install(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+def test_menuinst_install(pixi: Path, tmp_pixi_workspace: Path, menuinst_channel: str) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
     verify_cli_command(
@@ -1901,7 +1901,7 @@ def test_menuinst_install(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1:
             "global",
             "install",
             "--channel",
-            dummy_channel_1,
+            menuinst_channel,
             "pixi-editor",
         ],
         env=env,

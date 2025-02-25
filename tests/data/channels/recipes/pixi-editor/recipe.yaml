@@ -2,6 +2,10 @@ package:
   name: pixi-editor
   version: "0.1.3"
 
+requirements:
+  build:
+    - python
+
 build:
   noarch: generic
   script:
