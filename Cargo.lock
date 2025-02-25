@@ -5349,6 +5349,7 @@ dependencies = [
  "dirs 6.0.0",
  "fs-err",
  "known-folders",
+ "once_cell",
  "plist",
  "quick-xml 0.37.2",
  "rattler_conda_types",
