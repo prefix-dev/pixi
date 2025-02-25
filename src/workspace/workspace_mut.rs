@@ -417,6 +417,7 @@ impl WorkspaceMut {
                 .prefix(
                     &self.workspace().default_environment(),
                     UpdateMode::Revalidate,
+                    false,
                 )
                 .await?;
         }
