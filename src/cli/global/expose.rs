@@ -97,9 +97,12 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
-            revert_environment_after_error(&args.environment, &project_original)
-                .await
-                .wrap_err("Couldn't add exposed mappings. Reverting also failed.")?;
+            if let Err(revert_err) =
+                revert_environment_after_error(&args.environment, &project_original).await
+            {
+                tracing::warn!("Reverting of the operation failed");
+                tracing::info!("Reversion error: {:?}", revert_err);
+            }
             Err(err)
         }
     }
@@ -148,14 +151,12 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                 state_changes.report();
             }
             Err(err) => {
-                revert_environment_after_error(&env_name, &last_updated_project)
-                    .await
-                    .wrap_err_with(|| {
-                        format!(
-                            "Couldn't remove exposed name {exposed_name}. Reverting also failed."
-                        )
-                    })?;
-
+                if let Err(revert_err) =
+                    revert_environment_after_error(&env_name, &last_updated_project).await
+                {
+                    tracing::warn!("Reverting of the operation failed");
+                    tracing::info!("Reversion error: {:?}", revert_err);
+                }
                 return Err(err);
             }
         }
