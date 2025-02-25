@@ -49,15 +49,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 state_changes.report();
             }
             Err(err) => {
-                revert_environment_after_error(env_name, &last_updated_project)
-                    .await
-                    .wrap_err_with(|| {
-                        format!(
-                            "Couldn't uninstall environment {}. Reverting also failed.",
-                            env_name.fancy_display()
-                        )
-                    })?;
-
+                if let Err(revert_err) =
+                    revert_environment_after_error(env_name, &last_updated_project).await
+                {
+                    tracing::warn!("Reverting of the operation failed");
+                    tracing::info!("Reversion error: {:?}", revert_err);
+                }
                 return Err(err);
             }
         }
