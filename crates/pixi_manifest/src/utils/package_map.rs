@@ -23,6 +23,11 @@ pub struct UniquePackageMap {
     #[serde(skip)]
     pub value_spans: IndexMap<rattler_conda_types::PackageName, Range<usize>>,
 }
+impl PartialEq for UniquePackageMap {
+    fn eq(&self, other: &Self) -> bool {
+        self.specs == other.specs
+    }
+}
 
 impl UniquePackageMap {
     pub fn into_inner(
@@ -44,6 +49,12 @@ impl UniquePackageMap {
             }
         }
         Ok(self.specs)
+    }
+
+    /// Check if the specs are empty, we don't care about the other collections,
+    /// as this object would be useless without the specs.
+    pub fn is_empty(&self) -> bool {
+        self.specs.is_empty()
     }
 }
 
