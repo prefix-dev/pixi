@@ -24,6 +24,13 @@ pub struct UniquePackageMap {
     pub value_spans: IndexMap<rattler_conda_types::PackageName, Range<usize>>,
 }
 
+/// For equality checks we only care about the specs
+impl PartialEq for UniquePackageMap {
+    fn eq(&self, other: &Self) -> bool {
+        self.specs == other.specs
+    }
+}
+
 impl UniquePackageMap {
     pub fn into_inner(
         self,
@@ -44,6 +51,12 @@ impl UniquePackageMap {
             }
         }
         Ok(self.specs)
+    }
+
+    /// Check if the specs are empty, we don't care about the other collections,
+    /// as this object would be useless without the specs.
+    pub fn is_empty(&self) -> bool {
+        self.specs.is_empty()
     }
 }
 
@@ -212,5 +225,39 @@ mod test {
             input,
             UniquePackageMap::from_toml_str(input).unwrap_err()
         ));
+    }
+
+    #[test]
+    fn test_partial_eq() {
+        let input = r#"
+        foo = {version = "1.0"}
+        bar = {version = "2.0"}
+        "#;
+
+        let map1 = UniquePackageMap {
+            specs: vec![
+                (
+                    PackageName::from_str("foo").unwrap(),
+                    PixiSpec::from_toml_str(r###"version = "1.0""###).unwrap(),
+                ),
+                (
+                    PackageName::from_str("bar").unwrap(),
+                    PixiSpec::from_toml_str(r###"version = "2.0""###).unwrap(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            name_spans: Default::default(),
+            value_spans: Default::default(),
+        };
+
+        assert_eq!(map1, UniquePackageMap::from_toml_str(input).unwrap());
+    }
+
+    #[test]
+    fn test_empty_unique_map() {
+        let input = r#""#;
+        let map = UniquePackageMap::from_toml_str(input).unwrap();
+        assert!(map.is_empty());
     }
 }
