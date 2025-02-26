@@ -525,7 +525,8 @@ mod tests {
         let executable_name = "test_executable".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let env = ParsedEnvironment::new();
+        let env =
+            ParsedEnvironment::new(Config::load_global().default_channels(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         let result = manifest.add_exposed_mapping(&env_name, &mapping);
@@ -565,7 +566,8 @@ mod tests {
         let executable_relname1 = "test_executable1".to_string();
         let mapping1 = Mapping::new(exposed_name1.clone(), executable_relname1);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let env = ParsedEnvironment::new();
+        let env =
+            ParsedEnvironment::new(Config::load_global().default_channels(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
@@ -636,7 +638,8 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        let env = ParsedEnvironment::new();
+        let env =
+            ParsedEnvironment::new(Config::load_global().default_channels(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Add and remove mapping again
@@ -681,7 +684,8 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        let env = ParsedEnvironment::new().with_channels(Config::load_global().default_channels());
+        let env =
+            ParsedEnvironment::new(Config::load_global().default_channels(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Check document
@@ -716,7 +720,7 @@ mod tests {
         ]);
 
         // Add environment
-        let env = ParsedEnvironment::new().with_channels(channels.clone());
+        let env = ParsedEnvironment::new(channels.clone(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Check document
@@ -745,7 +749,8 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        let env = ParsedEnvironment::new();
+        let env =
+            ParsedEnvironment::new(Config::load_global().default_channels(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Remove environment
@@ -786,7 +791,7 @@ mod tests {
             MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
 
         // Add environment
-        let env = ParsedEnvironment::new().with_channels(DEFAULT_CHANNELS.iter().cloned());
+        let env = ParsedEnvironment::new(DEFAULT_CHANNELS.iter().cloned(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Add dependency
@@ -851,7 +856,8 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
 
         // Add environment
-        let env = ParsedEnvironment::new();
+        let env =
+            ParsedEnvironment::new(Config::load_global().default_channels(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Add dependency
@@ -903,7 +909,10 @@ mod tests {
         let platform = Platform::LinuxRiscv64;
 
         // Add environment with platform
-        let env = ParsedEnvironment::new().with_platform(platform);
+        let mut env =
+            ParsedEnvironment::new(Config::load_global().default_channels(), Default::default());
+        env.set_platform(platform);
+
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Check document
@@ -935,7 +944,8 @@ mod tests {
         channels.push(channel.clone());
 
         // Add environment
-        let env = ParsedEnvironment::new().with_channels(channels.iter().cloned());
+
+        let env = ParsedEnvironment::new(channels.iter().cloned(), Default::default());
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Add channel

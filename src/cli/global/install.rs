@@ -166,6 +166,7 @@ async fn setup_environment(
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
+    // Check if the environment already exists
     let channels = if args.channels.is_empty() {
         project.config().default_channels()
     } else {
@@ -195,20 +196,14 @@ async fn setup_environment(
         .collect();
 
     // Modify the project to include the new environment
-    let env = ParsedEnvironment::new()
-        .with_channels(channels)
-        .with_dependency(spec_map);
+    let mut env = ParsedEnvironment::new(channels, spec_map);
 
-    let env = if let Some(platform) = args.platform {
-        env.with_platform(platform)
-    } else {
-        env
+    if let Some(platform) = args.platform {
+        env.set_platform(platform)
     };
 
-    let env = if args.no_menu_install {
-        env.with_menu_install(false)
-    } else {
-        env
+    if args.no_menu_install {
+        env.set_menu_install(false)
     };
     project.manifest.add_environment(env_name, &env)?;
     state_changes.insert_change(env_name, StateChange::AddedEnvironment);

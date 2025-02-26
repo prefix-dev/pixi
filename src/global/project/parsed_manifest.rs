@@ -313,38 +313,32 @@ impl From<&ParsedEnvironment> for toml_edit::Value {
 }
 
 impl ParsedEnvironment {
-    /// Creates a default environment, add more fields with the builder pattern.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets the channels for this environment
-    pub fn with_channels<C>(mut self, channels: C) -> Self
+    /// Creates a minimal environment based on the channels and dependencies provided.
+    pub fn new<C>(channels: C, dependencies: IndexMap<PackageName, PixiSpec>) -> Self
     where
         C: IntoIterator,
         C::Item: Into<PrioritizedChannel>,
     {
-        self.channels.extend(channels.into_iter().map(Into::into));
-        self
+        Self {
+            channels: channels.into_iter().map(Into::into).collect(),
+            dependencies: UniquePackageMap {
+                specs: dependencies,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
     }
 
     /// Sets the platform for this environment
-    pub fn with_platform(mut self, platform: Platform) -> Self {
-        self.platform = Some(platform);
-        self
-    }
-
-    /// Sets the dependencies for this environment
-    pub fn with_dependency(mut self, dependencies: IndexMap<PackageName, PixiSpec>) -> Self {
-        self.dependencies.specs.extend(dependencies);
-        self
+    pub fn set_platform(&mut self, platform: Platform) {
+        self.platform = Some(platform)
     }
 
     /// Sets the menu install flag for this environment
-    pub fn with_menu_install(mut self, menu_install: bool) -> Self {
-        self.menu_install = Some(menu_install);
-        self
+    pub fn set_menu_install(&mut self, menu_install: bool) {
+        self.menu_install = Some(menu_install)
     }
+
     /// Returns the platform associated with this platform, `None` means current
     /// platform
     pub(crate) fn platform(&self) -> Option<Platform> {
@@ -592,11 +586,9 @@ mod tests {
                 })
                 .collect();
 
-        let parsed_env = ParsedEnvironment::new()
-            .with_channels(channels)
-            .with_dependency(dependencies)
-            .with_platform(Platform::Win64)
-            .with_menu_install(true);
+        let mut parsed_env = ParsedEnvironment::new(channels, dependencies);
+        parsed_env.set_platform(Platform::Win64);
+        parsed_env.set_menu_install(true);
 
         assert_snapshot!(::serde::Serialize::serialize(&parsed_env, toml_edit::ser::ValueSerializer::new()).unwrap(),
             @r#"{ channels = ["bioconda", "https://prefix.dev/conda-forge"], platform = "win-64", dependencies = { python = "==3.13.0", pixi = "*" }, menu-install = true }"#);
