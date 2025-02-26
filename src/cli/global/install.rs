@@ -172,10 +172,14 @@ async fn setup_environment(
         args.channels.clone()
     };
 
+    let existing_specs = project
+        .environment(env_name)
+        .into_iter()
+        .flat_map(|e| e.dependencies().clone().into_iter());
+
     // Convert the specs
-    let spec_map: IndexMap<rattler_conda_types::PackageName, PixiSpec> = specs
-        .iter()
-        .map(|spec| {
+    let spec_map: IndexMap<rattler_conda_types::PackageName, PixiSpec> = existing_specs
+        .chain(specs.iter().chain(&args.with).map(|spec| {
             let (name, nameless_spec) = spec.clone().into_nameless();
             let package_name =
                 name.expect("Package name should always exist in a MatchSpec from the arguments");
@@ -186,7 +190,8 @@ async fn setup_environment(
                     project.config().global_channel_config(),
                 ),
             )
-        })
+        }))
+        .unique()
         .collect();
 
     // Modify the project to include the new environment
