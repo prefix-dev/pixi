@@ -6,7 +6,7 @@ use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{miette, IntoDiagnostic};
 use uv_configuration::ConfigSettings;
 
 use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
@@ -290,13 +290,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if packages_to_output.is_empty() {
-        eprintln!(
+        return Err(miette!(
             "{}No packages found in '{}' environment for '{}' platform.",
             console::style(console::Emoji("✘ ", "")).red(),
             environment.name().fancy_display(),
             consts::ENVIRONMENT_STYLE.apply_to(platform),
-        );
-        return Ok(());
+        ));
     }
 
     // Print as table string or JSON
