@@ -4404,6 +4404,7 @@ dependencies = [
  "uv-distribution",
  "uv-distribution-filename",
  "uv-distribution-types",
+ "uv-git",
  "uv-git-types",
  "uv-install-wheel",
  "uv-installer",

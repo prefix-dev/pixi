@@ -140,6 +140,7 @@ uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
@@ -270,6 +271,7 @@ rattler_repodata_gateway = { workspace = true, features = [
 ] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
+uv-git = { workspace = true }
 uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
