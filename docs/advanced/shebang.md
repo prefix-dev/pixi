@@ -19,13 +19,10 @@ The only requirement for your script is that you must have `pixi` installed on y
 !!!tip "Making the script executable"
     You might need to make the script executable by running `chmod +x my-script.sh`.
 
-```bash title="deploy-tf.sh"
-#!/usr/bin/env -S pixi exec --spec opentofu -- bash -e
+```bash title="use-bat.sh"
+#!/usr/bin/env -S pixi exec --spec bat -- bash -e
 
-tofu init
-tofu plan -out=tfplan
-tofu apply tfplan
-tofu output
+bat my-file.json
 ```
 
 !!!info "Explanation what's happening"
@@ -33,9 +30,9 @@ tofu output
 
     The `/usr/bin/env` is used to find `pixi` in the system's `PATH`.
     The `-S` option tells `/usr/bin/env` to use the first argument as the interpreter and the rest as arguments to the interpreter.
-    `pixi exec --spec opentofu` creates a temporary environment containing only `opentofu`.
+    `pixi exec --spec bat` creates a temporary environment containing only [`bat`](https://github.com/sharkdp/bat).
     `bash -e` (separated with `--`) is the command that is executed in this environment.
-    So in total, `pixi exec --spec opentofu -- bash -e deploy-tf.sh` is being executed when you run `./deploy-tf.sh`.
+    So in total, `pixi exec --spec bat -- bash -e use-bat.sh` is being executed when you run `./use-bat.sh`.
 
 You can also write self-contained python files that ship with their dependencies.
 This example shows a very simple CLI that installs a pixi environment to an arbitrary prefix using [`py-rattler`](https://conda.github.io/rattler/py-rattler) and [`typer`](https://typer.tiangolo.com).
