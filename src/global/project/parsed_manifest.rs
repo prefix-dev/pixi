@@ -249,14 +249,25 @@ where
     map.end()
 }
 
-#[derive(Serialize, Debug, Clone, Default)]
+#[derive(Serialize, Debug, Clone, Default, PartialEq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
+    /// The channels to use for this environment.
+    #[serde(default, skip_serializing_if = "IndexSet::is_empty")]
     pub channels: IndexSet<PrioritizedChannel>,
+
     /// Platform used by the environment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<Platform>,
+
+    #[serde(default, skip_serializing_if = "UniquePackageMap::is_empty")]
     pub(crate) dependencies: UniquePackageMap,
-    #[serde(default, serialize_with = "serialize_expose_mappings")]
+
+    #[serde(
+        default,
+        serialize_with = "serialize_expose_mappings",
+        skip_serializing_if = "IndexSet::is_empty"
+    )]
     pub(crate) exposed: IndexSet<Mapping>,
 }
 
@@ -286,13 +297,34 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
     }
 }
 
+impl From<&ParsedEnvironment> for toml_edit::Value {
+    /// Converts this instance into a [`toml_edit::Value`].
+    fn from(env: &ParsedEnvironment) -> Self {
+        ::serde::Serialize::serialize(env, toml_edit::ser::ValueSerializer::new())
+            .expect("conversion to toml cannot fail")
+    }
+}
+
 impl ParsedEnvironment {
-    // Create empty parsed environment
-    pub(crate) fn new(channels: impl IntoIterator<Item = PrioritizedChannel>) -> Self {
+    /// Creates a minimal environment based on the channels and dependencies provided.
+    pub fn new<C>(channels: C, dependencies: IndexMap<PackageName, PixiSpec>) -> Self
+    where
+        C: IntoIterator,
+        C::Item: Into<PrioritizedChannel>,
+    {
         Self {
-            channels: channels.into_iter().collect(),
+            channels: channels.into_iter().map(Into::into).collect(),
+            dependencies: UniquePackageMap {
+                specs: dependencies,
+                ..Default::default()
+            },
             ..Default::default()
         }
+    }
+
+    /// Sets the platform for this environment
+    pub fn set_platform(&mut self, platform: Platform) {
+        self.platform = Some(platform)
     }
     /// Returns the platform associated with this platform, `None` means current
     /// platform
