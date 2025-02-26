@@ -140,7 +140,6 @@ uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
@@ -330,7 +329,6 @@ uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }
 uv-distribution = { workspace = true }
-uv-git = { workspace = true }
 uv-git-types = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
