@@ -205,8 +205,18 @@ async fn setup_environment(
     if args.no_menu_install {
         env.set_menu_install(false)
     };
-    project.manifest.add_environment(env_name, &env)?;
-    state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+
+    // Check whether the environment is already existent in the manifest
+    if !project.environment(env_name).is_some_and(|e| {
+        e.channels == env.channels
+            && e.dependencies.specs == env.dependencies.specs
+            && e.platform == env.platform
+            && e.menu_install == env.menu_install
+        // Skipping the exposed mappings because they are handled separately
+    }) {
+        project.manifest.add_environment(env_name, &env)?;
+        state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+    }
 
     // Sanitize and validate before adding the expose mappings
     // This is separately from the environment creation because the mapping needs to be validated against the full manifest.

@@ -23,6 +23,11 @@ pub struct UniquePackageMap {
     #[serde(skip)]
     pub value_spans: IndexMap<rattler_conda_types::PackageName, Range<usize>>,
 }
+impl PartialEq for UniquePackageMap {
+    fn eq(&self, other: &Self) -> bool {
+        self.specs == other.specs
+    }
+}
 
 impl UniquePackageMap {
     pub fn into_inner(
