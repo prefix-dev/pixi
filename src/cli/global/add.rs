@@ -3,7 +3,6 @@ use crate::cli::has_specs::HasSpecs;
 use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
 use itertools::Itertools;
-use miette::Context;
 use pixi_config::{Config, ConfigCli};
 use rattler_conda_types::MatchSpec;
 
@@ -102,12 +101,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
-            revert_environment_after_error(&args.environment, &project_original)
-                .await
-                .wrap_err(format!(
-                    "Couldn't add {:?}. Reverting also failed.",
-                    args.packages
-                ))?;
+            if let Err(revert_err) =
+                revert_environment_after_error(&args.environment, &project_original).await
+            {
+                tracing::warn!("Reverting of the operation failed");
+                tracing::info!("Reversion error: {:?}", revert_err);
+            }
             Err(err)
         }
     }

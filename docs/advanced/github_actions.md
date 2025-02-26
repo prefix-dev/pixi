@@ -387,6 +387,16 @@ This can be overwritten by setting the `manifest-path` input argument.
     manifest-path: pyproject.toml
 ```
 
+### Only install pixi
+
+If you only want to install pixi and not install the current project, you can use the `run-install` option.
+
+```yml
+- uses: prefix-dev/setup-pixi@v0.8.3
+  with:
+    run-install: false
+```
+
 ## More examples
 
 If you want to see more examples, you can take a look at the [GitHub Workflows of the `setup-pixi` repository](https://github.com/prefix-dev/setup-pixi/blob/main/.github/workflows/test.yml).

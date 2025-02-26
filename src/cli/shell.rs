@@ -71,7 +71,8 @@ fn start_powershell(
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
 
     // close the file handle, but keep the path (needed for Windows)
     let temp_path = temp_file.into_temp_path();
@@ -111,11 +112,15 @@ fn start_cmdexe(
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
+
+    // close the file handle, but keep the path (needed for Windows)
+    let temp_path = temp_file.into_temp_path();
 
     let mut command = std::process::Command::new(cmdexe.executable());
     command.arg("/K");
-    command.arg(temp_file.path());
+    command.arg(&temp_path);
 
     ignore_ctrl_c();
 
@@ -156,21 +161,31 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
+
+    let temp_path = temp_file.into_temp_path();
 
     let mut command = std::process::Command::new(shell.executable());
-    command.args(args);
+    command.args(&args);
 
     // Space added before `source` to automatically ignore it in history.
     let mut source_command = " ".to_string();
     shell
-        .run_script(&mut source_command, temp_file.path())
+        .run_script(&mut source_command, temp_path.as_ref())
         .into_diagnostic()?;
 
     // Remove automatically added `\n`, if for some reason this fails, just ignore.
     let source_command = source_command
         .strip_suffix('\n')
         .unwrap_or(source_command.as_str());
+
+    tracing::debug!(
+        "Starting shell '{} {}' with source command: '{}'",
+        shell.executable(),
+        args.join(" "),
+        source_command
+    );
 
     // Start process and send env activation to the shell.
     let mut process = PtySession::new(command).into_diagnostic()?;
@@ -214,7 +229,8 @@ async fn start_nu_shell(
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
 
     let mut command = std::process::Command::new(shell.executable());
     command.arg("--execute");

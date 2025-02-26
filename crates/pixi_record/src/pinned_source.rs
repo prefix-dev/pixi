@@ -286,11 +286,16 @@ impl PinnedGitSpec {
         // prepend git+ to the scheme
         // by transforming it into the string
         // as url does not allow to change from https to git+https.
-        let url_str = url.to_string();
+        // TODO: this is a good place to type the url.
+        let url = if !url.scheme().starts_with("git+") {
+            let url_str = url.to_string();
 
-        let git_prefix = format!("git+{}", url_str);
+            let git_prefix = format!("git+{}", url_str);
 
-        let url = Url::parse(&git_prefix).unwrap();
+            Url::parse(&git_prefix).expect("url should be valid")
+        } else {
+            url
+        };
 
         LockedGitUrl(url)
     }

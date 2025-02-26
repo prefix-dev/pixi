@@ -19,6 +19,8 @@ version = "0.1.0"
 
 [package.build]
 backend = { name = "pixi-build-cmake", version = "0.1.*" } # (5)!
+[package.build.configuration]
+extra-args = ["-DCMAKE_BUILD_TYPE=Release"] # (9)!
 
 [package.host-dependencies]
 cmake = "3.20.*"   # (8)!

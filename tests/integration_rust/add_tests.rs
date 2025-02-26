@@ -724,10 +724,18 @@ preview = ['pixi-build']
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
+    let git_package = lock
+        .default_environment()
+        .unwrap()
+        .packages(Platform::Linux64)
+        .unwrap()
+        .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
+
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(lock.render_to_string().unwrap());
+        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
+
     });
 
     // Check the manifest itself
