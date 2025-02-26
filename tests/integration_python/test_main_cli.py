@@ -788,11 +788,9 @@ def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel
     assert manifest_content == tmp_pixi_workspace.joinpath("pixi.toml").read_text()
 
 
-def test_list_exits_unsuccesfull_on_unkown_pkg(
+def test_list_exits_unsuccessful_on_unknown_pkg(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-
     # Create a new project
     verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
 
