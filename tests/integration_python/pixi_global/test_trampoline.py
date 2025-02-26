@@ -77,7 +77,7 @@ def test_trampoline_new_activation_scripts(
     # get envs of the trampoline
     assert trampoline_metadata["env"]["TRAMPOLINE_TEST_ENV"] == "teapot"
 
-    # now install newever version that have different activation scripts
+    # now install newer version that have different activation scripts
 
     # Replace the version with a "*"
     manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
