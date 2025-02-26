@@ -58,6 +58,7 @@ use crate::{
         self,
         records_by_name::HasNameVersion,
         reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
+        virtual_packages::validate_system_meets_environment_requirements,
         PypiRecord,
     },
     prefix::Prefix,
@@ -366,7 +367,19 @@ impl<'p> LockFileDerivedData<'p> {
             return Ok(prefix.clone());
         }
 
-        tracing::info!("Updating prefix");
+        // Validate the virtual packages for the environment match the system
+        validate_system_meets_environment_requirements(
+            &self.lock_file,
+            environment.best_platform(),
+            environment.name(),
+            None,
+        )
+        .wrap_err(format!(
+            "Cannot install environment '{}'",
+            environment.name().fancy_display()
+        ))?;
+
+        tracing::info!("Updating prefix: '{}'", environment.dir().display());
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
         let (prefix, python_status) = self.conda_prefix(environment).await?;

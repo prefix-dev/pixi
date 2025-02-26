@@ -20,12 +20,7 @@ use crate::{
         task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
         TaskDisambiguation,
     },
-    workspace::{
-        virtual_packages::{
-            verify_current_platform_has_required_virtual_packages, VerifyCurrentPlatformError,
-        },
-        Environment,
-    },
+    workspace::Environment,
     Workspace,
 };
 
@@ -198,7 +193,6 @@ impl<'p> TaskGraph<'p> {
             .explicit_environment
             .clone()
             .unwrap_or_else(|| project.default_environment());
-        verify_current_platform_has_required_virtual_packages(&run_environment)?;
 
         // Depending on whether we are passing arguments verbatim or now we allow deno
         // to interpret them or not.
@@ -348,10 +342,6 @@ pub enum TaskGraphError {
     #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
 
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    UnsupportedPlatform(#[from] VerifyCurrentPlatformError),
-
     #[error("could not split task, assuming non valid task")]
     InvalidTask,
 }
@@ -378,8 +368,7 @@ mod test {
         let project = Workspace::from_str(Path::new("pixi.toml"), project_str).unwrap();
 
         let environment = environment_name.map(|name| project.environment(&name).unwrap());
-        let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform)
-            .with_ignore_system_requirements(true);
+        let search_envs = SearchEnvironments::from_opt_env(&project, environment, platform);
 
         let graph = TaskGraph::from_cmd_args(
             &project,
