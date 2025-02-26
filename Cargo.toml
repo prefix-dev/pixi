@@ -101,15 +101,15 @@ toml_edit = "0.22.22"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 typed-path = "0.10.0"
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 
 wax = "0.6.0"
 which = "7.0.1"
@@ -134,19 +134,20 @@ rattler_virtual_packages = { version = "2.0.3", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.13"
 zip = { version = "2.2.2", default-features = false }
@@ -330,6 +331,7 @@ uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }
 uv-distribution = { workspace = true }
 uv-git = { workspace = true }
+uv-git-types = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-python = { workspace = true }

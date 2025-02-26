@@ -31,7 +31,7 @@ use rattler_lock::{
 use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
-use uv_git::GitReference;
+use uv_git_types::GitReference;
 use uv_pypi_types::{
     ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
