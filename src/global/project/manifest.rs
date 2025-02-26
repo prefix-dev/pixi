@@ -903,7 +903,7 @@ mod tests {
         let platform = Platform::LinuxRiscv64;
 
         // Add environment with platform
-        let env = ParsedEnvironment::new().with_platform(Some(platform));
+        let env = ParsedEnvironment::new().with_platform(platform);
         manifest.add_environment(&env_name, &env).unwrap();
 
         // Check document

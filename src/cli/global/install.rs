@@ -189,20 +189,22 @@ async fn setup_environment(
         })
         .collect();
 
-    // If the flag is set, we set it to false, otherwise we default to None.
-    let menu_install = if args.no_menu_install {
-        Some(false)
-    } else {
-        None
-    };
-
     // Modify the project to include the new environment
     let env = ParsedEnvironment::new()
         .with_channels(channels)
-        .with_platform(args.platform)
-        .with_dependency(spec_map)
-        // Default to None except if the flag is set, then we set false.
-        .with_menu_install(menu_install);
+        .with_dependency(spec_map);
+
+    let env = if let Some(platform) = args.platform {
+        env.with_platform(platform)
+    } else {
+        env
+    };
+
+    let env = if args.no_menu_install {
+        env.with_menu_install(false)
+    } else {
+        env
+    };
     project.manifest.add_environment(env_name, &env)?;
     state_changes.insert_change(env_name, StateChange::AddedEnvironment);
 

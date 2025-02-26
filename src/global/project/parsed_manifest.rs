@@ -329,8 +329,8 @@ impl ParsedEnvironment {
     }
 
     /// Sets the platform for this environment
-    pub fn with_platform(mut self, platform: Option<Platform>) -> Self {
-        self.platform = platform;
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.platform = Some(platform);
         self
     }
 
@@ -341,8 +341,8 @@ impl ParsedEnvironment {
     }
 
     /// Sets the menu install flag for this environment
-    pub fn with_menu_install(mut self, menu_install: Option<bool>) -> Self {
-        self.menu_install = menu_install;
+    pub fn with_menu_install(mut self, menu_install: bool) -> Self {
+        self.menu_install = Some(menu_install);
         self
     }
     /// Returns the platform associated with this platform, `None` means current
@@ -592,12 +592,11 @@ mod tests {
                 })
                 .collect();
 
-        let platform = Some(Platform::Win64);
         let parsed_env = ParsedEnvironment::new()
             .with_channels(channels)
             .with_dependency(dependencies)
-            .with_platform(platform)
-            .with_menu_install(Some(true));
+            .with_platform(Platform::Win64)
+            .with_menu_install(true);
 
         assert_snapshot!(::serde::Serialize::serialize(&parsed_env, toml_edit::ser::ValueSerializer::new()).unwrap(),
             @r#"{ channels = ["bioconda", "https://prefix.dev/conda-forge"], platform = "win-64", dependencies = { python = "==3.13.0", pixi = "*" }, menu-install = true }"#);
