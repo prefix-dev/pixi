@@ -165,7 +165,6 @@ async fn setup_environment(
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
-    // Check if the environment already exists
     let channels = if args.channels.is_empty() {
         project.config().default_channels()
     } else {
