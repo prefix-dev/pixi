@@ -8,7 +8,7 @@
                 "target_environment_is_base": "pixi-editor",
                 "target_environment_is_not_base": "pixi-editor ({{ ENV_NAME }})"
             },
-            "description": "Scientific PYthon Development EnviRonment",
+            "description": "Scientific Python Development Environment",
             "icon": "{{ MENU_DIR }}/pixi-icon.{{ ICON_EXT }}",
             "activate": false,
             "terminal": false,

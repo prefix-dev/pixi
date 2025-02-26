@@ -1,3 +1,4 @@
+use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
@@ -74,11 +75,12 @@ impl Prefix {
 
     pub async fn find_menu_schema_files(&self) -> miette::Result<Vec<PathBuf>> {
         let mut schemas = Vec::new();
-        for entry in fs_err::read_dir(self.root.join(consts::CONDA_MENU_SCHEMA_DIR))
-            .into_iter()
-            .flatten()
-        {
-            let entry = entry.into_diagnostic()?;
+        let mut dir = tokio_fs::read_dir(self.root.join(consts::CONDA_MENU_SCHEMA_DIR))
+            .await
+            .into_diagnostic()
+            .context("failed to read directory")?;
+
+        while let Some(entry) = dir.next_entry().await.into_diagnostic()? {
             let path = entry.path();
             if !path.is_file() || path.extension() != Some("json".as_ref()) {
                 continue;

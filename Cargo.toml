@@ -28,7 +28,7 @@ clap-verbosity-flag = "3.0.2"
 clap_complete = "4.5.40"
 clap_complete_nushell = "4.5.4"
 concat-idents = "1.1.5"
-configparser = { version = "3.1.0", default-features = false, features = [] }
+configparser = "3.1.0"
 console = "0.15.10"
 crossbeam-channel = "0.5.14"
 csv = "1.3.1"
@@ -115,22 +115,22 @@ uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.5.29" 
 wax = "0.6.0"
 which = "7.0.1"
 # Rattler crates
-file_url = { default-features = false, path = "../rattler/crates/file_url" }
-rattler = { default-features = false, path = "../rattler/crates/rattler" }
-rattler_cache = { default-features = false, path = "../rattler/crates/rattler_cache" }
+file_url = { default-features = false, git = "https://github.com/conda/rattler" }
+rattler = { default-features = false, git = "https://github.com/conda/rattler" }
+rattler_cache = { default-features = false, git = "https://github.com/conda/rattler" }
 rattler_conda_types = { default-features = false, features = [
   "rayon",
-], path = "../rattler/crates/rattler_conda_types" }
-rattler_digest = { default-features = false, path = "../rattler/crates/rattler_digest" }
-rattler_lock = { default-features = false, path = "../rattler/crates/rattler_lock" }
-rattler_menuinst = { default-features = false, path = "../rattler/crates/rattler_menuinst" }
+], git = "https://github.com/conda/rattler" }
+rattler_digest = { default-features = false, git = "https://github.com/conda/rattler" }
+rattler_lock = { default-features = false, git = "https://github.com/conda/rattler" }
+rattler_menuinst = { default-features = false, git = "https://github.com/conda/rattler" }
 rattler_networking = { default-features = false, features = [
   "gcs",
-], path = "../rattler/crates/rattler_networking" }
-rattler_repodata_gateway = { default-features = false, path = "../rattler/crates/rattler_repodata_gateway" }
-rattler_shell = { default-features = false, path = "../rattler/crates/rattler_shell" }
-rattler_solve = { default-features = false, path = "../rattler/crates/rattler_solve" }
-rattler_virtual_packages = { default-features = false, path = "../rattler/crates/rattler_virtual_packages" }
+], git = "https://github.com/conda/rattler" }
+rattler_repodata_gateway = { default-features = false, git = "https://github.com/conda/rattler" }
+rattler_shell = { default-features = false, git = "https://github.com/conda/rattler" }
+rattler_solve = { default-features = false, git = "https://github.com/conda/rattler" }
+rattler_virtual_packages = { default-features = false, git = "https://github.com/conda/rattler" }
 
 
 # Bumping this to a higher version breaks the Windows path handling.
