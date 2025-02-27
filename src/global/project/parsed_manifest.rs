@@ -8,7 +8,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Repo
 use pixi_consts::consts;
 use pixi_manifest::{toml::TomlPlatform, utils::package_map::UniquePackageMap, PrioritizedChannel};
 use pixi_spec::PixiSpec;
-use pixi_toml::{TomlIndexMap, TomlIndexSet};
+use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{ser::SerializeMap, Serialize, Serializer};
 use serde_with::serde_derive::Deserialize;
@@ -252,12 +252,13 @@ where
 #[derive(Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
-    pub channels: IndexSet<PrioritizedChannel>,
+    pub(crate) channels: IndexSet<PrioritizedChannel>,
     /// Platform used by the environment.
-    pub platform: Option<Platform>,
+    pub(crate) platform: Option<Platform>,
     pub(crate) dependencies: UniquePackageMap,
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub(crate) exposed: IndexSet<Mapping>,
+    pub(crate) shortcuts: IndexSet<PackageName>,
 }
 
 impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
@@ -274,6 +275,10 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             .optional::<TomlMapping>("exposed")
             .map(TomlMapping::into_inner)
             .unwrap_or_default();
+        let shortcuts = th
+            .optional_s::<TomlWith<_, TomlIndexSet<TomlFromStr<PackageName>>>>("shortcuts")
+            .map(|s| s.value.into_inner())
+            .unwrap_or_default();
 
         th.finalize(None)?;
 
@@ -282,6 +287,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             platform,
             dependencies,
             exposed,
+            shortcuts,
         })
     }
 }
