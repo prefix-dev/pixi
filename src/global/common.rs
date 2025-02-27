@@ -759,10 +759,55 @@ pub(crate) fn channel_url_to_prioritized_channel(
         .into())
 }
 
+pub(crate) fn shortcut_sync_status(
+    shortcuts: IndexSet<PackageName>,
+    prefix_records: Vec<PrefixRecord>,
+) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
+    let mut remaining_shortcuts = shortcuts;
+    let mut records_to_install = Vec::new();
+    let mut records_to_uninstall = Vec::new();
+
+    let filtered_records = prefix_records.into_iter().filter(|record| {
+        record.files.iter().any(|file| {
+            file.extension().is_some_and(|ext| ext == "json")
+                && file
+                    .parent()
+                    .is_some_and(|parent| parent.file_name().is_some_and(|f| f == "Menu"))
+        })
+    });
+
+    for record in filtered_records {
+        let has_installed_system_menus = record.installed_system_menus.is_empty().not();
+        if remaining_shortcuts
+            .swap_take(&record.repodata_record.package_record.name)
+            .is_some()
+        {
+            if !has_installed_system_menus {
+                // The package record isn't installed, but it is requested
+                records_to_install.push(record);
+            }
+        } else if has_installed_system_menus {
+            // The package record is installed, but not requested
+            records_to_uninstall.push(record);
+        }
+    }
+
+    if remaining_shortcuts.is_empty().not() {
+        miette::bail!(
+            "the following shortcuts are requested but not available: {}",
+            remaining_shortcuts
+                .iter()
+                .map(|n| n.as_normalized())
+                .join(", ")
+        );
+    }
+    Ok((records_to_install, records_to_uninstall))
+}
+
 /// Figures out what the status is of the exposed binaries of the environment.
 ///
 /// Returns a tuple of the exposed binaries to remove and the exposed binaries to add.
-pub(crate) async fn get_expose_scripts_sync_status(
+pub(crate) async fn expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
@@ -1021,7 +1066,7 @@ mod tests {
 
         // Test empty
         let exposed = IndexSet::new();
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1041,7 +1086,7 @@ mod tests {
                 .unwrap()
                 .to_string(),
         ));
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1098,7 +1143,7 @@ mod tests {
         };
 
         // Test to_remove and to_add to see if the legacy scripts are removed and trampolines are added
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
@@ -1107,10 +1152,9 @@ mod tests {
 
         // Test to_remove when nothing should be exposed
         // it should remove all the legacy scripts and add nothing
-        let (to_remove, to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
-                .await
-                .unwrap();
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+            .await
+            .unwrap();
 
         assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
         assert_eq!(to_remove.len(), 2);
@@ -1128,7 +1172,7 @@ mod tests {
 
         // Test empty
         let exposed = IndexSet::new();
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1141,7 +1185,7 @@ mod tests {
             "test".to_string(),
         ));
 
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1163,7 +1207,7 @@ mod tests {
 
         trampoline.save().await.unwrap();
 
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
 
@@ -1172,7 +1216,7 @@ mod tests {
 
         // Test to_remove when nothing should be exposed
         let (mut to_remove, to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+            expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
         assert_eq!(to_remove.len(), 1);

@@ -1,6 +1,6 @@
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
-    common::{get_install_changes, EnvironmentUpdate},
+    common::{get_install_changes, shortcut_sync_status, EnvironmentUpdate},
     install::find_binary_by_name,
     trampoline::{self, GlobalExecutable},
     BinDir, EnvRoot, StateChange, StateChanges,
@@ -8,8 +8,7 @@ use super::{
 use crate::{
     global::{
         common::{
-            channel_url_to_prioritized_channel, find_package_records,
-            get_expose_scripts_sync_status,
+            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
         },
         find_executables, find_executables_for_many_records,
         install::{create_executable_trampolines, script_exec_mapping},
@@ -52,13 +51,13 @@ use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use std::sync::LazyLock;
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
 };
-use std::{ops::Not, sync::LazyLock};
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
 
@@ -630,7 +629,7 @@ impl Project {
 
         // Get all removable binaries related to the environment
         let (to_remove, _to_add) =
-            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &IndexSet::new()).await?;
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &IndexSet::new()).await?;
 
         // Remove all removable binaries
         for binary_path in to_remove {
@@ -657,7 +656,7 @@ impl Project {
 
         // Get all removable binaries related to the environment
         let (to_remove, _to_add) =
-            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
 
         // Remove all removable binaries
         for exposed_path in to_remove {
@@ -856,14 +855,33 @@ impl Project {
         }
 
         tracing::debug!("Verify that the binaries are in sync with the environment");
-        let (to_remove, to_add) =
-            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
-        if !to_remove.is_empty() || !to_add.is_empty() {
+        let (exec_to_remove, exec_to_add) =
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
+        if !exec_to_remove.is_empty() || !exec_to_add.is_empty() {
             tracing::debug!(
-                "Environment {} binaries not in sync: to_remove: {:?}, to_add: {:?}",
+                "Environment {} binaries are not in sync: to_remove: {:?}, to_add: {:?}",
                 env_name.fancy_display(),
-                to_remove,
-                to_add
+                exec_to_remove,
+                exec_to_add
+            );
+            return Ok(false);
+        }
+
+        tracing::debug!("Verify that the shortcuts are in sync with the environment");
+        let (shortcuts_to_remove, shortcuts_to_add) =
+            shortcut_sync_status(environment.shortcuts().clone(), prefix_records)?;
+        if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
+            tracing::debug!(
+                "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
+                env_name.fancy_display(),
+                shortcuts_to_remove
+                    .iter()
+                    .map(|s| s.repodata_record.package_record.name.as_normalized())
+                    .join(", "),
+                shortcuts_to_add
+                    .iter()
+                    .map(|s| s.repodata_record.package_record.name.as_normalized())
+                    .join(", ")
             );
             return Ok(false);
         }
@@ -1044,7 +1062,7 @@ impl Project {
                         .await
                         .into_diagnostic()?;
                     // Get all removable binaries related to the environment
-                    let (to_remove, _to_add) = get_expose_scripts_sync_status(
+                    let (to_remove, _to_add) = expose_scripts_sync_status(
                         &self.bin_dir,
                         &EnvDir::from_path(env_path.clone()),
                         &IndexSet::new(),
@@ -1092,44 +1110,8 @@ impl Project {
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
 
-        let mut remaining_shortcuts = environment.shortcuts().clone();
-        let mut records_to_install = Vec::new();
-        let mut tracker_to_uninstall = Vec::new();
-
-        let filtered_records = prefix_records.into_iter().filter(|record| {
-            record.files.iter().any(|file| {
-                file.extension().is_some_and(|ext| ext == "json")
-                    && file
-                        .parent()
-                        .is_some_and(|parent| parent.file_name().is_some_and(|f| f == "Menu"))
-            })
-        });
-
-        for record in filtered_records {
-            let has_installed_system_menus = record.installed_system_menus.is_empty().not();
-            if remaining_shortcuts
-                .swap_take(&record.repodata_record.package_record.name)
-                .is_some()
-            {
-                if !has_installed_system_menus {
-                    // The package record isn't installed, but it is requested
-                    records_to_install.push(record);
-                }
-            } else if has_installed_system_menus {
-                // The package record is installed, but not requested
-                tracker_to_uninstall.push(record.installed_system_menus);
-            }
-        }
-
-        if remaining_shortcuts.is_empty().not() {
-            miette::bail!(
-                "the following shortcuts are requested but not available: {}",
-                remaining_shortcuts
-                    .iter()
-                    .map(|n| n.as_normalized())
-                    .join(", ")
-            );
-        }
+        let (records_to_install, records_to_uninstall) =
+            shortcut_sync_status(environment.shortcuts().clone(), prefix_records)?;
 
         for record in records_to_install {
             rattler_menuinst::install_menuitems_for_record(
@@ -1153,8 +1135,9 @@ impl Project {
             );
         }
 
-        for tracker in tracker_to_uninstall {
-            rattler_menuinst::remove_menu_items(&tracker).into_diagnostic()?;
+        for record in records_to_uninstall {
+            rattler_menuinst::remove_menu_items(&record.installed_system_menus)
+                .into_diagnostic()?;
         }
 
         Ok(state_changes)
