@@ -32,7 +32,7 @@ use crate::{
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 
-use plan::{InstallPlanner, InstallReason, NeedReinstall, PixiInstallPlan};
+use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallPlan};
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -184,16 +184,15 @@ pub async fn update_python_distributions(
     // Partition into those that should be linked from the cache (`local`), those
     // that need to be downloaded (`remote`), and those that should be removed
     // (`extraneous`).
-    let PixiInstallPlan {
+    let PyPIInstallPlan {
         local,
         remote,
         reinstalls,
         extraneous,
-    } = InstallPlanner::new(uv_context.cache.clone(), lock_file_dir).plan(
-        &site_packages,
-        registry_index,
-        &required_map,
-    )?;
+    } = InstallPlanner::new(uv_context.cache.clone(), lock_file_dir)
+        .plan(&site_packages, registry_index, &required_map)
+        .into_diagnostic()
+        .context("error while determining PyPI installation plan")?;
 
     // Determine the currently installed conda packages.
     let installed_packages = prefix.find_installed_packages().with_context(|| {

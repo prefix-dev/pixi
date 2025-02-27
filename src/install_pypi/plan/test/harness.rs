@@ -1,4 +1,5 @@
-use crate::install_pypi::plan::{CachedDistProvider, InstallPlanner, InstalledDistProvider};
+use crate::install_pypi::plan::providers::{CachedDistProvider, InstalledDistProvider};
+use crate::install_pypi::plan::InstallPlanner;
 use pixi_consts::consts;
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use std::collections::HashMap;

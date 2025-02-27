@@ -1,6 +1,5 @@
 use std::{borrow::Cow, str::FromStr, time::Duration};
 
-use miette::IntoDiagnostic;
 use url::Url;
 use uv_cache::{ArchiveTarget, ArchiveTimestamp};
 use uv_distribution_types::InstalledDist;
@@ -42,13 +41,11 @@ pub fn strip_direct_scheme(url: &Url) -> Cow<'_, Url> {
 pub fn check_url_freshness(
     locked_url: &Url,
     installed_dist: &InstalledDist,
-) -> miette::Result<bool> {
+) -> Result<bool, std::io::Error> {
     if let Ok(archive) = locked_url.to_file_path() {
         // This checks the entrypoints like `pyproject.toml`, `setup.cfg`, and
         // `setup.py` against the METADATA of the installed distribution
-        if ArchiveTimestamp::up_to_date_with(&archive, ArchiveTarget::Install(installed_dist))
-            .into_diagnostic()?
-        {
+        if ArchiveTimestamp::up_to_date_with(&archive, ArchiveTarget::Install(installed_dist))? {
             tracing::debug!("Requirement already satisfied (and up-to-date): {installed_dist}");
             Ok(true)
         } else {
