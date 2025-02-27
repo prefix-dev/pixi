@@ -1,5 +1,7 @@
+use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi_consts::consts;
 use pixi_utils::{is_binary_folder, strip_executable_extension};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
@@ -71,6 +73,26 @@ impl Prefix {
             .map_err(|err| PrefixError::PrefixRecordCollectionError(err, self.root.clone()))
     }
 
+    pub async fn find_menu_schema_files(&self) -> miette::Result<Vec<PathBuf>> {
+        let mut schemas = Vec::new();
+        let dir = self.root.join(consts::CONDA_MENU_SCHEMA_DIR);
+        if !dir.is_dir() {
+            return Ok(Vec::new());
+        }
+        let mut content = tokio_fs::read_dir(dir).await.into_diagnostic()?;
+
+        while let Some(entry) = content.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if !path.is_file() || path.extension() != Some("json".as_ref()) {
+                continue;
+            }
+            schemas.push(path);
+        }
+        Ok(schemas)
+    }
+
+    /// Processes prefix records (that you can get by using `find_installed_packages`)
+    /// to filter and collect executable files.
     /// Processes prefix records (that you can get by using
     /// `find_installed_packages`) to filter and collect executable files.
     pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {

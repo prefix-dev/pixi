@@ -320,6 +320,11 @@ impl ParsedEnvironment {
     pub(crate) fn exposed(&self) -> &IndexSet<Mapping> {
         &self.exposed
     }
+
+    /// Returns true if the menu items should be installed for this environment
+    pub(crate) fn shortcuts(&self) -> &IndexSet<PackageName> {
+        &self.shortcuts
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]

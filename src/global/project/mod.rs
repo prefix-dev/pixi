@@ -44,20 +44,21 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
+    menuinst::MenuMode, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform,
+    PrefixRecord,
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
-use std::sync::LazyLock;
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
 };
+use std::{ops::Not, sync::LazyLock};
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
 
@@ -615,6 +616,9 @@ impl Project {
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
+        // Remove all shortcuts, using the information still available in the environment
+        state_changes |= self.remove_shortcuts(env_name).await?;
+
         // Remove the environment from the manifest, if it exists, otherwise ignore
         // error.
         self.manifest.remove_environment(env_name)?;
@@ -974,6 +978,9 @@ impl Project {
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
+        // Install shortcuts
+        state_changes |= self.install_shortcuts(env_name).await?;
+
         Ok(state_changes)
     }
 
@@ -1068,6 +1075,89 @@ impl Project {
                 .map(|r| r.repodata_record.package_record)
                 .map(StateChange::AddedPackage),
         );
+        Ok(state_changes)
+    }
+
+    /// Install shortcuts of a specific environment
+    pub async fn install_shortcuts(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        // TODO: that needs to be adapted to only install the enabled shortcuts
+        if environment.shortcuts().is_empty().not() {
+            // Find menu items in the prefix
+            let prefix = self.environment_prefix(env_name).await?;
+            let menu_files = prefix.find_menu_schema_files().await?;
+
+            // Install menu items
+            for menu_file in menu_files {
+                // TODO: Make the mode configurable
+                match rattler_menuinst::install_menuitems(
+                    menu_file.as_path(),
+                    prefix.root(),
+                    prefix.root(),
+                    environment.platform().unwrap_or(Platform::current()),
+                    MenuMode::User,
+                ) {
+                    Ok(_) => {
+                        tracing::info!("Installed menu item: {}", menu_file.display());
+                        state_changes.insert_change(
+                            env_name,
+                            StateChange::InstalledMenuItem(
+                                menu_file
+                                    .file_name()
+                                    .unwrap_or("menu_file".as_ref())
+                                    .to_string_lossy()
+                                    .to_string(),
+                            ),
+                        );
+                    }
+                    // Don't fail on menu install errors, menuinst is too unstable to break the whole process because of issue with it.
+                    Err(e) => {
+                        tracing::warn!("Couldn't install menu item: {}", menu_file.display());
+                        tracing::warn!("{:?}", e);
+                        tracing::warn!("Please report this issue to the pixi developers.");
+                    }
+                }
+            }
+        }
+        Ok(state_changes)
+    }
+
+    /// Remove the shortcuts from the system coming from a specific environment
+    pub async fn remove_shortcuts(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
+        // Find menu items in the prefix
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+
+        // Remove menu items
+        for record in prefix_records {
+            match rattler_menuinst::remove_menu_items(&record.installed_system_menus) {
+                Ok(_) => {
+                    tracing::info!("Uninstalled menu items for: '{}'", record.file_name());
+                    state_changes.insert_change(
+                        env_name,
+                        StateChange::UninstalledMenuItem(record.file_name().to_string()),
+                    );
+                }
+                // Don't fail on menu install errors, menuinst is too unstable to break the whole process because of issue with it.
+                Err(e) => {
+                    tracing::warn!("Couldn't uninstall menu item for: {}", record.file_name());
+                    tracing::warn!("{:?}", e);
+                    tracing::warn!("Please report this issue to the pixi developers.");
+                }
+            }
+        }
         Ok(state_changes)
     }
 }
