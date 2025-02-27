@@ -44,3 +44,7 @@ def test_sync_shortcuts_linux(pixi: Path, tmp_path: Path, shortcuts_channel_1: s
     # Shortcuts should be removed again
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
     assert not desktop_file.is_file()
+
+
+# TODO: test empty list of shortcuts
+# TODO: test requesting shortcuts that are not available
