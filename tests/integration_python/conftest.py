@@ -85,5 +85,10 @@ def virtual_packages_channel(channels: Path) -> str:
 
 
 @pytest.fixture
+def shortcuts_channel_1(channels: Path) -> str:
+    return channels.joinpath("shortcuts_channel_1").as_uri()
+
+
+@pytest.fixture
 def doc_pixi_projects() -> Path:
     return Path(__file__).parents[2].joinpath("docs", "source_files", "pixi_projects")
