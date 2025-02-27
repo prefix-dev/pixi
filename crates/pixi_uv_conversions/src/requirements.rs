@@ -127,14 +127,14 @@ pub fn as_uv_req(
             precise: rev
                 .as_ref()
                 .map(|s| s.as_full_commit())
-                .and_then(|s| s.map(uv_git::GitOid::from_str))
+                .and_then(|s| s.map(uv_git_types::GitOid::from_str))
                 .transpose()
                 .expect("could not parse sha"),
             // The reference to the commit to use, which could be a branch, tag or revision.
             reference: rev
                 .as_ref()
                 .map(|rev| into_uv_git_reference(rev.clone().into()))
-                .unwrap_or(uv_git::GitReference::DefaultBranch),
+                .unwrap_or(uv_git_types::GitReference::DefaultBranch),
             subdirectory: subdirectory.as_ref().and_then(|s| s.parse().ok()),
             // The full url used to clone, comparable to the git+ url in pip. e.g:
             // - 'git+SCHEMA://HOST/PATH@REF#subdirectory=SUBDIRECTORY'
@@ -237,8 +237,8 @@ mod tests {
 
         let expected_uv_req = RequirementSource::Git {
             repository: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
-            precise: Some(uv_git::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
-            reference: uv_git::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
+            precise: Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
+            reference: uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
             subdirectory: None,
             url: VerbatimUrl::from_url(Url::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
         };
@@ -260,9 +260,9 @@ mod tests {
         let expected_uv_req = RequirementSource::Git {
             repository: Url::parse("https://github.com/user/test.git").unwrap(),
             precise: Some(
-                uv_git::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap(),
+                uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap(),
             ),
-            reference: uv_git::GitReference::BranchOrTagOrCommit(
+            reference: uv_git_types::GitReference::BranchOrTagOrCommit(
                 "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
             ),
             subdirectory: None,

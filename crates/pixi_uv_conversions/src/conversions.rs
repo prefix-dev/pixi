@@ -206,34 +206,35 @@ pub fn to_index_strategy(
     }
 }
 
-pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git::GitReference {
+pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git_types::GitReference {
     match git_ref {
-        PixiGitReference::Branch(branch) => uv_git::GitReference::Branch(branch),
-        PixiGitReference::Tag(tag) => uv_git::GitReference::Tag(tag),
+        PixiGitReference::Branch(branch) => uv_git_types::GitReference::Branch(branch),
+        PixiGitReference::Tag(tag) => uv_git_types::GitReference::Tag(tag),
         PixiGitReference::ShortCommit(rev) | PixiGitReference::FullCommit(rev) => {
-            uv_git::GitReference::BranchOrTagOrCommit(rev)
+            uv_git_types::GitReference::BranchOrTagOrCommit(rev)
         }
-        PixiGitReference::BranchOrTag(rev) => uv_git::GitReference::BranchOrTag(rev),
+        PixiGitReference::BranchOrTag(rev) => uv_git_types::GitReference::BranchOrTag(rev),
         PixiGitReference::BranchOrTagOrCommit(rev) => {
-            uv_git::GitReference::BranchOrTagOrCommit(rev)
+            uv_git_types::GitReference::BranchOrTagOrCommit(rev)
         }
-        PixiGitReference::NamedRef(rev) => uv_git::GitReference::NamedRef(rev),
-        PixiGitReference::DefaultBranch => uv_git::GitReference::DefaultBranch,
+        PixiGitReference::NamedRef(rev) => uv_git_types::GitReference::NamedRef(rev),
+        PixiGitReference::DefaultBranch => uv_git_types::GitReference::DefaultBranch,
     }
 }
 
-pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitOid {
-    uv_git::GitOid::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
+pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git_types::GitOid {
+    uv_git_types::GitOid::from_str(&git_sha.to_string())
+        .expect("we expect it to be the same git sha")
 }
 
-pub fn into_pixi_reference(git_reference: uv_git::GitReference) -> PixiReference {
+pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiReference {
     match git_reference {
-        uv_git::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
-        uv_git::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
-        uv_git::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
-        uv_git::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
-        uv_git::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
-        uv_git::GitReference::DefaultBranch => PixiReference::DefaultBranch,
+        uv_git_types::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
+        uv_git_types::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
+        uv_git_types::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::DefaultBranch => PixiReference::DefaultBranch,
     }
 }
 
