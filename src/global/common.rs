@@ -759,6 +759,12 @@ pub(crate) fn channel_url_to_prioritized_channel(
         .into())
 }
 
+/// Determines the status of shortcuts in the environment by comparing the requested shortcuts
+/// with the installed package records.
+///
+/// This function filters the provided `prefix_records` to find those that contain JSON files
+/// in the `Menu` directory. It then compares these records with the requested `shortcuts` to
+/// determine which records need to be installed and which need to be uninstalled.
 pub(crate) fn shortcut_sync_status(
     shortcuts: IndexSet<PackageName>,
     prefix_records: Vec<PrefixRecord>,
