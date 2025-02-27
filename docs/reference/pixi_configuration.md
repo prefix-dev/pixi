@@ -257,9 +257,8 @@ Set the configuration with:
 ```
 
 !!! note "Why is this experimental?"
-This feature is experimental because the cache invalidation is very tricky,
-and we don't want to disturb users that are not affected by activation times.
-
+    This feature is experimental because the cache invalidation is very tricky,
+    and we don't want to disturb users that are not affected by activation times.
 
 ## Mirror configuration
 
