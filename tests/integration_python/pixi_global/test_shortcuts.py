@@ -1,14 +1,15 @@
 from pathlib import Path
 import tomllib
 
-import pytest
 import tomli_w
 from ..common import verify_cli_command, ExitCode
 import platform
+from syrupy.assertion import SnapshotAssertion
 
 
-@pytest.mark.skipif(platform.system() != "Linux", reason="Only runs on Linux")
-def test_sync_shortcuts_linux(pixi: Path, tmp_path: Path, shortcuts_channel_1: str) -> None:
+def test_sync_shortcuts(
+    pixi: Path, tmp_path: Path, shortcuts_channel_1: str, snapshot: SnapshotAssertion
+) -> None:
     pixi_home = tmp_path / "pixi_home"
     data_home = tmp_path / "data_home"
     env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home)}
@@ -36,6 +37,7 @@ def test_sync_shortcuts_linux(pixi: Path, tmp_path: Path, shortcuts_channel_1: s
     # Now shortcuts should be created
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
     assert desktop_file.is_file()
+    assert desktop_file.read_text() == snapshot(name=f"{platform.system()}-desktop-file")
 
     # Remove shortcuts again
     del parsed_toml["envs"]["test"]["shortcuts"]
