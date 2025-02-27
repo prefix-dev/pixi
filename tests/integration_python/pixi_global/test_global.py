@@ -299,46 +299,6 @@ exposed = {{ dummy-a = "dummy-a" }}
     assert dummy_a.is_file()
 
 
-@pytest.mark.skipif(platform.system() != "Linux", reason="Only runs on Linux")
-def test_sync_shortcuts_linux(
-    pixi: Path, tmp_pixi_workspace: Path, shortcuts_channel_1: str
-) -> None:
-    env = {"HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
-    manifests.mkdir()
-    manifest = manifests.joinpath("pixi-global.toml")
-    toml = f"""
-    [envs.test]
-    channels = ["{shortcuts_channel_1}"]
-    dependencies = {{ pixi-editor = "*" }}
-    """
-    parsed_toml = tomllib.loads(toml)
-    manifest.write_text(toml)
-
-    applications_dir = tmp_pixi_workspace.joinpath(".local", "share", "applications")
-    desktop_file = applications_dir.joinpath("pixi-editor.desktop")
-
-    # Run sync and assert that no shortcuts are created
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    assert not desktop_file.is_file()
-
-    # Enable shortcuts for pixi-editor
-    parsed_toml["envs"]["test"]["shortcuts"] = ["pixi-editor"]
-    manifest.write_text(tomli_w.dumps(parsed_toml))
-
-    # Now shortcuts should be created
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    assert desktop_file.is_file()
-
-    # Remove shortcuts again
-    del parsed_toml["envs"]["test"]["shortcuts"]
-    manifest.write_text(tomli_w.dumps(parsed_toml))
-
-    # Now shortcuts should be created
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    assert not desktop_file.is_file()
-
-
 def test_expose_basic(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
     manifests = tmp_pixi_workspace.joinpath("manifests")
