@@ -63,7 +63,7 @@ We will do exactly that by creating a `pixi.toml`.
 !!! note
     The pixi manifest can be in its own `pixi.toml` file or integrated in `pyproject.toml`
     In this tutorial, we will use `pixi.toml`.
-    If you want everything integrated in `pyproject.toml` just copy the content of `pixi.toml` in this tutorial to your `pyproject.toml` and append `tool.pixi` to each table.
+    If you want everything integrated in `pyproject.toml` just copy the content of `pixi.toml` in this tutorial to your `pyproject.toml` and prepend `tool.pixi.` to each table.
 
 Let's initialize a pixi project.
 
