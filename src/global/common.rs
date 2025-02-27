@@ -352,8 +352,8 @@ pub(crate) enum StateChange {
     AddedEnvironment,
     RemovedEnvironment,
     UpdatedEnvironment(EnvironmentUpdate),
-    InstalledMenuItem(String),
-    UninstalledMenuItem(String),
+    InstalledShortcut(String),
+    UninstalledShortcut(String),
 }
 
 #[must_use]
@@ -589,11 +589,11 @@ impl StateChanges {
                     StateChange::UpdatedEnvironment(update_change) => {
                         StateChanges::report_update_changes(&env_name, update_change);
                     }
-                    StateChange::InstalledMenuItem(name) => {
+                    StateChange::InstalledShortcut(name) => {
                         let mut installed_items = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
-                                Some(StateChange::InstalledMenuItem(name)) => Some(name.clone()),
+                                Some(StateChange::InstalledShortcut(name)) => Some(name.clone()),
                                 _ => None,
                             },
                             Some(name.clone()),
@@ -603,14 +603,14 @@ impl StateChanges {
 
                         if installed_items.len() == 1 {
                             eprintln!(
-                                "{}Installed menu item {} in environment {}.",
+                                "{}Installed shortcut {} in environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 installed_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
                             eprintln!(
-                                "{}Installed menu items in environment {}:",
+                                "{}Installed shortcuts in environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
@@ -619,11 +619,11 @@ impl StateChanges {
                             }
                         }
                     }
-                    StateChange::UninstalledMenuItem(name) => {
+                    StateChange::UninstalledShortcut(name) => {
                         let mut uninstalled_items = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
-                                Some(StateChange::UninstalledMenuItem(name)) => Some(name.clone()),
+                                Some(StateChange::UninstalledShortcut(name)) => Some(name.clone()),
                                 _ => None,
                             },
                             Some(name.clone()),
@@ -633,14 +633,14 @@ impl StateChanges {
 
                         if uninstalled_items.len() == 1 {
                             eprintln!(
-                                "{}Uninstalled menu item {} in environment {}.",
+                                "{}Uninstalled shortcut {} in environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 uninstalled_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
                             eprintln!(
-                                "{}Uninstalled menu items in environment {}:",
+                                "{}Uninstalled shortcuts in environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );

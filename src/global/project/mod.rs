@@ -845,8 +845,12 @@ impl Project {
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
+        let prefix_records = self
+            .environment_prefix(env_name)
+            .await?
+            .find_installed_packages()?;
         let specs_in_sync =
-            environment_specs_in_sync(&env_dir, &specs, environment.platform).await?;
+            environment_specs_in_sync(&prefix_records, &specs, environment.platform).await?;
         if !specs_in_sync {
             return Ok(false);
         }
@@ -979,7 +983,7 @@ impl Project {
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
         // Install shortcuts
-        state_changes |= self.install_shortcuts(env_name).await?;
+        state_changes |= self.sync_shortcuts(env_name).await?;
 
         Ok(state_changes)
     }
@@ -1079,53 +1083,80 @@ impl Project {
     }
 
     /// Install shortcuts of a specific environment
-    pub async fn install_shortcuts(
-        &self,
-        env_name: &EnvironmentName,
-    ) -> miette::Result<StateChanges> {
+    pub async fn sync_shortcuts(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        // TODO: that needs to be adapted to only install the enabled shortcuts
-        if environment.shortcuts().is_empty().not() {
-            // Find menu items in the prefix
-            let prefix = self.environment_prefix(env_name).await?;
-            let menu_files = prefix.find_menu_schema_files().await?;
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
 
-            // Install menu items
-            for menu_file in menu_files {
-                // TODO: Make the mode configurable
-                match rattler_menuinst::install_menuitems(
-                    menu_file.as_path(),
-                    prefix.root(),
-                    prefix.root(),
-                    environment.platform().unwrap_or(Platform::current()),
-                    MenuMode::User,
-                ) {
-                    Ok(_) => {
-                        tracing::info!("Installed menu item: {}", menu_file.display());
-                        state_changes.insert_change(
-                            env_name,
-                            StateChange::InstalledMenuItem(
-                                menu_file
-                                    .file_name()
-                                    .unwrap_or("menu_file".as_ref())
-                                    .to_string_lossy()
-                                    .to_string(),
-                            ),
-                        );
-                    }
-                    // Don't fail on menu install errors, menuinst is too unstable to break the whole process because of issue with it.
-                    Err(e) => {
-                        tracing::warn!("Couldn't install menu item: {}", menu_file.display());
-                        tracing::warn!("{:?}", e);
-                        tracing::warn!("Please report this issue to the pixi developers.");
-                    }
+        let mut remaining_shortcuts = environment.shortcuts().clone();
+        let mut records_to_install = Vec::new();
+        let mut tracker_to_uninstall = Vec::new();
+
+        let filtered_records = prefix_records.into_iter().filter(|record| {
+            record.files.iter().any(|file| {
+                file.extension().is_some_and(|ext| ext == "json")
+                    && file
+                        .parent()
+                        .is_some_and(|parent| parent.file_name().is_some_and(|f| f == "Menu"))
+            })
+        });
+
+        for record in filtered_records {
+            let has_installed_system_menus = record.installed_system_menus.is_empty().not();
+            if remaining_shortcuts
+                .swap_take(&record.repodata_record.package_record.name)
+                .is_some()
+            {
+                if !has_installed_system_menus {
+                    // The package record isn't installed, but it is requested
+                    records_to_install.push(record);
                 }
+            } else if has_installed_system_menus {
+                // The package record is installed, but not requested
+                tracker_to_uninstall.push(record.installed_system_menus);
             }
         }
+
+        if remaining_shortcuts.is_empty().not() {
+            miette::bail!(
+                "the following shortcuts are requested but not available: {}",
+                remaining_shortcuts
+                    .iter()
+                    .map(|n| n.as_normalized())
+                    .join(", ")
+            );
+        }
+
+        for record in records_to_install {
+            rattler_menuinst::install_menuitems_for_record(
+                prefix.root(),
+                &record,
+                environment.platform().unwrap_or(Platform::current()),
+                MenuMode::User,
+            )
+            .into_diagnostic()?;
+
+            state_changes.insert_change(
+                env_name,
+                StateChange::InstalledShortcut(
+                    record
+                        .repodata_record
+                        .package_record
+                        .name
+                        .as_normalized()
+                        .to_owned(),
+                ),
+            );
+        }
+
+        for tracker in tracker_to_uninstall {
+            rattler_menuinst::remove_menu_items(&tracker).into_diagnostic()?;
+        }
+
         Ok(state_changes)
     }
 
@@ -1147,7 +1178,7 @@ impl Project {
                     tracing::info!("Uninstalled menu items for: '{}'", record.file_name());
                     state_changes.insert_change(
                         env_name,
-                        StateChange::UninstalledMenuItem(record.file_name().to_string()),
+                        StateChange::UninstalledShortcut(record.file_name().to_string()),
                     );
                 }
                 // Don't fail on menu install errors, menuinst is too unstable to break the whole process because of issue with it.
