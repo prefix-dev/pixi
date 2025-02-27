@@ -6,15 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Learn how to write self-contained shell scripts using `pixi exec`">
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/build/workspace/">
+      
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/shebang/">
       
       
-        <link rel="prev" href="../cpp/">
+        <link rel="prev" href="../s3/">
       
       
-        <link rel="next" href="../variants/">
+        <link rel="next" href="../../reference/pixi_manifest/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +24,7 @@
     
     
       
-        <title>Multiple Packages in Workspace - Pixi by prefix.dev</title>
+        <title>Self-contained scripts - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +61,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Multiple Packages in Workspace - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Self-contained scripts - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="None" >
+        <meta  property="og:description"  content="Learn how to write self-contained shell scripts using `pixi exec`" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/workspace.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/shebang.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +73,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/build/workspace/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/shebang/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Multiple Packages in Workspace - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Self-contained scripts - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="None" >
+        <meta  name="twitter:description"  content="Learn how to write self-contained shell scripts using `pixi exec`" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/build/workspace.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/shebang.png" >
       
     
     
@@ -102,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-integrating-multiple-packages-in-a-workspace" class="md-skip">
+        <a href="#using-pixi-exec-to-create-self-contained-scripts" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multiple Packages in Workspace
+              Self-contained scripts
             
           </span>
         </div>
@@ -1006,8 +1008,6 @@
       
   
   
-    
-  
   
   
     
@@ -1019,11 +1019,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -1037,7 +1037,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Building Packages
@@ -1051,7 +1051,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting_started/" class="md-nav__link">
+      <a href="../../build/getting_started/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1069,8 +1069,6 @@
                 
   
   
-    
-  
   
   
     
@@ -1079,11 +1077,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_2" >
         
           
           <label class="md-nav__link" for="__nav_8_2" id="__nav_8_2_label" tabindex="0">
@@ -1097,7 +1095,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_8_2">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -1111,7 +1109,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python/" class="md-nav__link">
+      <a href="../../build/python/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1132,7 +1130,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cpp/" class="md-nav__link">
+      <a href="../../build/cpp/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1150,30 +1148,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Multiple Packages in Workspace
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../build/workspace/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1182,53 +1160,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-is-this-useful" class="md-nav__link">
-    <span class="md-ellipsis">
-      Why is this useful?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lets-get-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      Let's get started
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Conclusion
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1241,7 +1172,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../variants/" class="md-nav__link">
+      <a href="../../build/variants/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1270,7 +1201,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../dependency_types/" class="md-nav__link">
+      <a href="../../build/dependency_types/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1291,7 +1222,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
+      <a href="../../build/backends/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1316,8 +1247,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -1327,11 +1260,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
@@ -1345,7 +1278,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -1359,7 +1292,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/authentication/" class="md-nav__link">
+      <a href="../authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1380,7 +1313,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/channel_priority/" class="md-nav__link">
+      <a href="../channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1401,7 +1334,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/github_actions/" class="md-nav__link">
+      <a href="../github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1422,7 +1355,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1443,7 +1376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
+      <a href="../updates_github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1464,7 +1397,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/lockfile_diffs/" class="md-nav__link">
+      <a href="../lockfile_diffs/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1485,7 +1418,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/production_deployment/" class="md-nav__link">
+      <a href="../production_deployment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1506,7 +1439,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
+      <a href="../pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1527,7 +1460,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/s3/" class="md-nav__link">
+      <a href="../s3/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1545,10 +1478,19 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../advanced/shebang/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1557,6 +1499,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -1851,41 +1794,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-is-this-useful" class="md-nav__link">
-    <span class="md-ellipsis">
-      Why is this useful?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lets-get-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      Let's get started
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Conclusion
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -1899,7 +1807,7 @@
                   
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/workspace.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/shebang.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -1907,128 +1815,101 @@
   
 
 
-<h1 id="tutorial-integrating-multiple-packages-in-a-workspace">Tutorial: Integrating multiple packages in a workspace<a class="headerlink" href="#tutorial-integrating-multiple-packages-in-a-workspace" title="Permanent link">#</a></h1>
-<p>In this tutorial, we will show you how to integrate multiple pixi packages into a single workspace.</p>
+<h1 id="using-pixi-exec-to-create-self-contained-scripts">Using <code>pixi exec</code> to create self-contained scripts<a class="headerlink" href="#using-pixi-exec-to-create-self-contained-scripts" title="Permanent link">#</a></h1>
 <div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p><code>pixi-build</code> is a preview feature, and will change until it is stabilized.
-Please keep that in mind when you use it for your projects.</p>
+<p class="admonition-title">Only on Unix-like systems</p>
+<p>The following approach only works on Unix-like systems (i.e. Linux and macOS) since Windows does not support shebang lines.</p>
 </div>
-<h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
-<p>The packages coming from conda channels are already built and ready to use.
-If you want to depend on a package you therefore typically get that package from such a channel.
-However, there are situations where you want to depend on the source of a package.
-This is the case for example if you want to develop on multiple packages within the same repository.
-Or if you need the changes of an unreleased version of one of your dependencies.</p>
-<h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
-<p>In this tutorial we will showcase how to develop two packages in one workspace.
-For that we will use the <code>rich_example</code> Python package developed in chapter <a href="../python/">Building a Python package</a> and let it depend on the <code>python_binding</code> C++ package developed in chapter <a href="../cpp/">Building a C++ package</a>.</p>
-<p>We will start with the original setup of <code>rich_example</code> and copy <code>python_binding</code> into a folder called <code>packages</code>.
-The source directory structure now looks like this:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├──<span class="w"> </span>packages
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>│<span class="w">   </span>└──<span class="w"> </span>python_bindings
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>│<span class="w">       </span>├──<span class="w"> </span>CMakeLists.txt
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│<span class="w">       </span>├──<span class="w"> </span>pixi.toml
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>│<span class="w">       </span>└──<span class="w"> </span>src
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>│<span class="w">           </span>└──<span class="w"> </span>bindings.cpp
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>├──<span class="w"> </span>pixi.lock
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>├──<span class="w"> </span>pixi.toml
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>├──<span class="w"> </span>pyproject.toml
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>└──<span class="w"> </span>src
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>└──<span class="w"> </span>rich_example
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span>└──<span class="w"> </span>__init__.py
+<p>For simple scripts, you can use <a href="../../reference/cli/#exec"><code>pixi exec</code></a> to run them directly without needing to take care of installing dependencies or setting up a virtual environment.
+This can be done by adding a <a href="https://en.wikipedia.org/wiki/Shebang_(Unix)">shebang line</a> at the top of the script, which tells the system how to execute the script.
+Usually, a shebang line starts with <code>#!/usr/bin/env</code> followed by the name of the interpreter to use.</p>
+<p>Instead of adding an interpreter, you can also just add <code>pixi exec</code> at the beginning of the script.
+The only requirement for your script is that you must have <code>pixi</code> installed on your system.</p>
+<div class="admonition tip">
+<p class="admonition-title">Making the script executable</p>
+<p>You might need to make the script executable by running <code>chmod +x my-script.sh</code>.</p>
+</div>
+<div class="language-bash highlight"><span class="filename">use-bat.sh</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="ch">#!/usr/bin/env -S pixi exec --spec bat -- bash -e</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>bat<span class="w"> </span>my-file.json
 </span></code></pre></div>
-<p>Within a pixi manifest, you can manage a workspace and/or describe a package.
-In the case of <code>rich_example</code> we choose to do both, so the only thing we have to add is the dependency on the <code>python_bindings</code>.</p>
-<div class="language-py highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">[</span><span class="n">workspace</span><span class="p">]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">channels</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>  <span class="s2">&quot;https://prefix.dev/pixi-build-backends&quot;</span><span class="p">,</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>  <span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">,</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="p">]</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">platforms</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span> <span class="s2">&quot;linux-64&quot;</span><span class="p">,</span> <span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span> <span class="s2">&quot;osx-64&quot;</span><span class="p">]</span>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">preview</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">[</span><span class="n">dependencies</span><span class="p">]</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">python_bindings</span> <span class="o">=</span> <span class="p">{</span> <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;packages/python_bindings&quot;</span> <span class="p">}</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="n">rich_example</span> <span class="o">=</span> <span class="p">{</span> <span class="n">path</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span> <span class="p">}</span>
+<div class="admonition info">
+<p class="admonition-title">Explanation what's happening</p>
+<p>The <code>#!</code> are magic characters that tell your system how to execute the script (take everything after the <code>#!</code> and append the file name).</p>
+<p>The <code>/usr/bin/env</code> is used to find <code>pixi</code> in the system's <code>PATH</code>.
+The <code>-S</code> option tells <code>/usr/bin/env</code> to use the first argument as the interpreter and the rest as arguments to the interpreter.
+<code>pixi exec --spec bat</code> creates a temporary environment containing only <a href="https://github.com/sharkdp/bat"><code>bat</code></a>.
+<code>bash -e</code> (separated with <code>--</code>) is the command that is executed in this environment.
+So in total, <code>pixi exec --spec bat -- bash -e use-bat.sh</code> is being executed when you run <code>./use-bat.sh</code>.</p>
+</div>
+<p>You can also write self-contained python files that ship with their dependencies.
+This example shows a very simple CLI that installs a pixi environment to an arbitrary prefix using <a href="https://conda.github.io/rattler/py-rattler"><code>py-rattler</code></a> and <a href="https://typer.tiangolo.com"><code>typer</code></a>.</p>
+<div class="language-python highlight"><span class="filename">install-pixi-environment-to-prefix.py</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="ch">#!/usr/bin/env -S pixi exec --spec py-rattler&gt;=0.10.0,&lt;0.11 --spec typer&gt;=0.15.0,&lt;0.16 -- python</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_args</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rattler</span><span class="w"> </span><span class="kn">import</span> <span class="n">install</span> <span class="k">as</span> <span class="n">rattler_install</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rattler</span><span class="w"> </span><span class="kn">import</span> <span class="n">LockFile</span><span class="p">,</span> <span class="n">Platform</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rattler.platform.platform</span><span class="w"> </span><span class="kn">import</span> <span class="n">PlatformLiteral</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rattler.networking</span><span class="w"> </span><span class="kn">import</span> <span class="n">Client</span><span class="p">,</span> <span class="n">MirrorMiddleware</span><span class="p">,</span> <span class="n">AuthenticationMiddleware</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="kn">import</span><span class="w"> </span><span class="nn">typer</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="n">app</span> <span class="o">=</span> <span class="n">typer</span><span class="o">.</span><span class="n">Typer</span><span class="p">()</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_install</span><span class="p">(</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>    <span class="n">lock_file_path</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>    <span class="n">environment_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="n">platform</span><span class="p">:</span> <span class="n">Platform</span><span class="p">,</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">target_prefix</span><span class="p">:</span> <span class="n">Path</span><span class="p">,</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="n">lock_file</span> <span class="o">=</span> <span class="n">LockFile</span><span class="o">.</span><span class="n">from_path</span><span class="p">(</span><span class="n">lock_file_path</span><span class="p">)</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">environment</span> <span class="o">=</span> <span class="n">lock_file</span><span class="o">.</span><span class="n">environment</span><span class="p">(</span><span class="n">environment_name</span><span class="p">)</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>    <span class="k">if</span> <span class="n">environment</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Environment </span><span class="si">{</span><span class="n">environment_name</span><span class="si">}</span><span class="s2"> not found in lock file </span><span class="si">{</span><span class="n">lock_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>    <span class="n">records</span> <span class="o">=</span> <span class="n">environment</span><span class="o">.</span><span class="n">conda_repodata_records_for_platform</span><span class="p">(</span><span class="n">platform</span><span class="p">)</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>    <span class="k">if</span> <span class="ow">not</span> <span class="n">records</span><span class="p">:</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;No records found for platform </span><span class="si">{</span><span class="n">platform</span><span class="si">}</span><span class="s2"> in lock file </span><span class="si">{</span><span class="n">lock_file_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    <span class="k">await</span> <span class="n">rattler_install</span><span class="p">(</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>        <span class="n">records</span><span class="o">=</span><span class="n">records</span><span class="p">,</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>        <span class="n">target_prefix</span><span class="o">=</span><span class="n">target_prefix</span><span class="p">,</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>        <span class="n">client</span><span class="o">=</span><span class="n">Client</span><span class="p">(</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>            <span class="n">middlewares</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>                <span class="n">MirrorMiddleware</span><span class="p">({</span><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;https://repo.prefix.dev/conda-forge&quot;</span><span class="p">]}),</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>                <span class="n">AuthenticationMiddleware</span><span class="p">(),</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>            <span class="p">]</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>        <span class="p">),</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>    <span class="p">)</span>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a><span class="nd">@app</span><span class="o">.</span><span class="n">command</span><span class="p">()</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a><span class="k">def</span><span class="w"> </span><span class="nf">install</span><span class="p">(</span>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>    <span class="n">lock_file_path</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;pixi.lock&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">absolute</span><span class="p">(),</span>
+</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>    <span class="n">environment_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;default&quot;</span><span class="p">,</span>
+</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>    <span class="n">platform</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">Platform</span><span class="o">.</span><span class="n">current</span><span class="p">()),</span>
+</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>    <span class="n">target_prefix</span><span class="p">:</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="s2">&quot;env&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">absolute</span><span class="p">(),</span>
+</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-49"><a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a><span class="sd">    Installs a pixi.lock file to a custom prefix.</span>
+</span><span id="__span-1-51"><a id="__codelineno-1-51" name="__codelineno-1-51" href="#__codelineno-1-51"></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="__span-1-52"><a id="__codelineno-1-52" name="__codelineno-1-52" href="#__codelineno-1-52"></a>    <span class="k">if</span> <span class="n">platform</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">get_args</span><span class="p">(</span><span class="n">PlatformLiteral</span><span class="p">):</span>
+</span><span id="__span-1-53"><a id="__codelineno-1-53" name="__codelineno-1-53" href="#__codelineno-1-53"></a>        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Invalid platform </span><span class="si">{</span><span class="n">platform</span><span class="si">}</span><span class="s2">. Must be one of </span><span class="si">{</span><span class="n">get_args</span><span class="p">(</span><span class="n">PlatformLiteral</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</span><span id="__span-1-54"><a id="__codelineno-1-54" name="__codelineno-1-54" href="#__codelineno-1-54"></a>    <span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+</span><span id="__span-1-55"><a id="__codelineno-1-55" name="__codelineno-1-55" href="#__codelineno-1-55"></a>        <span class="n">_install</span><span class="p">(</span>
+</span><span id="__span-1-56"><a id="__codelineno-1-56" name="__codelineno-1-56" href="#__codelineno-1-56"></a>            <span class="n">lock_file_path</span><span class="o">=</span><span class="n">lock_file_path</span><span class="p">,</span>
+</span><span id="__span-1-57"><a id="__codelineno-1-57" name="__codelineno-1-57" href="#__codelineno-1-57"></a>            <span class="n">environment_name</span><span class="o">=</span><span class="n">environment_name</span><span class="p">,</span>
+</span><span id="__span-1-58"><a id="__codelineno-1-58" name="__codelineno-1-58" href="#__codelineno-1-58"></a>            <span class="n">platform</span><span class="o">=</span><span class="n">Platform</span><span class="p">(</span><span class="n">platform</span><span class="p">),</span>
+</span><span id="__span-1-59"><a id="__codelineno-1-59" name="__codelineno-1-59" href="#__codelineno-1-59"></a>            <span class="n">target_prefix</span><span class="o">=</span><span class="n">target_prefix</span><span class="p">,</span>
+</span><span id="__span-1-60"><a id="__codelineno-1-60" name="__codelineno-1-60" href="#__codelineno-1-60"></a>        <span class="p">)</span>
+</span><span id="__span-1-61"><a id="__codelineno-1-61" name="__codelineno-1-61" href="#__codelineno-1-61"></a>    <span class="p">)</span>
+</span><span id="__span-1-62"><a id="__codelineno-1-62" name="__codelineno-1-62" href="#__codelineno-1-62"></a>
+</span><span id="__span-1-63"><a id="__codelineno-1-63" name="__codelineno-1-63" href="#__codelineno-1-63"></a>
+</span><span id="__span-1-64"><a id="__codelineno-1-64" name="__codelineno-1-64" href="#__codelineno-1-64"></a><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+</span><span id="__span-1-65"><a id="__codelineno-1-65" name="__codelineno-1-65" href="#__codelineno-1-65"></a>    <span class="n">app</span><span class="p">()</span>
 </span></code></pre></div>
-<p>We only want to use the <code>workspace</code> table of the top-level manifest.
-Therefore, we can remove the workspace section in the manifest of <code>python_bindings</code>.</p>
-<div class="language-diff highlight"><span class="filename">packages/python_bindings/pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="gd">-[workspace]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="gd">-channels = [</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="gd">-  &quot;https://prefix.dev/pixi-build-backends&quot;,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="gd">-  &quot;https://prefix.dev/conda-forge&quot;,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="gd">-]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="gd">-platforms = [&quot;osx-arm64&quot;, &quot;osx-64&quot;, &quot;linux-64&quot;, &quot;win-64&quot;]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="gd">-preview = [&quot;pixi-build&quot;]</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="gd">-</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="gd">-[dependencies]</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="gd">-python_bindings = { path = &quot;.&quot; }</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="gd">-</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="gd">-[tasks]</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="gd">-start = &quot;python -c &#39;import python_bindings as b; print(b.add(1, 2))&#39;&quot;</span>
-</span></code></pre></div>
-<p>There is actually one problem with <code>rich_example</code>.
-The age of every person is off by one year!</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>┃ name         ┃ age ┃ city        ┃
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>│ John Doe     │ 30  │ New York    │
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>│ Jane Smith   │ 25  │ Los Angeles │
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>│ Tim de Jager │ 35  │ Utrecht     │
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>└──────────────┴─────┴─────────────┘
-</span></code></pre></div>
-<p>We need to add one year to the age of every person.
-Luckily <code>python_bindings</code> exposes a function <code>add</code> which allows us to do exactly that.</p>
-<div class="language-py highlight"><span class="filename">src/rich_example/__init__.py</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">fields</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rich.console</span><span class="w"> </span><span class="kn">import</span> <span class="n">Console</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rich.table</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="kn">import</span><span class="w"> </span><span class="nn">python_bindings</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nd">@dataclass</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">Person</span><span class="p">:</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="n">age</span><span class="p">:</span> <span class="nb">int</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="n">city</span><span class="p">:</span> <span class="nb">str</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="k">def</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="n">console</span> <span class="o">=</span> <span class="n">Console</span><span class="p">()</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="n">people</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;John Doe&quot;</span><span class="p">,</span> <span class="mi">30</span><span class="p">,</span> <span class="s2">&quot;New York&quot;</span><span class="p">),</span>
-</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;Jane Smith&quot;</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="s2">&quot;Los Angeles&quot;</span><span class="p">),</span>
-</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a>        <span class="n">Person</span><span class="p">(</span><span class="s2">&quot;Tim de Jager&quot;</span><span class="p">,</span> <span class="mi">35</span><span class="p">,</span> <span class="s2">&quot;Utrecht&quot;</span><span class="p">),</span>
-</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a>    <span class="p">]</span>
-</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a>
-</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a>    <span class="n">table</span> <span class="o">=</span> <span class="n">Table</span><span class="p">()</span>
-</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a>
-</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a>    <span class="k">for</span> <span class="n">column</span> <span class="ow">in</span> <span class="n">fields</span><span class="p">(</span><span class="n">Person</span><span class="p">):</span>
-</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a>        <span class="n">table</span><span class="o">.</span><span class="n">add_column</span><span class="p">(</span><span class="n">column</span><span class="o">.</span><span class="n">name</span><span class="p">)</span>
-</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a>
-</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a>    <span class="k">for</span> <span class="n">person</span> <span class="ow">in</span> <span class="n">people</span><span class="p">:</span>
-</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a>        <span class="n">updated_age</span> <span class="o">=</span> <span class="n">python_bindings</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">age</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a>        <span class="n">table</span><span class="o">.</span><span class="n">add_row</span><span class="p">(</span><span class="n">person</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">updated_age</span><span class="p">),</span> <span class="n">person</span><span class="o">.</span><span class="n">city</span><span class="p">)</span>
-</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a>
-</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a>    <span class="n">console</span><span class="o">.</span><span class="n">print</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
-</span></code></pre></div>
-<p>If you run <code>pixi run start</code>, the age of each person should now be accurate:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>┃ name         ┃ age ┃ city        ┃
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>│ John Doe     │ 31  │ New York    │
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>│ Jane Smith   │ 26  │ Los Angeles │
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>│ Tim de Jager │ 36  │ Utrecht     │
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>└──────────────┴─────┴─────────────┘
-</span></code></pre></div>
-<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we created a pixi workspace containing two packages.
-The manifest of <code>rich_example</code> describes the workspace as well as the package, with <code>python_bindings</code> only the <code>package</code> section is used.
-Feel free to add more packages, written in different languages to this workspace!</p>
-<p>Thanks for reading! Happy Coding 🚀</p>
-<p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
 
 
 
@@ -2100,9 +1981,9 @@ Feel free to add more packages, written in different languages to this workspace
           
             
             <a
-              href="../cpp/"
+              href="../s3/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Building a C++ Package"
+              aria-label="Previous: S3"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2113,7 +1994,7 @@ Feel free to add more packages, written in different languages to this workspace
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Building a C++ Package
+                  S3
                 </div>
               </div>
             </a>
@@ -2123,16 +2004,16 @@ Feel free to add more packages, written in different languages to this workspace
           
             
             <a
-              href="../variants/"
+              href="../../reference/pixi_manifest/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Variants"
+              aria-label="Next: Pixi Manifest"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Variants
+                  Pixi Manifest
                 </div>
               </div>
               <div class="md-footer__button md-icon">
