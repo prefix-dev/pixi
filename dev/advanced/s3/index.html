@@ -1606,6 +1606,21 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Uploading to S3">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#re-indexing-s3-buckets-after-uploading-new-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Re-indexing S3 buckets after uploading new packages
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -2036,6 +2051,21 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Uploading to S3">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#re-indexing-s3-buckets-after-uploading-new-packages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Re-indexing S3 buckets after uploading new packages
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -2244,25 +2274,18 @@ You can use them with pixi by specifying the <code>s3-options</code> in your man
 <h2 id="uploading-to-s3">Uploading to S3<a class="headerlink" href="#uploading-to-s3" title="Permanent link">#</a></h2>
 <p>You can upload to S3 using <code>rattler-build upload s3</code>.
 For more information, see <a href="https://rattler.build/latest/authentication_and_upload/#s3">rattler-build's documentation</a>.</p>
-<!-- TODO: uncomment once implemented
-
-### Re-indexing S3 buckets after uploading new packages
-
-Every time you upload new packages to your package repository, the `repodata.json` file needs to be updated.
+<h3 id="re-indexing-s3-buckets-after-uploading-new-packages">Re-indexing S3 buckets after uploading new packages<a class="headerlink" href="#re-indexing-s3-buckets-after-uploading-new-packages" title="Permanent link">#</a></h3>
+<p>Every time you upload new packages to your package repository, the <code>repodata.json</code> file needs to be updated.
 This is done automatically for conda package servers like anaconda.org or prefix.dev.
-For S3 buckets, on the other hand, we need to do this manually since an S3 bucket is only a storage system and not a package server.
-
-To re-index an S3 bucket, you can use the `rattler-index` package which is available on [conda-forge](https://prefix.dev/channels/conda-forge/packages/rattler-index).
-
+For S3 buckets, on the other hand, we need to do this manually since an S3 bucket is only a storage system and not a package server.</p>
+<p>To re-index an S3 bucket, you can use the <code>rattler-index</code> package which is available on <a href="https://prefix.dev/channels/conda-forge/packages/rattler-index">conda-forge</a>.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>rattler-index<span class="w"> </span>s3<span class="w"> </span>s3://my-s3-bucket/my-channel<span class="w"> </span><span class="se">\</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">    </span>--endpoint-url<span class="w"> </span>https://my-s3-host<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span>--region<span class="w"> </span>us-east-1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">  </span>--force-path-style<span class="w"> </span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">  </span>--access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span>--secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span>--region<span class="w"> </span>us-east-1<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span>--force-path-style<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span>--access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span>--secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;
 </span></code></pre></div>
-
--->
 
 
 
