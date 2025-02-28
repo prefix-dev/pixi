@@ -78,6 +78,8 @@ pub(crate) enum NeedReinstall {
         locked_location: String,
         installed_location: String,
     },
+    /// Reinstallation was requested
+    ReinstallationRequested,
 }
 
 impl std::fmt::Display for NeedReinstall {
@@ -161,6 +163,10 @@ impl std::fmt::Display for NeedReinstall {
             NeedReinstall::SourceMismatch{locked_location, installed_location} => write!(
                 f,
                 "Installed from registry from '{installed_location}' but locked to a non-registry location from '{locked_location}'",
+            ),
+            NeedReinstall::ReinstallationRequested => write!(
+                f,
+                "Reinstallation was requested",
             ),
         }
     }
