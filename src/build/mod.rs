@@ -131,6 +131,13 @@ pub struct SourceCheckout {
     pub pinned: PinnedSourceSpec,
 }
 
+impl SourceCheckout {
+    /// Create a new source checkout from a pinned source specification.
+    pub fn new(path: PathBuf, pinned: PinnedSourceSpec) -> Self {
+        Self { path, pinned }
+    }
+}
+
 /// The metadata of a source checkout.
 #[derive(Debug)]
 pub struct SourceMetadata {
@@ -885,7 +892,7 @@ fn normalize_absolute_path(path: &Path) -> Result<PathBuf, std::io::Error> {
 
 /// A key to uniquely identify a work directory. If there is a source build with
 /// the same key they will share the same working directory.
-struct WorkDirKey {
+pub(crate) struct WorkDirKey {
     /// The location of the source
     source: SourceCheckout,
 
@@ -898,6 +905,14 @@ struct WorkDirKey {
 }
 
 impl WorkDirKey {
+    pub fn new(source: SourceCheckout, host_platform: Platform, build_backend: String) -> Self {
+        Self {
+            source,
+            host_platform,
+            build_backend,
+        }
+    }
+
     pub fn key(&self) -> String {
         let mut hasher = Xxh3::new();
         self.source.pinned.to_string().hash(&mut hasher);

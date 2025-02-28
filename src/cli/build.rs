@@ -9,10 +9,12 @@ use pixi_build_types::{
 };
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
+use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
+use typed_path::Utf8TypedPath;
 
 use crate::{
-    build::BuildContext,
+    build::{BuildContext, SourceCheckout, WorkDirKey},
     cli::cli_config::WorkspaceConfig,
     repodata::Repodata,
     utils::{move_file, MoveError},
@@ -35,6 +37,10 @@ pub struct Args {
     /// The output directory to place the build artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
+
+    /// Whether to build incrementally if possible
+    #[clap(long, short)]
+    pub no_incremental: bool,
 }
 
 struct ProgressReporter {
@@ -113,8 +119,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()
         .wrap_err("unable to setup the build-backend to build the workspace")?;
 
-    // Construct a temporary directory to build the package in. This path is also
-    // automatically removed after the build finishes.
     let pixi_dir = &workspace.pixi_dir();
     tokio::fs::create_dir_all(pixi_dir)
         .await
@@ -126,11 +130,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
-    let work_dir = tempfile::Builder::new()
-        .prefix("pixi-build-")
-        .tempdir_in(workspace.pixi_dir())
-        .into_diagnostic()
-        .context("failed to create temporary working directory in the .pixi directory")?;
+    let incremental = !args.no_incremental;
+    // Determine if we want to re-use existing build data
+    let (_tmp, work_dir) = if incremental {
+        // Specify the cache directory
+        let key = WorkDirKey::new(
+            SourceCheckout::new(
+                workspace.root().to_path_buf(),
+                PinnedSourceSpec::Path(PinnedPathSpec {
+                    path: Utf8TypedPath::derive(&workspace.root().to_string_lossy()).to_path_buf(),
+                }),
+            ),
+            args.target_platform,
+            protocol.identifier().to_string(),
+        )
+        .key();
+        (None, workspace.pixi_dir().join(key))
+    } else {
+        // Construct a temporary directory to build the package in. This path is also
+        // automatically removed after the build finishes.
+        let tmp = tempfile::Builder::new()
+            .prefix("pixi-build-")
+            .tempdir_in(workspace.pixi_dir())
+            .into_diagnostic()
+            .context("failed to create temporary working directory in the .pixi directory")?;
+        let work_dir = tmp.path().to_path_buf();
+        (Some(tmp), work_dir)
+    };
 
     let progress = Arc::new(ProgressReporter::new(workspace.name()));
     // Build platform virtual packages
@@ -174,7 +200,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 },
                 outputs: None,
                 editable: false,
-                work_directory: work_dir.path().to_path_buf(),
+                work_directory: work_dir,
                 variant_configuration: Some(build_context.resolve_variant(args.target_platform)),
             },
             progress.clone(),
