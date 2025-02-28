@@ -3,6 +3,27 @@ import tomllib
 import tomli_w
 from ..common import verify_cli_command, ExitCode, CURRENT_PLATFORM
 from abc import ABC, abstractmethod
+import pytest
+from dataclasses import dataclass
+
+
+@dataclass
+class SetupData:
+    pixi_home: Path
+    data_home: Path
+    env: dict[str, str]
+
+
+@pytest.fixture
+def setup_data(tmp_path: Path) -> SetupData:
+    pixi_home = tmp_path / "pixi_home"
+    data_home = tmp_path / "data_home"
+    env = {
+        "PIXI_HOME": str(pixi_home),
+        "HOME": str(data_home),  # Used for macOS and Linux
+        "MENUINST_FAKE_DIRECTORIES": str(data_home),  # Used for Windows
+    }
+    return SetupData(pixi_home=pixi_home, data_home=data_home, env=env)
 
 
 class PlatformConfig(ABC):
@@ -17,7 +38,7 @@ class PlatformConfig(ABC):
 
 class LinuxConfig(PlatformConfig):
     def shortcut_path(self, data_home: Path, name: str) -> Path:
-        return data_home / "applications" / f"{name}_{name}.desktop"
+        return data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"
 
     def shortcut_exists(self, path: Path) -> bool:
         return path.is_file()
@@ -69,16 +90,13 @@ def verify_shortcuts_exist(
 
 def test_sync_creation_and_removal(
     pixi: Path,
-    tmp_path: Path,
+    setup_data: SetupData,
     shortcuts_channel_1: str,
 ) -> None:
     """Test shortcut creation and removal with sync."""
-    pixi_home = tmp_path / "pixi_home"
-    data_home = tmp_path / "data_home"
-    env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home), "HOME": str(data_home)}
 
     # Setup manifest with given shortcuts
-    manifests = pixi_home.joinpath("manifests")
+    manifests = setup_data.pixi_home.joinpath("manifests")
     manifests.mkdir(parents=True)
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -87,22 +105,22 @@ def test_sync_creation_and_removal(
     dependencies = {{ pixi-editor = "*" }}
     """
     # Verify no shortcuts exist after sync
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=False)
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
     parsed_toml = tomllib.loads(toml)
     parsed_toml["envs"]["test"]["shortcuts"] = ["pixi-editor"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
 
     # # Run sync and verify
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=True)
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # test removal of shortcuts
     del parsed_toml["envs"]["test"]["shortcuts"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=False)
+    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
 
 # TODO: test empty list of shortcuts
@@ -112,39 +130,33 @@ def test_sync_creation_and_removal(
 
 def test_install_simple(
     pixi: Path,
-    tmp_path: Path,
+    setup_data: SetupData,
     shortcuts_channel_1: str,
 ) -> None:
     """Test shortcut creation with install."""
-    pixi_home = tmp_path / "pixi_home"
-    data_home = tmp_path / "data_home"
-    env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home), "HOME": str(data_home)}
 
     # Verify no shortcuts exist after sync
     verify_cli_command(
         [pixi, "global", "install", "--channel", shortcuts_channel_1, "pixi-editor"],
         ExitCode.SUCCESS,
-        env=env,
+        env=setup_data.env,
     )
 
     # Verify manifest
-    manifest = pixi_home.joinpath("manifests", "pixi-global.toml")
+    manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
     parsed_toml = tomllib.loads(manifest.read_text())
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
-    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=True)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
 
 def test_install_no_shortcut(
     pixi: Path,
-    tmp_path: Path,
+    setup_data: SetupData,
     shortcuts_channel_1: str,
 ) -> None:
     """Test shortcut creation with install where `--no-shortcut` was passed."""
-    pixi_home = tmp_path / "pixi_home"
-    data_home = tmp_path / "data_home"
-    env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home), "HOME": str(data_home)}
 
     # Verify no shortcuts exist after sync
     verify_cli_command(
@@ -158,13 +170,13 @@ def test_install_no_shortcut(
             "pixi-editor",
         ],
         ExitCode.SUCCESS,
-        env=env,
+        env=setup_data.env,
     )
 
     # Verify manifest
-    manifest = pixi_home.joinpath("manifests", "pixi-global.toml")
+    manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
     parsed_toml = tomllib.loads(manifest.read_text())
     assert "shortcuts" not in parsed_toml["envs"]["pixi-editor"]
 
     # Verify shortcut does not exist
-    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=False)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
