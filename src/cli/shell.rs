@@ -127,6 +127,7 @@ fn start_cmdexe(
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())
 }
+use crate::prefix::Prefix;
 
 /// Starts a UNIX shell.
 /// # Arguments
@@ -139,6 +140,8 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
     args: Vec<&str>,
     env: &HashMap<String, String>,
     prompt: String,
+    prefix: &Prefix,
+    source_shell_completions: bool,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -153,6 +156,13 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
 
+    if source_shell_completions {
+        if let Some(completions_dir) = shell.completion_script_location() {
+            shell_script
+                .source_completions(&prefix.root().join(completions_dir))
+                .into_diagnostic()?;
+        }
+    }
     const DONE_STR: &str = "=== DONE ===";
     shell_script.echo(DONE_STR).into_diagnostic()?;
 
@@ -254,7 +264,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
-    let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
+    let (lock_file_data, prefix) = get_update_lock_file_and_prefix(
         &environment,
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
@@ -308,14 +318,55 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
+    let source_shell_completions = workspace.config().shell.source_completion_scripts();
     #[cfg(target_family = "unix")]
     let res = match interactive_shell {
         ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
         ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
-        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], env, prompt_hook).await,
-        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], env, prompt_hook).await,
-        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], env, prompt_hook).await,
-        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], env, prompt_hook).await,
+        ShellEnum::Bash(bash) => {
+            start_unix_shell(
+                bash,
+                vec!["-l", "-i"],
+                env,
+                prompt_hook,
+                &prefix,
+                source_shell_completions,
+            )
+            .await
+        }
+        ShellEnum::Zsh(zsh) => {
+            start_unix_shell(
+                zsh,
+                vec!["-l", "-i"],
+                env,
+                prompt_hook,
+                &prefix,
+                source_shell_completions,
+            )
+            .await
+        }
+        ShellEnum::Fish(fish) => {
+            start_unix_shell(
+                fish,
+                vec![],
+                env,
+                prompt_hook,
+                &prefix,
+                source_shell_completions,
+            )
+            .await
+        }
+        ShellEnum::Xonsh(xonsh) => {
+            start_unix_shell(
+                xonsh,
+                vec![],
+                env,
+                prompt_hook,
+                &prefix,
+                source_shell_completions,
+            )
+            .await
+        }
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell)
         }
