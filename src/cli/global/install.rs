@@ -1,3 +1,5 @@
+use std::ops::Not;
+
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -61,6 +63,10 @@ pub struct Args {
     /// Specifies that the packages should be reinstalled even if they are already installed.
     #[arg(action, long)]
     force_reinstall: bool,
+
+    /// Specifies that no shortcuts should be created for the installed packages.
+    #[arg(action, long)]
+    no_shortcut: bool,
 }
 
 impl HasSpecs for Args {
@@ -202,26 +208,8 @@ async fn setup_environment(
     // Installing the environment to be able to find the bin paths later
     let _ = project.install_environment(env_name).await?;
 
-    let with_package_names = args
-        .with
-        .iter()
-        .map(|spec| {
-            spec.name
-                .clone()
-                .ok_or_else(|| miette::miette!("could not find package name in MatchSpec {}", spec))
-        })
-        .collect::<miette::Result<Vec<_>>>()?;
-
-    // Sync exposed binaries
-    let expose_type = if !args.expose.is_empty() {
-        ExposedType::Mappings(args.expose.clone())
-    } else if with_package_names.is_empty() {
-        ExposedType::All
-    } else {
-        ExposedType::Ignore(with_package_names)
-    };
-
-    project.sync_exposed_names(env_name, expose_type).await?;
+    // Sync exposed name
+    sync_exposed_names(env_name, project, args).await?;
 
     // Figure out added packages and their corresponding versions
     state_changes |= project.added_packages(specs, env_name).await?;
@@ -233,4 +221,29 @@ async fn setup_environment(
 
     project.manifest.save().await?;
     Ok(state_changes)
+}
+
+async fn sync_exposed_names(
+    env_name: &EnvironmentName,
+    project: &mut Project,
+    args: &Args,
+) -> Result<(), miette::Error> {
+    let with_package_names = args
+        .with
+        .iter()
+        .map(|spec| {
+            spec.name
+                .clone()
+                .ok_or_else(|| miette::miette!("could not find package name in MatchSpec {}", spec))
+        })
+        .collect::<miette::Result<Vec<_>>>()?;
+    let expose_type = if args.expose.is_empty().not() {
+        ExposedType::Mappings(args.expose.clone())
+    } else if with_package_names.is_empty() {
+        ExposedType::All
+    } else {
+        ExposedType::Ignore(with_package_names)
+    };
+    project.sync_exposed_names(env_name, expose_type).await?;
+    Ok(())
 }
