@@ -62,9 +62,9 @@ def verify_shortcuts_exist(
     for name in shortcut_names:
         shortcut_path = config.shortcut_path(data_home, name)
         exists = config.shortcut_exists(shortcut_path)
-        assert (
-            exists == expected_exists
-        ), f"Shortcut '{name}' {'should' if expected_exists else 'should not'} exist on {system}"
+        assert exists == expected_exists, (
+            f"Shortcut '{name}' {'should' if expected_exists else 'should not'} exist on {system}"
+        )
 
 
 def test_sync_creation_and_removal(
