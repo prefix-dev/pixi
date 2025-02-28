@@ -1058,6 +1058,9 @@ impl Project {
             if !env_set.contains(&env_name) {
                 // Test if the environment directory is a conda environment
                 if let Ok(true) = env_path.join(consts::CONDA_META_DIR).try_exists() {
+                    // Remove all shortcuts, using the information still available in the environment
+                    state_changes |= self.remove_shortcuts(&env_name).await?;
+
                     // Remove the conda environment
                     tokio_fs::remove_dir_all(&env_path)
                         .await
