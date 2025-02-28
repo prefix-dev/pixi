@@ -13,7 +13,7 @@ class PlatformConfig(TypedDict):
 
 # Platform-specific configuration
 PLATFORM_CONFIG: Dict[str, PlatformConfig] = {
-    "Linux": {
+    "linux-64": {
         "shortcut_path": lambda data_home, name: data_home
         / "applications"
         / f"{name}_{name}.desktop",
@@ -27,7 +27,7 @@ PLATFORM_CONFIG: Dict[str, PlatformConfig] = {
         "shortcut_path": lambda data_home, name: data_home / "Applications" / f"{name}.app",
         "shortcut_exists": lambda path: path.is_dir(),
     },
-    "Windows": {
+    "win-64": {
         "shortcut_path": lambda data_home, name: data_home
         / "Microsoft"
         / "Windows"
