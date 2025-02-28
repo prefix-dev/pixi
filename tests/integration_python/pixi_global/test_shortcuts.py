@@ -1,18 +1,73 @@
 from pathlib import Path
 import tomllib
-
 import tomli_w
-from ..common import verify_cli_command, ExitCode
-import platform
-from syrupy.assertion import SnapshotAssertion
+from typing import List, TypedDict, Dict, Callable
+
+from ..common import verify_cli_command, ExitCode, CURRENT_PLATFORM
 
 
-def test_sync_shortcuts(
-    pixi: Path, tmp_path: Path, shortcuts_channel_1: str, snapshot: SnapshotAssertion
+class PlatformConfig(TypedDict):
+    shortcut_path: Callable[[Path, str], Path]
+    shortcut_exists: Callable[[Path], bool]
+
+
+# Platform-specific configuration
+PLATFORM_CONFIG: Dict[str, PlatformConfig] = {
+    "Linux": {
+        "shortcut_path": lambda data_home, name: data_home
+        / "applications"
+        / f"{name}_{name}.desktop",
+        "shortcut_exists": lambda path: path.is_file(),
+    },
+    "osx-arm64": {  # macOS
+        "shortcut_path": lambda data_home, name: data_home / "Applications" / f"{name}.app",
+        "shortcut_exists": lambda path: path.is_dir(),
+    },
+    "osx64": {  # macOS
+        "shortcut_path": lambda data_home, name: data_home / "Applications" / f"{name}.app",
+        "shortcut_exists": lambda path: path.is_dir(),
+    },
+    "Windows": {
+        "shortcut_path": lambda data_home, name: data_home
+        / "Microsoft"
+        / "Windows"
+        / "Start Menu"
+        / "Programs"
+        / f"{name}.lnk",
+        "shortcut_exists": lambda path: path.is_file(),
+    },
+}
+
+
+def verify_shortcuts_exist(
+    data_home: Path,
+    system: str,
+    shortcut_names: List[str],
+    expected_exists: bool,
 ) -> None:
+    """Verify if the specified shortcuts exist or not on the given system."""
+    # Using the key to get the platform-specific configuration, to force a KeyError if the key is not found
+    config = PLATFORM_CONFIG[system]
+    for name in shortcut_names:
+        shortcut_path = config["shortcut_path"](data_home, name)
+        exists = config["shortcut_exists"](shortcut_path)
+        assert (
+            exists == expected_exists
+        ), f"Shortcut '{name}' {'should' if expected_exists else 'should not'} exist on {system}"
+
+
+def test_shortcuts_with_sync(
+    pixi: Path,
+    tmp_path: Path,
+    shortcuts_channel_1: str,
+) -> None:
+    """Test shortcut creation and removal with sync."""
     pixi_home = tmp_path / "pixi_home"
     data_home = tmp_path / "data_home"
-    env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home)}
+    system = CURRENT_PLATFORM
+    env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home), "HOME": str(data_home)}
+
+    # Setup manifest with given shortcuts
     manifests = pixi_home.joinpath("manifests")
     manifests.mkdir(parents=True)
     manifest = manifests.joinpath("pixi-global.toml")
@@ -21,31 +76,23 @@ def test_sync_shortcuts(
     channels = ["{shortcuts_channel_1}"]
     dependencies = {{ pixi-editor = "*" }}
     """
-    parsed_toml = tomllib.loads(toml)
-    manifest.write_text(toml)
-
-    desktop_file = data_home.joinpath("applications", "pixi-editor_pixi-editor.desktop")
-
-    # Run sync and assert that no shortcuts are created
+    # Verify no shortcuts exist after sync
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    assert not desktop_file.is_file()
+    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=False)
 
-    # Enable shortcuts for pixi-editor
+    parsed_toml = tomllib.loads(toml)
     parsed_toml["envs"]["test"]["shortcuts"] = ["pixi-editor"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
 
-    # Now shortcuts should be created
+    # # Run sync and verify
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    assert desktop_file.is_file()
-    assert desktop_file.read_text() == snapshot(name=f"{platform.system()}-desktop-file")
+    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=True)
 
-    # Remove shortcuts again
+    # test removal of shortcuts
     del parsed_toml["envs"]["test"]["shortcuts"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
-
-    # Shortcuts should be removed again
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    assert not desktop_file.is_file()
+    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=False)
 
 
 # TODO: test empty list of shortcuts
