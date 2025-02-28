@@ -586,3 +586,32 @@ fn test_installed_git_the_same() {
         install_plan.reinstalls
     );
 }
+
+/// Test that when we refresh a specific package it should reinstall or rebuild
+#[test]
+fn test_uv_refresh() {
+    let site_packages = MockedSitePackages::new().add_registry(
+        "aiofiles",
+        "0.6.0",
+        InstalledDistOptions::default(),
+    );
+    // Requires following package
+    let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
+
+    let plan = harness::install_planner();
+    let plan = plan.with_uv_refresh(uv_cache::Refresh::from_args(
+        Some(true),
+        vec![uv_pep508::PackageName::new("aiofiles".to_string()).unwrap()],
+    ));
+    let install_plan = plan
+        .plan(&site_packages, AllCached, &required.to_borrowed())
+        .expect("should install");
+
+    // Should not install package
+    assert_matches!(
+        install_plan.reinstalls[0].1,
+        NeedReinstall::ReinstallationRequested
+    );
+    assert!(install_plan.local.is_empty());
+    assert_eq!(install_plan.remote.len(), 1);
+}

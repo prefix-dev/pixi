@@ -55,6 +55,15 @@ impl InstallPlanner {
         }
     }
 
+    #[cfg(test)]
+    /// Set the refresh policy for the UV cache
+    pub fn with_uv_refresh(self, refresh: uv_cache::Refresh) -> Self {
+        Self {
+            uv_cache: self.uv_cache.with_refresh(refresh),
+            lock_file_dir: self.lock_file_dir.clone(),
+        }
+    }
+
     /// Decide if we need to get the distribution from the local cache or the registry
     /// this method will add the distribution to the local or remote vector,
     /// depending on whether the version is stale, available locally or not
@@ -150,8 +159,16 @@ impl InstallPlanner {
                         // Check if we need to reinstall
                         match need_reinstall(dist, required_pkg, &self.lock_file_dir)? {
                             ValidateCurrentInstall::Keep => {
-                                // No need to reinstall
-                                continue;
+                                //
+                                if self.uv_cache.must_revalidate(dist.name()) {
+                                    reinstalls.push((
+                                        dist.clone(),
+                                        NeedReinstall::ReinstallationRequested,
+                                    ));
+                                } else {
+                                    // No need to reinstall
+                                    continue;
+                                }
                             }
                             ValidateCurrentInstall::Reinstall(reason) => {
                                 reinstalls.push((dist.clone(), reason));
