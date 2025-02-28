@@ -104,6 +104,8 @@ def test_sync_creation_and_removal(
     channels = ["{shortcuts_channel_1}"]
     dependencies = {{ pixi-editor = "*" }}
     """
+    manifest.write_text(toml)
+
     # Verify no shortcuts exist after sync
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
@@ -123,9 +125,37 @@ def test_sync_creation_and_removal(
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
 
-# TODO: test empty list of shortcuts
-# TODO: test requesting shortcuts that are not available
-# TODO: test that shortcuts are removed when environment is removed
+def test_sync_duplicate_shortcuts(
+    pixi: Path,
+    setup_data: SetupData,
+    shortcuts_channel_1: str,
+) -> None:
+    """Test shortcut creation and removal with sync."""
+
+    # Setup manifest with given shortcuts
+    manifests = setup_data.pixi_home.joinpath("manifests")
+    manifests.mkdir(parents=True)
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+    [envs.test1]
+    channels = ["{shortcuts_channel_1}"]
+    dependencies = {{ pixi-editor = "*" }}
+    shortcuts = ["pixi-editor"]
+
+    [envs.test2]
+    channels = ["{shortcuts_channel_1}"]
+    dependencies = {{ pixi-editor = "*" }}
+    shortcuts = ["pixi-editor"]
+    """
+    manifest.write_text(toml)
+
+    # Verify no shortcuts exist after sync
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=setup_data.env,
+        stderr_contains="Duplicated shortcut names found: pixi-editor",
+    )
 
 
 def test_install_simple(
@@ -180,3 +210,8 @@ def test_install_no_shortcut(
 
     # Verify shortcut does not exist
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
+
+
+# TODO: test empty list of shortcuts
+# TODO: test requesting shortcuts that are not available
+# TODO: test that shortcuts are removed when environment is removed

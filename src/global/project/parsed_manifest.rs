@@ -129,39 +129,78 @@ impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
             .map(TomlIndexMap::into_inner)
             .unwrap_or_default();
 
-        // Check for duplicate keys in the exposed fields
-        let mut exposed_names = IndexSet::new();
-        let mut duplicates = IndexMap::new();
-        for key in envs
-            .values()
-            .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
-        {
-            if !exposed_names.insert(key) {
-                duplicates.entry(key).or_insert_with(Vec::new).push(key);
-            }
-        }
-        if !duplicates.is_empty() {
-            return Err(DeserError::from(toml_span::Error {
-                kind: toml_span::ErrorKind::Custom(
-                    format!(
-                        "Duplicated exposed names found: {}",
-                        duplicates
-                            .keys()
-                            .sorted()
-                            .map(|exposed_name| exposed_name.fancy_display())
-                            .join(", ")
-                    )
-                    .into(),
-                ),
-                span: value.span,
-                line_info: None,
-            }));
-        }
+        ensure_unique_exposed_names(value, &envs)?;
+        ensure_unique_shortcut_names(value, &envs)?;
 
         th.finalize(None)?;
 
         Ok(Self { version, envs })
     }
+}
+
+fn ensure_unique_exposed_names(
+    value: &mut Value<'_>,
+    envs: &IndexMap<EnvironmentName, ParsedEnvironment>,
+) -> Result<(), DeserError> {
+    let mut exposed_names = IndexSet::new();
+    let mut duplicates = IndexMap::new();
+    for key in envs
+        .values()
+        .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
+    {
+        if !exposed_names.insert(key) {
+            duplicates.entry(key).or_insert_with(Vec::new).push(key);
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                format!(
+                    "Duplicated exposed names found: {}",
+                    duplicates
+                        .keys()
+                        .sorted()
+                        .map(|exposed_name| exposed_name.fancy_display())
+                        .join(", ")
+                )
+                .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        }));
+    }
+    Ok(())
+}
+
+fn ensure_unique_shortcut_names(
+    value: &mut Value<'_>,
+    envs: &IndexMap<EnvironmentName, ParsedEnvironment>,
+) -> Result<(), DeserError> {
+    let mut shortcut_names = IndexSet::new();
+    let mut duplicates = IndexMap::new();
+    for key in envs.values().flat_map(|env| env.shortcuts.iter().flatten()) {
+        if !shortcut_names.insert(key) {
+            duplicates.entry(key).or_insert_with(Vec::new).push(key);
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                format!(
+                    "Duplicated shortcut names found: {}",
+                    duplicates
+                        .keys()
+                        .sorted()
+                        .map(|shortcut_name| console::style(shortcut_name.as_normalized()).green())
+                        .join(", ")
+                )
+                .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        }));
+    }
+    Ok(())
 }
 
 impl ParsedManifest {
