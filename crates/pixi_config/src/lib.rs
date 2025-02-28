@@ -1703,6 +1703,9 @@ UNUSED = "unused"
                     RepodataChannelConfig::default(),
                 )]),
             },
+            // Deprecated keys
+            change_ps1: None,
+            force_activate: None,
         };
         let original_other = other.clone();
         config = config.merge_config(other);
