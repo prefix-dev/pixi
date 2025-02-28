@@ -433,7 +433,7 @@ impl Manifest {
             .envs
             .iter()
             .filter_map(|(name, env)| if name != env_name { Some(env) } else { None })
-            .flat_map(|env| env.shortcuts.iter())
+            .flat_map(|env| env.shortcuts.iter().flat_map(|s| s.iter()))
             .any(|s| s == shortcut)
     }
 
@@ -462,7 +462,9 @@ impl Manifest {
             .envs
             .get_mut(env_name)
             .ok_or_else(|| miette::miette!("This should be impossible"))?;
-        env.shortcuts.insert(shortcut.clone());
+        env.shortcuts
+            .get_or_insert_default()
+            .insert(shortcut.clone());
 
         // Update self.document
         let shortcuts_array = self

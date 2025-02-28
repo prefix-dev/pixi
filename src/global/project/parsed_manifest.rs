@@ -258,7 +258,7 @@ pub(crate) struct ParsedEnvironment {
     pub(crate) dependencies: UniquePackageMap,
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub(crate) exposed: IndexSet<Mapping>,
-    pub(crate) shortcuts: IndexSet<PackageName>,
+    pub(crate) shortcuts: Option<IndexSet<PackageName>>,
 }
 
 impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
@@ -277,8 +277,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             .unwrap_or_default();
         let shortcuts = th
             .optional_s::<TomlWith<_, TomlIndexSet<TomlFromStr<PackageName>>>>("shortcuts")
-            .map(|s| s.value.into_inner())
-            .unwrap_or_default();
+            .map(|s| s.value.into_inner());
 
         th.finalize(None)?;
 
@@ -321,9 +320,9 @@ impl ParsedEnvironment {
         &self.exposed
     }
 
-    /// Returns true if the menu items should be installed for this environment
-    pub(crate) fn shortcuts(&self) -> &IndexSet<PackageName> {
-        &self.shortcuts
+    /// Returns the shortcuts that should be installed for this environment
+    pub(crate) fn shortcuts(&self) -> IndexSet<PackageName> {
+        self.shortcuts.clone().unwrap_or_default()
     }
 }
 
