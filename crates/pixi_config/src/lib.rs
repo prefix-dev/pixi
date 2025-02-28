@@ -649,7 +649,6 @@ pub struct Config {
     //////////////////////
     // Deprecated fields //
     //////////////////////
-
     #[serde(default)]
     #[serde(alias = "change_ps1")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]

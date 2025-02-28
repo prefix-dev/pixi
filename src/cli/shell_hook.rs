@@ -6,7 +6,7 @@ use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
-    shell::ShellEnum,
+    shell::{Shell, ShellEnum},
 };
 use serde::Serialize;
 use serde_json;
@@ -79,13 +79,27 @@ async fn generate_activation_script(
     // If we are in a conda environment, we need to deactivate it before activating
     // the host / build prefix
     let conda_prefix = std::env::var("CONDA_PREFIX").ok().map(|p| p.into());
-    let result = activator
+    let mut result = activator
         .activation(ActivationVariables {
             conda_prefix,
             path,
             path_modification_behavior: PathModificationBehavior::default(),
         })
         .into_diagnostic()?;
+
+    if project
+        .config()
+        .shell
+        .source_completion_scripts
+        .unwrap_or(true)
+    {
+        if let Some(completions_dir) = shell.completion_script_location() {
+            result
+                .script
+                .source_completions(&environment.dir().join(completions_dir))
+                .into_diagnostic()?;
+        }
+    }
 
     let script = result.script.contents().into_diagnostic()?;
     let hook = prompt::shell_hook(&shell).unwrap_or_default().to_owned();
