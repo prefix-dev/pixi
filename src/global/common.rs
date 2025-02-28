@@ -773,16 +773,11 @@ pub(crate) fn shortcut_sync_status(
     let mut records_to_install = Vec::new();
     let mut records_to_uninstall = Vec::new();
 
-    let filtered_records = prefix_records.into_iter().filter(|record| {
-        record.files.iter().any(|file| {
-            file.extension().is_some_and(|ext| ext == "json")
-                && file
-                    .parent()
-                    .is_some_and(|parent| parent.file_name().is_some_and(|f| f == "Menu"))
-        })
-    });
+    let records_with_menuinst = prefix_records
+        .into_iter()
+        .filter(contains_menuinst_document);
 
-    for record in filtered_records {
+    for record in records_with_menuinst {
         let has_installed_system_menus = record.installed_system_menus.is_empty().not();
         if remaining_shortcuts
             .swap_take(&record.repodata_record.package_record.name)
@@ -808,6 +803,15 @@ pub(crate) fn shortcut_sync_status(
         );
     }
     Ok((records_to_install, records_to_uninstall))
+}
+
+pub(crate) fn contains_menuinst_document(prefix_record: &PrefixRecord) -> bool {
+    prefix_record.files.iter().any(|file| {
+        file.extension().is_some_and(|ext| ext == "json")
+            && file
+                .parent()
+                .is_some_and(|parent| parent.file_name().is_some_and(|f| f == "Menu"))
+    })
 }
 
 /// Figures out what the status is of the exposed binaries of the environment.
