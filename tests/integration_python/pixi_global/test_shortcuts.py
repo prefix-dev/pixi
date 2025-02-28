@@ -1,56 +1,67 @@
 from pathlib import Path
 import tomllib
 import tomli_w
-from typing import List, TypedDict, Dict, Callable
-
 from ..common import verify_cli_command, ExitCode, CURRENT_PLATFORM
+from abc import ABC, abstractmethod
 
 
-class PlatformConfig(TypedDict):
-    shortcut_path: Callable[[Path, str], Path]
-    shortcut_exists: Callable[[Path], bool]
+class PlatformConfig(ABC):
+    @abstractmethod
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        pass
+
+    @abstractmethod
+    def shortcut_exists(self, path: Path) -> bool:
+        pass
 
 
-# Platform-specific configuration
-PLATFORM_CONFIG: Dict[str, PlatformConfig] = {
-    "linux-64": {
-        "shortcut_path": lambda data_home, name: data_home
-        / "applications"
-        / f"{name}_{name}.desktop",
-        "shortcut_exists": lambda path: path.is_file(),
-    },
-    "osx-arm64": {  # macOS
-        "shortcut_path": lambda data_home, name: data_home / "Applications" / f"{name}.app",
-        "shortcut_exists": lambda path: path.is_dir(),
-    },
-    "osx64": {  # macOS
-        "shortcut_path": lambda data_home, name: data_home / "Applications" / f"{name}.app",
-        "shortcut_exists": lambda path: path.is_dir(),
-    },
-    "win-64": {
-        "shortcut_path": lambda data_home, name: data_home
-        / "Microsoft"
-        / "Windows"
-        / "Start Menu"
-        / "Programs"
-        / f"{name}.lnk",
-        "shortcut_exists": lambda path: path.is_file(),
-    },
-}
+class LinuxConfig(PlatformConfig):
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / "applications" / f"{name}_{name}.desktop"
+
+    def shortcut_exists(self, path: Path) -> bool:
+        return path.is_file()
+
+
+class MacOSConfig(PlatformConfig):
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / "Applications" / f"{name}.app"
+
+    def shortcut_exists(self, path: Path) -> bool:
+        return path.is_dir()
+
+
+class WindowsConfig(PlatformConfig):
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / "Microsoft" / "Windows" / "Start Menu" / "Programs" / f"{name}.lnk"
+
+    def shortcut_exists(self, path: Path) -> bool:
+        return path.is_file()
+
+
+def get_platform_config(platform: str) -> PlatformConfig:
+    if platform == "linux-64":
+        return LinuxConfig()
+    elif platform in {"osx-arm64", "osx64"}:
+        return MacOSConfig()
+    elif platform == "win-64":
+        return WindowsConfig()
+    else:
+        raise ValueError(f"Unsupported platform: {platform}")
 
 
 def verify_shortcuts_exist(
     data_home: Path,
-    shortcut_names: List[str],
+    shortcut_names: list[str],
     expected_exists: bool,
 ) -> None:
     """Verify if the specified shortcuts exist or not on the given system."""
     # Using the key to get the platform-specific configuration, to force a KeyError if the key is not found
     system = CURRENT_PLATFORM
-    config = PLATFORM_CONFIG[system]
+    config = get_platform_config(system)
     for name in shortcut_names:
-        shortcut_path = config["shortcut_path"](data_home, name)
-        exists = config["shortcut_exists"](shortcut_path)
+        shortcut_path = config.shortcut_path(data_home, name)
+        exists = config.shortcut_exists(shortcut_path)
         assert (
             exists == expected_exists
         ), f"Shortcut '{name}' {'should' if expected_exists else 'should not'} exist on {system}"
