@@ -65,9 +65,9 @@ def verify_cli_command(
     stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
     output = Output(command, stdout, stderr, returncode)
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
-    assert (
-        returncode == expected_exit_code
-    ), f"Return code was {returncode}, expected {expected_exit_code}, stderr: {stderr}"
+    assert returncode == expected_exit_code, (
+        f"Return code was {returncode}, expected {expected_exit_code}, stderr: {stderr}"
+    )
 
     if stdout_contains:
         if isinstance(stdout_contains, str):

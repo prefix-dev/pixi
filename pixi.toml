@@ -82,14 +82,14 @@ cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
 
 [feature.lint.dependencies]
-actionlint = ">=1.7.4,<2"
-pre-commit = ">=3.7.1,<4"
-pre-commit-hooks = ">=4.6.0,<5"
-prettier = ">=3.4.2,<4"
-ruff = ">=0.4.8,<0.5"
+actionlint = ">=1.7.7,<2"
+pre-commit = ">=4.1.0,<5"
+pre-commit-hooks = ">=5.0.0,<6"
+prettier = ">=3.5.2,<4"
+ruff = ">=0.9.7,<0.10"
 shellcheck = ">=0.10.0,<0.11"
-taplo = ">=0.9.1,<0.10"
-typos = ">=1.23.1,<2"
+taplo = ">=0.9.3,<0.10"
+typos = ">=1.29.10,<2"
 
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
