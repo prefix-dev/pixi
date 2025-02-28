@@ -318,8 +318,8 @@ impl Manifest {
     /// Checks if an exposed name already exists in other environments
     pub fn exposed_name_already_exists_in_other_envs(
         &self,
-        exposed_name: &ExposedName,
         env_name: &EnvironmentName,
+        exposed_name: &ExposedName,
     ) -> bool {
         self.parsed
             .envs
@@ -341,7 +341,7 @@ impl Manifest {
         }
 
         // Ensure exposed name is unique
-        if self.exposed_name_already_exists_in_other_envs(&mapping.exposed_name, env_name) {
+        if self.exposed_name_already_exists_in_other_envs(env_name, &mapping.exposed_name) {
             miette::bail!(
                 "Exposed name {} already exists",
                 mapping.exposed_name.fancy_display()
@@ -419,6 +419,75 @@ impl Manifest {
         tracing::debug!(
             "Removed all exposed mappings for environment {} in toml document",
             env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Checks if an exposed name already exists in other environments
+    pub fn shortcut_already_exists_in_other_envs(
+        &self,
+        env_name: &EnvironmentName,
+        shortcut: &PackageName,
+    ) -> bool {
+        self.parsed
+            .envs
+            .iter()
+            .filter_map(|(name, env)| if name != env_name { Some(env) } else { None })
+            .flat_map(|env| env.shortcuts.iter())
+            .any(|s| s == shortcut)
+    }
+
+    /// Adds shortcut to the manifest
+    pub fn add_shortcut(
+        &mut self,
+        env_name: &EnvironmentName,
+        shortcut: &PackageName,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+        }
+
+        // Ensure shortcut is unique
+        if self.shortcut_already_exists_in_other_envs(env_name, shortcut) {
+            miette::bail!(
+                "Shortcut {} already exists",
+                console::style(shortcut.as_normalized()).green()
+            );
+        }
+
+        // Update self.parsed
+        let env = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("This should be impossible"))?;
+        env.shortcuts.insert(shortcut.clone());
+
+        // Update self.document
+        let shortcuts_array = self
+            .document
+            .get_or_insert_nested_table(&format!("envs.{env_name}"))?
+            .entry("shortcuts")
+            .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
+            .as_array_mut()
+            .ok_or_else(|| miette::miette!("Expected an array for shortcuts"))?;
+
+        // Convert existing TOML array to a IndexSet to ensure uniqueness
+        let mut existing_shortcuts: IndexSet<String> = shortcuts_array
+            .iter()
+            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+            .collect();
+
+        // Add the new shortcut to the HashSet
+        existing_shortcuts.insert(shortcut.as_normalized().to_string());
+
+        // Reinsert unique shortcuts
+        *shortcuts_array = existing_shortcuts.iter().collect();
+
+        tracing::debug!(
+            "Added channel {} for environment {env_name} in toml document",
+            console::style(shortcut.as_normalized()).green()
         );
         Ok(())
     }

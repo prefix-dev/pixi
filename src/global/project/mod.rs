@@ -1083,7 +1083,7 @@ impl Project {
     // Figure which packages have been added
     pub async fn added_packages(
         &self,
-        specs: &[MatchSpec],
+        specs: Vec<MatchSpec>,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
