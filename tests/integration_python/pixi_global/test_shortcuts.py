@@ -100,7 +100,7 @@ def test_shortcuts_with_sync(
 # TODO: test that shortcuts are removed when environment is removed
 
 
-def test_install(
+def test_install_simple(
     pixi: Path,
     tmp_path: Path,
     shortcuts_channel_1: str,
@@ -125,3 +125,38 @@ def test_install(
 
     # Verify shortcut exists
     verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=True)
+
+
+def test_install_no_shortcut(
+    pixi: Path,
+    tmp_path: Path,
+    shortcuts_channel_1: str,
+) -> None:
+    """Test shortcut creation with install where `--no-shortcut` was passed."""
+    pixi_home = tmp_path / "pixi_home"
+    data_home = tmp_path / "data_home"
+    system = CURRENT_PLATFORM
+    env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home), "HOME": str(data_home)}
+
+    # Verify no shortcuts exist after sync
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            shortcuts_channel_1,
+            "--no-shortcut",
+            "pixi-editor",
+        ],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    # Verify manifest
+    manifest = pixi_home.joinpath("manifests", "pixi-global.toml")
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert "shortcuts" not in parsed_toml["envs"]["pixi-editor"]
+
+    # Verify shortcut does not exist
+    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=False)
