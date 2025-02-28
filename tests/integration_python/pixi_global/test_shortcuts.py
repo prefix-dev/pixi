@@ -50,3 +50,4 @@ def test_sync_shortcuts(
 
 # TODO: test empty list of shortcuts
 # TODO: test requesting shortcuts that are not available
+# TODO: test that shortcuts are removed when environment is removed

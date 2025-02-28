@@ -1138,6 +1138,18 @@ impl Project {
         for record in records_to_uninstall {
             rattler_menuinst::remove_menu_items(&record.installed_system_menus)
                 .into_diagnostic()?;
+
+            state_changes.insert_change(
+                env_name,
+                StateChange::UninstalledShortcut(
+                    record
+                        .repodata_record
+                        .package_record
+                        .name
+                        .as_normalized()
+                        .to_owned(),
+                ),
+            );
         }
 
         Ok(state_changes)
@@ -1156,21 +1168,13 @@ impl Project {
 
         // Remove menu items
         for record in prefix_records {
-            match rattler_menuinst::remove_menu_items(&record.installed_system_menus) {
-                Ok(_) => {
-                    tracing::info!("Uninstalled menu items for: '{}'", record.file_name());
-                    state_changes.insert_change(
-                        env_name,
-                        StateChange::UninstalledShortcut(record.file_name().to_string()),
-                    );
-                }
-                // Don't fail on menu install errors, menuinst is too unstable to break the whole process because of issue with it.
-                Err(e) => {
-                    tracing::warn!("Couldn't uninstall menu item for: {}", record.file_name());
-                    tracing::warn!("{:?}", e);
-                    tracing::warn!("Please report this issue to the pixi developers.");
-                }
-            }
+            rattler_menuinst::remove_menu_items(&record.installed_system_menus)
+                .into_diagnostic()?;
+            tracing::info!("Uninstalled menu items for: '{}'", record.file_name());
+            state_changes.insert_change(
+                env_name,
+                StateChange::UninstalledShortcut(record.file_name().to_string()),
+            );
         }
         Ok(state_changes)
     }
