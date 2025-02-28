@@ -142,7 +142,7 @@ The following example will install both the `py311` and the `py312` environment 
 
 ### Authentication
 
-There are currently three ways to authenticate with pixi:
+There are currently four ways to authenticate with pixi:
 
 - using a token
 - using a username and password
