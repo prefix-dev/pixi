@@ -39,8 +39,8 @@ pub struct Args {
     pub output_dir: PathBuf,
 
     /// Whether to build incrementally if possible
-    #[clap(long, short, default_value_t = true)]
-    pub incremental: bool,
+    #[clap(long, short)]
+    pub no_incremental: bool,
 }
 
 struct ProgressReporter {
@@ -130,8 +130,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
+    let incremental = !args.no_incremental;
     // Determine if we want to re-use existing build data
-    let (_tmp, work_dir) = if args.incremental {
+    let (_tmp, work_dir) = if incremental {
+        // Specify the cache directory
         let key = WorkDirKey::new(
             SourceCheckout::new(
                 workspace.root().to_path_buf(),
