@@ -747,7 +747,7 @@ pub struct ShellConfig {
     /// Whether to source completion scripts from the environment or not.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_completion_scripts: Option<bool>,
+    source_completion_scripts: Option<bool>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom
     /// value.
@@ -771,6 +771,10 @@ impl ShellConfig {
         self.force_activate.is_none()
             && self.source_completion_scripts.is_none()
             && self.change_ps1.is_none()
+    }
+
+    pub fn source_completion_scripts(&self) -> bool {
+        self.source_completion_scripts.unwrap_or(true)
     }
 }
 
