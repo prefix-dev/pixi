@@ -77,7 +77,7 @@ def run_test_in_subfolders(
             print(f"\033[92m ✅ {folder}\033[0m")
             results.succeeded.append(str(folder))
 
-        print(f"Done: {i+1}/{tests}")
+        print(f"Done: {i + 1}/{tests}")
         print("")
     return results
 
