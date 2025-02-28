@@ -694,7 +694,7 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        let package_names: Vec<_> = parsed_env.dependencies().keys().cloned().collect();
+        let package_names: Vec<_> = parsed_env.dependencies.specs.keys().cloned().collect();
 
         let mut executables_for_package = IndexMap::new();
 
@@ -868,8 +868,9 @@ impl Project {
         }
 
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
+        let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (shortcuts_to_remove, shortcuts_to_add) =
-            shortcut_sync_status(environment.shortcuts().clone(), prefix_records)?;
+            shortcut_sync_status(shortcuts, prefix_records)?;
         if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
             tracing::debug!(
                 "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
@@ -1110,14 +1111,15 @@ impl Project {
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
 
+        let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (records_to_install, records_to_uninstall) =
-            shortcut_sync_status(environment.shortcuts().clone(), prefix_records)?;
+            shortcut_sync_status(shortcuts, prefix_records)?;
 
         for record in records_to_install {
             rattler_menuinst::install_menuitems_for_record(
                 prefix.root(),
                 &record,
-                environment.platform().unwrap_or(Platform::current()),
+                environment.platform.unwrap_or(Platform::current()),
                 MenuMode::User,
             )
             .into_diagnostic()?;

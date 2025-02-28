@@ -299,30 +299,10 @@ impl ParsedEnvironment {
             ..Default::default()
         }
     }
-    /// Returns the platform associated with this platform, `None` means current
-    /// platform
-    pub(crate) fn platform(&self) -> Option<Platform> {
-        self.platform
-    }
 
     /// Returns the channels associated with this environment.
     pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
-    }
-
-    /// Returns the dependencies associated with this environment.
-    pub(crate) fn dependencies(&self) -> &IndexMap<PackageName, PixiSpec> {
-        &self.dependencies.specs
-    }
-
-    /// Returns the exposed name mappings associated with this environment.
-    pub(crate) fn exposed(&self) -> &IndexSet<Mapping> {
-        &self.exposed
-    }
-
-    /// Returns the shortcuts that should be installed for this environment
-    pub(crate) fn shortcuts(&self) -> IndexSet<PackageName> {
-        self.shortcuts.clone().unwrap_or_default()
     }
 }
 
