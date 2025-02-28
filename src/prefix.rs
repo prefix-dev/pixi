@@ -71,6 +71,8 @@ impl Prefix {
             .map_err(|err| PrefixError::PrefixRecordCollectionError(err, self.root.clone()))
     }
 
+    /// Processes prefix records (that you can get by using `find_installed_packages`)
+    /// to filter and collect executable files.
     /// Processes prefix records (that you can get by using
     /// `find_installed_packages`) to filter and collect executable files.
     pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {

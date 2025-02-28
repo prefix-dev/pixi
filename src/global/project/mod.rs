@@ -1,6 +1,6 @@
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
-    common::{get_install_changes, EnvironmentUpdate},
+    common::{get_install_changes, shortcut_sync_status, EnvironmentUpdate},
     install::find_binary_by_name,
     trampoline::{self, GlobalExecutable},
     BinDir, EnvRoot, StateChange, StateChanges,
@@ -8,8 +8,7 @@ use super::{
 use crate::{
     global::{
         common::{
-            channel_url_to_prioritized_channel, find_package_records,
-            get_expose_scripts_sync_status,
+            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
         },
         find_executables, find_executables_for_many_records,
         install::{create_executable_trampolines, script_exec_mapping},
@@ -44,7 +43,8 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
+    menuinst::MenuMode, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform,
+    PrefixRecord,
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
@@ -615,6 +615,9 @@ impl Project {
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
+        // Remove all shortcuts, using the information still available in the environment
+        state_changes |= self.remove_shortcuts(env_name).await?;
+
         // Remove the environment from the manifest, if it exists, otherwise ignore
         // error.
         self.manifest.remove_environment(env_name)?;
@@ -626,7 +629,7 @@ impl Project {
 
         // Get all removable binaries related to the environment
         let (to_remove, _to_add) =
-            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &IndexSet::new()).await?;
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &IndexSet::new()).await?;
 
         // Remove all removable binaries
         for binary_path in to_remove {
@@ -653,7 +656,7 @@ impl Project {
 
         // Get all removable binaries related to the environment
         let (to_remove, _to_add) =
-            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
 
         // Remove all removable binaries
         for exposed_path in to_remove {
@@ -691,7 +694,7 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        let package_names: Vec<_> = parsed_env.dependencies().keys().cloned().collect();
+        let package_names: Vec<_> = parsed_env.dependencies.specs.keys().cloned().collect();
 
         let mut executables_for_package = IndexMap::new();
 
@@ -841,21 +844,45 @@ impl Project {
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
+        let prefix_records = self
+            .environment_prefix(env_name)
+            .await?
+            .find_installed_packages()?;
         let specs_in_sync =
-            environment_specs_in_sync(&env_dir, &specs, environment.platform).await?;
+            environment_specs_in_sync(&prefix_records, &specs, environment.platform).await?;
         if !specs_in_sync {
             return Ok(false);
         }
 
         tracing::debug!("Verify that the binaries are in sync with the environment");
-        let (to_remove, to_add) =
-            get_expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
-        if !to_remove.is_empty() || !to_add.is_empty() {
+        let (exec_to_remove, exec_to_add) =
+            expose_scripts_sync_status(&self.bin_dir, &env_dir, &environment.exposed).await?;
+        if !exec_to_remove.is_empty() || !exec_to_add.is_empty() {
             tracing::debug!(
-                "Environment {} binaries not in sync: to_remove: {:?}, to_add: {:?}",
+                "Environment {} binaries are not in sync: to_remove: {:?}, to_add: {:?}",
                 env_name.fancy_display(),
-                to_remove,
-                to_add
+                exec_to_remove,
+                exec_to_add
+            );
+            return Ok(false);
+        }
+
+        tracing::debug!("Verify that the shortcuts are in sync with the environment");
+        let shortcuts = environment.shortcuts.clone().unwrap_or_default();
+        let (shortcuts_to_remove, shortcuts_to_add) =
+            shortcut_sync_status(shortcuts, prefix_records)?;
+        if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
+            tracing::debug!(
+                "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
+                env_name.fancy_display(),
+                shortcuts_to_remove
+                    .iter()
+                    .map(|s| s.repodata_record.package_record.name.as_normalized())
+                    .join(", "),
+                shortcuts_to_add
+                    .iter()
+                    .map(|s| s.repodata_record.package_record.name.as_normalized())
+                    .join(", ")
             );
             return Ok(false);
         }
@@ -974,6 +1001,9 @@ impl Project {
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
+        // Install shortcuts
+        state_changes |= self.sync_shortcuts(env_name).await?;
+
         Ok(state_changes)
     }
 
@@ -1028,12 +1058,15 @@ impl Project {
             if !env_set.contains(&env_name) {
                 // Test if the environment directory is a conda environment
                 if let Ok(true) = env_path.join(consts::CONDA_META_DIR).try_exists() {
+                    // Remove all shortcuts, using the information still available in the environment
+                    state_changes |= self.remove_shortcuts(&env_name).await?;
+
                     // Remove the conda environment
                     tokio_fs::remove_dir_all(&env_path)
                         .await
                         .into_diagnostic()?;
                     // Get all removable binaries related to the environment
-                    let (to_remove, _to_add) = get_expose_scripts_sync_status(
+                    let (to_remove, _to_add) = expose_scripts_sync_status(
                         &self.bin_dir,
                         &EnvDir::from_path(env_path.clone()),
                         &IndexSet::new(),
@@ -1054,7 +1087,7 @@ impl Project {
     // Figure which packages have been added
     pub async fn added_packages(
         &self,
-        specs: &[MatchSpec],
+        specs: Vec<MatchSpec>,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
@@ -1068,6 +1101,86 @@ impl Project {
                 .map(|r| r.repodata_record.package_record)
                 .map(StateChange::AddedPackage),
         );
+        Ok(state_changes)
+    }
+
+    /// Install shortcuts of a specific environment
+    pub async fn sync_shortcuts(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+
+        let shortcuts = environment.shortcuts.clone().unwrap_or_default();
+        let (records_to_install, records_to_uninstall) =
+            shortcut_sync_status(shortcuts, prefix_records)?;
+
+        for record in records_to_install {
+            rattler_menuinst::install_menuitems_for_record(
+                prefix.root(),
+                &record,
+                environment.platform.unwrap_or(Platform::current()),
+                MenuMode::User,
+            )
+            .into_diagnostic()?;
+
+            state_changes.insert_change(
+                env_name,
+                StateChange::InstalledShortcut(
+                    record
+                        .repodata_record
+                        .package_record
+                        .name
+                        .as_normalized()
+                        .to_owned(),
+                ),
+            );
+        }
+
+        for record in records_to_uninstall {
+            rattler_menuinst::remove_menu_items(&record.installed_system_menus)
+                .into_diagnostic()?;
+
+            state_changes.insert_change(
+                env_name,
+                StateChange::UninstalledShortcut(
+                    record
+                        .repodata_record
+                        .package_record
+                        .name
+                        .as_normalized()
+                        .to_owned(),
+                ),
+            );
+        }
+
+        Ok(state_changes)
+    }
+
+    /// Remove the shortcuts from the system coming from a specific environment
+    pub async fn remove_shortcuts(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
+        // Find menu items in the prefix
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+
+        // Remove menu items
+        for record in prefix_records {
+            rattler_menuinst::remove_menu_items(&record.installed_system_menus)
+                .into_diagnostic()?;
+            tracing::info!("Uninstalled menu items for: '{}'", record.file_name());
+            state_changes.insert_change(
+                env_name,
+                StateChange::UninstalledShortcut(record.file_name().to_string()),
+            );
+        }
         Ok(state_changes)
     }
 }

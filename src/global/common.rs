@@ -352,6 +352,8 @@ pub(crate) enum StateChange {
     AddedEnvironment,
     RemovedEnvironment,
     UpdatedEnvironment(EnvironmentUpdate),
+    InstalledShortcut(String),
+    UninstalledShortcut(String),
 }
 
 #[must_use]
@@ -587,6 +589,66 @@ impl StateChanges {
                     StateChange::UpdatedEnvironment(update_change) => {
                         StateChanges::report_update_changes(&env_name, update_change);
                     }
+                    StateChange::InstalledShortcut(name) => {
+                        let mut installed_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::InstalledShortcut(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        installed_items.sort();
+
+                        if installed_items.len() == 1 {
+                            eprintln!(
+                                "{}Installed shortcut {} in environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                installed_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Installed shortcuts in environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for installed_item in installed_items {
+                                eprintln!("   - {}", installed_item);
+                            }
+                        }
+                    }
+                    StateChange::UninstalledShortcut(name) => {
+                        let mut uninstalled_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::UninstalledShortcut(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        uninstalled_items.sort();
+
+                        if uninstalled_items.len() == 1 {
+                            eprintln!(
+                                "{}Uninstalled shortcut {} in environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                uninstalled_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Uninstalled shortcuts in environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for uninstalled_item in uninstalled_items {
+                                eprintln!("   - {}", uninstalled_item);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -697,10 +759,65 @@ pub(crate) fn channel_url_to_prioritized_channel(
         .into())
 }
 
+/// Determines which shortcuts need to be installed or removed by comparing the requested shortcuts
+/// with the installed package records.
+///
+/// This function filters the provided `prefix_records` to find those that contain menuinst JSON files.
+/// It then compares these records with the requested `shortcuts` to
+/// determine which records need to be installed and which need to be uninstalled.
+pub(crate) fn shortcut_sync_status(
+    shortcuts: IndexSet<PackageName>,
+    prefix_records: Vec<PrefixRecord>,
+) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
+    let mut remaining_shortcuts = shortcuts;
+    let mut records_to_install = Vec::new();
+    let mut records_to_uninstall = Vec::new();
+
+    let records_with_menuinst = prefix_records
+        .into_iter()
+        .filter(contains_menuinst_document);
+
+    for record in records_with_menuinst {
+        let has_installed_system_menus = record.installed_system_menus.is_empty().not();
+        if remaining_shortcuts
+            .swap_take(&record.repodata_record.package_record.name)
+            .is_some()
+        {
+            if !has_installed_system_menus {
+                // The package record isn't installed, but it is requested
+                records_to_install.push(record);
+            }
+        } else if has_installed_system_menus {
+            // The package record is installed, but not requested
+            records_to_uninstall.push(record);
+        }
+    }
+
+    if remaining_shortcuts.is_empty().not() {
+        miette::bail!(
+            "the following shortcuts are requested but not available: {}",
+            remaining_shortcuts
+                .iter()
+                .map(|n| n.as_normalized())
+                .join(", ")
+        );
+    }
+    Ok((records_to_install, records_to_uninstall))
+}
+
+pub(crate) fn contains_menuinst_document(prefix_record: &PrefixRecord) -> bool {
+    prefix_record.files.iter().any(|file| {
+        file.extension().is_some_and(|ext| ext == "json")
+            && file
+                .parent()
+                .is_some_and(|parent| parent.file_name().is_some_and(|f| f == "Menu"))
+    })
+}
+
 /// Figures out what the status is of the exposed binaries of the environment.
 ///
 /// Returns a tuple of the exposed binaries to remove and the exposed binaries to add.
-pub(crate) async fn get_expose_scripts_sync_status(
+pub(crate) async fn expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
@@ -959,7 +1076,7 @@ mod tests {
 
         // Test empty
         let exposed = IndexSet::new();
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -979,7 +1096,7 @@ mod tests {
                 .unwrap()
                 .to_string(),
         ));
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1036,7 +1153,7 @@ mod tests {
         };
 
         // Test to_remove and to_add to see if the legacy scripts are removed and trampolines are added
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
@@ -1045,10 +1162,9 @@ mod tests {
 
         // Test to_remove when nothing should be exposed
         // it should remove all the legacy scripts and add nothing
-        let (to_remove, to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
-                .await
-                .unwrap();
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+            .await
+            .unwrap();
 
         assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
         assert_eq!(to_remove.len(), 2);
@@ -1066,7 +1182,7 @@ mod tests {
 
         // Test empty
         let exposed = IndexSet::new();
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1079,7 +1195,7 @@ mod tests {
             "test".to_string(),
         ));
 
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1101,7 +1217,7 @@ mod tests {
 
         trampoline.save().await.unwrap();
 
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
 
@@ -1110,7 +1226,7 @@ mod tests {
 
         // Test to_remove when nothing should be exposed
         let (mut to_remove, to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+            expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
         assert_eq!(to_remove.len(), 1);

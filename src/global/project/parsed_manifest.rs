@@ -8,7 +8,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Repo
 use pixi_consts::consts;
 use pixi_manifest::{toml::TomlPlatform, utils::package_map::UniquePackageMap, PrioritizedChannel};
 use pixi_spec::PixiSpec;
-use pixi_toml::{TomlIndexMap, TomlIndexSet};
+use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{ser::SerializeMap, Serialize, Serializer};
 use serde_with::serde_derive::Deserialize;
@@ -129,39 +129,78 @@ impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
             .map(TomlIndexMap::into_inner)
             .unwrap_or_default();
 
-        // Check for duplicate keys in the exposed fields
-        let mut exposed_names = IndexSet::new();
-        let mut duplicates = IndexMap::new();
-        for key in envs
-            .values()
-            .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
-        {
-            if !exposed_names.insert(key) {
-                duplicates.entry(key).or_insert_with(Vec::new).push(key);
-            }
-        }
-        if !duplicates.is_empty() {
-            return Err(DeserError::from(toml_span::Error {
-                kind: toml_span::ErrorKind::Custom(
-                    format!(
-                        "Duplicated exposed names found: {}",
-                        duplicates
-                            .keys()
-                            .sorted()
-                            .map(|exposed_name| exposed_name.fancy_display())
-                            .join(", ")
-                    )
-                    .into(),
-                ),
-                span: value.span,
-                line_info: None,
-            }));
-        }
+        ensure_unique_exposed_names(value, &envs)?;
+        ensure_unique_shortcut_names(value, &envs)?;
 
         th.finalize(None)?;
 
         Ok(Self { version, envs })
     }
+}
+
+fn ensure_unique_exposed_names(
+    value: &mut Value<'_>,
+    envs: &IndexMap<EnvironmentName, ParsedEnvironment>,
+) -> Result<(), DeserError> {
+    let mut exposed_names = IndexSet::new();
+    let mut duplicates = IndexMap::new();
+    for key in envs
+        .values()
+        .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
+    {
+        if !exposed_names.insert(key) {
+            duplicates.entry(key).or_insert_with(Vec::new).push(key);
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                format!(
+                    "Duplicated exposed names found: {}",
+                    duplicates
+                        .keys()
+                        .sorted()
+                        .map(|exposed_name| exposed_name.fancy_display())
+                        .join(", ")
+                )
+                .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        }));
+    }
+    Ok(())
+}
+
+fn ensure_unique_shortcut_names(
+    value: &mut Value<'_>,
+    envs: &IndexMap<EnvironmentName, ParsedEnvironment>,
+) -> Result<(), DeserError> {
+    let mut shortcut_names = IndexSet::new();
+    let mut duplicates = IndexMap::new();
+    for key in envs.values().flat_map(|env| env.shortcuts.iter().flatten()) {
+        if !shortcut_names.insert(key) {
+            duplicates.entry(key).or_insert_with(Vec::new).push(key);
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                format!(
+                    "Duplicated shortcut names found: {}",
+                    duplicates
+                        .keys()
+                        .sorted()
+                        .map(|shortcut_name| console::style(shortcut_name.as_normalized()).green())
+                        .join(", ")
+                )
+                .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        }));
+    }
+    Ok(())
 }
 
 impl ParsedManifest {
@@ -252,12 +291,13 @@ where
 #[derive(Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
-    pub channels: IndexSet<PrioritizedChannel>,
+    pub(crate) channels: IndexSet<PrioritizedChannel>,
     /// Platform used by the environment.
-    pub platform: Option<Platform>,
+    pub(crate) platform: Option<Platform>,
     pub(crate) dependencies: UniquePackageMap,
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub(crate) exposed: IndexSet<Mapping>,
+    pub(crate) shortcuts: Option<IndexSet<PackageName>>,
 }
 
 impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
@@ -274,6 +314,9 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             .optional::<TomlMapping>("exposed")
             .map(TomlMapping::into_inner)
             .unwrap_or_default();
+        let shortcuts = th
+            .optional_s::<TomlWith<_, TomlIndexSet<TomlFromStr<PackageName>>>>("shortcuts")
+            .map(|s| s.value.into_inner());
 
         th.finalize(None)?;
 
@@ -282,6 +325,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             platform,
             dependencies,
             exposed,
+            shortcuts,
         })
     }
 }
@@ -294,25 +338,10 @@ impl ParsedEnvironment {
             ..Default::default()
         }
     }
-    /// Returns the platform associated with this platform, `None` means current
-    /// platform
-    pub(crate) fn platform(&self) -> Option<Platform> {
-        self.platform
-    }
 
     /// Returns the channels associated with this environment.
     pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
-    }
-
-    /// Returns the dependencies associated with this environment.
-    pub(crate) fn dependencies(&self) -> &IndexMap<PackageName, PixiSpec> {
-        &self.dependencies.specs
-    }
-
-    /// Returns the exposed name mappings associated with this environment.
-    pub(crate) fn exposed(&self) -> &IndexSet<Mapping> {
-        &self.exposed
     }
 }
 

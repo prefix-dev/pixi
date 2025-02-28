@@ -1008,21 +1008,20 @@ dependencies = [
 
 [[package]]
 name = "bzip2"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75b89e7c29231c673a61a46e722602bcd138298f6b9e81e71119693534585f5c"
+checksum = "49ecfb22d906f800d4fe833b6282cf4dc1c298f5057ca0b5445e5c209735ca47"
 dependencies = [
  "bzip2-sys",
 ]
 
 [[package]]
 name = "bzip2-sys"
-version = "0.1.12+1.0.8"
+version = "0.1.13+1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72ebc2f1a417f01e1da30ef264ee86ae31d2dcd2d603ea283d3c244a883ca2a9"
+checksum = "225bff33b2141874fe80d71e07d6eec4f85c5c216453dd96388240f96e1acc14"
 dependencies = [
  "cc",
- "libc",
  "pkg-config",
 ]
 
@@ -4373,6 +4372,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
+ "rattler_menuinst 0.1.0",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
@@ -5214,7 +5214,7 @@ dependencies = [
  "rattler_cache",
  "rattler_conda_types",
  "rattler_digest",
- "rattler_menuinst",
+ "rattler_menuinst 0.2.1",
  "rattler_networking",
  "rattler_package_streaming",
  "rattler_shell",
@@ -5355,6 +5355,36 @@ checksum = "382cfcb2acfcdd5a0d7efdbb86705e03435c76c784f404d78b517649b522d244"
 dependencies = [
  "quote",
  "syn",
+]
+
+[[package]]
+name = "rattler_menuinst"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "807039404031e0ae99038e91f4c5f5c744b44d5f4587cc0f991c12f578778607"
+dependencies = [
+ "chrono",
+ "configparser",
+ "dirs 6.0.0",
+ "fs-err",
+ "known-folders",
+ "once_cell",
+ "plist",
+ "quick-xml 0.37.2",
+ "rattler_conda_types",
+ "rattler_shell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shlex",
+ "tempfile",
+ "thiserror 2.0.11",
+ "tracing",
+ "unicode-normalization",
+ "which",
+ "windows 0.60.0",
+ "windows-registry 0.5.0",
 ]
 
 [[package]]

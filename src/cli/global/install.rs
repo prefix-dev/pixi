@@ -1,13 +1,19 @@
+use std::ops::Not;
+
 use clap::Parser;
 use fancy_display::FancyDisplay;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{
-        self, common::NotChangedReason, list::list_global_environments, project::ExposedType,
+        self,
+        common::{contains_menuinst_document, NotChangedReason},
+        list::list_global_environments,
+        project::ExposedType,
         EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
 };
@@ -61,6 +67,10 @@ pub struct Args {
     /// Specifies that the packages should be reinstalled even if they are already installed.
     #[arg(action, long)]
     force_reinstall: bool,
+
+    /// Specifies that no shortcuts should be created for the installed packages.
+    #[arg(action, long)]
+    no_shortcut: bool,
 }
 
 impl HasSpecs for Args {
@@ -98,22 +108,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut last_updated_project = project_original;
     let specs = args.specs()?;
     for env_name in &env_names {
+        let specs = specs.clone();
         let specs = if multiple_envs {
             specs
-                .clone()
                 .into_iter()
                 .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
-                .map(|(_, spec)| spec)
-                .collect_vec()
+                .collect()
         } else {
             specs
-                .clone()
-                .into_iter()
-                .map(|(_, spec)| spec)
-                .collect_vec()
         };
         let mut project = last_updated_project.clone();
-        match setup_environment(env_name, &args, &specs, &mut project)
+        match setup_environment(env_name, &args, specs, &mut project)
             .await
             .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
         {
@@ -157,7 +162,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn setup_environment(
     env_name: &EnvironmentName,
     args: &Args,
-    specs: &[MatchSpec],
+    specs: IndexMap<PackageName, MatchSpec>,
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -179,7 +184,13 @@ async fn setup_environment(
     }
 
     // Add the dependencies to the environment
-    for spec in specs.iter().chain(&args.with) {
+    let packages_to_add = specs
+        .clone()
+        .into_iter()
+        .map(|(_, spec)| spec)
+        .chain(args.with.clone())
+        .collect_vec();
+    for spec in &packages_to_add {
         project.manifest.add_dependency(
             env_name,
             spec,
@@ -202,6 +213,38 @@ async fn setup_environment(
     // Installing the environment to be able to find the bin paths later
     let _ = project.install_environment(env_name).await?;
 
+    // Sync exposed name
+    sync_exposed_names(env_name, project, args).await?;
+
+    // Add shortcuts
+    if !args.no_shortcut {
+        let prefix = project.environment_prefix(env_name).await?;
+        for (package_name, _) in specs.iter() {
+            let prefix_record = prefix.find_designated_package(package_name).await?;
+            if contains_menuinst_document(&prefix_record) {
+                project.manifest.add_shortcut(env_name, package_name)?;
+            }
+        }
+        state_changes |= project.sync_shortcuts(env_name).await?;
+    }
+
+    // Figure out added packages and their corresponding versions
+    state_changes |= project.added_packages(packages_to_add, env_name).await?;
+
+    // Expose executables of the new environment
+    state_changes |= project
+        .expose_executables_from_environment(env_name)
+        .await?;
+
+    project.manifest.save().await?;
+    Ok(state_changes)
+}
+
+async fn sync_exposed_names(
+    env_name: &EnvironmentName,
+    project: &mut Project,
+    args: &Args,
+) -> Result<(), miette::Error> {
     let with_package_names = args
         .with
         .iter()
@@ -211,26 +254,13 @@ async fn setup_environment(
                 .ok_or_else(|| miette::miette!("could not find package name in MatchSpec {}", spec))
         })
         .collect::<miette::Result<Vec<_>>>()?;
-
-    // Sync exposed binaries
-    let expose_type = if !args.expose.is_empty() {
+    let expose_type = if args.expose.is_empty().not() {
         ExposedType::Mappings(args.expose.clone())
     } else if with_package_names.is_empty() {
         ExposedType::All
     } else {
         ExposedType::Ignore(with_package_names)
     };
-
     project.sync_exposed_names(env_name, expose_type).await?;
-
-    // Figure out added packages and their corresponding versions
-    state_changes |= project.added_packages(specs, env_name).await?;
-
-    // Expose executables of the new environment
-    state_changes |= project
-        .expose_executables_from_environment(env_name)
-        .await?;
-
-    project.manifest.save().await?;
-    Ok(state_changes)
+    Ok(())
 }

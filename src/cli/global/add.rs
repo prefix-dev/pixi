@@ -50,14 +50,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         env_name: &EnvironmentName,
-        specs: &[MatchSpec],
+        specs: Vec<MatchSpec>,
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
         // Add specs to the manifest
-        for spec in specs {
+        for spec in &specs {
             project.manifest.add_dependency(
                 env_name,
                 spec,
@@ -82,6 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let mut project_modified = project_original.clone();
+
     let specs = args
         .specs()?
         .into_iter()
@@ -90,7 +91,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match apply_changes(
         &args.environment,
-        specs.as_slice(),
+        specs,
         args.expose.as_slice(),
         &mut project_modified,
     )
