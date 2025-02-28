@@ -41,12 +41,12 @@ PLATFORM_CONFIG: Dict[str, PlatformConfig] = {
 
 def verify_shortcuts_exist(
     data_home: Path,
-    system: str,
     shortcut_names: List[str],
     expected_exists: bool,
 ) -> None:
     """Verify if the specified shortcuts exist or not on the given system."""
     # Using the key to get the platform-specific configuration, to force a KeyError if the key is not found
+    system = CURRENT_PLATFORM
     config = PLATFORM_CONFIG[system]
     for name in shortcut_names:
         shortcut_path = config["shortcut_path"](data_home, name)
@@ -56,7 +56,7 @@ def verify_shortcuts_exist(
         ), f"Shortcut '{name}' {'should' if expected_exists else 'should not'} exist on {system}"
 
 
-def test_shortcuts_with_sync(
+def test_sync_creation_and_removal(
     pixi: Path,
     tmp_path: Path,
     shortcuts_channel_1: str,
@@ -64,7 +64,6 @@ def test_shortcuts_with_sync(
     """Test shortcut creation and removal with sync."""
     pixi_home = tmp_path / "pixi_home"
     data_home = tmp_path / "data_home"
-    system = CURRENT_PLATFORM
     env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home), "HOME": str(data_home)}
 
     # Setup manifest with given shortcuts
@@ -78,7 +77,7 @@ def test_shortcuts_with_sync(
     """
     # Verify no shortcuts exist after sync
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=False)
+    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=False)
 
     parsed_toml = tomllib.loads(toml)
     parsed_toml["envs"]["test"]["shortcuts"] = ["pixi-editor"]
@@ -86,13 +85,13 @@ def test_shortcuts_with_sync(
 
     # # Run sync and verify
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=True)
+    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=True)
 
     # test removal of shortcuts
     del parsed_toml["envs"]["test"]["shortcuts"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=env)
-    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=False)
+    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=False)
 
 
 # TODO: test empty list of shortcuts
@@ -108,7 +107,6 @@ def test_install_simple(
     """Test shortcut creation with install."""
     pixi_home = tmp_path / "pixi_home"
     data_home = tmp_path / "data_home"
-    system = CURRENT_PLATFORM
     env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home), "HOME": str(data_home)}
 
     # Verify no shortcuts exist after sync
@@ -124,7 +122,7 @@ def test_install_simple(
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
-    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=True)
+    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=True)
 
 
 def test_install_no_shortcut(
@@ -135,7 +133,6 @@ def test_install_no_shortcut(
     """Test shortcut creation with install where `--no-shortcut` was passed."""
     pixi_home = tmp_path / "pixi_home"
     data_home = tmp_path / "data_home"
-    system = CURRENT_PLATFORM
     env = {"PIXI_HOME": str(pixi_home), "XDG_DATA_HOME": str(data_home), "HOME": str(data_home)}
 
     # Verify no shortcuts exist after sync
@@ -159,4 +156,4 @@ def test_install_no_shortcut(
     assert "shortcuts" not in parsed_toml["envs"]["pixi-editor"]
 
     # Verify shortcut does not exist
-    verify_shortcuts_exist(data_home, system, ["pixi-editor"], expected_exists=False)
+    verify_shortcuts_exist(data_home, ["pixi-editor"], expected_exists=False)
