@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - update-pixi
   workflow_dispatch:
   pull_request:
     types:

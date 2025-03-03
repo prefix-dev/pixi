@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - update-pixi
     paths:
       - "docs/**"
       - ".github/workflows/docs.yml"
