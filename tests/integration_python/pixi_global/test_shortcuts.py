@@ -216,6 +216,34 @@ def test_sync_duplicate_shortcuts(
     )
 
 
+def test_sync_unavailable_shortcuts(
+    pixi: Path,
+    setup_data: SetupData,
+    shortcuts_channel_1: str,
+) -> None:
+    """Test shortcut creation and removal with sync."""
+
+    # Setup manifest with given shortcuts
+    manifests = setup_data.pixi_home.joinpath("manifests")
+    manifests.mkdir(parents=True)
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+    [envs.test1]
+    channels = ["{shortcuts_channel_1}"]
+    dependencies = {{ pixi-editor = "*" }}
+    shortcuts = ["unavailable-shortcut"]
+    """
+    manifest.write_text(toml)
+
+    # Verify no shortcuts exist after sync
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=setup_data.env,
+        stderr_contains="the following shortcuts are requested but not available: unavailable-shortcut",
+    )
+
+
 def test_install_simple(
     pixi: Path,
     setup_data: SetupData,
@@ -270,6 +298,4 @@ def test_install_no_shortcut(
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
 
-# TODO: test requesting shortcuts that are not available
-# TODO: test that shortcuts are removed when environment is removed
 # TODO: test more files on macOS and Windows
