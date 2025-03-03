@@ -1,5 +1,7 @@
 from pathlib import Path
 import tomllib
+from typing import List
+
 import tomli_w
 from ..common import verify_cli_command, ExitCode, CURRENT_PLATFORM
 from abc import ABC, abstractmethod
@@ -28,36 +30,40 @@ def setup_data(tmp_path: Path) -> SetupData:
 
 class PlatformConfig(ABC):
     @abstractmethod
-    def shortcut_path(self, data_home: Path, name: str) -> Path:
+    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
         pass
 
     @abstractmethod
-    def shortcut_exists(self, path: Path) -> bool:
+    def shortcut_exists(self, data_home: Path, name: str) -> bool:
+        """Given the name of a shortcut, return whether it exists or not."""
         pass
 
 
 class LinuxConfig(PlatformConfig):
-    def shortcut_path(self, data_home: Path, name: str) -> Path:
-        return data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"
+    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
+        return [data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"]
 
-    def shortcut_exists(self, path: Path) -> bool:
-        return path.is_file()
+    def shortcut_exists(self, data_home: Path, name: str) -> bool:
+        return self._shortcut_paths(data_home, name).pop().is_file()
 
 
 class MacOSConfig(PlatformConfig):
-    def shortcut_path(self, data_home: Path, name: str) -> Path:
-        return data_home / "Applications" / f"{name}.app"
+    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
+        return [data_home / "Applications" / f"{name}.app"]
 
-    def shortcut_exists(self, path: Path) -> bool:
-        return path.is_dir()
+    def shortcut_exists(self, data_home: Path, name: str) -> bool:
+        return self._shortcut_paths(data_home, name).pop().is_dir()
 
 
 class WindowsConfig(PlatformConfig):
-    def shortcut_path(self, data_home: Path, name: str) -> Path:
-        return data_home / "Desktop" / f"{name}.lnk"
+    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
+        return [data_home / "Desktop" / f"{name}.lnk"]
 
-    def shortcut_exists(self, path: Path) -> bool:
-        return path.is_file()
+    def shortcut_exists(self, data_home: Path, name: str) -> bool:
+        for path in self._shortcut_paths(data_home, name):
+            if not path.is_file():
+                return False
+        return True
 
 
 def get_platform_config(platform: str) -> PlatformConfig:
@@ -81,9 +87,7 @@ def verify_shortcuts_exist(
     system = CURRENT_PLATFORM
     config = get_platform_config(system)
     for name in shortcut_names:
-        shortcut_path = config.shortcut_path(data_home, name)
-        exists = config.shortcut_exists(shortcut_path)
-        assert exists == expected_exists, (
+        assert config.shortcut_exists(data_home, name) == expected_exists, (
             f"Shortcut '{name}' {'should' if expected_exists else 'should not'} exist on {system}"
         )
 
