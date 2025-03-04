@@ -95,7 +95,16 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     // Add current command without link
     name_parts.push(format!("`{}`", command.get_name()));
 
+    // Title
     writeln!(buffer, "# {}", name_parts.join("")).unwrap();
+
+    // About
+    if command.get_name() != "pixi" {
+        if let Some(about) = command.get_about() {
+            writeln!(buffer, "\n## About").unwrap();
+            writeln!(buffer, "{}", about).unwrap();
+        }
+    }
 
     // Synopsis
     writeln!(buffer, "\n## Synopsis").unwrap();
@@ -107,12 +116,6 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         writeln!(buffer, "{}", subcommand_to_synopsis(&path, subcommand)).unwrap();
     }
     writeln!(buffer, "```").unwrap();
-
-    // About
-    if let Some(about) = command.get_about() {
-        writeln!(buffer, "\n## About").unwrap();
-        writeln!(buffer, "{}", about).unwrap();
-    }
 
     // Positionals
     let positionals: Vec<_> = command.get_positionals().collect();
