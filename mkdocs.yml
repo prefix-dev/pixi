@@ -84,12 +84,16 @@ markdown_extensions:
 
 extra:
   social:
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/prefix_dev
-    - icon: fontawesome/brands/linkedin
-      link: https://www.linkedin.com/company/prefix-dev
     - icon: fontawesome/brands/github
       link: https://github.com/prefix-dev
+    - icon: fontawesome/brands/mastodon
+      link: https://hachyderm.io/@prefix
+    - icon: fontawesome/brands/bluesky
+      link: https://bsky.app/profile/prefix.dev
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/prefix-dev
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/prefix_dev
   version:
     provider: mike
 
@@ -142,7 +146,7 @@ nav:
       - Rust: tutorials/rust.md
       - Multi Environment: tutorials/multi_environment.md
   - Advanced:
-      - Channel Logic: advanced/channel_priority.md
+      - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
       - Shebang: advanced/shebang.md
   - Reference:
@@ -151,8 +155,8 @@ nav:
       - CLI: reference/cli.md
   - Misc:
       - Changelog: CHANGELOG.md
-      - Pixi vision: vision.md
-      - Packaging: packaging.md
+      - Pixi Vision: vision.md
+      - Packaging pixi: packaging.md
       - Community: Community.md
       - FAQ: FAQ.md
 
