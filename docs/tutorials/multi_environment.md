@@ -161,7 +161,7 @@ test:
       environments: ${{ matrix.environment }}
   - run: pixi run -e ${{ matrix.environment }} test
 ```
-More info on that in the GitHub actions [documentation](../advanced/github_actions.md).
+More info on that in the GitHub actions [documentation](../integration/ci/github_actions.md).
 
 ## Development, Testing, Production environments
 This assumes a clean project, so if you have been following along, you might want to start a new project.

@@ -15,7 +15,7 @@
 This command is used to create a new project.
 It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent the environment from being added to `git`.
 
-It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if you have a `pyproject.toml` file in the directory where you run `pixi init`, it appends the pixi data to the `pyproject.toml` instead of a new `pixi.toml` file.
+It also supports the [`pyproject.toml`](../python/pyproject_toml.md) file, if you have a `pyproject.toml` file in the directory where you run `pixi init`, it appends the pixi data to the `pyproject.toml` instead of a new `pixi.toml` file.
 
 ##### Arguments
 

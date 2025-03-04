@@ -144,7 +144,7 @@ There are currently four ways to authenticate with pixi:
 - using a conda-token
 - using an S3 key pair
 
-For more information, see [Authentication](./authentication.md).
+For more information, see [Authentication](../../deployment/authentication.md).
 
 !!!warning "Handle secrets with care"
     Please only store sensitive information using [GitHub secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions). Do not store them in your repository.
@@ -206,7 +206,7 @@ You can also specify the session token using the `auth-session-token` input argu
 
 1. only needed if your key uses a session token
 
-See the [S3 section](../advanced/s3.md) for more information about S3 authentication.
+See the [S3 section](../../deployment/s3.md) for more information about S3 authentication.
 
 ### Custom shell wrapper
 
@@ -270,7 +270,7 @@ With `pixi exec`, you can also run a one-off command inside a temporary pixi env
 
 1. everything here will be run inside of the temporary pixi environment
 
-See [here](../reference/cli.md#exec) for more information about `pixi exec`.
+See [here](../../reference/cli.md#exec) for more information about `pixi exec`.
 
 ### Environment activation
 

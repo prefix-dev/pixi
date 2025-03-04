@@ -8,7 +8,7 @@ For more technical documentation check pixi on [docs.rs](https://docs.rs/pixi/la
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
     For example, the `[project]` table becomes `[tool.pixi.project]`.
-    There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../advanced/pyproject_toml.md) documentation for more information.
+    There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../python/pyproject_toml.md) documentation for more information.
 
 ## Manifest discovery
 
@@ -308,7 +308,7 @@ find-links = [{path = './links'}]
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the pixi repository, that make use of this feature.
 
 !!! tip "Authentication Methods"
-    To read about existing authentication methods for private registries, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
+    To read about existing authentication methods for private registries, please check the [PyPI Authentication](../deployment/authentication.md#pypi-authentication) section.
 
 
 ### No Build Isolation
@@ -549,7 +549,7 @@ torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 ```
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
-Learn more about installing PyTorch [here](../features/pytorch.md).
+Learn more about installing PyTorch [here](../python/pytorch.md).
 
 ##### `git`
 

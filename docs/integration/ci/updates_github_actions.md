@@ -2,8 +2,8 @@
 You can leverage GitHub Actions in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown)
 to automatically update your lockfiles similar to dependabot or renovate in other ecosystems.
 
-![Update lockfiles](../assets/update-lockfile-light.png#only-light)
-![Update lockfiles](../assets/update-lockfile-dark.png#only-dark)
+![Update lockfiles](../../assets/update-lockfile-light.png#only-light)
+![Update lockfiles](../../assets/update-lockfile-dark.png#only-dark)
 
 !!!note "Dependabot/Renovate support for pixi"
     You can track native Dependabot support for pixi in [dependabot/dependabot-core #2227](https://github.com/dependabot/dependabot-core/issues/2227#issuecomment-1709069470)
@@ -61,8 +61,8 @@ In order for this workflow to work, you need to set "Allow GitHub Actions to cre
 
     If you don't have any `pypi-dependencies`, you can use `pixi update --json --no-install` to speed up diff generation.
 
-![Allow GitHub Actions PRs](../assets/allow-github-actions-prs-light.png#only-light)
-![Allow GitHub Actions PRs](../assets/allow-github-actions-prs-dark.png#only-dark)
+![Allow GitHub Actions PRs](../../assets/allow-github-actions-prs-light.png#only-light)
+![Allow GitHub Actions PRs](../../assets/allow-github-actions-prs-dark.png#only-dark)
 
 ## Triggering CI in automated PRs
 

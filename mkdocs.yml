@@ -96,11 +96,6 @@ extra:
 nav:
   - Installation: index.md
   - Basic Usage: basic_usage.md
-  - Changelog: CHANGELOG.md
-  - Python:
-      - Tutorial: python/tutorial.md
-      - Pyproject.toml: python/pyproject_toml.md
-      - Pytorch Installation: python/pytorch.md
   - Features:
       - Environments: features/environment.md
       - Tasks: features/advanced_tasks.md
@@ -109,9 +104,6 @@ nav:
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
       - Global Tools: features/global_tools.md
-  - Switching from:
-      - Poetry: switching_from/poetry.md
-      - Conda/Mamba: switching_from/conda.md
   - Integration:
       - Editor:
           - JupyterLab: integration/editor/jupyterlab.md
@@ -122,8 +114,15 @@ nav:
           - GitHub Actions: integration/ci/github_actions.md
           - Lockfile Updates: integration/ci/updates_github_actions.md
       - Third Party:
+          - Pixi Diff: integration/third_party/pixi_diff.md
           - Starship: integration/third_party/starship.md
-          - Lockfile diffs: integration/third_party/lockfile_diffs.md
+  - Python:
+      - Tutorial: python/tutorial.md
+      - Pyproject.toml: python/pyproject_toml.md
+      - Pytorch Installation: python/pytorch.md
+  - Switching from:
+      - Poetry: switching_from/poetry.md
+      - Conda/Mamba: switching_from/conda.md
   - Building Packages:
       - Getting started: build/getting_started.md
       - Tutorials:
@@ -133,22 +132,25 @@ nav:
           - Variants: build/variants.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
+  - Deployment:
+      - Pixi Pack: deployment/pixi_pack.md
+      - Authentication: deployment/authentication.md
+      - Container: deployment/container.md
+      - S3: deployment/s3.md
   - Tutorials:
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
       - Multi Environment: tutorials/multi_environment.md
   - Advanced:
-      - Authentication: advanced/authentication.md
       - Channel Logic: advanced/channel_priority.md
       - Info Command: advanced/explain_info_command.md
-      - Production Deployment: advanced/production_deployment.md
-      - S3: advanced/s3.md
       - Shebang: advanced/shebang.md
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli.md
   - Misc:
+      - Changelog: CHANGELOG.md
       - Pixi vision: vision.md
       - Packaging: packaging.md
       - Community: Community.md

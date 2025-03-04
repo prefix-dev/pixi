@@ -62,7 +62,7 @@ pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-ac
 ```
 
 !!!note
-    S3 authentication is also supported through AWS's typical `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, see the [S3 section](../advanced/s3.md) for more details.
+    S3 authentication is also supported through AWS's typical `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, see the [S3 section](s3.md) for more details.
 
 ## Where does pixi store the authentication information?
 

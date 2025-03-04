@@ -197,7 +197,7 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 
 ### `s3-options`
 
-Configuration for S3 authentication. This will lead to pixi not using AWS's default credentials but instead use the credentials from the pixi authentication storage, see the [S3 section](../advanced/s3.md) for more information.
+Configuration for S3 authentication. This will lead to pixi not using AWS's default credentials but instead use the credentials from the pixi authentication storage, see the [S3 section](../deployment/s3.md) for more information.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:s3-options"

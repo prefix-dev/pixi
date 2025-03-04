@@ -1,8 +1,8 @@
 
 # Starship
 
-![Starship with pixi support](../assets/starship-light.png#only-light)
-![Starship with pixi support](../assets/starship-dark.png#only-dark)
+![Starship with pixi support](../../assets/starship-light.png#only-light)
+![Starship with pixi support](../../assets/starship-dark.png#only-dark)
 
 [Starship](https://starship.rs) is a cross-platform and cross-shell prompt for developers, similar to oh-my-zsh, but with a focus on performance and simplicity.
 In [starship/starship #6335](https://github.com/starship/starship/pull/6335), pixi support is being added.

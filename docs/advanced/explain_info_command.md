@@ -56,7 +56,7 @@ Checkout the [cache documentation](../features/environment.md#caching-packages) 
 
 ### Auth storage
 
-Check the [authentication documentation](authentication.md)
+Check the [authentication documentation](../deployment/authentication.md)
 
 ### Cache size
 

@@ -9,13 +9,13 @@ This can be leveraged in combination with [pavelzw/pixi-diff-to-markdown](https:
 With [henriklovhaug/md-tui](https://github.com/henriklovhaug/md-tui), you can even render the markdown file in the terminal.
 
 !!!tip "Install the tools globally"
-    All of the above-mentioned tools are available on conda-forge and can be installed using [`pixi global install`](../features/global_tools.md).
+    All of the above-mentioned tools are available on conda-forge and can be installed using [`pixi global install`](../../features/global_tools.md).
 
     ```bash
     pixi global install pixi-diff pixi-diff-to-markdown md-tui
     ```
 
-`pixi-diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../reference/cli.md#update).
+`pixi-diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../../reference/cli.md#update).
 
 ```bash
 $ pixi-diff --before pixi.lock.old --after pixi.lock.new
@@ -67,7 +67,7 @@ pixi-diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi-diff-to-markdown > diff
 ```
 
 !!!tip "pixi-diff-to-markdown in GitHub Actions updates"
-    For other usages of [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown), see also our page about [updating lockfiles using GitHub Actions](./updates_github_actions.md).
+    For other usages of [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown), see also our page about [updating lockfiles using GitHub Actions](../ci/updates_github_actions.md).
 
 You can view this generated markdown file in your terminal using [`md-tui`](https://github.com/henriklovhaug/md-tui).
 
