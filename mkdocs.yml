@@ -108,25 +108,10 @@ nav:
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
       - Global Tools: features/global_tools.md
-  - Integration:
-      - Editor:
-          - JupyterLab: integration/editor/jupyterlab.md
-          - PyCharm: integration/editor/pycharm.md
-          - RStudio: integration/editor/r_studio.md
-          - VSCode Devcontainer: integration/editor/devcontainer.md
-      - Continuous Integration:
-          - GitHub Actions: integration/ci/github_actions.md
-          - Lockfile Updates: integration/ci/updates_github_actions.md
-      - Third Party:
-          - Pixi Diff: integration/third_party/pixi_diff.md
-          - Starship: integration/third_party/starship.md
   - Python:
       - Tutorial: python/tutorial.md
       - Pyproject.toml: python/pyproject_toml.md
       - Pytorch Installation: python/pytorch.md
-  - Switching from:
-      - Poetry: switching_from/poetry.md
-      - Conda/Mamba: switching_from/conda.md
   - Building Packages:
       - Getting started: build/getting_started.md
       - Tutorials:
@@ -141,6 +126,21 @@ nav:
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md
       - S3: deployment/s3.md
+  - Integration:
+      - Editor:
+          - JupyterLab: integration/editor/jupyterlab.md
+          - PyCharm: integration/editor/pycharm.md
+          - RStudio: integration/editor/r_studio.md
+          - VSCode Devcontainer: integration/editor/devcontainer.md
+      - Continuous Integration:
+          - GitHub Actions: integration/ci/github_actions.md
+          - Lockfile Updates: integration/ci/updates_github_actions.md
+      - Third Party:
+          - Pixi Diff: integration/third_party/pixi_diff.md
+          - Starship: integration/third_party/starship.md
+  - Switching from:
+      - Poetry: switching_from/poetry.md
+      - Conda/Mamba: switching_from/conda.md
   - Tutorials:
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
