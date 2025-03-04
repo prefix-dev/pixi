@@ -66,7 +66,7 @@ For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION)
 )]
 #[clap(arg_required_else_help = true)]
-struct Args {
+pub struct Args {
     #[command(subcommand)]
     command: Command,
 
