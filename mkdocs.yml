@@ -96,13 +96,11 @@ extra:
 nav:
   - Installation: index.md
   - Basic Usage: basic_usage.md
-  - Tutorials:
-      - ROS 2: tutorials/ros2.md
-      - Rust: tutorials/rust.md
-      - Multi Environment: tutorials/multi_environment.md
+  - Changelog: CHANGELOG.md
   - Python:
-      - Tutorial: tutorials/python.md
-      - Pytorch Installation: features/pytorch.md
+      - Tutorial: python/tutorial.md
+      - Pyproject.toml: python/pyproject_toml.md
+      - Pytorch Installation: python/pytorch.md
   - Features:
       - Environments: features/environment.md
       - Tasks: features/advanced_tasks.md
@@ -111,19 +109,21 @@ nav:
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
       - Global Tools: features/global_tools.md
-  - Examples:
-      - C++/Cmake: examples/cpp-sdl.md
-      - OpenCV: examples/opencv.md
-      - ROS 2: examples/ros2-nav2.md
   - Switching from:
       - Poetry: switching_from/poetry.md
       - Conda/Mamba: switching_from/conda.md
   - Integration:
-      - JupyterLab: integration/jupyterlab.md
-      - PyCharm: integration/pycharm.md
-      - RStudio: integration/r_studio.md
-      - VSCode Devcontainer: integration/devcontainer.md
-      - Starship: integration/starship.md
+      - Editor:
+          - JupyterLab: integration/editor/jupyterlab.md
+          - PyCharm: integration/editor/pycharm.md
+          - RStudio: integration/editor/r_studio.md
+          - VSCode Devcontainer: integration/editor/devcontainer.md
+      - Continuous Integration:
+          - GitHub Actions: integration/ci/github_actions.md
+          - Lockfile Updates: integration/ci/updates_github_actions.md
+      - Third Party:
+          - Starship: integration/third_party/starship.md
+          - Lockfile diffs: integration/third_party/lockfile_diffs.md
   - Building Packages:
       - Getting started: build/getting_started.md
       - Tutorials:
@@ -133,15 +133,19 @@ nav:
           - Variants: build/variants.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
+  - Tutorials:
+      - ROS 2: tutorials/ros2.md
+      - Rust: tutorials/rust.md
+      - Multi Environment: tutorials/multi_environment.md
+  - Examples:
+      - C++/Cmake: examples/cpp-sdl.md
+      - OpenCV: examples/opencv.md
+      - ROS 2: examples/ros2-nav2.md
   - Advanced:
       - Authentication: advanced/authentication.md
       - Channel Logic: advanced/channel_priority.md
-      - GitHub Actions: advanced/github_actions.md
       - Info Command: advanced/explain_info_command.md
-      - Updates using GitHub Actions: advanced/updates_github_actions.md
-      - Lockfile diffs: advanced/lockfile_diffs.md
       - Production Deployment: advanced/production_deployment.md
-      - Pyproject.toml: advanced/pyproject_toml.md
       - S3: advanced/s3.md
       - Shebang: advanced/shebang.md
   - Reference:
@@ -153,7 +157,6 @@ nav:
       - Packaging: packaging.md
       - Community: Community.md
       - FAQ: FAQ.md
-      - Changelog: CHANGELOG.md
 
 hooks:
   - schema/docs_hooks.py

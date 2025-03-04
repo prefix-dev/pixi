@@ -1,7 +1,5 @@
 
-# Third-party tools
-
-## Starship
+# Starship
 
 ![Starship with pixi support](../assets/starship-light.png#only-light)
 ![Starship with pixi support](../assets/starship-dark.png#only-dark)
