@@ -6,15 +6,17 @@
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width,initial-scale=1">
       
+        <meta name="description" content="Learn about third-party tools that integrate with Pixi.">
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/tutorials/multi_environment/">
+      
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/third_party/">
       
       
-        <link rel="prev" href="../rust/">
+        <link rel="prev" href="../shebang/">
       
       
-        <link rel="next" href="../../features/environment/">
+        <link rel="next" href="../../reference/pixi_manifest/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +24,7 @@
     
     
       
-        <title>Multi Environment - Pixi by prefix.dev</title>
+        <title>Third-party tools - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +61,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Multi Environment - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Third-party tools - Pixi by prefix.dev" >
       
-        <meta  property="og:description"  content="None" >
+        <meta  property="og:description"  content="Learn about third-party tools that integrate with Pixi." >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/multi_environment.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/third_party.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +73,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/tutorials/multi_environment/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/third_party/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Multi Environment - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Third-party tools - Pixi by prefix.dev" >
       
-        <meta  name="twitter:description"  content="None" >
+        <meta  name="twitter:description"  content="Learn about third-party tools that integrate with Pixi." >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/tutorials/multi_environment.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/third_party.png" >
       
     
     
@@ -102,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#tutorial-using-multiple-environments" class="md-skip">
+        <a href="#third-party-tools" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Multi Environment
+              Third-party tools
             
           </span>
         </div>
@@ -332,8 +334,6 @@
       
   
   
-    
-  
   
   
     
@@ -345,11 +345,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
@@ -364,7 +364,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Tutorials
@@ -378,7 +378,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python/" class="md-nav__link">
+      <a href="../../tutorials/python/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -400,7 +400,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ros2/" class="md-nav__link">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -422,7 +422,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../rust/" class="md-nav__link">
+      <a href="../../tutorials/rust/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -441,31 +441,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    Multi Environment
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../tutorials/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -475,128 +454,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-is-this-useful" class="md-nav__link">
-    <span class="md-ellipsis">
-      Why is this useful?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#glossary" class="md-nav__link">
-    <span class="md-ellipsis">
-      Glossary
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lets-get-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      Let's get started
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Let's get started">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#adding-a-feature" class="md-nav__link">
-    <span class="md-ellipsis">
-      Adding a feature
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#adding-an-environment" class="md-nav__link">
-    <span class="md-ellipsis">
-      Adding an environment
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#running-a-task" class="md-nav__link">
-    <span class="md-ellipsis">
-      Running a task
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#using-multiple-environments-to-test-multiple-versions-of-a-package" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using multiple environments to test multiple versions of a package
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#development-testing-production-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Development, Testing, Production environments
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Development, Testing, Production environments">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#non-default-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Non default environments
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Conclusion
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1427,8 +1284,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -1438,11 +1297,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9" checked>
         
           
           <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="">
@@ -1457,7 +1316,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_9">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -1471,7 +1330,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/authentication/" class="md-nav__link">
+      <a href="../authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1493,7 +1352,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/channel_priority/" class="md-nav__link">
+      <a href="../channel_priority/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1515,7 +1374,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/github_actions/" class="md-nav__link">
+      <a href="../github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1537,7 +1396,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1559,7 +1418,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/updates_github_actions/" class="md-nav__link">
+      <a href="../updates_github_actions/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1581,7 +1440,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/lockfile_diffs/" class="md-nav__link">
+      <a href="../lockfile_diffs/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1603,7 +1462,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/production_deployment/" class="md-nav__link">
+      <a href="../production_deployment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1625,7 +1484,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/pyproject_toml/" class="md-nav__link">
+      <a href="../pyproject_toml/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1647,7 +1506,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/s3/" class="md-nav__link">
+      <a href="../s3/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1669,7 +1528,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/shebang/" class="md-nav__link">
+      <a href="../shebang/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1688,10 +1547,31 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../advanced/third_party/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Third Party Tools
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1701,6 +1581,35 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#starship" class="md-nav__link">
+    <span class="md-ellipsis">
+      Starship
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2012,102 +1921,9 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-is-this-useful" class="md-nav__link">
+  <a href="#starship" class="md-nav__link">
     <span class="md-ellipsis">
-      Why is this useful?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#glossary" class="md-nav__link">
-    <span class="md-ellipsis">
-      Glossary
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lets-get-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      Let's get started
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Let's get started">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#adding-a-feature" class="md-nav__link">
-    <span class="md-ellipsis">
-      Adding a feature
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#adding-an-environment" class="md-nav__link">
-    <span class="md-ellipsis">
-      Adding an environment
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#running-a-task" class="md-nav__link">
-    <span class="md-ellipsis">
-      Running a task
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#using-multiple-environments-to-test-multiple-versions-of-a-package" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using multiple environments to test multiple versions of a package
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#development-testing-production-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Development, Testing, Production environments
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Development, Testing, Production environments">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#non-default-environments" class="md-nav__link">
-    <span class="md-ellipsis">
-      Non default environments
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      Conclusion
+      Starship
     </span>
   </a>
   
@@ -2129,7 +1945,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/tutorials/multi_environment.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/third_party.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -2137,203 +1953,32 @@
   
 
 
-<h1 id="tutorial-using-multiple-environments">Tutorial: Using multiple environments<a class="headerlink" href="#tutorial-using-multiple-environments" title="Permanent link">#</a></h1>
-<p>In this tutorial we will show you how to use multiple environments in one pixi project.</p>
-<h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
-<p>When developing a project you often need different tools, libraries or test environments.
-With pixi you can define multiple environments in one project and switch between them easily.
-A developer often needs all the tools they can get, whereas your testing infrastructure might not require all those tools, and your production environment might require even less.
-Setting up different environments for these different use cases can be a hassle, but with pixi it's easy.</p>
-<h2 id="glossary">Glossary<a class="headerlink" href="#glossary" title="Permanent link">#</a></h2>
-<p>This tutorial possibly uses some new terms, here is a quick overview:</p>
-<h4 id="feature"><strong>Feature</strong><a class="headerlink" href="#feature" title="Permanent link">#</a></h4>
-<p>A feature defines a part of an environment, but are not useful without being part of an environment.
-You can define multiple features in one project.
-A feature can contain <code>tasks</code>, <code>dependencies</code>, <code>platforms</code>, <code>channels</code> and <a href="../../reference/pixi_manifest/#the-feature-table">more</a>.
-You can mix multiple features to create an environment.
-Features are defined by adding <code>[feature.&lt;name&gt;.*]</code> to a table in the manifest file.</p>
-<h4 id="environment"><strong>Environment</strong><a class="headerlink" href="#environment" title="Permanent link">#</a></h4>
-<p>An environment is a collection of features.
-Environments can actually be installed and activated to run tasks in.
-You can define multiple environments in one project.
-Defining environments is done by adding them to the <code>[environments]</code> table in the manifest file.</p>
-<h4 id="default"><strong>Default</strong><a class="headerlink" href="#default" title="Permanent link">#</a></h4>
-<p>Instead of specifying <code>[feature.&lt;name&gt;.dependencies]</code>, one can populate <code>[dependencies]</code> directly.
-These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.</p>
-<h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
-<p>We'll simply start with a new project, you can skip this step if you already have a pixi project.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>project
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>project
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>python
+<h1 id="third-party-tools">Third-party tools<a class="headerlink" href="#third-party-tools" title="Permanent link">#</a></h1>
+<h2 id="starship">Starship<a class="headerlink" href="#starship" title="Permanent link">#</a></h2>
+<p><img alt="Starship with pixi support" src="../../assets/starship-light.png#only-light" />
+<img alt="Starship with pixi support" src="../../assets/starship-dark.png#only-dark" /></p>
+<p><a href="https://starship.rs">Starship</a> is a cross-platform and cross-shell prompt for developers, similar to oh-my-zsh, but with a focus on performance and simplicity.
+In <a href="https://github.com/starship/starship/pull/6335">starship/starship #6335</a>, pixi support is being added.
+This pull request has not been merged at the time of writing.
+That's why <a href="https://github.com/pavelzw">@pavelzw</a> created a conda package for his fork in <a href="https://prefix.dev/channels/yolo-forge">prefix.dev/yolo-forge</a>.
+The packages are being built in GitHub Actions in the <a href="https://github.com/pavelzw/yolo-forge">pavelzw/yolo-forge GitHub repository</a> using <code>rattler-build</code>.
+You can install it using the following command:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>https://prefix.dev/yolo-forge<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>starship-fork-pavelzw
 </span></code></pre></div>
-<p>Now we have a new pixi project with the following structure:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>├── .pixi
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>│   └── envs
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│       └── default
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>├── pixi.lock
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>└── pixi.toml
-</span></code></pre></div></p>
-<p>Note the <code>.pixi/envs/default</code> directory, this is where the default environment is stored.
-If no environment is specified, pixi will create or use the <code>default</code> environment.</p>
-<h3 id="adding-a-feature">Adding a feature<a class="headerlink" href="#adding-a-feature" title="Permanent link">#</a></h3>
-<p>Let's start adding a simple <code>test</code> feature to our project.
-We can do this through the command line, or by editing the <code>pixi.toml</code> file.
-Here we will use the command line, and add a <code>pytest</code> dependency to the <code>test</code> feature in our project.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
+<div class="admonition tip">
+<p>For information about how to configure and set up starship, see the <a href="https://starship.rs">official documentation</a>.</p>
+</div>
+<p>In order for starship to always find the right python executable, you can adjust its configuration file.</p>
+<div class="language-toml highlight"><span class="filename">~/.config/starship.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[python]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># customize python binary path for pixi</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">python_binary</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="c1"># this is the python from PATH if in a pixi shell</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="c1"># (assuming you don&#39;t have python on your global PATH)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="s2">&quot;python&quot;</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="c1"># fall back to pixi&#39;s python if it&#39;s available</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="s2">&quot;.pixi/envs/default/bin/python&quot;</span><span class="p">,</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">]</span>
 </span></code></pre></div>
-This will add the following to our <code>pixi.toml</code> file:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[feature.test.dependencies]</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span></code></pre></div>
-This table acts exactly the same as a normal <code>dependencies</code> table, but it is only used when the <code>test</code> feature is part of an environment.</p>
-<h3 id="adding-an-environment">Adding an environment<a class="headerlink" href="#adding-an-environment" title="Permanent link">#</a></h3>
-<p>We will add the <code>test</code> environment to our project to add some testing tools.
-We can do this through the command line, or by editing the <code>pixi.toml</code> file.
-Here we will use the command line:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span>
-</span></code></pre></div>
-This will add the following to our <code>pixi.toml</code> file:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[environments]</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
-</span></code></pre></div></p>
-<h3 id="running-a-task">Running a task<a class="headerlink" href="#running-a-task" title="Permanent link">#</a></h3>
-<p>We can now run a task in our new environment.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest<span class="w"> </span>--version
-</span></code></pre></div>
-This has created the test environment, and run the <code>pytest --version</code> command in it.
-You can see the environment will be added to the <code>.pixi/envs</code> directory.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>├──<span class="w"> </span>.pixi
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>│<span class="w">   </span>└──<span class="w"> </span>envs
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>│<span class="w">       </span>├──<span class="w"> </span>default
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>│<span class="w">       </span>└──<span class="w"> </span><span class="nb">test</span>
-</span></code></pre></div>
-If you want to see the environment, you can use the <code>pixi list</code> command.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>list<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span>
-</span></code></pre></div></p>
-<p>If you have special test commands that always fit with the test environment you can add them to the <code>test</code> feature.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Adding the &#39;test&#39; task to the &#39;test&#39; feature and setting it to run `pytest`</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
-</span></code></pre></div>
-This will add the following to our <code>pixi.toml</code> file:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[feature.test.tasks]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
-</span></code></pre></div>
-Now you don't have to specify the environment when running the test command.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span>
-</span></code></pre></div>
-In this example similar to running <code>pixi run --environment test pytest</code></p>
-<p>This works as long as there is only one of the environments that has the <code>test</code> task.</p>
-<h2 id="using-multiple-environments-to-test-multiple-versions-of-a-package">Using multiple environments to test multiple versions of a package<a class="headerlink" href="#using-multiple-environments-to-test-multiple-versions-of-a-package" title="Permanent link">#</a></h2>
-<p>In this example we will use multiple environments to test a package against multiple versions of Python.
-This is a common use-case when developing a python library.
-This workflow can be translated to any setup where you want to have multiple environments to test against a different dependency setups.</p>
-<p>For this example we assume you have run the commands in the previous example, and have a project with a <code>test</code> environment.
-To allow python being flexible in the new environments we need to set it to a more flexible version e.g. <code>*</code>.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>add<span class="w"> </span><span class="s2">&quot;python=*&quot;</span>
-</span></code></pre></div>
-<p>We will start by setting up two features, <code>py311</code> and <code>py312</code>.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>py311<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.11
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>py312<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
-</span></code></pre></div></p>
-<p>We'll add the <code>test</code> and Python features to the corresponding environments.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>test-py311<span class="w"> </span>--feature<span class="w"> </span>py311<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>test-py312<span class="w"> </span>--feature<span class="w"> </span>py312<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span>
-</span></code></pre></div></p>
-<p>This should result in adding the following to the <code>pixi.toml</code>:
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[feature.py311.dependencies]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.11.*&quot;</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="k">[feature.py312.dependencies]</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span>
-</span><span id="__span-15-6"><a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>
-</span><span id="__span-15-7"><a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="k">[environments]</span>
-</span><span id="__span-15-8"><a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a><span class="n">test-py311</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;py311&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
-</span><span id="__span-15-9"><a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a><span class="n">test-py312</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;py312&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
-</span></code></pre></div></p>
-<p>Now we can run the test command in both environments.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span>test-py311<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span>test-py312<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Or using the task directly, which will spawn a dialog to select the environment of choice</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span>
-</span></code></pre></div></p>
-<p>These could now run in CI to test separate environments:
-<div class="language-yaml highlight"><span class="filename">.github/workflows/test.yml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">test</span><span class="p">:</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">  </span><span class="nt">strategy</span><span class="p">:</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">matrix</span><span class="p">:</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">      </span><span class="nt">environment</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">test-py311</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">test-py312</span><span class="p p-Indicator">]</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="nt">steps</span><span class="p">:</span>
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
-</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0</span>
-</span><span id="__span-17-9"><a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="w">    </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-17-10"><a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a><span class="w">      </span><span class="nt">environments</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ matrix.environment }}</span>
-</span><span id="__span-17-11"><a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi run -e ${{ matrix.environment }} test</span>
-</span></code></pre></div>
-More info on that in the GitHub actions <a href="../../advanced/github_actions/">documentation</a>.</p>
-<h2 id="development-testing-production-environments">Development, Testing, Production environments<a class="headerlink" href="#development-testing-production-environments" title="Permanent link">#</a></h2>
-<p>This assumes a clean project, so if you have been following along, you might want to start a new project.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>production_project
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="nb">cd</span><span class="w"> </span>production_project
-</span></code></pre></div></p>
-<p>Like before we'll start with creating multiple features.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span>python<span class="w"> </span><span class="c1"># default feature</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>dev<span class="w"> </span>jupyterlab
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
-</span></code></pre></div></p>
-<p>Now we'll add the environments.
-To accommodate the different use-cases we'll add a <code>production</code>, <code>test</code> and <code>default</code> environment.</p>
-<ul>
-<li>The <code>production</code> environment will only have the <code>default</code> feature, as that is the bare minimum for the project to run.</li>
-<li>The <code>test</code> environment will have the <code>test</code> and the <code>default</code> features, as we want to test the project and require the testing tools.</li>
-<li>The <code>default</code> environment will have the <code>dev</code> and <code>test</code> features.</li>
-</ul>
-<p>We make this the default environment as it will be the easiest to run locally, as it avoids the need to specify the environment when running tasks.</p>
-<p>We'll also add the <code>solve-group</code> <code>prod</code> to the environments, this will make sure that the dependencies are solved as if they were in the same environment.
-This will result in the <code>production</code> environment having the exact same versions of the dependencies as the <code>default</code> and <code>test</code> environment.
-This way we can be sure that the project will run in the same way in all environments.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>production<span class="w"> </span>--solve-group<span class="w"> </span>prod
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--solve-group<span class="w"> </span>prod
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># --force is used to overwrite the default environment</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>default<span class="w"> </span>--feature<span class="w"> </span>dev<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--solve-group<span class="w"> </span>prod<span class="w"> </span>--force
-</span></code></pre></div>
-<p>If we run <code>pixi list -x</code> for the environments we can see that the different environments have the exact same dependency versions.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Default environment</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>Package<span class="w">     </span>Version<span class="w">  </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>jupyterlab<span class="w">  </span><span class="m">4</span>.3.4<span class="w">    </span>pyhd8ed1ab_0<span class="w">        </span><span class="m">6</span>.9<span class="w"> </span>MiB<span class="w">    </span>conda<span class="w">  </span>jupyterlab
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>numpy<span class="w">       </span><span class="m">2</span>.2.1<span class="w">    </span>py313ha4a2180_0<span class="w">     </span><span class="m">6</span>.2<span class="w"> </span>MiB<span class="w">    </span>conda<span class="w">  </span>numpy
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>pytest<span class="w">      </span><span class="m">8</span>.3.4<span class="w">    </span>pyhd8ed1ab_1<span class="w">        </span><span class="m">253</span>.1<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>pytest
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>python<span class="w">      </span><span class="m">3</span>.13.1<span class="w">   </span>h4f43103_105_cp313<span class="w">  </span><span class="m">12</span>.3<span class="w"> </span>MiB<span class="w">   </span>conda<span class="w">  </span>python
-</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>
-</span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>Environment:<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a>Package<span class="w">  </span>Version<span class="w">  </span>Build<span class="w">               </span>Size<span class="w">       </span>Kind<span class="w">   </span>Source
-</span><span id="__span-21-10"><a id="__codelineno-21-10" name="__codelineno-21-10" href="#__codelineno-21-10"></a>numpy<span class="w">    </span><span class="m">2</span>.2.1<span class="w">    </span>py313ha4a2180_0<span class="w">     </span><span class="m">6</span>.2<span class="w"> </span>MiB<span class="w">    </span>conda<span class="w">  </span>numpy
-</span><span id="__span-21-11"><a id="__codelineno-21-11" name="__codelineno-21-11" href="#__codelineno-21-11"></a>pytest<span class="w">   </span><span class="m">8</span>.3.4<span class="w">    </span>pyhd8ed1ab_1<span class="w">        </span><span class="m">253</span>.1<span class="w"> </span>KiB<span class="w">  </span>conda<span class="w">  </span>pytest
-</span><span id="__span-21-12"><a id="__codelineno-21-12" name="__codelineno-21-12" href="#__codelineno-21-12"></a>python<span class="w">   </span><span class="m">3</span>.13.1<span class="w">   </span>h4f43103_105_cp313<span class="w">  </span><span class="m">12</span>.3<span class="w"> </span>MiB<span class="w">   </span>conda<span class="w">  </span>python
-</span><span id="__span-21-13"><a id="__codelineno-21-13" name="__codelineno-21-13" href="#__codelineno-21-13"></a>
-</span><span id="__span-21-14"><a id="__codelineno-21-14" name="__codelineno-21-14" href="#__codelineno-21-14"></a>Environment:<span class="w"> </span>production
-</span><span id="__span-21-15"><a id="__codelineno-21-15" name="__codelineno-21-15" href="#__codelineno-21-15"></a>Package<span class="w">  </span>Version<span class="w">  </span>Build<span class="w">               </span>Size<span class="w">      </span>Kind<span class="w">   </span>Source
-</span><span id="__span-21-16"><a id="__codelineno-21-16" name="__codelineno-21-16" href="#__codelineno-21-16"></a>numpy<span class="w">    </span><span class="m">2</span>.2.1<span class="w">    </span>py313ha4a2180_0<span class="w">     </span><span class="m">6</span>.2<span class="w"> </span>MiB<span class="w">   </span>conda<span class="w">  </span>numpy
-</span><span id="__span-21-17"><a id="__codelineno-21-17" name="__codelineno-21-17" href="#__codelineno-21-17"></a>python<span class="w">   </span><span class="m">3</span>.13.1<span class="w">   </span>h4f43103_105_cp313<span class="w">  </span><span class="m">12</span>.3<span class="w"> </span>MiB<span class="w">  </span>conda<span class="w">  </span>python
-</span></code></pre></div></p>
-<h3 id="non-default-environments">Non default environments<a class="headerlink" href="#non-default-environments" title="Permanent link">#</a></h3>
-<p>When you want to have an environment that doesn't have the <code>default</code> feature, you can use the <code>--no-default-feature</code> flag.
-This will result in the environment not having the <code>default</code> feature, and only the features you specify.</p>
-<p>A common use-case of this would be having an environment that can generate your documentation.</p>
-<p>Let's add the <code>mkdocs</code> dependency to the <code>docs</code> feature.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span>docs<span class="w"> </span>mkdocs
-</span></code></pre></div></p>
-<p>Now we can add the <code>docs</code> environment without the <code>default</code> feature.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>docs<span class="w"> </span>--feature<span class="w"> </span>docs<span class="w"> </span>--no-default-feature
-</span></code></pre></div></p>
-<p>If we run <code>pixi list -x -e docs</code> we can see that it only has the <code>mkdocs</code> dependency.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>Environment:<span class="w"> </span>docs
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>Package<span class="w">  </span>Version<span class="w">  </span>Build<span class="w">         </span>Size<span class="w">     </span>Kind<span class="w">   </span>Source
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>mkdocs<span class="w">   </span><span class="m">1</span>.6.1<span class="w">    </span>pyhd8ed1ab_1<span class="w">  </span><span class="m">3</span>.4<span class="w"> </span>MiB<span class="w">  </span>conda<span class="w">  </span>mkdocs
-</span></code></pre></div></p>
-<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>The multiple environment feature is extremely powerful and can be used in many different ways.
-There is much more to explore in the <a href="../../reference/pixi_manifest/#the-feature-and-environments-tables">reference</a> and <a href="../../features/multi_environment/">advanced</a> sections.
-If there are any questions, or you know how to improve this tutorial, feel free to reach out to us on <a href="https://github.com/prefix-dev/pixi">GitHub</a>.</p>
 
 
 
@@ -2405,9 +2050,9 @@ If there are any questions, or you know how to improve this tutorial, feel free 
           
             
             <a
-              href="../rust/"
+              href="../shebang/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Rust"
+              aria-label="Previous: Shebang"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2418,7 +2063,7 @@ If there are any questions, or you know how to improve this tutorial, feel free 
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Rust
+                  Shebang
                 </div>
               </div>
             </a>
@@ -2428,16 +2073,16 @@ If there are any questions, or you know how to improve this tutorial, feel free 
           
             
             <a
-              href="../../features/environment/"
+              href="../../reference/pixi_manifest/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Environments"
+              aria-label="Next: Pixi Manifest"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Environments
+                  Pixi Manifest
                 </div>
               </div>
               <div class="md-footer__button md-icon">
