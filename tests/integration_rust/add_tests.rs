@@ -670,7 +670,7 @@ preview = ['pixi-build']
 
     // Add a package
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
         .with_git_rev(GitRev::new().with_branch("main".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
@@ -773,7 +773,7 @@ preview = ['pixi-build']"#,
 
     // Add a package
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
         .with_git_rev(GitRev::new().with_rev("8a1d9b9".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
@@ -822,7 +822,7 @@ preview = ['pixi-build']"#,
 
     // Add a package
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
         .with_git_rev(GitRev::new().with_tag("v0.1.0".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
