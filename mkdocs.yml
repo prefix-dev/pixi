@@ -6,7 +6,6 @@ theme:
   custom_dir: docs/overrides
   favicon: assets/pixi.png
   logo: assets/pixi.png
-  site_url: https://prefix.dev
   font:
     text: Red Hat Text
     code: JetBrains Mono
@@ -84,7 +83,6 @@ markdown_extensions:
   - mdx_truly_sane_lists
 
 extra:
-  homepage: https://prefix.dev
   social:
     - icon: fontawesome/brands/twitter
       link: https://twitter.com/prefix_dev
@@ -99,10 +97,12 @@ nav:
   - Installation: index.md
   - Basic Usage: basic_usage.md
   - Tutorials:
-      - Python: tutorials/python.md
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
       - Multi Environment: tutorials/multi_environment.md
+  - Python:
+      - Tutorial: tutorials/python.md
+      - Pytorch Installation: features/pytorch.md
   - Features:
       - Environments: features/environment.md
       - Tasks: features/advanced_tasks.md
@@ -111,7 +111,6 @@ nav:
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
       - Global Tools: features/global_tools.md
-      - Pytorch Installation: features/pytorch.md
   - Examples:
       - C++/Cmake: examples/cpp-sdl.md
       - OpenCV: examples/opencv.md
@@ -119,11 +118,12 @@ nav:
   - Switching from:
       - Poetry: switching_from/poetry.md
       - Conda/Mamba: switching_from/conda.md
-  - IDE Integration:
-      - JupyterLab: ide_integration/jupyterlab.md
-      - PyCharm: ide_integration/pycharm.md
-      - RStudio: ide_integration/r_studio.md
-      - VSCode Devcontainer: ide_integration/devcontainer.md
+  - Integration:
+      - JupyterLab: integration/jupyterlab.md
+      - PyCharm: integration/pycharm.md
+      - RStudio: integration/r_studio.md
+      - VSCode Devcontainer: integration/devcontainer.md
+      - Starship: integration/starship.md
   - Building Packages:
       - Getting started: build/getting_started.md
       - Tutorials:
@@ -144,7 +144,6 @@ nav:
       - Pyproject.toml: advanced/pyproject_toml.md
       - S3: advanced/s3.md
       - Shebang: advanced/shebang.md
-      - Third Party Tools: advanced/third_party.md
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
