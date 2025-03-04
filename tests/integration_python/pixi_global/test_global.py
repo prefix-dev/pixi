@@ -10,7 +10,7 @@ MANIFEST_VERSION = 1
 
 
 @pytest.mark.slow
-def test_sync_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_sync_injected_python_lib_is_found(pixi: Path, tmp_pixi_workspace: Path) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
     manifests = tmp_pixi_workspace.joinpath("manifests")
     manifests.mkdir()
@@ -29,25 +29,29 @@ def test_sync_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command([pixi, "global", "sync"], env=env)
     verify_cli_command([python_injected, "--version"], env=env, stdout_contains="3.13.0")
     verify_cli_command(
-        [python_injected, "-c", "import numpy; print(numpy.__version__)"], ExitCode.FAILURE, env=env
-    )
-
-    # Add numpy
-    parsed_toml["envs"]["test"]["dependencies"]["numpy"] = "2.1.3"
-    manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync"], env=env)
-    verify_cli_command(
-        [python_injected, "-c", "import numpy; print(numpy.__version__)"],
+        [python_injected, "-c", "import narwhals; print(narwhals.__version__)"],
+        ExitCode.FAILURE,
         env=env,
-        stdout_contains="2.1.3",
     )
 
-    # Remove numpy again
-    del parsed_toml["envs"]["test"]["dependencies"]["numpy"]
+    # Add narwhals
+    parsed_toml["envs"]["test"]["dependencies"]["narwhals"] = "1.29.0"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
     verify_cli_command(
-        [python_injected, "-c", "import numpy; print(numpy.__version__)"], ExitCode.FAILURE, env=env
+        [python_injected, "-c", "import narwhals; print(narwhals.__version__)"],
+        env=env,
+        stdout_contains="1.29.0",
+    )
+
+    # Remove narwhals again
+    del parsed_toml["envs"]["test"]["dependencies"]["narwhals"]
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    verify_cli_command(
+        [python_injected, "-c", "import narwhals; print(narwhals.__version__)"],
+        ExitCode.FAILURE,
+        env=env,
     )
 
     # Remove python
