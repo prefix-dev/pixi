@@ -100,7 +100,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Machete
-        uses: bnjbvr/cargo-machete@v0.8.0
+        uses: bnjbvr/cargo-machete@v0.7.1
 
   # Checks for duplicate version of package
   cargo-vendor:
