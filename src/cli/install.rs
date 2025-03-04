@@ -23,6 +23,7 @@ pub struct Args {
     #[clap(flatten)]
     pub config: ConfigCli,
 
+    /// Install all environments
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 }
