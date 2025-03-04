@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.42.0] - 2025-03-04
 #### ✨ Highlights
 This release introduces an improved way of [dealing with Virtual Packages](https://github.com/prefix-dev/pixi/pull/2849).
-We now only stop the use of an environment if the environment actually uses a virtual package that does not match the system.
-For example, previously pixi would not allow this setup to be used on any machine that doesn't have CUDA:
+For example, previously pixi would not allow this configuration on a non-CUDA machine:
 ```toml
 [system-requirements]
 cuda = "12"
