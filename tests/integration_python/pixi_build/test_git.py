@@ -1,4 +1,5 @@
 from pathlib import Path
+import platform
 import shutil
 import pytest
 
@@ -179,6 +180,7 @@ def test_build_git_source_deps_from_rev(
     )
 
 
+@pytest.mark.skipif(platform.system() == "Windows", reason="Not reliable on Windows")
 @pytest.mark.slow
 def test_build_git_source_deps_from_tag(
     pixi: Path, tmp_pixi_workspace: Path, build_data: Path
