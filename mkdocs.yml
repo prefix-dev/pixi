@@ -99,7 +99,7 @@ extra:
 
 nav:
   - Installation: index.md
-  - Basic Usage: basic_usage.md
+  - Getting started: getting_started.md
   - Features:
       - Environments: features/environment.md
       - Tasks: features/advanced_tasks.md
