@@ -1,8 +1,3 @@
----
-part: pixi/ide_integration
-title: JupyterLab Integration
-description: Use JupyterLab with pixi environments
----
 
 ## Basic usage
 

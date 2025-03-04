@@ -1,8 +1,3 @@
----
-part: pixi/examples
-title: Navigation 2 example
-description: How to run Nav2 using pixi
----
 
 <iframe
   className={"aspect-video"}

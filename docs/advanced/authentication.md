@@ -1,8 +1,3 @@
----
-part: pixi
-title: Authenticate pixi with a server
-description: Authenticate pixi to access private channels
----
 
 You can authenticate pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
 Different servers use different authentication methods.

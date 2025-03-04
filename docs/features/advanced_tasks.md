@@ -1,8 +1,3 @@
----
-part: pixi/advanced
-title: Advanced tasks
-description: Learn how to interact with pixi tasks
----
 
 When building a package, you often have to do more than just run the code.
 Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a project.

@@ -1,8 +1,3 @@
----
-part: pixi
-title: Environment
-description: The resulting environment of a pixi installation.
----
 
 # Environments
 

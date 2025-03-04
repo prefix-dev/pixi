@@ -1,8 +1,3 @@
----
-part: pixi/examples
-title: Opencv example
-description: How to run opencv using pixi
----
 
 The `opencv` example is located in the pixi repository.
 

@@ -1,8 +1,3 @@
----
-part: pixi/advanced
-title: Multi platform config
-description: Learn how to set up for different platforms/OS's
----
 
 [Pixi's vision](../vision.md) includes being supported on all major platforms. Sometimes that needs some extra configuration to work well.
 On this page, you will learn what you can configure to align better with the platform you are making your application for.

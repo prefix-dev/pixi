@@ -1,8 +1,3 @@
----
-part: pixi/ide_integration
-title: PyCharm Integration
-description: Use PyCharm with pixi environments
----
 
 <!--
 Modifications to this file are related to the README.md in https://github.com/pavelzw/pixi-pycharm,

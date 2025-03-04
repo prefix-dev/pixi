@@ -1,8 +1,3 @@
----
-part: pixi/examples
-title: SDL example
-description: How to build and run an SDL application in C++
----
 
 ![](https://storage.googleapis.com/prefix-cms-images/docs/sdl_examle.png)
 

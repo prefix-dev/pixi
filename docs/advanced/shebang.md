@@ -1,8 +1,3 @@
----
-part: pixi/advanced
-title: Self-contained scripts
-description: Learn how to write self-contained shell scripts using `pixi exec`
----
 
 # Using `pixi exec` to create self-contained scripts
 

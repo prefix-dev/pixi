@@ -1,8 +1,3 @@
----
-part: pixi/advanced
-title: Update lockfiles with GitHub Actions
-description: Learn how to use GitHub Actions to automatically update your pixi lockfiles.
----
 
 You can leverage GitHub Actions in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown)
 to automatically update your lockfiles similar to dependabot or renovate in other ecosystems.

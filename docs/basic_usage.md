@@ -1,8 +1,3 @@
----
-part: pixi
-title: Basic usage
-description: Taking your first steps with pixi
----
 Ensure you've got `pixi` set up. If running `pixi` doesn't show the help, see the [getting started](index.md) if it doesn't.
 
 ```shell

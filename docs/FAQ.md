@@ -1,8 +1,3 @@
----
-part: pixi
-title: Frequently asked questions
-description: What questions did we encounter more often?
----
 ## What is the difference with `conda`, `mamba`, `poetry`, `pip`
 
 | Tool   | Installs python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                     |

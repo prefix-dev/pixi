@@ -1,8 +1,3 @@
----
-part: pixi
-title: Commands
-description: All pixi cli subcommands
----
 
 ## Global options
 

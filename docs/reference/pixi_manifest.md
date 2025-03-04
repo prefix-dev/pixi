@@ -1,8 +1,3 @@
----
-part: pixi
-title: Manifest
-description: Learn what you can do in the pixi manifest.
----
 
 The `pixi.toml` is the project manifest, also known as the pixi project configuration file.
 

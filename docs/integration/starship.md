@@ -1,8 +1,3 @@
----
-part: pixi/advanced
-title: Third-party tools
-description: Learn about third-party tools that integrate with Pixi.
----
 
 # Third-party tools
 

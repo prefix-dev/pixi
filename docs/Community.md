@@ -1,8 +1,3 @@
----
-part: pixi
-title: Community
-description: Who is using pixi?
----
 # Community
 
 When you want to show your users and contributors that they can use pixi in your repo, you can use the following badge:
