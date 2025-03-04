@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const MD_EXTENSION: &str = ".md";
-const RECURSIVE_COMMANDS: &[&str] = &["pixi", "project", "global"];
+// const RECURSIVE_COMMANDS: &[&str] = &["pixi", "project", "global"];
 
 #[derive(Parser)]
 #[command(about = "Generates markdown documentation for the Pixi CLI")]
@@ -49,11 +49,11 @@ fn process_subcommands(
     )
         .map_err(|e| format!("Failed to write command file {}: {}", command_file_path.display(), e))?;
 
-    if RECURSIVE_COMMANDS.contains(&command.get_name()) {
-        for subcommand in command.get_subcommands() {
-            process_subcommands(subcommand, current_path.clone(), output_dir)?;
-        }
+    // if RECURSIVE_COMMANDS.contains(&command.get_name()) {
+    for subcommand in command.get_subcommands() {
+        process_subcommands(subcommand, current_path.clone(), output_dir)?;
     }
+    // }
     Ok(())
 }
 
@@ -64,12 +64,47 @@ fn subcommand_to_synopsis(parents: &[String], command: &Command) -> String {
 
     let positionals: Vec<_> = command
         .get_positionals()
-        .flat_map(|p| p.get_value_names().map(|n| format!("[{}]", n.join(" "))))
+        .map(|p| {
+            let is_required = p.is_required_set();
+            let num_args = p.get_num_args().unwrap_or_else(|| 1.into());
+            let is_multiple = num_args.max_values() > 1 || num_args.min_values() == 0;
+
+            let name = p.get_value_names()
+                .map(|n| n.join(" "))
+                .unwrap_or_else(|| p.get_id().as_str().to_string());
+
+            let formatted = if is_multiple {
+                format!("[{}]", name)
+            } else {
+                format!("<{}>", name)
+            };
+
+            if is_required {
+                format!("{}*", formatted)
+            } else {
+                formatted
+            }
+        })
         .collect();
 
     if !positionals.is_empty() {
         write!(buffer, " {}", positionals.join(" ")).unwrap();
     }
+
+    buffer
+}
+
+/// Generate the shell block for synopsis
+fn subcommand_to_synopsis_shell(parents: &[String], command: &Command) -> String {
+    let mut buffer = String::with_capacity(100);
+    writeln!(buffer, "```").unwrap();
+    writeln!(buffer, "{}", subcommand_to_synopsis(parents, command)).unwrap();
+    for subcommand in command.get_subcommands() {
+        let mut path = parents.to_vec();
+        path.push(command.get_name().to_string());
+        writeln!(buffer, "{}", subcommand_to_synopsis(&path, subcommand)).unwrap();
+    }
+    writeln!(buffer, "```").unwrap();
     buffer
 }
 
@@ -108,14 +143,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
 
     // Synopsis
     writeln!(buffer, "\n## Synopsis").unwrap();
-    writeln!(buffer, "```").unwrap();
-    writeln!(buffer, "{}", subcommand_to_synopsis(parents, command)).unwrap();
-    for subcommand in command.get_subcommands() {
-        let mut path = parents.to_vec();
-        path.push(command.get_name().to_string());
-        writeln!(buffer, "{}", subcommand_to_synopsis(&path, subcommand)).unwrap();
-    }
-    writeln!(buffer, "```").unwrap();
+    writeln!(buffer, "{}", subcommand_to_synopsis_shell(parents, command)).unwrap();
 
     // Positionals
     let positionals: Vec<_> = command.get_positionals().collect();
@@ -124,8 +152,9 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         for pos in positionals {
             write!(
                 buffer,
-                "- **{}**",
-                pos.get_value_names().unwrap_or(&[Str::from("")]).join(" ")
+                "- **{}**{}",
+                pos.get_value_names().unwrap_or(&[Str::from("")]).join(" "),
+                if pos.is_required_set() { " *required*" } else { "" }
             )
                 .unwrap();
             if let Some(help) = pos.get_long_help().or(pos.get_help()) {
@@ -152,20 +181,40 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             .collect();
 
         for opt in sorted_opts {
-            let global = if opt.is_global_set() { "global: " } else { "" };
+            if opt.is_hide_set() || opt.get_long().is_none(){
+                continue;
+            }
+
+            let global = if opt.is_global_set() { "**global**: " } else { "" };
+
             write!(
                 buffer,
-                "- {}**`--{}`**",
+                "- {}**`--{}`**{}",
                 global,
-                opt.get_long().unwrap_or_default()
+                opt.get_long().unwrap_or_default(),
+                if opt.is_required_set() { "*" } else { "" }
             )
                 .unwrap();
-            if let Some(aliases) = opt.get_all_aliases() {
+            if let Some(aliases) = opt.get_visible_aliases() {
                 if !aliases.is_empty() {
                     write!(buffer, " (aliases: {})", aliases.join(", ")).unwrap();
                 }
             }
-            writeln!(buffer, ": {}", opt.get_help().unwrap_or_default()).unwrap();
+
+            write!(buffer, ": {}", opt.get_help().unwrap_or_default()).unwrap();
+            if let Some(env) = opt.get_env() {
+                write!(buffer, " **env**: `{}`", env.to_string_lossy()).unwrap();
+            }
+
+            if !opt.get_default_values().is_empty(){
+                write!(buffer, " **defaults**: `{}`", opt.get_default_values().iter().map(|value| value.to_string_lossy()).join(", ")).unwrap();
+            }
+
+            if opt.get_action().takes_values() && !opt.get_possible_values().is_empty() {
+                write!(buffer, " **possible values**: `{}`", opt.get_possible_values().iter().map(|value| value.get_name()).join("`, `")).unwrap();
+            }
+
+            writeln!(buffer).unwrap();
         }
     }
 
@@ -178,7 +227,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     // Subcommands
     if command.has_subcommands() {
         writeln!(buffer, "\n## Subcommands").unwrap();
-        let will_recurse = RECURSIVE_COMMANDS.contains(&command.get_name());
+        let will_recurse = true; // RECURSIVE_COMMANDS.contains(&command.get_name());
 
         for subcommand in command.get_subcommands() {
             if subcommand.is_hide_set() {
@@ -205,10 +254,19 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             } else {
                 // Plain text for non-recursive subcommands
                 writeln!(buffer, "### `{}`", subcommand.get_name()).unwrap();
-                write!(buffer, "{}\n\n", about).unwrap();
+                writeln!(buffer, "{}", about).unwrap();
+                writeln!(buffer,"{}", subcommand_to_synopsis_shell(parents, subcommand)).unwrap();
             }
         }
     }
+
+    // Write snippet link
+    let parent_path = if parents.is_empty() {
+        "".to_string()
+    } else {
+        format!("{}/", parents.join("/"))
+    };
+    writeln!(buffer, "\n--8<-- \"docs/reference/cli/examples/{}{}.md\"", parent_path, command.get_name()).unwrap();
 
     buffer
 }
