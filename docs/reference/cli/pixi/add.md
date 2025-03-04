@@ -62,14 +62,14 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 26. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
 
 !!! tip
-If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
-```
-pixi config set pinning-strategy no-pin --global
-```
-The default is `semver` which will pin the dependencies to the latest major version or minor for `v0` versions.
+    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](./pixi_configuration.md#pinning-strategy).
+    ```
+    pixi config set pinning-strategy no-pin --global
+    ```
+    The default is `semver` which will pin the dependencies to the latest major version or minor for `v0` versions.
 !!! note
-There is an exception to this rule when you add a package we defined as non `semver`, then we'll use the `minor` strategy.
-These are the packages we defined as non `semver`:
-Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
+    There is an exception to this rule when you add a package we defined as non `semver`, then we'll use the `minor` strategy.
+    These are the packages we defined as non `semver`:
+    Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 
 --8<-- [end:example]
