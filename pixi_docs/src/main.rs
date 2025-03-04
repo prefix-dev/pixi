@@ -1,9 +1,9 @@
+use clap::builder::Str;
 use clap::{Command, CommandFactory};
 use itertools::Itertools;
 use std::fmt::Write;
 use std::fs;
 use std::path::Path;
-use clap::builder::Str;
 
 /// This tool generates the documentation for the pixi cli.
 /// The implementation works as follows:
@@ -23,49 +23,32 @@ fn main() {
 }
 
 fn process_subcommands(command: &Command, parent_path: Vec<String>) {
-    // Create path for current command
+    // Write file for current command
     let mut current_path = parent_path.clone();
     current_path.push(command.get_name().to_string());
 
-    // Generate file name for current command
     let command_file_name = format!("{}.md", current_path.join("/"));
     let command_file_path = Path::new(&command_file_name);
 
-    println!("Processing command: {}", command_file_path.display());
-
-    // Create directories and write file for current command
-    fs::create_dir_all(command_file_path.parent().unwrap())
-        .expect("Failed to create directories");
-    fs::write(
-        command_file_path,
-        subcommand_to_md(&parent_path, command)
-    )
+    fs::create_dir_all(command_file_path.parent().unwrap()).expect("Failed to create directories");
+    fs::write(command_file_path, subcommand_to_md(&parent_path, command))
         .expect("Failed to write command file");
 
-    // Process all subcommands
+    // Process subcommands
     for subcommand in command.get_subcommands() {
-        process_subcommands(subcommand, current_path.clone());
+        if command.get_name() == "pixi"
+            || command.get_name() == "project"
+            || command.get_name() == "global"
+        {
+            // Use recursion
+            process_subcommands(subcommand, current_path.clone());
+        }
     }
 }
 
-fn subcommand_to_md(parents: &[String], command: &Command) -> String {
-    let mut buffer = String::new();
+fn subcommand_to_synopsis(parents: &[String], command: &Command) -> String {
     let full_name = format!("{} {}", parents.join(" "), command.get_name());
-    // ---------- Name ----------
-    write!(
-        buffer,
-        "# `{}`\n",
-        full_name
-    )
-    .unwrap();
-
-    // ---------- Short about ----------
-    write!(buffer, "## About\n").unwrap();
-    write!(buffer, "{}\n", command.get_about().unwrap()).unwrap();
-
-    // ---------- Synopsis ----------
-    write!(buffer, "## Synopsis\n").unwrap();
-    write!(buffer, "```shell\n").unwrap();
+    let mut buffer = String::new();
     write!(buffer, "{}", full_name).unwrap();
     // Add positionals
     let positionals = command
@@ -79,7 +62,30 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     if positionals.len() > 0 {
         write!(buffer, " {}", positionals.into_iter().join(" ")).unwrap();
     }
-    write!(buffer, "\n```\n").unwrap();
+    buffer
+}
+
+fn subcommand_to_md(parents: &[String], command: &Command) -> String {
+    let mut buffer = String::new();
+    let full_name = format!("{} {}", parents.join(" "), command.get_name());
+    // ---------- Name ----------
+    write!(buffer, "# `{}`\n", full_name).unwrap();
+
+
+    // ---------- Synopsis ----------
+    write!(buffer, "## Synopsis\n").unwrap();
+    write!(buffer, "```shell\n").unwrap();
+    write!(buffer, "{}\n", subcommand_to_synopsis(parents, command)).unwrap();
+    for subcommand in command.get_subcommands() {
+        write!(buffer, "{}\n", subcommand_to_synopsis(parents, subcommand)).unwrap();
+    }
+    write!(buffer, "```\n").unwrap();
+
+
+    // ---------- About ----------
+    write!(buffer, "## About\n").unwrap();
+    write!(buffer, "{}\n", command.get_about().unwrap()).unwrap();
+
 
     // ---------- Subcommands ----------
     if command.get_subcommands().next().is_some() {
@@ -102,7 +108,10 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             write!(
                 buffer,
                 "- **{}**",
-                positional.get_value_names().unwrap_or(&[Str::from("")]).join(" ")
+                positional
+                    .get_value_names()
+                    .unwrap_or(&[Str::from("")])
+                    .join(" ")
             )
             .unwrap();
 
@@ -152,8 +161,8 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         });
     }
     // ---------- Long about ----------
-    if let Some(help) = command.get_after_help() {
-        write!(buffer, "## Help\n").unwrap();
+    if let Some(help) = command.get_long_about() {
+        write!(buffer, "## Description\n").unwrap();
         write!(buffer, "{}\n", help).unwrap();
     }
 
