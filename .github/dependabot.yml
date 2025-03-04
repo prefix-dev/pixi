@@ -18,6 +18,8 @@ updates:
       interval: weekly
     commit-message:
       prefix: chore(ci)
+    ignore:
+      - dependency-name: bnjbvr/cargo-machete
     groups:
       dependencies:
         patterns:
