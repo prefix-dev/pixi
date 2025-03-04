@@ -11,6 +11,7 @@ use pixi_manifest::{
 };
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
+use url::Url;
 
 use crate::common::{
     builders::{HasDependencyConfig, HasPrefixUpdateConfig},
