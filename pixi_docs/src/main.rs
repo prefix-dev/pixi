@@ -112,6 +112,13 @@ fn subcommand_to_synopsis_shell(parents: &[String], command: &Command) -> String
 fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     let mut buffer = String::with_capacity(1024);
 
+    // Parent path for relative links
+    let parent_path = if parents.is_empty() {
+        "".to_string()
+    } else {
+        format!("{}/", parents.join("/"))
+    };
+
     // Name with correct relative links including .md extension
     let mut name_parts = Vec::new();
     let depth = parents.len() + 1; // Total depth including current command
@@ -141,6 +148,10 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         }
     }
 
+    // Additional description
+    writeln!(buffer, "\n--8<-- \"docs/reference/cli/{}{}.md:description\"", parent_path, command.get_name()).unwrap();
+
+
     // Synopsis
     writeln!(buffer, "\n## Synopsis").unwrap();
     writeln!(buffer, "{}", subcommand_to_synopsis_shell(parents, command)).unwrap();
@@ -157,11 +168,20 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
                 if pos.is_required_set() { " *required*" } else { "" }
             )
                 .unwrap();
+
             if let Some(help) = pos.get_long_help().or(pos.get_help()) {
-                writeln!(buffer, ": {}", help).unwrap();
-            } else {
-                writeln!(buffer).unwrap();
+                write!(buffer, ": {}", help).unwrap();
             }
+
+            if !pos.get_possible_values().is_empty() {
+                write!(buffer, " **options**: `{}`", pos.get_possible_values().iter().map(|value| value.get_name()).join("`, `")).unwrap();
+            }
+
+            if !pos.get_default_values().is_empty() {
+                write!(buffer, " **defaults**: `{}`", pos.get_default_values().iter().map(|value| value.to_string_lossy()).join(", ")).unwrap();
+            }
+
+            writeln!(buffer).unwrap();
         }
     }
 
@@ -189,9 +209,23 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
 
             write!(
                 buffer,
-                "- {}**`--{}`**{}",
+                "- {}**`--{}{}{}`**{}",
                 global,
                 opt.get_long().unwrap_or_default(),
+                if let Some(short) = opt.get_short() {
+                    format!(" (-{})", short)
+                } else {
+                    "".to_string()
+                },
+                if opt.get_action().takes_values(){
+                    if let Some(value_names) = opt.get_value_names() {
+                        format!(" {}", value_names.join(" "))
+                    } else {
+                        "".to_string()
+                    }
+                } else {
+                    "".to_string()
+                },
                 if opt.is_required_set() { "*" } else { "" }
             )
                 .unwrap();
@@ -211,7 +245,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             }
 
             if opt.get_action().takes_values() && !opt.get_possible_values().is_empty() {
-                write!(buffer, " **possible values**: `{}`", opt.get_possible_values().iter().map(|value| value.get_name()).join("`, `")).unwrap();
+                write!(buffer, " **options**: `{}`", opt.get_possible_values().iter().map(|value| value.get_name()).join("`, `")).unwrap();
             }
 
             writeln!(buffer).unwrap();
@@ -261,12 +295,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     }
 
     // Write snippet link
-    let parent_path = if parents.is_empty() {
-        "".to_string()
-    } else {
-        format!("{}/", parents.join("/"))
-    };
-    writeln!(buffer, "\n--8<-- \"docs/reference/cli/examples/{}{}.md\"", parent_path, command.get_name()).unwrap();
+    writeln!(buffer, "\n--8<-- \"docs/reference/cli/{}{}.md:example\"", parent_path, command.get_name()).unwrap();
 
     buffer
 }
