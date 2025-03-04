@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use pixi::{cli::cli_config::GitRev, DependencyType, Workspace};
+#[cfg(unix)]
+use pixi::cli::cli_config::GitRev;
+
+use pixi::{DependencyType, Workspace};
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::{PyPiPackageName, VersionOrStar},
@@ -8,6 +11,7 @@ use pixi_manifest::{
 };
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
+#[cfg(unix)]
 use url::Url;
 
 use crate::common::{
@@ -655,7 +659,6 @@ async fn add_dependency_pinning_strategy() {
 
 /// Test adding a git dependency with a specific branch
 #[tokio::test]
-#[cfg(not(windows))]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_deps() {
     let pixi = PixiControl::from_manifest(
@@ -706,8 +709,8 @@ preview = ['pixi-build']
 /// Test adding git dependencies with credentials
 /// This tests is skipped on windows because it spawns a credential helper
 /// during the CI run
-#[tokio::test]
 #[cfg(not(windows))]
+#[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_deps_with_creds() {
     let pixi = PixiControl::from_manifest(
@@ -760,7 +763,6 @@ preview = ['pixi-build']
 
 /// Test adding a git dependency with a specific commit
 #[tokio::test]
-#[cfg(not(windows))]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_with_specific_commit() {
     let pixi = PixiControl::from_manifest(
@@ -810,7 +812,6 @@ preview = ['pixi-build']"#,
 
 /// Test adding a git dependency with a specific tag
 #[tokio::test]
-#[cfg(not(windows))]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_git_with_tag() {
     let pixi = PixiControl::from_manifest(
@@ -859,7 +860,6 @@ preview = ['pixi-build']"#,
 
 /// Test adding a git dependency using ssh url
 #[tokio::test]
-#[cfg(not(windows))]
 async fn add_plain_ssh_url() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -891,7 +891,6 @@ preview = ['pixi-build']"#,
 
 /// Test adding a git dependency using ssh url
 #[tokio::test]
-#[cfg(not(windows))]
 async fn add_pypi_git() {
     let pixi = PixiControl::from_manifest(
         r#"
