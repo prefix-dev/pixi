@@ -77,17 +77,17 @@ fn subcommand_to_synopsis(parents: &[String], command: &Command) -> String {
 fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     let mut buffer = String::with_capacity(1024);
 
-    // Name with correct relative links
+    // Name with correct relative links including .md extension
     let mut name_parts = Vec::new();
     let depth = parents.len() + 1; // Total depth including current command
 
+    // Handle parents
     for (i, parent) in parents.iter().enumerate() {
-        // Calculate how many levels up we need to go
         let ups = depth - i - 1;
         let relative_path = if ups > 0 {
-            "../".repeat(ups)
+            format!("{}{}.md", "../".repeat(ups), parent)
         } else {
-            "".to_string()
+            format!("{}.md", parent)
         };
         name_parts.push(format!("[`{}`]({})", parent, relative_path));
     }
@@ -113,7 +113,6 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         writeln!(buffer, "\n## About").unwrap();
         writeln!(buffer, "{}", about).unwrap();
     }
-
 
     // Positionals
     let positionals: Vec<_> = command.get_positionals().collect();
@@ -173,103 +172,36 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         writeln!(buffer, "{}\n", long).unwrap();
     }
 
-
-
     // Subcommands
     if command.has_subcommands() {
         writeln!(buffer, "\n## Subcommands").unwrap();
-        let is_leaf = !RECURSIVE_COMMANDS.contains(&command.get_name());
+        let will_recurse = RECURSIVE_COMMANDS.contains(&command.get_name());
 
         for subcommand in command.get_subcommands() {
             if subcommand.is_hide_set() {
                 continue;
             }
-
-            let mut path = parents.to_vec();
-            path.push(command.get_name().to_string());
-            path.push(subcommand.get_name().to_string());
-            let reversed_path = path.iter().map(|_| "..").collect::<Vec<_>>();
-
-            if is_leaf {
-                // Detailed version for leaf nodes
-                writeln!(
-                    buffer,
-                    "### [{}]({}/{})",
-                    subcommand.get_name(),
-                    reversed_path[..reversed_path.len() - 1].join("/"),
-                    path.join("/")
-                )
-                    .unwrap();
-
-                if let Some(about) = subcommand.get_about() {
-                    writeln!(buffer, "\n**About**: {}", about).unwrap();
-                }
-
-                let sub_positionals: Vec<_> = subcommand.get_positionals().collect();
-                if !sub_positionals.is_empty() {
-                    writeln!(buffer, "\n**Arguments**:\n").unwrap();
-                    for pos in sub_positionals {
-                        write!(
-                            buffer,
-                            "- **{}**",
-                            pos.get_value_names().unwrap_or(&[Str::from("")]).join(" ")
-                        )
-                            .unwrap();
-                        if let Some(help) = pos.get_long_help().or(pos.get_help()) {
-                            writeln!(buffer, ": {}", help).unwrap();
-                        } else {
-                            writeln!(buffer).unwrap();
-                        }
-                    }
-                }
-
-                let sub_opts: Vec<_> = subcommand.get_opts().collect();
-                if !sub_opts.is_empty() {
-                    writeln!(buffer, "\n**Options**:\n").unwrap();
-                    let sorted_sub_opts: Vec<_> = sub_opts
-                        .into_iter()
-                        .filter(|o| !o.is_hide_set())
-                        .sorted_by(|a, b| {
-                            a.get_long()
-                                .unwrap_or_default()
-                                .cmp(&b.get_long().unwrap_or_default())
-                        })
-                        .sorted_by(|a, b| a.is_global_set().cmp(&b.is_global_set()))
-                        .collect();
-
-                    for opt in sorted_sub_opts {
-                        let global = if opt.is_global_set() { "global: " } else { "" };
-                        write!(
-                            buffer,
-                            "- {}**`--{}`**",
-                            global,
-                            opt.get_long().unwrap_or_default()
-                        )
-                            .unwrap();
-                        if let Some(aliases) = opt.get_all_aliases() {
-                            if !aliases.is_empty() {
-                                write!(buffer, " (aliases: {})", aliases.join(", ")).unwrap();
-                            }
-                        }
-                        writeln!(buffer, ": {}", opt.get_help().unwrap_or_default()).unwrap();
-                    }
-                }
-
-                if let Some(long) = subcommand.get_long_about() {
-                    writeln!(buffer, "\n**Description**: {}", long).unwrap();
-                }
-                writeln!(buffer, "\n").unwrap();
+            let about = if let Some(about) = subcommand.get_about() {
+                format!(": {about}")
             } else {
-                // Simple version for non-leaf nodes
-                let about = subcommand.get_about().map_or(String::new(), |a| format!(": {}", a));
+                "".to_string()
+            };
+
+            if will_recurse {
+                // Generate link only if this command will recurse, without .md
+                let path = vec![command.get_name(), subcommand.get_name()];
+
                 writeln!(
                     buffer,
-                    "### [{}]({}/{})",
+                    "### [{}]({}.md)",
                     subcommand.get_name(),
-                    reversed_path[..reversed_path.len() - 1].join("/"),
                     path.join("/")
                 )
                     .unwrap();
+                write!(buffer, "{}\n\n", about).unwrap();
+            } else {
+                // Plain text for non-recursive subcommands
+                writeln!(buffer, "### `{}`", subcommand.get_name()).unwrap();
                 write!(buffer, "{}\n\n", about).unwrap();
             }
         }
