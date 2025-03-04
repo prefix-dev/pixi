@@ -146,6 +146,7 @@ nav:
       - Rust: tutorials/rust.md
       - Multi Environment: tutorials/multi_environment.md
   - Advanced:
+      - Installation: advanced/installation.md
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
       - Shebang: advanced/shebang.md
