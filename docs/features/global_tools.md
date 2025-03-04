@@ -136,7 +136,7 @@ dependencies = { snakemake = "*" }
 exposed = { snakemake = "snakemake" }
 ```
 
-More information on channels can be found [here](../advanced/channel_priority.md).
+More information on channels can be found [here](../advanced/channel_logic.md).
 
 ### Automatic Exposed
 
