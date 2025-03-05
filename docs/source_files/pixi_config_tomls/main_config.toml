@@ -3,11 +3,6 @@
 default-channels = ["conda-forge"]
 # --8<-- [end:default-channels]
 
-# --8<-- [start:shell]
-[shell]
-change-ps1 = true
-force-activation = true
-# --8<-- [end:shell]
 
 # --8<-- [start:tls-no-verify]
 tls-no-verify = false
@@ -92,3 +87,9 @@ use-environment-activation-cache = true
   "https://prefix.dev/bioconda",
 ]
 #  --8<-- [end:mirrors]
+
+# --8<-- [start:shell]
+[shell]
+change-ps1 = true
+force-activation = true
+# --8<-- [end:shell]
