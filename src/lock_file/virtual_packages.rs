@@ -15,6 +15,10 @@ use std::str::FromStr;
 use thiserror::Error;
 use uv_distribution_filename::WheelFilename;
 
+/// Define accepted virtual packages as a constant set
+/// These packages will be checked against the system virtual packages
+const ACCEPTED_VIRTUAL_PACKAGES: &[&str] = &["__glibc", "__cuda", "__osx", "__win", "__linux"];
+
 #[derive(Debug, Error, Diagnostic)]
 #[error("{msg}")]
 pub struct VirtualPackageNotFoundError {
@@ -207,15 +211,12 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
     // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
-        // Define accepted virtual packages as a constant set
-        const ACCEPTED_PACKAGES: &[&str] = &["__glibc", "__cuda", "__osx", "__win", "__linux"];
-
-        // Check if the package name (normalized) is in our accepted list
+        // Check if the package name is in our accepted list
         let is_accepted = required
             .name
             .as_ref()
             .iter()
-            .any(|name| ACCEPTED_PACKAGES.contains(&name.as_normalized()));
+            .any(|name| ACCEPTED_VIRTUAL_PACKAGES.contains(&name.as_normalized()));
 
         // Skip if not in accepted packages
         if !is_accepted {
