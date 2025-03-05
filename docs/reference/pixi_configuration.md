@@ -73,14 +73,16 @@ This defaults to only conda-forge.
 !!! note
     The `default-channels` are only used when initializing a new project. Once initialized the `channels` are used from the project manifest.
 
-### `change-ps1`
+### `shell`
 
-When set to false, the `(pixi)` prefix in the shell prompt is removed.
-This applies to the `pixi shell` subcommand.
-You can override this from the CLI with `--change-ps1`.
+- `change-ps1`:  When set to false, the `(pixi)` prefix in the shell prompt is removed.
+    This applies to the `pixi shell` subcommand.
+    You can override this from the CLI with `--change-ps1`.
+- `force-activate`: When set to true the re-activation of the environment will always happen.
+This is used in combination with the [`experimental`](#experimental) feature `use-environment-activation-cache`.
 
 ```toml title="config.toml"
---8<-- "docs/source_files/pixi_config_tomls/main_config.toml:change-ps1"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:shell"
 ```
 
 ### `tls-no-verify`
