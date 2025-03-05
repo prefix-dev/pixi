@@ -186,6 +186,7 @@ pub struct ConfigCliActivation {
     #[arg(long)]
     force_activate: bool,
 
+    /// Do not source the autocompletion scripts from the environment.
     #[arg(long)]
     no_completion: Option<bool>,
 }
