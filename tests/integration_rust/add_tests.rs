@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-#[cfg(unix)]
 use pixi::cli::cli_config::GitRev;
 
 use pixi::{DependencyType, Workspace};
