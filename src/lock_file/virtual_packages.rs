@@ -91,8 +91,8 @@ pub enum MachineValidationError {
     #[diagnostic(transparent)]
     PyPITagError(#[from] PyPITagError),
 
-    #[error("Wheel: {0} doesn't match this systems virtual capabilities")]
-    WheelTagsMismatch(String),
+    #[error("Wheel: {0} doesn't match this systems virtual capabilities for tags: {1}")]
+    WheelTagsMismatch(String, String),
 
     #[error("No Python record found in the lockfile for platform: {0}.")]
     #[diagnostic(
@@ -253,7 +253,10 @@ pub(crate) fn validate_system_meets_environment_requirements(
             // Check if all the wheel tags match the system virtual packages
             for wheel in wheels {
                 if !wheel.is_compatible(&uv_system_tags) {
-                    return Err(MachineValidationError::WheelTagsMismatch(wheel.to_string()));
+                    return Err(MachineValidationError::WheelTagsMismatch(
+                        wheel.to_string(),
+                        uv_system_tags.to_string(),
+                    ));
                 }
                 tracing::debug!("Wheel: {} matches the system", wheel);
             }
@@ -367,7 +370,7 @@ mod test {
 
         let overrides = VirtualPackageOverrides {
             // To low version for the wheel
-            osx: Some(Override::String("14.0".to_string())),
+            osx: Some(Override::String("13.0".to_string())),
             libc: Some(Override::String("2.10".to_string())),
             ..VirtualPackageOverrides::default()
         };
@@ -380,7 +383,7 @@ mod test {
         );
         if Platform::current().is_unix() {
             assert!(
-                matches!(result, Err(MachineValidationError::WheelTagsMismatch(_))),
+                matches!(result, Err(MachineValidationError::WheelTagsMismatch(_, _))),
                 "{:?}",
                 result
             );
