@@ -370,7 +370,7 @@ mod test {
 
         let overrides = VirtualPackageOverrides {
             // To low version for the wheel
-            osx: Some(Override::String("14.0".to_string())),
+            osx: Some(Override::String("13.0".to_string())),
             libc: Some(Override::String("2.10".to_string())),
             ..VirtualPackageOverrides::default()
         };
