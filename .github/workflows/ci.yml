@@ -224,13 +224,9 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.8.3
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run git init ../test-git-bug
+      - run: pixi add --pypi boltons --git https://github.com/mahmoud/boltons.git --rev d463c60
 #  #
 #  # Builds the binary artifacts on different platforms
 #  #
