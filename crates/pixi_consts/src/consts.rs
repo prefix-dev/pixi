@@ -11,7 +11,7 @@ pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
 pub const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
-pub const PROJECT_MANIFEST: &str = "pixi.toml";
+pub const WORKSPACE_MANIFEST: &str = "pixi.toml";
 pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {

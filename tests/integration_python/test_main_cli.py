@@ -348,7 +348,7 @@ def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
         # Verify that the manifest file contains expected content
         manifest_content = manifest_path.read_text()
-        assert "[project]" in manifest_content
+        assert "[workspace]" in manifest_content
 
 
 def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -364,7 +364,7 @@ def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> Non
 
     # Verify that the manifest file contains expected content
     manifest_content = manifest_path.read_text()
-    assert "[project]" in manifest_content
+    assert "[workspace]" in manifest_content
 
 
 @pytest.mark.slow

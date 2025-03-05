@@ -64,7 +64,7 @@ pub async fn update_python_distributions(
     let python_record = pixi_records
         .iter()
         .find(|r| is_python_record(r))
-        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::PROJECT_MANIFEST))?;
+        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::WORKSPACE_MANIFEST))?;
     let tags = get_pypi_tags(
         platform,
         system_requirements,
