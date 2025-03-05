@@ -37,7 +37,7 @@ This shift towards projects offers a more organized and efficient way to manage 
 In `pixi`, a project is a folder containing a [manifest](../reference/pixi_manifest.md)(`pixi.toml`/`pyproject.toml`) file that describes the project, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
 
 This project-centric approach allows for easy sharing and collaboration, as the project folder contains all the necessary information to recreate the environment.
-It manages more than one environment for more than one platform in a single project, and allows for easy switching between them. (See [multiple environments](../features/multi_environment.md))
+It manages more than one environment for more than one platform in a single project, and allows for easy switching between them. (See [multiple environments](../environments/multi_environment.md))
 
 ## Global environments
 `conda` installs all environments in one global location.

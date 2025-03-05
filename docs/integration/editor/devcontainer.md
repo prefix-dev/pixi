@@ -1,7 +1,7 @@
 # Use pixi inside of a devcontainer
 
 [VSCode Devcontainers](https://code.visualstudio.com/docs/devcontainers/containers) are a popular tool to develop on a project with a consistent environment.
-They are also used in [GitHub Codespaces](https://github.com/features/codespaces) which makes it a great way to develop on a project without having to install anything on your local machine.
+They are also used in [GitHub Codespaces](https://github.com/environments/codespaces) which makes it a great way to develop on a project without having to install anything on your local machine.
 
 To use pixi inside of a devcontainer, follow these steps:
 
@@ -38,7 +38,7 @@ RUN echo 'eval "$(pixi completion -s bash)"' >> /home/vscode/.bashrc
       }
     },
     "features": {
-      "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+      "ghcr.io/devcontainers/environments/docker-in-docker:2": {}
     },
     "mounts": ["source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"],
     "postCreateCommand": "sudo chown vscode .pixi && pixi install"

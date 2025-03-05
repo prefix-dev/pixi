@@ -100,12 +100,12 @@ extra:
 nav:
   - Introduction: index.md
   - Environments:
-      - Environments: features/environment.md
-      - Tasks: features/advanced_tasks.md
-      - Multi Platform: features/multi_platform_configuration.md
-      - Multi Environment: features/multi_environment.md
-      - Lockfile: features/lockfile.md
-      - System Requirements: features/system_requirements.md
+      - Environments: environments/environment.md
+      - Tasks: environments/advanced_tasks.md
+      - Multi Platform: environments/multi_platform_configuration.md
+      - Multi Environment: environments/multi_environment.md
+      - Lockfile: environments/lockfile.md
+      - System Requirements: environments/system_requirements.md
   - Building:
       - Getting started: build/getting_started.md
       - Tutorials:
@@ -125,7 +125,7 @@ nav:
       - Pyproject.toml: python/pyproject_toml.md
       - Pytorch Installation: python/pytorch.md
   - Global Tools:
-      - Introduction: features/global_tools.md
+      - Introduction: global_tools/introduction.md
   - Integration:
       - Editor:
           - JupyterLab: integration/editor/jupyterlab.md
@@ -157,7 +157,7 @@ nav:
   - Misc:
       - Changelog: CHANGELOG.md
       - Pixi Vision: vision.md
-      - Packaging pixi: packaging.md
+      - Packaging Pixi: packaging.md
       - Community: Community.md
       - FAQ: FAQ.md
 
@@ -169,10 +169,10 @@ hooks:
 plugins:
   - redirects:
       redirect_maps:
-        "advanced/advanced_tasks.md": "features/advanced_tasks.md"
-        "environment.md": "features/environment.md"
-        "design_proposals/multi_environment_proposal.md": "features/multi_environment.md"
-        "advanced/multi_platform_configuration.md": "features/multi_platform_configuration.md"
+        "advanced/advanced_tasks.md": "environments/advanced_tasks.md"
+        "environment.md": "environments/environment.md"
+        "design_proposals/multi_environment_proposal.md": "environments/multi_environment.md"
+        "advanced/multi_platform_configuration.md": "environments/multi_platform_configuration.md"
         "cli.md": "reference/cli.md"
         "configuration.md": "reference/pixi_manifest.md"
         "reference/project_configuration.md": "reference/pixi_manifest.md"

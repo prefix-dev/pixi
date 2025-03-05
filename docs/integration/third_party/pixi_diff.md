@@ -9,7 +9,7 @@ This can be leveraged in combination with [pavelzw/pixi-diff-to-markdown](https:
 With [henriklovhaug/md-tui](https://github.com/henriklovhaug/md-tui), you can even render the markdown file in the terminal.
 
 !!!tip "Install the tools globally"
-    All of the above-mentioned tools are available on conda-forge and can be installed using [`pixi global install`](../../features/global_tools.md).
+    All of the above-mentioned tools are available on conda-forge and can be installed using [`pixi global install`](../../global_tools/introduction.md).
 
     ```bash
     pixi global install pixi-diff pixi-diff-to-markdown md-tui

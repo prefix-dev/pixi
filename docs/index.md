@@ -16,28 +16,16 @@ To install `pixi` you can run the following command in your terminal:
     ```
 
     The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
-    If this directory does not already exist, the script will create it.
-
-    The script will also update your `~/.bashrc` or `~/.zshrc` to include `~/.pixi/bin` in your PATH, allowing you to invoke the `pixi` command from anywhere.
+    The script will also extend the `PATH` environment variable in the startup script of your shell to include `~/.pixi/bin`.
+    This allows you to invoke `pixi` from anywhere.
 
 === "Windows"
-    `PowerShell`:
     ```powershell
     powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
     ```
-    Changing the [execution policy](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4#powershell-execution-policies) allows running a script from the internet.
-    Check the script you would be running with:
-    ```powershell
-    powershell -c "irm -useb https://pixi.sh/install.ps1 | more"
-    ```
-    `winget`:
-    ```
-    winget install prefix-dev.pixi
-    ```
-    The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `LocalAppData/pixi/bin`.
-    If this directory does not already exist, the script will create it.
 
-    The command will also automatically add `LocalAppData/pixi/bin` to your path allowing you to invoke `pixi` from anywhere.
+    The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `LocalAppData/pixi/bin`.
+    The command will also add `LocalAppData/pixi/bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
 
 
 !!! tip
@@ -47,7 +35,6 @@ To install `pixi` you can run the following command in your terminal:
 Check out our [installation docs](./advanced/installation.md) to learn about alternative installation methods, autocompletion and more.
 
 ## Getting Started
-
 
 
 Initialize a new project and navigate to the project directory.

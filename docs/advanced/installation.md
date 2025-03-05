@@ -114,6 +114,12 @@ brew install pixi
 We provide an `msi` installer on [our GitHub releases page](https://github.com/prefix-dev/pixi/releases/latest).
 The installer will download pixi and add it to the path.
 
+### Winget
+
+```
+winget install prefix-dev.pixi
+```
+
 ### Install From Source
 
 pixi is 100% written in Rust, and therefore it can be installed, built and tested with cargo.

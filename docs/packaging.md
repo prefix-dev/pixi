@@ -1,3 +1,5 @@
+# Packaging Pixi
+
 This is a guide for distribution maintainers wanting to package pixi for a different package manager.
 Users of pixi can ignore this page.
 

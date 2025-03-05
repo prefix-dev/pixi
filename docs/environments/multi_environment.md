@@ -249,10 +249,9 @@ Dev
 ```
 
 
-## Important links
+## Initial write-up
 
-- Initial writeup of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.com/0xbe7a/bbf8a323409be466fe1ad77aa6dd5428)
-- GitHub project: [#10](https://github.com/orgs/prefix-dev/projects/10)
+Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.com/0xbe7a/bbf8a323409be466fe1ad77aa6dd5428)
 
 ## Real world example use cases
 
