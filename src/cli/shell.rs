@@ -19,6 +19,9 @@ use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
+#[cfg(target_family = "unix")]
+use crate::prefix::Prefix;
+
 /// Start a shell in the pixi environment of the project
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -127,7 +130,6 @@ fn start_cmdexe(
     let mut process = command.spawn().into_diagnostic()?;
     Ok(process.wait().into_diagnostic()?.code())
 }
-use crate::prefix::Prefix;
 
 /// Starts a UNIX shell.
 /// # Arguments
@@ -264,6 +266,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
+    #[allow(unused_variables)]
     let (lock_file_data, prefix) = get_update_lock_file_and_prefix(
         &environment,
         UpdateMode::QuickValidate,
