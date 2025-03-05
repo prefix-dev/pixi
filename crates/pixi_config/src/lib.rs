@@ -1189,6 +1189,12 @@ impl Config {
                     .transpose()
                     .into_diagnostic()?
             }
+            "change-ps1" => {
+                return Err(miette::miette!("The `change-ps1` field is deprecated. Please use the `shell.change-ps1` field instead."));
+            }
+            "force-activate" => {
+                return Err(miette::miette!("The `force-activate` field is deprecated. Please use the `shell.force-activate` field instead."));
+            }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
                     self.repodata_config = value
@@ -1963,7 +1969,11 @@ UNUSED = "unused"
             Some(KeyringProvider::Subprocess)
         );
 
-        config.set("change-ps1", None).unwrap();
+        let deprecated = config.set("change-ps1", None);
+        assert!(deprecated.is_err());
+        assert!(deprecated.unwrap_err().to_string().contains("deprecated"));
+
+        config.set("shell.change-ps1", None).unwrap();
         assert_eq!(config.change_ps1, None);
 
         config
