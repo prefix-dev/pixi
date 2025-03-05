@@ -90,6 +90,7 @@ use-environment-activation-cache = true
 
 # --8<-- [start:shell]
 [shell]
-change-ps1 = true
+change-ps1 = false
 force-activation = true
+source-completion-scripts = false
 # --8<-- [end:shell]

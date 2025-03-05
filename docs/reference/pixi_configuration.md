@@ -75,11 +75,12 @@ This defaults to only conda-forge.
 
 ### `shell`
 
-- `change-ps1`:  When set to false, the `(pixi)` prefix in the shell prompt is removed.
+- `change-ps1`:  When set to `false`, the `(pixi)` prefix in the shell prompt is removed.
     This applies to the `pixi shell` subcommand.
     You can override this from the CLI with `--change-ps1`.
-- `force-activate`: When set to true the re-activation of the environment will always happen.
+- `force-activate`: When set to `true` the re-activation of the environment will always happen.
 This is used in combination with the [`experimental`](#experimental) feature `use-environment-activation-cache`.
+- `source-completion-scripts`: When set to `false`, pixi will not source the autocompletion scripts of the environment when going into the shell.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:shell"
