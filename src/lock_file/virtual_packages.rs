@@ -253,11 +253,6 @@ pub(crate) fn validate_system_meets_environment_requirements(
             // Check if all the wheel tags match the system virtual packages
             for wheel in wheels {
                 if !wheel.is_compatible(&uv_system_tags) {
-                    tracing::debug!(
-                        "Wheel: {} doesn't match the system virtual capabilities for tags: {}",
-                        wheel,
-                        uv_system_tags,
-                    );
                     return Err(MachineValidationError::WheelTagsMismatch(
                         wheel.to_string(),
                         uv_system_tags.to_string(),
@@ -364,9 +359,6 @@ mod test {
             libc: Some(Override::String("2.9999".to_string())),
             ..VirtualPackageOverrides::default()
         };
-
-        println!("{:?}", platform);
-        println!("{:?}", overrides);
 
         let result = validate_system_meets_environment_requirements(
             &lockfile,
