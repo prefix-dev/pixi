@@ -7,7 +7,7 @@ For more technical documentation check pixi on [docs.rs](https://docs.rs/pixi/la
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
-    For example, the `[project]` table becomes `[tool.pixi.project]`.
+    For example, the `[workspace]` table becomes `[tool.pixi.workspace]`.
     There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../python/pyproject_toml.md) documentation for more information.
 
 ## Manifest discovery
@@ -204,7 +204,7 @@ channel-priority = "disabled"
     It's advisable to maintain the default strict setting and order channels thoughtfully.
     If necessary, specify a channel directly for a dependency.
     ```toml
-    [project]
+    [workspace]
     # Putting conda-forge first solves most issues
     channels = ["conda-forge", "channel-name"]
     [dependencies]

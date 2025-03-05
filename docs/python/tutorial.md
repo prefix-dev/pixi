@@ -47,7 +47,7 @@ version = "0.1.0"
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["osx-arm64"]
 
@@ -68,13 +68,13 @@ These first entries were added to the `pyproject.toml` file:
 
 ```toml
 # Main pixi entry
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 # This is your machine platform by default
 platforms = ["osx-arm64"]
 ```
 
-The `channels` and `platforms` are added to the `[tool.pixi.project]` section.
+The `channels` and `platforms` are added to the `[tool.pixi.workspace]` section.
 Channels like `conda-forge` manage packages similar to PyPI but allow for different packages across languages.
 The keyword `platforms` determines what platform the project supports.
 

@@ -101,13 +101,13 @@ In some cases, you might only want to install `pixi-pycharm` on your local dev-m
 To achieve this, we can use [multiple environments](../../features/multi_environment.md).
 
 ```toml
-[project]
+[workspace]
 name = "multi-env"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = ["numpy"]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 

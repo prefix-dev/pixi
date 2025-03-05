@@ -6,7 +6,7 @@ Here is an example manifest file that highlights some of the features:
 
 === "`pixi.toml`"
     ```toml title="pixi.toml"
-    [project]
+    [workspace]
     # Default project info....
     # A list of platforms you are supporting with your package.
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
@@ -28,7 +28,7 @@ Here is an example manifest file that highlights some of the features:
     ```
 === "`pyproject.toml`"
     ```toml title="pyproject.toml"
-    [tool.pixi.project]
+    [tool.pixi.workspace]
     # Default project info....
     # A list of platforms you are supporting with your package.
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]

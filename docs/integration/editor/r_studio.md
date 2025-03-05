@@ -22,7 +22,7 @@ The full example can be found here: [RStudio example](https://github.com/prefix-
 Here is an example of a `pixi.toml` file that sets up an RStudio task:
 
 ```toml
-[project]
+[workspace]
 name = "r"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-64", "osx-arm64"]

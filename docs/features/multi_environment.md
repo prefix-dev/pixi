@@ -186,7 +186,7 @@ It's possible to define tasks in multiple environments, in this case the user sh
 Here is a simple example of a task only manifest:
 
 ```toml title="pixi.toml"
-[project]
+[workspace]
 name = "test_ambiguous_env"
 channels = []
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
@@ -263,7 +263,7 @@ Dev
     This can be replaced by using multiple environments.
 
     ```toml title="pixi.toml"
-    [project]
+    [workspace]
     name = "polarify"
     # ...
     channels = ["conda-forge"]
@@ -353,7 +353,7 @@ Dev
     This is a common use case where we want to test the production environment with additional dependencies.
 
     ```toml title="pixi.toml"
-    [project]
+    [workspace]
     name = "my-app"
     # ...
     channels = ["conda-forge"]
@@ -409,7 +409,7 @@ Dev
     This is an example for an ML project that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
 
     ```toml title="pixi.toml"
-    [project]
+    [workspace]
     name = "my-ml-project"
     description = "A project that does ML stuff"
     authors = ["Your Name <your.name@gmail.com>"]

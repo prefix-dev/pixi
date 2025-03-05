@@ -31,7 +31,7 @@ my_ros2_project
 The `pixi.toml` file is the manifest file for your project. It should look like this:
 
 ```toml title="pixi.toml"
-[project]
+[workspace]
 name = "my_ros2_project"
 version = "0.1.0"
 description = "Add a short description here"
@@ -129,7 +129,7 @@ Normally this would be the script you add to your `.bashrc` but instead you tell
     Use the following example to add support for both Linux and Windows, using the [target](../features/multi_platform_configuration.md#activation) syntax.
 
     ```toml
-    [project]
+    [workspace]
     platforms = ["linux-64", "win-64"]
 
     [activation]

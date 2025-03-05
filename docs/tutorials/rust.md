@@ -31,7 +31,7 @@ my_rust_project
 The `pixi.toml` file is the manifest file for your project. It should look like this:
 
 ```toml  title="pixi.toml"
-[project]
+[workspace]
 name = "my_rust_project"
 version = "0.1.0"
 description = "Add a short description here"

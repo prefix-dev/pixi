@@ -74,7 +74,7 @@ You can also specify which environment(s) you want to install by setting the `en
 This will install all environments that are specified and cache them.
 
 ```toml
-[project]
+[workspace]
 name = "my-package"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
@@ -373,7 +373,7 @@ You can also use a preinstalled local version of pixi on the runner by not setti
 `pixi-url` or `pixi-bin-path` inputs. This action will then try to find a local version of pixi in the runner's PATH.
 
 ### Using the `pyproject.toml` as a manifest file for pixi.
-`setup-pixi` will automatically pick up the `pyproject.toml` if it contains a `[tool.pixi.project]` section and no `pixi.toml`.
+`setup-pixi` will automatically pick up the `pyproject.toml` if it contains a `[tool.pixi.workspace]` section and no `pixi.toml`.
 This can be overwritten by setting the `manifest-path` input argument.
 
 ```yaml

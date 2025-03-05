@@ -9,7 +9,7 @@ We don't advise to use the `pyproject.toml` file for anything else than python p
 
 When you already have a `pyproject.toml` file in your project, you can run `pixi init` in a that folder. Pixi will automatically
 
-- Add a `[tool.pixi.project]` section to the file, with the platform and channel information required by pixi;
+- Add a `[tool.pixi.workspace]` section to the file, with the platform and channel information required by pixi;
 - Add the current project as an editable pypi dependency;
 - Add some defaults to the `.gitignore` and `.gitattributes` files.
 
@@ -27,7 +27,7 @@ This is an example of a `pyproject.toml` file with the `requires_python` field, 
 name = "my_project"
 requires-python = ">=3.9"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 ```
@@ -35,7 +35,7 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 Which is equivalent to:
 
 ```toml title="equivalent pixi.toml"
-[project]
+[workspace]
 name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
@@ -61,7 +61,7 @@ dependencies = [
     "matplotlib",
 ]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 ```
@@ -69,7 +69,7 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 Which is equivalent to:
 
 ```toml title="equivalent pixi.toml"
-[project]
+[workspace]
 name = "my_project"
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
@@ -95,7 +95,7 @@ dependencies = [
     "matplotlib",
 ]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
@@ -116,7 +116,7 @@ You can add them to pixi environments manually, or use `pixi init` to setup the 
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
-```toml
+```toml title="pyproject.toml"
 [project]
 name = "my_project"
 dependencies = ["package1"]
@@ -128,7 +128,7 @@ all = ["package2","my_project[test]"]
 
 Running `pixi init` in that project folder will transform the `pyproject.toml` file into:
 
-```toml
+```toml title="pyproject.toml"
 [project]
 name = "my_project"
 dependencies = ["package1"]
@@ -137,7 +137,7 @@ dependencies = ["package1"]
 test = ["pytest"]
 all = ["package2","my_project[test]"]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"] # if executed on linux
 
@@ -186,7 +186,7 @@ test = ["pytest"]
 docs = ["sphinx"]
 dev = [{include-group = "test"}, {include-group = "docs"}]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"] # if executed on linux
 
@@ -221,7 +221,7 @@ dependencies = [
     "ruff",
 ]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 

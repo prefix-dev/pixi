@@ -10,7 +10,7 @@ Therefore, this document will continue with simplified flow charts.
 
 When a user defines a channel per dependency, the solver needs to know the other channels are unusable for this dependency.
 ```toml
-[project]
+[workspace]
 channels = ["conda-forge", "my-channel"]
 
 [dependencies]
@@ -35,7 +35,7 @@ flowchart TD
 Channel priority is dictated by the order in the `project.channels` array, where the first channel is the highest priority.
 For instance:
 ```toml
-[project]
+[workspace]
 channels = ["conda-forge", "my-channel", "your-channel"]
 ```
 If the package is found in `conda-forge` the solver will not look for it in `my-channel` and `your-channel`, because it tells the solver they are excluded.
@@ -65,7 +65,7 @@ If you have 10 channels and the package is found in the 5th channel it will excl
 # Use case: pytorch and nvidia with conda-forge
 A common use case is to use `pytorch` with `nvidia` drivers, while also needing the `conda-forge` channel for the main dependencies.
 ```toml
-[project]
+[workspace]
 channels = ["nvidia/label/cuda-11.8.0", "nvidia", "conda-forge", "pytorch"]
 platforms = ["linux-64"]
 
@@ -98,7 +98,7 @@ Non specified priorities are set to 0 but the index in the array still counts as
 This priority definition is mostly important for [multiple environments](../features/multi_environment.md) with different channel priorities, as by default feature channels are prepended to the project channels.
 
 ```toml
-[project]
+[workspace]
 name = "test_channel_priority"
 platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
 channels = ["conda-forge"]
