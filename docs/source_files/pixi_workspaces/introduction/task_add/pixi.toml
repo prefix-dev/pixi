@@ -4,7 +4,7 @@ name = "hello-world"
 platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [tasks]
-hello = "python hello.py"
+start = "python hello.py"
 
 [dependencies]
 cowpy = "1.1.*"

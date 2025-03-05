@@ -44,40 +44,75 @@ pixi init hello-world
 cd hello-world
 ```
 
+This will create a pixi manifest which is a file called `pixi.toml`.
+It describes the structure, dependencies and metadata of your workspace.
+
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/introduction/init/pixi.toml"
 ```
 
-Add the dependencies you would like to use.
+Let's add dependencies!
 
 ```bash
-pixi add python
+pixi add cowpy python
 ```
 
-Create a file named `hello_world.py` in the directory and paste the following code into the file.
+The dependencies are not only installed, but also tracked in the manifest.
 
-```py title="hello_world.py"
-def hello():
-    print("Hello World, from the revolution in package management.")
-
-if __name__ == "__main__":
-    hello()
+```toml title="pixi.toml" hl_lines="6-8"
+--8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/pixi.toml"
 ```
 
-Run the code inside the environment.
+We can now create a Python script which uses the `cowpy` library.
+
+```py title="hello.py"
+--8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
+```
+
+The dependencies are installed in a pixi environment.
+In order to run a command within an environment, we prefix it with `pixi run`.
 
 ```bash
-pixi run python hello_world.py
+pixi run python hello.py
 ```
+
+```
+ __________________
+< Hello Pixi fans! >
+ ------------------
+     \   ^__^
+      \  (oo)\_______
+         (__)\       )\/\
+           ||----w |
+           ||     ||
+
+```
+
 
 You can also put this run command in a **task**.
 
 ```bash
-$ pixi task add hello python hello_world.py
+$ pixi task add hello python hello.py
+```
+
+```toml title="pixi.toml" hl_lines="6-7"
+--8<-- "docs/source_files/pixi_workspaces/introduction/task_add/pixi.toml"
 ```
 
 After adding the task, you can run the task using its name.
 
 ```bash
-$ pixi run hello
+$ pixi run start
+```
+
+```
+ __________________
+< Hello Pixi fans! >
+ ------------------
+     \   ^__^
+      \  (oo)\_______
+         (__)\       )\/\
+           ||----w |
+           ||     ||
+
 ```

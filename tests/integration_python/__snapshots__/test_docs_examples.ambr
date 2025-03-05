@@ -1,11 +1,11 @@
 # serializer version: 1
-# name: test_doc_pixi_workspaces[pixi_build_cpp]
+# name: test_doc_pixi_workspaces_pixi_build[cpp]
   '''
   3
   
   '''
 # ---
-# name: test_doc_pixi_workspaces[pixi_build_python]
+# name: test_doc_pixi_workspaces_pixi_build[python]
   '''
   ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
   ┃ name         ┃ age ┃ city        ┃
@@ -17,7 +17,7 @@
   
   '''
 # ---
-# name: test_doc_pixi_workspaces[pixi_build_workspace]
+# name: test_doc_pixi_workspaces_pixi_build[workspace]
   '''
   ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
   ┃ name         ┃ age ┃ city        ┃
@@ -29,15 +29,5 @@
   
   '''
 # ---
-# name: test_doc_pixi_workspaces[pixi_build_workspace_variants]
-  '''
-  ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-  ┃ name         ┃ age ┃ city        ┃
-  ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-  │ John Doe     │ 31  │ New York    │
-  │ Jane Smith   │ 26  │ Los Angeles │
-  │ Tim de Jager │ 36  │ Utrecht     │
-  └──────────────┴─────┴─────────────┘
-  
   '''
 # ---
