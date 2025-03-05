@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.42.0] - 2025-03-04
+#### ✨ Highlights
+This release introduces an improved way of [dealing with Virtual Packages](https://github.com/prefix-dev/pixi/pull/2849).
+For example, previously pixi would not allow this configuration on a non-CUDA machine:
+```toml
+[system-requirements]
+cuda = "12"
+
+[dependencies]
+python = "*"
+```
+Now this setup also works on non-CUDA machines, because it only stops if the packages themselves actually depend on CUDA.
+This is a first step to make the use of system-requirements/virtual-packages more flexible.
+
+#### Changed
+
+- Validate machine using lockfile by @ruben-arts in [#2849](https://github.com/prefix-dev/pixi/pull/2849)
+- Upgrade `uv` crates to `0.6.1` by @nichmor in [#3216](https://github.com/prefix-dev/pixi/pull/3216)
+
+#### Documentation
+
+- Add s3 upload section by @pavelzw in [#3168](https://github.com/prefix-dev/pixi/pull/3168)
+- Document cmake build backend `extra-args` by @wolfv in [#3167](https://github.com/prefix-dev/pixi/pull/3167)
+- Sync pixi-pack docs with PR #104 (add --use-cache) by @awesomebytes in [#3189](https://github.com/prefix-dev/pixi/pull/3189)
+- Mention add_pip_as_python_dependency in compatibility mode for pixi-pack by @pavelzw in [#3188](https://github.com/prefix-dev/pixi/pull/3188)
+- Mention run-install in setup-pixi documentation by @pavelzw in [#3185](https://github.com/prefix-dev/pixi/pull/3185)
+- Update python.md by @carschandler in [#3220](https://github.com/prefix-dev/pixi/pull/3220)
+- Add section about using `pixi exec` in shebangs by @pavelzw in [#3201](https://github.com/prefix-dev/pixi/pull/3201)
+- Fix snake_case config note by @salim-b in [#3232](https://github.com/prefix-dev/pixi/pull/3232)
+- Fix note about config locations by @salim-b in [#3231](https://github.com/prefix-dev/pixi/pull/3231)
+- Fix note formatting by @salim-b in [#3230](https://github.com/prefix-dev/pixi/pull/3230)
+- Improve looks of a link by @ruben-arts in [#3229](https://github.com/prefix-dev/pixi/pull/3229)
+- Add rattler-index s3 documentation by @pavelzw in [#3175](https://github.com/prefix-dev/pixi/pull/3175)
+- Minor fix (three -> four) by @tylere in [#3240](https://github.com/prefix-dev/pixi/pull/3240)
+- Add documentation about starship by @pavelzw in [#3242](https://github.com/prefix-dev/pixi/pull/3242)
+- Add missing docs for `pixi install --all` by @Hofer-Julian in [#3256](https://github.com/prefix-dev/pixi/pull/3256)
+- Typo in cli.md by @boisgera in [#3210](https://github.com/prefix-dev/pixi/pull/3210)
+
+#### Fixed
+
+- Improve UX on missing platforms by @ruben-arts in [#3169](https://github.com/prefix-dev/pixi/pull/3169)
+- Allow usage of `--branch` `--tag` `--rev` for `--pypi` with `git` by @nichmor in [#3132](https://github.com/prefix-dev/pixi/pull/3132)
+- Flush `shell` activation file after writing by @wolfv in [#3130](https://github.com/prefix-dev/pixi/pull/3130)
+- Improve `pixi list` output for conda source packages by @ruben-arts in [#3170](https://github.com/prefix-dev/pixi/pull/3170)
+- Pixi global revert error message by @Hofer-Julian in [#3207](https://github.com/prefix-dev/pixi/pull/3207)
+- Return err when `pixi list` doesn't find pkg by @savente93 in [#3212](https://github.com/prefix-dev/pixi/pull/3212)
+- Add caching of regular build by @tdejager in [#3238](https://github.com/prefix-dev/pixi/pull/3238)
+
+#### Refactor
+
+- Moving of types, renames and error updates by @tdejager in [#3228](https://github.com/prefix-dev/pixi/pull/3228)
+
+#### New Contributors
+* @salim-b made their first contribution in [#3230](https://github.com/prefix-dev/pixi/pull/3230)
+* @savente93 made their first contribution in [#3212](https://github.com/prefix-dev/pixi/pull/3212)
+* @boisgera made their first contribution in [#3210](https://github.com/prefix-dev/pixi/pull/3210)
+* @xiaoxiangmoe made their first contribution in [#3191](https://github.com/prefix-dev/pixi/pull/3191)
+* @awesomebytes made their first contribution in [#3189](https://github.com/prefix-dev/pixi/pull/3189)
+
 ### [0.41.4] - 2025-02-18
 #### ✨ Highlights
 This release add support for S3 backends.
