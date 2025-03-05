@@ -42,7 +42,7 @@ Next up we'll create the:
 Use the following `pixi.toml` file, you can hover over the annotations to see why each step was added.
 
 ```toml
---8<-- "docs/source_files/pixi_projects/pixi_build_cpp/pixi.toml"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/cpp/pixi.toml"
 ```
 
 1. Add the **preview** feature `pixi-build` that enables pixi to build the package.
@@ -60,7 +60,7 @@ Use the following `pixi.toml` file, you can hover over the annotations to see wh
 
 Next lets add the `CMakeList.txt` file:
 ```CMake
---8<-- "docs/source_files/pixi_projects/pixi_build_cpp/CMakeLists.txt"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/cpp/CMakeLists.txt"
 ```
 
 1. Find `python`, this actually finds anything above 3.8, but we are using 3.8 as a minimum version.
@@ -75,7 +75,7 @@ Next lets add the `CMakeList.txt` file:
 Next lets add the `src/bindings.cpp` file, this one is quite simple:
 
 ```cpp
---8<-- "docs/source_files/pixi_projects/pixi_build_cpp/src/bindings.cpp"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/cpp/src/bindings.cpp"
 ```
 
 1. We define a function that will be used to add two numbers together.

@@ -19,10 +19,10 @@ pytestmark = pytest.mark.skipif(
     "pixi_project",
     [
         pytest.param(pixi_project, id=pixi_project.name)
-        for pixi_project in repo_root().joinpath("docs/source_files/pixi_projects").iterdir()
+        for pixi_project in repo_root().joinpath("docs/source_files/pixi_workspaces").iterdir()
     ],
 )
-def test_doc_pixi_projects(
+def test_doc_pixi_workspaces(
     pixi_project: Path, pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
 ) -> None:
     # Remove existing .pixi folders

@@ -37,14 +37,14 @@ The Python package has a single function `main`.
 Calling that, will print a table containing the name, age and city of three people.
 
 ```py title="src/rich_example/__init__.py"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/src/rich_example/__init__.py"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/python/src/rich_example/__init__.py"
 ```
 
 
 The metadata of the Python package is defined in `pyproject.toml`.
 
 ```toml title="pyproject.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/pyproject.toml"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/python/pyproject.toml"
 ```
 
 1. We use the `rich` package to print the table in the terminal.
@@ -86,7 +86,7 @@ We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.to
 This is the content of the `pixi.toml`:
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/pixi.toml"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/python/pixi.toml"
 ```
 
 1. In `workspace` information is set that is shared across all packages in the workspace.

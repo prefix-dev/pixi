@@ -39,18 +39,19 @@ Check out our [installation docs](./advanced/installation.md) to learn about alt
 
 Initialize a new project and navigate to the project directory.
 
-```console
-$ pixi init pixi-hello-world
-✔ Created /path/to/pixi-hello-world/pixi.toml
+```bash
+pixi init hello-world
+cd hello-world
+```
 
-$ cd pixi-hello-world
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_workspaces/introduction/init/pixi.toml"
 ```
 
 Add the dependencies you would like to use.
 
-```console
-$ pixi add python
-✔ Added python >=3.13.2,<3.14
+```bash
+pixi add python
 ```
 
 Create a file named `hello_world.py` in the directory and paste the following code into the file.
@@ -65,20 +66,18 @@ if __name__ == "__main__":
 
 Run the code inside the environment.
 
-```console
-$ pixi run python hello_world.py
-Hello World, from the revolution in package management.
+```bash
+pixi run python hello_world.py
 ```
 
 You can also put this run command in a **task**.
 
-```console
+```bash
 $ pixi task add hello python hello_world.py
 ```
 
 After adding the task, you can run the task using its name.
 
-```console
+```bash
 $ pixi run hello
-Hello World, from the revolution in package management.
 ```
