@@ -207,6 +207,25 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
     // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
+        // Define accepted virtual packages as a constant set
+        const ACCEPTED_PACKAGES: &[&str] = &["__glibc", "__cuda", "__osx", "__win", "__linux"];
+
+        // Check if the package name (normalized) is in our accepted list
+        let is_accepted = required
+            .name
+            .as_ref()
+            .iter()
+            .any(|name| ACCEPTED_PACKAGES.contains(&name.as_normalized()));
+
+        // Skip if not in accepted packages
+        if !is_accepted {
+            tracing::debug!(
+                "Skipping virtual package: {} as it's not in the accepted packages",
+                required
+            );
+            continue;
+        }
+
         let name = if let Some(name) = required.name.as_ref() {
             name
         } else {
@@ -446,5 +465,50 @@ mod test {
             );
             assert!(error.help.unwrap().contains(msg));
         }
+    }
+
+    #[test]
+    fn test_archspec_skip() {
+        let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let lockfile_path = root_dir.join("tests/data/lockfiles/archspec.lock");
+        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let platform = Platform::Linux64;
+
+        let overrides = VirtualPackageOverrides {
+            libc: Some(Override::String("2.17".to_string())),
+            ..VirtualPackageOverrides::default()
+        };
+
+        // validate that the archspec is skipped
+        validate_system_meets_environment_requirements(
+            &lockfile,
+            platform,
+            &EnvironmentName::default(),
+            Some(overrides),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_ignored_virtual_packages() {
+        let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let lockfile_path = root_dir.join("tests/data/lockfiles/ignored_virtual_packages.lock");
+        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let platform = Platform::Linux64;
+
+        let overrides = VirtualPackageOverrides {
+            libc: Some(Override::String("2.17".to_string())),
+            cuda: Some(Override::String("11.0".to_string())),
+            ..VirtualPackageOverrides::default()
+        };
+
+        // validate that the ignored virtual packages are skipped
+        validate_system_meets_environment_requirements(
+            &lockfile,
+            platform,
+            &EnvironmentName::default(),
+            Some(overrides),
+        )
+        .unwrap();
     }
 }
