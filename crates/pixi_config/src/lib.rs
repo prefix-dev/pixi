@@ -818,7 +818,10 @@ impl Config {
     ///
     /// Parsing errors
     #[inline]
-    pub fn from_toml(toml: &str) -> miette::Result<(Config, Set<String>)> {
+    pub fn from_toml(
+        toml: &str,
+        source_path: Option<&Path>,
+    ) -> miette::Result<(Config, Set<String>)> {
         let de = toml_edit::de::Deserializer::from_str(toml).into_diagnostic()?;
 
         // Deserialize the config and collect unused keys
@@ -828,13 +831,26 @@ impl Config {
         })
         .into_diagnostic()?;
 
+        fn create_deprecation_warning(old: &str, new: &str, source_path: Option<&Path>) {
+            let msg = format!(
+                "Please replace '{}' with '{}', the field is deprecated and will be removed in a future release.",
+                console::style(old).red(), console::style(new).green()
+            );
+            match source_path {
+                Some(path) => {
+                    tracing::warn!("In '{}': {}", console::style(path.display()).bold(), msg,)
+                }
+                None => tracing::warn!("{}", msg),
+            }
+        }
+
         if config.change_ps1.is_some() {
-            tracing::warn!("The `change_ps1` field is deprecated and will be removed in a future release. Please use the `shell.change-ps1` field instead.");
+            create_deprecation_warning("change_ps1", "shell.change-ps1", source_path);
             config.shell.change_ps1 = config.change_ps1;
         }
 
         if config.force_activate.is_some() {
-            tracing::warn!("The `force_activate` field is deprecated and will be removed in a future release. Please use the `shell.force-activate` field instead.");
+            create_deprecation_warning("force_activate", "shell.force-activate", source_path);
             config.shell.force_activate = config.force_activate;
         }
 
@@ -863,8 +879,8 @@ impl Config {
             Err(e) => return Err(ConfigError::ReadError(e)),
         };
 
-        let (mut config, unused_keys) =
-            Config::from_toml(&s).map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
+        let (mut config, unused_keys) = Config::from_toml(&s, Some(path))
+            .map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
 
         if !unused_keys.is_empty() {
             tracing::warn!(
@@ -1504,7 +1520,7 @@ UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
         );
-        let (config, unused) = Config::from_toml(toml.as_str()).unwrap();
+        let (config, unused) = Config::from_toml(toml.as_str(), None).unwrap();
         assert_eq!(
             config.default_channels,
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
@@ -1518,7 +1534,7 @@ UNUSED = "unused"
         assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
             config.detached_environments().path().unwrap().unwrap(),
             get_cache_dir()
@@ -1537,7 +1553,7 @@ UNUSED = "unused"
     #[case("no-pin", PinningStrategy::NoPin)]
     fn test_config_parse_pinning_strategy(#[case] input: &str, #[case] expected: PinningStrategy) {
         let toml = format!("pinning-strategy = \"{}\"", input);
-        let (config, _) = Config::from_toml(&toml).unwrap();
+        let (config, _) = Config::from_toml(&toml, None).unwrap();
         assert_eq!(config.pinning_strategy, Some(expected));
     }
 
@@ -1582,12 +1598,12 @@ UNUSED = "unused"
             extra-index-urls = ["https://pypi.org/simple2"]
             keyring-provider = "subprocess"
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
             config.pypi_config().index_url,
             Some(Url::parse("https://pypi.org/simple").unwrap())
         );
-        assert!(config.pypi_config().extra_index_urls.len() == 1);
+        assert_eq!(config.pypi_config().extra_index_urls.len(), 1);
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
@@ -1603,7 +1619,7 @@ UNUSED = "unused"
             keyring-provider = "subprocess"
             allow-insecure-host = ["https://localhost:1234", "*"]
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
             config.pypi_config().allow_insecure_host,
             vec!["https://localhost:1234", "*",]
@@ -1618,7 +1634,7 @@ UNUSED = "unused"
             region = "us-east-1"
             force-path-style = false
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         let s3_options = config.s3_options;
         assert_eq!(
             s3_options["bucket1"].endpoint_url,
@@ -1636,7 +1652,7 @@ UNUSED = "unused"
             region = "us-east-1"
             # force-path-style = false
         "#;
-        let result = Config::from_toml(toml);
+        let result = Config::from_toml(toml, None);
         assert!(result.is_err());
         assert!(result
             .err()
@@ -1836,7 +1852,7 @@ UNUSED = "unused"
             disable_bzip2 = true
             disable_zstd = true
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
             config.default_channels,
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
@@ -1874,7 +1890,7 @@ UNUSED = "unused"
             disable-zstd = true
             disable-sharded = true
         "#;
-        Config::from_toml(toml).unwrap();
+        Config::from_toml(toml, None).unwrap();
     }
 
     #[test]
@@ -2103,7 +2119,7 @@ UNUSED = "unused"
             disable-bzip2 = false
             disable-zstd = false
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         let repodata_config = config.repodata_config();
         assert_eq!(repodata_config.default.disable_jlap, Some(true));
         assert_eq!(repodata_config.default.disable_bzip2, Some(true));
