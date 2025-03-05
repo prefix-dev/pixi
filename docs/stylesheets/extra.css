@@ -94,6 +94,11 @@
   height: 100%;
 }
 
+.md-typeset table td,
+.md-typeset table th {
+  font-size: 0.8rem;
+}
+
 table code {
   white-space: nowrap;
   word-break: keep-all;

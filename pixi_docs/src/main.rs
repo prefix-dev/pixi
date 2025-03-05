@@ -57,57 +57,6 @@ fn process_subcommands(
     Ok(())
 }
 
-/// Generates a command synopsis string
-fn subcommand_to_synopsis(parents: &[String], command: &Command) -> String {
-    let mut buffer = String::with_capacity(100);
-    write!(buffer, "{}{}{}", parents.join(" "), if parents.is_empty() {""} else {" "}, command.get_name()).unwrap();
-
-    let positionals: Vec<_> = command
-        .get_positionals()
-        .map(|p| {
-            let is_required = p.is_required_set();
-            let num_args = p.get_num_args().unwrap_or_else(|| 1.into());
-            let is_multiple = num_args.max_values() > 1 || num_args.min_values() == 0;
-
-            let name = p.get_value_names()
-                .map(|n| n.join(" "))
-                .unwrap_or_else(|| p.get_id().as_str().to_string());
-
-            let formatted = if is_multiple {
-                format!("[{}]", name)
-            } else {
-                format!("<{}>", name)
-            };
-
-            if is_required {
-                format!("{}*", formatted)
-            } else {
-                formatted
-            }
-        })
-        .collect();
-
-    if !positionals.is_empty() {
-        write!(buffer, " {}", positionals.join(" ")).unwrap();
-    }
-
-    buffer
-}
-
-/// Generate the shell block for synopsis
-fn subcommand_to_synopsis_shell(parents: &[String], command: &Command) -> String {
-    let mut buffer = String::with_capacity(100);
-    writeln!(buffer, "```").unwrap();
-    writeln!(buffer, "{}", subcommand_to_synopsis(parents, command)).unwrap();
-    for subcommand in command.get_subcommands() {
-        let mut path = parents.to_vec();
-        path.push(command.get_name().to_string());
-        writeln!(buffer, "{}", subcommand_to_synopsis(&path, subcommand)).unwrap();
-    }
-    writeln!(buffer, "```").unwrap();
-    buffer
-}
-
 /// Converts a command to Markdown format
 fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     let mut buffer = String::with_capacity(1024);
@@ -150,11 +99,6 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
 
     // Additional description
     writeln!(buffer, "\n--8<-- \"docs/reference/cli/{}{}.md:description\"", parent_path, command.get_name()).unwrap();
-
-
-    // Synopsis
-    writeln!(buffer, "\n## Synopsis").unwrap();
-    writeln!(buffer, "{}", subcommand_to_synopsis_shell(parents, command)).unwrap();
 
     // Positionals
     let positionals: Vec<_> = command.get_positionals().collect();
@@ -252,51 +196,48 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         }
     }
 
+    // Subcommands
+    if command.has_subcommands() {
+        writeln!(buffer, "\n## Subcommands").unwrap();
+        let subcommands: Vec<_> = command.get_subcommands().collect();
+        if !subcommands.is_empty() {
+            writeln!(buffer, "{}", subcommands_table(subcommands)).unwrap();
+        }
+    }
+
     // Long about
     if let Some(long) = command.get_long_about() {
         writeln!(buffer, "\n## Description").unwrap();
         writeln!(buffer, "{}\n", long).unwrap();
     }
 
-    // Subcommands
-    if command.has_subcommands() {
-        writeln!(buffer, "\n## Subcommands").unwrap();
-        let will_recurse = true; // RECURSIVE_COMMANDS.contains(&command.get_name());
-
-        for subcommand in command.get_subcommands() {
-            if subcommand.is_hide_set() {
-                continue;
-            }
-            let about = if let Some(about) = subcommand.get_about() {
-                format!(": {about}")
-            } else {
-                "".to_string()
-            };
-
-            if will_recurse {
-                // Generate link only if this command will recurse, without .md
-                let path = vec![command.get_name(), subcommand.get_name()];
-
-                writeln!(
-                    buffer,
-                    "### [{}]({}.md)",
-                    subcommand.get_name(),
-                    path.join("/")
-                )
-                    .unwrap();
-                write!(buffer, "{}\n\n", about).unwrap();
-            } else {
-                // Plain text for non-recursive subcommands
-                writeln!(buffer, "### `{}`", subcommand.get_name()).unwrap();
-                writeln!(buffer, "{}", about).unwrap();
-                writeln!(buffer,"{}", subcommand_to_synopsis_shell(parents, subcommand)).unwrap();
-            }
-        }
-    }
-
     // Write snippet link
     writeln!(buffer, "\n--8<-- \"docs/reference/cli/{}{}.md:example\"", parent_path, command.get_name()).unwrap();
 
+    buffer
+}
+
+/// Generates a Markdown table of subcommands with command names as links to their pages
+fn subcommands_table(subcommands: Vec<&Command>) -> String {
+    let mut buffer = String::with_capacity(1024);
+    writeln!(buffer, "| Command | Description |").unwrap();
+    writeln!(buffer, "|---------|-------------|").unwrap();
+    for subcommand in subcommands {
+        // Skip hidden subcommands
+        if subcommand.is_hide_set() {
+            continue;
+        }
+        // Create a link to the subcommand's Markdown file
+        let command_name = subcommand.get_name();
+        let link = format!("[`{}`]({})", command_name, command_name);
+        writeln!(
+            buffer,
+            "| {} | {} |",
+            link,
+            subcommand.get_about().unwrap_or_default()
+        )
+            .unwrap();
+    }
     buffer
 }
 
