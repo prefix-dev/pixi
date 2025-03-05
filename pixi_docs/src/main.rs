@@ -145,23 +145,30 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             .collect();
 
         for opt in sorted_opts {
-            if opt.is_hide_set() || opt.get_long().is_none(){
+            if opt.is_hide_set() || opt.get_long().is_none() {
                 continue;
             }
 
+            let long_name = opt.get_long().unwrap_or_default();
+            let id = format!("option-{}", long_name); // Generate a unique ID for each option
+
+            // Start with the span for the ID
+            write!(buffer, "<span id=\"{}\"></span>\n", id).unwrap();
+
             let global = if opt.is_global_set() { "**global**: " } else { "" };
 
+            // Write the option as a bullet point with a clickable link
             write!(
                 buffer,
-                "- {}**`--{}{}{}`**{}",
+                "- {}**[`--{}{}{}`](#{})**  \n:",
                 global,
-                opt.get_long().unwrap_or_default(),
+                long_name,
                 if let Some(short) = opt.get_short() {
                     format!(" (-{})", short)
                 } else {
                     "".to_string()
                 },
-                if opt.get_action().takes_values(){
+                if opt.get_action().takes_values() {
                     if let Some(value_names) = opt.get_value_names() {
                         format!(" {}", value_names.join(" "))
                     } else {
@@ -170,28 +177,47 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
                 } else {
                     "".to_string()
                 },
-                if opt.is_required_set() { "*" } else { "" }
+                id
             )
                 .unwrap();
+
+            // Write the help text on the next line, indented appropriately
+            write!(buffer, "  {}\n", opt.get_help().unwrap_or_default()).unwrap();
+
+            // Handle aliases, env, defaults, and options on separate lines with proper indentation
             if let Some(aliases) = opt.get_visible_aliases() {
                 if !aliases.is_empty() {
-                    write!(buffer, " (aliases: {})", aliases.join(", ")).unwrap();
+                    write!(buffer, "<br>**aliases**: {}\n", aliases.join(", ")).unwrap();
                 }
             }
 
-            write!(buffer, ": {}", opt.get_help().unwrap_or_default()).unwrap();
             if let Some(env) = opt.get_env() {
-                write!(buffer, " **env**: `{}`", env.to_string_lossy()).unwrap();
+                write!(buffer, "<br>**env**: `{}`\n", env.to_string_lossy()).unwrap();
             }
 
-            if !opt.get_default_values().is_empty(){
-                write!(buffer, " **defaults**: `{}`", opt.get_default_values().iter().map(|value| value.to_string_lossy()).join(", ")).unwrap();
+            if !opt.get_default_values().is_empty() {
+                write!(
+                    buffer,
+                    "<br>**defaults**: `{}`\n",
+                    opt.get_default_values()
+                        .iter()
+                        .map(|value| value.to_string_lossy())
+                        .join(", ")
+                )
+                    .unwrap();
             }
 
             if opt.get_action().takes_values() && !opt.get_possible_values().is_empty() {
-                write!(buffer, " **options**: `{}`", opt.get_possible_values().iter().map(|value| value.get_name()).join("`, `")).unwrap();
+                write!(
+                    buffer,
+                    "<br>**options**: `{}`\n",
+                    opt.get_possible_values()
+                        .iter()
+                        .map(|value| value.get_name())
+                        .join("`, `")
+                )
+                    .unwrap();
             }
-
             writeln!(buffer).unwrap();
         }
     }

@@ -29,11 +29,13 @@ use crate::{
 ///   3.11.3.* at the time of writing.
 ///
 /// Adding multiple dependencies at once is also supported:
+///
 /// - `pixi add python pytest`: This will add both `python` and `pytest` to the
 ///   project's dependencies.
 ///
 /// The `--platform` and `--build/--host` flags make the dependency target
 /// specific.
+///
 /// - `pixi add python --platform linux-64 --platform osx-arm64`: Will add the
 ///   latest version of python for linux-64 and osx-arm64 platforms.
 /// - `pixi add python --build`: Will add the latest version of python for as a
@@ -43,12 +45,14 @@ use crate::{
 ///
 /// The `--pypi` option will add the package as a pypi dependency. This cannot
 /// be mixed with the conda dependencies
+///
 /// - `pixi add --pypi boto3`
 /// - `pixi add --pypi "boto3==version"
 ///
 /// If the project manifest is a `pyproject.toml`, adding a pypi dependency will
 /// add it to the native pyproject `project.dependencies` array or to the native
 /// `dependency-groups` table if a feature is specified:
+///
 /// - `pixi add --pypi boto3` will add `boto3` to the `project.dependencies`
 ///   array
 /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the
