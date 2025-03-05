@@ -1,5 +1,38 @@
 # Installation
 
+## Update
+
+Updating is as simple as installing, rerunning the installation script gets you the latest version.
+
+```shell
+pixi self-update
+```
+Or get a specific pixi version using:
+```shell
+pixi self-update --version x.y.z
+```
+
+!!! note
+    If you've used a package manager like `brew`, `mamba`, `conda`, `paru` etc. to install `pixi`
+    you must use the built-in update mechanism. e.g. `brew upgrade pixi`.
+
+## Uninstall
+
+To uninstall pixi from your system, simply remove the binary.
+
+=== "Linux & macOS"
+    ```shell
+    rm ~/.pixi/bin/pixi
+    ```
+=== "Windows"
+    ```shell
+    $PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
+    ```
+
+After this command, you can still use the tools you installed with pixi.
+To remove these as well, just remove the whole `~/.pixi` directory and remove the directory from your path.
+
+
 ## Autocompletion
 
 To get autocompletion follow the instructions for your shell.
@@ -102,6 +135,7 @@ cargo test
 
 If you have any issues building because of the dependency on `rattler` checkout
 its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
+
 
 ## Installer Script Options
 

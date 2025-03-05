@@ -1,4 +1,5 @@
-# Getting Started
+# Introduction
+
 ![Pixi with magic wand](assets/pixi.webp)
 
 Pixi is a package management tool for developers.
@@ -43,37 +44,54 @@ To install `pixi` you can run the following command in your terminal:
 
     You might need to restart your terminal or source your shell for the changes to take effect.
 
-Check out our [advanced installation docs](./advanced/installation.md) to learn about how to install autocompletion, alternative installation methods and installer script options.
+Check out our [installation docs](./advanced/installation.md) to learn about alternative installation methods, autocompletion and more.
+
+## Getting Started
 
 
-## Update
 
-Updating is as simple as installing, rerunning the installation script gets you the latest version.
+Initialize a new project and navigate to the project directory.
 
-```shell
-pixi self-update
+```console
+$ pixi init pixi-hello-world
+✔ Created /path/to/pixi-hello-world/pixi.toml
+
+$ cd pixi-hello-world
 ```
-Or get a specific pixi version using:
-```shell
-pixi self-update --version x.y.z
+
+Add the dependencies you would like to use.
+
+```console
+$ pixi add python
+✔ Added python >=3.13.2,<3.14
 ```
 
-!!! note
-    If you've used a package manager like `brew`, `mamba`, `conda`, `paru` etc. to install `pixi`
-    you must use the built-in update mechanism. e.g. `brew upgrade pixi`.
+Create a file named `hello_world.py` in the directory and paste the following code into the file.
 
-## Uninstall
+```py title="hello_world.py"
+def hello():
+    print("Hello World, from the revolution in package management.")
 
-To uninstall pixi from your system, simply remove the binary.
+if __name__ == "__main__":
+    hello()
+```
 
-=== "Linux & macOS"
-    ```shell
-    rm ~/.pixi/bin/pixi
-    ```
-=== "Windows"
-    ```shell
-    $PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
-    ```
+Run the code inside the environment.
 
-After this command, you can still use the tools you installed with pixi.
-To remove these as well, just remove the whole `~/.pixi` directory and remove the directory from your path.
+```console
+$ pixi run python hello_world.py
+Hello World, from the revolution in package management.
+```
+
+You can also put this run command in a **task**.
+
+```console
+$ pixi task add hello python hello_world.py
+```
+
+After adding the task, you can run the task using its name.
+
+```console
+$ pixi run hello
+Hello World, from the revolution in package management.
+```

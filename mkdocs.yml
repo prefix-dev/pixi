@@ -98,21 +98,15 @@ extra:
     provider: mike
 
 nav:
-  - Installation: index.md
-  - Getting started: getting_started.md
-  - Features:
+  - Introduction: index.md
+  - Environments:
       - Environments: features/environment.md
       - Tasks: features/advanced_tasks.md
       - Multi Platform: features/multi_platform_configuration.md
       - Multi Environment: features/multi_environment.md
       - Lockfile: features/lockfile.md
       - System Requirements: features/system_requirements.md
-      - Global Tools: features/global_tools.md
-  - Python:
-      - Tutorial: python/tutorial.md
-      - Pyproject.toml: python/pyproject_toml.md
-      - Pytorch Installation: python/pytorch.md
-  - Building Packages:
+  - Building:
       - Getting started: build/getting_started.md
       - Tutorials:
           - Building a Python package: build/python.md
@@ -121,11 +115,17 @@ nav:
           - Variants: build/variants.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
-  - Deployment:
+  - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md
       - S3: deployment/s3.md
+  - Python:
+      - Tutorial: python/tutorial.md
+      - Pyproject.toml: python/pyproject_toml.md
+      - Pytorch Installation: python/pytorch.md
+  - Global Tools:
+      - Introduction: features/global_tools.md
   - Integration:
       - Editor:
           - JupyterLab: integration/editor/jupyterlab.md
