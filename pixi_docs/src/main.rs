@@ -60,7 +60,7 @@ fn process_subcommands(
 /// Generates a command synopsis string
 fn subcommand_to_synopsis(parents: &[String], command: &Command) -> String {
     let mut buffer = String::with_capacity(100);
-    write!(buffer, "{} {}", parents.join(" "), command.get_name()).unwrap();
+    write!(buffer, "{}{}{}", parents.join(" "), if parents.is_empty() {""} else {" "}, command.get_name()).unwrap();
 
     let positionals: Vec<_> = command
         .get_positionals()
