@@ -8,7 +8,7 @@ from .common import EMPTY_BOILERPLATE_PROJECT
 
 
 # Cross-platform process termination function
-def terminate_process(process: subprocess.Popen, number_of_tasks: int) -> None:
+def terminate_process(process: subprocess.Popen[str], number_of_tasks: int) -> None:
     """Terminate a process in a cross-platform way."""
     if os.name == "nt":  # Windows
         # On Windows, we can use terminate() which sends Ctrl+C
@@ -161,15 +161,40 @@ def test_glob_pattern_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
         cwd=str(tmp_pixi_workspace),
     )
 
-    time.sleep(1)  # Wait for process to start
+    # Wait for process to start and capture initial output
+    initial_output_found = False
+    for _ in range(10):
+        if process.stdout is None:
+            time.sleep(0.3)
+            continue
 
+        line = process.stdout.readline().strip()
+        if line and "initial_data" in line:
+            initial_output_found = True
+            break
+        time.sleep(0.3)
+
+    assert initial_output_found, "Task didn't show initial content"
+
+    time.sleep(1)  # Wait for watcher to set up
+
+    # Modify the log file to trigger the watcher
     log_file.write_text("modified_data")
 
-    time.sleep(1)  # Wait for change to be detected
+    # Wait for the process to detect changes and run again
+    rerun_output_found = False
+    for _ in range(10):
+        if process.stdout is None:
+            time.sleep(0.3)
+            continue
 
-    stdout, stderr = process.communicate(timeout=2)
-    assert "initial_data" in stdout or "modified_data" in stdout, "Expected output not found"
+        line = process.stdout.readline().strip()
+        if line and "modified_data" in line:
+            rerun_output_found = True
+            break
+        time.sleep(0.3)
 
+    assert rerun_output_found, "Task didn't rerun after file was modified"
     terminate_process(process, 1)
 
 

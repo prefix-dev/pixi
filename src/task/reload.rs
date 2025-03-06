@@ -3,6 +3,7 @@ use std::{
     time::Duration,
 };
 
+use glob;
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver};
@@ -77,26 +78,74 @@ impl FileWatcher {
         )?;
 
         let mut watched_paths = Vec::new();
+        let current_dir = std::env::current_dir()?;
 
         // Watch each path
-        for path in paths {
-            let path = path.as_ref().to_path_buf();
-            if path.exists() {
-                let mode = if path.is_dir() {
-                    RecursiveMode::Recursive
-                } else {
-                    RecursiveMode::NonRecursive
+        for path_ref in paths {
+            let path_str = path_ref.as_ref().to_string_lossy();
+
+            // Check if this is a glob pattern
+            if path_str.contains('*') || path_str.contains('?') || path_str.contains('[') {
+                info!("Detected glob pattern: {}", path_str);
+
+                // Use glob crate to expand the pattern
+                let entries = match glob::glob(&path_str) {
+                    Ok(entries) => entries,
+                    Err(e) => {
+                        warn!("Failed to parse glob pattern '{}': {}", path_str, e);
+                        continue;
+                    }
                 };
-                watcher.watch(&path, mode)?;
-                watched_paths.push(path);
+
+                let mut found_match = false;
+                for entry in entries {
+                    match entry {
+                        Ok(path) => {
+                            found_match = true;
+                            if path.exists() {
+                                let mode = if path.is_dir() {
+                                    RecursiveMode::Recursive
+                                } else {
+                                    RecursiveMode::NonRecursive
+                                };
+                                watcher.watch(&path, mode)?;
+                                watched_paths.push(path.clone());
+                                info!("Watching path from glob: {}", path.display());
+                            }
+                        }
+                        Err(e) => warn!("Error in glob pattern '{}': {}", path_str, e),
+                    }
+                }
+
+                // If no matches found, watch the parent directory
+                if !found_match {
+                    info!(
+                        "No existing files match glob pattern '{}', watching current directory",
+                        path_str
+                    );
+                    watcher.watch(&current_dir, RecursiveMode::Recursive)?;
+                    watched_paths.push(current_dir.clone());
+                }
             } else {
-                info!("Path does not exist, skipping: {}", path.display());
-                // Try to watch the parent directory if it exists
-                if let Some(parent) = path.parent() {
-                    if parent.exists() {
-                        info!("Watching parent directory instead: {}", parent.display());
-                        watcher.watch(parent, RecursiveMode::Recursive)?;
-                        watched_paths.push(parent.to_path_buf());
+                // Regular path handling
+                let path = path_ref.as_ref().to_path_buf();
+                if path.exists() {
+                    let mode = if path.is_dir() {
+                        RecursiveMode::Recursive
+                    } else {
+                        RecursiveMode::NonRecursive
+                    };
+                    watcher.watch(&path, mode)?;
+                    watched_paths.push(path);
+                } else {
+                    info!("Path does not exist, skipping: {}", path.display());
+                    // Try to watch the parent directory if it exists
+                    if let Some(parent) = path.parent() {
+                        if parent.exists() {
+                            info!("Watching parent directory instead: {}", parent.display());
+                            watcher.watch(parent, RecursiveMode::Recursive)?;
+                            watched_paths.push(parent.to_path_buf());
+                        }
                     }
                 }
             }
@@ -105,7 +154,7 @@ impl FileWatcher {
         if watched_paths.is_empty() {
             warn!("No paths are being watched! Auto-reload will not work.");
         } else {
-            info!("Watching paths: {:?}", watched_paths);
+            info!("Watching {} path(s)", watched_paths.len());
         }
 
         Ok(Self {

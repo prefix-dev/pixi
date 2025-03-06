@@ -4371,6 +4371,8 @@ dependencies = [
  "fs-err",
  "fs_extra",
  "futures",
+ "glob",
+ "hex",
  "http 1.2.0",
  "human_bytes",
  "humantime",
