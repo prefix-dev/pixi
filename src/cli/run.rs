@@ -4,7 +4,7 @@ use std::{
     string::String,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, OnceLock,
     },
 };
 
@@ -16,6 +16,7 @@ use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_manifest::TaskName;
 use thiserror::Error;
+use tokio::sync::Mutex;
 use tracing::Level;
 
 use crate::{
@@ -24,7 +25,7 @@ use crate::{
     lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
         get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
-        InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+        FileWatcher, InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
     },
     workspace::{errors::UnsupportedPlatformError, Environment},
     Workspace, WorkspaceLocator,
@@ -268,16 +269,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         ctrlc_should_exit_process.store(false, Ordering::Relaxed);
 
-        // Execute the task itself within the command environment. If one of the tasks
-        // failed with a non-zero exit code, we exit this parent process with
+        // Check if this task has watched files
+        let has_watched_files = executable_task
+            .task()
+            .as_execute()
+            .and_then(|e| e.watched_files.as_ref())
+            .is_some_and(|files| !files.is_empty());
+
+        // Execute the task itself within the command environment
+        let result = if has_watched_files {
+            // For tasks with watched files, use execute_task_with_watched_files
+            execute_task_with_watched_files(&executable_task, task_env).await
+        } else {
+            // For regular tasks, use execute_task
+            execute_task(&executable_task, task_env).await
+        };
+
+        // If one of the tasks failed with a non-zero exit code, we exit this parent process with
         // the same code.
-        match execute_task(&executable_task, task_env).await {
+        match result {
             Ok(_) => {
                 task_idx += 1;
             }
             Err(TaskExecutionError::NonZeroExitCode(code)) => {
                 if code == 127 {
-                    command_not_found(&workspace, explicit_environment);
+                    command_not_found(&workspace, explicit_environment.clone());
                 }
                 std::process::exit(code);
             }
@@ -364,6 +380,181 @@ async fn execute_task(
     }
 
     Ok(())
+}
+
+async fn execute_task_with_watched_files(
+    task: &ExecutableTask<'_>,
+    command_env: &HashMap<String, String>,
+) -> Result<(), TaskExecutionError> {
+    // Run the task initially
+    execute_task(task, command_env).await?;
+
+    // Set up signal handler
+    let signal_handler = setup_signal_handler().await;
+
+    // Handle file events directly without spawning
+    let mut watcher = FileWatcher::new(
+        &task
+            .task()
+            .as_execute()
+            .and_then(|e| e.watched_files.clone())
+            .unwrap_or_default(),
+    )
+    .map_err(|e| {
+        let err_msg = format!("Failed to create file watcher: {}", e);
+        tracing::error!("{}", err_msg);
+        TaskExecutionError::InvalidWorkingDirectory(InvalidWorkingDirectory { path: err_msg })
+    })?;
+
+    // Print minimal information about watching
+    let watched_files = task
+        .task()
+        .as_execute()
+        .and_then(|e| e.watched_files.clone())
+        .unwrap_or_default();
+    eprintln!(
+        "Watching {} file(s) for changes. Press Ctrl+C to stop.",
+        watched_files.len()
+    );
+
+    // Main event loop for file watching
+    let mut last_exec_time = std::time::Instant::now();
+    let debounce_time = std::time::Duration::from_millis(300);
+
+    // Handle file events loop
+    let mut result = Ok(());
+    let watcher_result = async {
+        while let Some(event) = watcher.next_event().await {
+            match event {
+                Ok(event) => {
+                    // Only respond to actual modifications
+                    match event.kind {
+                        notify::event::EventKind::Create(_)
+                        | notify::event::EventKind::Modify(_)
+                        | notify::event::EventKind::Remove(_) => {
+                            // Debounce handling
+                            let now = std::time::Instant::now();
+                            if now.duration_since(last_exec_time) < debounce_time {
+                                continue;
+                            }
+
+                            last_exec_time = now;
+
+                            // Execute the task directly without additional output
+                            let _ = execute_task(task, command_env).await;
+                        }
+                        _ => continue, // Ignore other event types
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Error watching files: {}", e);
+                    result = Err(e);
+                    break;
+                }
+            }
+
+            // Check if cancellation was requested
+            if is_cancellation_requested(&signal_handler).await {
+                break;
+            }
+        }
+
+        result
+    };
+
+    // Wait for either the watcher to complete or cancellation to be requested
+    tokio::select! {
+        result = watcher_result => {
+            // The file watcher task completed, cleanup signal handler
+            cleanup_signal_handler(&signal_handler).await;
+
+            // Return the result
+            match result {
+                Ok(()) => Ok(()),
+                Err(e) => Err(TaskExecutionError::InvalidWorkingDirectory(InvalidWorkingDirectory {
+                    path: format!("File watching error: {}", e),
+                })),
+            }
+        }
+        _ = wait_for_cancellation(&signal_handler) => {
+            // Cleanup signal handler
+            cleanup_signal_handler(&signal_handler).await;
+
+            // Return success as we're cancelling gracefully
+            Ok(())
+        }
+    }
+}
+
+static SIGNAL_HANDLER: OnceLock<Arc<Mutex<SignalState>>> = OnceLock::new();
+
+// Signal state
+struct SignalState {
+    cancellation_requested: bool,
+    active_watchers: usize,
+}
+
+// Setup the signal handler (initialize if needed)
+async fn setup_signal_handler() -> Arc<Mutex<SignalState>> {
+    // Check if handler is already initialized
+    if let Some(handler) = SIGNAL_HANDLER.get() {
+        // Increment active watchers count
+        let mut state = handler.lock().await;
+        state.active_watchers += 1;
+        return handler.clone();
+    }
+
+    // Create new handler
+    let handler = Arc::new(Mutex::new(SignalState {
+        cancellation_requested: false,
+        active_watchers: 1, // Start with 1 since we're creating it
+    }));
+
+    // Set up signal handling
+    let handler_clone = handler.clone();
+    tokio::spawn(async move {
+        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+            .expect("Failed to create signal handler");
+
+        sigint.recv().await;
+
+        // Set cancellation flag
+        let mut state = handler_clone.lock().await;
+        state.cancellation_requested = true;
+
+        // If there are multiple watchers, print a message
+        if state.active_watchers > 1 {
+            eprintln!("\nCancelling {} file watchers...", state.active_watchers);
+        }
+    });
+
+    // Initialize the global handler
+    SIGNAL_HANDLER.set(handler.clone()).ok();
+
+    handler
+}
+
+// Check if cancellation has been requested
+async fn is_cancellation_requested(signal_handler: &Arc<Mutex<SignalState>>) -> bool {
+    let state = signal_handler.lock().await;
+    state.cancellation_requested
+}
+
+// Wait for cancellation to be requested
+async fn wait_for_cancellation(signal_handler: &Arc<Mutex<SignalState>>) {
+    // Poll the cancellation flag periodically
+    loop {
+        if is_cancellation_requested(signal_handler).await {
+            break;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+}
+
+// Cleanup signal handler when a watcher is done
+async fn cleanup_signal_handler(signal_handler: &Arc<Mutex<SignalState>>) {
+    let mut state = signal_handler.lock().await;
+    state.active_watchers -= 1;
 }
 
 /// Called to disambiguate between environments to run a task in.
