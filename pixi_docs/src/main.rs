@@ -1,4 +1,3 @@
-use clap::builder::Str;
 use clap::{Command, CommandFactory};
 use itertools::Itertools;
 use std::error::Error;
@@ -20,39 +19,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Generating CLI documentation in {}", output_dir.display());
 
     process_subcommands(&command, Vec::new(), &output_dir)?;
-
-    Ok(())
-}
-
-/// Processes a command and its subcommands, generating markdown documentation
-fn process_subcommands(
-    command: &Command,
-    parent_path: Vec<String>,
-    output_dir: &Path,
-) -> Result<(), Box<dyn Error>> {
-    let mut current_path = parent_path;
-    current_path.push(command.get_name().to_string());
-
-    let command_file_name = format!("{}{}", current_path.join("/"), MD_EXTENSION);
-    let command_file_path = output_dir.join(&command_file_name);
-
-    fs::create_dir_all(command_file_path.parent().ok_or("Invalid path")?)
-        .map_err(|e| format!("Failed to create directories: {}", e))?;
-    fs::write(
-        &command_file_path,
-        subcommand_to_md(&current_path[..current_path.len() - 1], command),
-    )
-    .map_err(|e| {
-        format!(
-            "Failed to write command file {}: {}",
-            command_file_path.display(),
-            e
-        )
-    })?;
-
-    for subcommand in command.get_subcommands() {
-        process_subcommands(subcommand, current_path.clone(), output_dir)?;
-    }
 
     Ok(())
 }
@@ -106,53 +72,22 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     )
     .unwrap();
 
+    // Usage
+    writeln!(buffer, "\n## Usage").unwrap();
+    writeln!(buffer, "```").unwrap();
+    {
+        let mut command = command.clone();
+        writeln!(buffer, "{}{}{}", parents.join(" "), if parents.is_empty() {""} else {" "}, command.render_usage()
+            .to_string()
+            .trim_start_matches("Usage: ")).unwrap();
+    }
+    writeln!(buffer, "```").unwrap();
+
     // Positionals
     let positionals: Vec<_> = command.get_positionals().collect();
     if !positionals.is_empty() {
         writeln!(buffer, "\n## Arguments").unwrap();
-        for pos in positionals {
-            write!(
-                buffer,
-                "- **{}**{}",
-                pos.get_value_names().unwrap_or(&[Str::from("")]).join(" "),
-                if pos.is_required_set() {
-                    " *required*"
-                } else {
-                    ""
-                }
-            )
-            .unwrap();
-
-            if let Some(help) = pos.get_long_help().or(pos.get_help()) {
-                write!(buffer, ": {}", help).unwrap();
-            }
-
-            if !pos.get_possible_values().is_empty() {
-                write!(
-                    buffer,
-                    " **options**: `{}`",
-                    pos.get_possible_values()
-                        .iter()
-                        .map(|value| value.get_name())
-                        .join("`, `")
-                )
-                .unwrap();
-            }
-
-            if !pos.get_default_values().is_empty() {
-                write!(
-                    buffer,
-                    " **defaults**: `{}`",
-                    pos.get_default_values()
-                        .iter()
-                        .map(|value| value.to_string_lossy())
-                        .join(", ")
-                )
-                .unwrap();
-            }
-
-            writeln!(buffer).unwrap();
-        }
+        write!(buffer, "{}", arguments(&positionals)).unwrap();
     }
 
     // Options
@@ -173,18 +108,18 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             sorted_opts.into_iter().partition(|o| o.is_global_set());
 
         // Regular (non-global) options
-        if !regular_opts.is_empty() || command.get_version().is_some(){
+        if !regular_opts.is_empty() || command.get_version().is_some() {
             writeln!(buffer, "\n## Options").unwrap();
             if command.get_version().is_some() {
                 writeln!(buffer, "- <a id=\"option-version\" href=\"#option-version\">`--version (-V)`</a>  \n: Display version information").unwrap();
             }
-            write!(buffer, "{}", options(&regular_opts)).unwrap();
+            write!(buffer, "{}", arguments(&regular_opts)).unwrap();
         }
 
         // Global options
         if !global_opts.is_empty() {
             writeln!(buffer, "\n## Global Options").unwrap();
-            write!(buffer, "{}", options(&global_opts)).unwrap();
+            write!(buffer, "{}", arguments(&global_opts)).unwrap();
         }
     }
 
@@ -215,6 +150,39 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     buffer
 }
 
+/// Processes a command and its subcommands, generating markdown documentation
+fn process_subcommands(
+    command: &Command,
+    parent_path: Vec<String>,
+    output_dir: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let mut current_path = parent_path;
+    current_path.push(command.get_name().to_string());
+
+    let command_file_name = format!("{}{}", current_path.join("/"), MD_EXTENSION);
+    let command_file_path = output_dir.join(&command_file_name);
+
+    fs::create_dir_all(command_file_path.parent().ok_or("Invalid path")?)
+        .map_err(|e| format!("Failed to create directories: {}", e))?;
+    fs::write(
+        &command_file_path,
+        subcommand_to_md(&current_path[..current_path.len() - 1], command),
+    )
+    .map_err(|e| {
+        format!(
+            "Failed to write command file {}: {}",
+            command_file_path.display(),
+            e
+        )
+    })?;
+
+    for subcommand in command.get_subcommands() {
+        process_subcommands(subcommand, current_path.clone(), output_dir)?;
+    }
+
+    Ok(())
+}
+
 /// Generates a Markdown table of subcommands with command names as links to their pages
 fn subcommands_table(subcommands: Vec<&Command>) -> String {
     let mut buffer = String::with_capacity(1024);
@@ -240,20 +208,31 @@ fn subcommands_table(subcommands: Vec<&Command>) -> String {
 }
 
 // Function to write a list of options to the buffer
-fn options(options: &[&clap::Arg]) -> String {
+fn arguments(options: &[&clap::Arg]) -> String {
     let mut buffer = String::with_capacity(1024);
     for opt in options {
-        if opt.is_hide_set() || opt.get_long().is_none() {
+        if opt.is_hide_set() {
             continue;
         }
 
-        let long_name = opt.get_long().unwrap_or_default();
-        let id = format!("option-{}", long_name);
+        let argument = opt.get_long().is_none();
+
+        let long_name = if let Some(long) = opt.get_long() {
+            format!("--{}" ,long)
+        } else {
+            if let Some(value_names) = opt.get_value_names() {
+                // No long name, but we have value names, assuming positional.
+                format!("<{}>", value_names[0])
+            } else {
+                "".to_string()
+            }
+        };
+        let id = format!("arg-{}", long_name);
 
         // Write the option as a bullet point with a self-referential <a> tag
         write!(
             buffer,
-            "- <a id=\"{}\" href=\"#{}\">`--{}{}{}`</a>  \n:",
+            "- <a id=\"{}\" href=\"#{}\">`{}{}{}`</a>  \n:",
             id,
             id,
             long_name,
@@ -262,9 +241,9 @@ fn options(options: &[&clap::Arg]) -> String {
             } else {
                 "".to_string()
             },
-            if opt.get_action().takes_values() {
+            if opt.get_action().takes_values() && !argument {
                 if let Some(value_names) = opt.get_value_names() {
-                    format!(" {}", value_names.join(" "))
+                    format!(" <{}>", value_names.join(" "))
                 } else {
                     "".to_string()
                 }

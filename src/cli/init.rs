@@ -45,7 +45,12 @@ pub struct Args {
     pub path: PathBuf,
 
     /// Channels to use in the project.
-    #[arg(short, long = "channel", id = "CHANNEL", conflicts_with = "env_file")]
+    #[arg(
+        short,
+        long = "channel",
+        id = "CHANNEL",
+        conflicts_with = "ENVIRONMENT_FILE"
+    )]
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
     /// Platforms that the project supports.
@@ -57,12 +62,12 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// The manifest format to create.
-    #[arg(long, conflicts_with_all = ["env_file", "pyproject_toml"], ignore_case = true)]
+    #[arg(long, conflicts_with_all = ["ENVIRONMENT_FILE", "pyproject_toml"], ignore_case = true)]
     pub format: Option<ManifestFormat>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
     // BREAK (0.27.0): Remove this option from the cli in favor of the `format` option.
-    #[arg(long, conflicts_with_all = ["env_file", "format"], alias = "pyproject", hide = true)]
+    #[arg(long, conflicts_with_all = ["ENVIRONMENT_FILE", "format"], alias = "pyproject", hide = true)]
     pub pyproject_toml: bool,
 
     /// Source Control Management used for this project
