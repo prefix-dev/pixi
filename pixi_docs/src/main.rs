@@ -80,14 +80,14 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         } else {
             format!("{}.md", parent)
         };
-        name_parts.push(format!("[`{}`]({})", parent, relative_path));
+        name_parts.push(format!("[{}]({}) ", parent, relative_path));
     }
 
     // Add current command without link
-    name_parts.push(format!("`{}`", command.get_name()));
+    name_parts.push(format!("{}", command.get_name()));
 
     // Title
-    writeln!(buffer, "# {}", name_parts.join("")).unwrap();
+    writeln!(buffer, "# <code>{}</code>", name_parts.join("")).unwrap();
 
     // About
     if command.get_name() != "pixi" {
