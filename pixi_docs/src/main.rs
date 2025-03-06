@@ -132,7 +132,6 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     // Options
     let opts: Vec<_> = command.get_opts().collect();
     if !opts.is_empty() {
-        writeln!(buffer, "\n## Options").unwrap();
         let sorted_opts: Vec<_> = opts
             .into_iter()
             .filter(|o| !o.is_hide_set())
@@ -141,84 +140,23 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
                     .unwrap_or_default()
                     .cmp(&b.get_long().unwrap_or_default())
             })
-            .sorted_by(|a, b| a.is_global_set().cmp(&b.is_global_set()))
             .collect();
 
-        for opt in sorted_opts {
-            if opt.is_hide_set() || opt.get_long().is_none() {
-                continue;
-            }
+        // Split into global and non-global options
+        let (global_opts, regular_opts): (Vec<_>, Vec<_>) = sorted_opts
+            .into_iter()
+            .partition(|o| o.is_global_set());
 
-            let long_name = opt.get_long().unwrap_or_default();
-            let id = format!("option-{}", long_name); // Generate a unique ID for each option
+        // Regular (non-global) options
+        if !regular_opts.is_empty() {
+            writeln!(buffer, "\n## Options").unwrap();
+            write!(buffer, "{}", options(&regular_opts)).unwrap();
+        }
 
-            // Start with the span for the ID
-            write!(buffer, "<span id=\"{}\"></span>\n", id).unwrap();
-
-            let global = if opt.is_global_set() { "**global**: " } else { "" };
-
-            // Write the option as a bullet point with a clickable link
-            write!(
-                buffer,
-                "- {}**[`--{}{}{}`](#{})**  \n:",
-                global,
-                long_name,
-                if let Some(short) = opt.get_short() {
-                    format!(" (-{})", short)
-                } else {
-                    "".to_string()
-                },
-                if opt.get_action().takes_values() {
-                    if let Some(value_names) = opt.get_value_names() {
-                        format!(" {}", value_names.join(" "))
-                    } else {
-                        "".to_string()
-                    }
-                } else {
-                    "".to_string()
-                },
-                id
-            )
-                .unwrap();
-
-            // Write the help text on the next line, indented appropriately
-            write!(buffer, "  {}\n", opt.get_help().unwrap_or_default()).unwrap();
-
-            // Handle aliases, env, defaults, and options on separate lines with proper indentation
-            if let Some(aliases) = opt.get_visible_aliases() {
-                if !aliases.is_empty() {
-                    write!(buffer, "<br>**aliases**: {}\n", aliases.join(", ")).unwrap();
-                }
-            }
-
-            if let Some(env) = opt.get_env() {
-                write!(buffer, "<br>**env**: `{}`\n", env.to_string_lossy()).unwrap();
-            }
-
-            if !opt.get_default_values().is_empty() {
-                write!(
-                    buffer,
-                    "<br>**defaults**: `{}`\n",
-                    opt.get_default_values()
-                        .iter()
-                        .map(|value| value.to_string_lossy())
-                        .join(", ")
-                )
-                    .unwrap();
-            }
-
-            if opt.get_action().takes_values() && !opt.get_possible_values().is_empty() {
-                write!(
-                    buffer,
-                    "<br>**options**: `{}`\n",
-                    opt.get_possible_values()
-                        .iter()
-                        .map(|value| value.get_name())
-                        .join("`, `")
-                )
-                    .unwrap();
-            }
-            writeln!(buffer).unwrap();
+        // Global options
+        if !global_opts.is_empty() {
+            writeln!(buffer, "\n## Global Options").unwrap();
+            write!(buffer, "{}", options(&global_opts)).unwrap();
         }
     }
 
@@ -263,6 +201,79 @@ fn subcommands_table(subcommands: Vec<&Command>) -> String {
             subcommand.get_about().unwrap_or_default()
         )
             .unwrap();
+    }
+    buffer
+}
+
+// Function to write a list of options to the buffer
+fn options(options: &[&clap::Arg]) -> String {
+    let mut buffer = String::with_capacity(1024);
+    for opt in options {
+        if opt.is_hide_set() || opt.get_long().is_none() {
+            continue;
+        }
+
+        let long_name = opt.get_long().unwrap_or_default();
+        let id = format!("option-{}", long_name);
+
+        // Write the option as a bullet point with a self-referential <a> tag
+        write!(
+            buffer,
+            "- <a id=\"{}\" href=\"#{}\">`--{}{}{}`</a>  \n:",
+            id,
+            id,
+            long_name,
+            if let Some(short) = opt.get_short() {
+                format!(" (-{})", short)
+            } else {
+                "".to_string()
+            },
+            if opt.get_action().takes_values() {
+                if let Some(value_names) = opt.get_value_names() {
+                    format!(" {}", value_names.join(" "))
+                } else {
+                    "".to_string()
+                }
+            } else {
+                "".to_string()
+            }
+        )
+            .unwrap();
+
+        // Write the help text
+        write!(buffer, "  {}\n", opt.get_help().unwrap_or_default()).unwrap();
+
+        // Handle aliases, env, defaults, and options
+        if let Some(aliases) = opt.get_visible_aliases() {
+            if !aliases.is_empty() {
+                write!(buffer, "<br>**aliases**: {}\n", aliases.join(", ")).unwrap();
+            }
+        }
+        if let Some(env) = opt.get_env() {
+            write!(buffer, "<br>**env**: `{}`\n", env.to_string_lossy()).unwrap();
+        }
+        if !opt.get_default_values().is_empty() {
+            write!(
+                buffer,
+                "<br>**defaults**: `{}`\n",
+                opt.get_default_values()
+                    .iter()
+                    .map(|value| value.to_string_lossy())
+                    .join(", ")
+            )
+                .unwrap();
+        }
+        if opt.get_action().takes_values() && !opt.get_possible_values().is_empty() {
+            write!(
+                buffer,
+                "<br>**options**: `{}`\n",
+                opt.get_possible_values()
+                    .iter()
+                    .map(|value| value.get_name())
+                    .join("`, `")
+            )
+                .unwrap();
+        }
     }
     buffer
 }
