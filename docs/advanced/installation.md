@@ -1,5 +1,28 @@
 # Installation
 
+To install `pixi` you can run the following command in your terminal:
+
+=== "Linux & macOS"
+    ```bash
+    curl -fsSL https://pixi.sh/install.sh | bash
+    ```
+
+    The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
+    The script will also extend the `PATH` environment variable in the startup script of your shell to include `~/.pixi/bin`.
+    This allows you to invoke `pixi` from anywhere.
+
+=== "Windows"
+    ```powershell
+    powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
+    ```
+
+    The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `LocalAppData/pixi/bin`.
+    The command will also add `LocalAppData/pixi/bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
+
+!!! tip
+
+    You might need to restart your terminal or source your shell for the changes to take effect.
+
 ## Update
 
 Updating is as simple as installing, rerunning the installation script gets you the latest version.

@@ -38,7 +38,6 @@ To install `pixi` you can run the following command in your terminal:
     The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `LocalAppData/pixi/bin`.
     The command will also add `LocalAppData/pixi/bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
 
-
 !!! tip
 
     You might need to restart your terminal or source your shell for the changes to take effect.
