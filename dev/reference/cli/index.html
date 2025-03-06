@@ -4153,6 +4153,8 @@ Allowing you to access it anywhere on your system without activating the environ
 <li><code>--environment &lt;ENVIRONMENT&gt; (-e)</code>: The environment to install the package into. (default: name of the tool)</li>
 <li><code>--expose &lt;EXPOSE&gt;</code>: A mapping from name to the binary to expose to the system. (default: name of the tool)</li>
 <li><code>--with &lt;WITH&gt;</code>: Add additional dependencies to the environment. Their executables will not be exposed.</li>
+<li><code>--force-reinstall</code>: Specifies that the packages should be reinstalled even if they are already installed</li>
+<li><code>--no-shortcut</code>: Specifies that no shortcuts should be created for the installed packages</li>
 </ul>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>ruff
 </span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="c1"># Multiple packages can be installed at once</span>
