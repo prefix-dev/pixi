@@ -99,8 +99,8 @@ extra:
 
 nav:
   - Frontpage: index.md
+  - Getting Started: getting_started.md
   - Environments:
-      - Getting Started: environments/getting_started.md
       - Environments: environments/environment.md
       - Tasks: environments/advanced_tasks.md
       - Multi Platform: environments/multi_platform_configuration.md
