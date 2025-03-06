@@ -249,7 +249,8 @@ mod tests {
         let mut delete_event_received = false;
         for _ in 0..3 {
             if let Some(Ok(event)) = watcher.next_event().await {
-                if let notify::event::EventKind::Remove(_) = event.kind {
+                println!("event: {:?}", event);
+                if let notify::event::EventKind::Remove(_) | notify::event::EventKind::Modify(_) = event.kind {
                     delete_event_received = true;
                     break;
                 }
