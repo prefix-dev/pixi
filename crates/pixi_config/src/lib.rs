@@ -846,12 +846,12 @@ impl Config {
         }
 
         if config.change_ps1.is_some() {
-            create_deprecation_warning("change_ps1", "shell.change-ps1", source_path);
+            create_deprecation_warning("change-ps1", "shell.change-ps1", source_path);
             config.shell.change_ps1 = config.change_ps1;
         }
 
         if config.force_activate.is_some() {
-            create_deprecation_warning("force_activate", "shell.force-activate", source_path);
+            create_deprecation_warning("force-activate", "shell.force-activate", source_path);
             config.shell.force_activate = config.force_activate;
         }
 
