@@ -185,7 +185,7 @@ mod tests {
         // Verify the event is a modification
         if let Some(Ok(event)) = event {
             match event.kind {
-                notify::event::EventKind::Modify(_) | notify::event::EventKind::Create(_) => {
+                notify::event::EventKind::Modify(_) | notify::event::EventKind::Create(_) | notify::event::EventKind::Access(_) => {
                     // On some systems/filesystems, writing to a file can be reported as creating a new file
                 }
                 other => panic!("Expected Modify or Create event, got {:?}", other),
