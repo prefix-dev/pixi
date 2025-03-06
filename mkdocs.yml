@@ -98,8 +98,9 @@ extra:
     provider: mike
 
 nav:
-  - Introduction: index.md
+  - Frontpage: index.md
   - Environments:
+      - Getting Started: environments/getting_started.md
       - Environments: environments/environment.md
       - Tasks: environments/advanced_tasks.md
       - Multi Platform: environments/multi_platform_configuration.md

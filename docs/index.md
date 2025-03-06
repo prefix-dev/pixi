@@ -1,4 +1,4 @@
-# Introduction
+# Pixi
 
 ![Pixi with magic wand](assets/pixi.webp)
 
