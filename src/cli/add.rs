@@ -47,7 +47,7 @@ use crate::{
 /// be mixed with the conda dependencies
 ///
 /// - `pixi add --pypi boto3`
-/// - `pixi add --pypi "boto3==version"
+/// - `pixi add --pypi "boto3==version"`
 ///
 /// If the project manifest is a `pyproject.toml`, adding a pypi dependency will
 /// add it to the native pyproject `project.dependencies` array or to the native

@@ -13,8 +13,10 @@ use pixi_manifest::FeaturesExt;
 ///
 ///  If the project manifest is a `pyproject.toml`, removing a pypi dependency
 /// with the `--pypi` flag will remove it from either
+///
 /// - the native pyproject `project.dependencies` array or, if a feature is
 ///   specified, the native `project.optional-dependencies` table
+///
 /// - pixi `pypi-dependencies` tables of the default feature or, if a feature is
 ///   specified, a named feature
 #[derive(Debug, Default, Parser)]
