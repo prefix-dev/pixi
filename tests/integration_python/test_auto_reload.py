@@ -1,4 +1,3 @@
-import os
 import signal
 import subprocess
 import time
@@ -35,7 +34,7 @@ def test_file_watching_and_rerunning(pixi: Path, tmp_pixi_workspace: Path) -> No
             if process.stdout is None:
                 time.sleep(0.3)
                 continue
-                
+
             line = process.stdout.readline().strip()
             if line and "initial content" in line:
                 initial_output_found = True
@@ -53,7 +52,7 @@ def test_file_watching_and_rerunning(pixi: Path, tmp_pixi_workspace: Path) -> No
             if process.stdout is None:
                 time.sleep(0.3)
                 continue
-                
+
             line = process.stdout.readline().strip()
             if line and "updated content" in line:
                 rerun_output_found = True
@@ -99,7 +98,7 @@ def test_multiple_files_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
             if process.stdout is None:
                 time.sleep(0.3)
                 continue
-                
+
             line = process.stdout.readline().strip()
             if line and "f1=one" in line and "f2=two" in line:
                 initial_output_found = True
@@ -117,7 +116,7 @@ def test_multiple_files_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
             if process.stdout is None:
                 time.sleep(0.3)
                 continue
-                
+
             line = process.stdout.readline().strip()
             if line and "f1=one-updated" in line and "f2=two" in line:
                 rerun1_found = True
@@ -166,9 +165,7 @@ def test_glob_pattern_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
         time.sleep(0.5)
 
         stdout, stderr = process.communicate(timeout=2)
-        assert (
-            "initial_data" in stdout or "modified_data" in stdout
-        ), "Expected output not found"
+        assert "initial_data" in stdout or "modified_data" in stdout, "Expected output not found"
     finally:
         if process and process.poll() is None:
             process.kill()
@@ -228,7 +225,7 @@ def test_nonexistent_watched_file(pixi: Path, tmp_pixi_workspace: Path) -> None:
             if process.stdout is None:
                 time.sleep(0.3)
                 continue
-                
+
             line = process.stdout.readline().strip()
             if line and "File created" in line:
                 initial_run = True
