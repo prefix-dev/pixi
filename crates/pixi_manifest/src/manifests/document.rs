@@ -178,6 +178,17 @@ impl ManifestDocument {
     /// Detect the table name to use when querying elements of the manifest.
     fn detect_table_name(&self) -> &'static str {
         if self.manifest().as_table().contains_key("workspace") {
+            // pixi.toml
+            "workspace"
+        } else if self
+            .manifest()
+            .as_table()
+            .get("tool")
+            .and_then(|t| t.get("pixi"))
+            .and_then(|t| t.get("workspace"))
+            .is_some()
+        {
+            // pyproject.toml
             "workspace"
         } else {
             "project"
@@ -677,16 +688,31 @@ impl ManifestDocument {
 
     /// Sets the name of the project
     pub fn set_name(&mut self, name: &str) {
-        self.as_table_mut()["project"]["name"] = value(name);
+        let table = self.as_table_mut();
+        if table.contains_key("project") {
+            table["project"]["name"] = value(name);
+        } else {
+            table["workspace"]["name"] = value(name);
+        }
     }
 
     /// Sets the description of the project
     pub fn set_description(&mut self, description: &str) {
-        self.as_table_mut()["project"]["description"] = value(description);
+        let table = self.as_table_mut();
+        if table.contains_key("project") {
+            table["project"]["description"] = value(description);
+        } else {
+            table["workspace"]["description"] = value(description);
+        }
     }
 
     /// Sets the version of the project
     pub fn set_version(&mut self, version: &str) {
-        self.as_table_mut()["project"]["version"] = value(version);
+        let table = self.as_table_mut();
+        if table.contains_key("project") {
+            table["project"]["version"] = value(version);
+        } else {
+            table["workspace"]["version"] = value(version);
+        }
     }
 }

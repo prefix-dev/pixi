@@ -274,10 +274,10 @@ impl PixiControl {
         // Either pixi.toml or pyproject.toml
         if self
             .workspace_path()
-            .join(consts::PROJECT_MANIFEST)
+            .join(consts::WORKSPACE_MANIFEST)
             .exists()
         {
-            self.workspace_path().join(consts::PROJECT_MANIFEST)
+            self.workspace_path().join(consts::WORKSPACE_MANIFEST)
         } else if self
             .workspace_path()
             .join(consts::PYPROJECT_MANIFEST)
@@ -285,7 +285,7 @@ impl PixiControl {
         {
             self.workspace_path().join(consts::PYPROJECT_MANIFEST)
         } else {
-            self.workspace_path().join(consts::PROJECT_MANIFEST)
+            self.workspace_path().join(consts::WORKSPACE_MANIFEST)
         }
     }
 
