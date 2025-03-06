@@ -491,7 +491,7 @@ impl WorkspaceDiscoverer {
 
     /// Discover the workspace manifest in a directory.
     fn provenance_from_dir(dir: &Path) -> Option<ManifestProvenance> {
-        let pixi_toml_path = dir.join(consts::PROJECT_MANIFEST);
+        let pixi_toml_path = dir.join(consts::WORKSPACE_MANIFEST);
         let pyproject_toml_path = dir.join(consts::PYPROJECT_MANIFEST);
         if pixi_toml_path.is_file() {
             Some(ManifestProvenance::new(pixi_toml_path, ManifestKind::Pixi))

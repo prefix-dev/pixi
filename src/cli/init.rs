@@ -33,19 +33,19 @@ pub enum ManifestFormat {
 /// Creates a new workspace
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// Where to place the project (defaults to current path)
+    /// Where to place the workspace (defaults to current path)
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
-    /// Channels to use in the project.
+    /// Channels to use in the workspace.
     #[arg(short, long = "channel", id = "channel", conflicts_with = "env_file")]
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
-    /// Platforms that the project supports.
+    /// Platforms that the workspace supports.
     #[arg(short, long = "platform", id = "platform")]
     pub platforms: Vec<String>,
 
-    /// Environment.yml file to bootstrap the project.
+    /// Environment.yml file to bootstrap the workspace.
     #[arg(short = 'i', long = "import")]
     pub env_file: Option<PathBuf>,
 
@@ -58,7 +58,7 @@ pub struct Args {
     #[arg(long, conflicts_with_all = ["env_file", "format"], alias = "pyproject", hide = true)]
     pub pyproject_toml: bool,
 
-    /// Source Control Management used for this project
+    /// Source Control Management used for this workspace
     #[arg(short = 's', long = "scm", ignore_case = true)]
     pub scm: Option<GitAttributes>,
 }
@@ -66,7 +66,7 @@ pub struct Args {
 /// The pixi.toml template
 ///
 /// This uses a template just to simplify the flexibility of emitting it.
-const PROJECT_TEMPLATE: &str = r#"[project]
+const WORKSPACE_TEMPLATE: &str = r#"[workspace]
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
@@ -85,7 +85,7 @@ version = "{{ version }}"
 {%- if s3 %}
 {%- for key in s3 %}
 
-[project.s3-options.{{ key }}]
+[workspace.s3-options.{{ key }}]
 {%- if s3[key]["endpoint-url"] %}
 endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- endif %}
@@ -117,7 +117,7 @@ env = { {{ env_vars }} }
 ///
 /// This is injected into an existing pyproject.toml
 const PYROJECT_TEMPLATE_EXISTING: &str = r#"
-[tool.pixi.project]
+[tool.pixi.workspace]
 {%- if pixi_name %}
 name = "{{ name }}"
 {%- endif %}
@@ -138,7 +138,7 @@ default = { solve-group = "default" }
 {%- if s3 %}
 {%- for key in s3 %}
 
-[tool.pixi.project.s3-options.{{ key }}]
+[tool.pixi.workspace.s3-options.{{ key }}]
 {%- if s3[key]["endpoint-url"] %}
 endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- endif %}
@@ -174,7 +174,7 @@ version = "{{ version }}"
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = {{ channels }}
 platforms = {{ platforms }}
 
@@ -189,7 +189,7 @@ platforms = {{ platforms }}
 {%- if s3 %}
 {%- for key in s3 %}
 
-[tool.pixi.project.s3-options.{{ key }}]
+[tool.pixi.workspace.s3-options.{{ key }}]
 {%- if s3[key]["endpoint-url"] %}
 endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- endif %}
@@ -247,7 +247,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Fail silently if the directory already exists or cannot be created.
     fs_err::create_dir_all(&args.path).ok();
     let dir = args.path.canonicalize().into_diagnostic()?;
-    let pixi_manifest_path = dir.join(consts::PROJECT_MANIFEST);
+    let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
     let gitattributes_path = dir.join(".gitattributes");
@@ -263,7 +263,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    let default_name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_project"));
+    let default_name = get_name_from_dir(&dir).unwrap_or_else(|_| String::from("new_workspace"));
     let version = "0.1.0";
     let author = get_default_author();
     let platforms = if args.platforms.is_empty() {
@@ -278,7 +278,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Check if the 'pixi.toml' file doesn't already exist. We don't want to
         // overwrite it.
         if pixi_manifest_path.is_file() {
-            miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
+            miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
         }
 
         let env_file = CondaEnvFile::from_path(&env_file_path)?;
@@ -291,7 +291,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
-        let rendered_workspace_template = render_project(
+        let rendered_workspace_template = render_workspace(
             &env,
             name,
             version,
@@ -372,15 +372,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             args.format == Some(ManifestFormat::Pyproject) || args.pyproject_toml
         };
 
-        // Inject a tool.pixi.project section into an existing pyproject.toml file if
-        // there is one without '[tool.pixi.project]'
+        // Inject a tool.pixi.workspace section into an existing pyproject.toml file if
+        // there is one without '[tool.pixi.workspace]'
         if pyproject && pyproject_manifest_path.is_file() {
             let pyproject = PyProjectManifest::from_path(&pyproject_manifest_path)?;
 
-            // Early exit if 'pyproject.toml' already contains a '[tool.pixi.project]' table
+            // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
                 eprintln!(
-                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.project]' section.",
+                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace3]' section.",
                     console::style(console::Emoji("🤔 ", "")).blue(),
                 );
                 return Ok(());
@@ -492,9 +492,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Check if the 'pixi.toml' file doesn't already exist. We don't want to
             // overwrite it.
             if pixi_manifest_path.is_file() {
-                miette::bail!("{} already exists", consts::PROJECT_MANIFEST);
+                miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
             }
-            let rv = render_project(
+            let rv = render_workspace(
                 &env,
                 default_name,
                 version,
@@ -534,7 +534,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn render_project(
+fn render_workspace(
     env: &Environment<'_>,
     name: String,
     version: &str,
@@ -560,7 +560,7 @@ fn render_project(
         } else {String::new()}},
     };
 
-    env.render_named_str(consts::PROJECT_MANIFEST, PROJECT_TEMPLATE, ctx)
+    env.render_named_str(consts::WORKSPACE_MANIFEST, WORKSPACE_TEMPLATE, ctx)
         .expect("should be able to render the template")
 }
 

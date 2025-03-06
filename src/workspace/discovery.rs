@@ -60,7 +60,7 @@ pub enum WorkspaceLocatorError {
     /// The workspace could not be located.
     #[error(
         "could not find {project_manifest} or {pyproject_manifest} at directory {0}",
-        project_manifest = consts::PROJECT_MANIFEST,
+        project_manifest = consts::WORKSPACE_MANIFEST,
         pyproject_manifest = consts::PYPROJECT_MANIFEST
     )]
     WorkspaceNotFound(PathBuf),
