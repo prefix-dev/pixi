@@ -11,6 +11,7 @@ Pixi is a package management tool for developers.
 - Multi Environment: Compose multiple environments within one pixi manifest
 - Building: Build packages from source with powerful build backends
 - Distributing: Distribute your software via conda channels or many other options
+- Python: Full support of `pyproject.toml` and PyPI dependencies
 
 It allows the developer to install libraries and applications in a reproducible way.
 Use pixi cross-platform, on Windows, Mac and Linux.
