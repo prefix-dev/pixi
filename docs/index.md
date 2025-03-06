@@ -4,14 +4,15 @@
 
 Pixi is a package management tool for developers.
 
-- Conda: Relies on the existing conda ecosystem to get packages written in Python, C, C++ and many other languages
-- Reproducibility: Work in dedicated, isolated environments that can easily be recreated
-- Tasks: Manage complex pipelines
-- Multi Platform: Ensure compatibility across Linux, macOS, Windows and more
-- Multi Environment: Compose multiple environments within one pixi manifest
-- Building: Build packages from source with powerful build backends
-- Distributing: Distribute your software via conda channels or many other options
-- Python: Full support of `pyproject.toml` and PyPI dependencies
+- 🧪 **Conda**: Leverage the existing conda ecosystem to obtain packages written in Python, C, C++, and many other languages.
+- 🔄 **Reproducibility**: Work in dedicated, isolated environments that can be easily recreated.
+- 🛠️ **Tasks**: Manage complex pipelines effortlessly.
+- 🌐 **Multi Platform**: Ensure compatibility across Linux, macOS, Windows, and more.
+- 🧩 **Multi Environment**: Compose multiple environments within a single pixi manifest.
+- 🏗️ **Building**: Build packages from source using powerful build backends.
+- 📦 **Distributing**: Distribute your software via conda channels or various other options.
+- 🐍 **Python**: Full support for `pyproject.toml` and PyPI dependencies.
+- 🌍 **Global Tools**: Install globally available tools, safely stored in separate environments.
 
 It allows the developer to install libraries and applications in a reproducible way.
 Use pixi cross-platform, on Windows, Mac and Linux.
