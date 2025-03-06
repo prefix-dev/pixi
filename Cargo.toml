@@ -243,7 +243,6 @@ flate2 = { workspace = true }
 fs_extra = { workspace = true }
 futures = { workspace = true }
 glob = { workspace = true }
-hex = { workspace = true }
 human_bytes = { workspace = true }
 humantime = { workspace = true }
 ignore = { workspace = true }
