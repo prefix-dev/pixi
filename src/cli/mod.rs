@@ -71,8 +71,7 @@ pub struct Args {
     command: Command,
 
     /// The verbosity level
-    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for
-    /// quiet)
+    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for quiet)
     #[command(flatten)]
     verbose: Verbosity,
 

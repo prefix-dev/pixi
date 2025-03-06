@@ -1,5 +1,5 @@
 use clap::builder::Str;
-use clap::{Command, CommandFactory, Parser};
+use clap::{Command, CommandFactory};
 use itertools::Itertools;
 use std::error::Error;
 use std::fmt::Write;
@@ -173,8 +173,11 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             sorted_opts.into_iter().partition(|o| o.is_global_set());
 
         // Regular (non-global) options
-        if !regular_opts.is_empty() {
+        if !regular_opts.is_empty() || command.get_version().is_some(){
             writeln!(buffer, "\n## Options").unwrap();
+            if command.get_version().is_some() {
+                writeln!(buffer, "- <a id=\"option-version\" href=\"#option-version\">`--version (-V)`</a>  \n: Display version information").unwrap();
+            }
             write!(buffer, "{}", options(&regular_opts)).unwrap();
         }
 

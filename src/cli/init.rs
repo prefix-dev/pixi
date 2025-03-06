@@ -31,6 +31,13 @@ pub enum ManifestFormat {
 }
 
 /// Creates a new workspace
+///
+/// This command is used to create a new workspace.
+/// It prepares a manifest and some helpers for the user to start working.
+///
+/// As pixi can both work with `pixi.toml` and `pyproject.toml` files, the user can choose which one to use with `--format`.
+///
+/// You can import an existing conda environment file with the `--import` flag.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Where to place the project (defaults to current path)
