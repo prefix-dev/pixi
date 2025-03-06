@@ -39,86 +39,6 @@ pixi self-update --version x.y.z
     If you've used a package manager like `brew`, `mamba`, `conda`, `paru` etc. to install `pixi`
     you must use the built-in update mechanism. e.g. `brew upgrade pixi`.
 
-## Uninstall
-
-To uninstall pixi from your system, simply remove the binary.
-
-=== "Linux & macOS"
-    ```shell
-    rm ~/.pixi/bin/pixi
-    ```
-=== "Windows"
-    ```shell
-    $PIXI_BIN = "$Env:LocalAppData\pixi\bin\pixi"; Remove-Item -Path $PIXI_BIN
-    ```
-
-After this command, you can still use the tools you installed with pixi.
-To remove these as well, just remove the whole `~/.pixi` directory and remove the directory from your path.
-
-
-## Autocompletion
-
-To get autocompletion follow the instructions for your shell.
-Afterwards, restart the shell or source the shell config file.
-
-
-### Bash (default on most Linux systems)
-
-Add the following to the end of `~/.bashrc`:
-
-```bash title="~/.bashrc"
-
-eval "$(pixi completion --shell bash)"
-```
-### Zsh (default on macOS)
-
-Add the following to the end of `~/.zshrc`:
-
-
-```zsh title="~/.zshrc"
-
-autoload -Uz compinit && compinit  # redundant with Oh My Zsh
-eval "$(pixi completion --shell zsh)"
-```
-
-### PowerShell (pre-installed on all Windows systems)
-
-Add the following to the end of `Microsoft.PowerShell_profile.ps1`.
-You can check the location of this file by querying the `$PROFILE` variable in PowerShell.
-Typically the path is `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` or
-`~/.config/powershell/Microsoft.PowerShell_profile.ps1` on -Nix.
-
-```pwsh
-(& pixi completion --shell powershell) | Out-String | Invoke-Expression
-```
-
-### Fish
-
-Add the following to the end of `~/.config/fish/config.fish`:
-
-```fish title="~/.config/fish/config.fish"
-
-pixi completion --shell fish | source
-```
-
-### Nushell
-
-Add the following to your Nushell config file (find it by running `$nu.config-path` in Nushell):
-
-```nushell
-mkdir $"($nu.data-dir)/vendor/autoload"
-pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
-```
-
-### Elvish
-
-Add the following to the end of `~/.elvish/rc.elv`:
-
-```elv title="~/.elvish/rc.elv"
-
-eval (pixi completion --shell elvish | slurp)
-```
-
 
 ## Alternative Installation Methods
 
@@ -204,3 +124,67 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     ```powershell
     iwr -useb https://pixi.sh/install.ps1 | iex -Args "-PixiVersion v0.18.0"
     ```
+
+
+## Autocompletion
+
+To get autocompletion follow the instructions for your shell.
+Afterwards, restart the shell or source the shell config file.
+
+
+### Bash (default on most Linux systems)
+
+Add the following to the end of `~/.bashrc`:
+
+```bash title="~/.bashrc"
+
+eval "$(pixi completion --shell bash)"
+```
+### Zsh (default on macOS)
+
+Add the following to the end of `~/.zshrc`:
+
+
+```zsh title="~/.zshrc"
+
+autoload -Uz compinit && compinit  # redundant with Oh My Zsh
+eval "$(pixi completion --shell zsh)"
+```
+
+### PowerShell (pre-installed on all Windows systems)
+
+Add the following to the end of `Microsoft.PowerShell_profile.ps1`.
+You can check the location of this file by querying the `$PROFILE` variable in PowerShell.
+Typically the path is `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` or
+`~/.config/powershell/Microsoft.PowerShell_profile.ps1` on -Nix.
+
+```pwsh
+(& pixi completion --shell powershell) | Out-String | Invoke-Expression
+```
+
+### Fish
+
+Add the following to the end of `~/.config/fish/config.fish`:
+
+```fish title="~/.config/fish/config.fish"
+
+pixi completion --shell fish | source
+```
+
+### Nushell
+
+Add the following to your Nushell config file (find it by running `$nu.config-path` in Nushell):
+
+```nushell
+mkdir $"($nu.data-dir)/vendor/autoload"
+pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
+```
+
+### Elvish
+
+Add the following to the end of `~/.elvish/rc.elv`:
+
+```elv title="~/.elvish/rc.elv"
+
+eval (pixi completion --shell elvish | slurp)
+```
