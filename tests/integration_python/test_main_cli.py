@@ -1157,3 +1157,24 @@ def test_dont_error_on_missing_platform(pixi: Path, tmp_pixi_workspace: Path) ->
         [pixi, "install", "--manifest-path", manifest],
         stderr_contains=["pixi project platform add zos-z"],
     )
+
+
+def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64"]
+
+        [tasks]
+        foo = "echo foo"
+
+        [target.unix.tasks]
+        bar = "echo bar"
+
+        [target.win.tasks]
+        bar = "echo bar"
+        """
+    manifest.write_text(toml)
+    verify_cli_command([pixi, "info", "--manifest-path", manifest], stdout_contains="foo, bar")
