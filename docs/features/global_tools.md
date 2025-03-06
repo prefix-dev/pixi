@@ -219,6 +219,27 @@ When you execute a global install binary, a trampoline performs the following se
 * Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.
 * When installing a new binary, a new trampoline is placed in the `.pixi/bin` directory and is hard-linked to the `.pixi/bin/trampoline_configuration/trampoline_bin`. This optimizes storage space and avoids duplication of the same trampoline.
 
+### Shortcuts
+
+Especially for graphical user interfaces it is useful to add shortcuts so that the operating system knows that about the application.
+This way the application can show up in the start menu or be suggested when you want to open a file type the application supports.
+If the package supports shortcuts, nothing has do be done from your side.
+Simply executing `pixi global install` will do the trick.
+For example, `pixi global install mss` will lead to the following manifest:
+
+```toml
+[envs.mss]
+channels = ["https://prefix.dev/conda-forge"]
+dependencies = { mss = "*" }
+exposed = { ... }
+shortcuts = ["mss"]
+```
+
+Note the `shortcuts` entry.
+If it's present, `pixi` will install the shortcut for the `mss` package.
+If you want to package an application yourself that would benefit from this, you can check out the corresponding [documentation](https://conda.github.io/menuinst/).
+
+
 
 ### Example: Adding a series of tools at once
 Without specifying an environment, you can add multiple tools at once:

@@ -31,10 +31,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
 
         // Get the exposed binaries from mapping
-        let exposed_mapping_binaries = project
+        let exposed_mapping_binaries = &project
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?
-            .exposed();
+            .exposed;
 
         // Check if they were all auto-exposed, or if the user manually exposed a subset of them
         let expose_type = if check_all_exposed(&env_binaries, exposed_mapping_binaries) {

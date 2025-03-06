@@ -59,7 +59,7 @@ async fn test_invalid_manifest() {
     let source_dir = tempfile::TempDir::new().unwrap();
     let manifest = source_dir
         .path()
-        .join(pixi_consts::consts::PROJECT_MANIFEST);
+        .join(pixi_consts::consts::WORKSPACE_MANIFEST);
     tokio::fs::write(&manifest, "[workspace]").await.unwrap();
     let err = BuildFrontend::default()
         .setup_protocol(SetupRequest {
@@ -92,7 +92,7 @@ async fn test_not_a_package() {
     let source_dir = tempfile::TempDir::new().unwrap();
     let manifest = source_dir
         .path()
-        .join(pixi_consts::consts::PROJECT_MANIFEST);
+        .join(pixi_consts::consts::WORKSPACE_MANIFEST);
     tokio::fs::write(
         &manifest,
         r#"
@@ -126,7 +126,7 @@ async fn test_invalid_backend() {
     let source_dir = tempfile::TempDir::new().unwrap();
     let manifest = source_dir
         .path()
-        .join(pixi_consts::consts::PROJECT_MANIFEST);
+        .join(pixi_consts::consts::WORKSPACE_MANIFEST);
 
     let toml = r#"
     [workspace]

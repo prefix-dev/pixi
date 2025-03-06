@@ -182,7 +182,7 @@ impl<'p> Environment<'p> {
     pub fn tasks(
         &self,
         platform: Option<Platform>,
-    ) -> Result<HashMap<&'p TaskName, &'p Task>, UnsupportedPlatformError> {
+    ) -> Result<IndexMap<&'p TaskName, &'p Task>, UnsupportedPlatformError> {
         self.validate_platform_support(platform)?;
         let result = self
             .features()
