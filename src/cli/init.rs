@@ -38,15 +38,15 @@ pub struct Args {
     pub path: PathBuf,
 
     /// Channels to use in the project.
-    #[arg(short, long = "channel", id = "channel", conflicts_with = "env_file")]
+    #[arg(short, long = "channel", id = "CHANNEL", conflicts_with = "env_file")]
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
     /// Platforms that the project supports.
-    #[arg(short, long = "platform", id = "platform")]
+    #[arg(short, long = "platform", id = "PLATFORM")]
     pub platforms: Vec<String>,
 
     /// Environment.yml file to bootstrap the project.
-    #[arg(short = 'i', long = "import")]
+    #[arg(short = 'i', long = "import", id = "ENVIRONMENT_FILE")]
     pub env_file: Option<PathBuf>,
 
     /// The manifest format to create.
