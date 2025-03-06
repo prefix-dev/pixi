@@ -513,10 +513,9 @@ async fn setup_signal_handler() -> Arc<Mutex<SignalState>> {
     // Set up signal handling
     let handler_clone = handler.clone();
     tokio::spawn(async move {
-        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+        tokio::signal::ctrl_c()
+            .await
             .expect("Failed to create signal handler");
-
-        sigint.recv().await;
 
         // Set cancellation flag
         let mut state = handler_clone.lock().await;
