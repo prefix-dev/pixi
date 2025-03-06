@@ -3,6 +3,15 @@
 ![Pixi with magic wand](assets/pixi.webp)
 
 Pixi is a package management tool for developers.
+
+- Conda: Relies on the existing conda ecosystem to get packages written in Python, C, C++ and many other languages
+- Reproducibility: Work in dedicated, isolated environments that can easily be recreated
+- Tasks: Manage complex pipelines
+- Multi Platform: Ensure compatibility across Linux, macOS, Windows and more
+- Multi Environment: Compose multiple environments within one pixi manifest
+- Building: Build packages from source with powerful build backends
+- Distributing: Distribute your software via conda channels or many other options
+
 It allows the developer to install libraries and applications in a reproducible way.
 Use pixi cross-platform, on Windows, Mac and Linux.
 
@@ -116,3 +125,9 @@ $ pixi run start
            ||     ||
 
 ```
+
+
+You now know how to add dependencies and tasks to your environment.
+Put the workspace folder on a different machine, and you will find that Pixi will be able to fully reproduce your setup.
+
+If you want to learn more about Pixi, check out the next page!
