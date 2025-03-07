@@ -1,8 +1,3 @@
----
-part: pixi
-title: Pixi Vision
-description: What is the vision for pixi?
----
 
 # Vision
 

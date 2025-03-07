@@ -42,7 +42,7 @@ Within a pixi manifest, you can manage a workspace and/or describe a package.
 In the case of `rich_example` we choose to do both, so the only thing we have to add is the dependency on the `python_bindings`.
 
 ```py title="pixi.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_workspace/pixi.toml:workspace"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:workspace"
 ```
 
 We only want to use the `workspace` table of the top-level manifest.
@@ -83,7 +83,7 @@ Luckily `python_bindings` exposes a function `add` which allows us to do exactly
 
 
 ```py title="src/rich_example/__init__.py"
---8<-- "docs/source_files/pixi_projects/pixi_build_workspace/src/rich_example/__init__.py"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/src/rich_example/__init__.py"
 ```
 
 If you run `pixi run start`, the age of each person should now be accurate:

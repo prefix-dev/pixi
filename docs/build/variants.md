@@ -22,7 +22,7 @@ As a reminder, we ended up with a top-level `pixi.toml` containing the workspace
 Our workspace then depended on `rich_example` and `python_bindings`.
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_workspace_variants/pixi.toml:dependencies"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:dependencies"
 ```
 
 The file tree looks like this:
@@ -46,7 +46,7 @@ The file tree looks like this:
 In order to allow multiple Python versions we first have to change the Python version requirement of `python_bindings` from `3.12.*` to `*`.
 
 ```toml title="packages/python_bindings/pixi.toml" hl_lines="4"
---8<-- "docs/source_files/pixi_projects/pixi_build_workspace_variants/packages/python_bindings/pixi.toml:host-dependencies"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/packages/python_bindings/pixi.toml:host-dependencies"
 ```
 
 1. Used to be "3.12.*"
@@ -55,7 +55,7 @@ Now, we have to specify the Python versions we want to allow.
 We do that in `workspace.build-variants`:
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_workspace_variants/pixi.toml:variants"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:variants"
 ```
 
 If we'd run `pixi install` now, we'd leave it up to pixi whether to use Python 3.11 or 3.12.
@@ -64,7 +64,7 @@ In our case this allows us to test our setup against both Python 3.11 and 3.12.
 
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_workspace_variants/pixi.toml:environments"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:environments"
 ```
 
 By running `pixi list` we can see the Python version used in each environment.

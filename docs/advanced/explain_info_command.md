@@ -1,8 +1,3 @@
----
-part: pixi/advanced
-title: Info command
-description: Learn what the info command reports
----
 
 `pixi info` prints out useful information to debug a situation or to get an overview of your machine/project.
 This information can also be retrieved in `json` format using the `--json` flag, which can be useful for programmatically reading it.
@@ -57,11 +52,11 @@ In that case, if pixi cannot find the `__cuda` virtual package on your machine t
 ### Cache dir
 
 The directory where pixi stores its cache.
-Checkout the [cache documentation](../features/environment.md#caching-packages) for more information.
+Checkout the [cache documentation](../environments/environment.md#caching-packages) for more information.
 
 ### Auth storage
 
-Check the [authentication documentation](authentication.md)
+Check the [authentication documentation](../deployment/authentication.md)
 
 ### Cache size
 

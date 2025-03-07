@@ -1,0 +1,20 @@
+[workspace]
+channels = ["conda-forge"]
+name = "hello-world"
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[tasks]
+start = "python hello.py"
+
+[dependencies]
+cowpy = "1.1.*"
+
+[feature.py312.dependencies]
+python = "3.12.*"
+
+[feature.py313.dependencies]
+python = "3.13.*"
+
+[environments]
+py312 = ["py312"]
+py313 = ["py313"]

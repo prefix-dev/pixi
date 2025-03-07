@@ -229,7 +229,7 @@ mod tests {
     #[rstest]
     #[test]
     fn test_conversions_v1_docs(
-        #[files("../../docs/source_files/pixi_projects/pixi_build_*/pixi.toml")]
+        #[files("../../docs/source_files/pixi_workspaces/pixi_build/*/pixi.toml")]
         manifest_path: PathBuf,
     ) {
         snapshot_test!(manifest_path);

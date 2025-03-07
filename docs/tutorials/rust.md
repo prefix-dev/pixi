@@ -4,11 +4,8 @@ In this tutorial, we will show you how to develop a Rust package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
 The audience for this tutorial is developers who are familiar with Rust and `cargo` and how are interested to try pixi for their development workflow.
-The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. E.g tokio users will almost most definitely use `openssl`.
+The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. For example tokio users might depend on `openssl` for linux.
 
-!!! note ""
-    If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
-    This will teach you the basics of pixi project within 3 minutes.
 
 ## Prerequisites
 
@@ -34,7 +31,7 @@ my_rust_project
 The `pixi.toml` file is the manifest file for your project. It should look like this:
 
 ```toml  title="pixi.toml"
-[project]
+[workspace]
 name = "my_rust_project"
 version = "0.1.0"
 description = "Add a short description here"
@@ -66,7 +63,7 @@ pixi run cargo init
 ```
 
 `pixi run` is pixi's way to run commands in the `pixi` environment, it will make sure that the environment is set up correctly for the command to run.
-It runs its own cross-platform shell, if you want more information checkout the [`tasks` documentation](../features/advanced_tasks.md).
+It runs its own cross-platform shell, if you want more information checkout the [`tasks` documentation](../environments/advanced_tasks.md).
 You can also activate the environment in your own shell by running `pixi shell`, after that you don't need `pixi run ...` anymore.
 
 Now we can build a `cargo` project using `pixi`.

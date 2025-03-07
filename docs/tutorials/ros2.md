@@ -11,9 +11,6 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
   The crux of this tutorial is to show you only need pixi!
 - On Windows, it's advised to enable Developer mode. Go to Settings -> Update & Security -> For developers -> Developer mode.
 
-!!! note ""
-    If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
-    This will teach you the basics of pixi project within 3 minutes.
 
 ## Create a pixi project.
 
@@ -34,7 +31,7 @@ my_ros2_project
 The `pixi.toml` file is the manifest file for your project. It should look like this:
 
 ```toml title="pixi.toml"
-[project]
+[workspace]
 name = "my_ros2_project"
 version = "0.1.0"
 description = "Add a short description here"
@@ -129,10 +126,10 @@ Normally this would be the script you add to your `.bashrc` but instead you tell
 
 ??? tip "Multi platform support"
     You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
-    Use the following example to add support for both Linux and Windows, using the [target](../features/multi_platform_configuration.md#activation) syntax.
+    Use the following example to add support for both Linux and Windows, using the [target](../environments/multi_platform_configuration.md#activation) syntax.
 
     ```toml
-    [project]
+    [workspace]
     platforms = ["linux-64", "win-64"]
 
     [activation]
@@ -169,9 +166,9 @@ pixi run hello
 ???+ tip "Advanced task usage"
     Tasks are a powerful feature in pixi.
 
-    - You can add [`depends-on`](../features/advanced_tasks.md#depends-on) to the tasks to create a task chain.
-    - You can add [`cwd`](../features/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
-    - You can add [`inputs` and `outputs`](../features/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
+    - You can add [`depends-on`](../environments/advanced_tasks.md#depends-on) to the tasks to create a task chain.
+    - You can add [`cwd`](../environments/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
+    - You can add [`inputs` and `outputs`](../environments/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
     - You can use the [`target`](../reference/pixi_manifest.md#the-target-table) syntax to run specific tasks on specific machines.
 
 ```toml
