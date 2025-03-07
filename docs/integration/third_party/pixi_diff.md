@@ -15,7 +15,7 @@ With [henriklovhaug/md-tui](https://github.com/henriklovhaug/md-tui), you can ev
     pixi global install pixi-diff pixi-diff-to-markdown md-tui
     ```
 
-`pixi-diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../../reference/cli.md#update).
+`pixi-diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../../reference/cli/pixi/update.md).
 
 ```bash
 $ pixi-diff --before pixi.lock.old --after pixi.lock.new

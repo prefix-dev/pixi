@@ -1,0 +1,13 @@
+# <code>[pixi](../../../pixi.md) [project](../../project.md) [version](../version.md) patch</code>
+
+## About
+Bump the workspace version to PATCH
+
+--8<-- "docs/reference/cli/pixi/project/version/patch_extender.md:description"
+
+## Usage
+```
+pixi project version patch
+```
+
+--8<-- "docs/reference/cli/pixi/project/version/patch_extender.md:example"

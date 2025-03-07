@@ -39,12 +39,10 @@ pub enum Command {
     UpgradeAll(upgrade_all::Args),
 }
 
-/// Subcommand for global package management actions
+/// Subcommand for global package management actions.
 ///
 /// Install packages on the user level.
-/// Example:
-///    pixi global install my_package
-///    pixi global remove my_package
+/// Into to the [`$PIXI_HOME`] directory, which defaults to `~/.pixi`.
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]

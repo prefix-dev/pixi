@@ -1,0 +1,18 @@
+# <code>[pixi](../../pixi.md) [auth](../auth.md) logout</code>
+
+## About
+Remove authentication information for a given host
+
+--8<-- "docs/reference/cli/pixi/auth/logout_extender.md:description"
+
+## Usage
+```
+pixi auth logout <HOST>
+```
+
+## Arguments
+- <a id="arg-<HOST>" href="#arg-<HOST>">`<HOST>`</a>
+:  The host to remove authentication for
+<br>**required**: `true`
+
+--8<-- "docs/reference/cli/pixi/auth/logout_extender.md:example"

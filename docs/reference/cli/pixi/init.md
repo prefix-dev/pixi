@@ -1,0 +1,42 @@
+# <code>[pixi](../pixi.md) init</code>
+
+## About
+Creates a new workspace
+
+--8<-- "docs/reference/cli/pixi/init_extender.md:description"
+
+## Usage
+```
+pixi init [OPTIONS] [PATH]
+```
+
+## Arguments
+- <a id="arg-<PATH>" href="#arg-<PATH>">`<PATH>`</a>
+:  Where to place the workspace (defaults to current path)
+<br>**default**: `.`
+
+## Options
+- <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
+:  Channels to use in the workspace
+- <a id="arg---format" href="#arg---format">`--format <FORMAT>`</a>
+:  The manifest format to create
+<br>**options**: `pixi`, `pyproject`
+- <a id="arg---import" href="#arg---import">`--import (-i) <ENVIRONMENT_FILE>`</a>
+:  Environment.yml file to bootstrap the workspace
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
+:  Platforms that the workspace supports
+- <a id="arg---scm" href="#arg---scm">`--scm (-s) <SCM>`</a>
+:  Source Control Management used for this workspace
+<br>**options**: `github`, `gitlab`, `codeberg`
+
+## Description
+Creates a new workspace
+
+This command is used to create a new workspace. It prepares a manifest and some helpers for the user to start working.
+
+As pixi can both work with `pixi.toml` and `pyproject.toml` files, the user can choose which one to use with `--format`.
+
+You can import an existing conda environment file with the `--import` flag.
+
+
+--8<-- "docs/reference/cli/pixi/init_extender.md:example"

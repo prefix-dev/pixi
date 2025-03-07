@@ -11,8 +11,9 @@ use crate::{
 /// Add exposed binaries from an environment to your global environment
 ///
 /// Example:
-/// - pixi global expose add python310=python3.10 python3=python3 --environment myenv
-/// - pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest
+///
+/// - `pixi global expose add python310=python3.10 python3=python3 --environment myenv`
+/// - `pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest`
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct AddArgs {

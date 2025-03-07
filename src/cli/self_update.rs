@@ -17,7 +17,7 @@ use std::str::FromStr;
 /// Update pixi to the latest version or a specific version.
 #[derive(Debug, clap::Parser)]
 pub struct Args {
-    /// The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
+    /// The desired version (to downgrade or upgrade to).
     #[clap(long)]
     version: Option<Version>,
 }

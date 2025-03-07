@@ -102,7 +102,7 @@ pub struct ConfigCli {
     #[arg(long)]
     auth_file: Option<PathBuf>,
 
-    /// Specifies if we want to use uv keyring provider
+    /// Specifies whether to use the keyring to look up credentials for PyPI.
     #[arg(long)]
     pypi_keyring_provider: Option<KeyringProvider>,
 
@@ -110,7 +110,7 @@ pub struct ConfigCli {
     #[arg(long)]
     pub concurrent_solves: Option<usize>,
 
-    /// Max concurrent network requests, default is 50
+    /// Max concurrent network requests, default is `50`
     #[arg(long)]
     pub concurrent_downloads: Option<usize>,
 }

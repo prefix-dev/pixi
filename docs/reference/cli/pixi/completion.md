@@ -1,0 +1,19 @@
+# <code>[pixi](../pixi.md) completion</code>
+
+## About
+Generates a completion script for a shell
+
+--8<-- "docs/reference/cli/pixi/completion_extender.md:description"
+
+## Usage
+```
+pixi completion --shell <SHELL>
+```
+
+## Options
+- <a id="arg---shell" href="#arg---shell">`--shell (-s) <SHELL>`</a>
+:  The shell to generate a completion script for
+<br>**required**: `true`
+<br>**options**: `bash`, `elvish`, `fish`, `nushell`, `powershell`, `zsh`
+
+--8<-- "docs/reference/cli/pixi/completion_extender.md:example"

@@ -270,7 +270,7 @@ With `pixi exec`, you can also run a one-off command inside a temporary pixi env
 
 1. everything here will be run inside of the temporary pixi environment
 
-See [here](../../reference/cli.md#exec) for more information about `pixi exec`.
+See [here](../../reference/cli/pixi/exec.md) for more information about `pixi exec`.
 
 ### Environment activation
 

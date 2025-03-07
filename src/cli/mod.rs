@@ -66,13 +66,12 @@ For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION)
 )]
 #[clap(arg_required_else_help = true)]
-struct Args {
+pub struct Args {
     #[command(subcommand)]
     command: Command,
 
     /// The verbosity level
-    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for
-    /// quiet)
+    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for quiet)
     #[command(flatten)]
     verbose: Verbosity,
 
@@ -137,6 +136,7 @@ pub enum Command {
     Upload(upload::Args),
     Search(search::Args),
     #[cfg_attr(not(feature = "self_update"), clap(hide = true))]
+    #[cfg_attr(feature = "self_update", clap(hide = false))]
     SelfUpdate(self_update::Args),
     Clean(clean::Args),
     Completion(completion::Args),

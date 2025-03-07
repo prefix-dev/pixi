@@ -21,8 +21,7 @@ use pixi_progress;
 /// Upload a conda package
 ///
 /// With this command, you can upload a conda package to a channel.
-/// Example:
-///     pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda
+/// Example: `pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda`
 ///
 /// Use `pixi auth login` to authenticate with the server.
 #[derive(Parser, Debug)]

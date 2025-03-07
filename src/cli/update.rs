@@ -19,7 +19,9 @@ use pixi_manifest::EnvironmentName;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
 
-/// Update dependencies as recorded in the local lock file
+/// The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
+///
+/// It will only update the lock file if the dependencies in the manifest file are still compatible with the new versions.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
@@ -47,7 +49,8 @@ pub struct Args {
 
 #[derive(Parser, Debug, Default)]
 pub struct UpdateSpecsArgs {
-    /// The packages to update
+    /// The packages to update, space separated.
+    /// If no packages are provided, all packages will be updated.
     pub packages: Option<Vec<String>>,
 
     /// The environments to update. If none is specified, all environments are

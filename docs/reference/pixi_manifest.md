@@ -232,7 +232,7 @@ format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
 ```
 
-You can modify this table using [`pixi task`](cli.md#task).
+You can modify this table using [`pixi task`](cli/pixi/task.md).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 

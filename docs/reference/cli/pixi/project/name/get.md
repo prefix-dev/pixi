@@ -1,0 +1,13 @@
+# <code>[pixi](../../../pixi.md) [project](../../project.md) [name](../name.md) get</code>
+
+## About
+Get the project name
+
+--8<-- "docs/reference/cli/pixi/project/name/get_extender.md:description"
+
+## Usage
+```
+pixi project name get
+```
+
+--8<-- "docs/reference/cli/pixi/project/name/get_extender.md:example"

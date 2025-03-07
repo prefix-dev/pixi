@@ -224,7 +224,7 @@ impl From<AliasArgs> for Task {
     }
 }
 
-/// Interact with tasks in the project
+/// Interact with tasks in the workspace
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {

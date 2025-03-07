@@ -30,7 +30,13 @@ use crate::{
     Workspace, WorkspaceLocator,
 };
 
-/// Runs task in project.
+/// Runs task in the pixi environment.
+///
+/// This command is used to run tasks in the pixi environment.
+/// It will activate the environment and run the task in the environment.
+/// It is using the deno_task_shell to run the task.
+///
+/// `pixi run` will also update the lockfile and install the environment if it is required.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {

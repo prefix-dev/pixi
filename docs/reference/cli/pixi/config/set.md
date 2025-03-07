@@ -1,0 +1,38 @@
+# <code>[pixi](../../pixi.md) [config](../config.md) set</code>
+
+## About
+Set a configuration value
+
+--8<-- "docs/reference/cli/pixi/config/set_extender.md:description"
+
+## Usage
+```
+pixi config set [OPTIONS] <KEY> [VALUE]
+```
+
+## Arguments
+- <a id="arg-<KEY>" href="#arg-<KEY>">`<KEY>`</a>
+:  Configuration key to set
+<br>**required**: `true`
+- <a id="arg-<VALUE>" href="#arg-<VALUE>">`<VALUE>`</a>
+:  Configuration value to set (key will be unset if value not provided)
+
+## Options
+- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
+:  Operation on global configuration
+- <a id="arg---local" href="#arg---local">`--local (-l)`</a>
+:  Operation on project-local configuration
+- <a id="arg---system" href="#arg---system">`--system (-s)`</a>
+:  Operation on system configuration
+
+## Global Options
+- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
+:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+## Description
+Set a configuration value
+
+Example: `pixi config set default-channels '["conda-forge", "bioconda"]'`
+
+
+--8<-- "docs/reference/cli/pixi/config/set_extender.md:example"

@@ -22,8 +22,11 @@ pub enum Command {
     Cache(CacheArgs),
 }
 
-/// Clean the parts of your system which are touched by pixi.
-/// Defaults to cleaning the environments and task cache.
+/// Cleanup the environments.
+///
+/// This command removes the information in the .pixi folder.
+/// You can specify the environment to remove with the `--environment` flag.
+///
 /// Use the `cache` subcommand to clean the cache.
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -43,6 +46,8 @@ pub struct Args {
 }
 
 /// Clean the cache of your system which are touched by pixi.
+///
+/// Specify the cache type to clean with the flags.
 #[derive(Parser, Debug)]
 pub struct CacheArgs {
     /// Clean only the pypi related cache.

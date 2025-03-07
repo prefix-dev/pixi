@@ -1,0 +1,23 @@
+# <code>[pixi](../pixi.md) info</code>
+
+## About
+Information about the system, project and environments for the current machine
+
+--8<-- "docs/reference/cli/pixi/info_extender.md:description"
+
+## Usage
+```
+pixi info [OPTIONS]
+```
+
+## Options
+- <a id="arg---extended" href="#arg---extended">`--extended`</a>
+:  Show cache and environment size
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Whether to show the output as JSON or not
+
+## Global Options
+- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
+:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+--8<-- "docs/reference/cli/pixi/info_extender.md:example"

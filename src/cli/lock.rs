@@ -9,7 +9,7 @@ use crate::{
     WorkspaceLocator,
 };
 
-/// Solve environment and update the lock file
+/// Solve environment and update the lock file without installing the environments.
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
