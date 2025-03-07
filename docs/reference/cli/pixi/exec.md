@@ -20,7 +20,7 @@ pixi exec [OPTIONS] [COMMAND]...
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is 50
+:  Max concurrent network requests, default is `50`
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---force-reinstall" href="#arg---force-reinstall">`--force-reinstall`</a>
@@ -29,7 +29,7 @@ pixi exec [OPTIONS] [COMMAND]...
 :  The platform to create the environment for
 <br>**default**: `current_platform`
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
-:  Specifies if we want to use uv keyring provider
+:  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---spec" href="#arg---spec">`--spec (-s) <SPECS>`</a>
 :  Matchspecs of packages to install. If this is not provided, the package is guessed from the command

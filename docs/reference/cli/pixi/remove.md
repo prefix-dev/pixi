@@ -23,7 +23,7 @@ pixi remove [OPTIONS] <SPECS>...
 - <a id="arg---build" href="#arg---build">`--build`</a>
 :  The specified dependencies are build dependencies. Conflicts with `host` and `pypi`
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is 50
+:  Max concurrent network requests, default is `50`
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
@@ -48,7 +48,7 @@ pixi remove [OPTIONS] <SPECS>...
 - <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>
 :  The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
-:  Specifies if we want to use uv keyring provider
+:  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
 :  The git revision

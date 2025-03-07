@@ -14,7 +14,7 @@ pixi build [OPTIONS]
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is 50
+:  Max concurrent network requests, default is `50`
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---no-incremental" href="#arg---no-incremental">`--no-incremental (-n)`</a>
@@ -23,7 +23,7 @@ pixi build [OPTIONS]
 :  The output directory to place the build artifacts
 <br>**default**: `.`
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
-:  Specifies if we want to use uv keyring provider
+:  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---target-platform" href="#arg---target-platform">`--target-platform (-t) <TARGET_PLATFORM>`</a>
 :  The target platform to build for (defaults to the current platform)

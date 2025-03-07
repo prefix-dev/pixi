@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) install</code>
 
 ## About
-Install an environment
+Install an environment, both updating the lockfile and installing the environment
 
 --8<-- "docs/reference/cli/pixi/install_extender.md:description"
 
@@ -16,7 +16,7 @@ pixi install [OPTIONS]
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is 50
+:  Max concurrent network requests, default is `50`
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
@@ -28,7 +28,7 @@ pixi install [OPTIONS]
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
-:  Specifies if we want to use uv keyring provider
+:  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
@@ -38,13 +38,17 @@ pixi install [OPTIONS]
 :  The path to `pixi.toml`, `pyproject.toml`, or the project directory
 
 ## Description
-Install an environment
+Install an environment, both updating the lockfile and installing the environment.
 
 This command installs an environment, if the lockfile is not up-to-date it will be updated.
 
 `pixi install` only installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag. If you don't provide an environment, the `default` environment will be installed.
 
 If you want to install all environments, you can use the `--all` flag.
+
+Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`. These commands will automatically install the environment if it is not already installed.
+
+You can use `pixi clean` to remove the installed environments and start fresh.
 
 
 --8<-- "docs/reference/cli/pixi/install_extender.md:example"
