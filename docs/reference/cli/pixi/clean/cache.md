@@ -26,4 +26,10 @@ pixi clean cache [OPTIONS]
 - <a id="arg---yes" href="#arg---yes">`--yes (-y)`</a>
 :  Answer yes to all questions
 
+## Description
+Clean the cache of your system which are touched by pixi.
+
+Specify the cache type to clean with the flags.
+
+
 --8<-- "docs/reference/cli/pixi/clean/cache_extender.md:example"

@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) clean</code>
 
 ## About
-Clean the parts of your system which are touched by pixi. Defaults to cleaning the environments and task cache. Use the `cache` subcommand to clean the cache
+Cleanup the environments
 
 --8<-- "docs/reference/cli/pixi/clean_extender.md:description"
 
@@ -25,5 +25,13 @@ pixi clean [OPTIONS] [COMMAND]
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+## Description
+Cleanup the environments.
+
+This command removes the information in the .pixi folder. You can specify the environment to remove with the `--environment` flag.
+
+Use the `cache` subcommand to clean the cache.
+
 
 --8<-- "docs/reference/cli/pixi/clean_extender.md:example"
