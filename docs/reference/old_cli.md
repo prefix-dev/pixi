@@ -10,69 +10,7 @@ This subcommand allows you to modify the project configuration through the comma
 
 - `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
 
-### `project channel add`
 
-Add channels to the channel list in the project configuration.
-When you add channels, the channels are tested for existence, added to the lock file and the environment is reinstalled.
-
-##### Arguments
-
-1. `<CHANNEL>`: The channels to add, name or URL.
-
-##### Options
-
-- `--no-install`: do not update the environment, only add changed packages to the lock-file.
-- `--feature <FEATURE> (-f)`: The feature for which the channel is added.
-- `--prepend`: Prepend the channel to the list of channels.
-
-```
-pixi project channel add robostack
-pixi project channel add bioconda conda-forge robostack
-pixi project channel add file:///home/user/local_channel
-pixi project channel add https://repo.prefix.dev/conda-forge
-pixi project channel add --no-install robostack
-pixi project channel add --feature cuda nvidia
-pixi project channel add --prepend pytorch
-```
-
-### `project channel list`
-
-List the channels in the manifest file
-
-##### Options
-
-- `urls`: show the urls of the channels instead of the names.
-
-```sh
-$ pixi project channel list
-Environment: default
-- conda-forge
-
-$ pixi project channel list --urls
-Environment: default
-- https://conda.anaconda.org/conda-forge/
-
-```
-
-### `project channel remove`
-
-List the channels in the manifest file
-
-##### Arguments
-
-1. `<CHANNEL>...`: The channels to remove, name(s) or URL(s).
-
-##### Options
-
-- `--no-install`: do not update the environment, only add changed packages to the lock-file.
-- `--feature <FEATURE> (-f)`: The feature for which the channel is removed.
-
-```sh
-pixi project channel remove conda-forge
-pixi project channel remove https://conda.anaconda.org/conda-forge/
-pixi project channel remove --no-install conda-forge
-pixi project channel remove --feature cuda nvidia
-```
 
 ### `project description get`
 
