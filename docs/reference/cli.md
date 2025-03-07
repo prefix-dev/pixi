@@ -1,8 +1,3 @@
----
-part: pixi
-title: Commands
-description: All pixi cli subcommands
----
 
 ## Global options
 
@@ -20,7 +15,7 @@ description: All pixi cli subcommands
 This command is used to create a new project.
 It initializes a `pixi.toml` file and also prepares a `.gitignore` to prevent the environment from being added to `git`.
 
-It also supports the [`pyproject.toml`](../advanced/pyproject_toml.md) file, if you have a `pyproject.toml` file in the directory where you run `pixi init`, it appends the pixi data to the `pyproject.toml` instead of a new `pixi.toml` file.
+It also supports the [`pyproject.toml`](../python/pyproject_toml.md) file, if you have a `pyproject.toml` file in the directory where you run `pixi init`, it appends the pixi data to the `pyproject.toml` instead of a new `pixi.toml` file.
 
 ##### Arguments
 
@@ -54,7 +49,7 @@ pixi init --format pixi --scm gitlab
 
 Adds dependencies to the [manifest file](pixi_manifest.md).
 It will only add dependencies compatible with the rest of the dependencies in the project.
-[More info](../features/multi_platform_configuration.md) on multi-platform configuration.
+[More info](../environments/multi_platform_configuration.md) on multi-platform configuration.
 
 If the project manifest is a `pyproject.toml`, by default, adding a pypi dependency will add it to the native `project.dependencies` array, or to the native `dependency-groups` table if a feature is specified:
 
@@ -301,7 +296,7 @@ You cannot run `pixi run source setup.bash` as `source` is not available in the 
 - `--environment <ENVIRONMENT> (-e)`: The environment to run the task in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--clean-env`: Run the task in a clean environment, this will remove all environment variables of the shell environment except for the ones pixi sets. THIS DOESN't WORK ON `Windows`.
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
-- `--revalidate`: Revalidate the full environment, instead of checking the lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--revalidate`: Revalidate the full environment, instead of checking the lock file hash. [more info](../environments/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 - `--skip-deps`: Skip the dependencies of the task, which where defined in the `depends-on` field of the task.
@@ -751,7 +746,7 @@ To exit the pixi shell, simply run `exit`.
 - `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
 - `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
-- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../environments/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 - `--no-completion`: Do not source the autocompletion scripts from the environment.
@@ -784,7 +779,7 @@ This command prints the activation script of an environment.
 - `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
   this option, `--shell` is ignored.
 - `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
-- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
+- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../environments/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
 - `--no-completion`: Do not source the autocompletion scripts from the environment.
@@ -1067,7 +1062,7 @@ pixi config unset repodata-config.disable-zstd --system
 
 Global is the main entry point for the part of pixi that executes on the global(system) level.
 All commands in this section are used to manage global installations of packages and environments through the global manifest.
-More info on the global manifest can be found [here](../features/global_tools.md).
+More info on the global manifest can be found [here](../global_tools/introduction.md).
 
 !!! tip
     Binaries and environments installed globally are stored in `~/.pixi`

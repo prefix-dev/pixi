@@ -37,14 +37,14 @@ The Python package has a single function `main`.
 Calling that, will print a table containing the name, age and city of three people.
 
 ```py title="src/rich_example/__init__.py"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/src/rich_example/__init__.py"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/python/src/rich_example/__init__.py"
 ```
 
 
 The metadata of the Python package is defined in `pyproject.toml`.
 
 ```toml title="pyproject.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/pyproject.toml"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/python/pyproject.toml"
 ```
 
 1. We use the `rich` package to print the table in the terminal.
@@ -86,12 +86,12 @@ We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.to
 This is the content of the `pixi.toml`:
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_python/pixi.toml"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/python/pixi.toml"
 ```
 
 1. In `workspace` information is set that is shared across all packages in the workspace.
 2. In `dependencies` you specify all of your pixi packages. Here, this includes only our own package that is defined further below under `package`
-3. We define a task that runs the `rich-example-main` executable we defined earlier. You can learn more about tasks in this [section](../features/advanced_tasks.md)
+3. We define a task that runs the `rich-example-main` executable we defined earlier. You can learn more about tasks in this [section](../environments/advanced_tasks.md)
 4. In `package` we define the actual pixi package. This information will be used when other pixi packages or workspaces depend on our package or when we upload it to a conda channel.
 5. The same way, Python uses build backends to build a Python package, pixi uses build backends to build pixi packages. `pixi-build-python` creates a pixi package out of a Python package.
 6. In `package.host-dependencies`, we add Python dependencies that are necessary to build the Python package. By adding them here as well, the dependencies will come from the conda channel rather than PyPI.

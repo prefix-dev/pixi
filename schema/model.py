@@ -310,7 +310,7 @@ class TaskInlineTable(StrictBaseModel):
 
     cmd: list[NonEmptyStr] | NonEmptyStr | None = Field(
         None,
-        description="A shell command to run the task in the limited, but cross-platform `bash`-like `deno_task_shell`. See the documentation for [supported syntax](https://pixi.sh/latest/features/advanced_tasks/#syntax)",
+        description="A shell command to run the task in the limited, but cross-platform `bash`-like `deno_task_shell`. See the documentation for [supported syntax](https://pixi.sh/latest/environments/advanced_tasks/#syntax)",
     )
     cwd: PathNoBackslash | None = Field(None, description="The working directory to run the task")
     # BREAK: `depends_on` is deprecated, use `depends-on`

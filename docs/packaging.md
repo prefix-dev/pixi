@@ -1,8 +1,5 @@
----
-part: pixi
-title: Packaging pixi
-description: How to package pixi for distribution with another package manager?
----
+# Packaging Pixi
+
 This is a guide for distribution maintainers wanting to package pixi for a different package manager.
 Users of pixi can ignore this page.
 

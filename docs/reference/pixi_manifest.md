@@ -1,8 +1,3 @@
----
-part: pixi
-title: Manifest
-description: Learn what you can do in the pixi manifest.
----
 
 The `pixi.toml` is the project manifest, also known as the pixi project configuration file.
 
@@ -12,8 +7,8 @@ For more technical documentation check pixi on [docs.rs](https://docs.rs/pixi/la
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
-    For example, the `[project]` table becomes `[tool.pixi.project]`.
-    There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../advanced/pyproject_toml.md) documentation for more information.
+    For example, the `[workspace]` table becomes `[tool.pixi.workspace]`.
+    There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../python/pyproject_toml.md) documentation for more information.
 
 ## Manifest discovery
 
@@ -209,7 +204,7 @@ channel-priority = "disabled"
     It's advisable to maintain the default strict setting and order channels thoughtfully.
     If necessary, specify a channel directly for a dependency.
     ```toml
-    [project]
+    [workspace]
     # Putting conda-forge first solves most issues
     channels = ["conda-forge", "channel-name"]
     [dependencies]
@@ -221,8 +216,8 @@ channel-priority = "disabled"
 Tasks are a way to automate certain custom commands in your project.
 For example, a `lint` or `format` step.
 Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For more in-depth information, check the [Advanced tasks documentation](../features/advanced_tasks.md).
-Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../features/advanced_tasks.md#our-task-runner-deno_task_shell).
+For more in-depth information, check the [Advanced tasks documentation](../environments/advanced_tasks.md).
+Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../environments/advanced_tasks.md#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -268,7 +263,7 @@ e.g. `libc = { family="glibc", version="2.28" }`
 - `macos`: The minimal version of the macOS operating system.
 - `cuda`: The minimal version of the CUDA library.
 
-More information in the [system requirements documentation](../features/system_requirements.md).
+More information in the [system requirements documentation](../environments/system_requirements.md).
 
 ## The `pypi-options` table
 
@@ -313,7 +308,7 @@ find-links = [{path = './links'}]
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the pixi repository, that make use of this feature.
 
 !!! tip "Authentication Methods"
-    To read about existing authentication methods for private registries, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
+    To read about existing authentication methods for private registries, please check the [PyPI Authentication](../deployment/authentication.md#pypi-authentication) section.
 
 
 ### No Build Isolation
@@ -554,7 +549,7 @@ torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 ```
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
-Learn more about installing PyTorch [here](../features/pytorch.md).
+Learn more about installing PyTorch [here](../python/pytorch.md).
 
 ##### `git`
 
@@ -705,7 +700,7 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../features/multi_environment.md).
+The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../environments/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]
