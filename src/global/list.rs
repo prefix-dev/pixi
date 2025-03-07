@@ -86,7 +86,7 @@ fn print_meta_info(environment: &ParsedEnvironment) {
     }
 
     // Print platform
-    if let Some(platform) = environment.platform() {
+    if let Some(platform) = environment.platform {
         println!("{} {}", console::style("Platform:").bold().cyan(), platform);
     }
 }
@@ -162,7 +162,8 @@ pub async fn list_environment(
         .map(|record| {
             PackageToOutput::new(
                 &record.repodata_record.package_record,
-                env.dependencies()
+                env.dependencies
+                    .specs
                     .contains_key(&record.repodata_record.package_record.name),
             )
         })
@@ -269,7 +270,8 @@ pub async fn list_global_environments(
             .unwrap_or("".to_string());
 
         if !env
-            .dependencies()
+            .dependencies
+            .specs
             .iter()
             .any(|(pkg_name, _spec)| pkg_name.as_normalized() != env_name.as_str())
         {
@@ -303,7 +305,7 @@ pub async fn list_global_environments(
         }
 
         // Write exposed binaries
-        if let Some(exp_message) = format_exposed(env.exposed(), last) {
+        if let Some(exp_message) = format_exposed(&env.exposed, last) {
             message.push_str(&exp_message);
         }
 

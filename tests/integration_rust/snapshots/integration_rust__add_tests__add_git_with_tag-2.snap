@@ -9,4 +9,4 @@ platforms = ["win-64"]
 preview = ['pixi-build']
 
 [dependencies]
-boost-check = { git = "https://github.com/wolfv/pixi-build-examples", tag = "v0.1.0", subdirectory = "boost-check" }
+boost-check = { git = "https://github.com/wolfv/pixi-build-examples.git", tag = "v0.1.0", subdirectory = "boost-check" }

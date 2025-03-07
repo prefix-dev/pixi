@@ -1121,6 +1121,8 @@ Allowing you to access it anywhere on your system without activating the environ
 - `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
 - `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system. (default: name of the tool)
 - `--with <WITH>`: Add additional dependencies to the environment. Their executables will not be exposed.
+- `--force-reinstall`: Specifies that the packages should be reinstalled even if they are already installed
+- `--no-shortcut`: Specifies that no shortcuts should be created for the installed packages
 
 ```shell
 pixi global install ruff

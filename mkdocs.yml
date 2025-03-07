@@ -144,6 +144,7 @@ nav:
       - Pyproject.toml: advanced/pyproject_toml.md
       - S3: advanced/s3.md
       - Shebang: advanced/shebang.md
+      - Third Party Tools: advanced/third_party.md
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md

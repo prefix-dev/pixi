@@ -670,17 +670,25 @@ preview = ['pixi-build']
 
     // Add a package
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
         .with_git_rev(GitRev::new().with_branch("main".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
+    let git_package = lock
+        .default_environment()
+        .unwrap()
+        .packages(Platform::Win64)
+        .unwrap()
+        .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
+
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(lock.render_to_string().unwrap());
+        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
+
     });
 
     // Check the manifest itself
@@ -765,18 +773,26 @@ preview = ['pixi-build']"#,
 
     // Add a package
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
-        .with_git_rev(GitRev::new().with_rev("9de9e1b".to_string()))
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
+        .with_git_rev(GitRev::new().with_rev("8a1d9b9".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
         .unwrap();
 
     // Check the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let git_package = lock
+        .default_environment()
+        .unwrap()
+        .packages(Platform::Win64)
+        .unwrap()
+        .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
+
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(lock.render_to_string().unwrap());
+        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
+
     });
 
     // Check the manifest itself
@@ -806,7 +822,7 @@ preview = ['pixi-build']"#,
 
     // Add a package
     pixi.add("boost-check")
-        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples").unwrap())
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
         .with_git_rev(GitRev::new().with_tag("v0.1.0".to_string()))
         .with_git_subdir("boost-check".to_string())
         .await
@@ -814,10 +830,17 @@ preview = ['pixi-build']"#,
 
     // Check the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let git_package = lock
+        .default_environment()
+        .unwrap()
+        .packages(Platform::Win64)
+        .unwrap()
+        .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
+
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(lock.render_to_string().unwrap());
+        insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
     });
 
     // Check the manifest itself

@@ -348,7 +348,7 @@ def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
         # Verify that the manifest file contains expected content
         manifest_content = manifest_path.read_text()
-        assert "[project]" in manifest_content
+        assert "[workspace]" in manifest_content
 
 
 def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -364,7 +364,7 @@ def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> Non
 
     # Verify that the manifest file contains expected content
     manifest_content = manifest_path.read_text()
-    assert "[project]" in manifest_content
+    assert "[workspace]" in manifest_content
 
 
 @pytest.mark.slow
@@ -1190,3 +1190,24 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
         [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "fish"],
         stdout_contains=["for file in", "source", "share/fish/vendor_completions.d"],
     )
+
+
+def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64"]
+
+        [tasks]
+        foo = "echo foo"
+
+        [target.unix.tasks]
+        bar = "echo bar"
+
+        [target.win.tasks]
+        bar = "echo bar"
+        """
+    manifest.write_text(toml)
+    verify_cli_command([pixi, "info", "--manifest-path", manifest], stdout_contains="foo, bar")
