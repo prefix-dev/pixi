@@ -1,6 +1,6 @@
 # Tutorial: Integrating multiple packages in a workspace
 
-In this tutorial, we will show you how to integrate multiple pixi packages into a single workspace.
+In this tutorial, we will show you how to integrate multiple Pixi packages into a single workspace.
 
 !!! warning
     `pixi-build` is a preview feature, and will change until it is stabilized.
@@ -38,7 +38,7 @@ The source directory structure now looks like this:
         └── __init__.py
 ```
 
-Within a pixi manifest, you can manage a workspace and/or describe a package.
+Within a Pixi manifest, you can manage a workspace and/or describe a package.
 In the case of `rich_example` we choose to do both, so the only thing we have to add is the dependency on the `python_bindings`.
 
 ```py title="pixi.toml"
@@ -100,7 +100,7 @@ If you run `pixi run start`, the age of each person should now be accurate:
 
 ## Conclusion
 
-In this tutorial, we created a pixi workspace containing two packages.
+In this tutorial, we created a Pixi workspace containing two packages.
 The manifest of `rich_example` describes the workspace as well as the package, with `python_bindings` only the `package` section is used.
 Feel free to add more packages, written in different languages to this workspace!
 

@@ -8,14 +8,11 @@ Pixi is a package management tool for developers.
 - 🔄 **Reproducibility**: Work in dedicated, isolated environments that can be easily recreated.
 - 🛠️ **Tasks**: Manage complex pipelines effortlessly.
 - 🌐 **Multi Platform**: Ensure compatibility across Linux, macOS, Windows, and more.
-- 🧩 **Multi Environment**: Compose multiple environments within a single pixi manifest.
+- 🧩 **Multi Environment**: Compose multiple environments within a single Pixi manifest.
 - 🏗️ **Building**: Build packages from source using powerful build backends.
 - 📦 **Distributing**: Distribute your software via conda channels or various other options.
 - 🐍 **Python**: Full support for `pyproject.toml` and PyPI dependencies.
 - 🌍 **Global Tools**: Install globally available tools, safely stored in separate environments.
-
-It allows the developer to install libraries and applications in a reproducible way.
-Use pixi cross-platform, on Windows, Mac and Linux.
 
 ## Installation
 
@@ -54,7 +51,7 @@ pixi init hello-world
 cd hello-world
 ```
 
-This will create a pixi manifest which is a file called `pixi.toml`.
+This will create a Pixi manifest which is a file called `pixi.toml`.
 It describes the structure, dependencies and metadata of your workspace.
 
 ```toml title="pixi.toml"
@@ -79,7 +76,7 @@ We can now create a Python script which uses the `cowpy` library.
 --8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
 ```
 
-The dependencies are installed in a pixi environment.
+The dependencies are installed in a Pixi environment.
 In order to run a command within an environment, we prefix it with `pixi run`.
 
 ```bash

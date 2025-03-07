@@ -1,6 +1,6 @@
 # Tutorial: Adding variants
 
-In this tutorial, we will show you how to use variants in order to build a pixi package against different versions of a dependency.
+In this tutorial, we will show you how to use variants in order to build a Pixi package against different versions of a dependency.
 Some might call this functionality, build matrix, build configurations or parameterized builds, in the conda ecosystem this is referred to as a variant.
 
 !!! warning
@@ -9,7 +9,7 @@ Some might call this functionality, build matrix, build configurations or parame
 
 ## Why is this useful?
 
-When we depend on a pixi package, the dependency versions of the package itself are already set.
+When we depend on a Pixi package, the dependency versions of the package itself are already set.
 For example, in the [C++ tutorial](cpp.md) the `python_bindings` package we built depended on Python 3.12.
 Pixi would report a version conflict, if we'd add use both Python 3.11 and `python_bindings` to our workspace.
 By using variants, we can add a set of allowed versions for a specific dependency.
@@ -58,7 +58,7 @@ We do that in `workspace.build-variants`:
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:variants"
 ```
 
-If we'd run `pixi install` now, we'd leave it up to pixi whether to use Python 3.11 or 3.12.
+If we'd run `pixi install` now, we'd leave it up to Pixi whether to use Python 3.11 or 3.12.
 In practice, you'll want to create multiple environments specifying a different dependency version.
 In our case this allows us to test our setup against both Python 3.11 and 3.12.
 

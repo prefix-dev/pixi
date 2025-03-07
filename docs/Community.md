@@ -1,6 +1,6 @@
 # Community
 
-When you want to show your users and contributors that they can use pixi in your repo, you can use the following badge:
+When you want to show your users and contributors that they can use Pixi in your repo, you can use the following badge:
 
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
 
@@ -49,7 +49,7 @@ When you want to show your users and contributors that they can use pixi in your
   - [pydiverse.transform](https://github.com/pydiverse/pydiverse.transform): Pipe based dataframe manipulation library that can also transform data on SQL databases
 
 - [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm): Conda shim for PyCharm that proxies pixi
-- [pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown): Generate markdown summaries from pixi update
+- [pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown): Generate markdown summaries from Pixi update
 - [jiaxiyang/cpp_project_guideline](https://github.com/jiaxiyang/cpp_project_guideline): Guide the way beginners make their c++ projects.
 - [hex-inc/vegafusion](https://github.com/hex-inc/vegafusion): Serverside scaling of Vega and Altair visualizations in Rust, Python, WASM, and Java
 - [pablovela5620/arxiv-researcher](https://github.com/pablovela5620/arxiv-researcher): Summarize PDF's and Arixv papers with Langchain and Nougat 🦉
