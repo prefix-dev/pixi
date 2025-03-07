@@ -13,7 +13,7 @@
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/basic_usage/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/getting_started/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
@@ -25,11 +25,7 @@
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/authentication/</loc>
-         <lastmod>2025-03-07</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/channel_priority/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/advanced/channel_logic/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
@@ -37,35 +33,11 @@
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/github_actions/</loc>
-         <lastmod>2025-03-07</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/lockfile_diffs/</loc>
-         <lastmod>2025-03-07</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/production_deployment/</loc>
-         <lastmod>2025-03-07</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/pyproject_toml/</loc>
-         <lastmod>2025-03-07</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/s3/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/advanced/installation/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/shebang/</loc>
-         <lastmod>2025-03-07</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/third_party/</loc>
-         <lastmod>2025-03-07</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/advanced/updates_github_actions/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
@@ -97,63 +69,91 @@
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/examples/cpp-sdl/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/deployment/authentication/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/examples/opencv/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/deployment/container/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/examples/ros2-nav2/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/deployment/pixi_pack/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/features/advanced_tasks/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/deployment/s3/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/features/environment/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/environments/advanced_tasks/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/features/global_tools/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/environments/environment/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/features/lockfile/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/environments/lockfile/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/features/multi_environment/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/environments/multi_environment/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/features/multi_platform_configuration/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/environments/multi_platform_configuration/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/features/pytorch/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/environments/system_requirements/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/features/system_requirements/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/global_tools/introduction/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/ide_integration/devcontainer/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/integration/ci/github_actions/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/ide_integration/jupyterlab/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/integration/ci/updates_github_actions/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/ide_integration/pycharm/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/devcontainer/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/ide_integration/r_studio/</loc>
+         <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/jupyterlab/</loc>
+         <lastmod>2025-03-07</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/pycharm/</loc>
+         <lastmod>2025-03-07</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/r_studio/</loc>
+         <lastmod>2025-03-07</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/integration/third_party/pixi_diff/</loc>
+         <lastmod>2025-03-07</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/integration/third_party/starship/</loc>
+         <lastmod>2025-03-07</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/python/pyproject_toml/</loc>
+         <lastmod>2025-03-07</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/python/pytorch/</loc>
+         <lastmod>2025-03-07</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/python/tutorial/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
@@ -178,10 +178,6 @@
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/tutorials/multi_environment/</loc>
-         <lastmod>2025-03-07</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/tutorials/python/</loc>
          <lastmod>2025-03-07</lastmod>
     </url>
     <url>
