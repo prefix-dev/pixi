@@ -7,7 +7,7 @@ Here is an example manifest file that highlights some of the features:
 === "`pixi.toml`"
     ```toml title="pixi.toml"
     [workspace]
-    # Default project info....
+    # Default workspace info....
     # A list of platforms you are supporting with your package.
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
@@ -29,7 +29,7 @@ Here is an example manifest file that highlights some of the features:
 === "`pyproject.toml`"
     ```toml title="pyproject.toml"
     [tool.pixi.workspace]
-    # Default project info....
+    # Default workspace info....
     # A list of platforms you are supporting with your package.
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
@@ -51,7 +51,7 @@ Here is an example manifest file that highlights some of the features:
 
 ## Platform definition
 
-The `project.platforms` defines which platforms your project supports.
+The `workspace.platforms` defines which platforms your project supports.
 When multiple platforms are defined, pixi determines which dependencies to install for each platform individually.
 All of this is stored in a lock file.
 

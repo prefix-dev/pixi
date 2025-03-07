@@ -29,7 +29,7 @@ This is an overview of the pixi manifest using `pixi-build`.
 ```
 
 
-Under the `[workspace]` section, you can specify properties like the name, channels, and platforms. This is currently an alias for `project`.
+Under the `[workspace]` section, you can specify properties like the name, channels, and platforms. This is currently an alias for `[project]`.
 
 Since the build feature is still in preview, you have to add "pixi-build" to `workspace.preview`.
 

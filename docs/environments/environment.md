@@ -6,9 +6,9 @@ This document explains what an environment looks like and how to use it.
 
 ## Structure
 
-A pixi environment is located in the `.pixi/envs` directory of the project by default.
-This keeps your machine and your project clean and isolated from each other, and makes it easy to clean up after a project is done.
-While this structure is generally recommended, environments can also be stored outside of project directories by enabling [detached environments](../reference/pixi_configuration.md#detached-environments).
+A pixi environment is located in the `.pixi/envs` directory of the workspace by default.
+This keeps your machine and your workspace clean and isolated from each other, and makes it easy to clean up after a workspace is done.
+While this structure is generally recommended, environments can also be stored outside of workspace directories by enabling [detached environments](../reference/pixi_configuration.md#detached-environments).
 
 If you look at the `.pixi/envs` directory, you will see a directory for each environment, the `default` being the one that is normally used, if you specify a custom environment the name you specified will be used.
 
@@ -40,7 +40,7 @@ On environment installation, pixi will write a small file to the environment tha
 This file is called `pixi` and is located in the `conda-meta` folder of the environment.
 This file contains the following information:
 
-- `manifest_path`: The path to the manifest file that describes the project used to create this environment
+- `manifest_path`: The path to the manifest file that describes the workspace used to create this environment
 - `environment_name`: The name of the environment
 - `pixi_version`: The version of pixi that was used to create this environment
 - `environment_lock_file_hash`: The hash of the `pixi.lock` file that was used to create this environment
