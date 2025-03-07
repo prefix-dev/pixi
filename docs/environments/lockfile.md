@@ -1,11 +1,11 @@
 # The `pixi.lock` lock file
 
-> A lock file is the protector of the environments, and pixi is the key to unlock it.
+> A lock file is the protector of the environments, and Pixi is the key to unlock it.
 
 ## What is a lock file?
 
 A lock file locks the environment in a specific state.
-Within pixi a lock file is a description of the packages in an environment.
+Within Pixi a lock file is a description of the packages in an environment.
 The lock file contains two definitions:
 
 - The environments that are used in the workspace with their complete set of packages. e.g.:
@@ -119,7 +119,7 @@ All the commands that support the interaction with the lock file also include so
 
 The lock file is a description of the environment, and it should always be satisfiable.
 Satisfiable means that the given manifest file and the created environment are in sync with the lockfile.
-If the lock file is not satisfiable, pixi will generate a new lock file automatically.
+If the lock file is not satisfiable, Pixi will generate a new lock file automatically.
 
 Steps to check if the lock file is satisfiable:
 

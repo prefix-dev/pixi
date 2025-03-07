@@ -13,7 +13,7 @@ When you already have a `pyproject.toml` file in your project, you can run `pixi
 - Add the current project as an editable pypi dependency;
 - Add some defaults to the `.gitignore` and `.gitattributes` files.
 
-If you do not have an existing `pyproject.toml` file , you can run `pixi init --format pyproject` in your project folder. In that case, pixi will create a `pyproject.toml` manifest from scratch with some sane defaults.
+If you do not have an existing `pyproject.toml` file , you can run `pixi init --format pyproject` in your project folder. In that case, Pixi will create a `pyproject.toml` manifest from scratch with some sane defaults.
 
 ## Python dependency
 
@@ -106,13 +106,13 @@ matplotlib = "*"
 ```
 
 This would result in the conda dependencies being installed and the pypi dependencies being ignored.
-As pixi takes the conda dependencies over the pypi dependencies.
+As Pixi takes the conda dependencies over the pypi dependencies.
 
 ## Optional dependencies
 
-If your python project includes groups of optional dependencies, pixi will automatically interpret them as [pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
+If your python project includes groups of optional dependencies, Pixi will automatically interpret them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
+You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -157,9 +157,9 @@ All environments will be solved together, as indicated by the common `solve-grou
 
 ## Dependency groups
 
-If your python project includes dependency groups, pixi will automatically interpret them as [pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
+If your python project includes dependency groups, Pixi will automatically interpret them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to pixi environments manually, or use `pixi init` to setup the project, which will create one environment per dependency group.
+You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per dependency group.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -208,7 +208,7 @@ All environments will be solved together, as indicated by the common `solve-grou
 
 ## Example
 
-As the `pyproject.toml` file supports the full pixi spec with `[tool.pixi]` prepended an example would look like this:
+As the `pyproject.toml` file supports the full Pixi spec with `[tool.pixi]` prepended an example would look like this:
 
 ```toml title="pyproject.toml"
 [project]
@@ -250,7 +250,7 @@ test = ["test"]
 
 The `pyproject.toml` file normally contains a `[build-system]` section. Pixi will use this section to build and install the project if it is added as a pypi path dependency.
 
-If the `pyproject.toml` file does not contain any `[build-system]` section, pixi will fall back to [uv](https://github.com/astral-sh/uv)'s default, which is equivalent to the below:
+If the `pyproject.toml` file does not contain any `[build-system]` section, Pixi will fall back to [uv](https://github.com/astral-sh/uv)'s default, which is equivalent to the below:
 
 ```toml title="pyproject.toml"
 [build-system]

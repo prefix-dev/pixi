@@ -1,7 +1,7 @@
 # Tutorial: Doing Python development with Pixi
 
 In this tutorial, we will show you how to create a simple Python project with pixi.
-We will show some of the features that pixi provides, that are currently not a part of `pdm`, `poetry` etc.
+We will show some of the features that Pixi provides, that are currently not a part of `pdm`, `poetry` etc.
 
 ## Why is this useful?
 
@@ -57,7 +57,7 @@ pixi_py = { path = ".", editable = true }
 [tool.pixi.tasks]
 ```
 
-This project uses a src-layout, but pixi supports both [flat- and src-layouts](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout).
+This project uses a src-layout, but Pixi supports both [flat- and src-layouts](https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout).
 
 
 ### What's in the `pyproject.toml`?
@@ -206,14 +206,14 @@ werkzeug         3.1.3                           743 KiB    pypi   werkzeug-3.1.
 ```
 Here, you can see the different conda and Pypi packages listed.
 As you can see, the `pixi-py` package that we are working on is installed in editable mode.
-Every environment in pixi is isolated but reuses files that are hard-linked from a central cache directory.
+Every environment in Pixi is isolated but reuses files that are hard-linked from a central cache directory.
 This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.
 
 ??? question "Why does the environment have a Python interpreter?"
     The Python interpreter is also installed in the environment.
     This is because the Python interpreter version is read from the `requires-python` field in the `pyproject.toml` file.
     This is used to determine the Python version to install in the environment.
-    This way, pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
+    This way, Pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
 ??? question "How to use the Free-threaded interpreter?"
     If you want to use a free-threaded Python interpreter, you can add the `python-freethreading` dependency to the `[tool.pixi.dependencies]`.
@@ -223,7 +223,7 @@ This means that you can have multiple environments with the same packages but on
 
 Pixi can also create multiple environments, this works well together with the `dependency-groups` feature in the `pyproject.toml` file.
 
-Let's add a dependency-group, which pixi calls a `feature`, named `test`.
+Let's add a dependency-group, which Pixi calls a `feature`, named `test`.
 And add the `pytest` package to this group.
 
 ```shell
@@ -237,7 +237,7 @@ This results in the package being added to the `dependency-groups` following the
 test = ["pytest"]
 ```
 
-After we have added the `dependency-groups` to the `pyproject.toml`, pixi sees these as a [`feature`](../reference/pixi_manifest.md/#the-feature-and-environments-tables), which can contain a collection of `dependencies`, `tasks`, `channels`, and more.
+After we have added the `dependency-groups` to the `pyproject.toml`, Pixi sees these as a [`feature`](../reference/pixi_manifest.md/#the-feature-and-environments-tables), which can contain a collection of `dependencies`, `tasks`, `channels`, and more.
 
 
 ```shell
@@ -259,7 +259,7 @@ test = { features = ["test"], solve-group = "default" }
     For example, maybe `pytest` is a dependency that influences the dependencies of the `default` environment.
     By putting these in the same solve group, you ensure that the versions in `test` and `default` are exactly the same.
 
-Without specifying the environment name, pixi will default to the `default` environment.
+Without specifying the environment name, Pixi will default to the `default` environment.
 If you want to install or run the `test` environment, you can specify the environment with the `--environment` flag.
 
 ```shell
@@ -300,7 +300,7 @@ Hello, World! 🧛
 ```
 
 ??? note "Slow?"
-    This might be slow the first time because pixi installs the project, but it will be near instant the second time.
+    This might be slow the first time because Pixi installs the project, but it will be near instant the second time.
 
 Pixi runs the self installed Python interpreter.
 Then, we are importing the `pixi_py` package, which is installed in editable mode.
@@ -337,11 +337,11 @@ Let's add an easy task for running the tests.
 pixi task add --feature test test "pytest"
 ```
 
-So pixi has a task system to make it easy to run commands.
+So Pixi has a task system to make it easy to run commands.
 Similar to `npm` scripts or something you would specify in a `Justfile`.
 
 !!! tip "Pixi tasks"
-    Tasks are a cool pixi feature that is powerful and runs in a cross-platform shell.
+    Tasks are a cool Pixi feature that is powerful and runs in a cross-platform shell.
     You can do caching, dependencies and more.
     Read more about tasks in the [tasks](../environments/advanced_tasks.md) section.
 
@@ -364,7 +364,7 @@ test_me.py .                                                                    
 
 ??? question "Why didn't I have to specify the environment?"
     The `test` task was added to the `test` feature/environment.
-    When you run the `test` task, pixi automatically switches to the `test` environment.
+    When you run the `test` task, Pixi automatically switches to the `test` environment.
     Because that is the only environment that has the task.
 
 Neat! It seems to be working!
@@ -396,7 +396,7 @@ There is a [docker](https://github.com/prefix-dev/pixi/tree/main/examples/docker
 
 ## Replacing PyPI packages with conda packages
 
-Last thing, pixi provides the ability for `pypi` packages to depend on `conda` packages.
+Last thing, Pixi provides the ability for `pypi` packages to depend on `conda` packages.
 Let's confirm this with:
 ```shell
 pixi list pygments
@@ -447,7 +447,7 @@ And it still works!
 
 ## Conclusion
 
-In this tutorial, you've seen how easy it is to use a `pyproject.toml` to manage your pixi dependencies and environments.
+In this tutorial, you've seen how easy it is to use a `pyproject.toml` to manage your Pixi dependencies and environments.
 We have also explored how to use PyPI and conda dependencies seamlessly together in the same project and install optional dependencies to manage Python packages.
 
 Hopefully, this provides a flexible and powerful way to manage your Python projects and a fertile base for further exploration with Pixi.

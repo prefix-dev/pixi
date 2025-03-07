@@ -1,6 +1,6 @@
-To decouple the building of a conda package from pixi we provide something what are called build backends.
-These are essentially executables following a specific protocol that is implemented for both pixi and the build backend.
-This also allows for decoupling of the build backend from pixi and it's manifest specification.
+To decouple the building of a conda package from Pixi we provide something what are called build backends.
+These are essentially executables following a specific protocol that is implemented for both Pixi and the build backend.
+This also allows for decoupling of the build backend from Pixi and it's manifest specification.
 
 The backends we are currently developing are available in the following [conda channel](https://prefix.dev/channels/pixi-build-backends).
 And are being developed in the [pixi-build-backends](https://github.com/prefix-dev/pixi-build-backends) repository.
@@ -12,7 +12,7 @@ When looking at the following build-section:
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
-5. This will allow pixi to install desired backends from the `pixi-build-backends` channel, and any requirements from `conda-forge`. Backends are installed into isolated environments, and will be shared across pixi workspaces.
+5. This will allow Pixi to install desired backends from the `pixi-build-backends` channel, and any requirements from `conda-forge`. Backends are installed into isolated environments, and will be shared across Pixi workspaces.
 
 ### Overriding the Build Backend
 Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[package.build]`](../reference/pixi_manifest.md#the-build-system). We currently have two environment variables that allow for this:

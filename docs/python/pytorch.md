@@ -10,19 +10,19 @@ This guide explains how to integrate PyTorch with `pixi`, it supports multiple w
 With these options you can choose the best way to install PyTorch based on your requirements.
 
 ## System requirements
-In the context of PyTorch, [**system requirements**](../environments/system_requirements.md) help pixi understand whether it can install and use CUDA-related packages.
+In the context of PyTorch, [**system requirements**](../environments/system_requirements.md) help Pixi understand whether it can install and use CUDA-related packages.
 These requirements ensure compatibility during dependency resolution.
 
 The key mechanism here is the use of virtual packages like __cuda.
 Virtual packages signal the available system capabilities (e.g., CUDA version).
-By specifying `system-requirements.cuda = "12"`, you are telling pixi that CUDA version 12 is available and can be used during resolution.
+By specifying `system-requirements.cuda = "12"`, you are telling Pixi that CUDA version 12 is available and can be used during resolution.
 
 For example:
 
-- If a package depends on `__cuda >= 12`, pixi will resolve the correct version.
+- If a package depends on `__cuda >= 12`, Pixi will resolve the correct version.
 - If a package depends on `__cuda` without version constraints, any available CUDA version can be used.
 
-Without setting the appropriate `system-requirements.cuda`, pixi will default to installing the **CPU-only** versions of PyTorch and its dependencies.
+Without setting the appropriate `system-requirements.cuda`, Pixi will default to installing the **CPU-only** versions of PyTorch and its dependencies.
 
 A more in-depth explanation of system requirements can be found [here](../environments/system_requirements.md).
 
@@ -112,7 +112,7 @@ Best to do this per dependency to force the index to be used.
     --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi.toml:minimal"
     ```
 
-You can tell pixi to use multiple environment for the multiple versions of PyTorch, either `cpu` or `gpu`.
+You can tell Pixi to use multiple environment for the multiple versions of PyTorch, either `cpu` or `gpu`.
 
 === "`pixi.toml`"
     ```toml title="Use multiple environments for the pypi pytorch installation"
@@ -130,14 +130,14 @@ pixi run -e gpu python -c "import torch; print(torch.__version__); print(torch.c
 ```
 
 ### Mixing MacOS and CUDA with `pypi-dependencies`
-When using pypi-dependencies, pixi creates a “solve” environment to resolve the PyPI dependencies.
+When using pypi-dependencies, Pixi creates a “solve” environment to resolve the PyPI dependencies.
 This process involves installing the Conda dependencies first and then resolving the PyPI packages within that environment.
 
 This can become problematic if you’re on a macOS machine and trying to resolve the CUDA version of PyTorch for Linux or Windows.
 Since macOS doesn’t support those environments, the Conda dependencies for CUDA will fail to install, preventing proper resolution.
 
 **Current Status:**
-The pixi maintainers are aware of this limitation and are actively working on a solution to enable cross-platform dependency resolution for such cases.
+The Pixi maintainers are aware of this limitation and are actively working on a solution to enable cross-platform dependency resolution for such cases.
 
 In the meantime, you may need to run the resolution process on a machine that supports CUDA, such as a Linux or Windows host.
 
@@ -167,7 +167,7 @@ pixi run python -c "import torch; print(torch.__version__); print(torch.cuda.is_
 ```
 
 #### Checking the CUDA version of your machine
-To check which CUDA version pixi detects on your machine, run:
+To check which CUDA version Pixi detects on your machine, run:
 ```
 pixi info
 ```
@@ -212,7 +212,7 @@ To summarize:
 #### GPU version of `pytorch` not installing:
 
 1. Using [conda-Forge](#installing-from-conda-forge)
-   - Ensure `system-requirements.cuda` is set to inform pixi to install CUDA-enabled packages.
+   - Ensure `system-requirements.cuda` is set to inform Pixi to install CUDA-enabled packages.
    - Use the `cuda-version` package to pin the desired CUDA version.
 2. Using [PyPI](#installing-from-pypi)
    - Use the appropriate PyPI index to fetch the correct CUDA-enabled wheels.

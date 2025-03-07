@@ -1,13 +1,13 @@
 # Tutorial: Using multiple environments
 
-In this tutorial we will show you how to use multiple environments in one pixi workspace.
+In this tutorial we will show you how to use multiple environments in one Pixi workspace.
 
 ## Why is this useful?
 
 When developing a workspace you often need different tools, libraries or test environments.
-With pixi you can define multiple environments in one workspace and switch between them easily.
+With Pixi you can define multiple environments in one workspace and switch between them easily.
 A developer often needs all the tools they can get, whereas your testing infrastructure might not require all those tools, and your production environment might require even less.
-Setting up different environments for these different use cases can be a hassle, but with pixi it's easy.
+Setting up different environments for these different use cases can be a hassle, but with Pixi it's easy.
 
 ## Glossary
 This tutorial possibly uses some new terms, here is a quick overview:
@@ -28,7 +28,7 @@ These top level table, are added to the "default" feature, which is added to eve
 
 ## Let's get started
 
-We'll simply start with a new workspace, you can skip this step if you already have a pixi workspace.
+We'll simply start with a new workspace, you can skip this step if you already have a Pixi workspace.
 
 ```shell
 pixi init workspace
@@ -36,7 +36,7 @@ cd workspace
 pixi add python
 ```
 
-Now we have a new pixi workspace with the following structure:
+Now we have a new Pixi workspace with the following structure:
 ```
 ├── .pixi
 │   └── envs
@@ -46,7 +46,7 @@ Now we have a new pixi workspace with the following structure:
 ```
 
 Note the `.pixi/envs/default` directory, this is where the default environment is stored.
-If no environment is specified, pixi will create or use the `default` environment.
+If no environment is specified, Pixi will create or use the `default` environment.
 
 
 ### Adding a feature

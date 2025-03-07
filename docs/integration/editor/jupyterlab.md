@@ -1,8 +1,8 @@
 
 ## Basic usage
 
-Using JupyterLab with pixi is very simple.
-You can just create a new pixi workspace and add the `jupyterlab` package to it.
+Using JupyterLab with Pixi is very simple.
+You can just create a new Pixi workspace and add the `jupyterlab` package to it.
 The full example is provided under the following [Github link](https://github.com/prefix-dev/pixi/tree/main/examples/jupyterlab).
 
 ```bash
@@ -10,7 +10,7 @@ pixi init
 pixi add jupyterlab
 ```
 
-This will create a new pixi workspace and add the `jupyterlab` package to it. You can then start JupyterLab using the
+This will create a new Pixi workspace and add the `jupyterlab` package to it. You can then start JupyterLab using the
 following command:
 
 ```bash

@@ -12,7 +12,7 @@ In this simple example we have a single task `start` which runs a Python file an
 However, you might wonder why we need to specify the platforms if Pixi could just extract this information from your operating system.
 That is because every dependency in your environment is stored in the lockfile called `pixi.lock`.
 This ensures that even if you run your workspace on a different platform, the environment will contain exactly the dependencies that were solved on your machine.
-This is one of the core features that makes pixi reproducible.
+This is one of the core features that makes Pixi reproducible.
 Learn more about lock files in [this chapter](./environments/lockfile.md).
 
 
@@ -105,7 +105,7 @@ pixi run --environment=py312 start
 
 ## Going further
 
-There is still much more that pixi has to offer.
+There is still much more that Pixi has to offer.
 Check out the topics on the sidebar on the left to learn more.
 
 And don't forget to [join our Discord](https://discord.gg/kKV8ZxyzY4) to join our community of Pixi enthusiasts!

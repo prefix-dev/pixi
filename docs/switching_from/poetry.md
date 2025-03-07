@@ -4,7 +4,7 @@ This document compares key commands and concepts between these tools, highlighti
 With `pixi`, you'll experience a workspace-based workflow similar to `poetry` while including the `conda` ecosystem and allowing for easy sharing of your work.
 
 ## Why Pixi?
-Poetry is most-likely the closest tool to pixi in terms of workspace management, in the python ecosystem.
+Poetry is most-likely the closest tool to Pixi in terms of workspace management, in the python ecosystem.
 On top of the PyPI ecosystem, `pixi` adds the power of the conda ecosystem, allowing for a more flexible and powerful environment management.
 
 ## Quick look at the differences
@@ -32,5 +32,5 @@ Make sure that `python` is only defined in the `tool.pixi.dependencies` and not 
     Pixi supports PyPI dependencies in a different way than `poetry` does, and mixing them can lead to unexpected behavior.
     As you can only use one package manager at a time, it's best to stick to one.
 
-    If using poetry on top of a pixi workspace, you'll always need to install the `poetry` environment after the `pixi` environment.
+    If using poetry on top of a Pixi workspace, you'll always need to install the `poetry` environment after the `pixi` environment.
     And let `pixi` handle the `python` and `poetry` installation.

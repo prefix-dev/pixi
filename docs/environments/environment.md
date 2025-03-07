@@ -6,7 +6,7 @@ This document explains what an environment looks like and how to use it.
 
 ## Structure
 
-A pixi environment is located in the `.pixi/envs` directory of the workspace by default.
+A Pixi environment is located in the `.pixi/envs` directory of the workspace by default.
 This keeps your machine and your workspace clean and isolated from each other, and makes it easy to clean up after a workspace is done.
 While this structure is generally recommended, environments can also be stored outside of workspace directories by enabling [detached environments](../reference/pixi_configuration.md#detached-environments).
 
@@ -36,13 +36,13 @@ Pixi will always make sure the environment is in sync with the `pixi.lock` file.
 If this is not the case then all the commands that use the environment will automatically update the environment, e.g. `pixi run`, `pixi shell`.
 
 ### Environment Installation Metadata
-On environment installation, pixi will write a small file to the environment that contains some metadata about installation.
+On environment installation, Pixi will write a small file to the environment that contains some metadata about installation.
 This file is called `pixi` and is located in the `conda-meta` folder of the environment.
 This file contains the following information:
 
 - `manifest_path`: The path to the manifest file that describes the workspace used to create this environment
 - `environment_name`: The name of the environment
-- `pixi_version`: The version of pixi that was used to create this environment
+- `pixi_version`: The version of Pixi that was used to create this environment
 - `environment_lock_file_hash`: The hash of the `pixi.lock` file that was used to create this environment
 
 ```json
@@ -55,7 +55,7 @@ This file contains the following information:
 ```
 
 The `environment_lock_file_hash` is used to check if the environment is in sync with the `pixi.lock` file.
-If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, pixi will update the environment.
+If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, Pixi will update the environment.
 
 This is used to speedup activation, in order to trigger a full revalidation pass `--revalidate` to the `pixi run` or `pixi shell` command.
 A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment.
@@ -63,7 +63,7 @@ By default, all lock file modifying commands will always use the revalidation an
 
 ### Cleaning up
 
-If you want to clean up the environments, you can simply delete the `.pixi/envs` directory, and pixi will recreate the environments when needed.
+If you want to clean up the environments, you can simply delete the `.pixi/envs` directory, and Pixi will recreate the environments when needed.
 
 ```shell
 # either:
@@ -90,7 +90,7 @@ To do the activation we have multiple options:
 Where the `run` command is special as it runs its own cross-platform shell and has the ability to run tasks.
 More information about tasks can be found in the [tasks documentation](advanced_tasks.md).
 
-Using the `pixi shell-hook` in pixi you would get the following output:
+Using the `pixi shell-hook` in Pixi you would get the following output:
 
 ```shell
 export PATH="/home/user/development/pixi/.pixi/envs/default/bin:/home/user/.local/bin:/home/user/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/home/user/.pixi/bin"
@@ -195,9 +195,9 @@ The following environment variables are set by pixi, when using the `pixi run`, 
 
 ## Solving environments
 
-When you run a command that uses the environment, pixi will check if the environment is in sync with the `pixi.lock` file.
-If it is not, pixi will solve the environment and update it.
-This means that pixi will retrieve the best set of packages for the dependency requirements that you specified in the `pixi.toml` and will put the output of the solve step into the `pixi.lock` file.
+When you run a command that uses the environment, Pixi will check if the environment is in sync with the `pixi.lock` file.
+If it is not, Pixi will solve the environment and update it.
+This means that Pixi will retrieve the best set of packages for the dependency requirements that you specified in the `pixi.toml` and will put the output of the solve step into the `pixi.lock` file.
 Solving is a mathematical problem and can take some time, but we take pride in the way we solve environments, and we are confident that we can solve your environment in a reasonable time.
 If you want to learn more about the solving process, you can read these:
 
@@ -211,12 +211,12 @@ It also supports the `conda` way of solving, which means that it downloads the m
 
 For the `[pypi-dependencies]`, `uv` implements `sdist` building to retrieve the metadata of the packages, and `wheel` building to install the packages.
 For this building step, `pixi` requires to first install `python` in the (conda)`[dependencies]` section of the `pixi.toml` file.
-This will always be slower than the pure conda solves. So for the best pixi experience you should stay within the `[dependencies]` section of the `pixi.toml` file.
+This will always be slower than the pure conda solves. So for the best Pixi experience you should stay within the `[dependencies]` section of the `pixi.toml` file.
 
 ## Caching packages
 
 Pixi caches all previously downloaded packages in a cache folder.
-This cache folder is shared between all pixi projects and globally installed tools.
+This cache folder is shared between all Pixi projects and globally installed tools.
 
 Normally the location would be the following
 platform-specific default cache folder:
@@ -227,7 +227,7 @@ platform-specific default cache folder:
 
 This location is configurable by setting the `PIXI_CACHE_DIR` or `RATTLER_CACHE_DIR` environment variable.
 
-When you want to clean the cache, you can simply delete the cache directory, and pixi will re-create the cache when needed.
+When you want to clean the cache, you can simply delete the cache directory, and Pixi will re-create the cache when needed.
 
 The cache contains multiple folders concerning different caches from within pixi.
 

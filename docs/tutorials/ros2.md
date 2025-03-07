@@ -3,7 +3,7 @@
 In this tutorial, we will show you how to develop a ROS 2 package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
-The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try pixi for their development workflow.
+The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try Pixi for their development workflow.
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
 - On Windows, it's advised to enable Developer mode. Go to Settings -> Update & Security -> For developers -> Developer mode.
 
 
-## Create a pixi workspace
+## Create a Pixi workspace
 
 ```shell
 pixi init my_ros2_project -c robostack-staging -c conda-forge
@@ -46,12 +46,12 @@ platforms = ["linux-64"]
 ```
 
 The `channels` you added to the `init` command are repositories of packages, you can search in these repositories through our [prefix.dev](https://prefix.dev/channels) website.
-The `platforms` are the systems you want to support, in pixi you can support multiple platforms, but you have to define which platforms, so pixi can test if those are supported for your dependencies.
+The `platforms` are the systems you want to support, in Pixi you can support multiple platforms, but you have to define which platforms, so Pixi can test if those are supported for your dependencies.
 For the rest of the fields, you can fill them in as you see fit.
 
 ## Add ROS 2 dependencies
 
-To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
 
 Let's start with the `turtlesim` example
 
@@ -110,7 +110,7 @@ pixi run colcon build
 ```
 
 This will create a sourceable script in the `install` folder, you can source this script through an activation script to use your custom node.
-Normally this would be the script you add to your `.bashrc` but instead you tell pixi to use it by adding the following to `pixi.toml`:
+Normally this would be the script you add to your `.bashrc` but instead you tell Pixi to use it by adding the following to `pixi.toml`:
 
 === "Linux & macOS"
     ```toml title="pixi.toml"
@@ -222,8 +222,8 @@ Let's inspire the community together!
 
 ### What happens with `rosdep`?
 
-Currently, we don't support `rosdep` in a pixi environment, so you'll have to add the packages using `pixi add`.
-`rosdep` will call `conda install` which isn't supported in a pixi environment.
+Currently, we don't support `rosdep` in a Pixi environment, so you'll have to add the packages using `pixi add`.
+`rosdep` will call `conda install` which isn't supported in a Pixi environment.
 
 
 ### Community examples

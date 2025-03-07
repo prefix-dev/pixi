@@ -30,7 +30,7 @@ Updating is as simple as installing, rerunning the installation script gets you 
 ```shell
 pixi self-update
 ```
-Or get a specific pixi version using:
+Or get a specific Pixi version using:
 ```shell
 pixi self-update --version x.y.z
 ```
@@ -42,11 +42,11 @@ pixi self-update --version x.y.z
 
 ## Alternative Installation Methods
 
-Although we recommend installing pixi through the above method we also provide additional installation methods.
+Although we recommend installing Pixi through the above method we also provide additional installation methods.
 
 ### Homebrew
 
-Pixi is available via homebrew. To install pixi via homebrew simply run:
+Pixi is available via homebrew. To install Pixi via homebrew simply run:
 
 ```shell
 brew install pixi
@@ -55,7 +55,7 @@ brew install pixi
 ### Windows Installer
 
 We provide an `msi` installer on [our GitHub releases page](https://github.com/prefix-dev/pixi/releases/latest).
-The installer will download pixi and add it to the path.
+The installer will download Pixi and add it to the path.
 
 ### Winget
 
@@ -66,7 +66,7 @@ winget install prefix-dev.pixi
 ### Install From Source
 
 pixi is 100% written in Rust, and therefore it can be installed, built and tested with cargo.
-To start using pixi from a source build run:
+To start using Pixi from a source build run:
 
 ```shell
 cargo install --locked --git https://github.com/prefix-dev/pixi.git pixi
@@ -94,9 +94,9 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
     | Variable             | Description                                                                        | Default Value         |
     |----------------------|------------------------------------------------------------------------------------|-----------------------|
-    | `PIXI_VERSION`       | The version of pixi getting installed, can be used to up- or down-grade.           | `latest`              |
+    | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`              |
     | `PIXI_HOME`          | The location of the binary folder.                                                 | `$HOME/.pixi`         |
-    | `PIXI_ARCH`          | The architecture the pixi version was built for.                                   | `uname -m`            |
+    | `PIXI_ARCH`          | The architecture the Pixi version was built for.                                   | `uname -m`            |
     | `PIXI_NO_PATH_UPDATE`| If set the `$PATH` will not be updated to add `pixi` to it.                        |                       |
     | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from. | `/tmp`                |
 
@@ -115,7 +115,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
     | Variable         | Environment variable | Description                                                                       | Default Value               |
     |------------------|----------------------|-----------------------------------------------------------------------------------|-----------------------------|
-    | `PixiVersion`    | `PIXI_VERSION`       |The version of pixi getting installed, can be used to up- or down-grade.           | `latest`                    |
+    | `PixiVersion`    | `PIXI_VERSION`       |The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`                    |
     | `PixiHome`       | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
     | `NoPathUpdate`   |                      | If set, the `$PATH` will not be updated to add `pixi` to it.                      |                             |
 
