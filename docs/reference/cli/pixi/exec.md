@@ -12,7 +12,7 @@ pixi exec [OPTIONS] [COMMAND]...
 
 ## Arguments
 - <a id="arg-<COMMAND>" href="#arg-<COMMAND>">`<COMMAND>`</a>
-:  The executable to run
+:  The executable to run, followed by any arguments
 
 ## Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
