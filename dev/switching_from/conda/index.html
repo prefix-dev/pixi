@@ -1576,9 +1576,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#environment-vs-project" class="md-nav__link">
+  <a href="#environment-vs-workspace" class="md-nav__link">
     <span class="md-ellipsis">
-      Environment vs Project
+      Environment vs Workspace
     </span>
   </a>
   
@@ -2194,9 +2194,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#environment-vs-project" class="md-nav__link">
+  <a href="#environment-vs-workspace" class="md-nav__link">
     <span class="md-ellipsis">
-      Environment vs Project
+      Environment vs Workspace
     </span>
   </a>
   
@@ -2256,9 +2256,9 @@
 <h1 id="transitioning-from-the-conda-or-mamba-to-pixi">Transitioning from the <code>conda</code> or <code>mamba</code> to <code>pixi</code><a class="headerlink" href="#transitioning-from-the-conda-or-mamba-to-pixi" title="Permanent link">#</a></h1>
 <p>Welcome to the guide designed to ease your transition from <code>conda</code> or <code>mamba</code> to <code>pixi</code>.
 This document compares key commands and concepts between these tools, highlighting <code>pixi</code>'s unique approach to managing environments and packages.
-With <code>pixi</code>, you'll experience a project-based workflow, enhancing your development process, and allowing for easy sharing of your work.</p>
+With <code>pixi</code>, you'll experience a workspace-based workflow, enhancing your development process, and allowing for easy sharing of your work.</p>
 <h2 id="why-pixi">Why Pixi?<a class="headerlink" href="#why-pixi" title="Permanent link">#</a></h2>
-<p><code>Pixi</code> builds upon the foundation of the conda ecosystem, introducing a project-centric approach rather than focusing solely on environments.
+<p><code>Pixi</code> builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments.
 This shift towards projects offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.</p>
 <h2 id="key-differences-at-a-glance">Key Differences at a Glance<a class="headerlink" href="#key-differences-at-a-glance" title="Permanent link">#</a></h2>
 <table>
@@ -2283,7 +2283,7 @@ This shift towards projects offers a more organized and efficient way to manage 
 <tr>
 <td>Activating an Environment</td>
 <td><code>conda activate myenv</code></td>
-<td><code>pixi shell</code> within the project directory</td>
+<td><code>pixi shell</code> within the workspace directory</td>
 </tr>
 <tr>
 <td>Deactivating an Environment</td>
@@ -2310,7 +2310,7 @@ This shift towards projects offers a more organized and efficient way to manage 
 <div class="admonition warn">
 <p class="admonition-title">No <code>base</code> environment</p>
 <p>Conda has a base environment, which is the default environment when you start a new shell.
-<strong>Pixi does not have a base environment</strong>. And requires you to install the tools you need in the project or globally.
+<strong>Pixi does not have a base environment</strong>. And requires you to install the tools you need in the workspace or globally.
 Using <code>pixi global install bat</code> will install <code>bat</code> in a global environment, which is not the same as the <code>base</code> environment in conda.</p>
 </div>
 <details class="tip">
@@ -2320,11 +2320,11 @@ This uses the <code>pixi shell-hook</code> which prints the activation script, w
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>~/myenv<span class="w"> </span>&gt;<span class="w"> </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
 </span></code></pre></div></p>
 </details>
-<h2 id="environment-vs-project">Environment vs Project<a class="headerlink" href="#environment-vs-project" title="Permanent link">#</a></h2>
+<h2 id="environment-vs-workspace">Environment vs Workspace<a class="headerlink" href="#environment-vs-workspace" title="Permanent link">#</a></h2>
 <p><code>Conda</code> and <code>mamba</code> focus on managing environments, while <code>pixi</code> emphasizes projects.
-In <code>pixi</code>, a project is a folder containing a <a href="../../reference/pixi_manifest/">manifest</a>(<code>pixi.toml</code>/<code>pyproject.toml</code>) file that describes the project, a <code>pixi.lock</code> lock-file that describes the exact dependencies, and a <code>.pixi</code> folder that contains the environment.</p>
-<p>This project-centric approach allows for easy sharing and collaboration, as the project folder contains all the necessary information to recreate the environment.
-It manages more than one environment for more than one platform in a single project, and allows for easy switching between them. (See <a href="../../environments/multi_environment/">multiple environments</a>)</p>
+In <code>pixi</code>, a workspace is a folder containing a <a href="../../reference/pixi_manifest/">manifest</a>(<code>pixi.toml</code>/<code>pyproject.toml</code>) file that describes the workspace, a <code>pixi.lock</code> lock-file that describes the exact dependencies, and a <code>.pixi</code> folder that contains the environment.</p>
+<p>This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment.
+It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See <a href="../../environments/multi_environment/">multiple environments</a>)</p>
 <h2 id="global-environments">Global environments<a class="headerlink" href="#global-environments" title="Permanent link">#</a></h2>
 <p><code>conda</code> installs all environments in one global location.
 When this is important to you for filesystem reasons, you can use the <a href="../../reference/pixi_configuration/#detached-environments">detached-environments</a> feature of pixi.
@@ -2346,10 +2346,10 @@ Installing <code>pip</code> with <code>pixi global</code> will create a new isol
 Using that <code>pip</code> binary will install packages in the <code>pip</code> environment, making it unreachable form anywhere as you can't activate it.</p>
 </div>
 <h2 id="automated-switching">Automated switching<a class="headerlink" href="#automated-switching" title="Permanent link">#</a></h2>
-<p>With <code>pixi</code> you can import <code>environment.yml</code> files into a pixi project. (See <a href="../../reference/cli/#init">import</a>)
+<p>With <code>pixi</code> you can import <code>environment.yml</code> files into a pixi workspace. (See <a href="../../reference/cli/#init">import</a>)
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--import<span class="w"> </span>environment.yml
 </span></code></pre></div>
-This will create a new project with the dependencies from the <code>environment.yml</code> file.</p>
+This will create a new workspace with the dependencies from the <code>environment.yml</code> file.</p>
 <details class="tip">
 <summary>Exporting your environment</summary>
 <p>If you are working with Conda users or systems, you can <a href="../../reference/cli/#project-export-conda-environment">export your environment to a <code>environment.yml</code></a> file to share them.
@@ -2363,9 +2363,9 @@ Additionally you can export a <a href="../../reference/cli/#project-export-conda
 <li>Dependency <code>is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'</code>
   This error occurs when the package is in multiple channels. <code>pixi</code> uses a strict channel priority. See <a href="../../advanced/channel_logic/">channel priority</a> for more information.</li>
 <li><code>pixi global install pip</code>, pip doesn't work.
-  <code>pip</code> is installed in the global isolated environment. Use <code>pixi add pip</code> in a project to install <code>pip</code> in the project environment and use that project.</li>
+  <code>pip</code> is installed in the global isolated environment. Use <code>pixi add pip</code> in a workspace to install <code>pip</code> in the workspace environment and use that workspace.</li>
 <li><code>pixi global install &lt;Any Library&gt;</code> -&gt; <code>import &lt;Any Library&gt;</code> -&gt; <code>ModuleNotFoundError: No module named '&lt;Any Library&gt;'</code>
-   The library is installed in the global isolated environment. Use <code>pixi add &lt;Any Library&gt;</code> in a project to install the library in the project environment and use that project.</li>
+   The library is installed in the global isolated environment. Use <code>pixi add &lt;Any Library&gt;</code> in a workspace to install the library in the workspace environment and use that workspace.</li>
 </ul>
 
 

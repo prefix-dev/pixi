@@ -2166,10 +2166,10 @@
 
 
 <h1 id="use-pixi-inside-of-a-devcontainer">Use pixi inside of a devcontainer<a class="headerlink" href="#use-pixi-inside-of-a-devcontainer" title="Permanent link">#</a></h1>
-<p><a href="https://code.visualstudio.com/docs/devcontainers/containers">VSCode Devcontainers</a> are a popular tool to develop on a project with a consistent environment.
-They are also used in <a href="https://github.com/environments/codespaces">GitHub Codespaces</a> which makes it a great way to develop on a project without having to install anything on your local machine.</p>
+<p><a href="https://code.visualstudio.com/docs/devcontainers/containers">VSCode Devcontainers</a> are a popular tool to develop on a workspace with a consistent environment.
+They are also used in <a href="https://github.com/environments/codespaces">GitHub Codespaces</a> which makes it a great way to develop on a workspace without having to install anything on your local machine.</p>
 <p>To use pixi inside of a devcontainer, follow these steps:</p>
-<p>Create a new directory <code>.devcontainer</code> in the root of your project.
+<p>Create a new directory <code>.devcontainer</code> in the root of your workspace.
 Then, create the following two files in the <code>.devcontainer</code> directory:</p>
 <div class="language-dockerfile highlight"><span class="filename">.devcontainer/Dockerfile</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">FROM</span><span class="w"> </span><span class="s">mcr.microsoft.com/devcontainers/base:jammy</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
@@ -2186,7 +2186,7 @@ Then, create the following two files in the <code>.devcontainer</code> directory
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="k">RUN</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;eval &quot;$(pixi completion -s bash)&quot;&#39;</span><span class="w"> </span>&gt;&gt;<span class="w"> </span>/home/vscode/.bashrc
 </span></code></pre></div>
 <div class="language-json highlight"><span class="filename">.devcontainer/devcontainer.json</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-project&quot;</span><span class="p">,</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-workspace&quot;</span><span class="p">,</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">&quot;build&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">      </span><span class="nt">&quot;dockerfile&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Dockerfile&quot;</span><span class="p">,</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">      </span><span class="nt">&quot;context&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;..&quot;</span><span class="p">,</span>

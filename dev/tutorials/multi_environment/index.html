@@ -2350,35 +2350,35 @@
 
 
 <h1 id="tutorial-using-multiple-environments">Tutorial: Using multiple environments<a class="headerlink" href="#tutorial-using-multiple-environments" title="Permanent link">#</a></h1>
-<p>In this tutorial we will show you how to use multiple environments in one pixi project.</p>
+<p>In this tutorial we will show you how to use multiple environments in one pixi workspace.</p>
 <h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
-<p>When developing a project you often need different tools, libraries or test environments.
-With pixi you can define multiple environments in one project and switch between them easily.
+<p>When developing a workspace you often need different tools, libraries or test environments.
+With pixi you can define multiple environments in one workspace and switch between them easily.
 A developer often needs all the tools they can get, whereas your testing infrastructure might not require all those tools, and your production environment might require even less.
 Setting up different environments for these different use cases can be a hassle, but with pixi it's easy.</p>
 <h2 id="glossary">Glossary<a class="headerlink" href="#glossary" title="Permanent link">#</a></h2>
 <p>This tutorial possibly uses some new terms, here is a quick overview:</p>
 <h4 id="feature"><strong>Feature</strong><a class="headerlink" href="#feature" title="Permanent link">#</a></h4>
 <p>A feature defines a part of an environment, but are not useful without being part of an environment.
-You can define multiple features in one project.
+You can define multiple features in one workspace.
 A feature can contain <code>tasks</code>, <code>dependencies</code>, <code>platforms</code>, <code>channels</code> and <a href="../../reference/pixi_manifest/#the-feature-table">more</a>.
 You can mix multiple features to create an environment.
 Features are defined by adding <code>[feature.&lt;name&gt;.*]</code> to a table in the manifest file.</p>
 <h4 id="environment"><strong>Environment</strong><a class="headerlink" href="#environment" title="Permanent link">#</a></h4>
 <p>An environment is a collection of features.
 Environments can actually be installed and activated to run tasks in.
-You can define multiple environments in one project.
+You can define multiple environments in one workspace.
 Defining environments is done by adding them to the <code>[environments]</code> table in the manifest file.</p>
 <h4 id="default"><strong>Default</strong><a class="headerlink" href="#default" title="Permanent link">#</a></h4>
 <p>Instead of specifying <code>[feature.&lt;name&gt;.dependencies]</code>, one can populate <code>[dependencies]</code> directly.
 These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.</p>
 <h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
-<p>We'll simply start with a new project, you can skip this step if you already have a pixi project.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>project
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>project
+<p>We'll simply start with a new workspace, you can skip this step if you already have a pixi workspace.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>workspace
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>workspace
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>python
 </span></code></pre></div>
-<p>Now we have a new pixi project with the following structure:
+<p>Now we have a new pixi workspace with the following structure:
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>├── .pixi
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>│   └── envs
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│       └── default
@@ -2388,9 +2388,9 @@ These top level table, are added to the "default" feature, which is added to eve
 <p>Note the <code>.pixi/envs/default</code> directory, this is where the default environment is stored.
 If no environment is specified, pixi will create or use the <code>default</code> environment.</p>
 <h3 id="adding-a-feature">Adding a feature<a class="headerlink" href="#adding-a-feature" title="Permanent link">#</a></h3>
-<p>Let's start adding a simple <code>test</code> feature to our project.
+<p>Let's start adding a simple <code>test</code> feature to our workspace.
 We can do this through the command line, or by editing the <code>pixi.toml</code> file.
-Here we will use the command line, and add a <code>pytest</code> dependency to the <code>test</code> feature in our project.
+Here we will use the command line, and add a <code>pytest</code> dependency to the <code>test</code> feature in our workspace.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
 </span></code></pre></div>
 This will add the following to our <code>pixi.toml</code> file:
@@ -2399,7 +2399,7 @@ This will add the following to our <code>pixi.toml</code> file:
 </span></code></pre></div>
 This table acts exactly the same as a normal <code>dependencies</code> table, but it is only used when the <code>test</code> feature is part of an environment.</p>
 <h3 id="adding-an-environment">Adding an environment<a class="headerlink" href="#adding-an-environment" title="Permanent link">#</a></h3>
-<p>We will add the <code>test</code> environment to our project to add some testing tools.
+<p>We will add the <code>test</code> environment to our workspace to add some testing tools.
 We can do this through the command line, or by editing the <code>pixi.toml</code> file.
 Here we will use the command line:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span>

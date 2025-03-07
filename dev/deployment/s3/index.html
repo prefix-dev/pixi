@@ -2456,15 +2456,15 @@ You can either use the AWS credentials from the conventional locations (by not s
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.3</span>
 </span></code></pre></div>
 <h2 id="using-pixis-configuration">Using pixi's configuration<a class="headerlink" href="#using-pixis-configuration" title="Permanent link">#</a></h2>
-<p>You can specify the <code>project.s3-options</code> in your <code>pixi.toml</code> file.
+<p>You can specify the <code>workspace.s3-options</code> in your <code>pixi.toml</code> file.
 This might be useful when you want to use a custom S3-compatible host and not AWS's configuration.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project.s3-options.my-bucket]</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[workspace.s3-options.my-bucket]</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://my-s3-host&quot;</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
 </span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
 <div class="admonition note">
-<p>You need to configure this per bucket you use, i.e. use <code>[project.s3-options.&lt;bucket-name&gt;]</code>.</p>
+<p>You need to configure this per bucket you use, i.e. use <code>[workspace.s3-options.&lt;bucket-name&gt;]</code>.</p>
 </div>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--aws-access-key-id<span class="o">=</span>...<span class="w"> </span>--aws-secret-access-key<span class="o">=</span>...<span class="w"> </span>s3://my-s3-bucket
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Authenticating<span class="w"> </span>with<span class="w"> </span>s3://my-s3-bucket
@@ -2535,7 +2535,7 @@ Here is an example policy for AWS S3:</p>
 <p>Many other cloud providers offer S3-compatible storage APIs.
 You can use them with pixi by specifying the <code>s3-options</code> in your manifest file.</p>
 <h3 id="minio">MinIO<a class="headerlink" href="#minio" title="Permanent link">#</a></h3>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[project.s3-options]</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[workspace.s3-options]</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://minio.example.com&quot;</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
 </span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>

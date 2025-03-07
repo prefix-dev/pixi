@@ -2335,9 +2335,9 @@
 <p>Pixi is a tool to manage virtual environments.
 This document explains what an environment looks like and how to use it.</p>
 <h2 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">#</a></h2>
-<p>A pixi environment is located in the <code>.pixi/envs</code> directory of the project by default.
-This keeps your machine and your project clean and isolated from each other, and makes it easy to clean up after a project is done.
-While this structure is generally recommended, environments can also be stored outside of project directories by enabling <a href="../../reference/pixi_configuration/#detached-environments">detached environments</a>.</p>
+<p>A pixi environment is located in the <code>.pixi/envs</code> directory of the workspace by default.
+This keeps your machine and your workspace clean and isolated from each other, and makes it easy to clean up after a workspace is done.
+While this structure is generally recommended, environments can also be stored outside of workspace directories by enabling <a href="../../reference/pixi_configuration/#detached-environments">detached environments</a>.</p>
 <p>If you look at the <code>.pixi/envs</code> directory, you will see a directory for each environment, the <code>default</code> being the one that is normally used, if you specify a custom environment the name you specified will be used.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.pixi
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>└──<span class="w"> </span>envs
@@ -2364,7 +2364,7 @@ If this is not the case then all the commands that use the environment will auto
 This file is called <code>pixi</code> and is located in the <code>conda-meta</code> folder of the environment.
 This file contains the following information:</p>
 <ul>
-<li><code>manifest_path</code>: The path to the manifest file that describes the project used to create this environment</li>
+<li><code>manifest_path</code>: The path to the manifest file that describes the workspace used to create this environment</li>
 <li><code>environment_name</code>: The name of the environment</li>
 <li><code>pixi_version</code>: The version of pixi that was used to create this environment</li>
 <li><code>environment_lock_file_hash</code>: The hash of the <code>pixi.lock</code> file that was used to create this environment</li>

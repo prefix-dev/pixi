@@ -2309,10 +2309,10 @@
 <li><strong>Smaller single tool environments</strong>, e.g. <code>lint</code> or <code>docs</code>.</li>
 <li><strong>Large developer environments</strong>, that combine all the smaller environments, e.g. <code>dev</code>.</li>
 <li><strong>Strict supersets of environments</strong>, e.g. <code>prod</code> and <code>test-prod</code> where <code>test-prod</code> is a strict superset of <code>prod</code>.</li>
-<li><strong>Multiple machines from one project</strong>, e.g. a <code>cuda</code> environment and a <code>cpu</code> environment.</li>
+<li><strong>Multiple system requirements within one workspace</strong>, e.g. a <code>cuda</code> environment and a <code>cpu</code> environment.</li>
 <li><strong>And many more.</strong> (Feel free to edit this document in our GitHub and add your use case.)</li>
 </ul>
-<p>This prepares <code>pixi</code> for use in large projects with multiple use-cases, multiple developers and different CI needs.</p>
+<p>This prepares <code>pixi</code> for use in large workspaces with multiple use-cases, multiple developers and different CI needs.</p>
 <h2 id="design-considerations">Design Considerations<a class="headerlink" href="#design-considerations" title="Permanent link">#</a></h2>
 <p>There are a few things we wanted to keep in mind in the design:</p>
 <ol>
@@ -2600,7 +2600,7 @@ This can be replaced by using multiple environments.</p>
 </details>
 <details class="tip">
 <summary>Test vs Production example</summary>
-<p>This is an example of a project that has a <code>test</code> feature and <code>prod</code> environment.
+<p>This is an example of a workspace that has a <code>test</code> feature and <code>prod</code> environment.
 The <code>prod</code> environment is a production environment that contains the run dependencies.
 The <code>test</code> feature is a set of dependencies and tasks that we want to put on top of the previously solved <code>prod</code> environment.
 This is a common use case where we want to test the production environment with additional dependencies.</p>
@@ -2653,14 +2653,14 @@ Locally you would run the following command:
 </span></code></pre></div></p>
 </details>
 <details class="tip">
-<summary>Multiple machines from one project</summary>
-<p>This is an example for an ML project that should be executable on a machine that supports <code>cuda</code> and <code>mlx</code>. It should also be executable on machines that don't support <code>cuda</code> or <code>mlx</code>, we use the <code>cpu</code> feature for this.</p>
+<summary>Multiple machines from one workspace</summary>
+<p>This is an example for an ML workspace that should be executable on a machine that supports <code>cuda</code> and <code>mlx</code>. It should also be executable on machines that don't support <code>cuda</code> or <code>mlx</code>, we use the <code>cpu</code> feature for this.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-ml-project&quot;</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;A project that does ML stuff&quot;</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-ml-workspace&quot;</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;A workspace that does ML stuff&quot;</span>
 </span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Your Name &lt;your.name@gmail.com&gt;&quot;</span><span class="p">]</span>
 </span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">]</span>
-</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># All platforms that are supported by the project as the features will take the intersection of the platforms defined there.</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.</span>
 </span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span><span id="__span-21-8"><a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>
 </span><span id="__span-21-9"><a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="k">[tasks]</span>
@@ -2707,15 +2707,15 @@ Locally you would run the following command:
 </span><span id="__span-21-50"><a id="__codelineno-21-50" name="__codelineno-21-50" href="#__codelineno-21-50"></a><span class="n">mlx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;mlx&quot;</span><span class="p">]</span>
 </span><span id="__span-21-51"><a id="__codelineno-21-51" name="__codelineno-21-51" href="#__codelineno-21-51"></a><span class="n">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cpu&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Running the project on a cuda machine</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>train-model<span class="w"> </span>--environment<span class="w"> </span>cuda
+<div class="language-shell highlight"><span class="filename">Executing on a cuda machine</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>train-model<span class="w"> </span>--environment<span class="w"> </span>cuda
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># will execute `python train.py --cuda`</span>
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># fails if not on linux-64 or win-64 with cuda 12.1</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Running the project with mlx</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>train-model<span class="w"> </span>--environment<span class="w"> </span>mlx
+<div class="language-shell highlight"><span class="filename">Executing with mlx</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>train-model<span class="w"> </span>--environment<span class="w"> </span>mlx
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># will execute `python train.py --mlx`</span>
 </span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># fails if not on osx-arm64</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><span class="filename">Running the project on a machine without cuda or mlx</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>train-model
+<div class="language-shell highlight"><span class="filename">Executing on a machine without cuda or mlx</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>train-model
 </span></code></pre></div>
 </details>
 

@@ -2221,14 +2221,14 @@ Here you can see the three types of dependencies for a simple C++ package.</p>
 <p>When using the <code>pixi-build-cmake</code> backend you do not need to specify <code>cmake</code> or the compiler as a dependency.
 The backend will install <code>cmake</code>, <code>ninja</code> and the C++ compilers by default.</p>
 </div>
-<p>This table contains dependencies that are needed to build the project.
+<p>This table contains dependencies that are needed to build the workspace.
 Different from dependencies and host-dependencies these packages are installed for the architecture of the build machine.
 This enables cross-compiling from one machine architecture to another.</p>
 <p>Typical examples of build dependencies are:</p>
 <ul>
 <li>Compilers are invoked on the build machine, but they generate code for the target machine.
-  If the project is cross-compiled, the architecture of the build and target machine might differ.</li>
-<li><code>cmake</code> is invoked on the build machine to generate additional code- or project-files which are then include in the compilation process.</li>
+  If the package is cross-compiled, the architecture of the build and target machine might differ.</li>
+<li><code>cmake</code> is invoked on the build machine to generate additional files which are then include in the compilation process.</li>
 </ul>
 <div class="admonition info">
 <p class="admonition-title">Info</p>
@@ -2244,7 +2244,7 @@ In contrast, the libraries you link to are host dependencies since they are spec
 Typical examples of host dependencies are:</p>
 <ul>
 <li>Base interpreters: a Python package would list <code>python</code> here and an R package would list <code>mro-base</code> or <code>r-base</code>.</li>
-<li>Libraries your project links against like <code>openssl</code>, <code>rapidjson</code>, or <code>xtensor</code>.</li>
+<li>Libraries your package links against like <code>openssl</code>, <code>rapidjson</code>, or <code>xtensor</code>.</li>
 </ul>
 <h4 id="python-code">Python code<a class="headerlink" href="#python-code" title="Permanent link">#</a></h4>
 <p>Because of the way building currently works, dependencies like <code>hatchling</code>,<code>pip</code>,<code>uv</code> etc. are host dependencies.

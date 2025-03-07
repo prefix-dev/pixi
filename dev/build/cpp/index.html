@@ -690,22 +690,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#creating-a-new-project" class="md-nav__link">
+  <a href="#creating-a-new-workspace" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating a new project
+      Creating a new workspace
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#creating-the-project-files" class="md-nav__link">
+  <a href="#creating-the-workspace-files" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating the project files
+      Creating the workspace files
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Creating the project files">
+    <nav class="md-nav" aria-label="Creating the workspace files">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2193,22 +2193,22 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#creating-a-new-project" class="md-nav__link">
+  <a href="#creating-a-new-workspace" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating a new project
+      Creating a new workspace
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#creating-the-project-files" class="md-nav__link">
+  <a href="#creating-the-workspace-files" class="md-nav__link">
     <span class="md-ellipsis">
-      Creating the project files
+      Creating the workspace files
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Creating the project files">
+    <nav class="md-nav" aria-label="Creating the workspace files">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2286,18 +2286,18 @@
 
 
 <h1 id="tutorial-building-a-c-package">Tutorial: Building a C++ package<a class="headerlink" href="#tutorial-building-a-c-package" title="Permanent link">#</a></h1>
-<p>This example shows how to build a C++ project with CMake and use it together with <code>pixi-build</code>.
+<p>This example shows how to build a C++ package with CMake and use it together with <code>pixi-build</code>.
 To read more about how building packages work with pixi see the <a href="../getting_started/">Getting Started</a> guide.</p>
-<p>We'll start off by creating a project that use <a href="https://github.com/wjakob/nanobind">nanobind</a> to build Python bindings.
+<p>We'll start off by creating a workspace that use <a href="https://github.com/wjakob/nanobind">nanobind</a> to build Python bindings.
 That we can also test using pixi.
 We'll later combine this example together with a Python package.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p><code>pixi-build</code> is a preview feature, and will change until it is stabilized.
-Please keep that in mind when you use it for your projects.</p>
+Please keep that in mind when you use it for your workspaces.</p>
 </div>
-<h2 id="creating-a-new-project">Creating a new project<a class="headerlink" href="#creating-a-new-project" title="Permanent link">#</a></h2>
-<p>To get started, create a new project with pixi:</p>
+<h2 id="creating-a-new-workspace">Creating a new workspace<a class="headerlink" href="#creating-a-new-workspace" title="Permanent link">#</a></h2>
+<p>To get started, create a new workspace with pixi:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>python_bindings
 </span></code></pre></div>
 <p>This should give you the basic <code>pixi.toml</code> to get started.</p>
@@ -2309,7 +2309,7 @@ Please keep that in mind when you use it for your projects.</p>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>└──<span class="w"> </span>src
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>└──<span class="w"> </span>bindings.cpp
 </span></code></pre></div></p>
-<h2 id="creating-the-project-files">Creating the project files<a class="headerlink" href="#creating-the-project-files" title="Permanent link">#</a></h2>
+<h2 id="creating-the-workspace-files">Creating the workspace files<a class="headerlink" href="#creating-the-workspace-files" title="Permanent link">#</a></h2>
 <p>Next up we'll create the:</p>
 <ul>
 <li><code>pixi.toml</code> file that will be used to configure pixi.</li>
@@ -2357,7 +2357,7 @@ Please keep that in mind when you use it for your projects.</p>
 <li>We use the <a href="https://github.com/wjakob/nanobind">nanobind</a> package to build our bindings.</li>
 <li>We need python to build the bindings, so we add a host dependency on the <code>python</code> package.</li>
 <li>We override the cmake version to ensure it matches our <code>CMakeLists.txt</code> file.</li>
-<li>Optionally, we can add extra arguments to the CMake invocation (e.g. <code>-DCMAKE_BUILD_TYPE=Release</code> or <code>-DUSE_FOOBAR=True</code>). This totally depends on the specific project / CMakeLists.txt file.</li>
+<li>Optionally, we can add extra arguments to the CMake invocation (e.g. <code>-DCMAKE_BUILD_TYPE=Release</code> or <code>-DUSE_FOOBAR=True</code>). This totally depends on the specific workspace / CMakeLists.txt file.</li>
 </ol>
 <h3 id="the-cmakeliststxt-file">The <code>CMakeLists.txt</code> file<a class="headerlink" href="#the-cmakeliststxt-file" title="Permanent link">#</a></h3>
 <p>Next lets add the <code>CMakeList.txt</code> file:

@@ -2192,7 +2192,7 @@ And are being developed in the <a href="https://github.com/prefix-dev/pixi-build
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">]</span>
 </span></code></pre></div>
 <ol>
-<li>This will allow pixi to install desired backends from the <code>pixi-build-backends</code> channel, and any requirements from <code>conda-forge</code>. Backends are installed into isolated environments, and will be shared across pixi projects.</li>
+<li>This will allow pixi to install desired backends from the <code>pixi-build-backends</code> channel, and any requirements from <code>conda-forge</code>. Backends are installed into isolated environments, and will be shared across pixi workspaces.</li>
 </ol>
 <h3 id="overriding-the-build-backend">Overriding the Build Backend<a class="headerlink" href="#overriding-the-build-backend" title="Permanent link">#</a></h3>
 <p>Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the <a href="../../reference/pixi_manifest/#the-build-system"><code>[package.build]</code></a>. We currently have two environment variables that allow for this:</p>

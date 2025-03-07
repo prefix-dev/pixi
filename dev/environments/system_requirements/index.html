@@ -2284,16 +2284,16 @@
 
 
 <h1 id="system-requirements-in-pixi">System Requirements in pixi<a class="headerlink" href="#system-requirements-in-pixi" title="Permanent link">#</a></h1>
-<p><strong>System requirements</strong> tell pixi the minimum system specifications needed to install and run your project’s environment.
+<p><strong>System requirements</strong> tell pixi the minimum system specifications needed to install and run your workspace’s environment.
 They ensure that the dependencies match the operating system and hardware of your machine.</p>
 <p>Think of it like this:
-You’re defining what “kind of computer” your project can run on.
+You’re defining what “kind of computer” your workspace can run on.
 For example, you might require a specific Linux kernel version or a minimum glibc version.
 If your machine doesn’t meet these requirements, <code>pixi run</code> will fail because the environment can’t work reliably on your system.</p>
 <p>When resolving dependencies, pixi combines:</p>
 <ul>
 <li>The default requirements for the operating system.</li>
-<li>Any custom requirements you’ve added for your project through the <code>[system-requirements]</code>.</li>
+<li>Any custom requirements you’ve added for your workspace through the <code>[system-requirements]</code>.</li>
 </ul>
 <p>This way, pixi guarantees your environment is consistent and compatible with your machine.</p>
 <p>System specifications are closely related to <a href="https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual packages</a>, allowing for flexible and accurate dependency management.</p>
@@ -2309,7 +2309,7 @@ If your machine doesn’t meet these requirements, <code>pixi run</code> will fa
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Windows currently has no minimal system requirements defined. If your project requires specific Windows configurations,
+<p>Windows currently has no minimal system requirements defined. If your workspace requires specific Windows configurations,
 you should define them accordingly.</p>
 </div>
 <div class="tabbed-block">
@@ -2327,20 +2327,20 @@ you should define them accordingly.</p>
 </div>
 </div>
 <h2 id="customizing-system-requirements">Customizing System Requirements<a class="headerlink" href="#customizing-system-requirements" title="Permanent link">#</a></h2>
-<p>You only need to define system requirements if your project necessitates a different set from the defaults.
+<p>You only need to define system requirements if your workspace necessitates a different set from the defaults.
 This is common when installing environments on older or newer versions of operating systems.</p>
 <h3 id="adjusting-for-older-systems">Adjusting for Older Systems<a class="headerlink" href="#adjusting-for-older-systems" title="Permanent link">#</a></h3>
 <p>If you're encountering an error like:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>×<span class="w"> </span>The<span class="w"> </span>current<span class="w"> </span>system<span class="w"> </span>has<span class="w"> </span>a<span class="w"> </span>mismatching<span class="w"> </span>virtual<span class="w"> </span>package.<span class="w"> </span>The<span class="w"> </span>project<span class="w"> </span>requires<span class="w"> </span><span class="s1">&#39;__linux&#39;</span><span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>at<span class="w"> </span>least<span class="w"> </span>version<span class="w"> </span><span class="s1">&#39;4.18&#39;</span><span class="w"> </span>but<span class="w"> </span>the<span class="w"> </span>system<span class="w"> </span>has<span class="w"> </span>version<span class="w"> </span><span class="s1">&#39;4.12.14&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>×<span class="w"> </span>The<span class="w"> </span>current<span class="w"> </span>system<span class="w"> </span>has<span class="w"> </span>a<span class="w"> </span>mismatching<span class="w"> </span>virtual<span class="w"> </span>package.<span class="w"> </span>The<span class="w"> </span>workspace<span class="w"> </span>requires<span class="w"> </span><span class="s1">&#39;__linux&#39;</span><span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>at<span class="w"> </span>least<span class="w"> </span>version<span class="w"> </span><span class="s1">&#39;4.18&#39;</span><span class="w"> </span>but<span class="w"> </span>the<span class="w"> </span>system<span class="w"> </span>has<span class="w"> </span>version<span class="w"> </span><span class="s1">&#39;4.12.14&#39;</span>
 </span></code></pre></div>
-<p>This indicates that the project's system requirements are higher than your current system's specifications.
-To resolve this, you can lower the system requirements in your project's configuration:</p>
+<p>This indicates that the workspace's system requirements are higher than your current system's specifications.
+To resolve this, you can lower the system requirements in your workspace's configuration:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[system-requirements]</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">linux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4.12.14&quot;</span>
 </span></code></pre></div>
 <p>This adjustment informs the dependency resolver to accommodate the older system version.</p>
 <h3 id="using-cuda-in-pixi">Using CUDA in pixi<a class="headerlink" href="#using-cuda-in-pixi" title="Permanent link">#</a></h3>
-<p>To utilize CUDA in your project, you must specify the desired CUDA version in the system-requirements table.
+<p>To utilize CUDA in your workspace, you must specify the desired CUDA version in the system-requirements table.
 This ensures that CUDA is recognized and appropriately locked into the lock file if necessary.</p>
 <p>Example Configuration</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[system-requirements]</span>
@@ -2362,7 +2362,7 @@ Adding this field ensures that packages depending on <code>__cuda &gt;= {version
 </span></code></pre></div>
 <h3 id="available-override-options">Available Override Options<a class="headerlink" href="#available-override-options" title="Permanent link">#</a></h3>
 <p>In certain scenarios, you might need to override the system requirements detected on your machine.
-This can be particularly useful when working on systems that do not meet the project's default requirements.</p>
+This can be particularly useful when working on systems that do not meet the workspace's default requirements.</p>
 <p>You can override virtual packages by setting the following environment variables:</p>
 <ul>
 <li><code>CONDA_OVERRIDE_CUDA</code><ul>

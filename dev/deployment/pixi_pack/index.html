@@ -2279,7 +2279,7 @@
 <p>You can inject additional packages into the environment that are not specified in <code>pixi.lock</code> by using the <code>--inject</code> flag:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>--manifest-pack<span class="w"> </span>pixi.toml
 </span></code></pre></div>
-<p>This can be particularly useful if you build the project itself and want to include the built package in the environment but still want to use <code>pixi.lock</code> from the project.</p>
+<p>This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use <code>pixi.lock</code> from the workspace.</p>
 <h3 id="cache-downloaded-packages">Cache downloaded packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
 <p>You can cache downloaded packages to speed up subsequent pack operations by using the <code>--use-cache</code> flag:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache

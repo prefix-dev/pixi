@@ -2298,7 +2298,7 @@
   <h1>Tasks</h1>
 
 <p>When building a package, you often have to do more than just run the code.
-Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a project.
+Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a workspace.
 With pixi tasks, this should become much easier to do.</p>
 <p>Here are some quick examples</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[tasks]</span>
@@ -2374,7 +2374,7 @@ In that package we have some tasks that depend on each other, so we can assure t
 <p>Pixi tasks support the definition of a working directory.</p>
 <p><code>cwd</code>" stands for Current Working Directory.
 The directory is relative to the pixi package root, where the <code>pixi.toml</code> file is located.</p>
-<p>Consider a pixi project structured as follows:</p>
+<p>Consider a pixi workspace structured as follows:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>├──<span class="w"> </span>pixi.toml
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>└──<span class="w"> </span>scripts
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>└──<span class="w"> </span>bar.py

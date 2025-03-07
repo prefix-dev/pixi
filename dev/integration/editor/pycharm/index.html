@@ -2249,10 +2249,10 @@
 
 <p>You can use PyCharm with pixi environments by using the <code>conda</code> shim provided by the <a href="https://github.com/pavelzw/pixi-pycharm">pixi-pycharm</a> package.</p>
 <h2 id="how-to-use">How to use<a class="headerlink" href="#how-to-use" title="Permanent link">#</a></h2>
-<p>To get started, add <code>pixi-pycharm</code> to your pixi project.</p>
+<p>To get started, add <code>pixi-pycharm</code> to your pixi workspace.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pixi-pycharm
 </span></code></pre></div>
-<p>This will ensure that the conda shim is installed in your project's environment.</p>
+<p>This will ensure that the conda shim is installed in your workspace's environment.</p>
 <p>Having <code>pixi-pycharm</code> installed, you can now configure PyCharm to use your pixi environments.
 Go to the <em>Add Python Interpreter</em> dialog (bottom right corner of the PyCharm window) and select <em>Conda Environment</em>.
 Set <em>Conda Executable</em> to the full path of the <code>conda</code> file (on Windows: <code>conda.bat</code>) which is located in <code>.pixi/envs/default/libexec</code>.
@@ -2272,8 +2272,8 @@ You can get the path using the following command:</p>
 <p>This is an executable that tricks PyCharm into thinking it's the proper <code>conda</code> executable.
 Under the hood it redirects all calls to the corresponding <code>pixi</code> equivalent.</p>
 <div class="admonition warning">
-<p class="admonition-title">Use the conda shim from this pixi project</p>
-<p>Please make sure that this is the <code>conda</code> shim from this pixi project and not another one.
+<p class="admonition-title">Use the conda shim from this pixi workspace</p>
+<p>Please make sure that this is the <code>conda</code> shim from this pixi workspace and not another one.
 If you use multiple pixi projects, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.</p>
 </div>
 <p><img alt="Add Python Interpreter" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-light.png#only-light" />
@@ -2298,7 +2298,7 @@ Instead, you should run <code>pixi install</code> on the remote machine and sele
 <img alt="Deployment exclude from remote machine" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/deployment-exclude-pixi-dark.png#only-dark" /></p>
 </div>
 <h3 id="multiple-environments">Multiple environments<a class="headerlink" href="#multiple-environments" title="Permanent link">#</a></h3>
-<p>If your project uses <a href="../../../environments/multi_environment/">multiple environments</a> to tests different Python versions or dependencies, you can add multiple environments to PyCharm
+<p>If your workspace uses <a href="../../../environments/multi_environment/">multiple environments</a> to tests different Python versions or dependencies, you can add multiple environments to PyCharm
 by specifying <em>Use existing environment</em> in the <em>Add Python Interpreter</em> dialog.</p>
 <p><img alt="Multiple pixi environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/python-interpreters-multi-env-light.png#only-light" />
 <img alt="Multiple pixi environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/python-interpreters-multi-env-dark.png#only-dark" /></p>
@@ -2306,7 +2306,7 @@ by specifying <em>Use existing environment</em> in the <em>Add Python Interprete
 <p><img alt="Specify environment" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/specify-interpreter-light.png#only-light" />
 <img alt="Specify environment" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/specify-interpreter-dark.png#only-dark" /></p>
 <h3 id="multiple-pixi-projects">Multiple pixi projects<a class="headerlink" href="#multiple-pixi-projects" title="Permanent link">#</a></h3>
-<p>When using multiple pixi projects, remember to select the correct <em>Conda Executable</em> for each project as mentioned above.
+<p>When using multiple pixi projects, remember to select the correct <em>Conda Executable</em> for each workspace as mentioned above.
 It also might come up that you have multiple environments with the same name.</p>
 <p><img alt="Multiple default environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-light.png#only-light" />
 <img alt="Multiple default environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-dark.png#only-dark" /></p>

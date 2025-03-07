@@ -2232,7 +2232,7 @@ On this page, you will learn what you can configure to align better with the pla
 <div class="tabbed-content">
 <div class="tabbed-block">
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Default project info....</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Default workspace info....</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># A list of platforms you are supporting with your package.</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
@@ -2254,7 +2254,7 @@ On this page, you will learn what you can configure to align better with the pla
 </div>
 <div class="tabbed-block">
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[tool.pixi.workspace]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Default project info....</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Default workspace info....</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># A list of platforms you are supporting with your package.</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
@@ -2277,7 +2277,7 @@ On this page, you will learn what you can configure to align better with the pla
 </div>
 </div>
 <h2 id="platform-definition">Platform definition<a class="headerlink" href="#platform-definition" title="Permanent link">#</a></h2>
-<p>The <code>project.platforms</code> defines which platforms your project supports.
+<p>The <code>workspace.platforms</code> defines which platforms your project supports.
 When multiple platforms are defined, pixi determines which dependencies to install for each platform individually.
 All of this is stored in a lock file.</p>
 <p>Running <code>pixi install</code> on a platform that is not configured will warn the user that it is not setup for that platform:</p>
