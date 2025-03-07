@@ -10,15 +10,15 @@ This shift towards projects offers a more organized and efficient way to manage 
 
 ## Key Differences at a Glance
 
-| Task                        | Conda/Mamba                                       | Pixi                                                                 |
-|-----------------------------|---------------------------------------------------|----------------------------------------------------------------------|
-| Installation                | Requires an installer                             | Download and add to path (See [installation](../index.md))           |
-| Creating an Environment     | `conda create -n myenv -c conda-forge python=3.8` | `pixi init myenv` followed by `pixi add python=3.8`                  |
-| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the project directory                            |
-| Deactivating an Environment | `conda deactivate`                                | `exit` from the `pixi shell`                                         |
-| Running a Task              | `conda run -n myenv python my_program.py`         | `pixi run python my_program.py` (See [run](../reference/cli.md#run)) |
-| Installing a Package        | `conda install numpy`                             | `pixi add numpy`                                                     |
-| Uninstalling a Package      | `conda remove numpy`                              | `pixi remove numpy`                                                  |
+| Task                        | Conda/Mamba                                       | Pixi                                                                      |
+|-----------------------------|---------------------------------------------------|---------------------------------------------------------------------------|
+| Installation                | Requires an installer                             | Download and add to path (See [installation](../index.md))                |
+| Creating an Environment     | `conda create -n myenv -c conda-forge python=3.8` | `pixi init myenv` followed by `pixi add python=3.8`                       |
+| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the project directory                                 |
+| Deactivating an Environment | `conda deactivate`                                | `exit` from the `pixi shell`                                              |
+| Running a Task              | `conda run -n myenv python my_program.py`         | `pixi run python my_program.py` (See [run](../reference/cli/pixi/run.md)) |
+| Installing a Package        | `conda install numpy`                             | `pixi add numpy`                                                          |
+| Uninstalling a Package      | `conda remove numpy`                              | `pixi remove numpy`                                                       |
 
 !!! warn "No `base` environment"
     Conda has a base environment, which is the default environment when you start a new shell.
@@ -49,7 +49,7 @@ pixi config set detached-environments /path/to/envs
 ```
 This doesn't allow you to activate the environments using `pixi shell -n` but it will make the installation of the environments go to the same folder.
 
-`pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli.md#global))
+`pixi` does have the `pixi global` command to install tools on your machine. (See [global](../reference/cli/pixi/global.md))
 This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/).
 It creates a single isolated environment for the given requirement and installs the binaries into the global path.
 ```shell
@@ -64,18 +64,18 @@ bat pixi.toml
 
 
 ## Automated switching
-With `pixi` you can import `environment.yml` files into a pixi project. (See [import](../reference/cli.md#init))
+With `pixi` you can import `environment.yml` files into a pixi project. (See [import](../reference/cli/pixi/init.md))
 ```shell
 pixi init --import environment.yml
 ```
 This will create a new project with the dependencies from the `environment.yml` file.
 
 ??? tip "Exporting your environment"
-    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli.md#project-export-conda-environment) file to share them.
+    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/project/export.md) file to share them.
     ```shell
     pixi project export conda-environment
     ```
-    Additionally you can export a [conda explicit specification](../reference/cli.md#project-export-conda-explicit-spec).
+    Additionally you can export a [conda explicit specification](../reference/cli/pixi/project/export.md).
 
 ## Troubleshooting
 Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:
