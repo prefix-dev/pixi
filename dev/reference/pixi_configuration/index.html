@@ -1707,9 +1707,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#change-ps1" class="md-nav__link">
+  <a href="#shell" class="md-nav__link">
     <span class="md-ellipsis">
-      change-ps1
+      shell
     </span>
   </a>
   
@@ -2091,9 +2091,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#change-ps1" class="md-nav__link">
+  <a href="#shell" class="md-nav__link">
     <span class="md-ellipsis">
-      change-ps1
+      shell
     </span>
   </a>
   
@@ -2433,11 +2433,19 @@ This defaults to only conda-forge.
 <p class="admonition-title">Note</p>
 <p>The <code>default-channels</code> are only used when initializing a new project. Once initialized the <code>channels</code> are used from the project manifest.</p>
 </div>
-<h3 id="change-ps1"><code>change-ps1</code><a class="headerlink" href="#change-ps1" title="Permanent link">#</a></h3>
-<p>When set to false, the <code>(pixi)</code> prefix in the shell prompt is removed.
-This applies to the <code>pixi shell</code> subcommand.
-You can override this from the CLI with <code>--change-ps1</code>.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">change-ps1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<h3 id="shell"><code>shell</code><a class="headerlink" href="#shell" title="Permanent link">#</a></h3>
+<ul>
+<li><code>change-ps1</code>:  When set to <code>false</code>, the <code>(pixi)</code> prefix in the shell prompt is removed.
+    This applies to the <code>pixi shell</code> subcommand.
+    You can override this from the CLI with <code>--change-ps1</code>.</li>
+<li><code>force-activate</code>: When set to <code>true</code> the re-activation of the environment will always happen.
+This is used in combination with the <a href="#experimental"><code>experimental</code></a> feature <code>use-environment-activation-cache</code>.</li>
+<li><code>source-completion-scripts</code>: When set to <code>false</code>, pixi will not source the autocompletion scripts of the environment when going into the shell.</li>
+</ul>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[shell]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">change-ps1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">force-activate</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">source-completion-scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
 <h3 id="tls-no-verify"><code>tls-no-verify</code><a class="headerlink" href="#tls-no-verify" title="Permanent link">#</a></h3>
 <p>When set to true, the TLS certificates are not verified.</p>
