@@ -749,6 +749,7 @@ To exit the pixi shell, simply run `exit`.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../environments/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
+- `--no-completion`: Do not source the autocompletion scripts from the environment.
 
 ```shell
 pixi shell
@@ -781,6 +782,7 @@ This command prints the activation script of an environment.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../environments/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
+- `--no-completion`: Do not source the autocompletion scripts from the environment.
 
 ```shell
 pixi shell-hook

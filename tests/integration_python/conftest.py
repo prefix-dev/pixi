@@ -23,7 +23,7 @@ def tmp_pixi_workspace(tmp_path: Path) -> Path:
     pixi_config = """
 # Reset to defaults
 default-channels = ["conda-forge"]
-change-ps1 = true
+shell.change-ps1 = true
 tls-no-verify = false
 detached-environments = false
 pinning-strategy = "semver"

@@ -157,7 +157,7 @@ fn parse_valid_docs_configs() {
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
             let toml = fs_err::read_to_string(&path).unwrap();
-            let (_config, unused_keys) = Config::from_toml(&toml).unwrap();
+            let (_config, unused_keys) = Config::from_toml(&toml, None).unwrap();
             assert_eq!(
                 unused_keys,
                 BTreeSet::<String>::new(),
