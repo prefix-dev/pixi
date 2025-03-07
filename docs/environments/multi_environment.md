@@ -8,10 +8,10 @@ There are multiple scenarios where multiple environments are useful.
 - **Smaller single tool environments**, e.g. `lint` or `docs`.
 - **Large developer environments**, that combine all the smaller environments, e.g. `dev`.
 - **Strict supersets of environments**, e.g. `prod` and `test-prod` where `test-prod` is a strict superset of `prod`.
-- **Multiple machines from one project**, e.g. a `cuda` environment and a `cpu` environment.
+- **Multiple system requirements within one workspace**, e.g. a `cuda` environment and a `cpu` environment.
 - **And many more.** (Feel free to edit this document in our GitHub and add your use case.)
 
-This prepares `pixi` for use in large projects with multiple use-cases, multiple developers and different CI needs.
+This prepares `pixi` for use in large workspaces with multiple use-cases, multiple developers and different CI needs.
 
 ## Design Considerations
 
@@ -346,7 +346,7 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
 
 ??? tip "Test vs Production example"
 
-    This is an example of a project that has a `test` feature and `prod` environment.
+    This is an example of a workspace that has a `test` feature and `prod` environment.
     The `prod` environment is a production environment that contains the run dependencies.
     The `test` feature is a set of dependencies and tasks that we want to put on top of the previously solved `prod` environment.
     This is a common use case where we want to test the production environment with additional dependencies.
@@ -404,16 +404,16 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     CMD ["/usr/local/bin/pixi", "run", "--environment", "prod", "serve"]
     ```
 
-??? tip "Multiple machines from one project"
-    This is an example for an ML project that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
+??? tip "Multiple machines from one workspace"
+    This is an example for an ML workspace that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
 
     ```toml title="pixi.toml"
     [workspace]
-    name = "my-ml-project"
-    description = "A project that does ML stuff"
+    name = "my-ml-workspace"
+    description = "A workspace that does ML stuff"
     authors = ["Your Name <your.name@gmail.com>"]
     channels = ["conda-forge", "pytorch"]
-    # All platforms that are supported by the project as the features will take the intersection of the platforms defined there.
+    # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
     [tasks]
@@ -461,18 +461,18 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     default = ["cpu"]
     ```
 
-    ```shell title="Running the project on a cuda machine"
+    ```shell title="Executing on a cuda machine"
     pixi run train-model --environment cuda
     # will execute `python train.py --cuda`
     # fails if not on linux-64 or win-64 with cuda 12.1
     ```
 
-    ```shell title="Running the project with mlx"
+    ```shell title="Executing with mlx"
     pixi run train-model --environment mlx
     # will execute `python train.py --mlx`
     # fails if not on osx-arm64
     ```
 
-    ```shell title="Running the project on a machine without cuda or mlx"
+    ```shell title="Executing on a machine without cuda or mlx"
     pixi run train-model
     ```

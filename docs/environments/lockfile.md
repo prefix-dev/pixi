@@ -8,7 +8,7 @@ A lock file locks the environment in a specific state.
 Within pixi a lock file is a description of the packages in an environment.
 The lock file contains two definitions:
 
-- The environments that are used in the project with their complete set of packages. e.g.:
+- The environments that are used in the workspace with their complete set of packages. e.g.:
 
   ```yaml
   environments:
@@ -61,7 +61,7 @@ The lock file contains two definitions:
 Pixi uses the lock file for the following reasons:
 
 - To save a working installation state, without copying the entire environment's data.
-- To ensure the project configuration is aligned with the installed environment.
+- To ensure the workspace configuration is aligned with the installed environment.
 - To give the user a file that contains all the information about the environment.
 
 This gives you (and your collaborators) a way to really reproduce the environment they are working in.
@@ -161,7 +161,7 @@ But take note of the following:
 
 - A lock file allows you to run the same environment on different machines, think CI systems.
 - It also allows you to go back to a working state if you have made a mistake.
-- It helps other users onboard to your project as they don't have to figure out the environment setup or solve dependency issues.
+- It helps other users onboard to your workspace as they don't have to figure out the environment setup or solve dependency issues.
 
 ## Removing the lock file
 

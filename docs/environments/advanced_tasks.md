@@ -1,6 +1,6 @@
 
 When building a package, you often have to do more than just run the code.
-Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a project.
+Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a workspace.
 With pixi tasks, this should become much easier to do.
 
 Here are some quick examples
@@ -106,7 +106,7 @@ Pixi tasks support the definition of a working directory.
 `cwd`" stands for Current Working Directory.
 The directory is relative to the pixi package root, where the `pixi.toml` file is located.
 
-Consider a pixi project structured as follows:
+Consider a pixi workspace structured as follows:
 
 ```shell
 ├── pixi.toml

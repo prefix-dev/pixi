@@ -1,11 +1,11 @@
 # Tutorial: Using multiple environments
 
-In this tutorial we will show you how to use multiple environments in one pixi project.
+In this tutorial we will show you how to use multiple environments in one pixi workspace.
 
 ## Why is this useful?
 
-When developing a project you often need different tools, libraries or test environments.
-With pixi you can define multiple environments in one project and switch between them easily.
+When developing a workspace you often need different tools, libraries or test environments.
+With pixi you can define multiple environments in one workspace and switch between them easily.
 A developer often needs all the tools they can get, whereas your testing infrastructure might not require all those tools, and your production environment might require even less.
 Setting up different environments for these different use cases can be a hassle, but with pixi it's easy.
 
@@ -13,14 +13,14 @@ Setting up different environments for these different use cases can be a hassle,
 This tutorial possibly uses some new terms, here is a quick overview:
 #### **Feature**
 A feature defines a part of an environment, but are not useful without being part of an environment.
-You can define multiple features in one project.
+You can define multiple features in one workspace.
 A feature can contain `tasks`, `dependencies`, `platforms`, `channels` and [more](../reference/pixi_manifest.md#the-feature-table).
 You can mix multiple features to create an environment.
 Features are defined by adding `[feature.<name>.*]` to a table in the manifest file.
 #### **Environment**
 An environment is a collection of features.
 Environments can actually be installed and activated to run tasks in.
-You can define multiple environments in one project.
+You can define multiple environments in one workspace.
 Defining environments is done by adding them to the `[environments]` table in the manifest file.
 #### **Default**
 Instead of specifying `[feature.<name>.dependencies]`, one can populate `[dependencies]` directly.
@@ -28,15 +28,15 @@ These top level table, are added to the "default" feature, which is added to eve
 
 ## Let's get started
 
-We'll simply start with a new project, you can skip this step if you already have a pixi project.
+We'll simply start with a new workspace, you can skip this step if you already have a pixi workspace.
 
 ```shell
-pixi init project
-cd project
+pixi init workspace
+cd workspace
 pixi add python
 ```
 
-Now we have a new pixi project with the following structure:
+Now we have a new pixi workspace with the following structure:
 ```
 ├── .pixi
 │   └── envs
@@ -50,9 +50,9 @@ If no environment is specified, pixi will create or use the `default` environmen
 
 
 ### Adding a feature
-Let's start adding a simple `test` feature to our project.
+Let's start adding a simple `test` feature to our workspace.
 We can do this through the command line, or by editing the `pixi.toml` file.
-Here we will use the command line, and add a `pytest` dependency to the `test` feature in our project.
+Here we will use the command line, and add a `pytest` dependency to the `test` feature in our workspace.
 ```shell
 pixi add --feature test pytest
 ```
@@ -63,7 +63,7 @@ This will add the following to our `pixi.toml` file:
 This table acts exactly the same as a normal `dependencies` table, but it is only used when the `test` feature is part of an environment.
 
 ### Adding an environment
-We will add the `test` environment to our project to add some testing tools.
+We will add the `test` environment to our workspace to add some testing tools.
 We can do this through the command line, or by editing the `pixi.toml` file.
 Here we will use the command line:
 ```shell

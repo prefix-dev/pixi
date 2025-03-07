@@ -4,13 +4,13 @@ You can use PyCharm with pixi environments by using the `conda` shim provided by
 
 ## How to use
 
-To get started, add `pixi-pycharm` to your pixi project.
+To get started, add `pixi-pycharm` to your pixi workspace.
 
 ```bash
 pixi add pixi-pycharm
 ```
 
-This will ensure that the conda shim is installed in your project's environment.
+This will ensure that the conda shim is installed in your workspace's environment.
 
 Having `pixi-pycharm` installed, you can now configure PyCharm to use your pixi environments.
 Go to the _Add Python Interpreter_ dialog (bottom right corner of the PyCharm window) and select _Conda Environment_.
@@ -30,8 +30,8 @@ You can get the path using the following command:
 This is an executable that tricks PyCharm into thinking it's the proper `conda` executable.
 Under the hood it redirects all calls to the corresponding `pixi` equivalent.
 
-!!!warning "Use the conda shim from this pixi project"
-    Please make sure that this is the `conda` shim from this pixi project and not another one.
+!!!warning "Use the conda shim from this pixi workspace"
+    Please make sure that this is the `conda` shim from this pixi workspace and not another one.
     If you use multiple pixi projects, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.
 
 ![Add Python Interpreter](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-light.png#only-light)
@@ -64,7 +64,7 @@ You can now run your programs and tests as usual.
 
 ### Multiple environments
 
-If your project uses [multiple environments](../../environments/multi_environment.md) to tests different Python versions or dependencies, you can add multiple environments to PyCharm
+If your workspace uses [multiple environments](../../environments/multi_environment.md) to tests different Python versions or dependencies, you can add multiple environments to PyCharm
 by specifying _Use existing environment_ in the _Add Python Interpreter_ dialog.
 
 ![Multiple pixi environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/python-interpreters-multi-env-light.png#only-light)
@@ -77,7 +77,7 @@ You can then specify the corresponding environment in the bottom right corner of
 
 ### Multiple pixi projects
 
-When using multiple pixi projects, remember to select the correct _Conda Executable_ for each project as mentioned above.
+When using multiple pixi projects, remember to select the correct _Conda Executable_ for each workspace as mentioned above.
 It also might come up that you have multiple environments with the same name.
 
 ![Multiple default environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-light.png#only-light)

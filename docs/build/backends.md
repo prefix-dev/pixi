@@ -12,7 +12,7 @@ When looking at the following build-section:
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
-5. This will allow pixi to install desired backends from the `pixi-build-backends` channel, and any requirements from `conda-forge`. Backends are installed into isolated environments, and will be shared across pixi projects.
+5. This will allow pixi to install desired backends from the `pixi-build-backends` channel, and any requirements from `conda-forge`. Backends are installed into isolated environments, and will be shared across pixi workspaces.
 
 ### Overriding the Build Backend
 Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[package.build]`](../reference/pixi_manifest.md#the-build-system). We currently have two environment variables that allow for this:

@@ -1,19 +1,19 @@
 # Tutorial: Building a C++ package
 
-This example shows how to build a C++ project with CMake and use it together with `pixi-build`.
+This example shows how to build a C++ package with CMake and use it together with `pixi-build`.
 To read more about how building packages work with pixi see the [Getting Started](./getting_started.md) guide.
 
-We'll start off by creating a project that use [nanobind](https://github.com/wjakob/nanobind) to build Python bindings.
+We'll start off by creating a workspace that use [nanobind](https://github.com/wjakob/nanobind) to build Python bindings.
 That we can also test using pixi.
 We'll later combine this example together with a Python package.
 
 !!! warning
     `pixi-build` is a preview feature, and will change until it is stabilized.
-    Please keep that in mind when you use it for your projects.
+    Please keep that in mind when you use it for your workspaces.
 
-## Creating a new project
+## Creating a new workspace
 
-To get started, create a new project with pixi:
+To get started, create a new workspace with pixi:
 
 ```bash
 pixi init python_bindings
@@ -31,7 +31,7 @@ python_bindings/
     └── bindings.cpp
 ```
 
-## Creating the project files
+## Creating the workspace files
 Next up we'll create the:
 
 - `pixi.toml` file that will be used to configure pixi.
@@ -54,7 +54,7 @@ Use the following `pixi.toml` file, you can hover over the annotations to see wh
 6. We use the [nanobind](https://github.com/wjakob/nanobind) package to build our bindings.
 7. We need python to build the bindings, so we add a host dependency on the `python` package.
 8. We override the cmake version to ensure it matches our `CMakeLists.txt` file.
-9. Optionally, we can add extra arguments to the CMake invocation (e.g. `-DCMAKE_BUILD_TYPE=Release` or `-DUSE_FOOBAR=True`). This totally depends on the specific project / CMakeLists.txt file.
+9. Optionally, we can add extra arguments to the CMake invocation (e.g. `-DCMAKE_BUILD_TYPE=Release` or `-DUSE_FOOBAR=True`). This totally depends on the specific workspace / CMakeLists.txt file.
 
 ### The `CMakeLists.txt` file
 

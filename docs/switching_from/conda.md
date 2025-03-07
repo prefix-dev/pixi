@@ -1,11 +1,11 @@
 # Transitioning from the `conda` or `mamba` to `pixi`
 Welcome to the guide designed to ease your transition from `conda` or `mamba` to `pixi`.
 This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages.
-With `pixi`, you'll experience a project-based workflow, enhancing your development process, and allowing for easy sharing of your work.
+With `pixi`, you'll experience a workspace-based workflow, enhancing your development process, and allowing for easy sharing of your work.
 
 ## Why Pixi?
 
-`Pixi` builds upon the foundation of the conda ecosystem, introducing a project-centric approach rather than focusing solely on environments.
+`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments.
 This shift towards projects offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.
 
 ## Key Differences at a Glance
@@ -20,9 +20,10 @@ This shift towards projects offers a more organized and efficient way to manage 
 | Installing a Package        | `conda install numpy`                             | `pixi add numpy`                                                          |
 | Uninstalling a Package      | `conda remove numpy`                              | `pixi remove numpy`                                                       |
 
+
 !!! warn "No `base` environment"
     Conda has a base environment, which is the default environment when you start a new shell.
-    **Pixi does not have a base environment**. And requires you to install the tools you need in the project or globally.
+    **Pixi does not have a base environment**. And requires you to install the tools you need in the workspace or globally.
     Using `pixi global install bat` will install `bat` in a global environment, which is not the same as the `base` environment in conda.
 
 ??? tip "Activating pixi environment in the current shell"
@@ -32,12 +33,12 @@ This shift towards projects offers a more organized and efficient way to manage 
     ~/myenv > eval "$(pixi shell-hook)"
     ```
 
-## Environment vs Project
+## Environment vs Workspace
 `Conda` and `mamba` focus on managing environments, while `pixi` emphasizes projects.
-In `pixi`, a project is a folder containing a [manifest](../reference/pixi_manifest.md)(`pixi.toml`/`pyproject.toml`) file that describes the project, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
+In `pixi`, a workspace is a folder containing a [manifest](../reference/pixi_manifest.md)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
 
-This project-centric approach allows for easy sharing and collaboration, as the project folder contains all the necessary information to recreate the environment.
-It manages more than one environment for more than one platform in a single project, and allows for easy switching between them. (See [multiple environments](../environments/multi_environment.md))
+This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment.
+It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../environments/multi_environment.md))
 
 ## Global environments
 `conda` installs all environments in one global location.
@@ -64,11 +65,11 @@ bat pixi.toml
 
 
 ## Automated switching
-With `pixi` you can import `environment.yml` files into a pixi project. (See [import](../reference/cli/pixi/init.md))
+With `pixi` you can import `environment.yml` files into a pixi workspace. (See [import](../reference/cli/pixi/init.md))
 ```shell
 pixi init --import environment.yml
 ```
-This will create a new project with the dependencies from the `environment.yml` file.
+This will create a new workspace with the dependencies from the `environment.yml` file.
 
 ??? tip "Exporting your environment"
     If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/project/export.md) file to share them.
@@ -83,6 +84,6 @@ Encountering issues? Here are solutions to some common problems when being used 
 - Dependency `is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'`
   This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../advanced/channel_logic.md) for more information.
 - `pixi global install pip`, pip doesn't work.
-  `pip` is installed in the global isolated environment. Use `pixi add pip` in a project to install `pip` in the project environment and use that project.
+  `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace environment and use that workspace.
 - `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'`
-   The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a project to install the library in the project environment and use that project.
+   The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace to install the library in the workspace environment and use that workspace.

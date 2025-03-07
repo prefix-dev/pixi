@@ -300,7 +300,7 @@ impl Display for Info {
 
         // Project information
         if let Some(pi) = self.project_info.as_ref() {
-            writeln!(f, "\n{}", bold.apply_to("Project\n------------").cyan())?;
+            writeln!(f, "\n{}", bold.apply_to("Workspace\n------------").cyan())?;
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Name"), pi.name)?;
             if let Some(version) = pi.version.clone() {
                 writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Version"), version)?;
