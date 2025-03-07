@@ -29,5 +29,15 @@
   
   '''
 # ---
+# name: test_doc_pixi_workspaces_pixi_build[workspace_variants]
+  '''
+  ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+  ┃ name         ┃ age ┃ city        ┃
+  ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+  │ John Doe     │ 31  │ New York    │
+  │ Jane Smith   │ 26  │ Los Angeles │
+  │ Tim de Jager │ 36  │ Utrecht     │
+  └──────────────┴─────┴─────────────┘
+  
   '''
 # ---
