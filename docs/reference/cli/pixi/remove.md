@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) remove</code>
 
 ## About
-Removes dependencies from the project
+Removes dependencies from the workspace
 
 --8<-- "docs/reference/cli/pixi/remove_extender.md:description"
 
@@ -66,7 +66,7 @@ pixi remove [OPTIONS] <SPECS>...
 :  The path to `pixi.toml`, `pyproject.toml`, or the project directory
 
 ## Description
-Removes dependencies from the project
+Removes dependencies from the workspace.
 
 If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
 

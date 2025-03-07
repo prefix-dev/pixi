@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) task</code>
 
 ## About
-Interact with tasks in the project
+Interact with tasks in the workspace
 
 --8<-- "docs/reference/cli/pixi/task_extender.md:description"
 

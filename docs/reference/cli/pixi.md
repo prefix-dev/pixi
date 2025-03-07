@@ -12,7 +12,7 @@ pixi [OPTIONS] <COMMAND>
 |---------|-------------|
 | [`init`](pixi/init.md) | Creates a new workspace |
 | [`add`](pixi/add.md) | Adds dependencies to the workspace |
-| [`remove`](pixi/remove.md) | Removes dependencies from the project |
+| [`remove`](pixi/remove.md) | Removes dependencies from the workspace |
 | [`install`](pixi/install.md) | Install an environment, both updating the lockfile and installing the environment |
 | [`update`](pixi/update.md) | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
 | [`upgrade`](pixi/upgrade.md) | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file |
@@ -22,7 +22,7 @@ pixi [OPTIONS] <COMMAND>
 | [`shell`](pixi/shell.md) | Start a shell in the pixi environment of the project |
 | [`shell-hook`](pixi/shell-hook.md) | Print the pixi environment activation script |
 | [`project`](pixi/project.md) | Modify the project configuration file through the command line |
-| [`task`](pixi/task.md) | Interact with tasks in the project |
+| [`task`](pixi/task.md) | Interact with tasks in the workspace |
 | [`list`](pixi/list.md) | List project's packages |
 | [`tree`](pixi/tree.md) | Show a tree of project dependencies |
 | [`global`](pixi/global.md) | Subcommand for global package management actions |
