@@ -18,3 +18,4 @@ version = "0.1.0"
 clap = "4.5.31"
 itertools = "0.14.0"
 pixi = { path = "../." }
+rattler_conda_types = "0.31.3"

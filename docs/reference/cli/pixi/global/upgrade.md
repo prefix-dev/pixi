@@ -19,6 +19,6 @@ pixi global upgrade [OPTIONS] [SPECS]...
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 - <a id="arg---platform" href="#arg---platform">`--platform <PLATFORM>`</a>
 :  The platform to install the package for
-<br>**default**: `osx-arm64`
+<br>**default**: `current_platform`
 
 --8<-- "docs/reference/cli/pixi/global/upgrade_extender.md:example"

@@ -21,7 +21,7 @@ pixi global upgrade-all [OPTIONS]
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---platform" href="#arg---platform">`--platform <PLATFORM>`</a>
 :  The platform to install the package for
-<br>**default**: `osx-arm64`
+<br>**default**: `current_platform`
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies if we want to use uv keyring provider
 <br>**options**: `disabled`, `subprocess`

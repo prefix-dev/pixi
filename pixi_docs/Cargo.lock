@@ -4359,6 +4359,7 @@ dependencies = [
  "clap",
  "itertools 0.14.0",
  "pixi",
+ "rattler_conda_types",
 ]
 
 [[package]]

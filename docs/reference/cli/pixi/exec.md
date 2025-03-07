@@ -27,7 +27,7 @@ pixi exec [OPTIONS] [COMMAND]...
 :  If specified a new environment is always created even if one already exists
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform to create the environment for
-<br>**default**: `osx-arm64`
+<br>**default**: `current_platform`
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies if we want to use uv keyring provider
 <br>**options**: `disabled`, `subprocess`

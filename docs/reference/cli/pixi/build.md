@@ -27,7 +27,7 @@ pixi build [OPTIONS]
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---target-platform" href="#arg---target-platform">`--target-platform (-t) <TARGET_PLATFORM>`</a>
 :  The target platform to build for (defaults to the current platform)
-<br>**default**: `osx-arm64`
+<br>**default**: `current_platform`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
 

@@ -22,7 +22,7 @@ pixi search [OPTIONS] <PACKAGE>
 :  Limit the number of search results
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform to search for, defaults to current platform
-<br>**default**: `osx-arm64`
+<br>**default**: `current_platform`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt::Write;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 const MD_EXTENSION: &str = ".md";
 
@@ -281,7 +282,13 @@ fn arguments(options: &[&clap::Arg]) -> String {
                 "<br>**default**: `{}`\n",
                 opt.get_default_values()
                     .iter()
-                    .map(|value| value.to_string_lossy())
+                    .map(|value| {
+                        if rattler_conda_types::Platform::from_str(value.as_os_str().to_str().unwrap()).is_ok() {
+                            "current_platform".to_string()
+                        } else {
+                            value.to_string_lossy().to_string()
+                        }
+                    })
                     .join(", ")
             )
             .unwrap();
