@@ -47,7 +47,7 @@ Check out our [installation docs](./advanced/installation.md) to learn about alt
 ## Getting Started
 
 
-Initialize a new project and navigate to the project directory.
+Initialize a new workspace and navigate to the workspace directory.
 
 ```bash
 pixi init hello-world

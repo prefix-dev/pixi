@@ -1,5 +1,5 @@
 
-`pixi info` prints out useful information to debug a situation or to get an overview of your machine/project.
+`pixi info` prints out useful information to debug a situation or to get an overview of your machine/workspace.
 This information can also be retrieved in `json` format using the `--json` flag, which can be useful for programmatically reading it.
 
 ```title="Running pixi info in the pixi repo"
@@ -14,7 +14,7 @@ This information can also be retrieved in `json` format using the `--json` flag,
          Cache dir: /home/user/.cache/rattler/cache
       Auth storage: /home/user/.rattler/credentials.json
 
-Project
+Workspace
 ------------
            Version: 0.13.0
      Manifest file: /home/user/development/pixi/pixi.toml
@@ -64,14 +64,14 @@ Check the [authentication documentation](../deployment/authentication.md)
 
 The size of the previously mentioned "Cache dir" in Mebibytes.
 
-## Project info
+## Workspace info
 
-Everything below `Project` is info about the project you're currently in.
+Everything below `Workspace` is info about the workspace you're currently in.
 This info is only available if your path has a [manifest file](../reference/pixi_manifest.md).
 
 ### Manifest file
 
-The path to the [manifest file](../reference/pixi_manifest.md) that describes the project.
+The path to the [manifest file](../reference/pixi_manifest.md) that describes the workspace.
 
 ### Last updated
 
@@ -100,4 +100,4 @@ The list of dependencies defined for this environment.
 
 ### Target platforms
 
-The platforms the project has defined.
+The platforms the workspace has defined.

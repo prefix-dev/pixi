@@ -1,11 +1,11 @@
 # Use pixi inside of a devcontainer
 
-[VSCode Devcontainers](https://code.visualstudio.com/docs/devcontainers/containers) are a popular tool to develop on a project with a consistent environment.
-They are also used in [GitHub Codespaces](https://github.com/environments/codespaces) which makes it a great way to develop on a project without having to install anything on your local machine.
+[VSCode Devcontainers](https://code.visualstudio.com/docs/devcontainers/containers) are a popular tool to develop on a workspace with a consistent environment.
+They are also used in [GitHub Codespaces](https://github.com/environments/codespaces) which makes it a great way to develop on a workspace without having to install anything on your local machine.
 
 To use pixi inside of a devcontainer, follow these steps:
 
-Create a new directory `.devcontainer` in the root of your project.
+Create a new directory `.devcontainer` in the root of your workspace.
 Then, create the following two files in the `.devcontainer` directory:
 
 ```dockerfile title=".devcontainer/Dockerfile"
@@ -26,7 +26,7 @@ RUN echo 'eval "$(pixi completion -s bash)"' >> /home/vscode/.bashrc
 
 ```json title=".devcontainer/devcontainer.json"
 {
-    "name": "my-project",
+    "name": "my-workspace",
     "build": {
       "dockerfile": "Dockerfile",
       "context": "..",

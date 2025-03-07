@@ -67,7 +67,7 @@ You can inject additional packages into the environment that are not specified i
 pixi-pack pack --inject local-package-1.0.0-hbefa133_0.conda --manifest-pack pixi.toml
 ```
 
-This can be particularly useful if you build the project itself and want to include the built package in the environment but still want to use `pixi.lock` from the project.
+This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use `pixi.lock` from the workspace.
 
 ### Cache downloaded packages
 

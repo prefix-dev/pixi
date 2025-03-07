@@ -32,7 +32,7 @@ flowchart TD
 ```
 
 # Channel priority
-Channel priority is dictated by the order in the `project.channels` array, where the first channel is the highest priority.
+Channel priority is dictated by the order in the `workspace.channels` array, where the first channel is the highest priority.
 For instance:
 ```toml
 [workspace]
@@ -95,7 +95,7 @@ If you want to force a specific priority for a channel, you can use the `priorit
 The higher the number, the higher the priority.
 Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.
 
-This priority definition is mostly important for [multiple environments](../environments/multi_environment.md) with different channel priorities, as by default feature channels are prepended to the project channels.
+This priority definition is mostly important for [multiple environments](../environments/multi_environment.md) with different channel priorities, as by default feature channels are prepended to the workspace channels.
 
 ```toml
 [workspace]

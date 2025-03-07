@@ -384,7 +384,7 @@ This can be overwritten by setting the `manifest-path` input argument.
 
 ### Only install pixi
 
-If you only want to install pixi and not install the current project, you can use the `run-install` option.
+If you only want to install pixi and not install the current workspace, you can use the `run-install` option.
 
 ```yml
 - uses: prefix-dev/setup-pixi@v0.8.3

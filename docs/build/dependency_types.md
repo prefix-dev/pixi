@@ -18,15 +18,15 @@ Let's delve deeper into the various types of package dependencies and their spec
     When using the `pixi-build-cmake` backend you do not need to specify `cmake` or the compiler as a dependency.
     The backend will install `cmake`, `ninja` and the C++ compilers by default.
 
-This table contains dependencies that are needed to build the project.
+This table contains dependencies that are needed to build the workspace.
 Different from dependencies and host-dependencies these packages are installed for the architecture of the build machine.
 This enables cross-compiling from one machine architecture to another.
 
 Typical examples of build dependencies are:
 
 - Compilers are invoked on the build machine, but they generate code for the target machine.
-  If the project is cross-compiled, the architecture of the build and target machine might differ.
-- `cmake` is invoked on the build machine to generate additional code- or project-files which are then include in the compilation process.
+  If the package is cross-compiled, the architecture of the build and target machine might differ.
+- `cmake` is invoked on the build machine to generate additional files which are then include in the compilation process.
 
 !!! info
     The _build_ target refers to the machine that will execute the build.
@@ -43,7 +43,7 @@ In contrast, the libraries you link to are host dependencies since they are spec
 Typical examples of host dependencies are:
 
 - Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
-- Libraries your project links against like `openssl`, `rapidjson`, or `xtensor`.
+- Libraries your package links against like `openssl`, `rapidjson`, or `xtensor`.
 
 #### Python code
 Because of the way building currently works, dependencies like `hatchling`,`pip`,`uv` etc. are host dependencies.

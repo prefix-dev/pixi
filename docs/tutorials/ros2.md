@@ -12,7 +12,7 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
 - On Windows, it's advised to enable Developer mode. Go to Settings -> Update & Security -> For developers -> Developer mode.
 
 
-## Create a pixi project.
+## Create a pixi workspace
 
 ```shell
 pixi init my_ros2_project -c robostack-staging -c conda-forge
