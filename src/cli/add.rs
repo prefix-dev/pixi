@@ -13,7 +13,7 @@ use crate::{
     WorkspaceLocator,
 };
 
-/// Adds dependencies to the project
+/// Adds dependencies to the workspace
 ///
 /// The dependencies should be defined as MatchSpec for conda package, or a PyPI
 /// requirement for the `--pypi` dependencies. If no specific version is
