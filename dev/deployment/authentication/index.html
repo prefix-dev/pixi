@@ -883,7 +883,7 @@
         <li class="md-nav__item">
   <a href="#where-does-pixi-store-the-authentication-information" class="md-nav__link">
     <span class="md-ellipsis">
-      Where does pixi store the authentication information?
+      Where does Pixi store the authentication information?
     </span>
   </a>
   
@@ -2196,7 +2196,7 @@
         <li class="md-nav__item">
   <a href="#where-does-pixi-store-the-authentication-information" class="md-nav__link">
     <span class="md-ellipsis">
-      Where does pixi store the authentication information?
+      Where does Pixi store the authentication information?
     </span>
   </a>
   
@@ -2279,7 +2279,7 @@
 
   <h1>Authentication</h1>
 
-<p>You can authenticate pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
+<p>You can authenticate Pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
 Different servers use different authentication methods.
 In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Usage:<span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>&lt;HOST&gt;
@@ -2325,13 +2325,13 @@ A Bearer Token is sent with every request as an additional header of the form <c
 <p class="admonition-title">Note</p>
 <p>S3 authentication is also supported through AWS's typical <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> environment variables, see the <a href="../s3/">S3 section</a> for more details.</p>
 </div>
-<h2 id="where-does-pixi-store-the-authentication-information">Where does pixi store the authentication information?<a class="headerlink" href="#where-does-pixi-store-the-authentication-information" title="Permanent link">#</a></h2>
-<p>The storage location for the authentication information is system-dependent. By default, pixi tries to use the keychain to store this sensitive information securely on your machine.</p>
-<p>On Windows, the credentials are stored in the "credentials manager". Searching for <code>rattler</code> (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).</p>
-<p>On macOS, the passwords are stored in the keychain. To access the password, you can use the <code>Keychain Access</code> program that comes pre-installed on macOS. Searching for <code>rattler</code> (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).</p>
-<p>On Linux, one can use <code>GNOME Keyring</code> (or just Keyring) to access credentials that are securely stored by <code>libsecret</code>. Searching for <code>rattler</code> should list all the credentials stored by pixi and other rattler-based programs.</p>
+<h2 id="where-does-pixi-store-the-authentication-information">Where does Pixi store the authentication information?<a class="headerlink" href="#where-does-pixi-store-the-authentication-information" title="Permanent link">#</a></h2>
+<p>The storage location for the authentication information is system-dependent. By default, Pixi tries to use the keychain to store this sensitive information securely on your machine.</p>
+<p>On Windows, the credentials are stored in the "credentials manager". Searching for <code>rattler</code> (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).</p>
+<p>On macOS, the passwords are stored in the keychain. To access the password, you can use the <code>Keychain Access</code> program that comes pre-installed on macOS. Searching for <code>rattler</code> (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).</p>
+<p>On Linux, one can use <code>GNOME Keyring</code> (or just Keyring) to access credentials that are securely stored by <code>libsecret</code>. Searching for <code>rattler</code> should list all the credentials stored by Pixi and other rattler-based programs.</p>
 <h2 id="fallback-storage">Fallback storage<a class="headerlink" href="#fallback-storage" title="Permanent link">#</a></h2>
-<p>If you run on a server with none of the aforementioned keychains available, then pixi falls back to store the credentials in an <em>insecure</em> JSON file.
+<p>If you run on a server with none of the aforementioned keychains available, then Pixi falls back to store the credentials in an <em>insecure</em> JSON file.
 This JSON file is located at <code>~/.rattler/credentials.json</code> and contains the credentials.</p>
 <h2 id="override-the-authentication-storage">Override the authentication storage<a class="headerlink" href="#override-the-authentication-storage" title="Permanent link">#</a></h2>
 <p>You can use the <code>RATTLER_AUTH_FILE</code> environment variable to override the default location of the credentials file.
@@ -2378,9 +2378,9 @@ When this environment variable is set, it provides the only source of authentica
 </ol>
 <p>We want to add more methods in the future, so if you have a specific method you would like to see, please let us know.</p>
 <h3 id="keyring-authentication">Keyring authentication<a class="headerlink" href="#keyring-authentication" title="Permanent link">#</a></h3>
-<p>Currently, pixi supports the uv method of authentication through the python <a href="https://pypi.org/project/keyring/">keyring</a> library.</p>
+<p>Currently, Pixi supports the uv method of authentication through the python <a href="https://pypi.org/project/keyring/">keyring</a> library.</p>
 <h4 id="installing-keyring">Installing keyring<a class="headerlink" href="#installing-keyring" title="Permanent link">#</a></h4>
-<p>To install keyring you can use pixi global install:</p>
+<p>To install keyring you can use <code>pixi global install</code>:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Basic Auth</label><label for="__tabbed_1_2">Google Artifact Registry</label><label for="__tabbed_1_3">Azure DevOps Artifacts</label><label for="__tabbed_1_4">AWS CodeArtifact</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2410,13 +2410,13 @@ When this environment variable is set, it provides the only source of authentica
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>keyring<span class="w"> </span><span class="nb">set</span><span class="w"> </span>https://my-index/simple<span class="w"> </span>your_username
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># prompt will appear for your password</span>
 </span></code></pre></div>
-<p>Add the following configuration to your pixi manifest, making sure to include <code>your_username@</code> in the URL of the registry:</p>
+<p>Add the following configuration to your Pixi manifest, making sure to include <code>your_username@</code> in the URL of the registry:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[pypi-options]</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://your_username@custom-registry.com/simple&quot;</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>After making sure you are logged in, for instance by running <code>gcloud auth login</code>, add the following configuration to your pixi manifest:</p>
+<p>After making sure you are logged in, for instance by running <code>gcloud auth login</code>, add the following configuration to your Pixi manifest:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[pypi-options]</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://oauth2accesstoken@&lt;location&gt;-python.pkg.dev/&lt;project&gt;/&lt;repository&gt;/simple&quot;</span><span class="p">]</span>
 </span></code></pre></div>
@@ -2428,13 +2428,13 @@ When this environment variable is set, it provides the only source of authentica
 </div>
 </div>
 <div class="tabbed-block">
-<p>After following the <a href="https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage"><code>keyring.artifacts</code> instructions</a> and making sure that keyring works correctly, add the following configuration to your pixi manifest:</p>
+<p>After following the <a href="https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage"><code>keyring.artifacts</code> instructions</a> and making sure that keyring works correctly, add the following configuration to your Pixi manifest:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[pypi-options]</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<p>Ensure you are logged in e.g via <code>aws sso login</code> and add the following configuration to your pixi manifest:</p>
+<p>Ensure you are logged in e.g via <code>aws sso login</code> and add the following configuration to your Pixi manifest:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[pypi-options]</span>
 </span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://aws@&lt;your-domain&gt;-&lt;your-account&gt;.d.codeartifact.&lt;your-region&gt;.amazonaws.com/pypi/&lt;your-repository&gt;/simple/&quot;</span><span class="p">]</span>
 </span></code></pre></div>

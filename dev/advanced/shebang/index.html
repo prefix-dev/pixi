@@ -2134,7 +2134,7 @@ The <code>-S</code> option tells <code>/usr/bin/env</code> to use the first argu
 So in total, <code>pixi exec --spec bat -- bash -e use-bat.sh</code> is being executed when you run <code>./use-bat.sh</code>.</p>
 </div>
 <p>You can also write self-contained python files that ship with their dependencies.
-This example shows a very simple CLI that installs a pixi environment to an arbitrary prefix using <a href="https://conda.github.io/rattler/py-rattler"><code>py-rattler</code></a> and <a href="https://typer.tiangolo.com"><code>typer</code></a>.</p>
+This example shows a very simple CLI that installs a Pixi environment to an arbitrary prefix using <a href="https://conda.github.io/rattler/py-rattler"><code>py-rattler</code></a> and <a href="https://typer.tiangolo.com"><code>typer</code></a>.</p>
 <div class="language-python highlight"><span class="filename">install-pixi-environment-to-prefix.py</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="ch">#!/usr/bin/env -S pixi exec --spec py-rattler&gt;=0.10.0,&lt;0.11 --spec typer&gt;=0.15.0,&lt;0.16 -- python</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>

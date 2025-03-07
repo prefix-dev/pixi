@@ -2163,11 +2163,11 @@
   
 
 
-<h1 id="bringing-pixi-to-production">Bringing pixi to production<a class="headerlink" href="#bringing-pixi-to-production" title="Permanent link">#</a></h1>
-<p>One way to bring a pixi package into production is to containerize it using tools like Docker or Podman.</p>
+<h1 id="bringing-pixi-to-production">Bringing Pixi to production<a class="headerlink" href="#bringing-pixi-to-production" title="Permanent link">#</a></h1>
+<p>One way to bring a Pixi package into production is to containerize it using tools like Docker or Podman.</p>
 <!-- Keep in sync with https://github.com/prefix-dev/pixi-docker/blob/main/README.md -->
 
-<p>We provide a simple docker image at <a href="https://github.com/prefix-dev/pixi-docker"><code>pixi-docker</code></a> that contains the pixi executable on top of different base images.</p>
+<p>We provide a simple docker image at <a href="https://github.com/prefix-dev/pixi-docker"><code>pixi-docker</code></a> that contains the Pixi executable on top of different base images.</p>
 <p>The images are available on <a href="https://ghcr.io/prefix-dev/pixi">ghcr.io/prefix-dev/pixi</a>.</p>
 <p>There are different tags for different base images available:</p>
 <ul>
@@ -2182,8 +2182,8 @@
 <p>For all tags, take a look at the <a href="https://github.com/prefix-dev/pixi-docker/blob/main/.github/workflows/build.yml">build script</a>.</p>
 </div>
 <h3 id="example-usage">Example usage<a class="headerlink" href="#example-usage" title="Permanent link">#</a></h3>
-<p>The following example uses the pixi docker image as a base image for a multi-stage build.
-It also makes use of <code>pixi shell-hook</code> to not rely on pixi being installed in the production container.</p>
+<p>The following example uses the Pixi docker image as a base image for a multi-stage build.
+It also makes use of <code>pixi shell-hook</code> to not rely on Pixi being installed in the production container.</p>
 <div class="admonition tip">
 <p class="admonition-title">More examples</p>
 <p>For more examples, take a look at <a href="https://github.com/pavelzw/pixi-docker-example">pavelzw/pixi-docker-example</a>.</p>

@@ -2202,7 +2202,7 @@
 
 
 <h1 id="tutorial-adding-variants">Tutorial: Adding variants<a class="headerlink" href="#tutorial-adding-variants" title="Permanent link">#</a></h1>
-<p>In this tutorial, we will show you how to use variants in order to build a pixi package against different versions of a dependency.
+<p>In this tutorial, we will show you how to use variants in order to build a Pixi package against different versions of a dependency.
 Some might call this functionality, build matrix, build configurations or parameterized builds, in the conda ecosystem this is referred to as a variant.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
@@ -2210,7 +2210,7 @@ Some might call this functionality, build matrix, build configurations or parame
 Please keep that in mind when you use it for your projects.</p>
 </div>
 <h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
-<p>When we depend on a pixi package, the dependency versions of the package itself are already set.
+<p>When we depend on a Pixi package, the dependency versions of the package itself are already set.
 For example, in the <a href="../cpp/">C++ tutorial</a> the <code>python_bindings</code> package we built depended on Python 3.12.
 Pixi would report a version conflict, if we'd add use both Python 3.11 and <code>python_bindings</code> to our workspace.
 By using variants, we can add a set of allowed versions for a specific dependency.
@@ -2252,7 +2252,7 @@ We do that in <code>workspace.build-variants</code>:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[workspace.build-variants]</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;3.11.*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>If we'd run <code>pixi install</code> now, we'd leave it up to pixi whether to use Python 3.11 or 3.12.
+<p>If we'd run <code>pixi install</code> now, we'd leave it up to Pixi whether to use Python 3.11 or 3.12.
 In practice, you'll want to create multiple environments specifying a different dependency version.
 In our case this allows us to test our setup against both Python 3.11 and 3.12.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[feature.py311.dependencies]</span>

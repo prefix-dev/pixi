@@ -2283,7 +2283,7 @@ We don't advise to use the <code>pyproject.toml</code> file for anything else th
 <li>Add the current project as an editable pypi dependency;</li>
 <li>Add some defaults to the <code>.gitignore</code> and <code>.gitattributes</code> files.</li>
 </ul>
-<p>If you do not have an existing <code>pyproject.toml</code> file , you can run <code>pixi init --format pyproject</code> in your project folder. In that case, pixi will create a <code>pyproject.toml</code> manifest from scratch with some sane defaults.</p>
+<p>If you do not have an existing <code>pyproject.toml</code> file , you can run <code>pixi init --format pyproject</code> in your project folder. In that case, Pixi will create a <code>pyproject.toml</code> manifest from scratch with some sane defaults.</p>
 <h2 id="python-dependency">Python dependency<a class="headerlink" href="#python-dependency" title="Permanent link">#</a></h2>
 <p>The <code>pyproject.toml</code> file supports the <code>requires_python</code> field.
 Pixi understands that field and automatically adds the version to the dependencies.</p>
@@ -2356,10 +2356,10 @@ Pixi understands that field and automatically adds the dependencies to the proje
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="n">matplotlib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
 <p>This would result in the conda dependencies being installed and the pypi dependencies being ignored.
-As pixi takes the conda dependencies over the pypi dependencies.</p>
+As Pixi takes the conda dependencies over the pypi dependencies.</p>
 <h2 id="optional-dependencies">Optional dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">#</a></h2>
-<p>If your python project includes groups of optional dependencies, pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
-<p>You can add them to pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.</p>
+<p>If your python project includes groups of optional dependencies, Pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">Pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
+<p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.</p>
 <p>For instance, imagine you have a project folder with a <code>pyproject.toml</code> file similar to:</p>
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project]</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
@@ -2395,8 +2395,8 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
 </ul>
 <p>All environments will be solved together, as indicated by the common <code>solve-group</code>, and added to the lock file. You can edit the <code>[tool.pixi.environments]</code> section manually to adapt it to your use case (e.g. if you do not need a particular environment).</p>
 <h2 id="dependency-groups">Dependency groups<a class="headerlink" href="#dependency-groups" title="Permanent link">#</a></h2>
-<p>If your python project includes dependency groups, pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
-<p>You can add them to pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per dependency group.</p>
+<p>If your python project includes dependency groups, Pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">Pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
+<p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per dependency group.</p>
 <p>For instance, imagine you have a project folder with a <code>pyproject.toml</code> file similar to:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[project]</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
@@ -2436,7 +2436,7 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
 </ul>
 <p>All environments will be solved together, as indicated by the common <code>solve-group</code>, and added to the lock file. You can edit the <code>[tool.pixi.environments]</code> section manually to adapt it to your use case (e.g. if you do not need a particular environment).</p>
 <h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">#</a></h2>
-<p>As the <code>pyproject.toml</code> file supports the full pixi spec with <code>[tool.pixi]</code> prepended an example would look like this:</p>
+<p>As the <code>pyproject.toml</code> file supports the full Pixi spec with <code>[tool.pixi]</code> prepended an example would look like this:</p>
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[project]</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.9&quot;</span>
@@ -2473,7 +2473,7 @@ As pixi takes the conda dependencies over the pypi dependencies.</p>
 </span></code></pre></div>
 <h2 id="build-system-section">Build-system section<a class="headerlink" href="#build-system-section" title="Permanent link">#</a></h2>
 <p>The <code>pyproject.toml</code> file normally contains a <code>[build-system]</code> section. Pixi will use this section to build and install the project if it is added as a pypi path dependency.</p>
-<p>If the <code>pyproject.toml</code> file does not contain any <code>[build-system]</code> section, pixi will fall back to <a href="https://github.com/astral-sh/uv">uv</a>'s default, which is equivalent to the below:</p>
+<p>If the <code>pyproject.toml</code> file does not contain any <code>[build-system]</code> section, Pixi will fall back to <a href="https://github.com/astral-sh/uv">uv</a>'s default, which is equivalent to the below:</p>
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[build-system]</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setuptools &gt;= 40.8.0&quot;</span><span class="p">]</span>
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;setuptools.build_meta:__legacy__&quot;</span>

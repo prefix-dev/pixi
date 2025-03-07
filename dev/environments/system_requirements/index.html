@@ -2284,18 +2284,18 @@
 
 
 <h1 id="system-requirements-in-pixi">System Requirements in pixi<a class="headerlink" href="#system-requirements-in-pixi" title="Permanent link">#</a></h1>
-<p><strong>System requirements</strong> tell pixi the minimum system specifications needed to install and run your workspace’s environment.
+<p><strong>System requirements</strong> tell Pixi the minimum system specifications needed to install and run your workspace’s environment.
 They ensure that the dependencies match the operating system and hardware of your machine.</p>
 <p>Think of it like this:
 You’re defining what “kind of computer” your workspace can run on.
 For example, you might require a specific Linux kernel version or a minimum glibc version.
 If your machine doesn’t meet these requirements, <code>pixi run</code> will fail because the environment can’t work reliably on your system.</p>
-<p>When resolving dependencies, pixi combines:</p>
+<p>When resolving dependencies, Pixi combines:</p>
 <ul>
 <li>The default requirements for the operating system.</li>
 <li>Any custom requirements you’ve added for your workspace through the <code>[system-requirements]</code>.</li>
 </ul>
-<p>This way, pixi guarantees your environment is consistent and compatible with your machine.</p>
+<p>This way, Pixi guarantees your environment is consistent and compatible with your machine.</p>
 <p>System specifications are closely related to <a href="https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual packages</a>, allowing for flexible and accurate dependency management.</p>
 <h2 id="default-system-requirements">Default System Requirements<a class="headerlink" href="#default-system-requirements" title="Permanent link">#</a></h2>
 <p>The following configurations outline the default minimal system requirements for different operating systems:</p>

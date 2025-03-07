@@ -1639,7 +1639,7 @@
         <li class="md-nav__item">
   <a href="#create-a-pixi-workspace" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi workspace
+      Create a Pixi workspace
     </span>
   </a>
   
@@ -2238,7 +2238,7 @@
         <li class="md-nav__item">
   <a href="#create-a-pixi-workspace" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi workspace
+      Create a Pixi workspace
     </span>
   </a>
   
@@ -2358,14 +2358,14 @@
 <h1 id="tutorial-develop-a-ros-2-package-with-pixi">Tutorial: Develop a ROS 2 package with <code>pixi</code><a class="headerlink" href="#tutorial-develop-a-ros-2-package-with-pixi" title="Permanent link">#</a></h1>
 <p>In this tutorial, we will show you how to develop a ROS 2 package using <code>pixi</code>.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
-<p>The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try pixi for their development workflow.</p>
+<p>The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try Pixi for their development workflow.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
 <ul>
 <li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
   The crux of this tutorial is to show you only need pixi!</li>
 <li>On Windows, it's advised to enable Developer mode. Go to Settings -&gt; Update &amp; Security -&gt; For developers -&gt; Developer mode.</li>
 </ul>
-<h2 id="create-a-pixi-workspace">Create a pixi workspace<a class="headerlink" href="#create-a-pixi-workspace" title="Permanent link">#</a></h2>
+<h2 id="create-a-pixi-workspace">Create a Pixi workspace<a class="headerlink" href="#create-a-pixi-workspace" title="Permanent link">#</a></h2>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_ros2_project<span class="w"> </span>-c<span class="w"> </span>robostack-staging<span class="w"> </span>-c<span class="w"> </span>conda-forge
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
 </span></code></pre></div>
@@ -2390,10 +2390,10 @@ The tutorial is written to be executed from top to bottom, missing steps might r
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[dependencies]</span>
 </span></code></pre></div>
 <p>The <code>channels</code> you added to the <code>init</code> command are repositories of packages, you can search in these repositories through our <a href="https://prefix.dev/channels">prefix.dev</a> website.
-The <code>platforms</code> are the systems you want to support, in pixi you can support multiple platforms, but you have to define which platforms, so pixi can test if those are supported for your dependencies.
+The <code>platforms</code> are the systems you want to support, in Pixi you can support multiple platforms, but you have to define which platforms, so Pixi can test if those are supported for your dependencies.
 For the rest of the fields, you can fill them in as you see fit.</p>
 <h2 id="add-ros-2-dependencies">Add ROS 2 dependencies<a class="headerlink" href="#add-ros-2-dependencies" title="Permanent link">#</a></h2>
-<p>To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.</p>
+<p>To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.</p>
 <p>Let's start with the <code>turtlesim</code> example</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-desktop<span class="w"> </span>ros-humble-turtlesim
 </span></code></pre></div>
@@ -2428,7 +2428,7 @@ Now you can control the turtle with the arrow keys on your keyboard.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>colcon<span class="w"> </span>build
 </span></code></pre></div>
 <p>This will create a sourceable script in the <code>install</code> folder, you can source this script through an activation script to use your custom node.
-Normally this would be the script you add to your <code>.bashrc</code> but instead you tell pixi to use it by adding the following to <code>pixi.toml</code>:</p>
+Normally this would be the script you add to your <code>.bashrc</code> but instead you tell Pixi to use it by adding the following to <code>pixi.toml</code>:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -2515,8 +2515,8 @@ Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
 Let's inspire the community together!</p>
 <h2 id="frequently-asked-questions">Frequently asked questions<a class="headerlink" href="#frequently-asked-questions" title="Permanent link">#</a></h2>
 <h3 id="what-happens-with-rosdep">What happens with <code>rosdep</code>?<a class="headerlink" href="#what-happens-with-rosdep" title="Permanent link">#</a></h3>
-<p>Currently, we don't support <code>rosdep</code> in a pixi environment, so you'll have to add the packages using <code>pixi add</code>.
-<code>rosdep</code> will call <code>conda install</code> which isn't supported in a pixi environment.</p>
+<p>Currently, we don't support <code>rosdep</code> in a Pixi environment, so you'll have to add the packages using <code>pixi add</code>.
+<code>rosdep</code> will call <code>conda install</code> which isn't supported in a Pixi environment.</p>
 <h3 id="community-examples">Community examples<a class="headerlink" href="#community-examples" title="Permanent link">#</a></h3>
 <p>ROS 2 Humble on macOS,<a href="https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655">Simulating differential drive using Gazebo</a>.</p>
 

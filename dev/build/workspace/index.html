@@ -2202,7 +2202,7 @@
 
 
 <h1 id="tutorial-integrating-multiple-packages-in-a-workspace">Tutorial: Integrating multiple packages in a workspace<a class="headerlink" href="#tutorial-integrating-multiple-packages-in-a-workspace" title="Permanent link">#</a></h1>
-<p>In this tutorial, we will show you how to integrate multiple pixi packages into a single workspace.</p>
+<p>In this tutorial, we will show you how to integrate multiple Pixi packages into a single workspace.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
 <p><code>pixi-build</code> is a preview feature, and will change until it is stabilized.
@@ -2233,7 +2233,7 @@ The source directory structure now looks like this:</p>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">    </span>└──<span class="w"> </span>rich_example
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">        </span>└──<span class="w"> </span>__init__.py
 </span></code></pre></div>
-<p>Within a pixi manifest, you can manage a workspace and/or describe a package.
+<p>Within a Pixi manifest, you can manage a workspace and/or describe a package.
 In the case of <code>rich_example</code> we choose to do both, so the only thing we have to add is the dependency on the <code>python_bindings</code>.</p>
 <div class="language-py highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">[</span><span class="n">workspace</span><span class="p">]</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">channels</span> <span class="o">=</span> <span class="p">[</span>
@@ -2318,7 +2318,7 @@ Luckily <code>python_bindings</code> exposes a function <code>add</code> which a
 </span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>└──────────────┴─────┴─────────────┘
 </span></code></pre></div>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we created a pixi workspace containing two packages.
+<p>In this tutorial, we created a Pixi workspace containing two packages.
 The manifest of <code>rich_example</code> describes the workspace as well as the package, with <code>python_bindings</code> only the <code>package</code> section is used.
 Feel free to add more packages, written in different languages to this workspace!</p>
 <p>Thanks for reading! Happy Coding 🚀</p>

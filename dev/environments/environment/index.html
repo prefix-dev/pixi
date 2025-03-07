@@ -2335,7 +2335,7 @@
 <p>Pixi is a tool to manage virtual environments.
 This document explains what an environment looks like and how to use it.</p>
 <h2 id="structure">Structure<a class="headerlink" href="#structure" title="Permanent link">#</a></h2>
-<p>A pixi environment is located in the <code>.pixi/envs</code> directory of the workspace by default.
+<p>A Pixi environment is located in the <code>.pixi/envs</code> directory of the workspace by default.
 This keeps your machine and your workspace clean and isolated from each other, and makes it easy to clean up after a workspace is done.
 While this structure is generally recommended, environments can also be stored outside of workspace directories by enabling <a href="../../reference/pixi_configuration/#detached-environments">detached environments</a>.</p>
 <p>If you look at the <code>.pixi/envs</code> directory, you will see a directory for each environment, the <code>default</code> being the one that is normally used, if you specify a custom environment the name you specified will be used.</p>
@@ -2360,13 +2360,13 @@ While this structure is generally recommended, environments can also be stored o
 Pixi will always make sure the environment is in sync with the <code>pixi.lock</code> file.
 If this is not the case then all the commands that use the environment will automatically update the environment, e.g. <code>pixi run</code>, <code>pixi shell</code>.</p>
 <h3 id="environment-installation-metadata">Environment Installation Metadata<a class="headerlink" href="#environment-installation-metadata" title="Permanent link">#</a></h3>
-<p>On environment installation, pixi will write a small file to the environment that contains some metadata about installation.
+<p>On environment installation, Pixi will write a small file to the environment that contains some metadata about installation.
 This file is called <code>pixi</code> and is located in the <code>conda-meta</code> folder of the environment.
 This file contains the following information:</p>
 <ul>
 <li><code>manifest_path</code>: The path to the manifest file that describes the workspace used to create this environment</li>
 <li><code>environment_name</code>: The name of the environment</li>
-<li><code>pixi_version</code>: The version of pixi that was used to create this environment</li>
+<li><code>pixi_version</code>: The version of Pixi that was used to create this environment</li>
 <li><code>environment_lock_file_hash</code>: The hash of the <code>pixi.lock</code> file that was used to create this environment</li>
 </ul>
 <div class="language-json highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
@@ -2377,12 +2377,12 @@ This file contains the following information:</p>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>The <code>environment_lock_file_hash</code> is used to check if the environment is in sync with the <code>pixi.lock</code> file.
-If the hash of the <code>pixi.lock</code> file is different from the hash in the <code>pixi</code> file, pixi will update the environment.</p>
+If the hash of the <code>pixi.lock</code> file is different from the hash in the <code>pixi</code> file, Pixi will update the environment.</p>
 <p>This is used to speedup activation, in order to trigger a full revalidation pass <code>--revalidate</code> to the <code>pixi run</code> or <code>pixi shell</code> command.
 A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment.
 By default, all lock file modifying commands will always use the revalidation and on <code>pixi install</code> it always revalidates.</p>
 <h3 id="cleaning-up">Cleaning up<a class="headerlink" href="#cleaning-up" title="Permanent link">#</a></h3>
-<p>If you want to clean up the environments, you can simply delete the <code>.pixi/envs</code> directory, and pixi will recreate the environments when needed.</p>
+<p>If you want to clean up the environments, you can simply delete the <code>.pixi/envs</code> directory, and Pixi will recreate the environments when needed.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># either:</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>rm<span class="w"> </span>-rf<span class="w"> </span>.pixi/envs
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
@@ -2403,7 +2403,7 @@ But there is more to it in a conda environment, as it also sets some environment
 </ul>
 <p>Where the <code>run</code> command is special as it runs its own cross-platform shell and has the ability to run tasks.
 More information about tasks can be found in the <a href="../advanced_tasks/">tasks documentation</a>.</p>
-<p>Using the <code>pixi shell-hook</code> in pixi you would get the following output:</p>
+<p>Using the <code>pixi shell-hook</code> in Pixi you would get the following output:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default/bin:/home/user/.local/bin:/home/user/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/home/user/.pixi/bin&quot;</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">CONDA_PREFIX</span><span class="o">=</span><span class="s2">&quot;/home/user/development/pixi/.pixi/envs/default&quot;</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="nb">export</span><span class="w"> </span><span class="nv">PIXI_PROJECT_NAME</span><span class="o">=</span><span class="s2">&quot;pixi&quot;</span>
@@ -2511,9 +2511,9 @@ Enter the following into your <code>.envrc</code> file:</p>
 <p>Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting <code>PIXI_PROJECT_ROOT</code> in the environment.</p>
 </div>
 <h2 id="solving-environments">Solving environments<a class="headerlink" href="#solving-environments" title="Permanent link">#</a></h2>
-<p>When you run a command that uses the environment, pixi will check if the environment is in sync with the <code>pixi.lock</code> file.
-If it is not, pixi will solve the environment and update it.
-This means that pixi will retrieve the best set of packages for the dependency requirements that you specified in the <code>pixi.toml</code> and will put the output of the solve step into the <code>pixi.lock</code> file.
+<p>When you run a command that uses the environment, Pixi will check if the environment is in sync with the <code>pixi.lock</code> file.
+If it is not, Pixi will solve the environment and update it.
+This means that Pixi will retrieve the best set of packages for the dependency requirements that you specified in the <code>pixi.toml</code> and will put the output of the solve step into the <code>pixi.lock</code> file.
 Solving is a mathematical problem and can take some time, but we take pride in the way we solve environments, and we are confident that we can solve your environment in a reasonable time.
 If you want to learn more about the solving process, you can read these:</p>
 <ul>
@@ -2526,10 +2526,10 @@ These solvers are split between the <a href="https://github.com/conda/rattler"><
 It also supports the <code>conda</code> way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.</p>
 <p>For the <code>[pypi-dependencies]</code>, <code>uv</code> implements <code>sdist</code> building to retrieve the metadata of the packages, and <code>wheel</code> building to install the packages.
 For this building step, <code>pixi</code> requires to first install <code>python</code> in the (conda)<code>[dependencies]</code> section of the <code>pixi.toml</code> file.
-This will always be slower than the pure conda solves. So for the best pixi experience you should stay within the <code>[dependencies]</code> section of the <code>pixi.toml</code> file.</p>
+This will always be slower than the pure conda solves. So for the best Pixi experience you should stay within the <code>[dependencies]</code> section of the <code>pixi.toml</code> file.</p>
 <h2 id="caching-packages">Caching packages<a class="headerlink" href="#caching-packages" title="Permanent link">#</a></h2>
 <p>Pixi caches all previously downloaded packages in a cache folder.
-This cache folder is shared between all pixi projects and globally installed tools.</p>
+This cache folder is shared between all Pixi projects and globally installed tools.</p>
 <p>Normally the location would be the following
 platform-specific default cache folder:</p>
 <ul>
@@ -2538,7 +2538,7 @@ platform-specific default cache folder:</p>
 <li>Windows: <code>%LOCALAPPDATA%\rattler</code></li>
 </ul>
 <p>This location is configurable by setting the <code>PIXI_CACHE_DIR</code> or <code>RATTLER_CACHE_DIR</code> environment variable.</p>
-<p>When you want to clean the cache, you can simply delete the cache directory, and pixi will re-create the cache when needed.</p>
+<p>When you want to clean the cache, you can simply delete the cache directory, and Pixi will re-create the cache when needed.</p>
 <p>The cache contains multiple folders concerning different caches from within pixi.</p>
 <ul>
 <li><code>pkgs</code>: Contains the downloaded/unpacked <code>conda</code> packages.</li>

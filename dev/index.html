@@ -2185,14 +2185,12 @@
 <li>🔄 <strong>Reproducibility</strong>: Work in dedicated, isolated environments that can be easily recreated.</li>
 <li>🛠️ <strong>Tasks</strong>: Manage complex pipelines effortlessly.</li>
 <li>🌐 <strong>Multi Platform</strong>: Ensure compatibility across Linux, macOS, Windows, and more.</li>
-<li>🧩 <strong>Multi Environment</strong>: Compose multiple environments within a single pixi manifest.</li>
+<li>🧩 <strong>Multi Environment</strong>: Compose multiple environments within a single Pixi manifest.</li>
 <li>🏗️ <strong>Building</strong>: Build packages from source using powerful build backends.</li>
 <li>📦 <strong>Distributing</strong>: Distribute your software via conda channels or various other options.</li>
 <li>🐍 <strong>Python</strong>: Full support for <code>pyproject.toml</code> and PyPI dependencies.</li>
 <li>🌍 <strong>Global Tools</strong>: Install globally available tools, safely stored in separate environments.</li>
 </ul>
-<p>It allows the developer to install libraries and applications in a reproducible way.
-Use pixi cross-platform, on Windows, Mac and Linux.</p>
 <h2 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">#</a></h2>
 <p>To install <code>pixi</code> you can run the following command in your terminal:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
@@ -2222,7 +2220,7 @@ The command will also add <code>LocalAppData/pixi/bin</code> to your <code>PATH<
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>hello-world
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="nb">cd</span><span class="w"> </span>hello-world
 </span></code></pre></div>
-<p>This will create a pixi manifest which is a file called <code>pixi.toml</code>.
+<p>This will create a Pixi manifest which is a file called <code>pixi.toml</code>.
 It describes the structure, dependencies and metadata of your workspace.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
@@ -2248,7 +2246,7 @@ It describes the structure, dependencies and metadata of your workspace.</p>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">message</span> <span class="o">=</span> <span class="n">Cowacter</span><span class="p">()</span><span class="o">.</span><span class="n">milk</span><span class="p">(</span><span class="s2">&quot;Hello Pixi fans!&quot;</span><span class="p">)</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
 </span></code></pre></div>
-<p>The dependencies are installed in a pixi environment.
+<p>The dependencies are installed in a Pixi environment.
 In order to run a command within an environment, we prefix it with <code>pixi run</code>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>hello.py
 </span></code></pre></div>

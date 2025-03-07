@@ -2309,11 +2309,11 @@
 
 <h1 id="the-pixilock-lock-file">The <code>pixi.lock</code> lock file<a class="headerlink" href="#the-pixilock-lock-file" title="Permanent link">#</a></h1>
 <blockquote>
-<p>A lock file is the protector of the environments, and pixi is the key to unlock it.</p>
+<p>A lock file is the protector of the environments, and Pixi is the key to unlock it.</p>
 </blockquote>
 <h2 id="what-is-a-lock-file">What is a lock file?<a class="headerlink" href="#what-is-a-lock-file" title="Permanent link">#</a></h2>
 <p>A lock file locks the environment in a specific state.
-Within pixi a lock file is a description of the packages in an environment.
+Within Pixi a lock file is a description of the packages in an environment.
 The lock file contains two definitions:</p>
 <ul>
 <li>
@@ -2418,7 +2418,7 @@ This means that if you change the manifest file, the lock file will be updated.
 <h2 id="lockfile-satisfiability">Lockfile satisfiability<a class="headerlink" href="#lockfile-satisfiability" title="Permanent link">#</a></h2>
 <p>The lock file is a description of the environment, and it should always be satisfiable.
 Satisfiable means that the given manifest file and the created environment are in sync with the lockfile.
-If the lock file is not satisfiable, pixi will generate a new lock file automatically.</p>
+If the lock file is not satisfiable, Pixi will generate a new lock file automatically.</p>
 <p>Steps to check if the lock file is satisfiable:</p>
 <ul>
 <li>All <code>environments</code> in the manifest file are in the lock file</li>

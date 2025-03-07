@@ -2939,10 +2939,10 @@
 
   <h1>Pixi Manifest</h1>
 
-<p>The <code>pixi.toml</code> is the project manifest, also known as the pixi project configuration file.</p>
+<p>The <code>pixi.toml</code> is the project manifest, also known as the Pixi project configuration file.</p>
 <p>A <code>toml</code> file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check pixi on <a href="https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html">docs.rs</a>.</p>
+For more technical documentation check Pixi on <a href="https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html">docs.rs</a>.</p>
 <div class="admonition tip">
 <p class="admonition-title">Tip</p>
 <p>We also support the <code>pyproject.toml</code> file. It has the same structure as the <code>pixi.toml</code> file. except that you need to prepend the tables with <code>tool.pixi</code> instead of just the table name.
@@ -3113,9 +3113,9 @@ If necessary, specify a channel directly for a dependency.
 <h2 id="the-tasks-table">The <code>tasks</code> table<a class="headerlink" href="#the-tasks-table" title="Permanent link">#</a></h2>
 <p>Tasks are a way to automate certain custom commands in your project.
 For example, a <code>lint</code> or <code>format</code> step.
-Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
+Tasks in a Pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
 For more in-depth information, check the <a href="../../environments/advanced_tasks/">Advanced tasks documentation</a>.
-Pixi's tasks are run in a pixi environment using <code>pixi run</code> and are executed using the <a href="../../environments/advanced_tasks/#our-task-runner-deno_task_shell"><code>deno_task_shell</code></a>.</p>
+Pixi's tasks are run in a Pixi environment using <code>pixi run</code> and are executed using the <a href="../../environments/advanced_tasks/#our-task-runner-deno_task_shell"><code>deno_task_shell</code></a>.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">simple</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo This is a simple task&quot;</span>
 </span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="p">=</span><span class="s2">&quot;echo Same as a simple task but now more verbose&quot;</span><span class="p">}</span>
@@ -3189,7 +3189,7 @@ The order is determined by the order in the toml file. Where the <code>extra-ind
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://example.com/simple&quot;</span><span class="p">]</span>
 </span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">find-links</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">&#39;./links&#39;</span><span class="p">}]</span>
 </span></code></pre></div>
-<p>There are some <a href="https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry">examples</a> in the pixi repository, that make use of this feature.</p>
+<p>There are some <a href="https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry">examples</a> in the Pixi repository, that make use of this feature.</p>
 <div class="admonition tip">
 <p class="admonition-title">Authentication Methods</p>
 <p>To read about existing authentication methods for private registries, please check the <a href="../../deployment/authentication/#pypi-authentication">PyPI Authentication</a> section.</p>
@@ -3362,7 +3362,7 @@ See the example below to see how this is used in practice:</p>
 </span><span id="__span-31-34"><a id="__codelineno-31-34" name="__codelineno-31-34" href="#__codelineno-31-34"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/pytest-dev/pytest.git&quot;</span><span class="p">}</span>
 </span></code></pre></div>
 <h4 id="full-specification">Full specification<a class="headerlink" href="#full-specification" title="Permanent link">#</a></h4>
-<p>The full specification of a PyPI dependencies that pixi supports can be split into the following fields:</p>
+<p>The full specification of a PyPI dependencies that Pixi supports can be split into the following fields:</p>
 <h5 id="extras"><code>extras</code><a class="headerlink" href="#extras" title="Permanent link">#</a></h5>
 <p>A list of extras to install with the package. e.g. <code>["dataframe", "sql"]</code>
 The extras field works with all other version specifiers as it is an addition to the version specifier.</p>
@@ -3372,7 +3372,7 @@ The extras field works with all other version specifiers as it is an addition to
 </span><span id="__span-32-4"><a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="n">minimal-project</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;./minimal-project&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">editable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="n">extras</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;dev&quot;</span><span class="p">]}</span>
 </span></code></pre></div>
 <h5 id="version"><code>version</code><a class="headerlink" href="#version" title="Permanent link">#</a></h5>
-<p>The version of the package to install. e.g. <code>"&gt;=1.0.0"</code> or <code>*</code> which stands for any version, this is pixi specific.
+<p>The version of the package to install. e.g. <code>"&gt;=1.0.0"</code> or <code>*</code> which stands for any version, this is Pixi specific.
 Version is our default field so using no inline table (<code>{}</code>) will default to this field.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-33-1"><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="n">py-rattler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span><span id="__span-33-2"><a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="n">ruff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;~=1.0.0&quot;</span>
@@ -3476,7 +3476,7 @@ E.g <code>[target.linux-64.dependencies]</code></p>
 </ul>
 <p>The sub-table can be any of the specified above.</p>
 <p>To make it a bit more clear, let's look at an example below.
-Currently, pixi combines the top level tables like <code>dependencies</code> with the target-specific ones into a single set.
+Currently, Pixi combines the top level tables like <code>dependencies</code> with the target-specific ones into a single set.
 Which, in the case of dependencies, can both add or overwrite dependencies.
 In the example below, we have <code>cmake</code> being used for all targets but on <code>osx-64</code> or <code>osx-arm64</code> a different version of python will be selected.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-39-1"><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="k">[dependencies]</span>

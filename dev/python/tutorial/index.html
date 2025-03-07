@@ -2387,7 +2387,7 @@
 
 <h1 id="tutorial-doing-python-development-with-pixi">Tutorial: Doing Python development with Pixi<a class="headerlink" href="#tutorial-doing-python-development-with-pixi" title="Permanent link">#</a></h1>
 <p>In this tutorial, we will show you how to create a simple Python project with pixi.
-We will show some of the features that pixi provides, that are currently not a part of <code>pdm</code>, <code>poetry</code> etc.</p>
+We will show some of the features that Pixi provides, that are currently not a part of <code>pdm</code>, <code>poetry</code> etc.</p>
 <h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
 <p>Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
 This is especially useful when you are working with multiple Python interpreters and bindings to C and C++ libraries.
@@ -2428,7 +2428,7 @@ In this tutorial, we will use the <code>pyproject.toml</code> format because it 
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="k">[tool.pixi.tasks]</span>
 </span></code></pre></div>
-<p>This project uses a src-layout, but pixi supports both <a href="https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout">flat- and src-layouts</a>.</p>
+<p>This project uses a src-layout, but Pixi supports both <a href="https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout">flat- and src-layouts</a>.</p>
 <h3 id="whats-in-the-pyprojecttoml">What's in the <code>pyproject.toml</code>?<a class="headerlink" href="#whats-in-the-pyprojecttoml" title="Permanent link">#</a></h3>
 <p>Okay, so let's have a look at what sections have been added and how we can modify the <code>pyproject.toml</code>.</p>
 <p>These first entries were added to the <code>pyproject.toml</code> file:</p>
@@ -2533,14 +2533,14 @@ This file contains the exact versions of the dependencies that were installed in
 </span></code></pre></div>
 Here, you can see the different conda and Pypi packages listed.
 As you can see, the <code>pixi-py</code> package that we are working on is installed in editable mode.
-Every environment in pixi is isolated but reuses files that are hard-linked from a central cache directory.
+Every environment in Pixi is isolated but reuses files that are hard-linked from a central cache directory.
 This means that you can have multiple environments with the same packages but only have the individual files stored once on disk.</p>
 <details class="question">
 <summary>Why does the environment have a Python interpreter?</summary>
 <p>The Python interpreter is also installed in the environment.
 This is because the Python interpreter version is read from the <code>requires-python</code> field in the <code>pyproject.toml</code> file.
 This is used to determine the Python version to install in the environment.
-This way, pixi automatically manages/bootstraps the Python interpreter for you, so no more <code>brew</code>, <code>apt</code> or other system install steps.</p>
+This way, Pixi automatically manages/bootstraps the Python interpreter for you, so no more <code>brew</code>, <code>apt</code> or other system install steps.</p>
 </details>
 <details class="question">
 <summary>How to use the Free-threaded interpreter?</summary>
@@ -2550,7 +2550,7 @@ This might not work with other packages that are not thread-safe yet.
 You can read more about free-threaded Python <a href="https://docs.python.org/3/howto/free-threading-python.html">here</a>.</p>
 </details>
 <p>Pixi can also create multiple environments, this works well together with the <code>dependency-groups</code> feature in the <code>pyproject.toml</code> file.</p>
-<p>Let's add a dependency-group, which pixi calls a <code>feature</code>, named <code>test</code>.
+<p>Let's add a dependency-group, which Pixi calls a <code>feature</code>, named <code>test</code>.
 And add the <code>pytest</code> package to this group.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
 </span></code></pre></div>
@@ -2558,7 +2558,7 @@ And add the <code>pytest</code> package to this group.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[dependency-groups]</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pytest&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>After we have added the <code>dependency-groups</code> to the <code>pyproject.toml</code>, pixi sees these as a <a href="../../reference/pixi_manifest/#the-feature-and-environments-tables"><code>feature</code></a>, which can contain a collection of <code>dependencies</code>, <code>tasks</code>, <code>channels</code>, and more.</p>
+<p>After we have added the <code>dependency-groups</code> to the <code>pyproject.toml</code>, Pixi sees these as a <a href="../../reference/pixi_manifest/#the-feature-and-environments-tables"><code>feature</code></a>, which can contain a collection of <code>dependencies</code>, <code>tasks</code>, <code>channels</code>, and more.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span>default<span class="w"> </span>--solve-group<span class="w"> </span>default<span class="w"> </span>--force
 </span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>pixi<span class="w"> </span>project<span class="w"> </span>environment<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--solve-group<span class="w"> </span>default
 </span></code></pre></div>
@@ -2574,7 +2574,7 @@ This is useful when you have multiple environments that share the same dependenc
 For example, maybe <code>pytest</code> is a dependency that influences the dependencies of the <code>default</code> environment.
 By putting these in the same solve group, you ensure that the versions in <code>test</code> and <code>default</code> are exactly the same.</p>
 </details>
-<p>Without specifying the environment name, pixi will default to the <code>default</code> environment.
+<p>Without specifying the environment name, Pixi will default to the <code>default</code> environment.
 If you want to install or run the <code>test</code> environment, you can specify the environment with the <code>--environment</code> flag.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi<span class="w"> </span>install<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span>
 </span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>--environment<span class="w"> </span><span class="nb">test</span><span class="w"> </span>pytest
@@ -2601,7 +2601,7 @@ Which should output:</p>
 </span></code></pre></div>
 <details class="note">
 <summary>Slow?</summary>
-<p>This might be slow the first time because pixi installs the project, but it will be near instant the second time.</p>
+<p>This might be slow the first time because Pixi installs the project, but it will be near instant the second time.</p>
 </details>
 <p>Pixi runs the self installed Python interpreter.
 Then, we are importing the <code>pixi_py</code> package, which is installed in editable mode.
@@ -2627,11 +2627,11 @@ Let's add a <code>tests/test_me.py</code> file in the root of the project.</p>
 <p>Let's add an easy task for running the tests.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>--feature<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
 </span></code></pre></div>
-<p>So pixi has a task system to make it easy to run commands.
+<p>So Pixi has a task system to make it easy to run commands.
 Similar to <code>npm</code> scripts or something you would specify in a <code>Justfile</code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">Pixi tasks</p>
-<p>Tasks are a cool pixi feature that is powerful and runs in a cross-platform shell.
+<p>Tasks are a cool Pixi feature that is powerful and runs in a cross-platform shell.
 You can do caching, dependencies and more.
 Read more about tasks in the <a href="../../environments/advanced_tasks/">tasks</a> section.</p>
 </div>
@@ -2652,7 +2652,7 @@ results in the following output:
 <details class="question">
 <summary>Why didn't I have to specify the environment?</summary>
 <p>The <code>test</code> task was added to the <code>test</code> feature/environment.
-When you run the <code>test</code> task, pixi automatically switches to the <code>test</code> environment.
+When you run the <code>test</code> task, Pixi automatically switches to the <code>test</code> environment.
 Because that is the only environment that has the task.</p>
 </details>
 <p>Neat! It seems to be working!</p>
@@ -2674,7 +2674,7 @@ This way, you can finetune your environments to only have the packages that are 
 E.g. you could also have a <code>dev</code> environment that has <code>pytest</code> and <code>ruff</code> installed, but you could omit these from the <code>prod</code> environment.
 There is a <a href="https://github.com/prefix-dev/pixi/tree/main/examples/docker">docker</a> example that shows how to set up a minimal <code>prod</code> environment and copy from there.</p>
 <h2 id="replacing-pypi-packages-with-conda-packages">Replacing PyPI packages with conda packages<a class="headerlink" href="#replacing-pypi-packages-with-conda-packages" title="Permanent link">#</a></h2>
-<p>Last thing, pixi provides the ability for <code>pypi</code> packages to depend on <code>conda</code> packages.
+<p>Last thing, Pixi provides the ability for <code>pypi</code> packages to depend on <code>conda</code> packages.
 Let's confirm this with:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>pixi<span class="w"> </span>list<span class="w"> </span>pygments
 </span></code></pre></div>
@@ -2705,7 +2705,7 @@ Now results in:
 </span></code></pre></div>
 <p>And it still works!</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, you've seen how easy it is to use a <code>pyproject.toml</code> to manage your pixi dependencies and environments.
+<p>In this tutorial, you've seen how easy it is to use a <code>pyproject.toml</code> to manage your Pixi dependencies and environments.
 We have also explored how to use PyPI and conda dependencies seamlessly together in the same project and install optional dependencies to manage Python packages.</p>
 <p>Hopefully, this provides a flexible and powerful way to manage your Python projects and a fertile base for further exploration with Pixi.</p>
 <p>Thanks for reading! Happy Coding 🚀</p>

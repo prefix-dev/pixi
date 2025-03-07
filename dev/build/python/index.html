@@ -2256,7 +2256,7 @@ The package will be called <code>rich_example</code>, so we will create the foll
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>└──<span class="w"> </span>pyproject.toml
 </span></code></pre></div>
 <ol>
-<li>This project uses a src-layout, but pixi supports both <a href="https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout">flat- and src-layouts</a>.</li>
+<li>This project uses a src-layout, but Pixi supports both <a href="https://packaging.python.org/en/latest/discussions/src-layout-vs-flat-layout/#src-layout-vs-flat-layout">flat- and src-layouts</a>.</li>
 </ol>
 <p>The Python package has a single function <code>main</code>.
 Calling that, will print a table containing the name, age and city of three people.</p>
@@ -2311,15 +2311,15 @@ Calling that, will print a table containing the name, age and city of three peop
 <h3 id="adding-a-pixitoml">Adding a <code>pixi.toml</code><a class="headerlink" href="#adding-a-pixitoml" title="Permanent link">#</a></h3>
 <p>What we have in the moment, constitutes a full Python package.
 It could be uploaded to <a href="https://pypi.org/">PyPI</a> as-is.</p>
-<p>However, we still need a tool to manage our environments and if we want other pixi projects to depend on our tool, we need to include more information.
+<p>However, we still need a tool to manage our environments and if we want other Pixi projects to depend on our tool, we need to include more information.
 We will do exactly that by creating a <code>pixi.toml</code>.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The pixi manifest can be in its own <code>pixi.toml</code> file or integrated in <code>pyproject.toml</code>
+<p>The Pixi manifest can be in its own <code>pixi.toml</code> file or integrated in <code>pyproject.toml</code>
 In this tutorial, we will use <code>pixi.toml</code>.
 If you want everything integrated in <code>pyproject.toml</code> just copy the content of <code>pixi.toml</code> in this tutorial to your <code>pyproject.toml</code> and prepend <code>tool.pixi.</code> to each table.</p>
 </div>
-<p>Let's initialize a pixi project.</p>
+<p>Let's initialize a Pixi project.</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi init --format pixi
 </span></code></pre></div>
 <p>We pass <code>--format pixi</code> in order to communicate to pixi, that we want a <code>pixi.toml</code> rather than extending <code>pyproject.toml</code>.</p>
@@ -2360,10 +2360,10 @@ If you want everything integrated in <code>pyproject.toml</code> just copy the c
 </span></code></pre></div>
 <ol>
 <li>In <code>workspace</code> information is set that is shared across all packages in the workspace.</li>
-<li>In <code>dependencies</code> you specify all of your pixi packages. Here, this includes only our own package that is defined further below under <code>package</code></li>
+<li>In <code>dependencies</code> you specify all of your Pixi packages. Here, this includes only our own package that is defined further below under <code>package</code></li>
 <li>We define a task that runs the <code>rich-example-main</code> executable we defined earlier. You can learn more about tasks in this <a href="../../environments/advanced_tasks/">section</a></li>
-<li>In <code>package</code> we define the actual pixi package. This information will be used when other pixi packages or workspaces depend on our package or when we upload it to a conda channel.</li>
-<li>The same way, Python uses build backends to build a Python package, pixi uses build backends to build pixi packages. <code>pixi-build-python</code> creates a pixi package out of a Python package.</li>
+<li>In <code>package</code> we define the actual Pixi package. This information will be used when other Pixi packages or workspaces depend on our package or when we upload it to a conda channel.</li>
+<li>The same way, Python uses build backends to build a Python package, Pixi uses build backends to build Pixi packages. <code>pixi-build-python</code> creates a Pixi package out of a Python package.</li>
 <li>In <code>package.host-dependencies</code>, we add Python dependencies that are necessary to build the Python package. By adding them here as well, the dependencies will come from the conda channel rather than PyPI.</li>
 <li>In <code>package.run-dependencies</code>, we add the Python dependencies needed during runtime.</li>
 </ol>
@@ -2377,9 +2377,9 @@ If you want everything integrated in <code>pyproject.toml</code> just copy the c
 </span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>└──────────────┴─────┴─────────────┘
 </span></code></pre></div>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we created a pixi package based on Python.
+<p>In this tutorial, we created a Pixi package based on Python.
 It can be used as-is, to upload to a conda channel or to PyPI.
-In another tutorial we will learn how to add multiple pixi packages to the same workspace and let one pixi package use another.</p>
+In another tutorial we will learn how to add multiple Pixi packages to the same workspace and let one Pixi package use another.</p>
 <p>Thanks for reading! Happy Coding 🚀</p>
 <p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
 

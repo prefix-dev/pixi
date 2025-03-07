@@ -1661,7 +1661,7 @@
         <li class="md-nav__item">
   <a href="#create-a-pixi-project" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi project.
+      Create a Pixi project.
     </span>
   </a>
   
@@ -2205,7 +2205,7 @@
         <li class="md-nav__item">
   <a href="#create-a-pixi-project" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a pixi project.
+      Create a Pixi project.
     </span>
   </a>
   
@@ -2292,14 +2292,14 @@
 <h1 id="tutorial-develop-a-rust-package-using-pixi">Tutorial: Develop a Rust package using <code>pixi</code><a class="headerlink" href="#tutorial-develop-a-rust-package-using-pixi" title="Permanent link">#</a></h1>
 <p>In this tutorial, we will show you how to develop a Rust package using <code>pixi</code>.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
-<p>The audience for this tutorial is developers who are familiar with Rust and <code>cargo</code> and how are interested to try pixi for their development workflow.
+<p>The audience for this tutorial is developers who are familiar with Rust and <code>cargo</code> and how are interested to try Pixi for their development workflow.
 The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. For example tokio users might depend on <code>openssl</code> for linux.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
 <ul>
 <li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
   The crux of this tutorial is to show you only need pixi!</li>
 </ul>
-<h2 id="create-a-pixi-project">Create a pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
+<h2 id="create-a-pixi-project">Create a Pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_rust_project
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_rust_project
 </span></code></pre></div>
@@ -2326,7 +2326,7 @@ The benefit would be within a rust workflow that you lock both rust and the C/Sy
 <li>The <code>platforms</code> is set to your system's platform by default. You can change it to any platform you want to support. e.g. <code>["linux-64", "osx-64", "osx-arm64", "win-64"]</code>.</li>
 </ol>
 <h2 id="add-rust-dependencies">Add Rust dependencies<a class="headerlink" href="#add-rust-dependencies" title="Permanent link">#</a></h2>
-<p>To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+<p>To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>rust
 </span></code></pre></div></p>
 <p>This will add the <code>rust</code> package to your <code>pixi.toml</code> file under <code>[dependencies]</code>.

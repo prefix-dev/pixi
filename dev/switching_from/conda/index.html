@@ -2314,7 +2314,7 @@ This shift towards projects offers a more organized and efficient way to manage 
 Using <code>pixi global install bat</code> will install <code>bat</code> in a global environment, which is not the same as the <code>base</code> environment in conda.</p>
 </div>
 <details class="tip">
-<summary>Activating pixi environment in the current shell</summary>
+<summary>Activating Pixi environment in the current shell</summary>
 <p>For some advanced use-cases, you can activate the environment in the current shell.
 This uses the <code>pixi shell-hook</code> which prints the activation script, which can be used to activate the environment in the current shell without <code>pixi</code> itself.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>~/myenv<span class="w"> </span>&gt;<span class="w"> </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
@@ -2346,7 +2346,7 @@ Installing <code>pip</code> with <code>pixi global</code> will create a new isol
 Using that <code>pip</code> binary will install packages in the <code>pip</code> environment, making it unreachable form anywhere as you can't activate it.</p>
 </div>
 <h2 id="automated-switching">Automated switching<a class="headerlink" href="#automated-switching" title="Permanent link">#</a></h2>
-<p>With <code>pixi</code> you can import <code>environment.yml</code> files into a pixi workspace. (See <a href="../../reference/cli/#init">import</a>)
+<p>With <code>pixi</code> you can import <code>environment.yml</code> files into a Pixi workspace. (See <a href="../../reference/cli/#init">import</a>)
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--import<span class="w"> </span>environment.yml
 </span></code></pre></div>
 This will create a new workspace with the dependencies from the <code>environment.yml</code> file.</p>

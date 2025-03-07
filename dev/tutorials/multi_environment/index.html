@@ -2350,12 +2350,12 @@
 
 
 <h1 id="tutorial-using-multiple-environments">Tutorial: Using multiple environments<a class="headerlink" href="#tutorial-using-multiple-environments" title="Permanent link">#</a></h1>
-<p>In this tutorial we will show you how to use multiple environments in one pixi workspace.</p>
+<p>In this tutorial we will show you how to use multiple environments in one Pixi workspace.</p>
 <h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
 <p>When developing a workspace you often need different tools, libraries or test environments.
-With pixi you can define multiple environments in one workspace and switch between them easily.
+With Pixi you can define multiple environments in one workspace and switch between them easily.
 A developer often needs all the tools they can get, whereas your testing infrastructure might not require all those tools, and your production environment might require even less.
-Setting up different environments for these different use cases can be a hassle, but with pixi it's easy.</p>
+Setting up different environments for these different use cases can be a hassle, but with Pixi it's easy.</p>
 <h2 id="glossary">Glossary<a class="headerlink" href="#glossary" title="Permanent link">#</a></h2>
 <p>This tutorial possibly uses some new terms, here is a quick overview:</p>
 <h4 id="feature"><strong>Feature</strong><a class="headerlink" href="#feature" title="Permanent link">#</a></h4>
@@ -2373,12 +2373,12 @@ Defining environments is done by adding them to the <code>[environments]</code> 
 <p>Instead of specifying <code>[feature.&lt;name&gt;.dependencies]</code>, one can populate <code>[dependencies]</code> directly.
 These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.</p>
 <h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
-<p>We'll simply start with a new workspace, you can skip this step if you already have a pixi workspace.</p>
+<p>We'll simply start with a new workspace, you can skip this step if you already have a Pixi workspace.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>workspace
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>workspace
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>python
 </span></code></pre></div>
-<p>Now we have a new pixi workspace with the following structure:
+<p>Now we have a new Pixi workspace with the following structure:
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>├── .pixi
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>│   └── envs
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│       └── default
@@ -2386,7 +2386,7 @@ These top level table, are added to the "default" feature, which is added to eve
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>└── pixi.toml
 </span></code></pre></div></p>
 <p>Note the <code>.pixi/envs/default</code> directory, this is where the default environment is stored.
-If no environment is specified, pixi will create or use the <code>default</code> environment.</p>
+If no environment is specified, Pixi will create or use the <code>default</code> environment.</p>
 <h3 id="adding-a-feature">Adding a feature<a class="headerlink" href="#adding-a-feature" title="Permanent link">#</a></h3>
 <p>Let's start adding a simple <code>test</code> feature to our workspace.
 We can do this through the command line, or by editing the <code>pixi.toml</code> file.

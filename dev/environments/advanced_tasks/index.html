@@ -2299,7 +2299,7 @@
 
 <p>When building a package, you often have to do more than just run the code.
 Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a workspace.
-With pixi tasks, this should become much easier to do.</p>
+With Pixi tasks, this should become much easier to do.</p>
 <p>Here are some quick examples</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># Commands as lists so you can also add documentation in between.</span>
@@ -2373,8 +2373,8 @@ In that package we have some tasks that depend on each other, so we can assure t
 <h2 id="working-directory">Working directory<a class="headerlink" href="#working-directory" title="Permanent link">#</a></h2>
 <p>Pixi tasks support the definition of a working directory.</p>
 <p><code>cwd</code>" stands for Current Working Directory.
-The directory is relative to the pixi package root, where the <code>pixi.toml</code> file is located.</p>
-<p>Consider a pixi workspace structured as follows:</p>
+The directory is relative to the Pixi package root, where the <code>pixi.toml</code> file is located.</p>
+<p>Consider a Pixi workspace structured as follows:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>├──<span class="w"> </span>pixi.toml
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>└──<span class="w"> </span>scripts
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>└──<span class="w"> </span>bar.py
@@ -2387,8 +2387,8 @@ The directory is relative to the pixi package root, where the <code>pixi.toml</c
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">bar</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python bar.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cwd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;scripts&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">#</a></h2>
-<p>When you specify <code>inputs</code> and/or <code>outputs</code> to a task, pixi will reuse the result of the task.</p>
-<p>For the cache, pixi checks that the following are true:</p>
+<p>When you specify <code>inputs</code> and/or <code>outputs</code> to a task, Pixi will reuse the result of the task.</p>
+<p>For the cache, Pixi checks that the following are true:</p>
 <ul>
 <li>No package in the environment has changed.</li>
 <li>The selected inputs and outputs are the same as the last time the task was
@@ -2396,7 +2396,7 @@ The directory is relative to the pixi package root, where the <code>pixi.toml</c
   compare them to the last time the task was run.</li>
 <li>The command is the same as the last time the task was run.</li>
 </ul>
-<p>If all of these conditions are met, pixi will not run the task again and instead use the existing result.</p>
+<p>If all of these conditions are met, Pixi will not run the task again and instead use the existing result.</p>
 <p>Inputs and outputs can be specified as globs, which will be expanded to all matching files.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># This task will only run if the `main.py` file has changed.</span>
@@ -2435,8 +2435,8 @@ For example overwriting a <code>PATH</code>
 This will output <code>/tmp/path:/usr/bin:/bin</code> instead of the original <code>/usr/bin:/bin</code>.</p>
 </div>
 <h2 id="clean-environment">Clean environment<a class="headerlink" href="#clean-environment" title="Permanent link">#</a></h2>
-<p>You can make sure the environment of a task is "pixi only".
-Here pixi will only include the minimal required environment variables for your platform to run the command in.
+<p>You can make sure the environment of a task is "Pixi only".
+Here Pixi will only include the minimal required environment variables for your platform to run the command in.
 The environment will contain all variables set by the conda environment like <code>"CONDA_PREFIX"</code>.
 It will however include some default values from the shell, like:
 <code>"DISPLAY"</code>, <code>"LC_ALL"</code>, <code>"LC_TIME"</code>, <code>"LC_NUMERIC"</code>, <code>"LC_MEASUREMENT"</code>, <code>"SHELL"</code>, <code>"USER"</code>, <code>"USERNAME"</code>, <code>"LOGNAME"</code>, <code>"HOME"</code>, <code>"HOSTNAME"</code>,<code>"TMPDIR"</code>, <code>"XPC_SERVICE_NAME"</code>, <code>"XPC_FLAGS"</code></p>
@@ -2450,7 +2450,7 @@ This setting can also be set from the command line with <code>pixi run --clean-e
 Making this feature not worthy of implementing as the amount of edge cases will make it unusable.</p>
 </div>
 <h2 id="our-task-runner-deno_task_shell">Our task runner: deno_task_shell<a class="headerlink" href="#our-task-runner-deno_task_shell" title="Permanent link">#</a></h2>
-<p>To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
+<p>To support the different OS's (Windows, OSX and Linux), Pixi integrates a shell that can run on all of them.
 This is <a href="https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands"><code>deno_task_shell</code></a>.
 The task shell is a limited implementation of a bourne-shell interface.</p>
 <h3 id="built-in-commands">Built-in commands<a class="headerlink" href="#built-in-commands" title="Permanent link">#</a></h3>

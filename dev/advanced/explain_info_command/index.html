@@ -2477,18 +2477,18 @@ This information can also be retrieved in <code>json</code> format using the <co
 </span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>             Tasks: docs, test-all, test, build, lint, install, build-docs
 </span></code></pre></div>
 <h2 id="global-info">Global info<a class="headerlink" href="#global-info" title="Permanent link">#</a></h2>
-<p>The first part of the info output is information that is always available and tells you what pixi can read on your machine.</p>
+<p>The first part of the info output is information that is always available and tells you what Pixi can read on your machine.</p>
 <h3 id="platform">Platform<a class="headerlink" href="#platform" title="Permanent link">#</a></h3>
 <p>This defines the platform you're currently on according to pixi.
-If this is incorrect, please file an issue on the <a href="https://github.com/prefix-dev/pixi">pixi repo</a>.</p>
+If this is incorrect, please file an issue on the <a href="https://github.com/prefix-dev/pixi">Pixi repo</a>.</p>
 <h3 id="virtual-packages">Virtual packages<a class="headerlink" href="#virtual-packages" title="Permanent link">#</a></h3>
-<p>The virtual packages that pixi can find on your machine.</p>
+<p>The virtual packages that Pixi can find on your machine.</p>
 <p>In the Conda ecosystem, you can depend on virtual packages.
 These packages aren't real dependencies that are going to be installed, but rather are being used in the solve step to find if a package can be installed on the machine.
 A simple example: When a package depends on Cuda drivers being present on the host machine it can do that by depending on the <code>__cuda</code> virtual package.
-In that case, if pixi cannot find the <code>__cuda</code> virtual package on your machine the installation will fail.</p>
+In that case, if Pixi cannot find the <code>__cuda</code> virtual package on your machine the installation will fail.</p>
 <h3 id="cache-dir">Cache dir<a class="headerlink" href="#cache-dir" title="Permanent link">#</a></h3>
-<p>The directory where pixi stores its cache.
+<p>The directory where Pixi stores its cache.
 Checkout the <a href="../../environments/environment/#caching-packages">cache documentation</a> for more information.</p>
 <h3 id="auth-storage">Auth storage<a class="headerlink" href="#auth-storage" title="Permanent link">#</a></h3>
 <p>Check the <a href="../../deployment/authentication/">authentication documentation</a></p>
@@ -2501,7 +2501,7 @@ This info is only available if your path has a <a href="../../reference/pixi_man
 <h3 id="manifest-file">Manifest file<a class="headerlink" href="#manifest-file" title="Permanent link">#</a></h3>
 <p>The path to the <a href="../../reference/pixi_manifest/">manifest file</a> that describes the workspace.</p>
 <h3 id="last-updated">Last updated<a class="headerlink" href="#last-updated" title="Permanent link">#</a></h3>
-<p>The last time the lock file was updated, either manually or by pixi itself.</p>
+<p>The last time the lock file was updated, either manually or by Pixi itself.</p>
 <h2 id="environment-info">Environment info<a class="headerlink" href="#environment-info" title="Permanent link">#</a></h2>
 <p>The environment info defined per environment. If you don't have any environments defined, this will only show the <code>default</code> environment.</p>
 <h3 id="features">Features<a class="headerlink" href="#features" title="Permanent link">#</a></h3>

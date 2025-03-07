@@ -2212,12 +2212,12 @@
 
 
 <h1 id="packaging-pixi">Packaging Pixi<a class="headerlink" href="#packaging-pixi" title="Permanent link">#</a></h1>
-<p>This is a guide for distribution maintainers wanting to package pixi for a different package manager.
-Users of pixi can ignore this page.</p>
+<p>This is a guide for distribution maintainers wanting to package Pixi for a different package manager.
+Users of Pixi can ignore this page.</p>
 <h2 id="building">Building<a class="headerlink" href="#building" title="Permanent link">#</a></h2>
 <p>Pixi is written in Rust and compiled using Cargo, which are needed as compile-time dependencies.
-At runtime pixi needs no dependencies in other than the runtime it was compiled against (<code>libc</code>, ...).</p>
-<p>To build pixi run
+At runtime Pixi needs no dependencies in other than the runtime it was compiled against (<code>libc</code>, ...).</p>
+<p>To build Pixi run
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
 </span></code></pre></div>
 Instead of using the predefined <code>dist</code> profile, which is optimized for binary size, you can also pass other options to
@@ -2225,11 +2225,11 @@ let cargo optimize the binary for other metrics.</p>
 <h3 id="build-time-options">Build-time Options<a class="headerlink" href="#build-time-options" title="Permanent link">#</a></h3>
 <p>Pixi provides some compile-time options, which can influence the build</p>
 <h4 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">#</a></h4>
-<p>By default, pixi is built with Rustls TLS implementation. You can compile pixi using the platform native TLS implementation
+<p>By default, Pixi is built with Rustls TLS implementation. You can compile Pixi using the platform native TLS implementation
 using by adding <code>--no-default-features --feature native-tls</code> to the build command. Note that this might add additional
 runtime dependencies, such as OpenSSL on Linux.</p>
 <h4 id="self-update">Self-Update<a class="headerlink" href="#self-update" title="Permanent link">#</a></h4>
-<p>Pixi has a self-update functionality. When pixi is installed using another package manager one usually doesn't want pixi
+<p>Pixi has a self-update functionality. When Pixi is installed using another package manager one usually doesn't want pixi
 to try to update itself and instead let it be updated by the package manager.
 For this reason the self-update feature is disabled by default. It can be enabled by adding <code>--feature self_update</code> to
 the build command.</p>
@@ -2243,7 +2243,7 @@ the user to the package manager they should be using to update pixi.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nv">PIXI_VERSION</span><span class="o">=</span><span class="s2">&quot;HEAD-123456&quot;</span><span class="w"> </span>cargo<span class="w"> </span>build<span class="w"> </span>--locked<span class="w"> </span>--profile<span class="w"> </span>dist
 </span></code></pre></div>
 <h2 id="shell-completion">Shell completion<a class="headerlink" href="#shell-completion" title="Permanent link">#</a></h2>
-<p>After building pixi you can generate shell autocompletion scripts by running
+<p>After building Pixi you can generate shell autocompletion scripts by running
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>&lt;SHELL&gt;
 </span></code></pre></div>
 and saving the output to a file.
