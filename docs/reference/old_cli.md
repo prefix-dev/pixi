@@ -1,26 +1,4 @@
 
-## `search`
-
-Search a package, output will list the latest version of the package.
-
-##### Arguments
-
-1. `<PACKAGE>`: Name of package to search, it's possible to use wildcards (`*`).
-
-###### Options
-
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--channel <CHANNEL> (-c)`: specify a channel that the project uses. Defaults to `conda-forge`. (Allowed to be used more than once)
-- `--limit <LIMIT> (-l)`: optionally limit the number of search results
-- `--platform <PLATFORM> (-p)`: specify a platform that you want to search for. (default: current platform)
-
-```zsh
-pixi search pixi
-pixi search --limit 30 "py*"
-# search in a different channel and for a specific platform
-pixi search -c robostack --platform linux-64 "plotjuggler*"
-```
-
 ## `self-update`
 
 Update pixi to the latest version or a specific version. If pixi was installed using another package manager this feature might not

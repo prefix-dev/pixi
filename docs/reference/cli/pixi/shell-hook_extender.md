@@ -21,6 +21,4 @@ pixi shell-hook --shell bash > /etc/profile.d/pixi.sh
 rm ~/.pixi/bin/pixi # Now the environment will be activated without the need for the pixi executable.
 ```
 
-```
-
 --8<-- [end:example]
