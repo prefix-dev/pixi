@@ -83,6 +83,15 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     }
     writeln!(buffer, "```").unwrap();
 
+    // Subcommands
+    if command.has_subcommands() {
+        writeln!(buffer, "\n## Subcommands").unwrap();
+        let subcommands: Vec<_> = command.get_subcommands().collect();
+        if !subcommands.is_empty() {
+            writeln!(buffer, "{}", subcommands_table(subcommands)).unwrap();
+        }
+    }
+
     // Positionals
     let positionals: Vec<_> = command.get_positionals().collect();
     if !positionals.is_empty() {
@@ -120,15 +129,6 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         if !global_opts.is_empty() {
             writeln!(buffer, "\n## Global Options").unwrap();
             write!(buffer, "{}", arguments(&global_opts)).unwrap();
-        }
-    }
-
-    // Subcommands
-    if command.has_subcommands() {
-        writeln!(buffer, "\n## Subcommands").unwrap();
-        let subcommands: Vec<_> = command.get_subcommands().collect();
-        if !subcommands.is_empty() {
-            writeln!(buffer, "{}", subcommands_table(subcommands)).unwrap();
         }
     }
 
@@ -256,6 +256,11 @@ fn arguments(options: &[&clap::Arg]) -> String {
         // Write the help text
         write!(buffer, "  {}\n", opt.get_help().unwrap_or_default()).unwrap();
 
+        // Add required
+        if opt.is_required_set() {
+            write!(buffer, "<br>**required**: `true`\n").unwrap();
+        }
+
         // Handle aliases, env, defaults, and options
         if let Some(aliases) = opt.get_visible_aliases() {
             if !aliases.is_empty() {
@@ -268,7 +273,7 @@ fn arguments(options: &[&clap::Arg]) -> String {
         if !opt.get_default_values().is_empty() {
             write!(
                 buffer,
-                "<br>**defaults**: `{}`\n",
+                "<br>**default**: `{}`\n",
                 opt.get_default_values()
                     .iter()
                     .map(|value| value.to_string_lossy())
