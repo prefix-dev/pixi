@@ -13,8 +13,8 @@ pixi global expose <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](add) | Add exposed binaries from an environment to your global environment |
-| [`remove`](remove) | Remove exposed binaries from the global environment |
+| [`add`](expose/add.md) | Add exposed binaries from an environment to your global environment |
+| [`remove`](expose/remove.md) | Remove exposed binaries from the global environment |
 
 
 ## Description

@@ -13,9 +13,9 @@ pixi project channel <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](add) | Adds a channel to the project file and updates the lockfile |
-| [`list`](list) | List the channels in the project file |
-| [`remove`](remove) | Remove channel(s) from the project file and updates the lockfile |
+| [`add`](channel/add.md) | Adds a channel to the project file and updates the lockfile |
+| [`list`](channel/list.md) | List the channels in the project file |
+| [`remove`](channel/remove.md) | Remove channel(s) from the project file and updates the lockfile |
 
 
 --8<-- "docs/reference/cli/pixi/project/channel_extender.md:example"

@@ -13,11 +13,11 @@ pixi project version [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`get`](get) | Get the workspace version |
-| [`set`](set) | Set the workspace version |
-| [`major`](major) | Bump the workspace version to MAJOR |
-| [`minor`](minor) | Bump the workspace version to MINOR |
-| [`patch`](patch) | Bump the workspace version to PATCH |
+| [`get`](version/get.md) | Get the workspace version |
+| [`set`](version/set.md) | Set the workspace version |
+| [`major`](version/major.md) | Bump the workspace version to MAJOR |
+| [`minor`](version/minor.md) | Bump the workspace version to MINOR |
+| [`patch`](version/patch.md) | Bump the workspace version to PATCH |
 
 
 ## Global Options

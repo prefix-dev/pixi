@@ -13,8 +13,8 @@ pixi auth <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`login`](login) | Store authentication information for a given host |
-| [`logout`](logout) | Remove authentication information for a given host |
+| [`login`](auth/login.md) | Store authentication information for a given host |
+| [`logout`](auth/logout.md) | Remove authentication information for a given host |
 
 
 --8<-- "docs/reference/cli/pixi/auth_extender.md:example"

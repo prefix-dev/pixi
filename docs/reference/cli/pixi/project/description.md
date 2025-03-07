@@ -13,8 +13,8 @@ pixi project description [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`get`](get) | Get the project description |
-| [`set`](set) | Set the project description |
+| [`get`](description/get.md) | Get the project description |
+| [`set`](description/set.md) | Set the project description |
 
 
 ## Global Options

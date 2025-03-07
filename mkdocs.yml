@@ -154,7 +154,7 @@ nav:
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
-      - CLI: reference/cli/pixi
+      - CLI: reference/cli/pixi.md
   - Misc:
       - Changelog: CHANGELOG.md
       - Pixi Vision: vision.md

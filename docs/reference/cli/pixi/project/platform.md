@@ -13,9 +13,9 @@ pixi project platform [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](add) | Adds a platform(s) to the project file and updates the lockfile |
-| [`list`](list) | List the platforms in the project file |
-| [`remove`](remove) | Remove platform(s) from the project file and updates the lockfile |
+| [`add`](platform/add.md) | Adds a platform(s) to the project file and updates the lockfile |
+| [`list`](platform/list.md) | List the platforms in the project file |
+| [`remove`](platform/remove.md) | Remove platform(s) from the project file and updates the lockfile |
 
 
 ## Global Options

@@ -13,14 +13,14 @@ pixi project [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`channel`](channel) | Commands to manage project channels |
-| [`description`](description) | Commands to manage project description |
-| [`platform`](platform) | Commands to manage project platforms |
-| [`version`](version) | Commands to manage project version |
-| [`environment`](environment) | Commands to manage project environments |
-| [`export`](export) | Commands to export projects to other formats |
-| [`name`](name) | Commands to manage project name |
-| [`system-requirements`](system-requirements) | Commands to manage project environments |
+| [`channel`](project/channel.md) | Commands to manage project channels |
+| [`description`](project/description.md) | Commands to manage project description |
+| [`platform`](project/platform.md) | Commands to manage project platforms |
+| [`version`](project/version.md) | Commands to manage project version |
+| [`environment`](project/environment.md) | Commands to manage project environments |
+| [`export`](project/export.md) | Commands to export projects to other formats |
+| [`name`](project/name.md) | Commands to manage project name |
+| [`system-requirements`](project/system-requirements.md) | Commands to manage project environments |
 
 
 ## Global Options

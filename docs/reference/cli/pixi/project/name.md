@@ -13,8 +13,8 @@ pixi project name [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`get`](get) | Get the project name |
-| [`set`](set) | Set the project name |
+| [`get`](name/get.md) | Get the project name |
+| [`set`](name/set.md) | Set the project name |
 
 
 ## Global Options

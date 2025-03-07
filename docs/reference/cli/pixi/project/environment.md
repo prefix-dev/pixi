@@ -13,9 +13,9 @@ pixi project environment [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](add) | Adds an environment to the manifest file |
-| [`list`](list) | List the environments in the manifest file |
-| [`remove`](remove) | Remove an environment from the manifest file |
+| [`add`](environment/add.md) | Adds an environment to the manifest file |
+| [`list`](environment/list.md) | List the environments in the manifest file |
+| [`remove`](environment/remove.md) | Remove an environment from the manifest file |
 
 
 ## Global Options

@@ -13,10 +13,10 @@ pixi task [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](add) | Add a command to the project |
-| [`remove`](remove) | Remove a command from the project |
-| [`alias`](alias) | Alias another specific command |
-| [`list`](list) | List all tasks in the project |
+| [`add`](task/add.md) | Add a command to the project |
+| [`remove`](task/remove.md) | Remove a command from the project |
+| [`alias`](task/alias.md) | Alias another specific command |
+| [`list`](task/list.md) | List all tasks in the project |
 
 
 ## Global Options

@@ -88,7 +88,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         writeln!(buffer, "\n## Subcommands").unwrap();
         let subcommands: Vec<_> = command.get_subcommands().collect();
         if !subcommands.is_empty() {
-            writeln!(buffer, "{}", subcommands_table(subcommands)).unwrap();
+            writeln!(buffer, "{}", subcommands_table(subcommands, command.get_name())).unwrap();
         }
     }
 
@@ -184,7 +184,7 @@ fn process_subcommands(
 }
 
 /// Generates a Markdown table of subcommands with command names as links to their pages
-fn subcommands_table(subcommands: Vec<&Command>) -> String {
+fn subcommands_table(subcommands: Vec<&Command>, parent: &str) -> String {
     let mut buffer = String::with_capacity(1024);
     writeln!(buffer, "| Command | Description |").unwrap();
     writeln!(buffer, "|---------|-------------|").unwrap();
@@ -195,11 +195,12 @@ fn subcommands_table(subcommands: Vec<&Command>) -> String {
         }
         // Create a link to the subcommand's Markdown file
         let command_name = subcommand.get_name();
-        let link = format!("[`{}`]({})", command_name, command_name);
+        let link = format!("{}/{}{}", parent, command_name, MD_EXTENSION);
+        let link_md = format!("[`{}`]({})", command_name, link);
         writeln!(
             buffer,
             "| {} | {} |",
-            link,
+            link_md,
             subcommand.get_about().unwrap_or_default()
         )
         .unwrap();

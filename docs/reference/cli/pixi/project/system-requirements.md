@@ -13,8 +13,8 @@ pixi project system-requirements [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](add) | Adds an environment to the manifest file |
-| [`list`](list) | List the environments in the manifest file |
+| [`add`](system-requirements/add.md) | Adds an environment to the manifest file |
+| [`list`](system-requirements/list.md) | List the environments in the manifest file |
 
 
 ## Global Options

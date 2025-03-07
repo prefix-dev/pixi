@@ -13,7 +13,7 @@ pixi clean [OPTIONS] [COMMAND]
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`cache`](cache) | Clean the cache of your system which are touched by pixi |
+| [`cache`](clean/cache.md) | Clean the cache of your system which are touched by pixi |
 
 
 ## Options

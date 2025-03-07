@@ -13,15 +13,15 @@ pixi global <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](add) | Adds dependencies to an environment |
-| [`edit`](edit) | Edit the global manifest file |
-| [`install`](install) | Installs the defined packages in a globally accessible location and exposes their command line applications. |
-| [`uninstall`](uninstall) | Uninstalls environments from the global environment. |
-| [`remove`](remove) | Removes dependencies from an environment |
-| [`list`](list) | Lists all packages previously installed into a globally accessible location via `pixi global install`. |
-| [`sync`](sync) | Sync global manifest with installed environments |
-| [`expose`](expose) | Interact with the exposure of binaries in the global environment |
-| [`update`](update) | Updates environments in the global environment |
+| [`add`](global/add.md) | Adds dependencies to an environment |
+| [`edit`](global/edit.md) | Edit the global manifest file |
+| [`install`](global/install.md) | Installs the defined packages in a globally accessible location and exposes their command line applications. |
+| [`uninstall`](global/uninstall.md) | Uninstalls environments from the global environment. |
+| [`remove`](global/remove.md) | Removes dependencies from an environment |
+| [`list`](global/list.md) | Lists all packages previously installed into a globally accessible location via `pixi global install`. |
+| [`sync`](global/sync.md) | Sync global manifest with installed environments |
+| [`expose`](global/expose.md) | Interact with the exposure of binaries in the global environment |
+| [`update`](global/update.md) | Updates environments in the global environment |
 
 
 ## Description

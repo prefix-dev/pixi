@@ -10,30 +10,30 @@ pixi [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`init`](init) | Creates a new workspace |
-| [`add`](add) | Adds dependencies to the project |
-| [`remove`](remove) | Removes dependencies from the project |
-| [`install`](install) | Install all dependencies |
-| [`update`](update) | Update dependencies as recorded in the local lock file |
-| [`upgrade`](upgrade) | Update the version of packages to the latest possible version, disregarding the manifest version constraints |
-| [`lock`](lock) | Solve environment and update the lock file |
-| [`run`](run) | Runs task in project |
-| [`exec`](exec) | Run a command in a temporary environment |
-| [`shell`](shell) | Start a shell in the pixi environment of the project |
-| [`shell-hook`](shell-hook) | Print the pixi environment activation script |
-| [`project`](project) | Modify the project configuration file through the command line |
-| [`task`](task) | Interact with tasks in the project |
-| [`list`](list) | List project's packages |
-| [`tree`](tree) | Show a tree of project dependencies |
-| [`global`](global) | Subcommand for global package management actions |
-| [`auth`](auth) | Login to prefix.dev or anaconda.org servers to access private channels |
-| [`config`](config) | Configuration management |
-| [`info`](info) | Information about the system, project and environments for the current machine |
-| [`upload`](upload) | Upload a conda package |
-| [`search`](search) | Search a conda package |
-| [`clean`](clean) | Clean the parts of your system which are touched by pixi. Defaults to cleaning the environments and task cache. Use the `cache` subcommand to clean the cache |
-| [`completion`](completion) | Generates a completion script for a shell |
-| [`build`](build) | Workspace configuration |
+| [`init`](pixi/init.md) | Creates a new workspace |
+| [`add`](pixi/add.md) | Adds dependencies to the project |
+| [`remove`](pixi/remove.md) | Removes dependencies from the project |
+| [`install`](pixi/install.md) | Install all dependencies |
+| [`update`](pixi/update.md) | Update dependencies as recorded in the local lock file |
+| [`upgrade`](pixi/upgrade.md) | Update the version of packages to the latest possible version, disregarding the manifest version constraints |
+| [`lock`](pixi/lock.md) | Solve environment and update the lock file |
+| [`run`](pixi/run.md) | Runs task in project |
+| [`exec`](pixi/exec.md) | Run a command in a temporary environment |
+| [`shell`](pixi/shell.md) | Start a shell in the pixi environment of the project |
+| [`shell-hook`](pixi/shell-hook.md) | Print the pixi environment activation script |
+| [`project`](pixi/project.md) | Modify the project configuration file through the command line |
+| [`task`](pixi/task.md) | Interact with tasks in the project |
+| [`list`](pixi/list.md) | List project's packages |
+| [`tree`](pixi/tree.md) | Show a tree of project dependencies |
+| [`global`](pixi/global.md) | Subcommand for global package management actions |
+| [`auth`](pixi/auth.md) | Login to prefix.dev or anaconda.org servers to access private channels |
+| [`config`](pixi/config.md) | Configuration management |
+| [`info`](pixi/info.md) | Information about the system, project and environments for the current machine |
+| [`upload`](pixi/upload.md) | Upload a conda package |
+| [`search`](pixi/search.md) | Search a conda package |
+| [`clean`](pixi/clean.md) | Clean the parts of your system which are touched by pixi. Defaults to cleaning the environments and task cache. Use the `cache` subcommand to clean the cache |
+| [`completion`](pixi/completion.md) | Generates a completion script for a shell |
+| [`build`](pixi/build.md) | Workspace configuration |
 
 
 ## Options
