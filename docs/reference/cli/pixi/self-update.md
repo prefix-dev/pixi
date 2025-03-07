@@ -12,6 +12,6 @@ pixi self-update
 
 ## Options
 - <a id="arg---version" href="#arg---version">`--version <VERSION>`</a>
-:  The desired version (to downgrade or upgrade to). Update to the latest version if not specified
+:  The desired version (to downgrade or upgrade to)
 
 --8<-- "docs/reference/cli/pixi/self-update_extender.md:example"

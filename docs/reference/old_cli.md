@@ -1,18 +1,4 @@
 
-## `self-update`
-
-Update pixi to the latest version or a specific version. If pixi was installed using another package manager this feature might not
-be available and pixi should be updated using the package manager used to install it.
-
-##### Options
-
-- `--version <VERSION>`: The desired version (to downgrade or upgrade to). Update to the latest version if not specified.
-
-```shell
-pixi self-update
-pixi self-update --version 0.13.0
-```
-
 ## `info`
 
 Shows helpful information about the pixi installation, cache directories, disk usage, and more.

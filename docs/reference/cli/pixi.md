@@ -31,6 +31,7 @@ pixi [OPTIONS] <COMMAND>
 | [`info`](pixi/info.md) | Information about the system, project and environments for the current machine |
 | [`upload`](pixi/upload.md) | Upload a conda package |
 | [`search`](pixi/search.md) | Search a conda package |
+| [`self-update`](pixi/self-update.md) | Update pixi to the latest version or a specific version |
 | [`clean`](pixi/clean.md) | Clean the parts of your system which are touched by pixi. Defaults to cleaning the environments and task cache. Use the `cache` subcommand to clean the cache |
 | [`completion`](pixi/completion.md) | Generates a completion script for a shell |
 | [`build`](pixi/build.md) | Workspace configuration |

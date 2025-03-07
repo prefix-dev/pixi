@@ -136,6 +136,7 @@ pub enum Command {
     Upload(upload::Args),
     Search(search::Args),
     #[cfg_attr(not(feature = "self_update"), clap(hide = true))]
+    #[cfg_attr(feature = "self_update", clap(hide = false))]
     SelfUpdate(self_update::Args),
     Clean(clean::Args),
     Completion(completion::Args),
