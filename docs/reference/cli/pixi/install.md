@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) install</code>
 
 ## About
-Install all dependencies
+Install an environment
 
 --8<-- "docs/reference/cli/pixi/install_extender.md:description"
 
@@ -36,5 +36,15 @@ pixi install [OPTIONS]
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+## Description
+Install an environment
+
+This command installs an environment, if the lockfile is not up-to-date it will be updated.
+
+`pixi install` only installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag. If you don't provide an environment, the `default` environment will be installed.
+
+If you want to install all environments, you can use the `--all` flag.
+
 
 --8<-- "docs/reference/cli/pixi/install_extender.md:example"

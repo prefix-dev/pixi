@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) add</code>
 
 ## About
-Adds dependencies to the project
+Adds dependencies to the workspace
 
 --8<-- "docs/reference/cli/pixi/add_extender.md:description"
 
@@ -68,7 +68,7 @@ pixi add [OPTIONS] <SPECS>...
 :  The path to `pixi.toml`, `pyproject.toml`, or the project directory
 
 ## Description
-Adds dependencies to the project
+Adds dependencies to the workspace
 
 The dependencies should be defined as MatchSpec for conda package, or a PyPI
 requirement for the `--pypi` dependencies. If no specific version is

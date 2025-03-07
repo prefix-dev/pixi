@@ -11,9 +11,9 @@ pixi [OPTIONS] <COMMAND>
 | Command | Description |
 |---------|-------------|
 | [`init`](pixi/init.md) | Creates a new workspace |
-| [`add`](pixi/add.md) | Adds dependencies to the project |
+| [`add`](pixi/add.md) | Adds dependencies to the workspace |
 | [`remove`](pixi/remove.md) | Removes dependencies from the project |
-| [`install`](pixi/install.md) | Install all dependencies |
+| [`install`](pixi/install.md) | Install an environment |
 | [`update`](pixi/update.md) | Update dependencies as recorded in the local lock file |
 | [`upgrade`](pixi/upgrade.md) | Update the version of packages to the latest possible version, disregarding the manifest version constraints |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file |
