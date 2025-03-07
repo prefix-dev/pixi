@@ -1,19 +1,4 @@
 
-## `info`
-
-Shows helpful information about the pixi installation, cache directories, disk usage, and more.
-More information [here](../advanced/explain_info_command.md).
-
-##### Options
-
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--extended`: extend the information with more slow queries to the system, like directory sizes.
-- `--json`: Get a machine-readable version of the information as output.
-
-```shell
-pixi info
-pixi info --json --extended
-```
 ## `clean`
 
 Clean the parts of your system which are touched by pixi.
