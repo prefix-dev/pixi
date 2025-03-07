@@ -1,43 +1,4 @@
 
-## `shell-hook`
-
-This command prints the activation script of an environment.
-
-##### Options
-
-- `--shell <SHELL> (-s)`: The shell for which the activation script should be printed. Defaults to the current shell.
-  Currently supported variants: [`bash`, `zsh`, `xonsh`, `cmd`, `powershell`, `fish`, `nushell`]
-- `--manifest-path`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--environment <ENVIRONMENT> (-e)`: The environment to activate, if none are provided the default environment will be used or a selector will be given to select the right environment.
-- `--json`: Print all environment variables that are exported by running the activation script as JSON. When specifying
-  this option, `--shell` is ignored.
-- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
-- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../environments/environment.md#environment-installation-metadata)
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-- `--no-completion`: Do not source the autocompletion scripts from the environment.
-
-```shell
-pixi shell-hook
-pixi shell-hook --shell bash
-pixi shell-hook --shell zsh
-pixi shell-hook -s powershell
-pixi shell-hook --manifest-path ~/myproject/pixi.toml
-pixi shell-hook --frozen
-pixi shell-hook --locked
-pixi shell-hook --environment cuda
-pixi shell-hook --json
-```
-
-Example use-case, when you want to get rid of the `pixi` executable in a Docker container.
-
-```shell
-pixi shell-hook --shell bash > /etc/profile.d/pixi.sh
-rm ~/.pixi/bin/pixi # Now the environment will be activated without the need for the pixi executable.
-```
-
 ## `search`
 
 Search a package, output will list the latest version of the package.
