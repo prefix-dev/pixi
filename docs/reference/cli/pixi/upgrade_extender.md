@@ -1,4 +1,17 @@
----8<--- [start:example]
+--8<-- [start:description]
+!!! note
+    The `pixi upgrade` command will update only `version`s, except when you specify the exact package name (`pixi upgrade numpy`).
+
+    Then it will remove all fields, apart from:
+
+    - `build` field containing a wildcard `*`
+    - `channel`
+    - `file_name`
+    - `url`
+    - `subdir`.
+--8<-- [end:description]
+
+--8<-- [start:example]
 
 ## Examples
 
