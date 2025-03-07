@@ -1,36 +1,5 @@
 
 
-## `update`
-
-The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
-It will only update the lock file if the dependencies in the [manifest file](pixi_manifest.md) are still compatible with the new versions.
-
-##### Arguments
-
-1. `[PACKAGES]...` The packages to update, space separated. If no packages are provided, all packages will be updated.
-
-##### Options
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--environment <ENVIRONMENT> (-e)`: The environment to install, if none are provided all the environments are updated.
-- `--platform <PLATFORM> (-p)`: The platform for which the dependencies should be updated.
-- `--dry-run (-n)`: Only show the changes that would be made, without actually updating the lock file or environment.
-- `--no-install`: Don't install the (solve) environment needed for solving pypi-dependencies.
-- `--json`: Output the changes in json format.
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-
-```shell
-pixi update numpy
-pixi update numpy pandas
-pixi update --manifest-path ~/myproject/pixi.toml numpy
-pixi update --environment lint python
-pixi update -e lint -e schema -e docs pre-commit
-pixi update --platform osx-arm64 mlx
-pixi update -p linux-64 -p osx-64 numpy
-pixi update --dry-run
-pixi update --no-install boto3
-```
-
 ## `upgrade`
 
 The `upgrade` command checks if there are newer versions of the dependencies and upgrades them in the [manifest file](pixi_manifest.md).

@@ -14,8 +14,8 @@ pixi update --dry-run numpy # (8)!
 pixi update --no-install boto3 # (9)!
 ```
 
-1. This will update the `numpy` package to the latest version.
-2. This will update the `numpy` and `pandas` packages to the latest version.
+1. This will update the `numpy` package to the latest version that fits the requirement.
+2. This will update the `numpy` and `pandas` packages to the latest version that fits the requirement.
 3. This will update the `numpy` package to the latest version in the manifest file at the given path.
 4. This will update the `python` package in the `lint` environment.
 5. This will update the `pre-commit` package in the `lint`, `schema`, and `docs` environments.
