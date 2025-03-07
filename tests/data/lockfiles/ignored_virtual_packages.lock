@@ -1,0 +1,20 @@
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://prefix.dev/conda-forge/
+    packages:
+      linux-64:
+      - conda: https://prefix.dev/conda-forge/noarch/_x86_64-microarch-level-1-2_x86_64.conda
+packages:
+- conda: https://prefix.dev/conda-forge/noarch/_x86_64-microarch-level-1-2_x86_64.conda
+  sha256: fbe2c5e56a653bebb982eda4876a9178aedfc2b545f25d0ce9c4c0b508253d22
+  md5: 73aaf86a425cc6e73fcf236a5a46396d
+  depends:
+  - __cuda >=11.0,<12.0
+  - __glibc >=2.17,<3.0.a0
+  - __archspec 1 x86_64
+  - __non_existing_vpkg >=1.2.3
+  license: None
+  size: 10
+  timestamp: 12341234

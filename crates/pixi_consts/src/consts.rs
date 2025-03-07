@@ -11,12 +11,12 @@ pub const DEFAULT_ENVIRONMENT_NAME: &str = "default";
 pub const DEFAULT_FEATURE_NAME: &str = DEFAULT_ENVIRONMENT_NAME;
 pub const PYPROJECT_PIXI_PREFIX: &str = "tool.pixi";
 
-pub const PROJECT_MANIFEST: &str = "pixi.toml";
+pub const WORKSPACE_MANIFEST: &str = "pixi.toml";
 pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.41.4",
+    None => "0.42.1",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -31,6 +31,7 @@ pub const CONDA_PACKAGE_CACHE_DIR: &str = rattler_cache::PACKAGE_CACHE_DIR;
 pub const CONDA_REPODATA_CACHE_DIR: &str = rattler_cache::REPODATA_CACHE_DIR;
 // TODO: move to rattler
 pub const CONDA_META_DIR: &str = "conda-meta";
+pub const CONDA_MENU_SCHEMA_DIR: &str = "Menu";
 pub const PYPI_CACHE_DIR: &str = "uv-cache";
 pub const CONDA_PYPI_MAPPING_CACHE_DIR: &str = "conda-pypi-mapping";
 pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";

@@ -121,10 +121,14 @@ pub struct ConfigCliPrompt {
     #[arg(long)]
     change_ps1: Option<bool>,
 }
+
 impl From<ConfigCliPrompt> for Config {
     fn from(cli: ConfigCliPrompt) -> Self {
         Self {
-            change_ps1: cli.change_ps1,
+            shell: ShellConfig {
+                change_ps1: cli.change_ps1,
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
@@ -133,7 +137,7 @@ impl From<ConfigCliPrompt> for Config {
 impl ConfigCliPrompt {
     pub fn merge_config(self, config: Config) -> Config {
         let mut config = config;
-        config.change_ps1 = self.change_ps1.or(config.change_ps1);
+        config.shell.change_ps1 = self.change_ps1.or(config.shell.change_ps1);
         config
     }
 }
@@ -181,12 +185,19 @@ pub struct ConfigCliActivation {
     /// Do not use the environment activation cache. (default: true except in experimental mode)
     #[arg(long)]
     force_activate: bool,
+
+    /// Do not source the autocompletion scripts from the environment.
+    #[arg(long)]
+    no_completion: Option<bool>,
 }
 
 impl ConfigCliActivation {
     pub fn merge_config(self, config: Config) -> Config {
         let mut config = config;
-        config.force_activate = Some(self.force_activate);
+        config.shell.force_activate = Some(self.force_activate);
+        if let Some(no_completion) = self.no_completion {
+            config.shell.source_completion_scripts = Some(!no_completion);
+        }
         config
     }
 }
@@ -194,7 +205,11 @@ impl ConfigCliActivation {
 impl From<ConfigCliActivation> for Config {
     fn from(cli: ConfigCliActivation) -> Self {
         Self {
-            force_activate: Some(cli.force_activate),
+            shell: ShellConfig {
+                force_activate: Some(cli.force_activate),
+                source_completion_scripts: None,
+                change_ps1: None,
+            },
             ..Default::default()
         }
     }
@@ -243,8 +258,7 @@ impl From<RepodataChannelConfig> for SourceConfig {
             jlap_enabled: !value.disable_jlap.unwrap_or(false),
             zstd_enabled: !value.disable_zstd.unwrap_or(false),
             bz2_enabled: !value.disable_bzip2.unwrap_or(false),
-            // TODO: Change sharded repodata default to true, when enough testing has been done.
-            sharded_enabled: !value.disable_sharded.unwrap_or(true),
+            sharded_enabled: !value.disable_sharded.unwrap_or(false),
             cache_action: Default::default(),
         }
     }
@@ -566,13 +580,6 @@ pub struct Config {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_channels: Vec<NamedChannelOrUrl>,
 
-    /// If set to true, pixi will set the PS1 environment variable to a custom
-    /// value.
-    #[serde(default)]
-    #[serde(alias = "change_ps1")] // BREAK: remove to stop supporting snake_case alias
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub change_ps1: Option<bool>,
-
     /// Path to the file containing the authentication token.
     #[serde(default)]
     #[serde(alias = "authentication_override_file")] // BREAK: remove to stop supporting snake_case alias
@@ -624,10 +631,10 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detached_environments: Option<DetachedEnvironments>,
 
-    /// The option to disable the environment activation cache
+    /// Shell-specific configuration
     #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub force_activate: Option<bool>,
+    #[serde(skip_serializing_if = "ShellConfig::is_default")]
+    pub shell: ShellConfig,
 
     /// Experimental features that can be enabled.
     #[serde(default)]
@@ -638,13 +645,24 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "ConcurrencyConfig::is_default")]
     pub concurrency: ConcurrencyConfig,
+
+    //////////////////////
+    // Deprecated fields //
+    //////////////////////
+    #[serde(default)]
+    #[serde(alias = "change_ps1")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change_ps1: Option<bool>,
+
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub force_activate: Option<bool>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             default_channels: Vec::new(),
-            change_ps1: None,
             authentication_override_file: None,
             tls_no_verify: None,
             mirrors: HashMap::new(),
@@ -655,9 +673,13 @@ impl Default for Config {
             s3_options: HashMap::new(),
             detached_environments: None,
             pinning_strategy: None,
-            force_activate: None,
+            shell: ShellConfig::default(),
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
+
+            // Deprecated fields
+            change_ps1: None,
+            force_activate: None,
         }
     }
 }
@@ -714,6 +736,48 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
     }
 }
 
+#[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ShellConfig {
+    /// The option to disable the environment activation cache
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub force_activate: Option<bool>,
+
+    /// Whether to source completion scripts from the environment or not.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_completion_scripts: Option<bool>,
+
+    /// If set to true, pixi will set the PS1 environment variable to a custom
+    /// value.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub change_ps1: Option<bool>,
+}
+
+impl ShellConfig {
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            force_activate: other.force_activate.or(self.force_activate),
+            source_completion_scripts: other
+                .source_completion_scripts
+                .or(self.source_completion_scripts),
+            change_ps1: other.change_ps1.or(self.change_ps1),
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.force_activate.is_none()
+            && self.source_completion_scripts.is_none()
+            && self.change_ps1.is_none()
+    }
+
+    pub fn source_completion_scripts(&self) -> bool {
+        self.source_completion_scripts.unwrap_or(true)
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
     #[error("no file was found at {0}")]
@@ -754,15 +818,41 @@ impl Config {
     ///
     /// Parsing errors
     #[inline]
-    pub fn from_toml(toml: &str) -> miette::Result<(Config, Set<String>)> {
+    pub fn from_toml(
+        toml: &str,
+        source_path: Option<&Path>,
+    ) -> miette::Result<(Config, Set<String>)> {
         let de = toml_edit::de::Deserializer::from_str(toml).into_diagnostic()?;
 
         // Deserialize the config and collect unused keys
         let mut unused_keys = Set::new();
-        let config: Config = serde_ignored::deserialize(de, |path| {
+        let mut config: Config = serde_ignored::deserialize(de, |path| {
             unused_keys.insert(path.to_string());
         })
         .into_diagnostic()?;
+
+        fn create_deprecation_warning(old: &str, new: &str, source_path: Option<&Path>) {
+            let msg = format!(
+                "Please replace '{}' with '{}', the field is deprecated and will be removed in a future release.",
+                console::style(old).red(), console::style(new).green()
+            );
+            match source_path {
+                Some(path) => {
+                    tracing::warn!("In '{}': {}", console::style(path.display()).bold(), msg,)
+                }
+                None => tracing::warn!("{}", msg),
+            }
+        }
+
+        if config.change_ps1.is_some() {
+            create_deprecation_warning("change-ps1", "shell.change-ps1", source_path);
+            config.shell.change_ps1 = config.change_ps1;
+        }
+
+        if config.force_activate.is_some() {
+            create_deprecation_warning("force-activate", "shell.force-activate", source_path);
+            config.shell.force_activate = config.force_activate;
+        }
 
         Ok((config, unused_keys))
     }
@@ -789,8 +879,8 @@ impl Config {
             Err(e) => return Err(ConfigError::ReadError(e)),
         };
 
-        let (mut config, unused_keys) =
-            Config::from_toml(&s).map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
+        let (mut config, unused_keys) = Config::from_toml(&s, Some(path))
+            .map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
 
         if !unused_keys.is_empty() {
             tracing::warn!(
@@ -927,7 +1017,6 @@ impl Config {
     pub fn get_keys(&self) -> &[&str] {
         &[
             "default-channels",
-            "change-ps1",
             "authentication-override-file",
             "tls-no-verify",
             "mirrors",
@@ -943,6 +1032,10 @@ impl Config {
             "pypi-config.index-url",
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
+            "shell",
+            "shell.force-activate",
+            "shell.source-completion-scripts",
+            "shell.change-ps1",
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
@@ -966,7 +1059,6 @@ impl Config {
                 other.default_channels
             },
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
-            change_ps1: other.change_ps1.or(self.change_ps1),
             authentication_override_file: other
                 .authentication_override_file
                 .or(self.authentication_override_file),
@@ -985,10 +1077,14 @@ impl Config {
             },
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
-            force_activate: other.force_activate,
+            shell: self.shell.merge(other.shell),
             experimental: self.experimental.merge(other.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
+
+            // Deprecated fields that we can ignore as we handle them inside `shell.` field
+            change_ps1: None,
+            force_activate: None,
         }
     }
 
@@ -1009,7 +1105,7 @@ impl Config {
 
     /// Retrieve the value for the change_ps1 field (defaults to true).
     pub fn change_ps1(&self) -> bool {
-        self.change_ps1.unwrap_or(true)
+        self.shell.change_ps1.unwrap_or(true)
     }
 
     /// Retrieve the value for the auth_file field.
@@ -1044,7 +1140,7 @@ impl Config {
     }
 
     pub fn force_activate(&self) -> bool {
-        self.force_activate.unwrap_or(false)
+        self.shell.force_activate.unwrap_or(false)
     }
 
     pub fn experimental_activation_cache_usage(&self) -> bool {
@@ -1083,9 +1179,6 @@ impl Config {
                     .into_diagnostic()?
                     .unwrap_or_default();
             }
-            "change-ps1" => {
-                self.change_ps1 = value.map(|v| v.parse()).transpose().into_diagnostic()?;
-            }
             "authentication-override-file" => {
                 self.authentication_override_file = value.map(PathBuf::from);
             }
@@ -1111,6 +1204,12 @@ impl Config {
                     .map(|v| PinningStrategy::from_str(v.as_str()))
                     .transpose()
                     .into_diagnostic()?
+            }
+            "change-ps1" => {
+                return Err(miette::miette!("The `change-ps1` field is deprecated. Please use the `shell.change-ps1` field instead."));
+            }
+            "force-activate" => {
+                return Err(miette::miette!("The `force-activate` field is deprecated. Please use the `shell.force-activate` field instead."));
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -1294,6 +1393,34 @@ impl Config {
                     _ => return Err(err),
                 }
             }
+            key if key.starts_with("shell") => {
+                if key == "shell" {
+                    if let Some(value) = value {
+                        self.shell = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.shell = ShellConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("shell.") {
+                    return Err(err);
+                }
+                let subkey = key.strip_prefix("shell.").unwrap();
+                match subkey {
+                    "force-activate" => {
+                        self.shell.force_activate =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "source-completion-scripts" => {
+                        self.shell.source_completion_scripts =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "change-ps1" => {
+                        self.shell.change_ps1 =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    _ => return Err(err),
+                }
+            }
             _ => return Err(err),
         }
 
@@ -1393,7 +1520,7 @@ UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
         );
-        let (config, unused) = Config::from_toml(toml.as_str()).unwrap();
+        let (config, unused) = Config::from_toml(toml.as_str(), None).unwrap();
         assert_eq!(
             config.default_channels,
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
@@ -1407,7 +1534,7 @@ UNUSED = "unused"
         assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
             config.detached_environments().path().unwrap().unwrap(),
             get_cache_dir()
@@ -1426,7 +1553,7 @@ UNUSED = "unused"
     #[case("no-pin", PinningStrategy::NoPin)]
     fn test_config_parse_pinning_strategy(#[case] input: &str, #[case] expected: PinningStrategy) {
         let toml = format!("pinning-strategy = \"{}\"", input);
-        let (config, _) = Config::from_toml(&toml).unwrap();
+        let (config, _) = Config::from_toml(&toml, None).unwrap();
         assert_eq!(config.pinning_strategy, Some(expected));
     }
 
@@ -1471,12 +1598,12 @@ UNUSED = "unused"
             extra-index-urls = ["https://pypi.org/simple2"]
             keyring-provider = "subprocess"
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
             config.pypi_config().index_url,
             Some(Url::parse("https://pypi.org/simple").unwrap())
         );
-        assert!(config.pypi_config().extra_index_urls.len() == 1);
+        assert_eq!(config.pypi_config().extra_index_urls.len(), 1);
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
@@ -1492,7 +1619,7 @@ UNUSED = "unused"
             keyring-provider = "subprocess"
             allow-insecure-host = ["https://localhost:1234", "*"]
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
             config.pypi_config().allow_insecure_host,
             vec!["https://localhost:1234", "*",]
@@ -1507,7 +1634,7 @@ UNUSED = "unused"
             region = "us-east-1"
             force-path-style = false
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         let s3_options = config.s3_options;
         assert_eq!(
             s3_options["bucket1"].endpoint_url,
@@ -1525,7 +1652,7 @@ UNUSED = "unused"
             region = "us-east-1"
             # force-path-style = false
         "#;
-        let result = Config::from_toml(toml);
+        let result = Config::from_toml(toml, None);
         assert!(result.is_err());
         assert!(result
             .err()
@@ -1555,7 +1682,6 @@ UNUSED = "unused"
                 solves: 5,
                 ..ConcurrencyConfig::default()
             },
-            change_ps1: Some(false),
             authentication_override_file: Some(PathBuf::default()),
             mirrors: HashMap::from([(
                 Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
@@ -1566,7 +1692,11 @@ UNUSED = "unused"
                 use_environment_activation_cache: Some(true),
             },
             loaded_from: Vec::from([PathBuf::from_str("test").unwrap()]),
-            force_activate: Some(true),
+            shell: ShellConfig {
+                force_activate: Some(true),
+                source_completion_scripts: None,
+                change_ps1: Some(false),
+            },
             pypi_config: PyPIConfig {
                 allow_insecure_host: Vec::from(["test".to_string()]),
                 extra_index_urls: Vec::from([
@@ -1595,6 +1725,9 @@ UNUSED = "unused"
                     RepodataChannelConfig::default(),
                 )]),
             },
+            // Deprecated keys
+            change_ps1: None,
+            force_activate: None,
         };
         let original_other = other.clone();
         config = config.merge_config(other);
@@ -1719,7 +1852,7 @@ UNUSED = "unused"
             disable_bzip2 = true
             disable_zstd = true
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
             config.default_channels,
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
@@ -1757,7 +1890,7 @@ UNUSED = "unused"
             disable-zstd = true
             disable-sharded = true
         "#;
-        Config::from_toml(toml).unwrap();
+        Config::from_toml(toml, None).unwrap();
     }
 
     #[test]
@@ -1852,7 +1985,11 @@ UNUSED = "unused"
             Some(KeyringProvider::Subprocess)
         );
 
-        config.set("change-ps1", None).unwrap();
+        let deprecated = config.set("change-ps1", None);
+        assert!(deprecated.is_err());
+        assert!(deprecated.unwrap_err().to_string().contains("deprecated"));
+
+        config.set("shell.change-ps1", None).unwrap();
         assert_eq!(config.change_ps1, None);
 
         config
@@ -1982,7 +2119,7 @@ UNUSED = "unused"
             disable-bzip2 = false
             disable-zstd = false
         "#;
-        let (config, _) = Config::from_toml(toml).unwrap();
+        let (config, _) = Config::from_toml(toml, None).unwrap();
         let repodata_config = config.repodata_config();
         assert_eq!(repodata_config.default.disable_jlap, Some(true));
         assert_eq!(repodata_config.default.disable_bzip2, Some(true));

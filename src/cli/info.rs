@@ -412,7 +412,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .map(|env| {
                     let tasks = env
-                        .tasks(None)
+                        .tasks(Some(env.best_platform()))
                         .ok()
                         .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();

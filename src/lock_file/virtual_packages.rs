@@ -15,6 +15,10 @@ use std::str::FromStr;
 use thiserror::Error;
 use uv_distribution_filename::WheelFilename;
 
+/// Define accepted virtual packages as a constant set
+/// These packages will be checked against the system virtual packages
+const ACCEPTED_VIRTUAL_PACKAGES: &[&str] = &["__glibc", "__cuda", "__osx", "__win", "__linux"];
+
 #[derive(Debug, Error, Diagnostic)]
 #[error("{msg}")]
 pub struct VirtualPackageNotFoundError {
@@ -91,8 +95,8 @@ pub enum MachineValidationError {
     #[diagnostic(transparent)]
     PyPITagError(#[from] PyPITagError),
 
-    #[error("Wheel: {0} doesn't match this systems virtual capabilities")]
-    WheelTagsMismatch(String),
+    #[error("Wheel: {0} doesn't match this systems virtual capabilities for tags: {1}")]
+    WheelTagsMismatch(String, String),
 
     #[error("No Python record found in the lockfile for platform: {0}.")]
     #[diagnostic(
@@ -207,6 +211,22 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
     // Check if all the required virtual conda packages match the system virtual packages
     for required in required_virtual_packages {
+        // Check if the package name is in our accepted list
+        let is_accepted = required
+            .name
+            .as_ref()
+            .iter()
+            .any(|name| ACCEPTED_VIRTUAL_PACKAGES.contains(&name.as_normalized()));
+
+        // Skip if not in accepted packages
+        if !is_accepted {
+            tracing::debug!(
+                "Skipping virtual package: {} as it's not in the accepted packages",
+                required
+            );
+            continue;
+        }
+
         let name = if let Some(name) = required.name.as_ref() {
             name
         } else {
@@ -253,7 +273,10 @@ pub(crate) fn validate_system_meets_environment_requirements(
             // Check if all the wheel tags match the system virtual packages
             for wheel in wheels {
                 if !wheel.is_compatible(&uv_system_tags) {
-                    return Err(MachineValidationError::WheelTagsMismatch(wheel.to_string()));
+                    return Err(MachineValidationError::WheelTagsMismatch(
+                        wheel.to_string(),
+                        uv_system_tags.to_string(),
+                    ));
                 }
                 tracing::debug!("Wheel: {} matches the system", wheel);
             }
@@ -367,7 +390,7 @@ mod test {
 
         let overrides = VirtualPackageOverrides {
             // To low version for the wheel
-            osx: Some(Override::String("14.0".to_string())),
+            osx: Some(Override::String("13.0".to_string())),
             libc: Some(Override::String("2.10".to_string())),
             ..VirtualPackageOverrides::default()
         };
@@ -380,7 +403,7 @@ mod test {
         );
         if Platform::current().is_unix() {
             assert!(
-                matches!(result, Err(MachineValidationError::WheelTagsMismatch(_))),
+                matches!(result, Err(MachineValidationError::WheelTagsMismatch(_, _))),
                 "{:?}",
                 result
             );
@@ -443,5 +466,50 @@ mod test {
             );
             assert!(error.help.unwrap().contains(msg));
         }
+    }
+
+    #[test]
+    fn test_archspec_skip() {
+        let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let lockfile_path = root_dir.join("tests/data/lockfiles/archspec.lock");
+        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let platform = Platform::Linux64;
+
+        let overrides = VirtualPackageOverrides {
+            libc: Some(Override::String("2.17".to_string())),
+            ..VirtualPackageOverrides::default()
+        };
+
+        // validate that the archspec is skipped
+        validate_system_meets_environment_requirements(
+            &lockfile,
+            platform,
+            &EnvironmentName::default(),
+            Some(overrides),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_ignored_virtual_packages() {
+        let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let lockfile_path = root_dir.join("tests/data/lockfiles/ignored_virtual_packages.lock");
+        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let platform = Platform::Linux64;
+
+        let overrides = VirtualPackageOverrides {
+            libc: Some(Override::String("2.17".to_string())),
+            cuda: Some(Override::String("11.0".to_string())),
+            ..VirtualPackageOverrides::default()
+        };
+
+        // validate that the ignored virtual packages are skipped
+        validate_system_meets_environment_requirements(
+            &lockfile,
+            platform,
+            &EnvironmentName::default(),
+            Some(overrides),
+        )
+        .unwrap();
     }
 }

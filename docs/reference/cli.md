@@ -754,6 +754,7 @@ To exit the pixi shell, simply run `exit`.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
+- `--no-completion`: Do not source the autocompletion scripts from the environment.
 
 ```shell
 pixi shell
@@ -786,6 +787,7 @@ This command prints the activation script of an environment.
 - `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../features/environment.md#environment-installation-metadata)
 - `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
 - `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
+- `--no-completion`: Do not source the autocompletion scripts from the environment.
 
 ```shell
 pixi shell-hook
@@ -1119,6 +1121,8 @@ Allowing you to access it anywhere on your system without activating the environ
 - `--environment <ENVIRONMENT> (-e)`: The environment to install the package into. (default: name of the tool)
 - `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system. (default: name of the tool)
 - `--with <WITH>`: Add additional dependencies to the environment. Their executables will not be exposed.
+- `--force-reinstall`: Specifies that the packages should be reinstalled even if they are already installed
+- `--no-shortcut`: Specifies that no shortcuts should be created for the installed packages
 
 ```shell
 pixi global install ruff

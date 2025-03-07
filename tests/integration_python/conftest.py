@@ -23,7 +23,7 @@ def tmp_pixi_workspace(tmp_path: Path) -> Path:
     pixi_config = """
 # Reset to defaults
 default-channels = ["conda-forge"]
-change-ps1 = true
+shell.change-ps1 = true
 tls-no-verify = false
 detached-environments = false
 pinning-strategy = "semver"
@@ -82,6 +82,11 @@ def non_self_expose_channel_2(channels: Path) -> str:
 @pytest.fixture
 def virtual_packages_channel(channels: Path) -> str:
     return channels.joinpath("virtual_packages").as_uri()
+
+
+@pytest.fixture
+def shortcuts_channel_1(channels: Path) -> str:
+    return channels.joinpath("shortcuts_channel_1").as_uri()
 
 
 @pytest.fixture
