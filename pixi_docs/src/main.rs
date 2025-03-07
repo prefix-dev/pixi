@@ -66,7 +66,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     // Additional description
     writeln!(
         buffer,
-        "\n--8<-- \"docs/reference/cli/{}{}.md:description\"",
+        "\n--8<-- \"docs/reference/cli/{}{}_extender.md:description\"",
         parent_path,
         command.get_name()
     )
@@ -141,7 +141,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     // Write snippet link
     writeln!(
         buffer,
-        "\n--8<-- \"docs/reference/cli/{}{}.md:example\"",
+        "\n--8<-- \"docs/reference/cli/{}{}_extender.md:example\"",
         parent_path,
         command.get_name()
     )
