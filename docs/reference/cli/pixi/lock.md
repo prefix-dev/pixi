@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) lock</code>
 
 ## About
-Solve environment and update the lock file
+Solve environment and update the lock file without installing the environments
 
 --8<-- "docs/reference/cli/pixi/lock_extender.md:description"
 

@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) run</code>
 
 ## About
-Runs task in project
+Runs task in the pixi environment
 
 --8<-- "docs/reference/cli/pixi/run_extender.md:description"
 
@@ -15,8 +15,6 @@ pixi run [OPTIONS] [TASK]...
 :  The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
 
 ## Options
-- <a id="arg-<H>" href="#arg-<H>">`<H> (-h)`</a>
-:
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
@@ -59,5 +57,13 @@ pixi run [OPTIONS] [TASK]...
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+## Description
+Runs task in the pixi environment.
+
+This command is used to run tasks in the pixi environment. It will activate the environment and run the task in the environment. It is using the deno_task_shell to run the task.
+
+`pixi run` will also update the lockfile and install the environment if it is required.
+
 
 --8<-- "docs/reference/cli/pixi/run_extender.md:example"

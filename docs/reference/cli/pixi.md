@@ -15,9 +15,9 @@ pixi [OPTIONS] <COMMAND>
 | [`remove`](pixi/remove.md) | Removes dependencies from the project |
 | [`install`](pixi/install.md) | Install an environment, both updating the lockfile and installing the environment |
 | [`update`](pixi/update.md) | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
-| [`upgrade`](pixi/upgrade.md) | Update the version of packages to the latest possible version, disregarding the manifest version constraints |
-| [`lock`](pixi/lock.md) | Solve environment and update the lock file |
-| [`run`](pixi/run.md) | Runs task in project |
+| [`upgrade`](pixi/upgrade.md) | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file |
+| [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |
+| [`run`](pixi/run.md) | Runs task in the pixi environment |
 | [`exec`](pixi/exec.md) | Run a command in a temporary environment |
 | [`shell`](pixi/shell.md) | Start a shell in the pixi environment of the project |
 | [`shell-hook`](pixi/shell-hook.md) | Print the pixi environment activation script |

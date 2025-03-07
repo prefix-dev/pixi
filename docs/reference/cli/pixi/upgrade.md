@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) upgrade</code>
 
 ## About
-Update the version of packages to the latest possible version, disregarding the manifest version constraints
+Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file
 
 --8<-- "docs/reference/cli/pixi/upgrade_extender.md:description"
 
@@ -51,5 +51,11 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+## Description
+Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
+
+`pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
+
 
 --8<-- "docs/reference/cli/pixi/upgrade_extender.md:example"

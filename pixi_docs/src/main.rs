@@ -78,9 +78,17 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     writeln!(buffer, "```").unwrap();
     {
         let mut command = command.clone();
-        writeln!(buffer, "{}{}{}", parents.join(" "), if parents.is_empty() {""} else {" "}, command.render_usage()
-            .to_string()
-            .trim_start_matches("Usage: ")).unwrap();
+        writeln!(
+            buffer,
+            "{}{}{}",
+            parents.join(" "),
+            if parents.is_empty() { "" } else { " " },
+            command
+                .render_usage()
+                .to_string()
+                .trim_start_matches("Usage: ")
+        )
+        .unwrap();
     }
     writeln!(buffer, "```").unwrap();
 
@@ -89,7 +97,12 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         writeln!(buffer, "\n## Subcommands").unwrap();
         let subcommands: Vec<_> = command.get_subcommands().collect();
         if !subcommands.is_empty() {
-            writeln!(buffer, "{}", subcommands_table(subcommands, command.get_name())).unwrap();
+            writeln!(
+                buffer,
+                "{}",
+                subcommands_table(subcommands, command.get_name())
+            )
+            .unwrap();
         }
     }
 
@@ -213,14 +226,14 @@ fn subcommands_table(subcommands: Vec<&Command>, parent: &str) -> String {
 fn arguments(options: &[&clap::Arg]) -> String {
     let mut buffer = String::with_capacity(1024);
     for opt in options {
-        if opt.is_hide_set() {
+        if opt.is_hide_set() ||
+            // Skip short only as that is a bug in clap's disable help function.
+            (opt.get_long().is_none() && opt.get_short().is_some()) {
             continue;
         }
 
-        let argument = opt.get_long().is_none();
-
         let long_name = if let Some(long) = opt.get_long() {
-            format!("--{}" ,long)
+            format!("--{}", long)
         } else {
             if let Some(value_names) = opt.get_value_names() {
                 // No long name, but we have value names, assuming positional.
@@ -243,7 +256,7 @@ fn arguments(options: &[&clap::Arg]) -> String {
             } else {
                 "".to_string()
             },
-            if opt.get_action().takes_values() && !argument {
+            if opt.get_action().takes_values() && !opt.is_positional() {
                 if let Some(value_names) = opt.get_value_names() {
                     format!(" <{}>", value_names.join(" "))
                 } else {
@@ -283,7 +296,11 @@ fn arguments(options: &[&clap::Arg]) -> String {
                 opt.get_default_values()
                     .iter()
                     .map(|value| {
-                        if rattler_conda_types::Platform::from_str(value.as_os_str().to_str().unwrap()).is_ok() {
+                        if rattler_conda_types::Platform::from_str(
+                            value.as_os_str().to_str().unwrap(),
+                        )
+                        .is_ok()
+                        {
                             "current_platform".to_string()
                         } else {
                             value.to_string_lossy().to_string()
