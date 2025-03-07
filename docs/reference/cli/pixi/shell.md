@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) shell</code>
 
 ## About
-Start a shell in the pixi environment of the project
+Start a shell in a pixi environment, run `exit` to leave the shell
 
 --8<-- "docs/reference/cli/pixi/shell_extender.md:description"
 

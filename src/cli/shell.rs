@@ -22,7 +22,7 @@ use pixi_pty::unix::PtySession;
 #[cfg(target_family = "unix")]
 use crate::prefix::Prefix;
 
-/// Start a shell in the pixi environment of the project
+/// Start a shell in a pixi environment, run `exit` to leave the shell.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]

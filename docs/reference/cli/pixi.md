@@ -19,7 +19,7 @@ pixi [OPTIONS] <COMMAND>
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |
 | [`run`](pixi/run.md) | Runs task in the pixi environment |
 | [`exec`](pixi/exec.md) | Run a command and install it in a temporary environment |
-| [`shell`](pixi/shell.md) | Start a shell in the pixi environment of the project |
+| [`shell`](pixi/shell.md) | Start a shell in a pixi environment, run `exit` to leave the shell |
 | [`shell-hook`](pixi/shell-hook.md) | Print the pixi environment activation script |
 | [`project`](pixi/project.md) | Modify the project configuration file through the command line |
 | [`task`](pixi/task.md) | Interact with tasks in the workspace |

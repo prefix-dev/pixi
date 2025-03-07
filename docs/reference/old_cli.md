@@ -1,36 +1,3 @@
-## `shell`
-
-This command starts a new shell in the project's environment.
-To exit the pixi shell, simply run `exit`.
-
-##### Options
-
-- `--change-ps1 <true or false>`: When set to false, the `(pixi)` prefix in the shell prompt is removed (default: `true`). The default behavior can be [configured globally](pixi_configuration.md#change-ps1).
-- `--manifest-path <MANIFEST_PATH>`: the path to [manifest file](pixi_manifest.md), by default it searches for one in the parent directories.
-- `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
-- `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](pixi_manifest.md)[^1]. It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--no-install`: Don't install the environment, only activate the environment.
-- `--no-lockfile-update`: Don't update the lock-file, implies the `--no-install` flag.
-- `--environment <ENVIRONMENT> (-e)`: The environment to activate the shell in, if none are provided the default environment will be used or a selector will be given to select the right environment.
-- `--no-progress`: Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
-- `--force-activate`: (default, except in _experimental_ mode) Force the activation of the environment, even if the environment is already activated.
-- `--revalidate`: Revalidate the full environment, instead of checking lock file hash. [more info](../environments/environment.md#environment-installation-metadata)
-- `--concurrent-downloads`: The number of concurrent downloads to use when installing packages. Defaults to 50.
-- `--concurrent-solves`: The number of concurrent solves to use when installing packages. Defaults to the number of cpu threads.
-- `--no-completion`: Do not source the autocompletion scripts from the environment.
-
-```shell
-pixi shell
-exit
-pixi shell --manifest-path ~/myproject/pixi.toml
-exit
-pixi shell --frozen
-exit
-pixi shell --locked
-exit
-pixi shell --environment cuda
-exit
-```
 
 ## `shell-hook`
 
