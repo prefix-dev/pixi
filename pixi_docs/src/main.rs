@@ -120,7 +120,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         if !regular_opts.is_empty() || command.get_version().is_some() {
             writeln!(buffer, "\n## Options").unwrap();
             if command.get_version().is_some() {
-                writeln!(buffer, "- <a id=\"option-version\" href=\"#option-version\">`--version (-V)`</a>  \n: Display version information").unwrap();
+                writeln!(buffer, "- <a id=\"option-version\" href=\"#option-version\">`--version (-V)`</a>\n: Display version information").unwrap();
             }
             write!(buffer, "{}", arguments(&regular_opts)).unwrap();
         }
@@ -135,7 +135,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     // Long about
     if let Some(long) = command.get_long_about() {
         writeln!(buffer, "\n## Description").unwrap();
-        writeln!(buffer, "{}\n", long).unwrap();
+        writeln!(buffer, "{}\n", long.to_string().trim_end()).unwrap();
     }
 
     // Write snippet link
@@ -232,7 +232,7 @@ fn arguments(options: &[&clap::Arg]) -> String {
         // Write the option as a bullet point with a self-referential <a> tag
         write!(
             buffer,
-            "- <a id=\"{}\" href=\"#{}\">`{}{}{}`</a>  \n:",
+            "- <a id=\"{}\" href=\"#{}\">`{}{}{}`</a>\n:",
             id,
             id,
             long_name,
@@ -254,7 +254,11 @@ fn arguments(options: &[&clap::Arg]) -> String {
         .unwrap();
 
         // Write the help text
-        write!(buffer, "  {}\n", opt.get_help().unwrap_or_default()).unwrap();
+        if let Some(help) = opt.get_help() {
+            write!(buffer, "  {}\n", help).unwrap();
+        } else {
+            write!(buffer, "\n").unwrap();
+        }
 
         // Add required
         if opt.is_required_set() {

@@ -55,5 +55,4 @@ Show a tree of project dependencies
 Dependency names highlighted in green are directly specified in the manifest. Yellow version numbers are conda packages, PyPI version numbers are blue.
 
 
-
 --8<-- "docs/reference/cli/pixi/tree_extender.md:example"
