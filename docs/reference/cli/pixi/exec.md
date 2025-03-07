@@ -1,7 +1,7 @@
 # <code>[pixi](../pixi.md) exec</code>
 
 ## About
-Run a command in a temporary environment
+Run a command and install it in a temporary environment
 
 --8<-- "docs/reference/cli/pixi/exec_extender.md:description"
 
@@ -35,5 +35,11 @@ pixi exec [OPTIONS] [COMMAND]...
 :  Matchspecs of packages to install. If this is not provided, the package is guessed from the command
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
+
+## Description
+Run a command and install it in a temporary environment.
+
+Remove the temporary environments with `pixi clean cache --exec`.
+
 
 --8<-- "docs/reference/cli/pixi/exec_extender.md:example"
