@@ -1,0 +1,37 @@
+# <code>[pixi](../../pixi.md) [config](../config.md) list</code>
+
+## About
+List configuration values
+
+--8<-- "docs/reference/cli/pixi/config/list_extender.md:description"
+
+## Usage
+```
+pixi config list [OPTIONS] [KEY]
+```
+
+## Arguments
+- <a id="arg-<KEY>" href="#arg-<KEY>">`<KEY>`</a>
+:  Configuration key to show (all if not provided)
+
+## Options
+- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
+:  Operation on global configuration
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Output in JSON format
+- <a id="arg---local" href="#arg---local">`--local (-l)`</a>
+:  Operation on project-local configuration
+- <a id="arg---system" href="#arg---system">`--system (-s)`</a>
+:  Operation on system configuration
+
+## Global Options
+- <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
+:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+
+## Description
+List configuration values
+
+Example: `pixi config list default-channels`
+
+
+--8<-- "docs/reference/cli/pixi/config/list_extender.md:example"

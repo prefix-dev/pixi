@@ -1,0 +1,17 @@
+# <code>[pixi](../pixi.md) self-update</code>
+
+## About
+Update pixi to the latest version or a specific version
+
+--8<-- "docs/reference/cli/pixi/self-update_extender.md:description"
+
+## Usage
+```
+pixi self-update
+```
+
+## Options
+- <a id="arg---version" href="#arg---version">`--version <VERSION>`</a>
+:  The desired version (to downgrade or upgrade to). Update to the latest version if not specified
+
+--8<-- "docs/reference/cli/pixi/self-update_extender.md:example"

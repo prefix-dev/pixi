@@ -1,0 +1,18 @@
+# <code>[pixi](../../../pixi.md) [project](../../project.md) [environment](../environment.md) remove</code>
+
+## About
+Remove an environment from the manifest file
+
+--8<-- "docs/reference/cli/pixi/project/environment/remove_extender.md:description"
+
+## Usage
+```
+pixi project environment remove <NAME>
+```
+
+## Arguments
+- <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
+:  The name of the environment to remove
+<br>**required**: `true`
+
+--8<-- "docs/reference/cli/pixi/project/environment/remove_extender.md:example"

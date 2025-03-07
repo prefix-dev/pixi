@@ -1,0 +1,41 @@
+# <code>[pixi](../../pixi.md) [global](../global.md) remove</code>
+
+## About
+Removes dependencies from an environment
+
+--8<-- "docs/reference/cli/pixi/global/remove_extender.md:description"
+
+## Usage
+```
+pixi global remove [OPTIONS] <PACKAGES>...
+```
+
+## Arguments
+- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
+:  Specifies the packages that are to be removed
+<br>**required**: `true`
+
+## Options
+- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
+:  Path to the file containing the authentication token
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is 50
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  Specifies the environment that the dependencies need to be removed from
+- <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
+:  Specifies if we want to use uv keyring provider
+<br>**options**: `disabled`, `subprocess`
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
+
+## Description
+Removes dependencies from an environment
+
+Use `pixi global uninstall` to remove the whole environment
+
+Example: `pixi global remove --environment python numpy`
+
+
+--8<-- "docs/reference/cli/pixi/global/remove_extender.md:example"

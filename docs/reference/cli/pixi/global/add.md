@@ -1,0 +1,45 @@
+# <code>[pixi](../../pixi.md) [global](../global.md) add</code>
+
+## About
+Adds dependencies to an environment
+
+--8<-- "docs/reference/cli/pixi/global/add_extender.md:description"
+
+## Usage
+```
+pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGES>...
+```
+
+## Arguments
+- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
+:  Specifies the packages that are to be added to the environment
+<br>**required**: `true`
+
+## Options
+- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
+:  Path to the file containing the authentication token
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is 50
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  Specifies the environment that the dependencies need to be added to
+<br>**required**: `true`
+- <a id="arg---expose" href="#arg---expose">`--expose <EXPOSE>`</a>
+:  Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
+- <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
+:  Specifies if we want to use uv keyring provider
+<br>**options**: `disabled`, `subprocess`
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
+
+## Description
+Adds dependencies to an environment
+
+Example:
+
+- `pixi global add --environment python numpy`
+- `pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest`
+
+
+--8<-- "docs/reference/cli/pixi/global/add_extender.md:example"
