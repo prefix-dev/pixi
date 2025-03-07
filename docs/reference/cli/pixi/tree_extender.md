@@ -99,7 +99,7 @@ yaml v0.2.5
 
 
 !!! warning
-Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
+    Use `-v` to show which `pypi` packages are not yet parsed correctly. The `extras` and `markers` parsing is still under development.
 
 
 --8<-- [end:example]

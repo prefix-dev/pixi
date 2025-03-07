@@ -1,34 +1,4 @@
 
-## `global`
-
-Global is the main entry point for the part of pixi that executes on the global(system) level.
-All commands in this section are used to manage global installations of packages and environments through the global manifest.
-More info on the global manifest can be found [here](../global_tools/introduction.md).
-
-!!! tip
-    Binaries and environments installed globally are stored in `~/.pixi`
-    by default, this can be changed by setting the `PIXI_HOME` environment
-    variable.
-### `global add`
-
-Adds dependencies to a global environment.
-Without exposing the binaries of that package to the system by default.
-
-##### Arguments
-1. `[PACKAGE]`: The packages to add, this excepts the matchspec format. (e.g. `python=3.9.*`, `python [version='3.11.0', build_number=1]`)
-
-##### Options
-- `--environment <ENVIRONMENT> (-e)`: The environment to install the package into.
-- `--expose <EXPOSE>`: A mapping from name to the binary to expose to the system.
-
-```shell
-pixi global add python=3.9.* --environment my-env
-pixi global add python=3.9.* --expose py39=python3.9 --environment my-env
-pixi global add numpy matplotlib --environment my-env
-pixi global add numpy matplotlib --expose np=python3.9 --environment my-env
-```
-
-
 
 
 
