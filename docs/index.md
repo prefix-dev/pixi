@@ -112,7 +112,7 @@ pixi task add hello python hello.py
 After adding the task, you can run the task using its name.
 
 ```bash
-$ pixi run start
+pixi run start
 ```
 
 ```
