@@ -96,8 +96,7 @@ pub async fn amend_pypi_purls(
             client,
             &packages_for_prefix_mapping,
             reporter,
-        )
-        .await?;
+        )?;
         let compressed_mapping =
             prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client).await?;
 
