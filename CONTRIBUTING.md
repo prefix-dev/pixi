@@ -47,7 +47,7 @@ By contributing to Pixi, you agree that your contributions will be licensed unde
 
 # Tips while developing on `pixi`
 
-## Pixi is a pixi project so use a preinstalled `pixi` to run the predefined tasks
+## Pixi is a Pixi project itself, so use a preinstalled `pixi` to run the predefined tasks
 ```shell
 pixi run build-debug # or `pixi run build-release` to build with optimizations
 pixi run lint
@@ -57,7 +57,7 @@ pixi run install # only works on unix systems as on windows you can't overwrite 
 
 ### Installing the target binaries to a custom location
 
-Use the pixi task `install-as` which invokes a python script to build the project and copy the executable to a custom location.
+Use the Pixi task `install-as` which invokes a python script to build the project and copy the executable to a custom location.
 ```shell
 $ pixi run install-as
 usage: install.py [-h] [--dest DEST] name
