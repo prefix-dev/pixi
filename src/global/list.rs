@@ -93,7 +93,7 @@ fn print_meta_info(environment: &ParsedEnvironment) {
 
 /// Create a human-readable representation of the global environment.
 /// Using a tabwriter to align the columns.
-fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io::Error> {
+pub fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io::Error> {
     let mut writer = tabwriter::TabWriter::new(stdout());
     let header_style = console::Style::new().bold().cyan();
     let header = format!(
@@ -370,8 +370,8 @@ fn format_dependencies(
 }
 
 #[derive(Serialize, Hash, Eq, PartialEq)]
-struct PackageToOutput {
-    name: PackageName,
+pub struct PackageToOutput {
+    pub name: PackageName,
     version: Version,
     build: Option<String>,
     size_bytes: Option<u64>,
@@ -379,7 +379,7 @@ struct PackageToOutput {
 }
 
 impl PackageToOutput {
-    fn new(record: &PackageRecord, is_explicit: bool) -> Self {
+    pub fn new(record: &PackageRecord, is_explicit: bool) -> Self {
         Self {
             name: record.name.clone(),
             version: record.version.version().clone(),
