@@ -488,7 +488,7 @@ impl<'p> LockFileDerivedData<'p> {
             environment.best_platform(),
             non_isolated_packages,
             &no_build,
-            &self.workspace.config().mirror_map(),
+            self.workspace.config().mirror_map(),
         )
         .await
         .with_context(|| {

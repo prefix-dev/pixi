@@ -134,8 +134,12 @@ pub fn convert_to_dist(
             'outer: for (url_prefix, mapped_prefixs) in mirror_map {
                 if url.as_str().starts_with(url_prefix.as_str()) {
                     for mapped_prefix in mapped_prefixs {
-                        if ! is_direct_url(mapped_prefix.scheme()) {
-                            let new_url_str = url.as_str().replacen(url_prefix.as_str(), mapped_prefix.as_str(), 1);
+                        if !is_direct_url(mapped_prefix.scheme()) {
+                            let new_url_str = url.as_str().replacen(
+                                url_prefix.as_str(),
+                                mapped_prefix.as_str(),
+                                1,
+                            );
                             let new_url = Url::parse(&new_url_str)?;
                             mapped_url = Some(new_url);
                             break 'outer;
@@ -263,7 +267,7 @@ mod tests {
 
         // Convert the locked data to a uv dist
         // check if it does not panic
-        let dist = convert_to_dist(&locked, &PathBuf::new(), &std::collections::HashMap<Url, Vec<Url>>::new())
+        let dist = convert_to_dist(&locked, &PathBuf::new(), &std::collections::HashMap::new())
             .expect("could not convert wheel with special chars to dist");
 
         // Check if the dist is a built dist
