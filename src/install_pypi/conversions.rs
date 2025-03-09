@@ -85,12 +85,15 @@ pub enum ConvertToUvDistError {
 
     #[error(transparent)]
     UvPepTypes(#[from] ConversionError),
+    #[error(transparent)]
+    ParseError(#[from] url::ParseError),
 }
 
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
 pub fn convert_to_dist(
     pkg: &PypiPackageData,
     lock_file_dir: &Path,
+    mirror_map: &std::collections::HashMap<Url, Vec<Url>>,
 ) -> Result<Dist, ConvertToUvDistError> {
     // Figure out if it is a url from the registry or a direct url
     let dist = match &pkg.location {
@@ -126,6 +129,21 @@ pub fn convert_to_dist(
             }
         }
         UrlOrPath::Url(url) => {
+            // try to find mapped url
+            let mut mapped_url: Option<Url> = None;
+            'outer: for (url_prefix, mapped_prefixs) in mirror_map {
+                if url.as_str().starts_with(url_prefix.as_str()) {
+                    for mapped_prefix in mapped_prefixs {
+                        if ! is_direct_url(mapped_prefix.scheme()) {
+                            let new_url_str = url.as_str().replacen(url_prefix.as_str(), mapped_prefix.as_str(), 1);
+                            let new_url = Url::parse(&new_url_str)?;
+                            mapped_url = Some(new_url);
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+
             // We consider it to be a registry url
             // Extract last component from registry url
             // should be something like `package-0.1.0-py3-none-any.whl`
@@ -142,7 +160,7 @@ pub fn convert_to_dist(
             // Now we can convert the locked data to a [`distribution_types::File`]
             // which is essentially the file information for a wheel or sdist
             let file = locked_data_to_file(
-                url,
+                mapped_url.as_ref().unwrap_or(url),
                 pkg.hash.as_ref(),
                 filename_decoded.as_ref(),
                 pkg.requires_python.clone(),
@@ -212,6 +230,7 @@ pub fn convert_to_dist(
         }
     };
 
+    tracing::info!("dist={}", dist);
     Ok(dist)
 }
 
@@ -244,7 +263,7 @@ mod tests {
 
         // Convert the locked data to a uv dist
         // check if it does not panic
-        let dist = convert_to_dist(&locked, &PathBuf::new())
+        let dist = convert_to_dist(&locked, &PathBuf::new(), &std::collections::HashMap<Url, Vec<Url>>::new())
             .expect("could not convert wheel with special chars to dist");
 
         // Check if the dist is a built dist

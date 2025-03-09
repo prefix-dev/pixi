@@ -21,6 +21,8 @@ use super::{
     InstallReason, NeedReinstall, PyPIInstallPlan,
 };
 
+use url::Url;
+
 /// Struct that handles the planning of the installation
 /// of the PyPI packages into an existing conda environment with specific
 /// locked data
@@ -75,6 +77,7 @@ impl InstallPlanner {
         remote: &mut Vec<(Dist, InstallReason)>,
         dist_cache: &mut impl CachedDistProvider<'a>,
         op_to_reason: Op,
+        mirror_map: &std::collections::HashMap<Url, Vec<Url>>,
     ) -> Result<(), InstallPlannerError> {
         // Okay so we need to re-install the package
         // let's see if we need the remote or local version
@@ -83,7 +86,7 @@ impl InstallPlanner {
         // then we should get it from the remote
         if self.uv_cache.must_revalidate_package(name) {
             remote.push((
-                convert_to_dist(required_pkg, &self.lock_file_dir)?,
+                convert_to_dist(required_pkg, &self.lock_file_dir, mirror_map)?,
                 op_to_reason.stale(),
             ));
             return Ok(());
@@ -97,7 +100,7 @@ impl InstallPlanner {
         // If we don't have it in the cache we need to download it
         } else {
             remote.push((
-                convert_to_dist(required_pkg, &self.lock_file_dir)?,
+                convert_to_dist(required_pkg, &self.lock_file_dir, mirror_map)?,
                 op_to_reason.missing(),
             ));
         }
@@ -116,6 +119,7 @@ impl InstallPlanner {
         site_packages: &'a Installed,
         mut dist_cache: Cached,
         required_pkgs: &'a HashMap<uv_normalize::PackageName, &PypiPackageData>,
+        mirror_map: &std::collections::HashMap<Url, Vec<Url>>,
     ) -> Result<PyPIInstallPlan, InstallPlannerError> {
         // Packages to be removed
         let mut extraneous = vec![];
@@ -184,6 +188,7 @@ impl InstallPlanner {
                         &mut remote,
                         &mut dist_cache,
                         reasons::Reinstall,
+                        mirror_map,
                     )?;
                 }
                 // Second case we are not managing the package
@@ -214,6 +219,7 @@ impl InstallPlanner {
                 &mut remote,
                 &mut dist_cache,
                 reasons::Install,
+                mirror_map,
             )?;
         }
 
