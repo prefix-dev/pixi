@@ -331,6 +331,25 @@ impl<'p> TaskGraph<'p> {
             order.push(id);
         }
     }
+
+    /// Returns an iterator over all task IDs in the graph.
+    pub fn task_ids(&self) -> impl Iterator<Item = TaskId> + '_ {
+        (0..self.nodes.len()).map(TaskId)
+    }
+
+    /// Returns an iterator over the root tasks in the graph.
+    /// Root tasks are tasks that are not dependencies of any other task.
+    pub fn root_tasks(&self) -> Vec<TaskId> {
+        let all_deps: HashSet<TaskId> = self
+            .nodes
+            .iter()
+            .flat_map(|node| node.dependencies.iter().copied())
+            .collect();
+
+        self.task_ids()
+            .filter(|id| !all_deps.contains(id))
+            .collect()
+    }
 }
 
 #[derive(Debug, Error, Diagnostic)]
