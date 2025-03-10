@@ -18,6 +18,11 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    diff::LockFileDiff,
+    lock_file::filter_lock_file,
+};
 use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
@@ -36,7 +41,8 @@ use pixi_manifest::{
 };
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
-use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
+use pypi_mapping::CustomMapping;
+use pypi_mapping::{ChannelName, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::s3_middleware;
@@ -46,12 +52,6 @@ pub use solve_group::SolveGroup;
 use url::{ParseError, Url};
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
-
-use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
-    diff::LockFileDiff,
-    lock_file::filter_lock_file,
-};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
