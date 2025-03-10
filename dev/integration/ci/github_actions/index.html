@@ -2036,7 +2036,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/cli/" class="md-nav__link">
+      <a href="../../../reference/cli/pixi/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -2616,7 +2616,7 @@ See the <a href="https://docs.github.com/en/actions/using-workflows/workflow-syn
 <ol>
 <li>everything here will be run inside of the temporary pixi environment</li>
 </ol>
-<p>See <a href="../../../reference/cli/#exec">here</a> for more information about <code>pixi exec</code>.</p>
+<p>See <a href="../../../reference/cli/pixi/exec/">here</a> for more information about <code>pixi exec</code>.</p>
 <h3 id="environment-activation">Environment activation<a class="headerlink" href="#environment-activation" title="Permanent link">#</a></h3>
 <p>Instead of using a custom shell wrapper, you can also make all pixi-installed binaries available to subsequent steps by "activating" the installed environment in the currently running job.
 To this end, <code>setup-pixi</code> adds all environment variables set when executing <code>pixi run</code> to <code>$GITHUB_ENV</code> and, similarly, adds all path modifications to <code>$GITHUB_PATH</code>.

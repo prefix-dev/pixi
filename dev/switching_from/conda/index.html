@@ -1969,7 +1969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/cli/" class="md-nav__link">
+      <a href="../../reference/cli/pixi/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -2283,7 +2283,7 @@ This shift towards projects offers a more organized and efficient way to manage 
 <tr>
 <td>Activating an Environment</td>
 <td><code>conda activate myenv</code></td>
-<td><code>pixi shell</code> within the workspace directory</td>
+<td><code>pixi shell</code> within the project directory</td>
 </tr>
 <tr>
 <td>Deactivating an Environment</td>
@@ -2293,7 +2293,7 @@ This shift towards projects offers a more organized and efficient way to manage 
 <tr>
 <td>Running a Task</td>
 <td><code>conda run -n myenv python my_program.py</code></td>
-<td><code>pixi run python my_program.py</code> (See <a href="../../reference/cli/#run">run</a>)</td>
+<td><code>pixi run python my_program.py</code> (See <a href="../../reference/cli/pixi/run/">run</a>)</td>
 </tr>
 <tr>
 <td>Installing a Package</td>
@@ -2333,7 +2333,7 @@ When this is important to you for filesystem reasons, you can use the <a href=".
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>detached-environments<span class="w"> </span>/path/to/envs
 </span></code></pre></div>
 This doesn't allow you to activate the environments using <code>pixi shell -n</code> but it will make the installation of the environments go to the same folder.</p>
-<p><code>pixi</code> does have the <code>pixi global</code> command to install tools on your machine. (See <a href="../../reference/cli/#global">global</a>)
+<p><code>pixi</code> does have the <code>pixi global</code> command to install tools on your machine. (See <a href="../../reference/cli/pixi/global/">global</a>)
 This is not a replacement for <code>conda</code> but works the same as <a href="https://pipx.pypa.io/stable/"><code>pipx</code></a> and <a href="https://mariusvniekerk.github.io/condax/"><code>condax</code></a>.
 It creates a single isolated environment for the given requirement and installs the binaries into the global path.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>bat
@@ -2346,16 +2346,16 @@ Installing <code>pip</code> with <code>pixi global</code> will create a new isol
 Using that <code>pip</code> binary will install packages in the <code>pip</code> environment, making it unreachable form anywhere as you can't activate it.</p>
 </div>
 <h2 id="automated-switching">Automated switching<a class="headerlink" href="#automated-switching" title="Permanent link">#</a></h2>
-<p>With <code>pixi</code> you can import <code>environment.yml</code> files into a Pixi workspace. (See <a href="../../reference/cli/#init">import</a>)
+<p>With <code>pixi</code> you can import <code>environment.yml</code> files into a Pixi workspace. (See <a href="../../reference/cli/pixi/init/">import</a>)
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--import<span class="w"> </span>environment.yml
 </span></code></pre></div>
 This will create a new workspace with the dependencies from the <code>environment.yml</code> file.</p>
 <details class="tip">
 <summary>Exporting your environment</summary>
-<p>If you are working with Conda users or systems, you can <a href="../../reference/cli/#project-export-conda-environment">export your environment to a <code>environment.yml</code></a> file to share them.
+<p>If you are working with Conda users or systems, you can <a href="../../reference/cli/pixi/project/export/">export your environment to a <code>environment.yml</code></a> file to share them.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>project<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment
 </span></code></pre></div>
-Additionally you can export a <a href="../../reference/cli/#project-export-conda-explicit-spec">conda explicit specification</a>.</p>
+Additionally you can export a <a href="../../reference/cli/pixi/project/export/">conda explicit specification</a>.</p>
 </details>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">#</a></h2>
 <p>Encountering issues? Here are solutions to some common problems when being used to the <code>conda</code> workflow:</p>
