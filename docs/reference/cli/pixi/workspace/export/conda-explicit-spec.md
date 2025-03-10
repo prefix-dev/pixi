@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [export](../export.md) conda-explicit-spec</code>
 
 ## About
-Export project environment to a conda explicit specification file
+Export workspace environment to a conda explicit specification file
 
 --8<-- "docs/reference/cli/pixi/workspace/export/conda-explicit-spec_extender.md:description"
 

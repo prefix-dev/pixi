@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [platform](../platform.md) remove</code>
 
 ## About
-Remove platform(s) from the project file and updates the lockfile
+Remove platform(s) from the workspace file and updates the lockfile
 
 --8<-- "docs/reference/cli/pixi/workspace/platform/remove_extender.md:description"
 

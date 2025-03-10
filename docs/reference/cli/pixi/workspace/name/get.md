@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [name](../name.md) get</code>
 
 ## About
-Get the project name
+Get the workspace name
 
 --8<-- "docs/reference/cli/pixi/workspace/name/get_extender.md:description"
 

@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [workspace](../workspace.md) version</code>
 
 ## About
-Commands to manage project version
+Commands to manage workspace version
 
 --8<-- "docs/reference/cli/pixi/workspace/version_extender.md:description"
 

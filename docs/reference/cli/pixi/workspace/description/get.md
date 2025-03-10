@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [description](../description.md) get</code>
 
 ## About
-Get the project description
+Get the workspace description
 
 --8<-- "docs/reference/cli/pixi/workspace/description/get_extender.md:description"
 
@@ -12,9 +12,9 @@ pixi workspace description get
 ```
 
 ## Description
-Get the project description.
+Get the workspace description.
 
-Example: `pixi project description get`
+Example: `pixi workspace description get`
 
 
 --8<-- "docs/reference/cli/pixi/workspace/description/get_extender.md:example"

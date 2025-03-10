@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [platform](../platform.md) list</code>
 
 ## About
-List the platforms in the project file
+List the platforms in the workspace file
 
 --8<-- "docs/reference/cli/pixi/workspace/platform/list_extender.md:description"
 

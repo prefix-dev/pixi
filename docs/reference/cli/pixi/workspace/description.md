@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [workspace](../workspace.md) description</code>
 
 ## About
-Commands to manage project description
+Commands to manage workspace description
 
 --8<-- "docs/reference/cli/pixi/workspace/description_extender.md:description"
 
@@ -14,8 +14,8 @@ pixi workspace description [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`get`](description/get.md) | Get the project description |
-| [`set`](description/set.md) | Set the project description |
+| [`get`](description/get.md) | Get the workspace description |
+| [`set`](description/set.md) | Set the workspace description |
 
 
 ## Global Options

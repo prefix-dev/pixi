@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [workspace](../workspace.md) system-requirements</code>
 
 ## About
-Commands to manage project environments
+Commands to manage workspace environments
 
 --8<-- "docs/reference/cli/pixi/workspace/system-requirements_extender.md:description"
 

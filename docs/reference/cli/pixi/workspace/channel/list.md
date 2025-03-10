@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [channel](../channel.md) list</code>
 
 ## About
-List the channels in the project file
+List the channels in the manifest
 
 --8<-- "docs/reference/cli/pixi/workspace/channel/list_extender.md:description"
 

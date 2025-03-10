@@ -2,7 +2,7 @@
 # <code>[pixi](../pixi.md) workspace</code>
 
 ## About
-Modify the project configuration file through the command line
+Modify the workspace configuration file through the command line
 
 --8<-- "docs/reference/cli/pixi/workspace_extender.md:description"
 
@@ -14,14 +14,14 @@ pixi workspace [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`channel`](workspace/channel.md) | Commands to manage project channels |
-| [`description`](workspace/description.md) | Commands to manage project description |
-| [`platform`](workspace/platform.md) | Commands to manage project platforms |
-| [`version`](workspace/version.md) | Commands to manage project version |
+| [`channel`](workspace/channel.md) | Commands to manage workspace channels |
+| [`description`](workspace/description.md) | Commands to manage workspace description |
+| [`platform`](workspace/platform.md) | Commands to manage workspace platforms |
+| [`version`](workspace/version.md) | Commands to manage workspace version |
 | [`environment`](workspace/environment.md) | Commands to manage project environments |
-| [`export`](workspace/export.md) | Commands to export projects to other formats |
-| [`name`](workspace/name.md) | Commands to manage project name |
-| [`system-requirements`](workspace/system-requirements.md) | Commands to manage project environments |
+| [`export`](workspace/export.md) | Commands to export workspaces to other formats |
+| [`name`](workspace/name.md) | Commands to manage workspace name |
+| [`system-requirements`](workspace/system-requirements.md) | Commands to manage workspace environments |
 
 
 ## Global Options

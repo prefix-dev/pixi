@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [channel](../channel.md) add</code>
 
 ## About
-Adds a channel to the project file and updates the lockfile
+Adds a channel to the manifest and updates the lockfile
 
 --8<-- "docs/reference/cli/pixi/workspace/channel/add_extender.md:description"
 

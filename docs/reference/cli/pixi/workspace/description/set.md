@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [description](../description.md) set</code>
 
 ## About
-Set the project description
+Set the workspace description
 
 --8<-- "docs/reference/cli/pixi/workspace/description/set_extender.md:description"
 
@@ -13,13 +13,13 @@ pixi workspace description set <DESCRIPTION>
 
 ## Arguments
 - <a id="arg-<DESCRIPTION>" href="#arg-<DESCRIPTION>">`<DESCRIPTION>`</a>
-:  The project description
+:  The workspace description
 <br>**required**: `true`
 
 ## Description
-Set the project description.
+Set the workspace description.
 
-Example: `pixi project description set "My awesome project"`
+Example: `pixi workspace description set "My awesome workspace"`
 
 
 --8<-- "docs/reference/cli/pixi/workspace/description/set_extender.md:example"

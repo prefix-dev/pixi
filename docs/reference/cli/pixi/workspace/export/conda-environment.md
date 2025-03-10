@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [export](../export.md) conda-environment</code>
 
 ## About
-Export project environment to a conda environment.yaml file
+Export workspace environment to a conda environment.yaml file
 
 --8<-- "docs/reference/cli/pixi/workspace/export/conda-environment_extender.md:description"
 

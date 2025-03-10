@@ -13,7 +13,7 @@ pixi workspace version set <VERSION>
 
 ## Arguments
 - <a id="arg-<VERSION>" href="#arg-<VERSION>">`<VERSION>`</a>
-:  The new project version
+:  The new workspace version
 <br>**required**: `true`
 
 --8<-- "docs/reference/cli/pixi/workspace/version/set_extender.md:example"

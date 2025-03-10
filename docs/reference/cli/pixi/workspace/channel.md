@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [workspace](../workspace.md) channel</code>
 
 ## About
-Commands to manage project channels
+Commands to manage workspace channels
 
 --8<-- "docs/reference/cli/pixi/workspace/channel_extender.md:description"
 
@@ -14,9 +14,9 @@ pixi workspace channel <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](channel/add.md) | Adds a channel to the project file and updates the lockfile |
-| [`list`](channel/list.md) | List the channels in the project file |
-| [`remove`](channel/remove.md) | Remove channel(s) from the project file and updates the lockfile |
+| [`add`](channel/add.md) | Adds a channel to the manifest and updates the lockfile |
+| [`list`](channel/list.md) | List the channels in the manifest |
+| [`remove`](channel/remove.md) | Remove channel(s) from the manifest and updates the lockfile |
 
 
 --8<-- "docs/reference/cli/pixi/workspace/channel_extender.md:example"

@@ -22,7 +22,7 @@ pixi [OPTIONS] <COMMAND>
 | [`exec`](pixi/exec.md) | Run a command and install it in a temporary environment |
 | [`shell`](pixi/shell.md) | Start a shell in a pixi environment, run `exit` to leave the shell |
 | [`shell-hook`](pixi/shell-hook.md) | Print the pixi environment activation script |
-| [`workspace`](pixi/workspace.md) | Modify the project configuration file through the command line |
+| [`workspace`](pixi/workspace.md) | Modify the workspace configuration file through the command line |
 | [`task`](pixi/task.md) | Interact with tasks in the workspace |
 | [`list`](pixi/list.md) | List project's packages |
 | [`tree`](pixi/tree.md) | Show a tree of project dependencies |

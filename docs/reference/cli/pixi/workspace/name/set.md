@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [name](../name.md) set</code>
 
 ## About
-Set the project name
+Set the workspace name
 
 --8<-- "docs/reference/cli/pixi/workspace/name/set_extender.md:description"
 
@@ -13,13 +13,13 @@ pixi workspace name set <NAME>
 
 ## Arguments
 - <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
-:  The project name, please only use lowercase letters (a-z), digits (0-9), hyphens (-), and underscores (_)
+:  The workspace name, please only use lowercase letters (a-z), digits (0-9), hyphens (-), and underscores (_)
 <br>**required**: `true`
 
 ## Description
-Set the project name.
+Set the workspace name.
 
-Example: `pixi project name set "my-project"`
+Example: `pixi workspace name set "my-workspace"`
 
 
 --8<-- "docs/reference/cli/pixi/workspace/name/set_extender.md:example"

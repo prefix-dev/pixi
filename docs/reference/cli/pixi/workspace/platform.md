@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [workspace](../workspace.md) platform</code>
 
 ## About
-Commands to manage project platforms
+Commands to manage workspace platforms
 
 --8<-- "docs/reference/cli/pixi/workspace/platform_extender.md:description"
 
@@ -14,9 +14,9 @@ pixi workspace platform [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](platform/add.md) | Adds a platform(s) to the project file and updates the lockfile |
-| [`list`](platform/list.md) | List the platforms in the project file |
-| [`remove`](platform/remove.md) | Remove platform(s) from the project file and updates the lockfile |
+| [`add`](platform/add.md) | Adds a platform(s) to the workspace file and updates the lockfile |
+| [`list`](platform/list.md) | List the platforms in the workspace file |
+| [`remove`](platform/remove.md) | Remove platform(s) from the workspace file and updates the lockfile |
 
 
 ## Global Options

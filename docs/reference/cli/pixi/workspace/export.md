@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [workspace](../workspace.md) export</code>
 
 ## About
-Commands to export projects to other formats
+Commands to export workspaces to other formats
 
 --8<-- "docs/reference/cli/pixi/workspace/export_extender.md:description"
 
@@ -14,8 +14,8 @@ pixi workspace export <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`conda-explicit-spec`](export/conda-explicit-spec.md) | Export project environment to a conda explicit specification file |
-| [`conda-environment`](export/conda-environment.md) | Export project environment to a conda environment.yaml file |
+| [`conda-explicit-spec`](export/conda-explicit-spec.md) | Export workspace environment to a conda explicit specification file |
+| [`conda-environment`](export/conda-environment.md) | Export workspace environment to a conda environment.yaml file |
 
 
 --8<-- "docs/reference/cli/pixi/workspace/export_extender.md:example"

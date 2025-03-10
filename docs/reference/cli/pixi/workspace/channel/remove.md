@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [channel](../channel.md) remove</code>
 
 ## About
-Remove channel(s) from the project file and updates the lockfile
+Remove channel(s) from the manifest and updates the lockfile
 
 --8<-- "docs/reference/cli/pixi/workspace/channel/remove_extender.md:description"
 

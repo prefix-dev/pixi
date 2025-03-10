@@ -2,7 +2,7 @@
 # <code>[pixi](../../../pixi.md) [workspace](../../workspace.md) [platform](../platform.md) add</code>
 
 ## About
-Adds a platform(s) to the project file and updates the lockfile
+Adds a platform(s) to the workspace file and updates the lockfile
 
 --8<-- "docs/reference/cli/pixi/workspace/platform/add_extender.md:description"
 

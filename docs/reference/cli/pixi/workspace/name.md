@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [workspace](../workspace.md) name</code>
 
 ## About
-Commands to manage project name
+Commands to manage workspace name
 
 --8<-- "docs/reference/cli/pixi/workspace/name_extender.md:description"
 
@@ -14,8 +14,8 @@ pixi workspace name [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`get`](name/get.md) | Get the project name |
-| [`set`](name/set.md) | Set the project name |
+| [`get`](name/get.md) | Get the workspace name |
+| [`set`](name/set.md) | Set the workspace name |
 
 
 ## Global Options
