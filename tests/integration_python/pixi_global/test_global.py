@@ -817,7 +817,71 @@ def test_install_twice_with_same_env_name_as_expose(
     assert dummy_b.is_file()
 
 
-def test_install_twice_with_force_reinstall(
+def test_install_force_reinstall_removes_original_environment(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+
+    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_pixi_workspace / "bin" / exec_extension("dummy-c")
+
+    env_name = "test_env"
+
+    # Install dummy-b
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            env_name,
+            "dummy-b",
+        ],
+        env=env,
+    )
+    assert dummy_b.is_file()
+    assert not dummy_c.is_file()
+
+    # Install dummy-c, it should be added to the environment
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            env_name,
+            "dummy-c",
+        ],
+        env=env,
+    )
+    assert dummy_b.is_file()
+    assert dummy_c.is_file()
+
+    # Install dummy-c with `--force-reinstall
+    # It should create a fresh environment
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            env_name,
+            "dummy-c",
+            "--force-reinstall",
+        ],
+        env=env,
+    )
+    assert not dummy_b.is_file()
+    assert dummy_c.is_file()
+
+
+def test_install_with_different_channel_and_force_reinstall(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
