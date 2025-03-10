@@ -167,6 +167,10 @@ async fn setup_environment(
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
+    if args.force_reinstall && project.environment(env_name).is_some() {
+        state_changes |= project.remove_environment(env_name).await?;
+    }
+
     let channels = if args.channels.is_empty() {
         project.config().default_channels()
     } else {
@@ -206,11 +210,7 @@ async fn setup_environment(
         }
     }
 
-    if args.force_reinstall {
-        if project.environment(env_name).is_some() {
-            state_changes |= project.remove_environment(env_name).await?;
-        }
-    } else if project.environment_in_sync(env_name).await? {
+    if project.environment_in_sync(env_name).await? {
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
