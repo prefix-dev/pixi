@@ -5,7 +5,7 @@
 ```shell
 pixi update numpy # (1)!
 pixi update numpy pandas # (2)!
-pixi update --manifest-path ~/myproject/pixi.toml numpy # (3)!
+pixi update --manifest-path ~/myworkspace/pixi.toml numpy # (3)!
 pixi update --environment lint python # (4)!
 pixi update -e lint -e schema -e docs pre-commit # (5)!
 pixi update --platform osx-arm64 mlx # (6)!

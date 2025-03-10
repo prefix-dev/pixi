@@ -4,7 +4,7 @@
 
 ```shell
 pixi lock
-pixi lock --manifest-path ~/myproject/pixi.toml
+pixi lock --manifest-path ~/myworkspace/pixi.toml
 pixi lock --json
 ```
 

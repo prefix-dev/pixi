@@ -7,7 +7,7 @@
 pixi add numpy # (1)!
 pixi add numpy pandas "pytorch>=1.8" # (2)!
 pixi add "numpy>=1.22,<1.24" # (3)!
-pixi add --manifest-path ~/myproject/pixi.toml numpy # (4)!
+pixi add --manifest-path ~/myworkspace/pixi.toml numpy # (4)!
 pixi add --host "python>=3.9.0" # (5)!
 pixi add --build cmake # (6)!
 pixi add --platform osx-64 clang # (7)!

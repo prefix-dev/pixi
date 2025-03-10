@@ -19,9 +19,9 @@ use pixi::{
         cli_config::{ChannelsConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
-        project, remove, run, search,
+        remove, run, search,
         task::{self, AddArgs, AliasArgs},
-        update, LockFileUsageArgs,
+        update, workspace, LockFileUsageArgs,
     },
     lock_file::UpdateMode,
     task::{
@@ -397,7 +397,7 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
-            args: project::channel::AddRemoveArgs {
+            args: workspace::channel::AddRemoveArgs {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
@@ -420,7 +420,7 @@ impl PixiControl {
     pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
         ProjectChannelRemoveBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: project::channel::AddRemoveArgs {
+            args: workspace::channel::AddRemoveArgs {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
@@ -442,7 +442,7 @@ impl PixiControl {
     pub fn project_environment_add(&self, name: EnvironmentName) -> ProjectEnvironmentAddBuilder {
         ProjectEnvironmentAddBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: project::environment::add::Args {
+            args: workspace::environment::add::Args {
                 name,
                 features: None,
                 solve_group: None,

@@ -7,7 +7,7 @@ pixi shell-hook
 pixi shell-hook --shell bash
 pixi shell-hook --shell zsh
 pixi shell-hook -s powershell
-pixi shell-hook --manifest-path ~/myproject/pixi.toml
+pixi shell-hook --manifest-path ~/myworkspace/pixi.toml
 pixi shell-hook --frozen
 pixi shell-hook --locked
 pixi shell-hook --environment cuda

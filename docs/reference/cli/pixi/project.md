@@ -4,7 +4,7 @@
 ## About
 Modify the project configuration file through the command line
 
---8<-- "docs/reference/cli/pixi/project_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace_extender.md:description"
 
 ## Usage
 ```
@@ -14,18 +14,18 @@ pixi project [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`channel`](project/channel.md) | Commands to manage project channels |
-| [`description`](project/description.md) | Commands to manage project description |
-| [`platform`](project/platform.md) | Commands to manage project platforms |
-| [`version`](project/version.md) | Commands to manage project version |
-| [`environment`](project/environment.md) | Commands to manage project environments |
-| [`export`](project/export.md) | Commands to export projects to other formats |
-| [`name`](project/name.md) | Commands to manage project name |
-| [`system-requirements`](project/system-requirements.md) | Commands to manage project environments |
+| [`channel`](workspace/channel.md) | Commands to manage project channels |
+| [`description`](workspace/description.md) | Commands to manage project description |
+| [`platform`](workspace/platform.md) | Commands to manage project platforms |
+| [`version`](workspace/version.md) | Commands to manage project version |
+| [`environment`](workspace/environment.md) | Commands to manage project environments |
+| [`export`](workspace/export.md) | Commands to export projects to other formats |
+| [`name`](workspace/name.md) | Commands to manage project name |
+| [`system-requirements`](workspace/system-requirements.md) | Commands to manage project environments |
 
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the project directory
 
---8<-- "docs/reference/cli/pixi/project_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace_extender.md:example"

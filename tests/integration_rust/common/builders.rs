@@ -35,7 +35,7 @@ use std::{
 use futures::FutureExt;
 use pixi::{
     cli::{
-        add, cli_config::DependencyConfig, init, install, project, remove, search, task, update,
+        add, cli_config::DependencyConfig, init, install, remove, search, task, update, workspace,
     },
     task::TaskName,
     DependencyType,
@@ -366,7 +366,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
-    pub args: project::channel::AddRemoveArgs,
+    pub args: workspace::channel::AddRemoveArgs,
 }
 
 impl ProjectChannelAddBuilder {
@@ -394,8 +394,8 @@ impl IntoFuture for ProjectChannelAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        project::channel::execute(project::channel::Args {
-            command: project::channel::Command::Add(self.args),
+        workspace::channel::execute(workspace::channel::Args {
+            command: workspace::channel::Command::Add(self.args),
         })
         .boxed_local()
     }
@@ -403,7 +403,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
 pub struct ProjectChannelRemoveBuilder {
     pub manifest_path: Option<PathBuf>,
-    pub args: project::channel::AddRemoveArgs,
+    pub args: workspace::channel::AddRemoveArgs,
 }
 
 impl ProjectChannelRemoveBuilder {
@@ -426,8 +426,8 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        project::channel::execute(project::channel::Args {
-            command: project::channel::Command::Remove(self.args),
+        workspace::channel::execute(workspace::channel::Args {
+            command: workspace::channel::Command::Remove(self.args),
         })
         .boxed_local()
     }
@@ -459,7 +459,7 @@ impl IntoFuture for InstallBuilder {
 }
 
 pub struct ProjectEnvironmentAddBuilder {
-    pub args: project::environment::add::Args,
+    pub args: workspace::environment::add::Args,
     pub manifest_path: Option<PathBuf>,
 }
 
@@ -492,11 +492,11 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        project::environment::execute(project::environment::Args {
+        workspace::environment::execute(workspace::environment::Args {
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
-            command: project::environment::Command::Add(self.args),
+            command: workspace::environment::Command::Add(self.args),
         })
         .boxed_local()
     }

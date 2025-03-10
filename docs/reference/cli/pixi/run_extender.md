@@ -4,7 +4,7 @@
 ```shell
 pixi run python
 pixi run cowpy "Hey pixi user"
-pixi run --manifest-path ~/myproject/pixi.toml python
+pixi run --manifest-path ~/myworkspace/pixi.toml python
 pixi run --frozen python
 pixi run --locked python
 # If you have specified a custom task in the pixi.toml you can run it with run as well
