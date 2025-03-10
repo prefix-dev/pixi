@@ -10,4 +10,10 @@ Get the project description
 pixi project description get
 ```
 
+## Description
+Get the project description.
+
+Example: `pixi project description get`
+
+
 --8<-- "docs/reference/cli/pixi/project/description/get_extender.md:example"

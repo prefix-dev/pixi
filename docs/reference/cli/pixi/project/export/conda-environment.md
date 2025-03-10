@@ -12,7 +12,7 @@ pixi project export conda-environment [OPTIONS] [OUTPUT_PATH]
 
 ## Arguments
 - <a id="arg-<OUTPUT_PATH>" href="#arg-<OUTPUT_PATH>">`<OUTPUT_PATH>`</a>
-:  Explicit path to export the environment to
+:  Explicit path to export the environment file to
 
 ## Options
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>

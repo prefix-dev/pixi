@@ -24,6 +24,7 @@ pub struct Args {
     /// Output directory for rendered explicit environment spec files
     pub output_dir: PathBuf,
 
+    /// The environments to render. Can be repeated for multiple environments.
     #[arg(short, long)]
     pub environment: Option<Vec<String>>,
 

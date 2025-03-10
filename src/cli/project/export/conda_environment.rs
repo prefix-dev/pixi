@@ -20,7 +20,7 @@ pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
-    /// Explicit path to export the environment to
+    /// Explicit path to export the environment file to.
     pub output_path: Option<PathBuf>,
 
     /// The platform to render the environment file for.

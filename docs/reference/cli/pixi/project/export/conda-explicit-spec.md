@@ -23,7 +23,7 @@ pixi project export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:
+:  The environments to render. Can be repeated for multiple environments
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`

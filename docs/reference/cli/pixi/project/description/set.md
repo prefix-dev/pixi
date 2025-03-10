@@ -15,4 +15,10 @@ pixi project description set <DESCRIPTION>
 :  The project description
 <br>**required**: `true`
 
+## Description
+Set the project description.
+
+Example: `pixi project description set "My awesome project"`
+
+
 --8<-- "docs/reference/cli/pixi/project/description/set_extender.md:example"
