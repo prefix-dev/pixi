@@ -64,7 +64,7 @@ pub struct Args {
     #[clap(flatten)]
     config: ConfigCli,
 
-    /// Specifies that the packages should be reinstalled even if they are already installed.
+    /// Specifies that the environment should be reinstalled.
     #[arg(action, long)]
     force_reinstall: bool,
 
@@ -206,7 +206,11 @@ async fn setup_environment(
         }
     }
 
-    if !args.force_reinstall && project.environment_in_sync(env_name).await? {
+    if args.force_reinstall {
+        if project.environment(env_name).is_some() {
+            state_changes |= project.remove_environment(env_name).await?;
+        }
+    } else if project.environment_in_sync(env_name).await? {
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
