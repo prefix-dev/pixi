@@ -4,7 +4,7 @@ use miette::IntoDiagnostic;
 
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// The project name
+    /// The project name, please only use lowercase letters (a-z), digits (0-9), hyphens (-), and underscores (_)
     #[clap(required = true, num_args = 1)]
     pub name: String,
 }

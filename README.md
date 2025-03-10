@@ -76,7 +76,7 @@ curl -fsSL https://pixi.sh/install.sh | bash
 brew install pixi
 ```
 
-The script will also update your ~/.bash_profile to include `~/.pixi/bin` in your `PATH`, allowing you to invoke the `pixi` command from anywhere.
+The script will also update your `~/.bashrc` to include `~/.pixi/bin` in your `PATH`, allowing you to invoke the `pixi` command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
 
 Starting with macOS Catalina [zsh is the default login shell and interactive shell](https://support.apple.com/en-us/102360). Therefore, you might want to use `zsh` instead of `bash` in the install command:

@@ -7,7 +7,20 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 
-/// Install all dependencies
+/// Install an environment, both updating the lockfile and installing the environment.
+///
+/// This command installs an environment, if the lockfile is not up-to-date it will be updated.
+///
+/// `pixi install` only installs one environment at a time,
+/// if you have multiple environments you can select the right one with the `--environment` flag.
+/// If you don't provide an environment, the `default` environment will be installed.
+///
+/// If you want to install all environments, you can use the `--all` flag.
+///
+/// Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`.
+/// These commands will automatically install the environment if it is not already installed.
+///
+/// You can use `pixi clean` to remove the installed environments and start fresh.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
