@@ -1,9 +1,9 @@
 
-The `pixi.toml` is the project manifest, also known as the pixi project configuration file.
+The `pixi.toml` is the project manifest, also known as the Pixi project configuration file.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
+For more technical documentation check Pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
@@ -215,9 +215,9 @@ channel-priority = "disabled"
 
 Tasks are a way to automate certain custom commands in your project.
 For example, a `lint` or `format` step.
-Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
+Tasks in a Pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
 For more in-depth information, check the [Advanced tasks documentation](../environments/advanced_tasks.md).
-Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../environments/advanced_tasks.md#our-task-runner-deno_task_shell).
+Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../environments/advanced_tasks.md#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -305,7 +305,7 @@ extra-index-urls = ["https://example.com/simple"]
 find-links = [{path = './links'}]
 ```
 
-There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the pixi repository, that make use of this feature.
+There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
 
 !!! tip "Authentication Methods"
     To read about existing authentication methods for private registries, please check the [PyPI Authentication](../deployment/authentication.md#pypi-authentication) section.
@@ -512,7 +512,7 @@ pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 
 #### Full specification
 
-The full specification of a PyPI dependencies that pixi supports can be split into the following fields:
+The full specification of a PyPI dependencies that Pixi supports can be split into the following fields:
 
 ##### `extras`
 
@@ -528,7 +528,7 @@ minimal-project = { path = "./minimal-project", editable = true, extras = ["dev"
 
 ##### `version`
 
-The version of the package to install. e.g. `">=1.0.0"` or `*` which stands for any version, this is pixi specific.
+The version of the package to install. e.g. `">=1.0.0"` or `*` which stands for any version, this is Pixi specific.
 Version is our default field so using no inline table (`{}`) will default to this field.
 
 ```toml
@@ -665,7 +665,7 @@ The platform can be any of:
 The sub-table can be any of the specified above.
 
 To make it a bit more clear, let's look at an example below.
-Currently, pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
+Currently, Pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
 Which, in the case of dependencies, can both add or overwrite dependencies.
 In the example below, we have `cmake` being used for all targets but on `osx-64` or `osx-arm64` a different version of python will be selected.
 

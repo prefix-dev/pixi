@@ -3,7 +3,7 @@
 In this tutorial, we will show you how to develop a Rust package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
-The audience for this tutorial is developers who are familiar with Rust and `cargo` and how are interested to try pixi for their development workflow.
+The audience for this tutorial is developers who are familiar with Rust and `cargo` and how are interested to try Pixi for their development workflow.
 The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. For example tokio users might depend on `openssl` for linux.
 
 
@@ -12,7 +12,7 @@ The benefit would be within a rust workflow that you lock both rust and the C/Sy
 - You need to have `pixi` installed. If you haven't installed it yet, you can follow the instructions in the [installation guide](../index.md).
   The crux of this tutorial is to show you only need pixi!
 
-## Create a pixi project.
+## Create a Pixi project.
 
 ```shell
 pixi init my_rust_project
@@ -48,7 +48,7 @@ platforms = ["linux-64"] # (1)!
 
 ## Add Rust dependencies
 
-To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
 ```shell
 pixi add rust
 ```

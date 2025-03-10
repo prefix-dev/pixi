@@ -1,5 +1,5 @@
 # System Requirements in pixi
-**System requirements** tell pixi the minimum system specifications needed to install and run your workspace’s environment.
+**System requirements** tell Pixi the minimum system specifications needed to install and run your workspace’s environment.
 They ensure that the dependencies match the operating system and hardware of your machine.
 
 Think of it like this:
@@ -7,12 +7,12 @@ You’re defining what “kind of computer” your workspace can run on.
 For example, you might require a specific Linux kernel version or a minimum glibc version.
 If your machine doesn’t meet these requirements, `pixi run` will fail because the environment can’t work reliably on your system.
 
-When resolving dependencies, pixi combines:
+When resolving dependencies, Pixi combines:
 
 - The default requirements for the operating system.
 - Any custom requirements you’ve added for your workspace through the `[system-requirements]`.
 
-This way, pixi guarantees your environment is consistent and compatible with your machine.
+This way, Pixi guarantees your environment is consistent and compatible with your machine.
 
 System specifications are closely related to [virtual packages](https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html), allowing for flexible and accurate dependency management.
 

@@ -1,7 +1,7 @@
 
 When building a package, you often have to do more than just run the code.
 Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a workspace.
-With pixi tasks, this should become much easier to do.
+With Pixi tasks, this should become much easier to do.
 
 Here are some quick examples
 
@@ -104,9 +104,9 @@ pixi run style
 Pixi tasks support the definition of a working directory.
 
 `cwd`" stands for Current Working Directory.
-The directory is relative to the pixi package root, where the `pixi.toml` file is located.
+The directory is relative to the Pixi package root, where the `pixi.toml` file is located.
 
-Consider a pixi workspace structured as follows:
+Consider a Pixi workspace structured as follows:
 
 ```shell
 ├── pixi.toml
@@ -129,9 +129,9 @@ bar = { cmd = "python bar.py", cwd = "scripts" }
 
 ## Caching
 
-When you specify `inputs` and/or `outputs` to a task, pixi will reuse the result of the task.
+When you specify `inputs` and/or `outputs` to a task, Pixi will reuse the result of the task.
 
-For the cache, pixi checks that the following are true:
+For the cache, Pixi checks that the following are true:
 
 - No package in the environment has changed.
 - The selected inputs and outputs are the same as the last time the task was
@@ -139,7 +139,7 @@ For the cache, pixi checks that the following are true:
   compare them to the last time the task was run.
 - The command is the same as the last time the task was run.
 
-If all of these conditions are met, pixi will not run the task again and instead use the existing result.
+If all of these conditions are met, Pixi will not run the task again and instead use the existing result.
 
 Inputs and outputs can be specified as globs, which will be expanded to all matching files.
 
@@ -191,8 +191,8 @@ These variables are not shared over tasks, so you need to define these for every
     This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
 
 ## Clean environment
-You can make sure the environment of a task is "pixi only".
-Here pixi will only include the minimal required environment variables for your platform to run the command in.
+You can make sure the environment of a task is "Pixi only".
+Here Pixi will only include the minimal required environment variables for your platform to run the command in.
 The environment will contain all variables set by the conda environment like `"CONDA_PREFIX"`.
 It will however include some default values from the shell, like:
 `"DISPLAY"`, `"LC_ALL"`, `"LC_TIME"`, `"LC_NUMERIC"`, `"LC_MEASUREMENT"`, `"SHELL"`, `"USER"`, `"USERNAME"`, `"LOGNAME"`, `"HOME"`, `"HOSTNAME"`,`"TMPDIR"`, `"XPC_SERVICE_NAME"`, `"XPC_FLAGS"`
@@ -211,7 +211,7 @@ This setting can also be set from the command line with `pixi run --clean-env TA
 
 ## Our task runner: deno_task_shell
 
-To support the different OS's (Windows, OSX and Linux), pixi integrates a shell that can run on all of them.
+To support the different OS's (Windows, OSX and Linux), Pixi integrates a shell that can run on all of them.
 This is [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands).
 The task shell is a limited implementation of a bourne-shell interface.
 

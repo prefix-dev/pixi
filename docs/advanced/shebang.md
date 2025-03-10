@@ -30,7 +30,7 @@ bat my-file.json
     So in total, `pixi exec --spec bat -- bash -e use-bat.sh` is being executed when you run `./use-bat.sh`.
 
 You can also write self-contained python files that ship with their dependencies.
-This example shows a very simple CLI that installs a pixi environment to an arbitrary prefix using [`py-rattler`](https://conda.github.io/rattler/py-rattler) and [`typer`](https://typer.tiangolo.com).
+This example shows a very simple CLI that installs a Pixi environment to an arbitrary prefix using [`py-rattler`](https://conda.github.io/rattler/py-rattler) and [`typer`](https://typer.tiangolo.com).
 
 ```python title="install-pixi-environment-to-prefix.py"
 #!/usr/bin/env -S pixi exec --spec py-rattler>=0.10.0,<0.11 --spec typer>=0.15.0,<0.16 -- python

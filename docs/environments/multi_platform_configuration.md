@@ -52,7 +52,7 @@ Here is an example manifest file that highlights some of the features:
 ## Platform definition
 
 The `workspace.platforms` defines which platforms your project supports.
-When multiple platforms are defined, pixi determines which dependencies to install for each platform individually.
+When multiple platforms are defined, Pixi determines which dependencies to install for each platform individually.
 All of this is stored in a lock file.
 
 Running `pixi install` on a platform that is not configured will warn the user that it is not setup for that platform:
@@ -73,7 +73,7 @@ Running `pixi install` on a platform that is not configured will warn the user t
 ## Target specifier
 
 With the target specifier, you can overwrite the original configuration specifically for a single platform.
-If you are targeting a specific platform in your target specifier that was not specified in your `project.platforms` then pixi will throw an error.
+If you are targeting a specific platform in your target specifier that was not specified in your `project.platforms` then Pixi will throw an error.
 
 ### Dependencies
 

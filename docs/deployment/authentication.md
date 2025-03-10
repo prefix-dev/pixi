@@ -1,5 +1,5 @@
 
-You can authenticate pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
+You can authenticate Pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
 Different servers use different authentication methods.
 In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.
 
@@ -64,19 +64,19 @@ pixi auth login s3://my-bucket --s3-access-key-id <access-key-id> --s3-secret-ac
 !!!note
     S3 authentication is also supported through AWS's typical `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, see the [S3 section](s3.md) for more details.
 
-## Where does pixi store the authentication information?
+## Where does Pixi store the authentication information?
 
-The storage location for the authentication information is system-dependent. By default, pixi tries to use the keychain to store this sensitive information securely on your machine.
+The storage location for the authentication information is system-dependent. By default, Pixi tries to use the keychain to store this sensitive information securely on your machine.
 
-On Windows, the credentials are stored in the "credentials manager". Searching for `rattler` (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).
+On Windows, the credentials are stored in the "credentials manager". Searching for `rattler` (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).
 
-On macOS, the passwords are stored in the keychain. To access the password, you can use the `Keychain Access` program that comes pre-installed on macOS. Searching for `rattler` (the underlying library pixi uses) you should find any credentials stored by pixi (or other rattler-based programs).
+On macOS, the passwords are stored in the keychain. To access the password, you can use the `Keychain Access` program that comes pre-installed on macOS. Searching for `rattler` (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).
 
-On Linux, one can use `GNOME Keyring` (or just Keyring) to access credentials that are securely stored by `libsecret`. Searching for `rattler` should list all the credentials stored by pixi and other rattler-based programs.
+On Linux, one can use `GNOME Keyring` (or just Keyring) to access credentials that are securely stored by `libsecret`. Searching for `rattler` should list all the credentials stored by Pixi and other rattler-based programs.
 
 ## Fallback storage
 
-If you run on a server with none of the aforementioned keychains available, then pixi falls back to store the credentials in an _insecure_ JSON file.
+If you run on a server with none of the aforementioned keychains available, then Pixi falls back to store the credentials in an _insecure_ JSON file.
 This JSON file is located at `~/.rattler/credentials.json` and contains the credentials.
 
 ## Override the authentication storage
@@ -136,11 +136,11 @@ We want to add more methods in the future, so if you have a specific method you 
 
 ### Keyring authentication
 
-Currently, pixi supports the uv method of authentication through the python [keyring](https://pypi.org/project/keyring/) library.
+Currently, Pixi supports the uv method of authentication through the python [keyring](https://pypi.org/project/keyring/) library.
 
 #### Installing keyring
 
-To install keyring you can use pixi global install:
+To install keyring you can use `pixi global install`:
 
 === "Basic Auth"
     ```shell
@@ -171,7 +171,7 @@ For other registries, you will need to adapt these instructions to add the right
     # prompt will appear for your password
     ```
 
-    Add the following configuration to your pixi manifest, making sure to include `your_username@` in the URL of the registry:
+    Add the following configuration to your Pixi manifest, making sure to include `your_username@` in the URL of the registry:
 
     ```toml
     [pypi-options]
@@ -179,7 +179,7 @@ For other registries, you will need to adapt these instructions to add the right
     ```
 
 === "Google Artifact Registry"
-    After making sure you are logged in, for instance by running `gcloud auth login`, add the following configuration to your pixi manifest:
+    After making sure you are logged in, for instance by running `gcloud auth login`, add the following configuration to your Pixi manifest:
 
     ```toml
     [pypi-options]
@@ -194,7 +194,7 @@ For other registries, you will need to adapt these instructions to add the right
         ```
 
 === "Azure DevOps Artifacts"
-    After following the [`keyring.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your pixi manifest:
+    After following the [`keyring.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your Pixi manifest:
 
     ```toml
     [pypi-options]
@@ -202,7 +202,7 @@ For other registries, you will need to adapt these instructions to add the right
     ```
 
 === "AWS CodeArtifact"
-    Ensure you are logged in e.g via `aws sso login` and add the following configuration to your pixi manifest:
+    Ensure you are logged in e.g via `aws sso login` and add the following configuration to your Pixi manifest:
 
     ```toml
     [pypi-options]

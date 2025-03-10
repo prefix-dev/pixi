@@ -1,6 +1,6 @@
-# The configuration of pixi itself
+# The configuration of Pixi itself
 
-Apart from the [project specific configuration](../reference/pixi_manifest.md) pixi supports configuration options which are not required for the project to work but are local to the machine.
+Apart from the [project specific configuration](../reference/pixi_manifest.md) Pixi supports configuration options which are not required for the project to work but are local to the machine.
 The configuration is loaded in the following order:
 
 
@@ -49,7 +49,7 @@ The configuration is loaded in the following order:
 ## Configuration options
 
 ??? info "Casing In Configuration"
-    In versions of pixi `0.20.1` and older the global configuration used `snake_case` which
+    In versions of Pixi `0.20.1` and older the global configuration used `snake_case` which
     we've changed to `kebab-case` for consistency with the rest of the configuration.
     But we still support the old `snake_case` configuration, for older configuration options.
     These are:
@@ -80,7 +80,7 @@ This defaults to only conda-forge.
     You can override this from the CLI with `--change-ps1`.
 - `force-activate`: When set to `true` the re-activation of the environment will always happen.
 This is used in combination with the [`experimental`](#experimental) feature `use-environment-activation-cache`.
-- `source-completion-scripts`: When set to `false`, pixi will not source the autocompletion scripts of the environment when going into the shell.
+- `source-completion-scripts`: When set to `false`, Pixi will not source the autocompletion scripts of the environment when going into the shell.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:shell"
@@ -109,7 +109,7 @@ Read more in the authentication section.
 ```
 
 ### `detached-environments`
-The directory where pixi stores the project environments, what would normally be placed in the `.pixi/envs` folder in a project's root.
+The directory where Pixi stores the project environments, what would normally be placed in the `.pixi/envs` folder in a project's root.
 It doesn't affect the environments built for `pixi global`.
 The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME` environment variable.
 !!! warning
@@ -200,7 +200,7 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 
 ### `s3-options`
 
-Configuration for S3 authentication. This will lead to pixi not using AWS's default credentials but instead use the credentials from the pixi authentication storage, see the [S3 section](../deployment/s3.md) for more information.
+Configuration for S3 authentication. This will lead to Pixi not using AWS's default credentials but instead use the credentials from the Pixi authentication storage, see the [S3 section](../deployment/s3.md) for more information.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:s3-options"

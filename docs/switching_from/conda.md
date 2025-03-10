@@ -26,7 +26,7 @@ This shift towards projects offers a more organized and efficient way to manage 
     **Pixi does not have a base environment**. And requires you to install the tools you need in the workspace or globally.
     Using `pixi global install bat` will install `bat` in a global environment, which is not the same as the `base` environment in conda.
 
-??? tip "Activating pixi environment in the current shell"
+??? tip "Activating Pixi environment in the current shell"
     For some advanced use-cases, you can activate the environment in the current shell.
     This uses the `pixi shell-hook` which prints the activation script, which can be used to activate the environment in the current shell without `pixi` itself.
     ```shell
@@ -65,7 +65,7 @@ bat pixi.toml
 
 
 ## Automated switching
-With `pixi` you can import `environment.yml` files into a pixi workspace. (See [import](../reference/cli/pixi/init.md))
+With `pixi` you can import `environment.yml` files into a Pixi workspace. (See [import](../reference/cli/pixi/init.md))
 ```shell
 pixi init --import environment.yml
 ```

@@ -1,7 +1,7 @@
 # Pixi Pack
 <!-- Keep in sync with https://github.com/quantco/pixi-pack/blob/main/README.md -->
 
-[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes a pixi environment and packs it into a compressed archive that can be shipped to the target machine.
+[`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes a Pixi environment and packs it into a compressed archive that can be shipped to the target machine.
 
 It can be installed via
 
@@ -11,7 +11,7 @@ pixi global install pixi-pack
 
 Or by downloading our pre-built binaries from the [releases page](https://github.com/quantco/pixi-pack/releases).
 
-Instead of installing pixi-pack globally, you can also use pixi exec to run `pixi-pack` in a temporary environment:
+Instead of installing pixi-pack globally, you can also use Pixi exec to run `pixi-pack` in a temporary environment:
 
 ```bash
 pixi exec pixi-pack pack

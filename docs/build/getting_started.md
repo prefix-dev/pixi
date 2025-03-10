@@ -1,7 +1,7 @@
 
 ## Introduction
 
-Next to managing workflows and environments, pixi can also build packages.
+Next to managing workflows and environments, Pixi can also build packages.
 This is useful for the following reasons:
 
 - Building and uploading a package to a conda channel
@@ -22,7 +22,7 @@ The vision is to enable building of packages from source, for any language, on a
 
 ## Setting up the Manifest
 
-This is an overview of the pixi manifest using `pixi-build`.
+This is an overview of the Pixi manifest using `pixi-build`.
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:full"

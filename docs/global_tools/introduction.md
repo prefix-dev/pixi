@@ -9,7 +9,7 @@
 
 
 With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory.
-This means that the pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
+This means that the Pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
 
 
 ## Basic Usage
@@ -58,7 +58,7 @@ py3 -c "print('Hello World')"
 
 ## The Global Manifest
 
-Since `v0.33.0` pixi has a new manifest file that will be created in the global directory.
+Since `v0.33.0` Pixi has a new manifest file that will be created in the global directory.
 This file will contain the list of environments that are installed globally, their dependencies and exposed binaries.
 The manifest can be edited, synced, checked in to a version control system, and shared with others.
 

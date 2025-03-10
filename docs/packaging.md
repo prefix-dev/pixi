@@ -1,14 +1,14 @@
 # Packaging Pixi
 
-This is a guide for distribution maintainers wanting to package pixi for a different package manager.
-Users of pixi can ignore this page.
+This is a guide for distribution maintainers wanting to package Pixi for a different package manager.
+Users of Pixi can ignore this page.
 
 ## Building
 
 Pixi is written in Rust and compiled using Cargo, which are needed as compile-time dependencies.
-At runtime pixi needs no dependencies in other than the runtime it was compiled against (`libc`, ...).
+At runtime Pixi needs no dependencies in other than the runtime it was compiled against (`libc`, ...).
 
-To build pixi run
+To build Pixi run
 ```shell
 cargo build --locked --profile dist
 ```
@@ -21,13 +21,13 @@ Pixi provides some compile-time options, which can influence the build
 
 #### TLS
 
-By default, pixi is built with Rustls TLS implementation. You can compile pixi using the platform native TLS implementation
+By default, Pixi is built with Rustls TLS implementation. You can compile Pixi using the platform native TLS implementation
 using by adding `--no-default-features --feature native-tls` to the build command. Note that this might add additional
 runtime dependencies, such as OpenSSL on Linux.
 
 #### Self-Update
 
-Pixi has a self-update functionality. When pixi is installed using another package manager one usually doesn't want pixi
+Pixi has a self-update functionality. When Pixi is installed using another package manager one usually doesn't want pixi
 to try to update itself and instead let it be updated by the package manager.
 For this reason the self-update feature is disabled by default. It can be enabled by adding `--feature self_update` to
 the build command.
@@ -49,7 +49,7 @@ PIXI_VERSION="HEAD-123456" cargo build --locked --profile dist
 
 ## Shell completion
 
-After building pixi you can generate shell autocompletion scripts by running
+After building Pixi you can generate shell autocompletion scripts by running
 ```shell
 pixi completion --shell <SHELL>
 ```

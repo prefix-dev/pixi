@@ -1,7 +1,7 @@
 # Tutorial: Building a C++ package
 
 This example shows how to build a C++ package with CMake and use it together with `pixi-build`.
-To read more about how building packages work with pixi see the [Getting Started](./getting_started.md) guide.
+To read more about how building packages work with Pixi see the [Getting Started](./getting_started.md) guide.
 
 We'll start off by creating a workspace that use [nanobind](https://github.com/wjakob/nanobind) to build Python bindings.
 That we can also test using pixi.
@@ -45,7 +45,7 @@ Use the following `pixi.toml` file, you can hover over the annotations to see wh
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/cpp/pixi.toml"
 ```
 
-1. Add the **preview** feature `pixi-build` that enables pixi to build the package.
+1. Add the **preview** feature `pixi-build` that enables Pixi to build the package.
 2. These are the workspace dependencies. We add our own package as well as Python so that we can later run our package.
 3. Let's add a task that will run our test
 4. This is where we specify the package name and version.
@@ -93,9 +93,9 @@ This command builds the bindings, installs them and then runs the `test` task.
 
 ## Conclusion
 
-In this tutorial, we created a pixi package using C++.
+In this tutorial, we created a Pixi package using C++.
 It can be used as-is, to upload to a conda channel.
-In another tutorial we will learn how to add multiple pixi packages to the same workspace and let one pixi package use another.
+In another tutorial we will learn how to add multiple Pixi packages to the same workspace and let one Pixi package use another.
 
 Thanks for reading! Happy Coding 🚀
 
