@@ -19,7 +19,7 @@
 pixi upgrade # (1)!
 pixi upgrade numpy # (2)!
 pixi upgrade numpy pandas # (3)!
-pixi upgrade --manifest-path ~/myproject/pixi.toml numpy # (4)!
+pixi upgrade --manifest-path ~/myworkspace/pixi.toml numpy # (4)!
 pixi upgrade --feature lint python # (5)!
 pixi upgrade --json # (6)!
 pixi upgrade --dry-run # (7)!
