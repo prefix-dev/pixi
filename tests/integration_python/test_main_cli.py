@@ -1018,6 +1018,7 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     assert not dot_pixi.exists()
 
 
+@pytest.mark.extra_slow
 def test_pixi_auth(pixi: Path) -> None:
     verify_cli_command([pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"])
     verify_cli_command(
