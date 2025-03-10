@@ -62,7 +62,7 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 26. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
 
 !!! tip
-    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](/docs/reference/pixi_configuration.md#pinning-strategy).
+    If you want to use a non default pinning strategy, you can set it using [pixi's configuration](../../pixi_configuration.md#pinning-strategy).
     ```
     pixi config set pinning-strategy no-pin --global
     ```
