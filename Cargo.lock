@@ -4941,13 +4941,16 @@ dependencies = [
  "pixi_consts",
  "rattler_conda_types",
  "rattler_digest",
+ "rayon",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
  "serde",
  "serde_json",
  "tokio",
+ "tracing",
  "url",
+ "uv-configuration",
 ]
 
 [[package]]
