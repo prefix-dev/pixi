@@ -387,6 +387,12 @@ impl<'de> toml_span::Deserialize<'de> for ExposedName {
     }
 }
 
+impl AsRef<str> for ExposedName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Represents an error that occurs when parsing an binary exposed name.
 ///
 /// This error is returned when a string fails to be parsed as an environment

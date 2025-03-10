@@ -1,6 +1,7 @@
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
     common::{get_install_changes, shortcut_sync_status, EnvironmentUpdate},
+    find_completions,
     install::find_binary_by_name,
     trampoline::{self, GlobalExecutable},
     BinDir, EnvRoot, StateChange, StateChanges,
@@ -1181,6 +1182,28 @@ impl Project {
                 StateChange::UninstalledShortcut(record.file_name().to_string()),
             );
         }
+        Ok(state_changes)
+    }
+
+    pub async fn expose_completion_scripts(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
+        let Some(env) = self.environment(env_name) else {
+            return Ok(state_changes);
+        };
+
+        let prefix = self.environment_prefix(env_name).await?;
+
+        let completions = find_completions(&prefix, &env.exposed);
+
+        // for mapping in &env.exposed {
+        //     println!("Mapping: {:?}", mapping);
+
+        // }
+
         Ok(state_changes)
     }
 }
