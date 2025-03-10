@@ -149,12 +149,11 @@ pub enum Command {
 #[group(multiple = false)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageArgs {
-    /// Install the environment as defined in the lockfile, doesn't update
-    /// lockfile if it isn't up-to-date with the manifest file.
+    /// Install the environment from the lockfile without checking
+    /// that it is up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
     pub frozen: bool,
-    /// Check if lockfile is up-to-date before installing the environment,
-    /// aborts when lockfile isn't up-to-date with the manifest file.
+    /// Abort installation if the lockfile isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
     pub locked: bool,
 }
