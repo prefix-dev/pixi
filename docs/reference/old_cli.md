@@ -43,8 +43,7 @@ Remove platform(s) from the manifest file and updates the lock file.
 - `--feature <FEATURE> (-f)`: The feature for which the platform will be removed.
 
 ```sh
-pixi project platform remove win-64
-pixi project platform remove --feature test win-64
+
 ```
 
 ### `project version get`
