@@ -17,33 +17,28 @@ enum Subcommand {
 
     /// List configuration values
     ///
-    /// Example:
-    ///     pixi config list default-channels
+    /// Example: `pixi config list default-channels`
     #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 
     /// Prepend a value to a list configuration key
     ///
-    /// Example:
-    ///     pixi config prepend default-channels bioconda
+    /// Example: `pixi config prepend default-channels bioconda`
     Prepend(PendArgs),
 
     /// Append a value to a list configuration key
     ///
-    /// Example:
-    ///     pixi config append default-channels bioconda
+    /// Example: `pixi config append default-channels bioconda`
     Append(PendArgs),
 
     /// Set a configuration value
     ///
-    /// Example:
-    ///     pixi config set default-channels '["conda-forge", "bioconda"]'
+    /// Example: `pixi config set default-channels '["conda-forge", "bioconda"]'`
     Set(SetArgs),
 
     /// Unset a configuration value
     ///
-    /// Example:
-    ///     pixi config unset default-channels
+    /// Example: `pixi config unset default-channels`
     Unset(UnsetArgs),
 }
 

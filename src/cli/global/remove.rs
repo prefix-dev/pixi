@@ -12,8 +12,7 @@ use std::str::FromStr;
 ///
 /// Use `pixi global uninstall` to remove the whole environment
 ///
-/// Example:
-/// - pixi global remove --environment python numpy
+/// Example: `pixi global remove --environment python numpy`
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {

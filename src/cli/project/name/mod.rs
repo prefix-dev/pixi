@@ -20,7 +20,10 @@ pub struct Args {
 pub enum Command {
     /// Get the project name.
     Get,
-    /// Set the project name
+    /// Set the project name.
+    ///
+    /// Example:
+    /// `pixi project name set "my-project"`
     Set(set::Args),
 }
 

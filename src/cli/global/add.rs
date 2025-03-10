@@ -9,8 +9,9 @@ use rattler_conda_types::MatchSpec;
 /// Adds dependencies to an environment
 ///
 /// Example:
-/// - pixi global add --environment python numpy
-/// - pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest
+///
+/// - `pixi global add --environment python numpy`
+/// - `pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest`
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
