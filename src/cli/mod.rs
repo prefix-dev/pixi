@@ -25,7 +25,6 @@ pub mod init;
 pub mod install;
 pub mod list;
 pub mod lock;
-pub mod project;
 pub mod remove;
 pub mod run;
 pub mod search;
@@ -37,6 +36,7 @@ pub mod tree;
 pub mod update;
 pub mod upgrade;
 pub mod upload;
+pub mod workspace;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -118,7 +118,8 @@ pub enum Command {
     ShellHook(shell_hook::Args),
 
     // Project modification commands
-    Project(project::Args),
+    #[clap(alias = "project")]
+    Workspace(workspace::Args),
     Task(task::Args),
 
     // Environment inspection
@@ -257,7 +258,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
-        Command::Project(cmd) => project::execute(cmd).await,
+        Command::Workspace(cmd) => workspace::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
         #[cfg(feature = "self_update")]
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
