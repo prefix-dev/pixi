@@ -1,9 +1,10 @@
 use std::{
     collections::{BTreeSet, HashMap},
     str::FromStr,
+    sync::Arc,
 };
 
-use pypi_mapping::{self, PurlSource};
+use pypi_mapping::{self, CustomMapping, MappingLocation, MappingSource, PurlSource};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use reqwest_middleware::ClientBuilder;
@@ -179,22 +180,11 @@ async fn test_purl_are_missing_for_non_conda_forge() {
         channel: Some("dummy-channel".to_owned()),
     };
 
-    let packages = vec![repo_data_record.clone()];
-
-    let conda_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
-            .await
-            .unwrap();
-    // We are using custom mapping
-    let compressed_mapping =
-        HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
-
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(&MappingSource::Prefix, vec![&mut repo_data_record], None)
+        .await
+        .unwrap();
 
     // Because foo-bar-car is not from conda-forge channel
     // We verify that purls are missing for non-conda-forge packages
@@ -223,22 +213,23 @@ async fn test_purl_are_generated_using_custom_mapping() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let packages = vec![repo_data_record.clone()];
-
-    let conda_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
-            .await
-            .unwrap();
     // We are using custom mapping
     let compressed_mapping =
         HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
+    let source = HashMap::from([(
+        "https://conda.anaconda.org/conda-forge".to_owned(),
+        MappingLocation::Memory(compressed_mapping),
+    )]);
 
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(
+            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            vec![&mut repo_data_record],
+            None,
+        )
+        .await
+        .unwrap();
 
     let first_purl = repo_data_record
         .package_record
@@ -268,24 +259,13 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let packages = vec![repo_data_record.clone()];
+    let packages = vec![&mut repo_data_record];
 
-    let conda_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
-            .await
-            .unwrap();
-
-    let compressed_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client)
-            .await
-            .unwrap();
-
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(&MappingSource::Prefix, packages, None)
+        .await
+        .unwrap();
 
     // pandoc is not a python package
     // so purls for it should be empty
@@ -325,31 +305,24 @@ async fn test_dont_record_not_present_package_as_purl() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let packages = vec![repo_data_record.clone(), boltons_repo_data_record.clone()];
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            vec![&mut repo_data_record, &mut boltons_repo_data_record],
+            None,
+        )
+        .await
+        .unwrap();
 
-    let conda_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
-            .await
-            .unwrap();
-
-    let compressed_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client)
-            .await
-            .unwrap();
-
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
-
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut boltons_repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
+    mapping_client
+        .ament_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            vec![&mut repo_data_record, &mut boltons_repo_data_record],
+            None,
+        )
+        .await
+        .unwrap();
 
     let first_purl = repo_data_record
         .package_record
@@ -422,13 +395,13 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mut packages = vec![repo_data_record, boltons_repo_data_record];
 
-    let mapping_map = project
-        .pypi_name_mapping_source()
-        .unwrap()
-        .custom()
-        .unwrap();
-
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -492,11 +465,13 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source().unwrap();
-
-    let mapping_map = mapping_source.custom().unwrap();
-
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -543,11 +518,13 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source().unwrap();
-
-    let mapping_map = mapping_source.custom().unwrap();
-
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -594,11 +571,13 @@ async fn test_path_channel() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source().unwrap();
-
-    let mapping_map = mapping_source.custom().unwrap();
-
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -668,10 +647,13 @@ async fn test_file_url_as_mapping_location() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source().unwrap();
-
-    let mapping_map = mapping_source.custom().unwrap();
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .ament_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -725,14 +707,15 @@ async fn test_disabled_mapping() {
 
     let mut packages = vec![boltons_repo_data_record];
 
-    pypi_mapping::amend_pypi_purls(
-        blocked_client,
-        project.pypi_name_mapping_source().unwrap(),
-        &mut packages,
-        None,
-    )
-    .await
-    .unwrap();
+    let mapping_client = pypi_mapping::MappingClient::builder(blocked_client).finish();
+    mapping_client
+        .ament_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
 
     let boltons_package = packages.pop().unwrap();
 
