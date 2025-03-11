@@ -173,7 +173,7 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
                 .into_diagnostic()?;
         }
     }
-    const DONE_STR: &str = "=== DONE ===";
+    const DONE_STR: &str = "PIXI_SHELL_ACTIVATION_DONE";
     shell_script.echo(DONE_STR).into_diagnostic()?;
 
     temp_file

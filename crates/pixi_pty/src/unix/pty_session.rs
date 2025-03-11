@@ -7,6 +7,7 @@ use nix::{
     sys::{select, time::TimeVal, wait::WaitStatus},
 };
 use signal_hook::iterator::Signals;
+use std::time::Instant;
 use std::{
     fs::File,
     io::{self, Read, Write},
@@ -80,6 +81,9 @@ impl PtySession {
     /// forward all input from stdin to the process and all output from the process to stdout.
     /// This will block until the process exits.
     pub fn interact(&mut self, wait_until: Option<&str>) -> io::Result<Option<i32>> {
+        let pattern_timeout = 4;
+        let pattern_start = Instant::now();
+
         // Make sure anything we have written so far has been flushed.
         self.flush()?;
 
@@ -129,7 +133,12 @@ impl PtySession {
                 }
             }
 
-            let mut select_timeout = TimeVal::new(4, 0);
+            // Check if we have waited long enough for the pattern
+            if pattern_start.elapsed().as_secs() > pattern_timeout {
+                write_stdout = true;
+            }
+
+            let mut select_timeout = TimeVal::new(0, 100_000);
             let mut select_set = fd_set;
 
             let res = select::select(None, &mut select_set, None, None, &mut select_timeout);
@@ -150,13 +159,23 @@ impl PtySession {
                             // Append new data to rolling buffer
                             self.rolling_buffer.extend_from_slice(&buf[..bytes_read]);
 
-                            // Check for pattern in the rolling buffer
-                            if self
+                            // Find the first occurrence of the pattern
+                            if let Some(window_pos) = self
                                 .rolling_buffer
                                 .windows(wait_until.len())
-                                .any(|window| window == wait_until.as_bytes())
+                                .position(|window| window == wait_until.as_bytes())
                             {
                                 write_stdout = true;
+
+                                // Calculate position after the pattern
+                                let output_start = window_pos + wait_until.len();
+
+                                // Write remaining buffered content after the pattern
+                                if output_start < self.rolling_buffer.len() {
+                                    io::stdout().write_all(&self.rolling_buffer[output_start..])?;
+                                    io::stdout().flush()?;
+                                }
+
                                 // Clear the rolling buffer as we don't need it anymore
                                 self.rolling_buffer.clear();
                             } else {
