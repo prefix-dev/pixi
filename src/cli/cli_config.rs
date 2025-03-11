@@ -27,7 +27,7 @@ use pixi_git::GIT_URL_QUERY_REV_TYPE;
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
-    /// The path to `pixi.toml`, `pyproject.toml`, or the project directory
+    /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
     #[arg(long, global = true)]
     pub manifest_path: Option<PathBuf>,
 }

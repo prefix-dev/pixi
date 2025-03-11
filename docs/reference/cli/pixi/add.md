@@ -66,14 +66,14 @@ pixi add [OPTIONS] <SPECS>...
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 Adds dependencies to the workspace
 
 The dependencies should be defined as MatchSpec for conda package, or a PyPI
 requirement for the `--pypi` dependencies. If no specific version is
-provided, the latest version compatible with your project will be chosen
+provided, the latest version compatible with your workspace will be chosen
 automatically or a * will be used.
 
 Example usage:
@@ -87,7 +87,7 @@ Example usage:
 Adding multiple dependencies at once is also supported:
 
 - `pixi add python pytest`: This will add both `python` and `pytest` to the
-  project's dependencies.
+  workspace's dependencies.
 
 The `--platform` and `--build/--host` flags make the dependency target
 specific.
@@ -105,7 +105,7 @@ be mixed with the conda dependencies
 - `pixi add --pypi boto3`
 - `pixi add --pypi "boto3==version"`
 
-If the project manifest is a `pyproject.toml`, adding a pypi dependency will
+If the workspace manifest is a `pyproject.toml`, adding a pypi dependency will
 add it to the native pyproject `project.dependencies` array or to the native
 `dependency-groups` table if a feature is specified:
 

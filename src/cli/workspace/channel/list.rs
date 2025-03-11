@@ -15,7 +15,7 @@ pub struct Args {
 }
 
 pub(crate) fn execute(args: Args) -> miette::Result<()> {
-    // Project without cli config as it shouldn't be needed here.
+    // Workspace without cli config as it shouldn't be needed here.
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;

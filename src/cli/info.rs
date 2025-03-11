@@ -28,8 +28,7 @@ use fancy_display::FancyDisplay;
 
 static WIDTH: usize = 19;
 
-/// Information about the system, project and environments for the current
-/// machine.
+/// Information about the system, workspace and environments for the current machine.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Show cache and environment size
@@ -298,7 +297,7 @@ impl Display for Info {
             write!(f, "{}", gi)?;
         }
 
-        // Project information
+        // Workspace information
         if let Some(pi) = self.project_info.as_ref() {
             writeln!(f, "\n{}", bold.apply_to("Workspace\n------------").cyan())?;
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Name"), pi.name)?;

@@ -42,13 +42,13 @@ pub mod workspace;
 #[command(
     version(consts::PIXI_VERSION),
     about = format!("
-Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.
 
-Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
+Pixi is a versatile developer workflow tool designed to streamline the management of your workspace's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
 
 Basic Usage:
-    Initialize pixi for a project:
+    Initialize pixi for a workspace:
     $ pixi init
     $ pixi add python numpy pytest
 
@@ -117,7 +117,7 @@ pub enum Command {
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
 
-    // Project modification commands
+    // Workspace Manifest modification commands
     #[clap(alias = "project")]
     Workspace(workspace::Args),
     Task(task::Args),

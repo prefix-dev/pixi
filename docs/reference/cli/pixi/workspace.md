@@ -21,11 +21,11 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`environment`](workspace/environment.md) | Commands to manage project environments |
 | [`export`](workspace/export.md) | Commands to export workspaces to other formats |
 | [`name`](workspace/name.md) | Commands to manage workspace name |
-| [`system-requirements`](workspace/system-requirements.md) | Commands to manage workspace environments |
+| [`system-requirements`](workspace/system-requirements.md) | Commands to manage workspace system requirements |
 
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 --8<-- "docs/reference/cli/pixi/workspace_extender.md:example"
