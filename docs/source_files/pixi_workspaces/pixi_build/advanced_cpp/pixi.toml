@@ -20,7 +20,3 @@ version = "0.1.0"
 
 [package.build]
 backend = { name = "pixi-build-rattler-build", version = "0.1.*" } # (5)!
-
-
-[package.host-dependencies]
-python = "3.12.*" # (7)!

@@ -101,7 +101,7 @@ Next lets add the `recipe.yaml` file that will be used to build the package:
 1. Because we are specifying current directory as the source directory, `rattler-build` may skip files that are not tracked by git. We need to ignore `gitignore`.  If your files are already tracked by git, you can remove this line.
 2. This build script configures and builds a `CMake` project using the `Ninja` build system. It sets various options such as the build type to `Release`, the installation prefix to `$PREFIX`, and enables shared libraries and compile commands export. The script then builds the project in the specified build directory `($SRC_DIR/../build)` and installs the built files to the installation directory.
 3. For build dependencies we need compilers and the build systems `cmake` and `ninja`. Make sure that `cmake` version matches the one from `CMakeLists.txt` file.
-4. For host dependencies we will need `python` and `nanobind`.
+
 
 ## Testing if everything works
 Now that we have created the files we can test if everything works:
