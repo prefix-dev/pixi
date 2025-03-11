@@ -246,7 +246,7 @@ pub struct DependencyConfig {
 
     /// The specified dependencies are pypi dependencies. Conflicts with `host`
     /// and `build`
-    #[arg(long, conflicts_with_all = ["host", "build"], help_heading = "PyPI options")]
+    #[arg(long, conflicts_with_all = ["host", "build"])]
     pub pypi: bool,
 
     /// The platform(s) for which the dependency should be modified

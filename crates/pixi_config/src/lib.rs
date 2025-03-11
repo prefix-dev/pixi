@@ -118,7 +118,7 @@ pub struct ConfigCli {
 #[derive(Parser, Debug, Clone, Default)]
 pub struct ConfigCliPrompt {
     /// Do not change the PS1 variable when starting a prompt.
-    #[arg(long, help_heading = "Config options")]
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     change_ps1: Option<bool>,
 }
 
@@ -183,11 +183,11 @@ impl RepodataConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCliActivation {
     /// Do not use the environment activation cache. (default: true except in experimental mode)
-    #[arg(long, help_heading = "Config options")]
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     force_activate: bool,
 
     /// Do not source the autocompletion scripts from the environment.
-    #[arg(long, help_heading = "Config options")]
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     no_completion: Option<bool>,
 }
 
