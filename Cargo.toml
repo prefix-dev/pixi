@@ -47,7 +47,6 @@ http = "1.2.0"
 http-cache-reqwest = "0.15.1"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
-ignore = "0.4.23"
 indexmap = "2.7.1"
 indicatif = "0.17.11"
 insta = "1.42.1"
@@ -110,7 +109,6 @@ uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 
-wax = "0.6.0"
 which = "7.0.2"
 
 # Rattler crates
