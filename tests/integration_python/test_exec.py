@@ -31,6 +31,10 @@ def test_concurrent_exec(pixi: Path, dummy_channel_1: str) -> None:
             future.result()
 
 
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="For some reason .bat files are not correctly executed on windows",
+)
 def test_exec_list(pixi: Path, dummy_channel_1: str) -> None:
     # Without `--list`, nothing is listed
     verify_cli_command(
