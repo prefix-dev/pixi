@@ -685,10 +685,9 @@ packages:
   build: pyh4616a5c_0
   subdir: noarch
   depends:
-  - python 3.12.*
   - python
   input:
-    hash: 575ec45ec331b2d3d4409e6952f72cd355d29ed26e2e0252f4ebca5ce63739b9
+    hash: c625295567a9de12c0ecd9e7bbc2cb8d3302ed96e9771f4eb634adb680d423c5
     globs:
     - pixi.toml
 - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda
