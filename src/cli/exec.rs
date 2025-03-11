@@ -252,8 +252,8 @@ fn list_exec_environment(
                 specs
                     .clone()
                     .into_iter()
-                    .filter_map(|spec| spec.name.clone()) // Extract the name if it exists
-                    .collect::<Vec<PackageName>>()
+                    .filter_map(|spec| spec.name) // Extract the name if it exists
+                    .collect_vec()
                     .contains(&record.package_record.name),
             )
         })
