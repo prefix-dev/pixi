@@ -22,7 +22,7 @@ pub enum SystemRequirementEnum {
     // ArchSpec,
 }
 
-/// Commands to manage workspace environments.
+/// Commands to manage workspace system requirements.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
