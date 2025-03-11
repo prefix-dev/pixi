@@ -63,6 +63,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
+    config.activate_proxy_envs();
+
     let mut command_args = args.command.iter();
     let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
     let (_, client) = build_reqwest_clients(Some(&config), None)?;

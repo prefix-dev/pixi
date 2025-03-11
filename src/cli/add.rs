@@ -107,6 +107,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config.clone());
 
+    workspace.activate_proxy_envs();
+
     sanity_check_project(&workspace).await?;
 
     let mut workspace = workspace.modify()?;

@@ -651,6 +651,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "ConcurrencyConfig::is_default")]
     pub concurrency: ConcurrencyConfig,
 
+    /// Https/Http proxy configuration for pixi
+    #[serde(default)]
+    #[serde(skip_serializing_if = "ProxyConfig::is_default")]
+    pub proxy_config: ProxyConfig,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -681,6 +686,7 @@ impl Default for Config {
             shell: ShellConfig::default(),
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
+            proxy_config: ProxyConfig::default(),
 
             // Deprecated fields
             change_ps1: None,
@@ -780,6 +786,40 @@ impl ShellConfig {
 
     pub fn source_completion_scripts(&self) -> bool {
         self.source_completion_scripts.unwrap_or(true)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ProxyConfig {
+    /// https proxy.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub https: Option<Url>,
+    /// http proxy.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http: Option<Url>,
+    /// A list of no proxy pattern
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub no_proxy_domains: Vec<String>,
+}
+
+impl ProxyConfig {
+    pub fn is_default(&self) -> bool {
+        self.https.is_none() && self.https.is_none() && self.no_proxy_domains.is_empty()
+    }
+    pub fn merge(&self, other: Self) -> Self {
+        Self {
+            https: other.https.as_ref().or(self.https.as_ref()).cloned(),
+            http: other.http.as_ref().or(self.http.as_ref()).cloned(),
+            no_proxy_domains: if other.is_default() {
+                self.no_proxy_domains.clone()
+            } else {
+                other.no_proxy_domains.clone()
+            },
+        }
     }
 }
 
@@ -1047,6 +1087,10 @@ impl Config {
             "s3-options.<bucket>.region",
             "s3-options.<bucket>.force-path-style",
             "experimental.use-environment-activation-cache",
+            "proxy-config",
+            "proxy-config.https",
+            "proxy-config.http",
+            "proxy-config.no-proxy-domains",
         ]
     }
 
@@ -1086,6 +1130,8 @@ impl Config {
             experimental: self.experimental.merge(other.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
+
+            proxy_config: self.proxy_config.merge(other.proxy_config),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1160,6 +1206,57 @@ impl Config {
     /// Retrieve the value for the network_requests field.
     pub fn max_concurrent_downloads(&self) -> usize {
         self.concurrency.downloads
+    }
+
+    pub fn activate_proxy_envs(&self) {
+        if self.proxy_config.https.is_none() && self.proxy_config.http.is_none() {
+            if !self.proxy_config.no_proxy_domains.is_empty() {
+                tracing::info!("proxy_config.no_proxy_domains is ignored")
+            }
+            return;
+        }
+
+        // detect proxy env vars like curl: https://curl.se/docs/manpage.html
+        let env_https_proxy = ["https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
+            .iter()
+            .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()));
+        let env_http_proxy = ["http_proxy", "all_proxy", "ALL_PROXY"]
+            .iter()
+            .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()));
+        let env_no_proxy = ["no_proxy", "NO_PROXY"]
+            .iter()
+            .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()));
+
+        let config_no_proxy =
+            Some(self.proxy_config.no_proxy_domains.iter().join(",")).filter(|v| !v.is_empty());
+
+        if env_https_proxy.is_some() || env_http_proxy.is_some() {
+            if env_https_proxy.as_deref() != self.proxy_config.https.as_ref().map(Url::as_str)
+                || env_http_proxy.as_deref() != self.proxy_config.http.as_ref().map(Url::as_str)
+                || env_no_proxy != config_no_proxy
+            {
+                tracing::info!("proxy configs are overridden by proxy environment vars.")
+            }
+            return;
+        }
+
+        if let Some(url) = &self.proxy_config.https {
+            std::env::set_var("https_proxy", url.as_str());
+            tracing::debug!("use https proxy: {}", url.as_str());
+        }
+        if let Some(url) = &self.proxy_config.http {
+            std::env::set_var("http_proxy", url.as_str());
+            tracing::debug!("use http proxy: {}", url.as_str());
+        }
+
+        if config_no_proxy != env_no_proxy {
+            if let Some(no_proxy_str) = &config_no_proxy {
+                std::env::set_var("no_proxy", no_proxy_str);
+                tracing::debug!("no proxy hosts: {}", no_proxy_str);
+            } else {
+                std::env::remove_var("no_proxy");
+            }
+        }
     }
 
     /// Modify this config with the given key and value
@@ -1422,6 +1519,42 @@ impl Config {
                     "change-ps1" => {
                         self.shell.change_ps1 =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    _ => return Err(err),
+                }
+            }
+            key if key.starts_with("proxy-config") => {
+                if key == "proxy-config" {
+                    if let Some(value) = value {
+                        self.proxy_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.proxy_config = ProxyConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("proxy-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("proxy-config.").unwrap();
+                match subkey {
+                    "https" => {
+                        self.proxy_config.https = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "http" => {
+                        self.proxy_config.http = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "no-proxy-domains" => {
+                        self.proxy_config.no_proxy_domains = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
                     }
                     _ => return Err(err),
                 }
@@ -1728,6 +1861,7 @@ UNUSED = "unused"
                     RepodataChannelConfig::default(),
                 )]),
             },
+            proxy_config: ProxyConfig::default(),
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
@@ -2147,5 +2281,26 @@ UNUSED = "unused"
         assert_eq!(anaconda_config.disable_bzip2, Some(false));
         assert_eq!(anaconda_config.disable_zstd, Some(false));
         assert_eq!(anaconda_config.disable_sharded, None);
+    }
+
+    #[test]
+    fn test_proxy_config_parse() {
+        let toml = r#"
+            [proxy-config]
+            https = "http://proxy-for-https"
+            http = "http://proxy-for-http"
+            no-proxy-domains = [ "a.com" ]
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(
+            config.proxy_config.https,
+            Some(Url::parse("http://proxy-for-https").unwrap())
+        );
+        assert_eq!(
+            config.proxy_config.http,
+            Some(Url::parse("http://proxy-for-http").unwrap())
+        );
+        assert_eq!(config.proxy_config.no_proxy_domains.len(), 1);
+        assert_eq!(config.proxy_config.no_proxy_domains[0], "a.com");
     }
 }

@@ -78,6 +78,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
+    workspace.activate_proxy_envs();
+
     let environment = workspace
         .environment_from_name_or_env_var(args.environment)
         .wrap_err("Environment not found")?;

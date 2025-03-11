@@ -4,6 +4,7 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 use miette::IntoDiagnostic;
+use pixi_config::Config;
 use pixi_consts::consts;
 use reqwest::redirect::Policy;
 use reqwest::Client;
@@ -110,6 +111,8 @@ async fn latest_version() -> miette::Result<Version> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    Config::load_global().activate_proxy_envs();
+
     // Get the target version, without 'v' prefix
     let target_version = match &args.version {
         Some(version) => version,

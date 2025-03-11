@@ -133,6 +133,11 @@ Config {
         solves: 1,
         downloads: 50,
     },
+    proxy_config: ProxyConfig {
+        https: None,
+        http: None,
+        no_proxy_domains: [],
+    },
     change_ps1: None,
     force_activate: None,
 }
