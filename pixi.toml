@@ -63,7 +63,7 @@ test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 
   "build-release",
 ] }
 test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python"
-test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 tests/integration_python", depends-on = [
+test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ] }
 test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=100 -m 'not extra_slow' tests/integration_python", depends-on = [
@@ -72,7 +72,7 @@ test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --time
 # pass the file to run as an argument to the task
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
-test-specific-test = { cmd = "pytest", depends-on = ["build-debug"] }
+test-specific-test = { cmd = "pytest", depends-on = ["build-release"] }
 # Update one test channel by passing on value of `mappings.toml`
 # e.g. "multiple_versions_channel_1"
 update-test-channel = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
