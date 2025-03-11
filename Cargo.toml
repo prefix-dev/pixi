@@ -298,6 +298,7 @@ pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
+rayon = "1.10.0"
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
   "http2",
@@ -338,6 +339,7 @@ uv-requirements = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
+wax = { workspace = true, features = ["walk"] }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
