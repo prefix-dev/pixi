@@ -1,6 +1,7 @@
 use std::{path::Path, str::FromStr, sync::LazyLock};
 
 use clap::{Parser, ValueHint};
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
@@ -16,8 +17,10 @@ use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
 use super::cli_config::ChannelsConfig;
-use crate::global::list::{print_package_table, PackageToOutput};
-use crate::prefix::Prefix;
+use crate::{
+    environment::list::{print_package_table, PackageToOutput},
+    prefix::Prefix,
+};
 
 /// Run a command in a temporary environment.
 #[derive(Parser, Debug)]
@@ -44,7 +47,7 @@ pub struct Args {
     #[clap(long)]
     pub force_reinstall: bool,
 
-    #[clap(long = "list", visible_alias = "ls", num_args = 0..=1, default_missing_value = "")]
+    #[clap(long = "list", num_args = 0..=1, default_missing_value = "", require_equals = true)]
     pub list: Option<String>,
 
     #[clap(flatten)]
@@ -217,60 +220,60 @@ pub async fn create_exec_prefix(
 
     write_guard.finish().await.into_diagnostic()?;
 
-    // If `--list` was passed, output the environment's packages in a table
-    if let Some(regex) = args.list.clone() {
-        let regex = {
-            if !regex.is_empty() {
-                Some(regex)
-            } else {
-                None
-            }
-        };
-        let mut packages_to_output: Vec<PackageToOutput> = solved_records
-            .records
-            .iter()
-            .map(|record| {
-                PackageToOutput::new(
-                    &record.package_record,
-                    specs
-                        .clone()
-                        .into_iter()
-                        .filter_map(|spec| spec.name.clone()) // Extract the name if it exists
-                        .collect::<Vec<PackageName>>()
-                        .contains(&record.package_record.name),
-                )
-            })
-            .collect();
-
-        // Filter according to the regex
-        if let Some(ref regex) = regex {
-            let regex = regex::Regex::new(regex).into_diagnostic()?;
-            packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
-        }
-
-        let output_message = if let Some(ref regex) = regex {
-            format!(
-                "The environment has {} packages filtered by regex `{}`:",
-                console::style(packages_to_output.len()).bold(),
-                regex
-            )
-        } else {
-            format!(
-                "The environment has {} packages:",
-                console::style(packages_to_output.len()).bold()
-            )
-        };
-
-        // Should we allow different sorting strategies?
-        // Sort by name
-        packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
-
-        println!("{}", output_message);
-        print_package_table(packages_to_output).into_diagnostic()?;
-        println!()
+    if let Some(ref regex) = args.list {
+        list_exec_environment(specs, solved_records, regex.clone())?;
     }
 
     Ok(prefix)
+}
+
+fn list_exec_environment(
+    specs: Vec<MatchSpec>,
+    solved_records: rattler_conda_types::SolverResult,
+    regex: String,
+) -> Result<(), miette::Error> {
+    let regex = {
+        if regex.is_empty() {
+            None
+        } else {
+            Some(regex)
+        }
+    };
+    let mut packages_to_output = solved_records
+        .records
+        .iter()
+        .map(|record| {
+            PackageToOutput::new(
+                &record.package_record,
+                specs
+                    .clone()
+                    .into_iter()
+                    .filter_map(|spec| spec.name.clone()) // Extract the name if it exists
+                    .collect::<Vec<PackageName>>()
+                    .contains(&record.package_record.name),
+            )
+        })
+        .collect_vec();
+    if let Some(ref regex) = regex {
+        let regex = regex::Regex::new(regex).into_diagnostic()?;
+        packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
+    }
+    let output_message = if let Some(ref regex) = regex {
+        format!(
+            "The environment has {} packages filtered by regex `{}`:",
+            console::style(packages_to_output.len()).bold(),
+            regex
+        )
+    } else {
+        format!(
+            "The environment has {} packages:",
+            console::style(packages_to_output.len()).bold()
+        )
+    };
+    packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
+    println!("{}", output_message);
+    print_package_table(packages_to_output).into_diagnostic()?;
+    Ok(())
 }
 
 /// This function is used to guess the package name from the command.

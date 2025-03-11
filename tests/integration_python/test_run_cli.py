@@ -339,7 +339,7 @@ def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="pixi run",
     ).stdout
 
-    assert len(help_long) > len(help_short)
+    assert len(help_long.splitlines()) > len(help_short.splitlines())
 
     help_run = verify_cli_command(
         [pixi, "help", "run"],

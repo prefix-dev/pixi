@@ -1,5 +1,6 @@
 pub(crate) mod conda_metadata;
 mod conda_prefix;
+pub mod list;
 mod pypi_prefix;
 mod python_status;
 mod reporters;
