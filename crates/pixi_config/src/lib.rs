@@ -95,30 +95,30 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
     /// Do not verify the TLS certificate of the server.
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(long, action = ArgAction::SetTrue, help_heading = "Config options")]
     tls_no_verify: bool,
 
     /// Path to the file containing the authentication token.
-    #[arg(long)]
+    #[arg(long, help_heading = "Config options")]
     auth_file: Option<PathBuf>,
 
     /// Specifies whether to use the keyring to look up credentials for PyPI.
-    #[arg(long)]
+    #[arg(long, help_heading = "Config options")]
     pypi_keyring_provider: Option<KeyringProvider>,
 
     /// Max concurrent solves, default is the number of CPUs
-    #[arg(long)]
+    #[arg(long, help_heading = "Config options")]
     pub concurrent_solves: Option<usize>,
 
     /// Max concurrent network requests, default is `50`
-    #[arg(long)]
+    #[arg(long, help_heading = "Config options")]
     pub concurrent_downloads: Option<usize>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
 pub struct ConfigCliPrompt {
     /// Do not change the PS1 variable when starting a prompt.
-    #[arg(long)]
+    #[arg(long, help_heading = "Config options")]
     change_ps1: Option<bool>,
 }
 
@@ -183,11 +183,11 @@ impl RepodataConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCliActivation {
     /// Do not use the environment activation cache. (default: true except in experimental mode)
-    #[arg(long)]
+    #[arg(long, help_heading = "Config options")]
     force_activate: bool,
 
     /// Do not source the autocompletion scripts from the environment.
-    #[arg(long)]
+    #[arg(long, help_heading = "Config options")]
     no_completion: Option<bool>,
 }
 

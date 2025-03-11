@@ -1,5 +1,5 @@
+use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::Parser;
-use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
@@ -63,33 +63,75 @@ Need Help?
 Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 
 For more information, see the documentation at: https://pixi.sh
-", consts::PIXI_VERSION)
+", consts::PIXI_VERSION),
+disable_help_flag = true,
 )]
-#[clap(arg_required_else_help = true)]
+#[clap(arg_required_else_help = true, styles=get_styles())]
 pub struct Args {
     #[command(subcommand)]
     command: Command,
 
-    /// The verbosity level
-    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for quiet)
-    #[command(flatten)]
-    verbose: Verbosity,
+    #[clap(flatten)]
+    global_options: GlobalOptions,
+}
+
+#[derive(Debug, Parser)]
+#[clap(next_help_heading = "Global Options")]
+pub struct GlobalOptions {
+    /// Display help information
+    #[clap(long, short, global = true, action = clap::ArgAction::Help)]
+    help: Option<bool>,
+
+    /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
+    #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count, global = true, help_heading = "Global Options")]
+    verbose: u8,
+
+    /// Decrease logging verbosity (quiet mode)
+    #[clap(short = 'q', long = "quiet", action = clap::ArgAction::Count, global = true, help_heading = "Global Options")]
+    quiet: u8,
 
     /// Whether the log needs to be colored.
-    #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
+    #[clap(
+        long,
+        default_value = "auto",
+        global = true,
+        env = "PIXI_COLOR",
+        help_heading = "Global Options"
+    )]
     color: ColorOutput,
 
     /// Hide all progress bars, always turned on if stderr is not a terminal.
-    #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS")]
+    #[clap(
+        long,
+        default_value = "false",
+        global = true,
+        env = "PIXI_NO_PROGRESS",
+        help_heading = "Global Options"
+    )]
     no_progress: bool,
 }
+
 impl Args {
     /// Whether to show progress bars or not, based on the terminal and the user's preference.
     fn no_progress(&self) -> bool {
         if !std::io::stderr().is_terminal() {
             true
         } else {
-            self.no_progress
+            self.global_options.no_progress
+        }
+    }
+
+    /// Determine the log level filter based on verbose and quiet counts.
+    fn log_level_filter(&self) -> LevelFilter {
+        match (self.global_options.quiet, self.global_options.verbose) {
+            // Quiet mode overrides verbose
+            (q, _) if q > 0 => LevelFilter::OFF,
+            // Custom verbosity levels
+            (_, 0) => LevelFilter::ERROR, // Default
+            (_, 1) => LevelFilter::WARN,  // -v
+            (_, 2) => LevelFilter::INFO,  // -vv
+            (_, 3) => LevelFilter::DEBUG, // -vvv
+            (_, _) => LevelFilter::TRACE, // -vvvv+
         }
     }
 }
@@ -152,11 +194,21 @@ pub enum Command {
 pub struct LockFileUsageArgs {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
+    #[clap(
+        long,
+        conflicts_with = "locked",
+        env = "PIXI_FROZEN",
+        help_heading = "Install options"
+    )]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
+    #[clap(
+        long,
+        conflicts_with = "frozen",
+        env = "PIXI_LOCKED",
+        help_heading = "Install options"
+    )]
     pub locked: bool,
 }
 
@@ -190,25 +242,13 @@ pub async fn execute() -> miette::Result<()> {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
     }
 
-    let (low_level_filter, level_filter, pixi_level) = match args.verbose.log_level_filter() {
-        clap_verbosity_flag::log::LevelFilter::Off => {
-            (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF)
-        }
-        clap_verbosity_flag::log::LevelFilter::Error => {
-            (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN)
-        }
-        clap_verbosity_flag::log::LevelFilter::Warn => {
-            (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO)
-        }
-        clap_verbosity_flag::log::LevelFilter::Info => {
-            (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO)
-        }
-        clap_verbosity_flag::log::LevelFilter::Debug => {
-            (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG)
-        }
-        clap_verbosity_flag::log::LevelFilter::Trace => {
-            (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE)
-        }
+    let (low_level_filter, level_filter, pixi_level) = match args.log_level_filter() {
+        LevelFilter::OFF => (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF),
+        LevelFilter::ERROR => (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN),
+        LevelFilter::WARN => (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO),
+        LevelFilter::INFO => (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO),
+        LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG),
+        LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
     let env_filter = EnvFilter::builder()
@@ -293,7 +333,7 @@ fn set_console_colors(args: &Args) {
         Ok(_) => &ColorOutput::Always,
         Err(_) => match env::var("NO_COLOR") {
             Ok(_) => &ColorOutput::Never,
-            Err(_) => &args.color,
+            Err(_) => &args.global_options.color,
         },
     };
 
@@ -308,4 +348,38 @@ fn set_console_colors(args: &Args) {
         }
         ColorOutput::Auto => {} // Let `console` detect if colors should be enabled
     };
+}
+
+pub fn get_styles() -> clap::builder::Styles {
+    clap::builder::Styles::styled()
+        .usage(
+            Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(Color::Ansi(AnsiColor::BrightGreen))),
+        )
+        .header(
+            Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(Color::Ansi(AnsiColor::BrightGreen))),
+        )
+        .literal(Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightCyan))))
+        .invalid(
+            Style::new()
+                .bold()
+                .fg_color(Some(Color::Ansi(AnsiColor::Red))),
+        )
+        .error(
+            Style::new()
+                .bold()
+                .fg_color(Some(Color::Ansi(AnsiColor::Red))),
+        )
+        .valid(
+            Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(Color::Ansi(AnsiColor::Green))),
+        )
+        .placeholder(Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightCyan))))
 }
