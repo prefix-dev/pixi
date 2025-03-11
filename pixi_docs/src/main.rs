@@ -61,7 +61,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     }
 
     // Add current command without link
-    name_parts.push(format!("{}", command.get_name()));
+    name_parts.push(command.get_name().to_string());
 
     // Title
     writeln!(buffer, "# <code>{}</code>", name_parts.join("")).unwrap();
@@ -146,7 +146,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
                 ("Global Options", _) => Ordering::Greater,
                 (_, "Global Options") => Ordering::Less,
                 // Alphabetical for others
-                _ => a.0.cmp(&b.0),
+                _ => a.0.cmp(b.0),
             }
         });
 
@@ -245,13 +245,11 @@ fn arguments(options: &[&clap::Arg]) -> String {
 
         let long_name = if let Some(long) = opt.get_long() {
             format!("--{}", long)
+        } else if let Some(value_names) = opt.get_value_names() {
+            // No long name, but we have value names, assuming positional.
+            format!("<{}>", value_names[0])
         } else {
-            if let Some(value_names) = opt.get_value_names() {
-                // No long name, but we have value names, assuming positional.
-                format!("<{}>", value_names[0])
-            } else {
-                "".to_string()
-            }
+            "".to_string()
         };
         let id = format!("arg-{}", long_name);
 
@@ -281,29 +279,29 @@ fn arguments(options: &[&clap::Arg]) -> String {
 
         // Write the help text
         if let Some(help) = opt.get_help() {
-            write!(buffer, "  {}\n", help).unwrap();
+            writeln!(buffer, "  {}", help).unwrap();
         } else {
-            write!(buffer, "\n").unwrap();
+            writeln!(buffer).unwrap();
         }
 
         // Add required
         if opt.is_required_set() {
-            write!(buffer, "<br>**required**: `true`\n").unwrap();
+            writeln!(buffer, "<br>**required**: `true`").unwrap();
         }
 
         // Handle aliases, env, defaults, and options
         if let Some(aliases) = opt.get_visible_aliases() {
             if !aliases.is_empty() {
-                write!(buffer, "<br>**aliases**: {}\n", aliases.join(", ")).unwrap();
+                writeln!(buffer, "<br>**aliases**: {}", aliases.join(", ")).unwrap();
             }
         }
         if let Some(env) = opt.get_env() {
-            write!(buffer, "<br>**env**: `{}`\n", env.to_string_lossy()).unwrap();
+            writeln!(buffer, "<br>**env**: `{}`", env.to_string_lossy()).unwrap();
         }
         if !opt.get_default_values().is_empty() {
-            write!(
+            writeln!(
                 buffer,
-                "<br>**default**: `{}`\n",
+                "<br>**default**: `{}`",
                 opt.get_default_values()
                     .iter()
                     .map(|value| {
@@ -322,9 +320,9 @@ fn arguments(options: &[&clap::Arg]) -> String {
             .unwrap();
         }
         if opt.get_action().takes_values() && !opt.get_possible_values().is_empty() {
-            write!(
+            writeln!(
                 buffer,
-                "<br>**options**: `{}`\n",
+                "<br>**options**: `{}`",
                 opt.get_possible_values()
                     .iter()
                     .map(|value| value.get_name())
