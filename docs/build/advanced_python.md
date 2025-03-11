@@ -37,14 +37,14 @@ The Python package has a single function `main`.
 Calling that, will print a table containing the name, age and city of three people.
 
 ```py title="src/rich_example/__init__.py"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_rattler_build/python/src/rich_example/__init__.py"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_python/src/rich_example/__init__.py"
 ```
 
 
 The metadata of the Python package is defined in `pyproject.toml`.
 
 ```toml title="pyproject.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_rattler_build/python/pyproject.toml"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_python/pyproject.toml"
 ```
 
 1. We use the `rich` package to print the table in the terminal.
@@ -89,7 +89,7 @@ We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.to
 Next lets add the `recipe.yaml` file that will be used to build the package:
 
 ```yaml
---8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_rattler_build/python/recipe.yaml"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_python/recipe.yaml"
 ```
 
 1. Because we are specifying current directory as the source directory, `rattler-build` may skip files that are not tracked by git. We need to ignore `gitignore`.  If your files are already tracked by git, you can remove this line.
@@ -100,7 +100,7 @@ Next lets add the `recipe.yaml` file that will be used to build the package:
 This is the content of the `pixi.toml`:
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_rattler_build/python/pixi.toml"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_python/pixi.toml"
 ```
 
 1. In `workspace` information is set that is shared across all packages in the workspace.
