@@ -613,6 +613,10 @@ impl Workspace {
             }
         })
     }
+
+    pub fn activate_proxy_envs(&self) {
+        self.config.activate_proxy_envs();
+    }
 }
 
 pub struct UpdateDeps {

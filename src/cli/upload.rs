@@ -15,6 +15,7 @@ use thiserror::Error;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
+use pixi_config::Config;
 use pixi_progress;
 
 #[allow(rustdoc::bare_urls)]
@@ -52,6 +53,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.package_file.display(),
         HumanBytes(filesize)
     );
+
+    Config::load_global().activate_proxy_envs();
 
     let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
         .with_arc(Arc::new(

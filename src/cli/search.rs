@@ -147,6 +147,10 @@ pub async fn execute_impl<W: Write>(
 
     let config = Config::load_global();
 
+    project
+        .map_or(&config, |p| p.config())
+        .activate_proxy_envs();
+
     // Fetch the all names from the repodata using gateway
     let gateway = config.gateway().with_client(client).finish();
 

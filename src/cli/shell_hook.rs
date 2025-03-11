@@ -153,6 +153,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(config);
 
+    workspace.activate_proxy_envs();
+
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
