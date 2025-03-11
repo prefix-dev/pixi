@@ -358,7 +358,10 @@ impl WorkspaceMut {
             io_concurrency_limit,
         } = UpdateContext::builder(self.workspace())
             .with_lock_file(unlocked_lock_file)
-            .with_no_install(prefix_update_config.no_install() || dry_run)
+            .with_no_install(
+                (prefix_update_config.no_install && lock_file_update_config.no_lockfile_update)
+                    || dry_run,
+            )
             .finish()
             .await?
             .update()
@@ -406,10 +409,11 @@ impl WorkspaceMut {
             build_context,
             glob_hash_cache,
         };
-        if !prefix_update_config.no_lockfile_update && !dry_run {
+        if !lock_file_update_config.no_lockfile_update && !dry_run {
             updated_lock_file.write_to_disk()?;
         }
-        if !prefix_update_config.no_install()
+        if !prefix_update_config.no_install
+            && !lock_file_update_config.no_lockfile_update
             && !dry_run
             && self.workspace().environments().len() == 1
             && default_environment_is_affected

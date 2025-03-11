@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pep508_rs::{MarkerTree, Requirement};
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, PyPiRequirement, SpecType};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
@@ -31,6 +32,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     #[clap(flatten)]
     pub specs: UpgradeSpecsArgs,

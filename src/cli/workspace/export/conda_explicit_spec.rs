@@ -10,6 +10,7 @@ use crate::{
 };
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
+use pixi_config::ConfigCli;
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
 };
@@ -43,6 +44,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 }
 
 fn build_explicit_spec<'a>(
@@ -167,7 +171,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let lockfile = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install,
+            no_install: args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?

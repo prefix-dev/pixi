@@ -5,6 +5,7 @@ pub mod remove;
 use crate::cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
 use clap::Parser;
 use miette::IntoDiagnostic;
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, PrioritizedChannel};
 use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl};
 
@@ -38,6 +39,9 @@ pub struct AddRemoveArgs {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     /// The name of the feature to modify.
     #[clap(long, short)]

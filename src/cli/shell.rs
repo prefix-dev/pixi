@@ -280,7 +280,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install(),
+            no_install: args.prefix_update_config.no_install
+                && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
     )
