@@ -95,23 +95,23 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
     /// Do not verify the TLS certificate of the server.
-    #[arg(long, action = ArgAction::SetTrue, help_heading = "Config options")]
+    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     tls_no_verify: bool,
 
     /// Path to the file containing the authentication token.
-    #[arg(long, help_heading = "Config options")]
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     auth_file: Option<PathBuf>,
 
     /// Specifies whether to use the keyring to look up credentials for PyPI.
-    #[arg(long, help_heading = "Config options")]
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pypi_keyring_provider: Option<KeyringProvider>,
 
     /// Max concurrent solves, default is the number of CPUs
-    #[arg(long, help_heading = "Config options")]
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub concurrent_solves: Option<usize>,
 
     /// Max concurrent network requests, default is `50`
-    #[arg(long, help_heading = "Config options")]
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub concurrent_downloads: Option<usize>,
 }
 

@@ -64,9 +64,8 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 
 For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION),
-disable_help_flag = true,
 )]
-#[clap(arg_required_else_help = true, styles=get_styles())]
+#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Command,
@@ -76,38 +75,26 @@ pub struct Args {
 }
 
 #[derive(Debug, Parser)]
-#[clap(next_help_heading = "Global Options")]
+#[clap(next_help_heading = consts::CLAP_GLOBAL_OPTIONS)]
 pub struct GlobalOptions {
     /// Display help information
     #[clap(long, short, global = true, action = clap::ArgAction::Help)]
     help: Option<bool>,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
-    #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count, global = true, help_heading = "Global Options")]
+    #[clap(short, long, action = clap::ArgAction::Count, global = true)]
     verbose: u8,
 
     /// Decrease logging verbosity (quiet mode)
-    #[clap(short = 'q', long = "quiet", action = clap::ArgAction::Count, global = true, help_heading = "Global Options")]
+    #[clap(short, long, action = clap::ArgAction::Count, global = true)]
     quiet: u8,
 
     /// Whether the log needs to be colored.
-    #[clap(
-        long,
-        default_value = "auto",
-        global = true,
-        env = "PIXI_COLOR",
-        help_heading = "Global Options"
-    )]
+    #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
     color: ColorOutput,
 
     /// Hide all progress bars, always turned on if stderr is not a terminal.
-    #[clap(
-        long,
-        default_value = "false",
-        global = true,
-        env = "PIXI_NO_PROGRESS",
-        help_heading = "Global Options"
-    )]
+    #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS")]
     no_progress: bool,
 }
 

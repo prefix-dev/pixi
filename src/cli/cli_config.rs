@@ -28,7 +28,7 @@ use pixi_git::GIT_URL_QUERY_REV_TYPE;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, global = true, help_heading = "Global Options")]
+    #[arg(long, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 }
 
@@ -151,15 +151,15 @@ impl PrefixUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
-    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"], help_heading = "Git options")]
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub branch: Option<String>,
 
     /// The git tag
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"], help_heading = "Git options")]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub tag: Option<String>,
 
     /// The git revision
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"], help_heading = "Git options")]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub rev: Option<String>,
 }
 
@@ -258,7 +258,7 @@ pub struct DependencyConfig {
     pub feature: FeatureName,
 
     /// The git url to use when adding a git dependency
-    #[clap(long, short, help_heading = "Git options")]
+    #[clap(long, short, help_heading = consts::CLAP_GIT_OPTIONS)]
     pub git: Option<Url>,
 
     #[clap(flatten)]
@@ -266,7 +266,7 @@ pub struct DependencyConfig {
     pub rev: Option<GitRev>,
 
     /// The subdirectory of the git repository to use
-    #[clap(long, short, requires = "git", help_heading = "Git options")]
+    #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdir: Option<String>,
 }
 

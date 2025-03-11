@@ -45,15 +45,15 @@ enum Subcommand {
 #[derive(Parser, Debug, Clone)]
 struct CommonArgs {
     /// Operation on project-local configuration
-    #[arg(long, short, conflicts_with_all = &["global", "system"], help_heading = "Config Options")]
+    #[arg(long, short, conflicts_with_all = &["global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     local: bool,
 
     /// Operation on global configuration
-    #[arg(long, short, conflicts_with_all = &["local", "system"], help_heading = "Config Options")]
+    #[arg(long, short, conflicts_with_all = &["local", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     global: bool,
 
     /// Operation on system configuration
-    #[arg(long, short, conflicts_with_all = &["local", "global"], help_heading = "Config Options")]
+    #[arg(long, short, conflicts_with_all = &["local", "global"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     system: bool,
 
     #[clap(flatten)]
