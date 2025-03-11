@@ -4,9 +4,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Write;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use fs_err as fs;
 
 const MD_EXTENSION: &str = ".md";
 
