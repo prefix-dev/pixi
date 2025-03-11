@@ -88,7 +88,6 @@ def test_trampoline_new_activation_scripts(
             pixi,
             "global",
             "install",
-            "--force-reinstall",
             "dummy-trampoline==0.2.0",
         ],
         env=env,

@@ -3,7 +3,7 @@ The `pixi.toml` is the project manifest, also known as the Pixi project configur
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check Pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
+For more technical documentation check Pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/workspace/manifest/struct.ProjectManifest.html).
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.

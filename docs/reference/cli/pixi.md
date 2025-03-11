@@ -22,14 +22,14 @@ pixi [OPTIONS] <COMMAND>
 | [`exec`](pixi/exec.md) | Run a command and install it in a temporary environment |
 | [`shell`](pixi/shell.md) | Start a shell in a pixi environment, run `exit` to leave the shell |
 | [`shell-hook`](pixi/shell-hook.md) | Print the pixi environment activation script |
-| [`project`](pixi/project.md) | Modify the project configuration file through the command line |
+| [`workspace`](pixi/workspace.md) | Modify the workspace configuration file through the command line |
 | [`task`](pixi/task.md) | Interact with tasks in the workspace |
-| [`list`](pixi/list.md) | List project's packages |
-| [`tree`](pixi/tree.md) | Show a tree of project dependencies |
+| [`list`](pixi/list.md) | List workspace's packages |
+| [`tree`](pixi/tree.md) | Show a tree of workspace dependencies |
 | [`global`](pixi/global.md) | Subcommand for global package management actions |
 | [`auth`](pixi/auth.md) | Login to prefix.dev or anaconda.org servers to access private channels |
 | [`config`](pixi/config.md) | Configuration management |
-| [`info`](pixi/info.md) | Information about the system, project and environments for the current machine |
+| [`info`](pixi/info.md) | Information about the system, workspace and environments for the current machine |
 | [`upload`](pixi/upload.md) | Upload a conda package |
 | [`search`](pixi/search.md) | Search a conda package |
 | [`self-update`](pixi/self-update.md) | Update pixi to the latest version or a specific version |

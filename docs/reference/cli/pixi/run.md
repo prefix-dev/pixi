@@ -13,7 +13,7 @@ pixi run [OPTIONS] [TASK]...
 
 ## Arguments
 - <a id="arg-<TASK>" href="#arg-<TASK>">`<TASK>`</a>
-:  The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
+:  The pixi task or a task shell command you want to run in the workspace's environment, which can be an executable in the environment's PATH
 
 ## Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -57,7 +57,7 @@ pixi run [OPTIONS] [TASK]...
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 Runs task in the pixi environment.

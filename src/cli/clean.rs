@@ -121,7 +121,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             tracing::info!("Skipping removal of task cache and solve group environments for explicit environment '{}'", explicit_env.name().fancy_display());
         }
     } else {
-        // Remove all pixi related work from the project.
+        // Remove all pixi related work from the workspace.
         if !workspace
             .environments_dir()
             .starts_with(workspace.pixi_dir())

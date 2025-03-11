@@ -818,6 +818,7 @@ async fn pypi_prefix_is_not_created_when_whl() {
 /// and osxarm64.
 /// This should result in the PyPI package being overridden on linux and not on osxarm64.
 #[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
     let pixi = PixiControl::new().unwrap();
     pixi.init_with_platforms(vec![
@@ -871,6 +872,8 @@ async fn conda_pypi_override_correct_per_platform() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+
 async fn test_multiple_prefix_update() {
     let current_platform = Platform::current();
 

@@ -14,14 +14,14 @@ pixi task [OPTIONS] <COMMAND>
 ## Subcommands
 | Command | Description |
 |---------|-------------|
-| [`add`](task/add.md) | Add a command to the project |
-| [`remove`](task/remove.md) | Remove a command from the project |
+| [`add`](task/add.md) | Add a command to the workspace |
+| [`remove`](task/remove.md) | Remove a command from the workspace |
 | [`alias`](task/alias.md) | Alias another specific command |
-| [`list`](task/list.md) | List all tasks in the project |
+| [`list`](task/list.md) | List all tasks in the workspace |
 
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 --8<-- "docs/reference/cli/pixi/task_extender.md:example"
