@@ -14,7 +14,6 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 [dependencies]
 git = "==2.47.1"
 python = "3.12.*"
-rust-src = ">=1.84.0,<2"
 
 [tasks]
 build-debug = "cargo build"
@@ -116,6 +115,7 @@ git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
 rust = "==1.84.0"
+rust-src = ">=1.84.0,<2"
 
 [feature.build.target.linux-64.dependencies]
 clang = ">=18.1.8,<19.0"
