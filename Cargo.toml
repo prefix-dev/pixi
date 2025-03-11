@@ -109,6 +109,7 @@ uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
 
+wax = "0.6.0"
 which = "7.0.2"
 
 # Rattler crates
@@ -238,7 +239,6 @@ fs_extra = { workspace = true }
 futures = { workspace = true }
 human_bytes = { workspace = true }
 humantime = { workspace = true }
-ignore = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -337,7 +337,6 @@ uv-requirements = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
-wax = { workspace = true, features = ["walk"] }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
