@@ -48,13 +48,15 @@ pixi [OPTIONS] <COMMAND>
 <br>**env**: `PIXI_COLOR`
 <br>**default**: `auto`
 <br>**options**: `always`, `never`, `auto`
+- <a id="arg---help" href="#arg---help">`--help (-h)`</a>
+:  Display help information
 - <a id="arg---no-progress" href="#arg---no-progress">`--no-progress`</a>
 :  Hide all progress bars, always turned on if stderr is not a terminal
 <br>**env**: `PIXI_NO_PROGRESS`
 <br>**default**: `false`
 - <a id="arg---quiet" href="#arg---quiet">`--quiet (-q)`</a>
-:  Decrease logging verbosity
+:  Decrease logging verbosity (quiet mode)
 - <a id="arg---verbose" href="#arg---verbose">`--verbose (-v)`</a>
-:  Increase logging verbosity
+:  Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
 
 --8<-- "docs/reference/cli/pixi_extender.md:example"

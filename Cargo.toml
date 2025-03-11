@@ -24,7 +24,6 @@ base64 = "0.22.1"
 bytes = "1.10.0"
 chrono = "0.4.40"
 clap = { version = "4.5.31", default-features = false }
-clap-verbosity-flag = "3.0.2"
 clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 concat-idents = "1.1.5"
@@ -226,7 +225,6 @@ clap = { workspace = true, features = [
   "error-context",
   "env",
 ] }
-clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
