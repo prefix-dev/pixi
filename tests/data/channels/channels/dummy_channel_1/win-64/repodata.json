@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "f6d65e06e02e2d51c02baa97d08cd2ca",
+      "md5": "211dff6f4ce4243025841b6f84d2e0ed",
       "name": "dummy-a",
       "platform": "win",
-      "sha256": "b4accca89ddb3cac3172a29641c12c670854ab12f212686ffd7dd630b1138d10",
-      "size": 1326,
+      "sha256": "b5b79701cd4e45e6845cbd038347112b72e94131f450ca2f1516a84dc3c4318f",
+      "size": 1328,
       "subdir": "win-64",
-      "timestamp": 1736931760141,
+      "timestamp": 1741687107508,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-h9490d1a_0.conda": {
@@ -25,13 +25,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "33644cb94fed549e963ba8ac37b117c2",
+      "md5": "2f06a69cdd3a4ccd8f1d07eac71e0d3e",
       "name": "dummy-b",
       "platform": "win",
-      "sha256": "006d1123ca0db5c2a3a5aeed73710024d84e380d9109f85c8e4c97391fad821a",
-      "size": 1157,
+      "sha256": "ab1d6ad961c29d1f6462971248caf669fb2f6f6b3b231250ed347aed8273c6e2",
+      "size": 1159,
       "subdir": "win-64",
-      "timestamp": 1736931760139,
+      "timestamp": 1741687107508,
       "version": "0.1.0"
     },
     "dummy-c-0.1.0-h9490d1a_0.conda": {
@@ -39,13 +39,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "bcff041ee19377e48ed069d3c92140dc",
+      "md5": "7ba027d84cad59916e581b26c83d86c0",
       "name": "dummy-c",
       "platform": "win",
-      "sha256": "97d96406c20cd9b4bc93960b5c98445f255ee51da2dfd2a34b3c6be6c79c478b",
+      "sha256": "6751bae616cbbc779fdb191b96feba8840875d717324ff1dcb0c8a09a5a904e5",
       "size": 1158,
       "subdir": "win-64",
-      "timestamp": 1736931760141,
+      "timestamp": 1741687107508,
       "version": "0.1.0"
     },
     "dummy-d-0.1.0-h9490d1a_0.conda": {
@@ -55,13 +55,13 @@
       "depends": [
         "dummy-x"
       ],
-      "md5": "98a73409b67979739cf127dbc0a46c57",
+      "md5": "b5f8517e70e2255a7f12363bed3dae83",
       "name": "dummy-d",
       "platform": "win",
-      "sha256": "7fd4cef99fc17d578a8f13eba7f5387b9f5c080a7093b41b5790e03fc44ced76",
-      "size": 1174,
+      "sha256": "efcbb39ee11a868d4ee023e93f62fec7b4107a8fc8e29365b445998bc7497825",
+      "size": 1175,
       "subdir": "win-64",
-      "timestamp": 1736931760141,
+      "timestamp": 1741687107508,
       "version": "0.1.0"
     },
     "dummy-f-0.1.0-h9490d1a_0.conda": {
@@ -69,13 +69,29 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "1a4c0c1cd6c6372f51614b9c825911f0",
+      "md5": "a4520e8217320ba8b9880b30b5368f40",
       "name": "dummy-f",
       "platform": "win",
-      "sha256": "12851cbcab30fbbae88f5cda1ff3b4b11563c5a4f57ac9102367577fa5ebebca",
-      "size": 1173,
+      "sha256": "11d7bf0338f1377a859a63da9fe842e5958f63e9bb4df7fc09d6b8b2facc6f32",
+      "size": 1171,
       "subdir": "win-64",
-      "timestamp": 1736931760141,
+      "timestamp": 1741687107508,
+      "version": "0.1.0"
+    },
+    "dummy-g-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-b"
+      ],
+      "md5": "95f801ddbef3885c4485ce3cf24d2a73",
+      "name": "dummy-g",
+      "platform": "win",
+      "sha256": "59af6589b5f3be8114f4b959871a8f814e9239ebc257ab127408c3b4c0b4d5a0",
+      "size": 1184,
+      "subdir": "win-64",
+      "timestamp": 1741687107508,
       "version": "0.1.0"
     },
     "dummy_e-0.1.0-h9490d1a_0.conda": {
@@ -83,13 +99,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "a56500b9529877e60f8b303939303899",
+      "md5": "3a1abd039c99f8a669b64f832d297306",
       "name": "dummy_e",
       "platform": "win",
-      "sha256": "4f3c38ab0d08183ea11a2abac0f655fece10dd3b634e3ced7feb0395089a23df",
-      "size": 1157,
+      "sha256": "672d76a27135e6c023360553a7ba732e747af52e8fd9f47b8bf18e48401ee212",
+      "size": 1158,
       "subdir": "win-64",
-      "timestamp": 1736931760141,
+      "timestamp": 1741687107508,
       "version": "0.1.0"
     }
   },

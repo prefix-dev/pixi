@@ -103,3 +103,23 @@ outputs:
             - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-f
             - echo "echo dummy-f on unix" >> $PREFIX/bin/dummy-f
             - chmod +x $PREFIX/bin/dummy-f
+
+  - package:
+      name: dummy-g
+      version: 0.1.0
+
+    requirements:
+      run:
+        - dummy-b
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "@echo off" > $PREFIX/bin/dummy-g.bat
+            - echo "echo windows" >> $PREFIX/bin/dummy-g.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-g
+            - echo "echo unix" >> $PREFIX/bin/dummy-g
+            - chmod +x $PREFIX/bin/dummy-g
