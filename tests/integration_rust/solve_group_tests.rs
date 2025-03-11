@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeSet, HashMap},
+    path::Path,
     str::FromStr,
     sync::Arc,
 };
@@ -351,17 +352,37 @@ async fn test_dont_record_not_present_package_as_purl() {
     );
 }
 
+fn absolute_custom_mapping_path() -> String {
+    dunce::simplified(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/mapping_files/custom_mapping.json"),
+    )
+    .display()
+    .to_string()
+    .replace("\\", "/")
+}
+
+fn absolute_compressed_mapping_path() -> String {
+    dunce::simplified(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/data/mapping_files/compressed_mapping.json"),
+    )
+    .display()
+    .to_string()
+    .replace("\\", "/")
+}
+
 #[tokio::test]
 async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
-    let pixi = PixiControl::from_manifest(
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
     name = "test-channel-change"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = { 'conda-forge' = "tests/data/mapping_files/compressed_mapping.json" }
+    conda-pypi-map = {{ 'conda-forge' = "{}" }}
     "#,
-    )
+        absolute_compressed_mapping_path()
+    ))
     .unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -414,6 +435,8 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
         .and_then(BTreeSet::first)
         .unwrap();
 
+    println!("{boltons_first_purl}");
+
     // for boltons we have a mapping record
     // so we test that we also record source=project-defined-mapping qualifier
     assert_eq!(boltons_first_purl.name(), "boltons");
@@ -440,14 +463,16 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
 #[tokio::test]
 async fn test_custom_mapping_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(r#"
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
      [project]
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = { "https://conda.anaconda.org/conda-forge/" = "tests/data/mapping_files/custom_mapping.json" }
+     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge/" = "{}" }}
      "#,
-    )
+        absolute_custom_mapping_path()
+    ))
     .unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -493,14 +518,16 @@ async fn test_custom_mapping_channel_with_suffix() {
 
 #[tokio::test]
 async fn test_repo_data_record_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(r#"
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
      [project]
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = { "https://conda.anaconda.org/conda-forge" = "tests/data/mapping_files/custom_mapping.json" }
+     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge" = "{}" }}
      "#,
-    )
+        absolute_custom_mapping_path(),
+    ))
     .unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -545,15 +572,16 @@ async fn test_repo_data_record_channel_with_suffix() {
 
 #[tokio::test]
 async fn test_path_channel() {
-    let pixi = PixiControl::from_manifest(
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
      [project]
      name = "test-channel-change"
      channels = ["file:///home/user/staged-recipes/build_artifacts"]
      platforms = ["linux-64"]
-     conda-pypi-map = {"file:///home/user/staged-recipes/build_artifacts" = "tests/data/mapping_files/custom_mapping.json"}
+     conda-pypi-map = {{"file:///home/user/staged-recipes/build_artifacts" = "{}" }}
      "#,
-    )
+        absolute_custom_mapping_path()
+    ))
     .unwrap();
 
     let project = pixi.workspace().unwrap();

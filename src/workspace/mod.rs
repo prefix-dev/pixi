@@ -18,18 +18,13 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
-    diff::LockFileDiff,
-    lock_file::filter_lock_file,
-};
 use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::Equivalent;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_config::Config;
@@ -41,17 +36,22 @@ use pixi_manifest::{
 };
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
-use pypi_mapping::CustomMapping;
-use pypi_mapping::{ChannelName, MappingLocation, MappingSource};
+use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
-use url::{ParseError, Url};
+use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
+
+use crate::{
+    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    diff::LockFileDiff,
+    lock_file::filter_lock_file,
+};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -182,7 +182,8 @@ impl Workspace {
         // Canonicalize the root path
         let root = &manifest.workspace.provenance.path;
         let root = dunce::canonicalize(root).unwrap_or(root.to_path_buf());
-        // Take the parent after canonicalizing to ensure this works even when the manifest
+        // Take the parent after canonicalizing to ensure this works even when the
+        // manifest
         let root = root
             .parent()
             .expect("manifest path should always have a parent")
@@ -533,24 +534,32 @@ impl Workspace {
                     let mapping = channel_to_location_map
                         .iter()
                         .map(|(channel, mapping_location)| {
-                            let url_or_path = match Url::parse(mapping_location) {
-                                Ok(url) => MappingLocation::Url(url),
-                                Err(err) => {
-                                    if let ParseError::RelativeUrlWithoutBase = err {
-                                        let path = PathBuf::from(mapping_location);
-                                        let abs_path = if path.is_relative() {
-                                            channel_config.root_dir.join(path)
-                                        } else {
-                                            path
-                                        };
-                                        MappingLocation::Path(abs_path)
-                                    } else {
-                                        miette::bail!("Could not convert {mapping_location} to neither URL or Path")
+                            let url_or_path = if mapping_location.starts_with("https://")
+                                || mapping_location.starts_with("http://")
+                                || mapping_location.starts_with("file://")
+                            {
+                                match Url::parse(mapping_location) {
+                                    Ok(url) => MappingLocation::Url(url),
+                                    Err(err) => {
+                                        return Err(err).into_diagnostic().context(format!(
+                                            "Could not convert {mapping_location} to URL"
+                                        ))
                                     }
                                 }
+                            } else {
+                                let path = PathBuf::from(mapping_location);
+                                let abs_path = if path.is_relative() {
+                                    channel_config.root_dir.join(path)
+                                } else {
+                                    path
+                                };
+                                MappingLocation::Path(abs_path)
                             };
 
-                            Ok((channel.canonical_name().trim_end_matches('/').into(), url_or_path))
+                            Ok((
+                                channel.canonical_name().trim_end_matches('/').into(),
+                                url_or_path,
+                            ))
                         })
                         .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
