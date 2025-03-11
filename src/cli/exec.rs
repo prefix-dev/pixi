@@ -22,11 +22,13 @@ use crate::{
     prefix::Prefix,
 };
 
-/// Run a command in a temporary environment.
+/// Run a command and install it in a temporary environment.
+///
+/// Remove the temporary environments with `pixi clean cache --exec`.
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
-    /// The executable to run.
+    /// The executable to run, followed by any arguments.
     #[clap(num_args = 1.., value_hint = ValueHint::CommandWithArguments)]
     pub command: Vec<String>,
 

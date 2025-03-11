@@ -18,8 +18,14 @@ pub struct Args {
 #[derive(Parser, Debug)]
 pub enum Command {
     /// Get the project description.
+    ///
+    /// Example:
+    /// `pixi project description get`
     Get,
     /// Set the project description.
+    ///
+    /// Example:
+    /// `pixi project description set "My awesome project"`
     Set(set::Args),
 }
 

@@ -22,10 +22,11 @@ use pixi_config::{self, Config, ConfigCli};
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
 ///
 /// Example:
-/// - pixi global install starship nushell ripgrep bat
-/// - pixi global install jupyter --with polars
-/// - pixi global install --expose python3.8=python python=3.8
-/// - pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars
+///
+/// - `pixi global install starship nushell ripgrep bat`
+/// - `pixi global install jupyter --with polars`
+/// - `pixi global install --expose python3.8=python python=3.8`
+/// - `pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars`
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
@@ -64,7 +65,7 @@ pub struct Args {
     #[clap(flatten)]
     config: ConfigCli,
 
-    /// Specifies that the packages should be reinstalled even if they are already installed.
+    /// Specifies that the environment should be reinstalled.
     #[arg(action, long)]
     force_reinstall: bool,
 
@@ -167,6 +168,10 @@ async fn setup_environment(
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
+    if args.force_reinstall && project.environment(env_name).is_some() {
+        state_changes |= project.remove_environment(env_name).await?;
+    }
+
     let channels = if args.channels.is_empty() {
         project.config().default_channels()
     } else {
@@ -206,7 +211,7 @@ async fn setup_environment(
         }
     }
 
-    if !args.force_reinstall && project.environment_in_sync(env_name).await? {
+    if project.environment_in_sync(env_name).await? {
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 

@@ -154,7 +154,7 @@ nav:
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
-      - CLI: reference/cli.md
+      - CLI: reference/cli/pixi.md
   - Misc:
       - Changelog: CHANGELOG.md
       - Pixi Vision: vision.md
@@ -174,7 +174,6 @@ plugins:
         "environment.md": "environments/environment.md"
         "design_proposals/multi_environment_proposal.md": "environments/multi_environment.md"
         "advanced/multi_platform_configuration.md": "environments/multi_platform_configuration.md"
-        "cli.md": "reference/cli.md"
         "configuration.md": "reference/pixi_manifest.md"
         "reference/project_configuration.md": "reference/pixi_manifest.md"
         "advanced/global_configuration.md": "reference/pixi_configuration.md"

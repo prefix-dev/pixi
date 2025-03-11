@@ -8,9 +8,11 @@ use serde::Serialize;
 
 #[derive(Parser, Debug)]
 pub struct Args {
+    /// List the system requirements in JSON format.
     #[clap(long)]
     pub json: bool,
 
+    /// The environment to list the system requirements for.
     #[clap(long, short)]
     pub environment: Option<EnvironmentName>,
 }

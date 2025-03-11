@@ -20,6 +20,7 @@ pub struct Args {
 pub struct AddRemoveArgs {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
+
     /// The channel name or URL
     #[clap(required = true, num_args=1..)]
     pub channel: Vec<NamedChannelOrUrl>,

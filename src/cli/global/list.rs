@@ -10,12 +10,14 @@ use std::str::FromStr;
 /// Lists all packages previously installed into a globally accessible location via `pixi global install`.
 ///
 /// All environments:
+///
 /// - Yellow: the binaries that are exposed.
 /// - Green: the packages that are explicit dependencies of the environment.
 /// - Blue: the version of the installed package.
 /// - Cyan: the name of the environment.
 ///
 /// Per environment:
+///
 /// - Green: packages that are explicitly installed.
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
