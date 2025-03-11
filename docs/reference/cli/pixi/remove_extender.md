@@ -4,7 +4,7 @@
 ```shell
 pixi remove numpy
 pixi remove numpy pandas pytorch
-pixi remove --manifest-path ~/myproject/pixi.toml numpy
+pixi remove --manifest-path ~/myworkspace/pixi.toml numpy
 pixi remove --host python
 pixi remove --build cmake
 pixi remove --pypi requests

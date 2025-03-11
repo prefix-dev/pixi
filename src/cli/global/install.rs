@@ -12,7 +12,7 @@ use crate::{
     global::{
         self,
         common::{contains_menuinst_document, NotChangedReason},
-        list::list_global_environments,
+        list::list_all_global_environments,
         project::ExposedType,
         EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
@@ -149,7 +149,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // After installing, we always want to list the changed environments
-    list_global_environments(
+    list_all_global_environments(
         &last_updated_project,
         Some(env_names),
         Some(&env_changes),

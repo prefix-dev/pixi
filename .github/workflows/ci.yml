@@ -142,6 +142,7 @@ jobs:
           # Check if there are any changes
           if ! git diff --quiet; then
             echo "Error: Generated CLI documentation differs from committed version"
+            echo "Please run 'pixi run generate-cli-docs' to regenerate the documentation and commit the changes."
             git diff
             exit 1
           fi

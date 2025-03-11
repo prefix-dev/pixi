@@ -19,7 +19,7 @@ python = "3.12.*"
 build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
-generate-cli-docs = "cargo run --manifest-path pixi_docs/Cargo.toml"
+generate-cli-docs = "cargo run --locked --manifest-path pixi_docs/Cargo.toml"
 install = "cargo install --path . --locked"
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
@@ -117,6 +117,7 @@ git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
 rust = "==1.84.0"
+rust-src = ">=1.84.0,<2"
 
 [feature.build.target.linux-64.dependencies]
 clang = ">=18.1.8,<19.0"

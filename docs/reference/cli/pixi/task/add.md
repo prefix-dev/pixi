@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [task](../task.md) add</code>
 
 ## About
-Add a command to the project
+Add a command to the workspace
 
 --8<-- "docs/reference/cli/pixi/task/add_extender.md:description"
 
@@ -23,7 +23,7 @@ pixi task add [OPTIONS] <NAME> <COMMANDS>...
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
 :  Isolate the task from the shell environment, and only use the pixi environment to run the task
 - <a id="arg---cwd" href="#arg---cwd">`--cwd <CWD>`</a>
-:  The working directory relative to the root of the project
+:  The working directory relative to the root of the workspace
 - <a id="arg---depends-on" href="#arg---depends-on">`--depends-on <DEPENDS_ON>`</a>
 :  Depends on these other commands
 - <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>

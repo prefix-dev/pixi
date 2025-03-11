@@ -17,7 +17,7 @@ use crate::{
 ///
 /// The dependencies should be defined as MatchSpec for conda package, or a PyPI
 /// requirement for the `--pypi` dependencies. If no specific version is
-/// provided, the latest version compatible with your project will be chosen
+/// provided, the latest version compatible with your workspace will be chosen
 /// automatically or a * will be used.
 ///
 /// Example usage:
@@ -31,7 +31,7 @@ use crate::{
 /// Adding multiple dependencies at once is also supported:
 ///
 /// - `pixi add python pytest`: This will add both `python` and `pytest` to the
-///   project's dependencies.
+///   workspace's dependencies.
 ///
 /// The `--platform` and `--build/--host` flags make the dependency target
 /// specific.
@@ -49,7 +49,7 @@ use crate::{
 /// - `pixi add --pypi boto3`
 /// - `pixi add --pypi "boto3==version"`
 ///
-/// If the project manifest is a `pyproject.toml`, adding a pypi dependency will
+/// If the workspace manifest is a `pyproject.toml`, adding a pypi dependency will
 /// add it to the native pyproject `project.dependencies` array or to the native
 /// `dependency-groups` table if a feature is specified:
 ///
@@ -88,14 +88,14 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, project_config) = (
+    let (dependency_config, prefix_update_config, workspace_config) = (
         args.dependency_config,
         args.prefix_update_config,
         args.workspace_config,
     );
 
     let workspace = WorkspaceLocator::for_cli()
-        .with_search_start(project_config.workspace_locator_start())
+        .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(prefix_update_config.config.clone());
 

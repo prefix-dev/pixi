@@ -21,11 +21,11 @@ use crate::{
     WorkspaceLocator,
 };
 
-/// Show a tree of project dependencies
+/// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false, long_about = format!(
     "\
-    Show a tree of project dependencies\n\
+    Show a tree of workspace dependencies\n\
     \n\
     Dependency names highlighted in {} are directly specified in the manifest. \
     {} version numbers are conda packages, PyPI version numbers are {}.
