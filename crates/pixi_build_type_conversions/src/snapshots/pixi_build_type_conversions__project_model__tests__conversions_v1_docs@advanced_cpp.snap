@@ -1,0 +1,40 @@
+---
+source: crates/pixi_build_type_conversions/src/project_model.rs
+expression: project_model
+---
+{
+  "version": "1",
+  "data": {
+    "name": "python_bindings",
+    "version": "0.1.0",
+    "description": null,
+    "authors": null,
+    "license": null,
+    "licenseFile": null,
+    "readme": null,
+    "homepage": null,
+    "repository": null,
+    "documentation": null,
+    "targets": {
+      "defaultTarget": {
+        "hostDependencies": {
+          "python": {
+            "binary": {
+              "version": "3.12.*",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null
+            }
+          }
+        },
+        "buildDependencies": {},
+        "runDependencies": {}
+      },
+      "targets": {}
+    }
+  }
+}
