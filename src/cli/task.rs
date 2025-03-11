@@ -27,11 +27,11 @@ use crate::{
 
 #[derive(Parser, Debug)]
 pub enum Operation {
-    /// Add a command to the project
+    /// Add a command to the workspace
     #[clap(visible_alias = "a")]
     Add(AddArgs),
 
-    /// Remove a command from the project
+    /// Remove a command from the workspace
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
 
@@ -39,7 +39,7 @@ pub enum Operation {
     #[clap(alias = "@")]
     Alias(AliasArgs),
 
-    /// List all tasks in the project
+    /// List all tasks in the workspace
     #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 }
@@ -82,7 +82,7 @@ pub struct AddArgs {
     #[arg(long, short)]
     pub feature: Option<String>,
 
-    /// The working directory relative to the root of the project
+    /// The working directory relative to the root of the workspace
     #[arg(long)]
     pub cwd: Option<PathBuf>,
 

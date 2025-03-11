@@ -4,7 +4,7 @@
 
 ```shell
 pixi install  # (1)!
-pixi install --manifest-path ~/myproject/pixi.toml # (2)!
+pixi install --manifest-path ~/myworkspace/pixi.toml # (2)!
 pixi install --frozen # (3)!
 pixi install --locked # (4)!
 pixi install --environment lint # (5)!

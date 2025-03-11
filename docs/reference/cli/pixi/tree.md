@@ -2,7 +2,7 @@
 # <code>[pixi](../pixi.md) tree</code>
 
 ## About
-Show a tree of project dependencies
+Show a tree of workspace dependencies
 
 --8<-- "docs/reference/cli/pixi/tree_extender.md:description"
 
@@ -48,10 +48,10 @@ pixi tree [OPTIONS] [REGEX]
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
-Show a tree of project dependencies
+Show a tree of workspace dependencies
 
 Dependency names highlighted in green are directly specified in the manifest. Yellow version numbers are conda packages, PyPI version numbers are blue.
 

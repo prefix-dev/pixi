@@ -25,7 +25,6 @@ pub mod init;
 pub mod install;
 pub mod list;
 pub mod lock;
-pub mod project;
 pub mod remove;
 pub mod run;
 pub mod search;
@@ -37,18 +36,19 @@ pub mod tree;
 pub mod update;
 pub mod upgrade;
 pub mod upload;
+pub mod workspace;
 
 #[derive(Parser, Debug)]
 #[command(
     version(consts::PIXI_VERSION),
     about = format!("
-Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.
 
-Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
+Pixi is a versatile developer workflow tool designed to streamline the management of your workspace's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
 
 Basic Usage:
-    Initialize pixi for a project:
+    Initialize pixi for a workspace:
     $ pixi init
     $ pixi add python numpy pytest
 
@@ -117,8 +117,9 @@ pub enum Command {
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
 
-    // Project modification commands
-    Project(project::Args),
+    // Workspace Manifest modification commands
+    #[clap(alias = "project")]
+    Workspace(workspace::Args),
     Task(task::Args),
 
     // Environment inspection
@@ -257,7 +258,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
-        Command::Project(cmd) => project::execute(cmd).await,
+        Command::Workspace(cmd) => workspace::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
         #[cfg(feature = "self_update")]
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,

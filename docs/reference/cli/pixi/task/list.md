@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [task](../task.md) list</code>
 
 ## About
-List all tasks in the project
+List all tasks in the workspace
 
 --8<-- "docs/reference/cli/pixi/task/list_extender.md:description"
 

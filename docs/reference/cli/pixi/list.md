@@ -2,7 +2,7 @@
 # <code>[pixi](../pixi.md) list</code>
 
 ## About
-List project's packages
+List workspace's packages
 
 --8<-- "docs/reference/cli/pixi/list_extender.md:description"
 
@@ -25,7 +25,7 @@ pixi list [OPTIONS] [REGEX]
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
 - <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
-:  Only list packages that are explicitly defined in the project
+:  Only list packages that are explicitly defined in the workspace
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
@@ -56,10 +56,10 @@ pixi list [OPTIONS] [REGEX]
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
-List project's packages.
+List workspace's packages.
 
 Highlighted packages are explicit dependencies.
 

@@ -1,0 +1,23 @@
+---
+source: src/cli/workspace/export/conda_environment.rs
+expression: env_yaml.unwrap().to_yaml_string()
+---
+name: default
+channels:
+- conda-forge
+- nodefaults
+dependencies:
+- libclang ~=16.0.6
+- numpy 1.26.*
+- python ~=3.11.0
+- scipy ~=1.11.4
+- pip
+- pip:
+  - black[jupyter]~=24.0
+  - flask
+  - pyboy==1.6.6
+  - tensorflow==2.14.0
+  - env-test-package==0.0.3
+  - plot-antenna==1.8
+  - pycosat
+  - pyliblzfse

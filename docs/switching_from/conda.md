@@ -72,11 +72,11 @@ pixi init --import environment.yml
 This will create a new workspace with the dependencies from the `environment.yml` file.
 
 ??? tip "Exporting your environment"
-    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/project/export.md) file to share them.
+    If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/workspace/export.md) file to share them.
     ```shell
     pixi project export conda-environment
     ```
-    Additionally you can export a [conda explicit specification](../reference/cli/pixi/project/export.md).
+    Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export.md).
 
 ## Troubleshooting
 Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:

@@ -32,7 +32,7 @@ pub enum SortBy {
     Kind,
 }
 
-/// List project's packages.
+/// List workspace's packages.
 ///
 /// Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]
@@ -68,7 +68,7 @@ pub struct Args {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
-    /// Only list packages that are explicitly defined in the project.
+    /// Only list packages that are explicitly defined in the workspace.
     #[arg(short = 'x', long)]
     pub explicit: bool,
 }

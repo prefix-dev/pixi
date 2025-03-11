@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [task](../task.md) remove</code>
 
 ## About
-Remove a command from the project
+Remove a command from the workspace
 
 --8<-- "docs/reference/cli/pixi/task/remove_extender.md:description"
 

@@ -64,12 +64,12 @@ pixi remove [OPTIONS] <SPECS>...
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 Removes dependencies from the workspace.
 
-If the project manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
+If the workspace manifest is a `pyproject.toml`, removing a pypi dependency with the `--pypi` flag will remove it from either
 
 - the native pyproject `project.dependencies` array or, if a feature is specified, the native `project.optional-dependencies` table
 

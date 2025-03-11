@@ -40,7 +40,7 @@ use crate::{
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
-    /// The pixi task or a task shell command you want to run in the project's
+    /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
 
