@@ -320,8 +320,8 @@ trait DerivePurls {
     ) -> Result<Option<Vec<PackageUrl>>, MappingError>;
 }
 
-/// A struct that implements [`DerivePurls`] for conda-forge records where the
-/// name of the package is just assumed to be the pypi name.
+/// A struct that provides derived package urls for conda-forge records where
+/// the name of the package is just assumed to be the pypi name.
 ///
 /// This is a fallback for when the mapping is not available.
 pub struct CondaForgeVerbatim;
