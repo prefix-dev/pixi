@@ -612,6 +612,7 @@ impl TasksControl<'_> {
                 env: Default::default(),
                 description: None,
                 clean_env: false,
+                watched_files: None,
             },
         }
     }
