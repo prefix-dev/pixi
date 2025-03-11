@@ -1,4 +1,4 @@
-use super::has_specs::HasSpecs;
+use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
@@ -7,6 +7,7 @@ use crate::{
 };
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
+use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
 
 /// Removes dependencies from the workspace.
@@ -33,6 +34,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -45,7 +49,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(prefix_update_config.config.clone())
+        .with_cli_config(args.config.clone())
         .modify()?;
     let dependency_type = dependency_config.dependency_type();
 

@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
     WorkspaceLocator,
 };

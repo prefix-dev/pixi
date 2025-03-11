@@ -2,7 +2,7 @@ use std::{collections::HashMap, default::Default};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
+use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -19,6 +19,8 @@ use crate::{
     workspace::{get_activated_environment_variables, Environment, HasWorkspaceRef},
     UpdateLockFileOptions, Workspace, WorkspaceLocator,
 };
+
+use super::cli_config::LockFileUpdateConfig;
 
 /// Print the pixi environment activation script.
 ///
@@ -39,6 +41,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     #[clap(flatten)]
     activation_config: ConfigCliActivation,
@@ -141,7 +146,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
         .prompt_config
         .merge_config(args.activation_config.into())
-        .merge_config(args.prefix_update_config.config.clone().into());
+        .merge_config(args.config.clone().into());
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?

@@ -24,6 +24,8 @@ use rattler_lock::{CondaPackageData, LockedPackageRef, PypiPackageData, UrlOrPat
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
+use super::cli_config::LockFileUpdateConfig;
+
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
 pub enum SortBy {
@@ -178,8 +180,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?;

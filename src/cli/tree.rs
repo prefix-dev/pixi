@@ -21,6 +21,8 @@ use crate::{
     WorkspaceLocator,
 };
 
+use super::cli_config::LockFileUpdateConfig;
+
 /// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false, long_about = format!(

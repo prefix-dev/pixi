@@ -15,12 +15,14 @@ use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
     UpdateLockFileOptions, WorkspaceLocator,
 };
-use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
+use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
 #[cfg(target_family = "unix")]
 use crate::prefix::Prefix;
+
+use super::cli_config::LockFileUpdateConfig;
 
 /// Start a shell in a pixi environment, run `exit` to leave the shell.
 #[derive(Parser, Debug)]
@@ -33,6 +35,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     /// The environment to activate in the shell
     #[arg(long, short)]
@@ -259,7 +264,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
         .activation_config
         .merge_config(args.prompt_config.into())
-        .merge_config(args.prefix_update_config.config.clone().into());
+        .merge_config(args.config.clone().into());
 
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())

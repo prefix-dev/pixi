@@ -13,7 +13,7 @@ use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
-use pixi_config::ConfigCliActivation;
+use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;
@@ -29,6 +29,8 @@ use crate::{
     workspace::{errors::UnsupportedPlatformError, Environment},
     Workspace, WorkspaceLocator,
 };
+
+use super::cli_config::LockFileUpdateConfig;
 
 /// Runs task in the pixi environment.
 ///
@@ -52,6 +54,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     #[clap(flatten)]
     pub activation_config: ConfigCliActivation,
@@ -89,7 +94,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let cli_config = args
         .activation_config
-        .merge_config(args.prefix_update_config.config.clone().into());
+        .merge_config(args.config.clone().into());
 
     // Load the workspace
     let workspace = WorkspaceLocator::for_cli()

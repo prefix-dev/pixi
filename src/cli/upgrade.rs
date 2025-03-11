@@ -10,7 +10,7 @@ use pixi_manifest::{FeatureName, PyPiRequirement, SpecType};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
 
-use super::cli_config::PrefixUpdateConfig;
+use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
 use crate::{
     cli::cli_config::WorkspaceConfig,
     diff::LockFileJsonDiff,

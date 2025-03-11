@@ -1,6 +1,7 @@
 use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
@@ -85,6 +86,9 @@ pub struct Args {
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
+    #[clap(flatten)]
+    config: ConfigCli,
+
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
@@ -100,7 +104,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
     sanity_check_project(&workspace).await?;
 
