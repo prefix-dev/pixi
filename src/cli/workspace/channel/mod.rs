@@ -36,6 +36,9 @@ pub struct AddRemoveArgs {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
     /// The name of the feature to modify.
     #[clap(long, short)]
     pub feature: Option<String>,

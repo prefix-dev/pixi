@@ -51,6 +51,9 @@ pub struct Args {
     pub prefix_update_config: PrefixUpdateConfig,
 
     #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
     pub activation_config: ConfigCliActivation,
 
     /// The environment to run the task in.

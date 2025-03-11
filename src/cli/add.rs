@@ -5,7 +5,7 @@ use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use super::has_specs::HasSpecs;
+use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
@@ -81,6 +81,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
 
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]

@@ -42,7 +42,7 @@ pub struct Args {
     pub ignore_source_errors: bool,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub lock_file_update_config: LockFileUpdateConfig,
 }
 
 fn build_explicit_spec<'a>(

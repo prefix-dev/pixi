@@ -31,6 +31,9 @@ pub struct Args {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
     /// The environment to activate in the shell
     #[arg(long, short)]
     environment: Option<String>,

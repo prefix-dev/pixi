@@ -38,6 +38,9 @@ pub struct Args {
     pub prefix_update_config: PrefixUpdateConfig,
 
     #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
     activation_config: ConfigCliActivation,
 
     /// The environment to activate in the script

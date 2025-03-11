@@ -30,6 +30,9 @@ pub struct Args {
     pub prefix_update_config: PrefixUpdateConfig,
 
     #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
     pub specs: UpgradeSpecsArgs,
 
     /// Output the changes in JSON format.

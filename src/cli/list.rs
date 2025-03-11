@@ -66,7 +66,7 @@ pub struct Args {
     pub environment: Option<String>,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub lock_file_update_config: LockFileUpdateConfig,
 
     /// Only list packages that are explicitly defined in the workspace.
     #[arg(short = 'x', long)]

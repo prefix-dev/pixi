@@ -30,6 +30,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {

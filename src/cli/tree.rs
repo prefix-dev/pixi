@@ -52,7 +52,7 @@ pub struct Args {
     pub environment: Option<String>,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub lock_file_update_config: LockFileUpdateConfig,
 
     /// Invert tree and show what depends on given package in the regex argument
     #[arg(short, long, requires = "regex")]
