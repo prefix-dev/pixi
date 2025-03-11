@@ -4759,6 +4759,7 @@ name = "pypi_mapping"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
+ "dashmap",
  "fs-err",
  "futures",
  "http-cache-reqwest",
@@ -4775,6 +4776,7 @@ dependencies = [
  "reqwest-retry",
  "serde",
  "serde_json",
+ "thiserror 2.0.12",
  "tokio",
  "url",
 ]
