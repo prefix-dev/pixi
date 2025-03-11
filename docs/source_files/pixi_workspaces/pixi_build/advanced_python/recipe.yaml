@@ -1,0 +1,19 @@
+package:
+  name: rich_example
+  version: 0.1.0
+
+source:
+  path: .
+  use_gitignore: true # (1)!
+
+build:
+  noarch: python
+  number: 0
+  script: | # (2)!
+    pip install . --no-deps -vv
+
+requirements:
+  host: # (3)!
+    - pip
+    - python 3.12.*
+    - hatchling
