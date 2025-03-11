@@ -9,7 +9,7 @@ use itertools::Itertools;
 use miette::{miette, IntoDiagnostic};
 use uv_configuration::ConfigSettings;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
+use crate::cli::cli_config::WorkspaceConfig;
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::WorkspaceLocator;
 use fancy_display::FancyDisplay;

@@ -158,7 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.update_mode(),
         UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },

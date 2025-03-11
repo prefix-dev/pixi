@@ -40,9 +40,10 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, workspace_config) = (
+    let (dependency_config, prefix_update_config, lock_file_update_config, workspace_config) = (
         args.dependency_config,
         args.prefix_update_config,
+        args.lock_file_update_config,
         args.workspace_config,
     );
 
@@ -114,12 +115,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
-    if !prefix_update_config.no_lockfile_update {
+    if !lock_file_update_config.no_lockfile_update {
         get_update_lock_file_and_prefix(
             &workspace.default_environment(),
             UpdateMode::Revalidate,
             UpdateLockFileOptions {
-                lock_file_usage: prefix_update_config.lock_file_usage(),
+                lock_file_usage: lock_file_update_config.lock_file_usage(),
                 no_install: prefix_update_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },

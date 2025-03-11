@@ -15,9 +15,7 @@ use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
 use crate::{
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
-    lock_file::UpdateLockFileOptions,
-    workspace::Environment,
+    cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions, workspace::Environment,
     WorkspaceLocator,
 };
 
@@ -86,7 +84,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })

@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{LockFileUpdateConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
     WorkspaceLocator,
 };
@@ -162,11 +162,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
     let lockfile = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             no_install: args.prefix_update_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })

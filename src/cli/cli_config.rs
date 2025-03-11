@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
-use pixi_config::{Config, ConfigCli};
+use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;

@@ -63,7 +63,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
     let mut workspace = workspace.modify()?;
 
@@ -88,6 +88,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             pypi_deps,
             IndexMap::default(),
             &args.prefix_update_config,
+            &args.lock_file_update_config,
             &args.specs.feature,
             &[],
             false,

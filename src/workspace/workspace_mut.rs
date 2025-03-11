@@ -22,7 +22,7 @@ use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
 
 use crate::{
-    cli::cli_config::PrefixUpdateConfig,
+    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
     diff::LockFileDiff,
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, UpdateContext, UpdateMode},
@@ -233,6 +233,7 @@ impl WorkspaceMut {
         pypi_deps: PypiDeps,
         source_specs: SourceSpecs,
         prefix_update_config: &PrefixUpdateConfig,
+        lock_file_update_config: &LockFileUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
@@ -302,7 +303,7 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
+        if lock_file_update_config.lock_file_usage() != LockFileUsage::Update {
             return Ok(None);
         }
 
