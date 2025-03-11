@@ -537,7 +537,13 @@ impl Workspace {
                                 Ok(url) => MappingLocation::Url(url),
                                 Err(err) => {
                                     if let ParseError::RelativeUrlWithoutBase = err {
-                                        MappingLocation::Path(PathBuf::from(mapping_location))
+                                        let path = PathBuf::from(mapping_location);
+                                        let abs_path = if path.is_relative() {
+                                            channel_config.root_dir.join(path)
+                                        } else {
+                                            path
+                                        };
+                                        MappingLocation::Path(abs_path)
                                     } else {
                                         miette::bail!("Could not convert {mapping_location} to neither URL or Path")
                                     }

@@ -2,10 +2,14 @@ use std::path::Path;
 
 use async_once_cell::OnceCell as AsyncCell;
 use miette::{IntoDiagnostic, WrapErr};
+use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 use url::Url;
 
-use crate::{CompressedMapping, MappingByChannel, MappingLocation, MappingMap};
+use crate::{
+    CompressedMapping, DerivePurls, MappingByChannel, MappingError, MappingLocation, MappingMap,
+    PurlSource,
+};
 
 /// Struct with a mapping of channel names to their respective mapping locations
 /// location could be a remote url or local file.
@@ -112,4 +116,67 @@ fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
     ))?;
 
     Ok(mapping_by_name)
+}
+
+/// THis is a client that uses a custom in memory mapping to derive purls.
+#[derive(Default)]
+pub(crate) struct CustomMappingClient {
+    mapping: MappingByChannel,
+}
+
+impl CustomMappingClient {
+    /// Returns the mapping associated with a channel.
+    fn get_channel_mapping(&self, channel: &str) -> Option<&CompressedMapping> {
+        self.mapping.get(channel.trim_end_matches('/'))
+    }
+
+    /// Returns true if this mapping applies to the given record.
+    pub fn is_mapping_for_record(&self, record: &RepoDataRecord) -> bool {
+        record
+            .channel
+            .as_ref()
+            .is_some_and(|channel| self.get_channel_mapping(channel).is_some())
+    }
+}
+
+impl From<MappingByChannel> for CustomMappingClient {
+    fn from(value: MappingByChannel) -> Self {
+        Self { mapping: value }
+    }
+}
+
+impl DerivePurls for CustomMappingClient {
+    async fn derive_purls(
+        &self,
+        record: &RepoDataRecord,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+        let Some(channel) = record.channel.as_ref() else {
+            return Ok(None);
+        };
+
+        // See if the mapping contains the channel
+        let Some(custom_mapping) = self.get_channel_mapping(channel) else {
+            return Ok(None);
+        };
+
+        // Find the mapping for this particular record
+        match custom_mapping.get(record.package_record.name.as_normalized()) {
+            // The record is in the mapping, and it has a pypi name
+            Some(Some(mapped_name)) => {
+                let purl = PackageUrl::builder(String::from("pypi"), mapped_name.to_string())
+                    .with_qualifier("source", PurlSource::ProjectDefinedMapping.as_str())
+                    .expect("valid qualifier");
+                let built_purl = purl.build().expect("valid pypi package url");
+                Ok(Some(vec![built_purl]))
+            }
+            Some(None) => {
+                // The record is in the mapping, but it has no pypi name
+                Ok(Some(vec![]))
+            }
+            None => {
+                // The record is not in the mapping
+                Ok(None)
+            }
+        }
+    }
 }

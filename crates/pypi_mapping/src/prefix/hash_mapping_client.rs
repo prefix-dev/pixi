@@ -4,12 +4,15 @@ use std::{
 };
 
 use dashmap::{DashMap, Entry};
+use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_digest::Sha256Hash;
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{broadcast, Semaphore};
+
+use crate::{DerivePurls, MappingError, PurlSource};
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
@@ -38,7 +41,21 @@ impl From<reqwest::Error> for HashMappingClientError {
     }
 }
 
+impl From<HashMappingClientError> for MappingError {
+    fn from(value: HashMappingClientError) -> Self {
+        match value {
+            HashMappingClientError::Io(err) => MappingError::IoError(err),
+            HashMappingClientError::Reqwest(err) => MappingError::Reqwest(err),
+        }
+    }
+}
+
 /// A client for fetching and caching the pypi name mapping from <https://conda-mapping.prefix.dev>.
+///
+/// This provides a hash based mapping to pypi packages which should yield
+/// perfect results. The downside is that maybe not all packages are in the map.
+/// Therefor, this client should always be combined with another fallback
+/// client.
 ///
 /// This client can be shared between multiple tasks. Individual requests are
 /// coalesced. The client can cheaply be cloned.
@@ -235,4 +252,39 @@ async fn try_fetch_mapping(
     let package = response.json().await?;
 
     Ok(Some(package))
+}
+
+impl DerivePurls for HashMappingClient {
+    async fn derive_purls(
+        &self,
+        record: &RepoDataRecord,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+        // Get the hash from the record, if there is no sha we cannot derive purls
+        let Some(sha256) = record.package_record.sha256 else {
+            return Ok(None);
+        };
+
+        // Fetch the mapping from the server, or return None if it doesn't exist
+        let Some(mapped_package) = self.get_mapping(sha256).await? else {
+            return Ok(None);
+        };
+
+        // Get the pypi names from the mapping
+        let Some(mapped_name) = mapped_package.pypi_normalized_names else {
+            // If there are no pypi names, there are no purls
+            return Ok(Some(vec![]));
+        };
+
+        Ok(Some(
+            mapped_name
+                .into_iter()
+                .map(|pypi_name| {
+                    let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
+                        .with_qualifier("source", PurlSource::HashMapping.as_str())
+                        .expect("valid qualifier");
+                    purl.build().expect("valid pypi package url")
+                })
+                .collect(),
+        ))
+    }
 }

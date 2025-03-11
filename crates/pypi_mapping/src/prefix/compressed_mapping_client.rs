@@ -1,17 +1,24 @@
 use std::sync::Arc;
 
 use async_once_cell::OnceCell;
+use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use url::Url;
 
-use crate::CompressedMapping;
+use crate::{is_conda_forge_record, CompressedMapping, DerivePurls, MappingError, PurlSource};
 
 const COMPRESSED_MAPPING: &str =
     "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json";
 
 /// A client for fetching and caching the compressed mapping from the
-/// parselmouth repository.
+/// parselmouth github repository.
+///
+/// This mapping provides a mapping from the conda-forge package names to their
+/// pypi counterparts, or `None` if the package is not a pypi package.
+///
+/// The downside of this client is that it only contains information for
+/// conda-forge packages.
 #[derive(Clone)]
 pub struct CompressedMappingClient {
     inner: Arc<CompressedMappingClientInner>,
@@ -98,5 +105,39 @@ impl CompressedMappingClient {
                     .map_err(Into::into)
             })
             .await
+    }
+}
+
+impl DerivePurls for CompressedMappingClient {
+    async fn derive_purls(
+        &self,
+        record: &RepoDataRecord,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+        // If the record does not refer to a conda-forge mapping we can skip it
+        if !is_conda_forge_record(record) {
+            return Ok(None);
+        }
+
+        // Get the mapping from the server
+        let mapping = self.get_mapping().await?;
+
+        // Determine the mapping for the record
+        let Some(potential_pypi_name) = mapping.get(record.package_record.name.as_normalized())
+        else {
+            return Ok(None);
+        };
+
+        // If the mapping is empty, there are no purls.
+        let Some(pypi_name) = potential_pypi_name else {
+            return Ok(Some(vec![]));
+        };
+
+        // Construct the purl
+        let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
+            .with_qualifier("source", PurlSource::CompressedMapping.as_str())
+            .expect("valid qualifier");
+        let built_purl = purl.build().expect("valid pypi package url");
+
+        Ok(Some(vec![built_purl]))
     }
 }

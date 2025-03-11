@@ -10,24 +10,21 @@ use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheO
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::get_cache_dir;
-use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
+use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use url::Url;
 
-use crate::prefix::{
-    CompressedMappingClient, CompressedMappingClientBuilder, HashMappingClient,
-    HashMappingClientBuilder, HashMappingClientError,
-};
-
 mod custom_mapping;
-mod prefix;
+pub mod prefix;
 mod reporter;
 
 pub use custom_mapping::CustomMapping;
 pub use reporter::Reporter;
+
+use crate::custom_mapping::CustomMappingClient;
 
 /// A compressed mapping is a mapping of a package name to a potential pypi
 /// name.
@@ -100,32 +97,25 @@ pub fn is_conda_forge_url(url: &Url) -> bool {
     url.path().starts_with("/conda-forge")
 }
 
-/// Build a purl for a `PackageRecord`
-/// it will return a purl in this format
-/// `pkg:pypi/aiofiles`
-pub fn build_pypi_purl_from_package_record(package_record: &PackageRecord) -> Option<PackageUrl> {
-    let name = pep508_rs::PackageName::from_str(package_record.name.as_source()).ok();
-    let version = pep440_rs::Version::from_str(&package_record.version.as_str()).ok();
-    if let (Some(name), Some(_)) = (name, version) {
-        let purl = PackageUrl::builder(String::from("pypi"), name.to_string());
-        let built_purl = purl.build().expect("valid pypi package url");
-        return Some(built_purl);
-    }
-
-    None
-}
-
+/// The mapping client implements the logic to derive purls for conda packages.
+/// Internally it uses a combination of sources and also allows overwriting the
+/// sources for particular channels.
+///
+/// For more information see:
+/// - [`prefix::CompressedMappingClient`]
+/// - [`prefix::HashMappingClient`]
+/// - [`CondaForgeVerbatim`]
 #[derive(Clone)]
 pub struct MappingClient {
     client: ClientWithMiddleware,
-    compressed_mapping: CompressedMappingClient,
-    hash_mapping: HashMappingClient,
+    compressed_mapping: prefix::CompressedMappingClient,
+    hash_mapping: prefix::HashMappingClient,
 }
 
 pub struct MappingClientBuilder {
     client: ClientWithMiddleware,
-    compressed_mapping: CompressedMappingClientBuilder,
-    hash_mapping: HashMappingClientBuilder,
+    compressed_mapping: prefix::CompressedMappingClientBuilder,
+    hash_mapping: prefix::HashMappingClientBuilder,
 }
 
 impl MappingClientBuilder {
@@ -167,22 +157,6 @@ pub enum MappingError {
     Reqwest(#[from] reqwest_middleware::Error),
 }
 
-impl From<HashMappingClientError> for MappingError {
-    fn from(value: HashMappingClientError) -> Self {
-        match value {
-            HashMappingClientError::Io(err) => MappingError::IoError(err),
-            HashMappingClientError::Reqwest(err) => MappingError::Reqwest(err),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum IsPypiPackage {
-    Yes,
-    No,
-    Unknown,
-}
-
 impl MappingClient {
     /// Construct a new `MappingClientBuilder` with the provided `Client`.
     pub fn builder(client: ClientWithMiddleware) -> MappingClientBuilder {
@@ -206,8 +180,8 @@ impl MappingClient {
 
         MappingClientBuilder {
             client: client.clone(),
-            compressed_mapping: CompressedMappingClient::builder(client.clone()),
-            hash_mapping: HashMappingClient::builder(client),
+            compressed_mapping: prefix::CompressedMappingClient::builder(client.clone()),
+            hash_mapping: prefix::HashMappingClient::builder(client),
         }
     }
 
@@ -216,7 +190,7 @@ impl MappingClient {
         &self,
         mapping_source: &MappingSource,
         conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
-        _reporter: Option<Arc<dyn Reporter>>,
+        reporter: Option<Arc<dyn Reporter>>,
     ) -> miette::Result<()> {
         // Collect the records into a vec so we can iterate multiple times.
         let mut records = conda_packages.into_iter().collect_vec();
@@ -234,134 +208,81 @@ impl MappingClient {
 
         // Fetch custom mapped channels if any.
         let custom_mappings = if let MappingSource::Custom(mapping_url) = mapping_source {
-            mapping_url.fetch_custom_mapping(&self.client).await?
+            CustomMappingClient::from(mapping_url.fetch_custom_mapping(&self.client).await?)
         } else {
-            MappingByChannel::new()
+            CustomMappingClient::default()
         };
 
-        if !matches!(mapping_source, MappingSource::Disabled) {
-            let mut amend_futures = FuturesUnordered::new();
-            for record in records.iter_mut() {
-                amend_futures.push(async {
-                    // Find a custom mapping if available.
-                    let custom_mapping = record
-                        .channel
-                        .as_ref()
-                        .and_then(|channel| custom_mappings.get(channel));
-
-                    if let Some(custom_mapping) = custom_mapping {
-                        if let Some(possibly_mapped_name) =
-                            custom_mapping.get(record.package_record.name.as_normalized())
-                        {
-                            let purls = record
-                                .package_record
-                                .purls
-                                .get_or_insert_with(BTreeSet::new);
-
-                            if let Some(mapped_name) = possibly_mapped_name {
-                                let purl = PackageUrl::builder(
-                                    String::from("pypi"),
-                                    mapped_name.to_string(),
-                                )
-                                .with_qualifier(
-                                    "source",
-                                    PurlSource::ProjectDefinedMapping.as_str(),
-                                )
-                                .expect("valid qualifier");
-                                let built_purl = purl.build().expect("valid pypi package url");
-                                purls.insert(built_purl);
-                            }
-                        }
-                    } else {
-                        self.ament_purls_from_prefix_clients(record)
-                            .await
-                            .into_diagnostic()?;
-                    };
-                    Ok(())
-                });
-            }
-
-            while let Some(next) = amend_futures.next().await {
-                if let Some(err) = next.err() {
-                    return Err(err);
+        let mut amend_futures = FuturesUnordered::new();
+        let total_records = records.len();
+        for record in records.into_iter() {
+            let reporter = reporter.clone();
+            let custom_mappings = &custom_mappings;
+            let derive_purls_future = async move {
+                if let Some(reporter) = reporter.as_deref() {
+                    reporter.download_started(record, total_records);
                 }
-            }
+
+                let derived_purls = if matches!(mapping_source, MappingSource::Disabled) {
+                    Ok(None)
+                } else if custom_mappings.is_mapping_for_record(record) {
+                    custom_mappings.derive_purls(record).await
+                } else {
+                    self.derive_purls_from_clients(record).await
+                };
+
+                match derived_purls {
+                    Ok(derived_purls) => {
+                        if let Some(reporter) = reporter.as_deref() {
+                            reporter.download_finished(record, total_records);
+                        }
+                        Ok((record, derived_purls))
+                    }
+                    Err(err) => {
+                        if let Some(reporter) = reporter.as_deref() {
+                            reporter.download_failed(record, total_records);
+                        }
+                        Err(err)
+                    }
+                }
+            };
+
+            // Add all futures to the futures queue to ensure all can run concurrently.
+            amend_futures.push(derive_purls_future);
         }
 
-        // For the remaining records, if they are conda-forge packages, we just assume
-        // that the name is the pypi name.
-        for record in records {
-            if record.package_record.purls.is_none() && is_conda_forge_record(record) {
-                if let Some(purl) = build_pypi_purl_from_package_record(&record.package_record) {
-                    record
-                        .package_record
-                        .purls
-                        .get_or_insert_with(BTreeSet::new)
-                        .insert(purl);
-                }
+        while let Some(next) = amend_futures.next().await {
+            let (record, mut derived_purls) = next.into_diagnostic()?;
+
+            // As a last resort use the verbatim conda-forge purls.
+            if derived_purls.is_none() {
+                derived_purls = CondaForgeVerbatim
+                    .derive_purls(record)
+                    .await
+                    .into_diagnostic()?;
+            }
+
+            if let Some(derived_purls) = derived_purls {
+                amend_purls(record, derived_purls)
             }
         }
 
         Ok(())
     }
 
-    async fn ament_purls_from_prefix_clients(
+    async fn derive_purls_from_clients(
         &self,
-        record: &mut RepoDataRecord,
-    ) -> Result<IsPypiPackage, MappingError> {
-        // If the record has a sha256, we can use the hash mapping to get the purl.
-        if let Some(sha256) = record.package_record.sha256.as_ref() {
-            if let Some(mapped) = self.hash_mapping.get_mapping(*sha256).await? {
-                let purls = record
-                    .package_record
-                    .purls
-                    .get_or_insert_with(BTreeSet::new);
+        record: &RepoDataRecord,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+        // Try to get the purls from the hash mapping.
+        let mut purls = self.hash_mapping.derive_purls(record).await?;
 
-                if let Some(mapped_name) = mapped.pypi_normalized_names {
-                    for pypi_name in mapped_name {
-                        let purl = PackageUrl::builder(String::from("pypi"), pypi_name)
-                            .with_qualifier("source", PurlSource::HashMapping.as_str())
-                            .expect("valid qualifier");
-                        let built_purl = purl.build().expect("valid pypi package url");
-                        // Push the value into the vector
-                        purls.insert(built_purl);
-                    }
-
-                    return Ok(IsPypiPackage::Yes);
-                } else {
-                    return Ok(IsPypiPackage::No);
-                }
-            }
+        // Otherwise try from the compressed mapping
+        if purls.is_none() {
+            purls = self.compressed_mapping.derive_purls(record).await?;
         }
 
-        // If we dont have a mapping yet, or if the mapping is missing a sha256 hash we
-        // try to look up the name in the name mapping.
-        if is_conda_forge_record(record) {
-            let mapping = self.compressed_mapping.get_mapping().await?;
-            if let Some(possible_mapped_name) =
-                mapping.get(record.package_record.name.as_normalized())
-            {
-                let purls = record
-                    .package_record
-                    .purls
-                    .get_or_insert_with(BTreeSet::new);
-
-                // if we have a pypi name for it
-                // we record the purl
-                if let Some(mapped_name) = possible_mapped_name {
-                    let purl = PackageUrl::builder(String::from("pypi"), mapped_name)
-                        .with_qualifier("source", PurlSource::CompressedMapping.as_str())
-                        .expect("valid qualifier");
-                    let built_purl = purl.build().expect("valid pypi package url");
-                    purls.insert(built_purl);
-                    return Ok(IsPypiPackage::Yes);
-                }
-
-                return Ok(IsPypiPackage::No);
-            }
-        }
-
-        Ok(IsPypiPackage::Unknown)
+        Ok(purls)
     }
 }
 
@@ -372,4 +293,60 @@ fn has_pypi_purl(record: &RepoDataRecord) -> bool {
         .purls
         .as_ref()
         .is_some_and(|vec| vec.iter().any(|p| p.package_type() == "pypi"))
+}
+
+/// Adds the specified purls to the `purls` field of the record.
+fn amend_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item = PackageUrl>) {
+    let record_purls = record
+        .package_record
+        .purls
+        .get_or_insert_with(BTreeSet::new);
+    for purl in purls {
+        record_purls.insert(purl);
+    }
+}
+
+/// A trait that is implemented for clients that can derive a purl from a
+/// particular record.
+trait DerivePurls {
+    /// Derives purls from the given record.
+    ///
+    /// Returns `None` if no purls could be derived. Note that this is different
+    /// from `Some(vec[])` which would indicate that purls could be derived but
+    /// there were simply none.
+    async fn derive_purls(
+        &self,
+        record: &RepoDataRecord,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError>;
+}
+
+/// A struct that implements [`DerivePurls`] for conda-forge records where the
+/// name of the package is just assumed to be the pypi name.
+///
+/// This is a fallback for when the mapping is not available.
+pub struct CondaForgeVerbatim;
+
+impl DerivePurls for CondaForgeVerbatim {
+    async fn derive_purls(
+        &self,
+        record: &RepoDataRecord,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+        if !is_conda_forge_record(record) {
+            return Ok(None);
+        }
+
+        // Try to convert the name and version into pep440/pep508 compliant versions.
+        let (Some(name), Some(_version)) = (
+            pep508_rs::PackageName::from_str(record.package_record.name.as_source()).ok(),
+            pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok(),
+        ) else {
+            // If we cannot convert the name or version, we cannot build a purl.
+            return Ok(Some(vec![]));
+        };
+
+        // Build the purl
+        let purl = PackageUrl::builder(String::from("pypi"), name.to_string());
+        let built_purl = purl.build().expect("valid pypi package url");
+        Ok(Some(vec![built_purl]))
+    }
 }
