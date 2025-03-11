@@ -19,7 +19,7 @@ python = "3.12.*"
 build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
-generate-cli-docs = "cargo run --manifest-path pixi_docs/Cargo.toml"
+generate-cli-docs = "cargo run --locked --manifest-path pixi_docs/Cargo.toml"
 install = "cargo install --path . --locked"
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
