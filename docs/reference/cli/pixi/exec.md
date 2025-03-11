@@ -26,6 +26,8 @@ pixi exec [OPTIONS] [COMMAND]...
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---force-reinstall" href="#arg---force-reinstall">`--force-reinstall`</a>
 :  If specified a new environment is always created even if one already exists
+- <a id="arg---list" href="#arg---list">`--list <LIST>`</a>
+:  Before executing the command, list packages in the environment Specify `--list=some_regex` to filter the shown packages
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform to create the environment for
 <br>**default**: `current_platform`

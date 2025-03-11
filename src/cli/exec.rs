@@ -49,6 +49,8 @@ pub struct Args {
     #[clap(long)]
     pub force_reinstall: bool,
 
+    /// Before executing the command, list packages in the environment
+    /// Specify `--list=some_regex` to filter the shown packages
     #[clap(long = "list", num_args = 0..=1, default_missing_value = "", require_equals = true)]
     pub list: Option<String>,
 
