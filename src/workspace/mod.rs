@@ -1035,7 +1035,12 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &MappingLocation::Path(PathBuf::from("mapping.json"))
+            &MappingLocation::Path(
+                workspace
+                    .channel_config()
+                    .root_dir
+                    .join(PathBuf::from("mapping.json"))
+            )
         );
     }
 
