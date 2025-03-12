@@ -17,48 +17,52 @@ pixi add [OPTIONS] <SPECS>...
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
-:  Path to the file containing the authentication token
-- <a id="arg---branch" href="#arg---branch">`--branch <BRANCH>`</a>
-:  The git branch
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
-- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
-:  Max concurrent solves, default is the number of CPUs
-- <a id="arg---editable" href="#arg---editable">`--editable`</a>
-:  Whether the pypi requirement should be editable
+- <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>
+:  The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORMS>`</a>
+:  The platform(s) for which the dependency should be modified
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the dependency should be modified
 <br>**default**: `default`
+- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
+:  Don't update lockfile, implies the no-install as well
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
-- <a id="arg---git" href="#arg---git">`--git (-g) <GIT>`</a>
-:  The git url to use when adding a git dependency
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
-- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Don't update lockfile, implies the no-install as well
-- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORMS>`</a>
-:  The platform(s) for which the dependency should be modified
-- <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>
-:  The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
+- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
+:  Run the complete environment validation. This will reinstall a broken environment
+- <a id="arg---editable" href="#arg---editable">`--editable`</a>
+:  Whether the pypi requirement should be editable
+
+## Config Options
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
+- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
+:  Path to the file containing the authentication token
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
-- <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
-:  The git revision
-- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
-:  Run the complete environment validation. This will reinstall a broken environment
-- <a id="arg---subdir" href="#arg---subdir">`--subdir (-s) <SUBDIR>`</a>
-:  The subdirectory of the git repository to use
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is `50`
+
+## Git Options
+- <a id="arg---git" href="#arg---git">`--git (-g) <GIT>`</a>
+:  The git url to use when adding a git dependency
+- <a id="arg---branch" href="#arg---branch">`--branch <BRANCH>`</a>
+:  The git branch
 - <a id="arg---tag" href="#arg---tag">`--tag <TAG>`</a>
 :  The git tag
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
+- <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
+:  The git revision
+- <a id="arg---subdir" href="#arg---subdir">`--subdir (-s) <SUBDIR>`</a>
+:  The subdirectory of the git repository to use
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
