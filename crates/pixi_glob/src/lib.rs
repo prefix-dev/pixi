@@ -10,3 +10,4 @@ mod glob_set;
 pub use glob_hash::{GlobHash, GlobHashError};
 pub use glob_hash_cache::{GlobHashCache, GlobHashKey};
 pub use glob_mtime::{GlobModificationTime, GlobModificationTimeError};
+pub use glob_set::{GlobSet, GlobSetError};
