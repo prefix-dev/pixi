@@ -17,20 +17,7 @@ expression: project_model
     "documentation": null,
     "targets": {
       "defaultTarget": {
-        "hostDependencies": {
-          "python": {
-            "binary": {
-              "version": "3.12.*",
-              "build": null,
-              "buildNumber": null,
-              "fileName": null,
-              "channel": null,
-              "subdir": null,
-              "md5": null,
-              "sha256": null
-            }
-          }
-        },
+        "hostDependencies": {},
         "buildDependencies": {},
         "runDependencies": {}
       },

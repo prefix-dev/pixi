@@ -110,13 +110,11 @@ nav:
   - Building:
       - Getting started: build/getting_started.md
       - Tutorials:
-          - Building a Python package: build/python.md
+          - Building a Python Package: build/python.md
           - Building a C++ Package: build/cpp.md
           - Multiple Packages in Workspace: build/workspace.md
           - Variants: build/variants.md
-          - Advanced building using rattler-build:
-              - Building a C++ package: build/advanced_cpp.md
-              - Building a Python package: build/advanced_python.md
+          - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
   - Distributing:

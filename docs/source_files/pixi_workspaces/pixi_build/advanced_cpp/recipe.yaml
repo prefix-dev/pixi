@@ -22,7 +22,6 @@ build:
 
 requirements:
   build: # (3)!
-    - ${{ compiler('c') }}
     - ${{ compiler('cxx') }}
     - cmake
     - ninja
