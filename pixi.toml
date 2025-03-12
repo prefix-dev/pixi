@@ -117,6 +117,7 @@ git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
 rust = "==1.84.0"
+rust-src = ">=1.84.0,<2"
 
 [feature.build.target.linux-64.dependencies]
 clang = ">=18.1.8,<19.0"

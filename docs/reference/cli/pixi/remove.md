@@ -21,8 +21,6 @@ pixi remove [OPTIONS] <SPECS>...
 :  Path to the file containing the authentication token
 - <a id="arg---branch" href="#arg---branch">`--branch <BRANCH>`</a>
 :  The git branch
-- <a id="arg---build" href="#arg---build">`--build`</a>
-:  The specified dependencies are build dependencies. Conflicts with `host` and `pypi`
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
@@ -35,8 +33,6 @@ pixi remove [OPTIONS] <SPECS>...
 <br>**env**: `PIXI_FROZEN`
 - <a id="arg---git" href="#arg---git">`--git (-g) <GIT>`</a>
 :  The git url to use when adding a git dependency
-- <a id="arg---host" href="#arg---host">`--host`</a>
-:  The specified dependencies are host dependencies. Conflicts with `build` and `pypi`
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
