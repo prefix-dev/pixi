@@ -10,6 +10,7 @@
 use itertools::Itertools;
 use pixi_glob::{GlobSet, GlobSetError};
 use rayon::prelude::*;
+use std::sync::LazyLock;
 use std::{
     clone::Clone,
     collections::HashMap,
@@ -22,6 +23,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::task::JoinError;
+use uv_configuration::RAYON_INITIALIZE;
 use xxhash_rust::xxh3::Xxh3;
 
 #[derive(Debug, Error)]
@@ -101,6 +103,10 @@ impl FileHashes {
 
         // Collect all entries first to avoid holding lock during iteration
         let entries: Vec<_> = glob.filter_directory(root).collect::<Result<Vec<_>, _>>()?;
+
+        // Force the initialization of the rayon thread pool to avoid implicit creation
+        // by the Installer.
+        LazyLock::force(&RAYON_INITIALIZE);
 
         // Process entries in parallel using rayon
         entries.into_par_iter().for_each(|entry| {
