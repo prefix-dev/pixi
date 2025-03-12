@@ -1,4 +1,5 @@
 use clap::{Arg, Command, CommandFactory};
+use fs_err as fs;
 use itertools::Itertools;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -7,7 +8,6 @@ use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::str::FromStr;
-use fs_err as fs;
 
 const MD_EXTENSION: &str = ".md";
 
@@ -226,26 +226,24 @@ fn subcommands_table(subcommands: Vec<&Command>, parent: &str) -> String {
         let about = if let Some(about) = subcommand.get_about() {
             about
         } else {
-            eprintln!("Warning: Subcommand `{}{}` has no description", parent, subcommand.get_name());
+            eprintln!(
+                "Warning: Subcommand `{}{}` has no description",
+                parent,
+                subcommand.get_name()
+            );
             exit(1);
         };
         // Create a link to the subcommand's Markdown file
         let command_name = subcommand.get_name();
         let link = format!("{}/{}{}", parent, command_name, MD_EXTENSION);
         let link_md = format!("[`{}`]({})", command_name, link);
-        writeln!(
-            buffer,
-            "| {} | {} |",
-            link_md,
-            about,
-        )
-        .unwrap();
+        writeln!(buffer, "| {} | {} |", link_md, about,).unwrap();
     }
     buffer
 }
 
 // Function to write a list of options to the buffer
-fn arguments(options: &[&clap::Arg], parents: &Vec<String>) -> String {
+fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
     let mut buffer = String::with_capacity(1024);
     for opt in options {
         if opt.is_hide_set() ||
@@ -261,13 +259,21 @@ fn arguments(options: &[&clap::Arg], parents: &Vec<String>) -> String {
             // No long name, but we have value names, assuming positional.
             format!("<{}>", value_names[0])
         } else {
-            eprintln!("Error: Option: '{:?}' with parents {} has no long name", opt, parents.join(" "));
+            eprintln!(
+                "Error: Option: '{:?}' with parents {} has no long name",
+                opt,
+                parents.join(" ")
+            );
             exit(1);
         };
 
         // Error on missing help
         if opt.get_help().is_none() && opt.get_long().unwrap() != "help" {
-            eprintln!("Error: Option `{} {}` has no description", parents.join(" "), long_name);
+            eprintln!(
+                "Error: Option `{} {}` has no description",
+                parents.join(" "),
+                long_name
+            );
             exit(1);
         }
 

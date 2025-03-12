@@ -146,6 +146,9 @@ jobs:
             git diff
             exit 1
           fi
+
+          # Lint pixi_docs
+          pixi run lint-pixi_docs
   #
   # Run tests on important platforms.
   #
