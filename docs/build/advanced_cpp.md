@@ -2,7 +2,7 @@
 
 In this tutorial, we will show you how to build the same C++ package as from [Building a C++ Package](cpp.md) tutorial using a `recipe.yaml` with `rattler-build`.
 
-This approach may be useful when no build backend for your language or build system exists. You may use it for example when building a package that would require a `go` backend.
+This approach may be useful when no build backend for your language or build system exists.
 
 
 Another reason to use it when you would like to have more control over the build process, by passing custom flags to the build system, pre or post-process the build artifacts, which is not possible with the existing backends.
