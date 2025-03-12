@@ -13,7 +13,7 @@ use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
-use pixi_config::ConfigCliActivation;
+use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tracing::Level;
@@ -29,6 +29,8 @@ use crate::{
     workspace::{errors::UnsupportedPlatformError, Environment},
     Workspace, WorkspaceLocator,
 };
+
+use super::cli_config::LockFileUpdateConfig;
 
 /// Runs task in the pixi environment.
 ///
@@ -49,6 +51,12 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
 
     #[clap(flatten)]
     pub activation_config: ConfigCliActivation,
@@ -86,7 +94,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let cli_config = args
         .activation_config
-        .merge_config(args.prefix_update_config.config.clone().into());
+        .merge_config(args.config.clone().into());
 
     // Load the workspace
     let workspace = WorkspaceLocator::for_cli()
@@ -118,7 +126,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..UpdateLockFileOptions::default()
         })
