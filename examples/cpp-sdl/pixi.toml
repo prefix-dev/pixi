@@ -14,10 +14,8 @@ depends-on = ["build"]
 sdl2 = "2.26.5.*"
 
 [feature.build.dependencies]
-cmake = "3.26.4.*"
-cxx-compiler = "1.5.2.*"
-make = ">=4.3,<5"
-ninja = "1.11.1.*"
+compilers = ">=1.9.0, <2"
+ninja = ">=1.12.1,<2"
 
 [feature.build.tasks.configure]
 # Configures CMake
