@@ -41,7 +41,7 @@ pub struct AddRemoveArgs {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
-    config: ConfigCli,
+    pub config: ConfigCli,
 
     /// The name of the feature to modify.
     #[clap(long, short)]

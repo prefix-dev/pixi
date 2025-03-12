@@ -87,7 +87,7 @@ pub struct Args {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
-    config: ConfigCli,
+    pub config: ConfigCli,
 
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]

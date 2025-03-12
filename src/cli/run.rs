@@ -56,7 +56,7 @@ pub struct Args {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
-    config: ConfigCli,
+    pub config: ConfigCli,
 
     #[clap(flatten)]
     pub activation_config: ConfigCliActivation,

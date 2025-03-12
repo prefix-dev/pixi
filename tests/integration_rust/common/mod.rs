@@ -16,7 +16,7 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
     cli::{
         add,
-        cli_config::{ChannelsConfig, PrefixUpdateConfig, WorkspaceConfig},
+        cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
         remove, run, search,
@@ -348,12 +348,15 @@ impl PixiControl {
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
+
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageArgs::default(),
+                },
+                config: Default::default(),
                 editable: false,
             },
         }
@@ -384,12 +387,14 @@ impl PixiControl {
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageArgs::default(),
+                },
+                config: Default::default(),
             },
         }
     }
@@ -403,12 +408,14 @@ impl PixiControl {
                 },
                 channel: vec![],
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageArgs::default(),
+                },
+                config: Default::default(),
                 feature: None,
                 priority: None,
                 prepend: false,
@@ -426,12 +433,14 @@ impl PixiControl {
                 },
                 channel: vec![],
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageArgs::default(),
+                },
+                config: Default::default(),
                 feature: None,
                 priority: None,
                 prepend: false,
@@ -477,7 +486,7 @@ impl PixiControl {
         // Ensure the lock-file is up-to-date
         let mut lock_file = project
             .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.prefix_update_config.lock_file_usage(),
+                lock_file_usage: args.lock_file_update_config.lock_file_usage(),
                 ..UpdateLockFileOptions::default()
             })
             .await?;

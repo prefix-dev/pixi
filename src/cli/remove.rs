@@ -36,7 +36,7 @@ pub struct Args {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
-    config: ConfigCli,
+    pub config: ConfigCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {

@@ -134,6 +134,7 @@ pub struct PrefixUpdateConfig {
     #[arg(long)]
     pub revalidate: bool,
 }
+
 impl PrefixUpdateConfig {
     /// Which `[UpdateMode]` to use
     pub(crate) fn update_mode(&self) -> UpdateMode {
