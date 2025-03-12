@@ -31,7 +31,7 @@ pixi global install [OPTIONS] <PACKAGES>...
 :  Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
 - <a id="arg---force-reinstall" href="#arg---force-reinstall">`--force-reinstall`</a>
 :  Specifies that the environment should be reinstalled
-- <a id="arg---no-shortcut" href="#arg---no-shortcut">`--no-shortcut`</a>
+- <a id="arg---no-shortcuts" href="#arg---no-shortcuts">`--no-shortcuts`</a>
 :  Specifies that no shortcuts should be created for the installed packages
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :
