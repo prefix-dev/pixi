@@ -2111,6 +2111,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Config Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#description" class="md-nav__link">
     <span class="md-ellipsis">
       Description
@@ -2180,26 +2189,14 @@
 <ul>
 <li>
 <dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
-</dl>
-</li>
-<li>
-<dl>
 <dt><a id="arg---channel" href="#arg---channel"><code>--channel (-c) &lt;CHANNEL&gt;</code></a></dt>
 <dd>The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
+<dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORM&gt;</code></a></dt>
+<dd>The platform to install the packages for</dd>
 </dl>
 </li>
 <li>
@@ -2216,6 +2213,12 @@
 </li>
 <li>
 <dl>
+<dt><a id="arg---with" href="#arg---with"><code>--with &lt;WITH&gt;</code></a></dt>
+<dd>Add additional dependencies to the environment. Their executables will not be exposed</dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---force-reinstall" href="#arg---force-reinstall"><code>--force-reinstall</code></a></dt>
 <dd>Specifies that the environment should be reinstalled</dd>
 </dl>
@@ -2226,8 +2229,21 @@
 <dd>Specifies that no shortcuts should be created for the installed packages</dd>
 </dl>
 </li>
-<li><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORM&gt;</code></a>
-:</li>
+</ul>
+<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
+<dd>Do not verify the TLS certificate of the server</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
+<dd>Path to the file containing the authentication token</dd>
+</dl>
+</li>
 <li>
 <dl>
 <dt><a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider"><code>--pypi-keyring-provider &lt;PYPI_KEYRING_PROVIDER&gt;</code></a></dt>
@@ -2237,14 +2253,14 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
+<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
+<dd>Max concurrent solves, default is the number of CPUs</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---with" href="#arg---with"><code>--with &lt;WITH&gt;</code></a></dt>
-<dd>Add additional dependencies to the environment. Their executables will not be exposed</dd>
+<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
+<dd>Max concurrent network requests, default is <code>50</code></dd>
 </dl>
 </li>
 </ul>

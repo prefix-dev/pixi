@@ -2111,6 +2111,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Config Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#description" class="md-nav__link">
     <span class="md-ellipsis">
       Description
@@ -2172,8 +2181,8 @@
 <ul>
 <li>
 <dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
+<dt><a id="arg---spec" href="#arg---spec"><code>--spec (-s) &lt;SPECS&gt;</code></a></dt>
+<dd>Matchspecs of packages to install. If this is not provided, the package is guessed from the command</dd>
 </dl>
 </li>
 <li>
@@ -2184,14 +2193,9 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
+<dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORM&gt;</code></a></dt>
+<dd>The platform to create the environment for
+<br><strong>default</strong>: <code>current_platform</code></dd>
 </dl>
 </li>
 <li>
@@ -2206,11 +2210,19 @@
 <dd>Before executing the command, list packages in the environment Specify <code>--list=some_regex</code> to filter the shown packages</dd>
 </dl>
 </li>
+</ul>
+<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<ul>
 <li>
 <dl>
-<dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORM&gt;</code></a></dt>
-<dd>The platform to create the environment for
-<br><strong>default</strong>: <code>current_platform</code></dd>
+<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
+<dd>Do not verify the TLS certificate of the server</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
+<dd>Path to the file containing the authentication token</dd>
 </dl>
 </li>
 <li>
@@ -2222,14 +2234,14 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---spec" href="#arg---spec"><code>--spec (-s) &lt;SPECS&gt;</code></a></dt>
-<dd>Matchspecs of packages to install. If this is not provided, the package is guessed from the command</dd>
+<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
+<dd>Max concurrent solves, default is the number of CPUs</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
+<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
+<dd>Max concurrent network requests, default is <code>50</code></dd>
 </dl>
 </li>
 </ul>

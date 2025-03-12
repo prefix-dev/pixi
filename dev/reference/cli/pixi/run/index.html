@@ -2111,6 +2111,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Config Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#global-options" class="md-nav__link">
     <span class="md-ellipsis">
       Global Options
@@ -2190,44 +2199,8 @@
 <ul>
 <li>
 <dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---clean-env" href="#arg---clean-env"><code>--clean-env</code></a></dt>
-<dd>Use a clean environment to run the task</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---dry-run" href="#arg---dry-run"><code>--dry-run (-n)</code></a></dt>
-<dd>Run the task in dry-run mode (only print the command that would run)</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
-<dd>The environment to run the task in</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---force-activate" href="#arg---force-activate"><code>--force-activate</code></a></dt>
-<dd>Do not use the environment activation cache. (default: true except in experimental mode)</dd>
+<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
+<dd>Don't update lockfile, implies the no-install as well</dd>
 </dl>
 </li>
 <li>
@@ -2237,20 +2210,11 @@
 <br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
 </dl>
 </li>
-<li><a id="arg---help" href="#arg---help"><code>--help</code></a>
-:</li>
 <li>
 <dl>
 <dt><a id="arg---locked" href="#arg---locked"><code>--locked</code></a></dt>
 <dd>Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br><strong>env</strong>: <code>PIXI_LOCKED</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---no-completion" href="#arg---no-completion"><code>--no-completion &lt;NO_COMPLETION&gt;</code></a></dt>
-<dd>Do not source the autocompletion scripts from the environment
-<br><strong>options</strong>: <code>true</code>, <code>false</code></dd>
 </dl>
 </li>
 <li>
@@ -2261,8 +2225,49 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
-<dd>Don't update lockfile, implies the no-install as well</dd>
+<dt><a id="arg---revalidate" href="#arg---revalidate"><code>--revalidate</code></a></dt>
+<dd>Run the complete environment validation. This will reinstall a broken environment</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
+<dd>The environment to run the task in</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---clean-env" href="#arg---clean-env"><code>--clean-env</code></a></dt>
+<dd>Use a clean environment to run the task</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---skip-deps" href="#arg---skip-deps"><code>--skip-deps</code></a></dt>
+<dd>Don't run the dependencies of the task ('depends-on' field in the task definition)</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---dry-run" href="#arg---dry-run"><code>--dry-run (-n)</code></a></dt>
+<dd>Run the task in dry-run mode (only print the command that would run)</dd>
+</dl>
+</li>
+<li><a id="arg---help" href="#arg---help"><code>--help</code></a>
+:</li>
+</ul>
+<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
+<dd>Do not verify the TLS certificate of the server</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
+<dd>Path to the file containing the authentication token</dd>
 </dl>
 </li>
 <li>
@@ -2274,20 +2279,27 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---revalidate" href="#arg---revalidate"><code>--revalidate</code></a></dt>
-<dd>Run the complete environment validation. This will reinstall a broken environment</dd>
+<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
+<dd>Max concurrent solves, default is the number of CPUs</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---skip-deps" href="#arg---skip-deps"><code>--skip-deps</code></a></dt>
-<dd>Don't run the dependencies of the task ('depends-on' field in the task definition)</dd>
+<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
+<dd>Max concurrent network requests, default is <code>50</code></dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
+<dt><a id="arg---force-activate" href="#arg---force-activate"><code>--force-activate</code></a></dt>
+<dd>Do not use the environment activation cache. (default: true except in experimental mode)</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---no-completion" href="#arg---no-completion"><code>--no-completion &lt;NO_COMPLETION&gt;</code></a></dt>
+<dd>Do not source the autocompletion scripts from the environment
+<br><strong>options</strong>: <code>true</code>, <code>false</code></dd>
 </dl>
 </li>
 </ul>

@@ -2111,6 +2111,24 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Config Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#git-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Git Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#global-options" class="md-nav__link">
     <span class="md-ellipsis">
       Global Options
@@ -2187,26 +2205,14 @@
 <ul>
 <li>
 <dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
+<dt><a id="arg---pypi" href="#arg---pypi"><code>--pypi</code></a></dt>
+<dd>The specified dependencies are pypi dependencies. Conflicts with <code>host</code> and <code>build</code></dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---branch" href="#arg---branch"><code>--branch &lt;BRANCH&gt;</code></a></dt>
-<dd>The git branch</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
+<dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORMS&gt;</code></a></dt>
+<dd>The platform(s) for which the dependency should be modified</dd>
 </dl>
 </li>
 <li>
@@ -2218,15 +2224,15 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---frozen" href="#arg---frozen"><code>--frozen</code></a></dt>
-<dd>Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-<br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
+<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
+<dd>Don't update lockfile, implies the no-install as well</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---git" href="#arg---git"><code>--git (-g) &lt;GIT&gt;</code></a></dt>
-<dd>The git url to use when adding a git dependency</dd>
+<dt><a id="arg---frozen" href="#arg---frozen"><code>--frozen</code></a></dt>
+<dd>Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+<br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
 </dl>
 </li>
 <li>
@@ -2244,20 +2250,23 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
-<dd>Don't update lockfile, implies the no-install as well</dd>
+<dt><a id="arg---revalidate" href="#arg---revalidate"><code>--revalidate</code></a></dt>
+<dd>Run the complete environment validation. This will reinstall a broken environment</dd>
+</dl>
+</li>
+</ul>
+<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
+<dd>Do not verify the TLS certificate of the server</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORMS&gt;</code></a></dt>
-<dd>The platform(s) for which the dependency should be modified</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---pypi" href="#arg---pypi"><code>--pypi</code></a></dt>
-<dd>The specified dependencies are pypi dependencies. Conflicts with <code>host</code> and <code>build</code></dd>
+<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
+<dd>Path to the file containing the authentication token</dd>
 </dl>
 </li>
 <li>
@@ -2269,20 +2278,29 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---rev" href="#arg---rev"><code>--rev &lt;REV&gt;</code></a></dt>
-<dd>The git revision</dd>
+<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
+<dd>Max concurrent solves, default is the number of CPUs</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---revalidate" href="#arg---revalidate"><code>--revalidate</code></a></dt>
-<dd>Run the complete environment validation. This will reinstall a broken environment</dd>
+<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
+<dd>Max concurrent network requests, default is <code>50</code></dd>
+</dl>
+</li>
+</ul>
+<h2 id="git-options">Git Options<a class="headerlink" href="#git-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---git" href="#arg---git"><code>--git (-g) &lt;GIT&gt;</code></a></dt>
+<dd>The git url to use when adding a git dependency</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---subdir" href="#arg---subdir"><code>--subdir (-s) &lt;SUBDIR&gt;</code></a></dt>
-<dd>The subdirectory of the git repository to use</dd>
+<dt><a id="arg---branch" href="#arg---branch"><code>--branch &lt;BRANCH&gt;</code></a></dt>
+<dd>The git branch</dd>
 </dl>
 </li>
 <li>
@@ -2293,8 +2311,14 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
+<dt><a id="arg---rev" href="#arg---rev"><code>--rev &lt;REV&gt;</code></a></dt>
+<dd>The git revision</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---subdir" href="#arg---subdir"><code>--subdir (-s) &lt;SUBDIR&gt;</code></a></dt>
+<dd>The subdirectory of the git repository to use</dd>
 </dl>
 </li>
 </ul>

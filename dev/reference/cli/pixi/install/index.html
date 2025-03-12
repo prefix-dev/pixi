@@ -2102,6 +2102,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Config Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#global-options" class="md-nav__link">
     <span class="md-ellipsis">
       Global Options
@@ -2163,36 +2172,6 @@
 <ul>
 <li>
 <dl>
-<dt><a id="arg---all" href="#arg---all"><code>--all (-a)</code></a></dt>
-<dd>Install all environments</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
-<dd>The environment to install</dd>
-</dl>
-</li>
-<li>
-<dl>
 <dt><a id="arg---frozen" href="#arg---frozen"><code>--frozen</code></a></dt>
 <dd>Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
@@ -2207,6 +2186,33 @@
 </li>
 <li>
 <dl>
+<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
+<dd>The environment to install</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---all" href="#arg---all"><code>--all (-a)</code></a></dt>
+<dd>Install all environments</dd>
+</dl>
+</li>
+</ul>
+<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
+<dd>Do not verify the TLS certificate of the server</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
+<dd>Path to the file containing the authentication token</dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider"><code>--pypi-keyring-provider &lt;PYPI_KEYRING_PROVIDER&gt;</code></a></dt>
 <dd>Specifies whether to use the keyring to look up credentials for PyPI
 <br><strong>options</strong>: <code>disabled</code>, <code>subprocess</code></dd>
@@ -2214,8 +2220,14 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
+<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
+<dd>Max concurrent solves, default is the number of CPUs</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
+<dd>Max concurrent network requests, default is <code>50</code></dd>
 </dl>
 </li>
 </ul>

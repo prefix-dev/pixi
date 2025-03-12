@@ -2102,6 +2102,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Config Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#global-options" class="md-nav__link">
     <span class="md-ellipsis">
       Global Options
@@ -2145,26 +2154,9 @@
 <ul>
 <li>
 <dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---no-incremental" href="#arg---no-incremental"><code>--no-incremental (-n)</code></a></dt>
-<dd>Whether to build incrementally if possible</dd>
+<dt><a id="arg---target-platform" href="#arg---target-platform"><code>--target-platform (-t) &lt;TARGET_PLATFORM&gt;</code></a></dt>
+<dd>The target platform to build for (defaults to the current platform)
+<br><strong>default</strong>: <code>current_platform</code></dd>
 </dl>
 </li>
 <li>
@@ -2176,6 +2168,27 @@
 </li>
 <li>
 <dl>
+<dt><a id="arg---no-incremental" href="#arg---no-incremental"><code>--no-incremental (-n)</code></a></dt>
+<dd>Whether to build incrementally if possible</dd>
+</dl>
+</li>
+</ul>
+<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
+<dd>Do not verify the TLS certificate of the server</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
+<dd>Path to the file containing the authentication token</dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider"><code>--pypi-keyring-provider &lt;PYPI_KEYRING_PROVIDER&gt;</code></a></dt>
 <dd>Specifies whether to use the keyring to look up credentials for PyPI
 <br><strong>options</strong>: <code>disabled</code>, <code>subprocess</code></dd>
@@ -2183,15 +2196,14 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---target-platform" href="#arg---target-platform"><code>--target-platform (-t) &lt;TARGET_PLATFORM&gt;</code></a></dt>
-<dd>The target platform to build for (defaults to the current platform)
-<br><strong>default</strong>: <code>current_platform</code></dd>
+<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
+<dd>Max concurrent solves, default is the number of CPUs</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
+<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
+<dd>Max concurrent network requests, default is <code>50</code></dd>
 </dl>
 </li>
 </ul>
