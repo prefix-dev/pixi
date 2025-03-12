@@ -7,20 +7,17 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 
-/// Install an environment, both updating the lockfile and installing the environment.
+/// Re-install an environment, both updating the lockfile and re-installing the environment.
 ///
-/// This command installs an environment, if the lockfile is not up-to-date it will be updated.
+/// This command reinstalls an environment, if the lockfile is not up-to-date it will be updated.
+/// If `--package` is given, only the specified package will be reinstalled.
+/// Otherwise the whole environment will be reinstalled.
 ///
-/// `pixi install` only installs one environment at a time,
+/// `pixi reinstall` only re-installs one environment at a time,
 /// if you have multiple environments you can select the right one with the `--environment` flag.
-/// If you don't provide an environment, the `default` environment will be installed.
+/// If you don't provide an environment, the `default` environment will be re-installed.
 ///
-/// If you want to install all environments, you can use the `--all` flag.
-///
-/// Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`.
-/// These commands will automatically install the environment if it is not already installed.
-///
-/// You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
+/// If you want to re-install all environments, you can use the `--all` flag.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
@@ -39,6 +36,10 @@ pub struct Args {
     /// Install all environments
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
+
+    /// Specifies the package that should be reinstalled.
+    #[arg(num_args = 1.., required = true, id = "PACKAGE")]
+    packages: Vec<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
