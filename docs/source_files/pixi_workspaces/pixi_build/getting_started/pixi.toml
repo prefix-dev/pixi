@@ -36,17 +36,15 @@ hatchling = "*"
 # --8<-- [start:dependencies]
 # We add our package as dependency to the workspace
 [dependencies]
-# pixi support package dependencies by path
-rich_example = { path = "./rich_example" }
-
-# pixi support automatic discovery of recipe.yaml by folder
+# We can get source dependencies from a path on our file system
 rich_example_by_folder = { path = "./recipe_by_folder" }
-
-# pixi support direct reference to recipe.yaml
-rich_example_by_file = { path = "./recipe_by_file/recipe.yaml" }
-
-# pixi also support git dependencies
+# as well as from a git repository
 boost-check = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "boost-check" }
+
+# If the directory contains a `pixi.toml`, `pixi-build` will be used to build the package
+rich_example = { path = "./rich_example" }
+# if the directory contains a `recipe.yaml`, `rattler-build` will be used.
+rich_example_by_file = { path = "./recipe_by_file/recipe.yaml" }
 # --8<-- [end:dependencies]
 
 # --8<-- [start:run-dependencies]
