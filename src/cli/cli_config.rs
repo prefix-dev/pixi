@@ -28,7 +28,7 @@ use pixi_git::GIT_URL_QUERY_REV_TYPE;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, global = true)]
+    #[arg(long, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 }
 
@@ -151,15 +151,15 @@ impl PrefixUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
-    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub branch: Option<String>,
 
     /// The git tag
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub tag: Option<String>,
 
     /// The git revision
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub rev: Option<String>,
 }
 
@@ -236,12 +236,12 @@ pub struct DependencyConfig {
 
     /// The specified dependencies are host dependencies. Conflicts with `build`
     /// and `pypi`
-    #[arg(long, conflicts_with_all = ["build", "pypi"])]
+    #[arg(long, conflicts_with_all = ["build", "pypi"], hide = true)]
     pub host: bool,
 
     /// The specified dependencies are build dependencies. Conflicts with `host`
     /// and `pypi`
-    #[arg(long, conflicts_with_all = ["host", "pypi"])]
+    #[arg(long, conflicts_with_all = ["host", "pypi"], hide = true)]
     pub build: bool,
 
     /// The specified dependencies are pypi dependencies. Conflicts with `host`
@@ -258,7 +258,7 @@ pub struct DependencyConfig {
     pub feature: FeatureName,
 
     /// The git url to use when adding a git dependency
-    #[clap(long, short)]
+    #[clap(long, short, help_heading = consts::CLAP_GIT_OPTIONS)]
     pub git: Option<Url>,
 
     #[clap(flatten)]
@@ -266,7 +266,7 @@ pub struct DependencyConfig {
     pub rev: Option<GitRev>,
 
     /// The subdirectory of the git repository to use
-    #[clap(long, short, requires = "git")]
+    #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdir: Option<String>,
 }
 

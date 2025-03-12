@@ -24,7 +24,6 @@ base64 = "0.22.1"
 bytes = "1.10.0"
 chrono = "0.4.40"
 clap = { version = "4.5.31", default-features = false }
-clap-verbosity-flag = "3.0.2"
 clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 concat-idents = "1.1.5"
@@ -48,7 +47,6 @@ http = "1.2.0"
 http-cache-reqwest = "0.15.1"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
-ignore = "0.4.23"
 indexmap = "2.7.1"
 indicatif = "0.17.11"
 insta = "1.42.1"
@@ -116,20 +114,20 @@ which = "7.0.2"
 
 # Rattler crates
 file_url = "0.2.3"
-rattler = { version = "0.32.4", default-features = false }
-rattler_cache = { version = "0.3.13", default-features = false }
-rattler_conda_types = { version = "0.31.3", default-features = false, features = [
+rattler = { version = "0.33.0", default-features = false }
+rattler_cache = { version = "0.3.14", default-features = false }
+rattler_conda_types = { version = "0.31.4", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.0.7", default-features = false }
-rattler_lock = { version = "0.22.46", default-features = false }
-rattler_menuinst = { version = "0.2.2", default-features = false }
-rattler_networking = { version = "0.22.8", default-features = false, features = [
+rattler_digest = { version = "1.0.8", default-features = false }
+rattler_lock = { version = "0.22.47", default-features = false }
+rattler_menuinst = { version = "0.2.3", default-features = false }
+rattler_networking = { version = "0.22.9", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { version = "0.22.0", default-features = false }
-rattler_shell = { version = "0.22.22", default-features = false }
-rattler_solve = { version = "1.4.0", default-features = false }
+rattler_repodata_gateway = { version = "0.22.1", default-features = false }
+rattler_shell = { version = "0.22.23", default-features = false }
+rattler_solve = { version = "1.4.1", default-features = false }
 rattler_virtual_packages = { version = "2.0.6", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
@@ -226,7 +224,6 @@ clap = { workspace = true, features = [
   "error-context",
   "env",
 ] }
-clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
@@ -242,7 +239,6 @@ fs_extra = { workspace = true }
 futures = { workspace = true }
 human_bytes = { workspace = true }
 humantime = { workspace = true }
-ignore = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -300,6 +296,7 @@ pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
+rayon = "1.10.0"
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
   "http2",

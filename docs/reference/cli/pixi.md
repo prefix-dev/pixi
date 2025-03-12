@@ -38,11 +38,13 @@ pixi [OPTIONS] <COMMAND>
 | [`build`](pixi/build.md) | Workspace configuration |
 
 
-## Options
-- <a id="option-version" href="#option-version">`--version (-V)`</a>
-: Display version information
-
 ## Global Options
+- <a id="arg---help" href="#arg---help">`--help (-h)`</a>
+:  Display help information
+- <a id="arg---verbose" href="#arg---verbose">`--verbose (-v)`</a>
+:  Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
+- <a id="arg---quiet" href="#arg---quiet">`--quiet (-q)`</a>
+:  Decrease logging verbosity (quiet mode)
 - <a id="arg---color" href="#arg---color">`--color <COLOR>`</a>
 :  Whether the log needs to be colored
 <br>**env**: `PIXI_COLOR`
@@ -52,9 +54,5 @@ pixi [OPTIONS] <COMMAND>
 :  Hide all progress bars, always turned on if stderr is not a terminal
 <br>**env**: `PIXI_NO_PROGRESS`
 <br>**default**: `false`
-- <a id="arg---quiet" href="#arg---quiet">`--quiet (-q)`</a>
-:  Decrease logging verbosity
-- <a id="arg---verbose" href="#arg---verbose">`--verbose (-v)`</a>
-:  Increase logging verbosity
 
 --8<-- "docs/reference/cli/pixi_extender.md:example"

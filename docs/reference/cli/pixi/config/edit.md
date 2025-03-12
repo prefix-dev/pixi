@@ -16,11 +16,11 @@ pixi config edit [OPTIONS] [EDITOR]
 :  The editor to use, defaults to `EDITOR` environment variable or `nano` on Unix and `notepad` on Windows
 <br>**env**: `EDITOR`
 
-## Options
-- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
-:  Operation on global configuration
+## Config Options
 - <a id="arg---local" href="#arg---local">`--local (-l)`</a>
 :  Operation on project-local configuration
+- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
+:  Operation on global configuration
 - <a id="arg---system" href="#arg---system">`--system (-s)`</a>
 :  Operation on system configuration
 

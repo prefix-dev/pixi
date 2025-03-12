@@ -2052,7 +2052,7 @@ async fn spawn_solve_pypi_task<'p>(
     let locked_pypi_records = locked_pypi_packages.records.clone();
 
     pypi_mapping::amend_pypi_purls(
-        environment.workspace().client()?.clone().into(),
+        environment.workspace().authenticated_client()?.clone(),
         pypi_name_mapping_location,
         pixi_solve_records
             .iter_mut()

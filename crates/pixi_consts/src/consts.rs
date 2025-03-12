@@ -83,6 +83,9 @@ pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
 pub const ENVIRONMENT_FILE_NAME: &str = "pixi";
 
 pub const RELEASES_URL: &str = "https://github.com/prefix-dev/pixi/releases";
+pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
+pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
+pub const CLAP_GIT_OPTIONS: &str = "Git Options";
 
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
