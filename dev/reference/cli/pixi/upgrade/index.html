@@ -2124,18 +2124,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#options" class="md-nav__link">
+  <a href="#config-options" class="md-nav__link">
     <span class="md-ellipsis">
-      Options
+      Config Options
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#config-options" class="md-nav__link">
+  <a href="#update-options" class="md-nav__link">
     <span class="md-ellipsis">
-      Config Options
+      Update Options
     </span>
   </a>
   
@@ -2220,66 +2220,6 @@
 </dl>
 </li>
 </ul>
-<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
-<ul>
-<li>
-<dl>
-<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
-<dd>Don't update lockfile, implies the no-install as well</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---frozen" href="#arg---frozen"><code>--frozen</code></a></dt>
-<dd>Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-<br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---locked" href="#arg---locked"><code>--locked</code></a></dt>
-<dd>Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-<br><strong>env</strong>: <code>PIXI_LOCKED</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---no-install" href="#arg---no-install"><code>--no-install</code></a></dt>
-<dd>Don't modify the environment, only modify the lock-file</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---revalidate" href="#arg---revalidate"><code>--revalidate</code></a></dt>
-<dd>Run the complete environment validation. This will reinstall a broken environment</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---feature" href="#arg---feature"><code>--feature (-f) &lt;FEATURE&gt;</code></a></dt>
-<dd>The feature to update
-<br><strong>default</strong>: <code>default</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---exclude" href="#arg---exclude"><code>--exclude &lt;EXCLUDE&gt;</code></a></dt>
-<dd>The packages which should be excluded</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---json" href="#arg---json"><code>--json</code></a></dt>
-<dd>Output the changes in JSON format</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---dry-run" href="#arg---dry-run"><code>--dry-run (-n)</code></a></dt>
-<dd>Only show the changes that would be made, without actually updating the manifest, lock file, or environment</dd>
-</dl>
-</li>
-</ul>
 <h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
 <ul>
 <li>
@@ -2311,6 +2251,66 @@
 <dl>
 <dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
 <dd>Max concurrent network requests, default is <code>50</code></dd>
+</dl>
+</li>
+</ul>
+<h2 id="update-options">Update Options<a class="headerlink" href="#update-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---no-install" href="#arg---no-install"><code>--no-install</code></a></dt>
+<dd>Don't modify the environment, only modify the lock-file</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---revalidate" href="#arg---revalidate"><code>--revalidate</code></a></dt>
+<dd>Run the complete environment validation. This will reinstall a broken environment</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
+<dd>Don't update lockfile, implies the no-install as well</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---frozen" href="#arg---frozen"><code>--frozen</code></a></dt>
+<dd>Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+<br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---locked" href="#arg---locked"><code>--locked</code></a></dt>
+<dd>Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+<br><strong>env</strong>: <code>PIXI_LOCKED</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---feature" href="#arg---feature"><code>--feature (-f) &lt;FEATURE&gt;</code></a></dt>
+<dd>The feature to update
+<br><strong>default</strong>: <code>default</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---exclude" href="#arg---exclude"><code>--exclude &lt;EXCLUDE&gt;</code></a></dt>
+<dd>The packages which should be excluded</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---json" href="#arg---json"><code>--json</code></a></dt>
+<dd>Output the changes in JSON format</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---dry-run" href="#arg---dry-run"><code>--dry-run (-n)</code></a></dt>
+<dd>Only show the changes that would be made, without actually updating the manifest, lock file, or environment</dd>
 </dl>
 </li>
 </ul>

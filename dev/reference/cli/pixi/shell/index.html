@@ -2115,18 +2115,18 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#options" class="md-nav__link">
+  <a href="#config-options" class="md-nav__link">
     <span class="md-ellipsis">
-      Options
+      Config Options
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#config-options" class="md-nav__link">
+  <a href="#update-options" class="md-nav__link">
     <span class="md-ellipsis">
-      Config Options
+      Update Options
     </span>
   </a>
   
@@ -2181,47 +2181,6 @@
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi shell [OPTIONS]
 </span></code></pre></div>
-<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
-<ul>
-<li>
-<dl>
-<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
-<dd>Don't update lockfile, implies the no-install as well</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---frozen" href="#arg---frozen"><code>--frozen</code></a></dt>
-<dd>Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-<br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---locked" href="#arg---locked"><code>--locked</code></a></dt>
-<dd>Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-<br><strong>env</strong>: <code>PIXI_LOCKED</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---no-install" href="#arg---no-install"><code>--no-install</code></a></dt>
-<dd>Don't modify the environment, only modify the lock-file</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---revalidate" href="#arg---revalidate"><code>--revalidate</code></a></dt>
-<dd>Run the complete environment validation. This will reinstall a broken environment</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
-<dd>The environment to activate in the shell</dd>
-</dl>
-</li>
-</ul>
 <h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
 <ul>
 <li>
@@ -2273,6 +2232,47 @@
 <dt><a id="arg---no-completion" href="#arg---no-completion"><code>--no-completion &lt;NO_COMPLETION&gt;</code></a></dt>
 <dd>Do not source the autocompletion scripts from the environment
 <br><strong>options</strong>: <code>true</code>, <code>false</code></dd>
+</dl>
+</li>
+</ul>
+<h2 id="update-options">Update Options<a class="headerlink" href="#update-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---no-install" href="#arg---no-install"><code>--no-install</code></a></dt>
+<dd>Don't modify the environment, only modify the lock-file</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---revalidate" href="#arg---revalidate"><code>--revalidate</code></a></dt>
+<dd>Run the complete environment validation. This will reinstall a broken environment</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
+<dd>Don't update lockfile, implies the no-install as well</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---frozen" href="#arg---frozen"><code>--frozen</code></a></dt>
+<dd>Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+<br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---locked" href="#arg---locked"><code>--locked</code></a></dt>
+<dd>Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+<br><strong>env</strong>: <code>PIXI_LOCKED</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
+<dd>The environment to activate in the shell</dd>
 </dl>
 </li>
 </ul>
