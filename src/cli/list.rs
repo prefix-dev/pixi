@@ -9,7 +9,7 @@ use itertools::Itertools;
 use miette::{miette, IntoDiagnostic};
 use uv_configuration::ConfigSettings;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
+use crate::cli::cli_config::WorkspaceConfig;
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::WorkspaceLocator;
 use fancy_display::FancyDisplay;
@@ -24,6 +24,8 @@ use rattler_lock::{CondaPackageData, LockedPackageRef, PypiPackageData, UrlOrPat
 use serde::Serialize;
 use uv_distribution::RegistryWheelIndex;
 
+use super::cli_config::LockFileUpdateConfig;
+
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
 pub enum SortBy {
@@ -32,7 +34,7 @@ pub enum SortBy {
     Kind,
 }
 
-/// List project's packages.
+/// List workspace's packages.
 ///
 /// Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]
@@ -66,9 +68,9 @@ pub struct Args {
     pub environment: Option<String>,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub lock_file_update_config: LockFileUpdateConfig,
 
-    /// Only list packages that are explicitly defined in the project.
+    /// Only list packages that are explicitly defined in the workspace.
     #[arg(short = 'x', long)]
     pub explicit: bool,
 }
@@ -178,8 +180,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?;

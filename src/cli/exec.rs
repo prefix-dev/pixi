@@ -1,6 +1,7 @@
 use std::{path::Path, str::FromStr, sync::LazyLock};
 
 use clap::{Parser, ValueHint};
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
@@ -16,7 +17,10 @@ use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
 use super::cli_config::ChannelsConfig;
-use crate::prefix::Prefix;
+use crate::{
+    environment::list::{print_package_table, PackageToOutput},
+    prefix::Prefix,
+};
 
 /// Run a command and install it in a temporary environment.
 ///
@@ -44,6 +48,11 @@ pub struct Args {
     /// exists.
     #[clap(long)]
     pub force_reinstall: bool,
+
+    /// Before executing the command, list packages in the environment
+    /// Specify `--list=some_regex` to filter the shown packages
+    #[clap(long = "list", num_args = 0..=1, default_missing_value = "", require_equals = true)]
+    pub list: Option<String>,
 
     #[clap(flatten)]
     pub config: ConfigCli,
@@ -180,9 +189,10 @@ pub async fn create_exec_prefix(
             .unwrap_or(prefix.root())
             .display()
     );
+    let specs_clone = specs.clone();
     let solved_records = wrap_in_progress("solving environment", move || {
         Solver.solve(SolverTask {
-            specs,
+            specs: specs_clone,
             virtual_packages,
             ..SolverTask::from_iter(&repodata)
         })
@@ -207,13 +217,67 @@ pub async fn create_exec_prefix(
         .with_package_cache(PackageCache::new(
             cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
         ))
-        .install(prefix.root(), solved_records.records)
+        .install(prefix.root(), solved_records.records.clone())
         .await
         .into_diagnostic()
         .context("failed to create environment")?;
 
     write_guard.finish().await.into_diagnostic()?;
+
+    if let Some(ref regex) = args.list {
+        list_exec_environment(specs, solved_records, regex.clone())?;
+    }
+
     Ok(prefix)
+}
+
+fn list_exec_environment(
+    specs: Vec<MatchSpec>,
+    solved_records: rattler_conda_types::SolverResult,
+    regex: String,
+) -> Result<(), miette::Error> {
+    let regex = {
+        if regex.is_empty() {
+            None
+        } else {
+            Some(regex)
+        }
+    };
+    let mut packages_to_output = solved_records
+        .records
+        .iter()
+        .map(|record| {
+            PackageToOutput::new(
+                &record.package_record,
+                specs
+                    .clone()
+                    .into_iter()
+                    .filter_map(|spec| spec.name) // Extract the name if it exists
+                    .collect_vec()
+                    .contains(&record.package_record.name),
+            )
+        })
+        .collect_vec();
+    if let Some(ref regex) = regex {
+        let regex = regex::Regex::new(regex).into_diagnostic()?;
+        packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
+    }
+    let output_message = if let Some(ref regex) = regex {
+        format!(
+            "The environment has {} packages filtered by regex `{}`:",
+            console::style(packages_to_output.len()).bold(),
+            regex
+        )
+    } else {
+        format!(
+            "The environment has {} packages:",
+            console::style(packages_to_output.len()).bold()
+        )
+    };
+    packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
+    println!("{}", output_message);
+    print_package_table(packages_to_output).into_diagnostic()?;
+    Ok(())
 }
 
 /// This function is used to guess the package name from the command.

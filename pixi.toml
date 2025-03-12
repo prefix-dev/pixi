@@ -19,7 +19,7 @@ python = "3.12.*"
 build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
-generate-cli-docs = "cargo run --manifest-path pixi_docs/Cargo.toml"
+generate-cli-docs = "cargo run --locked --manifest-path pixi_docs/Cargo.toml"
 install = "cargo install --path . --locked"
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
@@ -97,9 +97,15 @@ typos = ">=1.29.10,<2"
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
 cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings"
+cargo-clippy-pixi_docs = "cargo clippy --all-targets --workspace --manifest-path pixi_docs/Cargo.toml -- -D warnings"
 cargo-fmt = "cargo fmt --all"
+cargo-fmt-pixi_docs = "cargo fmt --all --manifest-path pixi_docs/Cargo.toml"
 check-openssl = "python tests/scripts/check-openssl.py"
 lint = "pre-commit run --all-files --hook-stage=manual"
+lint-pixi_docs = { depends-on = [
+  "cargo-fmt-pixi_docs",
+  "cargo-clippy-pixi_docs",
+] }
 pre-commit-install = "pre-commit install --install-hooks"
 pre-commit-run = "pre-commit run --all-files"
 prettier-fmt = { cmd = "prettier --write" }
@@ -117,6 +123,7 @@ git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
 rust = "==1.84.0"
+rust-src = ">=1.84.0,<2"
 
 [feature.build.target.linux-64.dependencies]
 clang = ">=18.1.8,<19.0"

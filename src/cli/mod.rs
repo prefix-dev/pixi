@@ -1,5 +1,5 @@
+use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::Parser;
-use clap_verbosity_flag::Verbosity;
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
@@ -25,7 +25,6 @@ pub mod init;
 pub mod install;
 pub mod list;
 pub mod lock;
-pub mod project;
 pub mod remove;
 pub mod run;
 pub mod search;
@@ -37,18 +36,19 @@ pub mod tree;
 pub mod update;
 pub mod upgrade;
 pub mod upload;
+pub mod workspace;
 
 #[derive(Parser, Debug)]
 #[command(
     version(consts::PIXI_VERSION),
     about = format!("
-Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Projects.
+Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.
 
-Pixi is a versatile developer workflow tool designed to streamline the management of your project's dependencies, tasks, and environments.
+Pixi is a versatile developer workflow tool designed to streamline the management of your workspace's dependencies, tasks, and environments.
 Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
 
 Basic Usage:
-    Initialize pixi for a project:
+    Initialize pixi for a workspace:
     $ pixi init
     $ pixi add python numpy pytest
 
@@ -63,17 +63,31 @@ Need Help?
 Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 
 For more information, see the documentation at: https://pixi.sh
-", consts::PIXI_VERSION)
+", consts::PIXI_VERSION),
 )]
-#[clap(arg_required_else_help = true)]
+#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Command,
 
-    /// The verbosity level
-    /// (-v for warning, -vv for info, -vvv for debug, -vvvv for trace, -q for quiet)
-    #[command(flatten)]
-    verbose: Verbosity,
+    #[clap(flatten)]
+    global_options: GlobalOptions,
+}
+
+#[derive(Debug, Parser)]
+#[clap(next_help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+pub struct GlobalOptions {
+    /// Display help information
+    #[clap(long, short, global = true, action = clap::ArgAction::Help)]
+    help: Option<bool>,
+
+    /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
+    #[clap(short, long, action = clap::ArgAction::Count, global = true)]
+    verbose: u8,
+
+    /// Decrease logging verbosity (quiet mode)
+    #[clap(short, long, action = clap::ArgAction::Count, global = true)]
+    quiet: u8,
 
     /// Whether the log needs to be colored.
     #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
@@ -83,13 +97,28 @@ pub struct Args {
     #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS")]
     no_progress: bool,
 }
+
 impl Args {
     /// Whether to show progress bars or not, based on the terminal and the user's preference.
     fn no_progress(&self) -> bool {
         if !std::io::stderr().is_terminal() {
             true
         } else {
-            self.no_progress
+            self.global_options.no_progress
+        }
+    }
+
+    /// Determine the log level filter based on verbose and quiet counts.
+    fn log_level_filter(&self) -> LevelFilter {
+        match (self.global_options.quiet, self.global_options.verbose) {
+            // Quiet mode overrides verbose
+            (q, _) if q > 0 => LevelFilter::OFF,
+            // Custom verbosity levels
+            (_, 0) => LevelFilter::ERROR, // Default
+            (_, 1) => LevelFilter::WARN,  // -v
+            (_, 2) => LevelFilter::INFO,  // -vv
+            (_, 3) => LevelFilter::DEBUG, // -vvv
+            (_, _) => LevelFilter::TRACE, // -vvvv+
         }
     }
 }
@@ -117,8 +146,9 @@ pub enum Command {
     Shell(shell::Args),
     ShellHook(shell_hook::Args),
 
-    // Project modification commands
-    Project(project::Args),
+    // Workspace Manifest modification commands
+    #[clap(alias = "project")]
+    Workspace(workspace::Args),
     Task(task::Args),
 
     // Environment inspection
@@ -147,8 +177,9 @@ pub enum Command {
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
+#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 /// Lock file usage from the CLI
-pub struct LockFileUsageArgs {
+pub struct LockFileUsageConfig {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
@@ -159,8 +190,8 @@ pub struct LockFileUsageArgs {
     pub locked: bool,
 }
 
-impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
-    fn from(value: LockFileUsageArgs) -> Self {
+impl From<LockFileUsageConfig> for crate::environment::LockFileUsage {
+    fn from(value: LockFileUsageConfig) -> Self {
         if value.frozen {
             Self::Frozen
         } else if value.locked {
@@ -189,25 +220,13 @@ pub async fn execute() -> miette::Result<()> {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
     }
 
-    let (low_level_filter, level_filter, pixi_level) = match args.verbose.log_level_filter() {
-        clap_verbosity_flag::log::LevelFilter::Off => {
-            (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF)
-        }
-        clap_verbosity_flag::log::LevelFilter::Error => {
-            (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN)
-        }
-        clap_verbosity_flag::log::LevelFilter::Warn => {
-            (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO)
-        }
-        clap_verbosity_flag::log::LevelFilter::Info => {
-            (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO)
-        }
-        clap_verbosity_flag::log::LevelFilter::Debug => {
-            (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG)
-        }
-        clap_verbosity_flag::log::LevelFilter::Trace => {
-            (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE)
-        }
+    let (low_level_filter, level_filter, pixi_level) = match args.log_level_filter() {
+        LevelFilter::OFF => (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF),
+        LevelFilter::ERROR => (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN),
+        LevelFilter::WARN => (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO),
+        LevelFilter::INFO => (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO),
+        LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG),
+        LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
     let env_filter = EnvFilter::builder()
@@ -257,7 +276,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
-        Command::Project(cmd) => project::execute(cmd).await,
+        Command::Workspace(cmd) => workspace::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
         #[cfg(feature = "self_update")]
         Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
@@ -292,7 +311,7 @@ fn set_console_colors(args: &Args) {
         Ok(_) => &ColorOutput::Always,
         Err(_) => match env::var("NO_COLOR") {
             Ok(_) => &ColorOutput::Never,
-            Err(_) => &args.color,
+            Err(_) => &args.global_options.color,
         },
     };
 
@@ -307,4 +326,38 @@ fn set_console_colors(args: &Args) {
         }
         ColorOutput::Auto => {} // Let `console` detect if colors should be enabled
     };
+}
+
+pub fn get_styles() -> clap::builder::Styles {
+    clap::builder::Styles::styled()
+        .usage(
+            Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(Color::Ansi(AnsiColor::BrightGreen))),
+        )
+        .header(
+            Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(Color::Ansi(AnsiColor::BrightGreen))),
+        )
+        .literal(Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightCyan))))
+        .invalid(
+            Style::new()
+                .bold()
+                .fg_color(Some(Color::Ansi(AnsiColor::Red))),
+        )
+        .error(
+            Style::new()
+                .bold()
+                .fg_color(Some(Color::Ansi(AnsiColor::Red))),
+        )
+        .valid(
+            Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(Color::Ansi(AnsiColor::Green))),
+        )
+        .placeholder(Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightCyan))))
 }

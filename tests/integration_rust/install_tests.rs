@@ -1,21 +1,23 @@
 use crate::common::{
-    builders::{string_from_iter, HasDependencyConfig, HasPrefixUpdateConfig},
+    builders::{
+        string_from_iter, HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig,
+    },
     package_database::{Package, PackageDatabase},
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use pixi::environment::LockFileUsage;
 use pixi::lock_file::UpdateMode;
 use pixi::{
     build::BuildContext,
     cli::{
         run::{self, Args},
-        LockFileUsageArgs,
+        LockFileUsageConfig,
     },
     lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
 };
+use pixi::{cli::cli_config::LockFileUpdateConfig, environment::LockFileUsage};
 use pixi::{
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::WorkspaceConfig,
     workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
 };
 use pixi::{UpdateLockFileOptions, Workspace};
@@ -289,8 +291,8 @@ async fn install_frozen() {
     // Check if running with frozen doesn't suddenly install the latest update.
     let result = pixi
         .run(run::Args {
-            prefix_update_config: PrefixUpdateConfig {
-                lock_file_usage: LockFileUsageArgs {
+            lock_file_update_config: LockFileUpdateConfig {
+                lock_file_usage: LockFileUsageConfig {
                     frozen: true,
                     ..Default::default()
                 },

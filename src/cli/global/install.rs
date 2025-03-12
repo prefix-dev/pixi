@@ -12,7 +12,7 @@ use crate::{
     global::{
         self,
         common::{contains_menuinst_document, NotChangedReason},
-        list::list_global_environments,
+        list::list_all_global_environments,
         project::ExposedType,
         EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
@@ -44,6 +44,10 @@ pub struct Args {
     #[clap(long = "channel", short = 'c', value_name = "CHANNEL")]
     channels: Vec<NamedChannelOrUrl>,
 
+    /// The platform to install the packages for.
+    ///
+    /// This is useful when you want to install packages for a different platform than the one you are currently on.
+    /// This is very often used when you want to install `osx-64` packages on `osx-arm64`.
     #[clap(short, long)]
     platform: Option<Platform>,
 
@@ -149,7 +153,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // After installing, we always want to list the changed environments
-    list_global_environments(
+    list_all_global_environments(
         &last_updated_project,
         Some(env_names),
         Some(&env_changes),

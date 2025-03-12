@@ -1,11 +1,12 @@
 use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use super::has_specs::HasSpecs;
+use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
@@ -17,7 +18,7 @@ use crate::{
 ///
 /// The dependencies should be defined as MatchSpec for conda package, or a PyPI
 /// requirement for the `--pypi` dependencies. If no specific version is
-/// provided, the latest version compatible with your project will be chosen
+/// provided, the latest version compatible with your workspace will be chosen
 /// automatically or a * will be used.
 ///
 /// Example usage:
@@ -31,7 +32,7 @@ use crate::{
 /// Adding multiple dependencies at once is also supported:
 ///
 /// - `pixi add python pytest`: This will add both `python` and `pytest` to the
-///   project's dependencies.
+///   workspace's dependencies.
 ///
 /// The `--platform` and `--build/--host` flags make the dependency target
 /// specific.
@@ -49,7 +50,7 @@ use crate::{
 /// - `pixi add --pypi boto3`
 /// - `pixi add --pypi "boto3==version"`
 ///
-/// If the project manifest is a `pyproject.toml`, adding a pypi dependency will
+/// If the workspace manifest is a `pyproject.toml`, adding a pypi dependency will
 /// add it to the native pyproject `project.dependencies` array or to the native
 /// `dependency-groups` table if a feature is specified:
 ///
@@ -82,22 +83,29 @@ pub struct Args {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
+
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, project_config) = (
+    let (dependency_config, prefix_update_config, lock_file_update_config, workspace_config) = (
         args.dependency_config,
         args.prefix_update_config,
+        args.lock_file_update_config,
         args.workspace_config,
     );
 
     let workspace = WorkspaceLocator::for_cli()
-        .with_search_start(project_config.workspace_locator_start())
+        .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
     sanity_check_project(&workspace).await?;
 
@@ -167,6 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         pypi_deps,
         source_specs,
         &prefix_update_config,
+        &lock_file_update_config,
         &dependency_config.feature,
         &dependency_config.platforms,
         args.editable,

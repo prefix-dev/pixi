@@ -1,9 +1,0 @@
----
-source: src/cli/project/export/conda_environment.rs
-expression: env_yaml.unwrap().to_yaml_string()
----
-name: default
-channels:
-- main
-dependencies:
-- python ==3.9

@@ -1,18 +1,17 @@
-use std::io::stdout;
-
 use fancy_display::FancyDisplay;
-use human_bytes::human_bytes;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use pixi_consts::consts;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, PackageRecord, PrefixRecord, Version};
+use rattler_conda_types::{PackageName, PrefixRecord, Version};
 use serde::Serialize;
-use std::io::Write;
 
 use miette::{miette, IntoDiagnostic};
 
-use crate::global::common::find_package_records;
+use crate::{
+    environment::list::{print_package_table, PackageToOutput},
+    global::common::find_package_records,
+};
 
 use super::{project::ParsedEnvironment, EnvChanges, EnvState, EnvironmentName, Mapping, Project};
 
@@ -91,53 +90,8 @@ fn print_meta_info(environment: &ParsedEnvironment) {
     }
 }
 
-/// Create a human-readable representation of the global environment.
-/// Using a tabwriter to align the columns.
-fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io::Error> {
-    let mut writer = tabwriter::TabWriter::new(stdout());
-    let header_style = console::Style::new().bold().cyan();
-    let header = format!(
-        "{}\t{}\t{}\t{}",
-        header_style.apply_to("Package"),
-        header_style.apply_to("Version"),
-        header_style.apply_to("Build"),
-        header_style.apply_to("Size"),
-    );
-    writeln!(writer, "{}", &header)?;
-
-    for package in packages {
-        // Convert size to human-readable format
-        let size_human = package
-            .size_bytes
-            .map(|size| human_bytes(size as f64))
-            .unwrap_or_default();
-
-        let package_info = format!(
-            "{}\t{}\t{}\t{}",
-            package.name.as_normalized(),
-            &package.version,
-            package.build.as_deref().unwrap_or(""),
-            size_human
-        );
-
-        writeln!(
-            writer,
-            "{}",
-            if package.is_explicit {
-                console::style(package_info).green().to_string()
-            } else {
-                package_info
-            }
-        )?;
-    }
-
-    writeln!(writer, "{}", header)?;
-
-    writer.flush()
-}
-
-/// List package and binaries in environment
-pub async fn list_environment(
+/// List package and binaries in global environment
+pub async fn list_specific_global_environment(
     project: &Project,
     environment_name: &EnvironmentName,
     sort_by: GlobalSortBy,
@@ -157,7 +111,7 @@ pub async fn list_environment(
     )
     .await?;
 
-    let mut packages_to_output: Vec<PackageToOutput> = records
+    let mut packages_to_output = records
         .iter()
         .map(|record| {
             PackageToOutput::new(
@@ -167,7 +121,7 @@ pub async fn list_environment(
                     .contains_key(&record.repodata_record.package_record.name),
             )
         })
-        .collect();
+        .collect_vec();
 
     // Filter according to the regex
     if let Some(ref regex) = regex {
@@ -202,14 +156,13 @@ pub async fn list_environment(
     }
     println!("{}", output_message);
     print_package_table(packages_to_output).into_diagnostic()?;
-    println!();
     print_meta_info(env);
 
     Ok(())
 }
 
 /// List all environments in the global environment
-pub async fn list_global_environments(
+pub async fn list_all_global_environments(
     project: &Project,
     envs: Option<Vec<EnvironmentName>>,
     envs_changes: Option<&EnvChanges>,
@@ -366,26 +319,5 @@ fn format_dependencies(
         Some(format_asciiart_section("dependencies", content, last, more))
     } else {
         None
-    }
-}
-
-#[derive(Serialize, Hash, Eq, PartialEq)]
-struct PackageToOutput {
-    name: PackageName,
-    version: Version,
-    build: Option<String>,
-    size_bytes: Option<u64>,
-    is_explicit: bool,
-}
-
-impl PackageToOutput {
-    fn new(record: &PackageRecord, is_explicit: bool) -> Self {
-        Self {
-            name: record.name.clone(),
-            version: record.version.version().clone(),
-            build: Some(record.build.clone()),
-            size_bytes: record.size,
-            is_explicit,
-        }
     }
 }

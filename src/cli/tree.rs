@@ -15,17 +15,17 @@ use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
 use crate::{
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
-    lock_file::UpdateLockFileOptions,
-    workspace::Environment,
+    cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions, workspace::Environment,
     WorkspaceLocator,
 };
 
-/// Show a tree of project dependencies
+use super::cli_config::LockFileUpdateConfig;
+
+/// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false, long_about = format!(
     "\
-    Show a tree of project dependencies\n\
+    Show a tree of workspace dependencies\n\
     \n\
     Dependency names highlighted in {} are directly specified in the manifest. \
     {} version numbers are conda packages, PyPI version numbers are {}.
@@ -52,7 +52,7 @@ pub struct Args {
     pub environment: Option<String>,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub lock_file_update_config: LockFileUpdateConfig,
 
     /// Invert tree and show what depends on given package in the regex argument
     #[arg(short, long, requires = "regex")]
@@ -84,8 +84,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            no_install: args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await
