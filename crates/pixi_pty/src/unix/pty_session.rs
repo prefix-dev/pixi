@@ -7,7 +7,7 @@ use nix::{
     sys::{select, time::TimeVal, wait::WaitStatus},
 };
 use signal_hook::iterator::Signals;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::{
     fs::File,
     io::{self, Read, Write},
@@ -61,15 +61,17 @@ impl PtySession {
     ///
     /// Returns number of written bytes
     pub fn send<B: AsRef<[u8]>>(&mut self, s: B) -> io::Result<usize> {
+        // sleep for 0.05 seconds to delay sending the next command
+        std::thread::sleep(Duration::from_millis(50));
         self.process_stdin.write(s.as_ref())
     }
 
     /// Sends string and a newline to process. This is guaranteed to be flushed to the process.
     /// Returns number of written bytes.
     pub fn send_line(&mut self, line: &str) -> io::Result<usize> {
-        let mut len = self.send(line)?;
-        len += self.process_stdin.write(b"\n")?;
-        Ok(len)
+        let result = self.send(format!("{line}\n"))?;
+        self.flush()?;
+        Ok(result)
     }
 
     /// Make sure all bytes written via `send()` are sent to the process
@@ -81,7 +83,7 @@ impl PtySession {
     /// forward all input from stdin to the process and all output from the process to stdout.
     /// This will block until the process exits.
     pub fn interact(&mut self, wait_until: Option<&str>) -> io::Result<Option<i32>> {
-        let pattern_timeout = 4;
+        let pattern_timeout = Duration::from_secs(1);
         let pattern_start = Instant::now();
 
         // Make sure anything we have written so far has been flushed.
@@ -134,7 +136,13 @@ impl PtySession {
             }
 
             // Check if we have waited long enough for the pattern
-            if pattern_start.elapsed().as_secs() > pattern_timeout {
+            if pattern_start.elapsed() > pattern_timeout && !write_stdout {
+                io::stdout().write_all(
+                    "WARNING: Did not detect successful shell initialization within 1 second\n\r"
+                        .as_bytes(),
+                )?;
+                io::stdout().write_all(&self.rolling_buffer)?;
+                io::stdout().flush()?;
                 write_stdout = true;
             }
 
