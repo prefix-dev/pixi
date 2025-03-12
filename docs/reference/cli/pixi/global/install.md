@@ -20,7 +20,7 @@ pixi global install [OPTIONS] <PACKAGES>...
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:
+:  The platform to install the packages for
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  Ensures that all packages will be installed in the same environment
 - <a id="arg---expose" href="#arg---expose">`--expose <EXPOSE>`</a>

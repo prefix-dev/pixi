@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
+use std::process::exit;
 use std::str::FromStr;
 use fs_err as fs;
 
@@ -116,11 +117,15 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
         }
     }
 
+    // Get a list of the parents and command name
+    let mut parts = parents.to_vec();
+    parts.push(command.get_name().to_string());
+
     // Positionals
     let positionals: Vec<_> = command.get_positionals().collect();
     if !positionals.is_empty() {
         writeln!(buffer, "\n## Arguments").unwrap();
-        write!(buffer, "{}", arguments(&positionals)).unwrap();
+        write!(buffer, "{}", arguments(&positionals, &parts)).unwrap();
     }
 
     // Options
@@ -152,7 +157,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
 
         for (header, opts) in sorted_header_options {
             writeln!(buffer, "\n## {}", header).unwrap();
-            write!(buffer, "{}", arguments(opts)).unwrap();
+            write!(buffer, "{}", arguments(opts, &parts)).unwrap();
         }
     }
 
@@ -217,6 +222,13 @@ fn subcommands_table(subcommands: Vec<&Command>, parent: &str) -> String {
         if subcommand.is_hide_set() {
             continue;
         }
+
+        let about = if let Some(about) = subcommand.get_about() {
+            about
+        } else {
+            eprintln!("Warning: Subcommand `{}{}` has no description", parent, subcommand.get_name());
+            exit(1);
+        };
         // Create a link to the subcommand's Markdown file
         let command_name = subcommand.get_name();
         let link = format!("{}/{}{}", parent, command_name, MD_EXTENSION);
@@ -225,7 +237,7 @@ fn subcommands_table(subcommands: Vec<&Command>, parent: &str) -> String {
             buffer,
             "| {} | {} |",
             link_md,
-            subcommand.get_about().unwrap_or_default()
+            about,
         )
         .unwrap();
     }
@@ -233,7 +245,7 @@ fn subcommands_table(subcommands: Vec<&Command>, parent: &str) -> String {
 }
 
 // Function to write a list of options to the buffer
-fn arguments(options: &[&clap::Arg]) -> String {
+fn arguments(options: &[&clap::Arg], parents: &Vec<String>) -> String {
     let mut buffer = String::with_capacity(1024);
     for opt in options {
         if opt.is_hide_set() ||
@@ -249,8 +261,16 @@ fn arguments(options: &[&clap::Arg]) -> String {
             // No long name, but we have value names, assuming positional.
             format!("<{}>", value_names[0])
         } else {
-            "".to_string()
+            eprintln!("Error: Option: '{:?}' with parents {} has no long name", opt, parents.join(" "));
+            exit(1);
         };
+
+        // Error on missing help
+        if opt.get_help().is_none() && opt.get_long().unwrap() != "help" {
+            eprintln!("Error: Option `{} {}` has no description", parents.join(" "), long_name);
+            exit(1);
+        }
+
         let id = format!("arg-{}", long_name);
 
         // Write the option as a bullet point with a self-referential <a> tag

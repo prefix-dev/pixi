@@ -44,6 +44,10 @@ pub struct Args {
     #[clap(long = "channel", short = 'c', value_name = "CHANNEL")]
     channels: Vec<NamedChannelOrUrl>,
 
+    /// The platform to install the packages for.
+    ///
+    /// This is useful when you want to install packages for a different platform than the one you are currently on.
+    /// This is very often used when you want to install `osx-64` packages on `osx-arm64`.
     #[clap(short, long)]
     platform: Option<Platform>,
 
