@@ -488,8 +488,9 @@ impl Manifest {
         *shortcuts_array = existing_shortcuts.iter().collect();
 
         tracing::debug!(
-            "Added channel {} for environment {env_name} in toml document",
-            console::style(shortcut.as_normalized()).green()
+            "Added shortcut {} for environment {} in toml document",
+            console::style(shortcut.as_normalized()).green(),
+            env_name.fancy_display()
         );
         Ok(())
     }
