@@ -101,6 +101,7 @@ impl ChannelsConfig {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
+#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct LockFileUpdateConfig {
     /// Don't update lockfile, implies the no-install as well.
     #[clap(long)]
@@ -108,7 +109,7 @@ pub struct LockFileUpdateConfig {
 
     /// Lock file usage from the CLI
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
+    pub lock_file_usage: super::LockFileUsageConfig,
 }
 
 impl LockFileUpdateConfig {
@@ -125,6 +126,7 @@ impl LockFileUpdateConfig {
 
 /// Configuration for how to update the prefix
 #[derive(Parser, Debug, Default, Clone)]
+#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct PrefixUpdateConfig {
     /// Don't modify the environment, only modify the lock-file.
     #[arg(long)]

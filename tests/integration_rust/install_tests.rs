@@ -11,7 +11,7 @@ use pixi::{
     build::BuildContext,
     cli::{
         run::{self, Args},
-        LockFileUsageArgs,
+        LockFileUsageConfig,
     },
     lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
 };
@@ -292,7 +292,7 @@ async fn install_frozen() {
     let result = pixi
         .run(run::Args {
             lock_file_update_config: LockFileUpdateConfig {
-                lock_file_usage: LockFileUsageArgs {
+                lock_file_usage: LockFileUsageConfig {
                     frozen: true,
                     ..Default::default()
                 },

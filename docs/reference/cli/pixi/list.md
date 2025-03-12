@@ -28,6 +28,8 @@ pixi list [OPTIONS] [REGEX]
 <br>**options**: `size`, `name`, `kind`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
+
+## Update Options
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
 :  Don't update lockfile, implies the no-install as well
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
@@ -36,25 +38,8 @@ pixi list [OPTIONS] [REGEX]
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
-- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
-:  Run the complete environment validation. This will reinstall a broken environment
 - <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
 :  Only list packages that are explicitly defined in the workspace
-
-## Config Options
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
-- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
-:  Path to the file containing the authentication token
-- <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
-:  Specifies whether to use the keyring to look up credentials for PyPI
-<br>**options**: `disabled`, `subprocess`
-- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
-:  Max concurrent solves, default is the number of CPUs
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

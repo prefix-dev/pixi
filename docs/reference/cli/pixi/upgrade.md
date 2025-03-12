@@ -15,29 +15,6 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 - <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
 :  The packages to upgrade
 
-## Options
-- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Don't update lockfile, implies the no-install as well
-- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-<br>**env**: `PIXI_FROZEN`
-- <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-<br>**env**: `PIXI_LOCKED`
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
-- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
-:  Run the complete environment validation. This will reinstall a broken environment
-- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
-:  The feature to update
-<br>**default**: `default`
-- <a id="arg---exclude" href="#arg---exclude">`--exclude <EXCLUDE>`</a>
-:  The packages which should be excluded
-- <a id="arg---json" href="#arg---json">`--json`</a>
-:  Output the changes in JSON format
-- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Only show the changes that would be made, without actually updating the manifest, lock file, or environment
-
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
@@ -50,6 +27,29 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
+
+## Update Options
+- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
+:  Don't modify the environment, only modify the lock-file
+- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
+:  Run the complete environment validation. This will reinstall a broken environment
+- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
+:  Don't update lockfile, implies the no-install as well
+- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
+:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+<br>**env**: `PIXI_FROZEN`
+- <a id="arg---locked" href="#arg---locked">`--locked`</a>
+:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+<br>**env**: `PIXI_LOCKED`
+- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
+:  The feature to update
+<br>**default**: `default`
+- <a id="arg---exclude" href="#arg---exclude">`--exclude <EXCLUDE>`</a>
+:  The packages which should be excluded
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Output the changes in JSON format
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Only show the changes that would be made, without actually updating the manifest, lock file, or environment
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

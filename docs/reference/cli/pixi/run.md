@@ -15,30 +15,6 @@ pixi run [OPTIONS] [TASK]...
 - <a id="arg-<TASK>" href="#arg-<TASK>">`<TASK>`</a>
 :  The pixi task or a task shell command you want to run in the workspace's environment, which can be an executable in the environment's PATH
 
-## Options
-- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Don't update lockfile, implies the no-install as well
-- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-<br>**env**: `PIXI_FROZEN`
-- <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-<br>**env**: `PIXI_LOCKED`
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
-- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
-:  Run the complete environment validation. This will reinstall a broken environment
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to run the task in
-- <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
-:  Use a clean environment to run the task
-- <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
-:  Don't run the dependencies of the task ('depends-on' field in the task definition)
-- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Run the task in dry-run mode (only print the command that would run)
-- <a id="arg---help" href="#arg---help">`--help`</a>
-:
-
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
@@ -56,6 +32,30 @@ pixi run [OPTIONS] [TASK]...
 - <a id="arg---no-completion" href="#arg---no-completion">`--no-completion <NO_COMPLETION>`</a>
 :  Do not source the autocompletion scripts from the environment
 <br>**options**: `true`, `false`
+
+## Update Options
+- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
+:  Don't modify the environment, only modify the lock-file
+- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
+:  Run the complete environment validation. This will reinstall a broken environment
+- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
+:  Don't update lockfile, implies the no-install as well
+- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
+:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+<br>**env**: `PIXI_FROZEN`
+- <a id="arg---locked" href="#arg---locked">`--locked`</a>
+:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+<br>**env**: `PIXI_LOCKED`
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to run the task in
+- <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
+:  Use a clean environment to run the task
+- <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
+:  Don't run the dependencies of the task ('depends-on' field in the task definition)
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Run the task in dry-run mode (only print the command that would run)
+- <a id="arg---help" href="#arg---help">`--help`</a>
+:
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

@@ -27,7 +27,7 @@ pub struct Args {
     pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
+    pub lock_file_usage: super::LockFileUsageConfig,
 
     /// The environment to install
     #[arg(long, short)]

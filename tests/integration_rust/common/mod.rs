@@ -21,7 +21,7 @@ use pixi::{
         install::Args,
         remove, run, search,
         task::{self, AddArgs, AliasArgs},
-        update, workspace, LockFileUsageArgs,
+        update, workspace, LockFileUsageConfig,
     },
     lock_file::UpdateMode,
     task::{
@@ -354,7 +354,7 @@ impl PixiControl {
                 },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
-                    lock_file_usage: LockFileUsageArgs::default(),
+                    lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
                 editable: false,
@@ -392,7 +392,7 @@ impl PixiControl {
                 },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
-                    lock_file_usage: LockFileUsageArgs::default(),
+                    lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
             },
@@ -413,7 +413,7 @@ impl PixiControl {
                 },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
-                    lock_file_usage: LockFileUsageArgs::default(),
+                    lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
                 feature: None,
@@ -438,7 +438,7 @@ impl PixiControl {
                 },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
-                    lock_file_usage: LockFileUsageArgs::default(),
+                    lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
                 feature: None,
@@ -544,7 +544,7 @@ impl PixiControl {
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
-                lock_file_usage: LockFileUsageArgs {
+                lock_file_usage: LockFileUsageConfig {
                     frozen: false,
                     locked: false,
                 },
