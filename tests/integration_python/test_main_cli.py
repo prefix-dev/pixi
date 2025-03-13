@@ -1333,14 +1333,18 @@ def test_pixi_reinstall_multi_env(
         stdout_contains="Pixi Build is number 1",
     )
 
-    # After re-installing pypi-package, it should return "number 2"
-    # pixi-build-package, should still return "number 1"
+    # After re-installing pixi-build-package, it should return "number 2"
+    # pypi-package, should still return "number 1"
     verify_cli_command(
-        [pixi, "reinstall", "--manifest-path", manifest, "--environment", "dev", "pypi-package"]
-    )
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--environment", "dev", "pypi-package-main"],
-        stdout_contains="PyPI is number 2",
+        [
+            pixi,
+            "reinstall",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "pixi-build-package",
+        ]
     )
     verify_cli_command(
         [
@@ -1352,7 +1356,11 @@ def test_pixi_reinstall_multi_env(
             "dev",
             "pixi-build-package-main",
         ],
-        stdout_contains="Pixi Build is number 1",
+        stdout_contains="Pixi Build is number 2",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--environment", "dev", "pypi-package-main"],
+        stdout_contains="PyPI is number 1",
     )
 
     # After re-installing both packages in the "dev" environment,
