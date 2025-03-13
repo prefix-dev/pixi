@@ -7,4 +7,5 @@
 "pixi-editor/recipe.yaml" = "shortcuts_channel_1"
 "trampoline/trampoline_1.yaml" = "trampoline_channel"
 "trampoline/trampoline_2.yaml" = "trampoline_channel"
+"post_link_script_package/recipe.yaml" = "post_link_script_channel"
 "trampoline/trampoline_path.yaml" = "trampoline_path_channel"
