@@ -37,7 +37,7 @@ pub struct RemoveArgs {
     config: ConfigCli,
 }
 
-/// Interact with the shortcuts on your machine
+/// Interact with the shortcuts on your machine.
 #[derive(Parser, Debug)]
 #[clap(group(clap::ArgGroup::new("command")))]
 pub enum SubCommand {
