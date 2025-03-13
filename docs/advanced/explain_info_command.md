@@ -52,7 +52,7 @@ In that case, if Pixi cannot find the `__cuda` virtual package on your machine t
 ### Cache dir
 
 The directory where Pixi stores its cache.
-Checkout the [cache documentation](../environments/environment.md#caching-packages) for more information.
+Checkout the [cache documentation](../workspace/environment.md#caching-packages) for more information.
 
 ### Auth storage
 

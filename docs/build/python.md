@@ -91,7 +91,7 @@ This is the content of the `pixi.toml`:
 
 1. In `workspace` information is set that is shared across all packages in the workspace.
 2. In `dependencies` you specify all of your Pixi packages. Here, this includes only our own package that is defined further below under `package`
-3. We define a task that runs the `rich-example-main` executable we defined earlier. You can learn more about tasks in this [section](../environments/advanced_tasks.md)
+3. We define a task that runs the `rich-example-main` executable we defined earlier. You can learn more about tasks in this [section](../workspace/advanced_tasks.md)
 4. In `package` we define the actual Pixi package. This information will be used when other Pixi packages or workspaces depend on our package or when we upload it to a conda channel.
 5. The same way, Python uses build backends to build a Python package, Pixi uses build backends to build Pixi packages. `pixi-build-python` creates a Pixi package out of a Python package.
 6. In `package.host-dependencies`, we add Python dependencies that are necessary to build the Python package. By adding them here as well, the dependencies will come from the conda channel rather than PyPI.

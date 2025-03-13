@@ -10,7 +10,7 @@ This guide explains how to integrate PyTorch with `pixi`, it supports multiple w
 With these options you can choose the best way to install PyTorch based on your requirements.
 
 ## System requirements
-In the context of PyTorch, [**system requirements**](../environments/system_requirements.md) help Pixi understand whether it can install and use CUDA-related packages.
+In the context of PyTorch, [**system requirements**](../workspace/system_requirements.md) help Pixi understand whether it can install and use CUDA-related packages.
 These requirements ensure compatibility during dependency resolution.
 
 The key mechanism here is the use of virtual packages like __cuda.
@@ -24,7 +24,7 @@ For example:
 
 Without setting the appropriate `system-requirements.cuda`, Pixi will default to installing the **CPU-only** versions of PyTorch and its dependencies.
 
-A more in-depth explanation of system requirements can be found [here](../environments/system_requirements.md).
+A more in-depth explanation of system requirements can be found [here](../workspace/system_requirements.md).
 
 ## Installing from Conda-forge
 You can install PyTorch using the `conda-forge` channel.

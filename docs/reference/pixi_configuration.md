@@ -135,7 +135,7 @@ or:
 --8<-- "docs/source_files/pixi_config_tomls/detached_environments_path_config.toml:detached-environments-path"
 ```
 
-The environments will be stored in the [cache directory](../environments/environment.md#caching-packages) when this option is `true`.
+The environments will be stored in the [cache directory](../workspace/environment.md#caching-packages) when this option is `true`.
 When you specify a custom path the environments will be stored in that directory.
 
 The resulting directory structure will look like this:
