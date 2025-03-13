@@ -1215,7 +1215,9 @@ def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 @pytest.mark.slow
-def test_pixi_reinstall(pixi: Path, tmp_pixi_workspace: Path, mock_projects: Path) -> None:
+def test_pixi_reinstall_default_env(
+    pixi: Path, tmp_pixi_workspace: Path, mock_projects: Path
+) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     test_rebuild_src = mock_projects / "test-rebuild"
     shutil.copytree(test_rebuild_src, tmp_pixi_workspace, dirs_exist_ok=True)
@@ -1266,6 +1268,119 @@ def test_pixi_reinstall(pixi: Path, tmp_pixi_workspace: Path, mock_projects: Pat
     # After re-installing the whole default environment,
     # both should return "number 2"
     verify_cli_command([pixi, "reinstall", "--manifest-path", manifest])
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pypi-package-main"],
+        stdout_contains="PyPI is number 2",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pixi-build-package-main"],
+        stdout_contains="Pixi Build is number 2",
+    )
+
+
+@pytest.mark.slow
+def test_pixi_reinstall_multi_env(
+    pixi: Path, tmp_pixi_workspace: Path, mock_projects: Path
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    test_rebuild_src = mock_projects / "test-rebuild"
+    shutil.copytree(test_rebuild_src, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    pypi_package_init = tmp_pixi_workspace.joinpath(
+        "pypi_package", "src", "pypi_package", "__init__.py"
+    )
+    pixi_build_package_init = tmp_pixi_workspace.joinpath(
+        "pixi_build_package", "src", "pixi_build_package", "__init__.py"
+    )
+
+    # Check that packages return "number 1"
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pypi-package-main"],
+        stdout_contains="PyPI is number 1",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pixi-build-package-main"],
+        stdout_contains="Pixi Build is number 1",
+    )
+
+    # Modify the Python files
+    pypi_package_init.write_text(pypi_package_init.read_text().replace("1", "2"))
+    pixi_build_package_init.write_text(pypi_package_init.read_text().replace("1", "2"))
+
+    # That shouldn't trigger a re-install, so running still returns "number 1"
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--environment", "dev", "pypi-package-main"],
+        stdout_contains="PyPI is number 1",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "pixi-build-package-main",
+        ],
+        stdout_contains="Pixi Build is number 1",
+    )
+
+    # After re-installing pypi-package, it should return "number 2"
+    # pixi-build-package, should still return "number 1"
+    verify_cli_command([pixi, "reinstall", "--manifest-path", manifest, "pypi-package"])
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pypi-package-main"],
+        stdout_contains="PyPI is number 2",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pixi-build-package-main"],
+        stdout_contains="Pixi Build is number 1",
+    )
+
+    # After re-installing both packages in the "dev" environment,
+    # both should return "number 2"
+    verify_cli_command(
+        [
+            pixi,
+            "reinstall",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "pypi-package",
+            "pixi-build-package-main",
+        ]
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--environment", "dev", "pypi-package-main"],
+        stdout_contains="PyPI is number 2",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest,
+            "--environment",
+            "dev",
+            "pixi-build-package-main",
+        ],
+        stdout_contains="Pixi Build is number 2",
+    )
+
+    # In the default environment, it should still be "number 1"
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pypi-package-main"],
+        stdout_contains="PyPI is number 1",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pixi-build-package-main"],
+        stdout_contains="Pixi Build is number 1",
+    )
+
+    # After reinstalling all environments,
+    # also the default environment should be "number 2"
+    verify_cli_command([pixi, "reinstall", "--manifest-path", manifest, "--all"])
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "pypi-package-main"],
         stdout_contains="PyPI is number 2",
