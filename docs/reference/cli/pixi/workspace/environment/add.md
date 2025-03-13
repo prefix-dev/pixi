@@ -19,13 +19,13 @@ pixi workspace environment add [OPTIONS] <NAME>
 ## Options
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURES>`</a>
 :  Features to add to the environment
-- <a id="arg---force" href="#arg---force">`--force`</a>
-:  Update the manifest even if the environment already exists
-<br>**default**: `false`
+- <a id="arg---solve-group" href="#arg---solve-group">`--solve-group <SOLVE_GROUP>`</a>
+:  The solve-group to add the environment to
 - <a id="arg---no-default-feature" href="#arg---no-default-feature">`--no-default-feature`</a>
 :  Don't include the default feature in the environment
 <br>**default**: `false`
-- <a id="arg---solve-group" href="#arg---solve-group">`--solve-group <SOLVE_GROUP>`</a>
-:  The solve-group to add the environment to
+- <a id="arg---force" href="#arg---force">`--force`</a>
+:  Update the manifest even if the environment already exists
+<br>**default**: `false`
 
 --8<-- "docs/reference/cli/pixi/workspace/environment/add_extender.md:example"

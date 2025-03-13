@@ -11,7 +11,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.prefix_update_config.config.clone())
+        .with_cli_config(args.config.clone())
         .modify()?;
 
     // Remove the channels from the manifest
@@ -25,7 +25,8 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
-            no_install: args.prefix_update_config.no_install(),
+            no_install: args.prefix_update_config.no_install
+                && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
     )
