@@ -20,6 +20,10 @@ use pixi_config::ConfigCli;
 /// If you want to re-install all environments, you can use the `--all` flag.
 #[derive(Parser, Debug)]
 pub struct Args {
+    /// Specifies the package that should be reinstalled.
+    #[arg(value_name = "PACKAGE")]
+    packages: Option<Vec<String>>,
+
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
@@ -36,10 +40,6 @@ pub struct Args {
     /// Install all environments.
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
-
-    /// Specifies the package that should be reinstalled.
-    #[arg(id = "PACKAGE")]
-    packages: Vec<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
