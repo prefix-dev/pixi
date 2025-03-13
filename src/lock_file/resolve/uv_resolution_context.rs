@@ -75,4 +75,14 @@ impl UvResolutionContext {
             shared_state: SharedState::default(),
         })
     }
+
+    /// Set the cache refresh strategy.
+    pub fn set_cache_refresh(
+        mut self,
+        all: Option<bool>,
+        specific_packages: Option<Vec<uv_pep508::PackageName>>,
+    ) {
+        let policy = uv_cache::Refresh::from_args(all, specific_packages.unwrap_or_default());
+        self.cache = self.cache.with_refresh(policy);
+    }
 }
