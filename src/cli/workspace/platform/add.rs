@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    lock_file::UpdateMode,
+    lock_file::{ReinstallPackages, UpdateMode},
     UpdateLockFileOptions, Workspace,
 };
 use clap::Parser;
@@ -55,7 +55,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
             no_install: args.no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
-        None,
+        ReinstallPackages::default(),
     )
     .await?;
     workspace.save().await.into_diagnostic()?;

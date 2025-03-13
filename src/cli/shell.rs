@@ -8,12 +8,15 @@ use rattler_shell::{
     shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
-use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::UpdateMode;
 use crate::workspace::get_activated_environment_variables;
 use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
     UpdateLockFileOptions, WorkspaceLocator,
+};
+use crate::{
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    lock_file::ReinstallPackages,
 };
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 #[cfg(target_family = "unix")]
@@ -284,7 +287,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
-        None,
+        ReinstallPackages::default(),
     )
     .await?;
 

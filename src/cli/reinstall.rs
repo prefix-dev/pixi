@@ -1,6 +1,6 @@
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::environment::get_update_lock_file_and_prefix;
-use crate::lock_file::UpdateMode;
+use crate::lock_file::{ReinstallPackages, UpdateMode};
 use crate::{UpdateLockFileOptions, WorkspaceLocator};
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -21,6 +21,7 @@ use pixi_config::ConfigCli;
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Specifies the package that should be reinstalled.
+    /// If no package is given, the whole environment will be reinstalled.
     #[arg(value_name = "PACKAGE")]
     packages: Option<Vec<String>>,
 
@@ -65,7 +66,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         vec![workspace.default_environment().name().to_string()]
     };
 
-    let reinstall_packages = args.packages.map(|p| p.into_iter().collect());
+    let reinstall_packages = args
+        .packages
+        .map(|p| p.into_iter().collect())
+        .map(ReinstallPackages::Some)
+        .unwrap_or(ReinstallPackages::All);
 
     let mut installed_envs = Vec::with_capacity(envs.len());
     for env in envs {

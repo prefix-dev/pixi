@@ -23,7 +23,7 @@ use pixi::{
         task::{self, AddArgs, AliasArgs},
         update, workspace, LockFileUsageConfig,
     },
-    lock_file::UpdateMode,
+    lock_file::{ReinstallPackages, UpdateMode},
     task::{
         get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
         TaskGraphError, TaskName,
@@ -513,7 +513,11 @@ impl PixiControl {
             let task_env = match task_env.as_ref() {
                 None => {
                     lock_file
-                        .prefix(&task.run_environment, UpdateMode::Revalidate, None)
+                        .prefix(
+                            &task.run_environment,
+                            UpdateMode::Revalidate,
+                            ReinstallPackages::default(),
+                        )
                         .await?;
                     let env =
                         get_task_env(&task.run_environment, args.clean_env, None, false, false)

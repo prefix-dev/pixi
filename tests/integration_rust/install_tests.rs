@@ -6,7 +6,7 @@ use crate::common::{
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use pixi::lock_file::UpdateMode;
+use pixi::lock_file::{ReinstallPackages, UpdateMode};
 use pixi::{
     build::BuildContext,
     cli::{
@@ -598,7 +598,7 @@ async fn test_old_lock_install() {
             no_install: false,
             ..Default::default()
         },
-        None,
+        ReinstallPackages::default(),
     )
     .await
     .unwrap();

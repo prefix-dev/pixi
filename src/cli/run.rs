@@ -21,7 +21,7 @@ use tracing::Level;
 use crate::{
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
-    lock_file::UpdateLockFileOptions,
+    lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
         get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
         InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
@@ -250,7 +250,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .prefix(
                         &executable_task.run_environment,
                         args.prefix_update_config.update_mode(),
-                        None,
+                        ReinstallPackages::default(),
                     )
                     .await?;
 

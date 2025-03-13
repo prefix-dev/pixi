@@ -1,6 +1,6 @@
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::environment::get_update_lock_file_and_prefix;
-use crate::lock_file::UpdateMode;
+use crate::lock_file::{ReinstallPackages, UpdateMode};
 use crate::{UpdateLockFileOptions, WorkspaceLocator};
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -77,7 +77,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
-            None,
+            ReinstallPackages::default(),
         )
         .await?;
 

@@ -4,7 +4,6 @@ use std::{
     future::{ready, Future},
     iter,
     path::PathBuf,
-    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -213,6 +212,14 @@ pub struct UpdateLockFileOptions {
     pub max_concurrent_solves: usize,
 }
 
+#[derive(Debug, Clone, Default)]
+pub enum ReinstallPackages {
+    #[default]
+    None,
+    All,
+    Some(HashSet<String>),
+}
+
 /// A struct that holds the lock-file and any potential derived data that was
 /// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
@@ -287,7 +294,7 @@ impl<'p> LockFileDerivedData<'p> {
         &mut self,
         environment: &Environment<'p>,
         update_mode: UpdateMode,
-        reinstall_packages: Option<HashSet<String>>,
+        reinstall_packages: ReinstallPackages,
     ) -> miette::Result<Prefix> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
@@ -366,7 +373,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn update_prefix(
         &mut self,
         environment: &Environment<'p>,
-        reinstall_packages: Option<HashSet<String>>,
+        reinstall_packages: ReinstallPackages,
     ) -> miette::Result<Prefix> {
         // If we previously updated this environment, early out.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
@@ -388,14 +395,7 @@ impl<'p> LockFileDerivedData<'p> {
         tracing::info!("Updating prefix: '{}'", environment.dir().display());
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
-        let reinstall_packages_conda = reinstall_packages.clone().map(|p| {
-            p.into_iter()
-                .filter_map(|p| PackageName::from_str(&p).ok())
-                .collect()
-        });
-        let (prefix, python_status) = self
-            .conda_prefix(environment, reinstall_packages_conda)
-            .await?;
+        let (prefix, python_status) = self.conda_prefix(environment, todo!()).await?;
         let pixi_records = self
             .pixi_records(environment, platform)
             .into_diagnostic()?

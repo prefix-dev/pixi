@@ -6,7 +6,7 @@ mod python_status;
 mod reporters;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     hash::{Hash, Hasher},
     io::ErrorKind,
     path::{Path, PathBuf},
@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
-    lock_file::{LockFileDerivedData, UpdateLockFileOptions, UpdateMode},
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
     workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef},
@@ -392,7 +392,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     environment: &Environment<'env>,
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
-    reinstall_packages: Option<HashSet<String>>,
+    reinstall_packages: ReinstallPackages,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let current_platform = environment.best_platform();
     let project = environment.workspace();
