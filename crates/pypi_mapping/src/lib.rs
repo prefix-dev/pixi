@@ -186,7 +186,7 @@ impl MappingClient {
     }
 
     /// Given a set of `RepoDataRecord`s, amend the purls for each record.
-    pub async fn ament_purls(
+    pub async fn amend_purls(
         &self,
         mapping_source: &MappingSource,
         conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,

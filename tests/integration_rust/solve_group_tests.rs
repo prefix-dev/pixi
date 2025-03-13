@@ -183,7 +183,7 @@ async fn test_purl_are_missing_for_non_conda_forge() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(&MappingSource::Prefix, vec![&mut repo_data_record], None)
+        .amend_purls(&MappingSource::Prefix, vec![&mut repo_data_record], None)
         .await
         .unwrap();
 
@@ -224,7 +224,7 @@ async fn test_purl_are_generated_using_custom_mapping() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(
+        .amend_purls(
             &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
             vec![&mut repo_data_record],
             None,
@@ -264,7 +264,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(&MappingSource::Prefix, packages, None)
+        .amend_purls(&MappingSource::Prefix, packages, None)
         .await
         .unwrap();
 
@@ -310,7 +310,7 @@ async fn test_dont_record_not_present_package_as_purl() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(
+        .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
             vec![&mut repo_data_record, &mut boltons_repo_data_record],
             None,
@@ -319,7 +319,7 @@ async fn test_dont_record_not_present_package_as_purl() {
         .unwrap();
 
     mapping_client
-        .ament_purls(
+        .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
             vec![&mut repo_data_record, &mut boltons_repo_data_record],
             None,
@@ -420,7 +420,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(
+        .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
             &mut packages,
             None,
@@ -494,7 +494,7 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(
+        .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
             &mut packages,
             None,
@@ -549,7 +549,7 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(
+        .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
             &mut packages,
             None,
@@ -603,7 +603,7 @@ async fn test_path_channel() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(
+        .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
             &mut packages,
             None,
@@ -679,7 +679,7 @@ async fn test_file_url_as_mapping_location() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
     mapping_client
-        .ament_purls(
+        .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
             &mut packages,
             None,
@@ -739,7 +739,7 @@ async fn test_disabled_mapping() {
 
     let mapping_client = pypi_mapping::MappingClient::builder(blocked_client).finish();
     mapping_client
-        .ament_purls(
+        .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
             &mut packages,
             None,

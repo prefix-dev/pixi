@@ -1806,7 +1806,7 @@ async fn spawn_solve_conda_environment_task(
             if has_pypi_dependencies {
                 pb.set_message("mapping conda to pypi packages");
                 mapping_client
-                    .ament_purls(
+                    .amend_purls(
                         &pypi_name_mapping_location,
                         records.iter_mut().filter_map(PixiRecord::as_binary_mut),
                         Some(pb.purl_amend_reporter()),
@@ -2065,7 +2065,7 @@ async fn spawn_solve_pypi_task<'p>(
     let locked_pypi_records = locked_pypi_packages.records.clone();
 
     mapping_client
-        .ament_purls(
+        .amend_purls(
             pypi_name_mapping_location,
             pixi_solve_records
                 .iter_mut()
