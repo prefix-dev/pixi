@@ -8,12 +8,12 @@ Remove shortcuts from your machine
 
 ## Usage
 ```
-pixi global shortcut remove [OPTIONS] [SHORTCUTS]...
+pixi global shortcut remove [OPTIONS] [SHORTCUT]...
 ```
 
 ## Arguments
-- <a id="arg-<SHORTCUTS>" href="#arg-<SHORTCUTS>">`<SHORTCUTS>`</a>
-:  The shortcuts that should be removed
+- <a id="arg-<SHORTCUT>" href="#arg-<SHORTCUT>">`<SHORTCUT>`</a>
+:  The shortcut that should be removed
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>

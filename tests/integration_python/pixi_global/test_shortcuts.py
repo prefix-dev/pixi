@@ -308,8 +308,6 @@ def test_remove_shortcut(
     setup_data: SetupData,
     shortcuts_channel_1: str,
 ) -> None:
-    """Test shortcut creation with add."""
-
     # Verify no shortcuts exist after sync
     verify_cli_command(
         [pixi, "global", "install", "--channel", shortcuts_channel_1, "pixi-editor"],

@@ -496,8 +496,6 @@ impl Manifest {
     }
 
     /// Removes shortcut from the manifest of any environment
-    ///
-    /// Returns true if the shortcut was removed, false if it didn't exist
     pub fn remove_shortcut(
         &mut self,
         shortcut: &PackageName,
@@ -535,10 +533,9 @@ impl Manifest {
 
         let shortcut_str = shortcut.as_normalized();
         // First find the index without holding onto the iterator
-        let maybe_index = {
-            let mut iter = shortcuts_array.iter();
-            iter.position(|item| item.as_str() == Some(shortcut_str))
-        };
+        let maybe_index = shortcuts_array
+            .iter()
+            .position(|item| item.as_str() == Some(shortcut_str));
 
         if let Some(index) = maybe_index {
             shortcuts_array.remove(index);
