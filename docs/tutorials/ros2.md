@@ -126,7 +126,7 @@ Normally this would be the script you add to your `.bashrc` but instead you tell
 
 ??? tip "Multi platform support"
     You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
-    Use the following example to add support for both Linux and Windows, using the [target](../environments/multi_platform_configuration.md#activation) syntax.
+    Use the following example to add support for both Linux and Windows, using the [target](../workspace/multi_platform_configuration.md#activation) syntax.
 
     ```toml
     [workspace]
@@ -166,9 +166,9 @@ pixi run hello
 ???+ tip "Advanced task usage"
     Tasks are a powerful feature in pixi.
 
-    - You can add [`depends-on`](../environments/advanced_tasks.md#depends-on) to the tasks to create a task chain.
-    - You can add [`cwd`](../environments/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
-    - You can add [`inputs` and `outputs`](../environments/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
+    - You can add [`depends-on`](../workspace/advanced_tasks.md#depends-on) to the tasks to create a task chain.
+    - You can add [`cwd`](../workspace/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
+    - You can add [`inputs` and `outputs`](../workspace/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
     - You can use the [`target`](../reference/pixi_manifest.md#the-target-table) syntax to run specific tasks on specific machines.
 
 ```toml
