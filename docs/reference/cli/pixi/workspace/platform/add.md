@@ -14,6 +14,7 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 ## Arguments
 - <a id="arg-<PLATFORM>" href="#arg-<PLATFORM>">`<PLATFORM>`</a>
 :  The platform name(s) to add
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options

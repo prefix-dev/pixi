@@ -14,6 +14,7 @@ pixi global remove [OPTIONS] <PACKAGES>...
 ## Arguments
 - <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
 :  Specifies the packages that are to be removed
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options

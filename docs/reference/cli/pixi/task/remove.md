@@ -14,6 +14,7 @@ pixi task remove [OPTIONS] [NAMES]...
 ## Arguments
 - <a id="arg-<NAMES>" href="#arg-<NAMES>">`<NAMES>`</a>
 :  Task names to remove
+<br>May be provided more than once.
 
 ## Options
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
