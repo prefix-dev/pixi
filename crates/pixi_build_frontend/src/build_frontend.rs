@@ -7,7 +7,8 @@ use rattler_conda_types::ChannelConfig;
 use crate::{
     protocol,
     protocol_builder::{EnabledProtocols, ProtocolBuilder},
-    Protocol, SetupRequest, ToolContext,
+    protocols::JsonRPCBuildProtocol,
+    SetupRequest, ToolContext,
 };
 
 /// The frontend for building packages.
@@ -99,7 +100,7 @@ impl BuildFrontend {
     pub async fn setup_protocol(
         &self,
         request: SetupRequest,
-    ) -> Result<Protocol, BuildFrontendError> {
+    ) -> Result<JsonRPCBuildProtocol, BuildFrontendError> {
         // Determine the build protocol to use for the source directory.
         let protocol = ProtocolBuilder::discover(&request.source_dir, &self.enabled_protocols)?
             .with_channel_config(self.channel_config.clone())

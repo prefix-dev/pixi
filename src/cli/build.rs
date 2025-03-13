@@ -142,7 +142,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }),
             ),
             args.target_platform,
-            protocol.identifier().to_string(),
+            protocol.backend_identifier().to_string(),
         )
         .key();
         (None, workspace.pixi_dir().join(key))
@@ -158,7 +158,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (Some(tmp), work_dir)
     };
 
-    let progress = Arc::new(ProgressReporter::new(workspace.name()));
+    // let progress = Arc::new(ProgressReporter::new(workspace.name()));
+    let progress = ProgressReporter::new(workspace.name());
+
     // Build platform virtual packages
     let build_platform_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
@@ -203,7 +205,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 work_directory: work_dir,
                 variant_configuration: Some(build_context.resolve_variant(args.target_platform)),
             },
-            progress.clone(),
+            &progress,
         )
         .await
         .wrap_err("during the building of the project the following error occurred")?;
