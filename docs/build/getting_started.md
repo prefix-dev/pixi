@@ -62,17 +62,14 @@ We need to add our package `rich_example` as source dependency to the workspace.
     Pixi dependencies fall into two main categories: `binary` and `source` dependencies.
     `binary` dependencies are pre-built packages, while `source` dependencies are source code that needs to be built.
 
-Pixi supports two ways to define `source` dependencies:
 
-- `recipe` based dependencies are built using a `recipe.yaml` file and a `rattler-build` backend.
-You can specify the folder where the `recipe.yaml` file is located or directly the path to the `recipe.yaml` file.
+Source dependencies can be specified either by providing a local path to the directory containing the package or a `git` dependency. When using `git`, you can optionally define a `branch`, `tag`, or `rev` to pin the dependency. If none are specified, the latest commit on the default branch is used. Additionally, a `subdirectory` can be specified to indicate the package’s location within the repository.
 
-- `pixi.toml` based dependencies are built using the backend defined in `[package.build]` section.
+Source dependencies are defined in one of two ways:
 
+* `Pixi`-based dependencies are built using the backend specified in the `[package.build]` section of pixi.toml.
+* `rattler-build`-based dependencies are built using a `recipe.yaml` file. You can specify the path to the folder containing the recipe file, or the path to the `recipe.yaml` file itself.
 
-
-`pixi` also supports `git` dependencies, allowing you to specify a `branch`, `tag`, or `rev` to pin the dependency.
-If none are specified, the latest commit on the default branch is used. The `subdirectory` is optional and specifies the location of the package within the repository.
 
 
 ```toml
