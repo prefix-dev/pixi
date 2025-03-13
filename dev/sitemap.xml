@@ -89,30 +89,6 @@
          <lastmod>2025-03-13</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/environments/advanced_tasks/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/environments/environment/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/environments/lockfile/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/environments/multi_environment/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/environments/multi_platform_configuration/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/environments/system_requirements/</loc>
-         <lastmod>2025-03-13</lastmod>
-    </url>
-    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/global_tools/introduction/</loc>
          <lastmod>2025-03-13</lastmod>
     </url>
@@ -678,6 +654,30 @@
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/tutorials/rust/</loc>
+         <lastmod>2025-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/workspace/advanced_tasks/</loc>
+         <lastmod>2025-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/workspace/environment/</loc>
+         <lastmod>2025-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/workspace/lockfile/</loc>
+         <lastmod>2025-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/workspace/multi_environment/</loc>
+         <lastmod>2025-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/workspace/multi_platform_configuration/</loc>
+         <lastmod>2025-03-13</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/workspace/system_requirements/</loc>
          <lastmod>2025-03-13</lastmod>
     </url>
     <url>

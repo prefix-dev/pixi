@@ -376,7 +376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/environment/" class="md-nav__link">
+      <a href="../../workspace/environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -398,7 +398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/advanced_tasks/" class="md-nav__link">
+      <a href="../../workspace/advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -420,7 +420,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/multi_platform_configuration/" class="md-nav__link">
+      <a href="../../workspace/multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -442,7 +442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/multi_environment/" class="md-nav__link">
+      <a href="../../workspace/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -464,7 +464,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/lockfile/" class="md-nav__link">
+      <a href="../../workspace/lockfile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -486,7 +486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/system_requirements/" class="md-nav__link">
+      <a href="../../workspace/system_requirements/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -2383,7 +2383,7 @@ If you want everything integrated in <code>pyproject.toml</code> just copy the c
 <ol>
 <li>In <code>workspace</code> information is set that is shared across all packages in the workspace.</li>
 <li>In <code>dependencies</code> you specify all of your Pixi packages. Here, this includes only our own package that is defined further below under <code>package</code></li>
-<li>We define a task that runs the <code>rich-example-main</code> executable we defined earlier. You can learn more about tasks in this <a href="../../environments/advanced_tasks/">section</a></li>
+<li>We define a task that runs the <code>rich-example-main</code> executable we defined earlier. You can learn more about tasks in this <a href="../../workspace/advanced_tasks/">section</a></li>
 <li>In <code>package</code> we define the actual Pixi package. This information will be used when other Pixi packages or workspaces depend on our package or when we upload it to a conda channel.</li>
 <li>The same way, Python uses build backends to build a Python package, Pixi uses build backends to build Pixi packages. <code>pixi-build-python</code> creates a Pixi package out of a Python package.</li>
 <li>In <code>package.host-dependencies</code>, we add Python dependencies that are necessary to build the Python package. By adding them here as well, the dependencies will come from the conda channel rather than PyPI.</li>

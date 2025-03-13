@@ -376,7 +376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/environment/" class="md-nav__link">
+      <a href="../../workspace/environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -398,7 +398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/advanced_tasks/" class="md-nav__link">
+      <a href="../../workspace/advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -420,7 +420,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/multi_platform_configuration/" class="md-nav__link">
+      <a href="../../workspace/multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -442,7 +442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/multi_environment/" class="md-nav__link">
+      <a href="../../workspace/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -464,7 +464,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/lockfile/" class="md-nav__link">
+      <a href="../../workspace/lockfile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -486,7 +486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/system_requirements/" class="md-nav__link">
+      <a href="../../workspace/system_requirements/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -2333,7 +2333,7 @@
 </ul>
 <p>With these options you can choose the best way to install PyTorch based on your requirements.</p>
 <h2 id="system-requirements">System requirements<a class="headerlink" href="#system-requirements" title="Permanent link">#</a></h2>
-<p>In the context of PyTorch, <a href="../../environments/system_requirements/"><strong>system requirements</strong></a> help Pixi understand whether it can install and use CUDA-related packages.
+<p>In the context of PyTorch, <a href="../../workspace/system_requirements/"><strong>system requirements</strong></a> help Pixi understand whether it can install and use CUDA-related packages.
 These requirements ensure compatibility during dependency resolution.</p>
 <p>The key mechanism here is the use of virtual packages like __cuda.
 Virtual packages signal the available system capabilities (e.g., CUDA version).
@@ -2344,7 +2344,7 @@ By specifying <code>system-requirements.cuda = "12"</code>, you are telling Pixi
 <li>If a package depends on <code>__cuda</code> without version constraints, any available CUDA version can be used.</li>
 </ul>
 <p>Without setting the appropriate <code>system-requirements.cuda</code>, Pixi will default to installing the <strong>CPU-only</strong> versions of PyTorch and its dependencies.</p>
-<p>A more in-depth explanation of system requirements can be found <a href="../../environments/system_requirements/">here</a>.</p>
+<p>A more in-depth explanation of system requirements can be found <a href="../../workspace/system_requirements/">here</a>.</p>
 <h2 id="installing-from-conda-forge">Installing from Conda-forge<a class="headerlink" href="#installing-from-conda-forge" title="Permanent link">#</a></h2>
 <p>You can install PyTorch using the <code>conda-forge</code> channel.
 These are the conda-forge community maintained builds of PyTorch.

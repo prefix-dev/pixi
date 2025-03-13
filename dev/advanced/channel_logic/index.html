@@ -376,7 +376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/environment/" class="md-nav__link">
+      <a href="../../workspace/environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -398,7 +398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/advanced_tasks/" class="md-nav__link">
+      <a href="../../workspace/advanced_tasks/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -420,7 +420,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/multi_platform_configuration/" class="md-nav__link">
+      <a href="../../workspace/multi_platform_configuration/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -442,7 +442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/multi_environment/" class="md-nav__link">
+      <a href="../../workspace/multi_environment/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -464,7 +464,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/lockfile/" class="md-nav__link">
+      <a href="../../workspace/lockfile/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -486,7 +486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../environments/system_requirements/" class="md-nav__link">
+      <a href="../../workspace/system_requirements/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -2259,7 +2259,7 @@ Thus breaking the installation if we would skip the <code>conda-forge</code> cha
 <p>If you want to force a specific priority for a channel, you can use the <code>priority</code> (int) key in the channel definition.
 The higher the number, the higher the priority.
 Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.</p>
-<p>This priority definition is mostly important for <a href="../../environments/multi_environment/">multiple environments</a> with different channel priorities, as by default feature channels are prepended to the workspace channels.</p>
+<p>This priority definition is mostly important for <a href="../../workspace/multi_environment/">multiple environments</a> with different channel priorities, as by default feature channels are prepended to the workspace channels.</p>
 <p><div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;test_channel_priority&quot;</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
