@@ -158,7 +158,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (Some(tmp), work_dir)
     };
 
-    // let progress = Arc::new(ProgressReporter::new(workspace.name()));
     let progress = ProgressReporter::new(workspace.name());
 
     // Build platform virtual packages
