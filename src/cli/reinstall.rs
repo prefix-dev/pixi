@@ -6,7 +6,6 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
-use rattler_conda_types::PackageName;
 
 /// Re-install an environment, both updating the lockfile and re-installing the environment.
 ///
@@ -23,7 +22,7 @@ use rattler_conda_types::PackageName;
 pub struct Args {
     /// Specifies the package that should be reinstalled.
     #[arg(value_name = "PACKAGE")]
-    packages: Option<Vec<PackageName>>,
+    packages: Option<Vec<String>>,
 
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
@@ -66,6 +65,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         vec![workspace.default_environment().name().to_string()]
     };
 
+    let reinstall_packages = args.packages.map(|p| p.into_iter().collect());
+
     let mut installed_envs = Vec::with_capacity(envs.len());
     for env in envs {
         let environment = workspace.environment_from_name_or_env_var(Some(env))?;
@@ -79,7 +80,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
-            todo!(),
+            reinstall_packages.clone(),
         )
         .await?;
 

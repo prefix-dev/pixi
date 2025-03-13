@@ -4,6 +4,7 @@ use std::{
     future::{ready, Future},
     iter,
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -286,7 +287,7 @@ impl<'p> LockFileDerivedData<'p> {
         &mut self,
         environment: &Environment<'p>,
         update_mode: UpdateMode,
-        reinstall_packages: Option<HashSet<PackageName>>,
+        reinstall_packages: Option<HashSet<String>>,
     ) -> miette::Result<Prefix> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
@@ -365,7 +366,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn update_prefix(
         &mut self,
         environment: &Environment<'p>,
-        reinstall_packages: Option<HashSet<PackageName>>,
+        reinstall_packages: Option<HashSet<String>>,
     ) -> miette::Result<Prefix> {
         // If we previously updated this environment, early out.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
@@ -387,7 +388,14 @@ impl<'p> LockFileDerivedData<'p> {
         tracing::info!("Updating prefix: '{}'", environment.dir().display());
         // Get the prefix with the conda packages installed.
         let platform = environment.best_platform();
-        let (prefix, python_status) = self.conda_prefix(environment, reinstall_packages).await?;
+        let reinstall_packages_conda = reinstall_packages.clone().map(|p| {
+            p.into_iter()
+                .filter_map(|p| PackageName::from_str(&p).ok())
+                .collect()
+        });
+        let (prefix, python_status) = self
+            .conda_prefix(environment, reinstall_packages_conda)
+            .await?;
         let pixi_records = self
             .pixi_records(environment, platform)
             .into_diagnostic()?
