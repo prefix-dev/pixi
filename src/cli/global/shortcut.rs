@@ -18,7 +18,7 @@ pub struct AddArgs {
     #[arg(num_args = 1.., value_name = "PACKAGE")]
     packages: Vec<PackageName>,
 
-    /// The environment from which the shortcut should be added
+    /// The environment from which the shortcut should be added.
     #[clap(short, long)]
     environment: EnvironmentName,
 
