@@ -10,7 +10,7 @@ use pixi_config::ConfigCli;
 /// Re-install an environment, both updating the lockfile and re-installing the environment.
 ///
 /// This command reinstalls an environment, if the lockfile is not up-to-date it will be updated.
-/// If `--package` is given, only the specified package will be reinstalled.
+/// If packages are specified, only those packages will be reinstalled.
 /// Otherwise the whole environment will be reinstalled.
 ///
 /// `pixi reinstall` only re-installs one environment at a time,
@@ -26,19 +26,19 @@ pub struct Args {
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageConfig,
 
-    /// The environment to install
+    /// The environment to install.
     #[arg(long, short)]
     pub environment: Option<Vec<String>>,
 
     #[clap(flatten)]
     pub config: ConfigCli,
 
-    /// Install all environments
+    /// Install all environments.
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
     /// Specifies the package that should be reinstalled.
-    #[arg(num_args = 1.., required = true, id = "PACKAGE")]
+    #[arg(id = "PACKAGE")]
     packages: Vec<String>,
 }
 

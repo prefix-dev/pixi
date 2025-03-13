@@ -1212,3 +1212,32 @@ def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
     verify_cli_command([pixi, "info", "--manifest-path", manifest], stdout_contains="foo, bar")
+
+
+@pytest.mark.slow
+def test_pixi_reinstall(pixi: Path, tmp_pixi_workspace: Path, mock_projects: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    test_rebuild_src = mock_projects / "test-rebuild"
+    shutil.copytree(test_rebuild_src, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    # Check that package returns "Number 1"
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pypi-package-main"], stdout_contains="Number 1"
+    )
+
+    # Modify the Python file
+    pypi_package_init = tmp_pixi_workspace.joinpath(
+        "pypi_package", "src", "pypi_package", "__init__.py"
+    )
+    pypi_package_init.write_text(pypi_package_init.read_text().replace("1", "2"))
+
+    # That shouldn't trigger a re-install, so running still returns "Number 1"
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pypi-package-main"], stdout_contains="Number 1"
+    )
+
+    # After re-installing, it should return "Number 2"
+    verify_cli_command([pixi, "reinstall", "--manifest-path", manifest])
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "pypi-package-main"], stdout_contains="Number 2"
+    )
