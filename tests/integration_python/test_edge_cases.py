@@ -253,9 +253,9 @@ def test_post_link_scripts(
 
     # Install the package
     verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
+        [pixi, "install", "--manifest-path", manifest, "-vvv"],
         ExitCode.SUCCESS,
     )
 
     # Make sure script has ran
-    assert tmp_pixi_workspace.joinpath(".pixi", "envs", "default", ".message.txt").exists()
+    assert tmp_pixi_workspace.joinpath(".pixi", "envs", "default", ".messages.bak.txt").exists()
