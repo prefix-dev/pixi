@@ -1,2 +1,2 @@
 def main() -> None:
-    print("Number 1")
+    print("PyPI is number 1")

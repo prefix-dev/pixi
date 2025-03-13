@@ -3,11 +3,13 @@ authors = ["Julian Hofer <julianhofer@gnome.org>"]
 channels = ["https://prefix.dev/conda-forge"]
 name = "test-rebuild"
 platforms = ["linux-64"]
+preview = ["pixi-build"]
 version = "0.1.0"
 
 [tasks]
 
 [dependencies]
+pixi_build_package = { path = "pixi_build_package" }
 python = ">=3.13.2,<3.14"
 
 [pypi-dependencies]
