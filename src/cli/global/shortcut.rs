@@ -29,8 +29,8 @@ pub struct AddArgs {
 /// Remove shortcuts from your machine.
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
-    /// The shortcuts that should be removed
-    #[arg(num_args = 1..)]
+    /// The shortcut that should be removed.
+    #[arg(num_args = 1.., value_name = "SHORTCUT")]
     shortcuts: Vec<PackageName>,
 
     #[clap(flatten)]
