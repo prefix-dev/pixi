@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "linux-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "post-link-script-package-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "7b37d5da5ec7ffccc61e7b2f8c185f3c",
+      "name": "post-link-script-package",
+      "platform": "linux",
+      "sha256": "f1ba7fdeb0c3b8f2964d0b862e582bcbef33c1c81fd7060a38b8c33a1fa5d47c",
+      "size": 1322,
+      "subdir": "linux-64",
+      "timestamp": 1741859868826,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
