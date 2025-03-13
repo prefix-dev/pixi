@@ -803,21 +803,21 @@ pub struct ProxyConfig {
     /// A list of no proxy pattern
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub no_proxy_domains: Vec<String>,
+    pub non_proxy_hosts: Vec<String>,
 }
 
 impl ProxyConfig {
     pub fn is_default(&self) -> bool {
-        self.https.is_none() && self.https.is_none() && self.no_proxy_domains.is_empty()
+        self.https.is_none() && self.https.is_none() && self.non_proxy_hosts.is_empty()
     }
     pub fn merge(&self, other: Self) -> Self {
         Self {
             https: other.https.as_ref().or(self.https.as_ref()).cloned(),
             http: other.http.as_ref().or(self.http.as_ref()).cloned(),
-            no_proxy_domains: if other.is_default() {
-                self.no_proxy_domains.clone()
+            non_proxy_hosts: if other.is_default() {
+                self.non_proxy_hosts.clone()
             } else {
-                other.no_proxy_domains.clone()
+                other.non_proxy_hosts.clone()
             },
         }
     }
@@ -1090,7 +1090,7 @@ impl Config {
             "proxy-config",
             "proxy-config.https",
             "proxy-config.http",
-            "proxy-config.no-proxy-domains",
+            "proxy-config.non-proxy-hosts",
         ]
     }
 
@@ -1210,8 +1210,8 @@ impl Config {
 
     pub fn activate_proxy_envs(&self) {
         if self.proxy_config.https.is_none() && self.proxy_config.http.is_none() {
-            if !self.proxy_config.no_proxy_domains.is_empty() {
-                tracing::info!("proxy_config.no_proxy_domains is ignored")
+            if !self.proxy_config.non_proxy_hosts.is_empty() {
+                tracing::info!("proxy_config.non_proxy_hosts is ignored")
             }
             return;
         }
@@ -1228,7 +1228,7 @@ impl Config {
             .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()));
 
         let config_no_proxy =
-            Some(self.proxy_config.no_proxy_domains.iter().join(",")).filter(|v| !v.is_empty());
+            Some(self.proxy_config.non_proxy_hosts.iter().join(",")).filter(|v| !v.is_empty());
 
         if env_https_proxy.is_some() || env_http_proxy.is_some() {
             if env_https_proxy.as_deref() != self.proxy_config.https.as_ref().map(Url::as_str)
@@ -1549,8 +1549,8 @@ impl Config {
                             .transpose()
                             .into_diagnostic()?;
                     }
-                    "no-proxy-domains" => {
-                        self.proxy_config.no_proxy_domains = value
+                    "non-proxy-hosts" => {
+                        self.proxy_config.non_proxy_hosts = value
                             .map(|v| serde_json::de::from_str(&v))
                             .transpose()
                             .into_diagnostic()?
@@ -2289,7 +2289,7 @@ UNUSED = "unused"
             [proxy-config]
             https = "http://proxy-for-https"
             http = "http://proxy-for-http"
-            no-proxy-domains = [ "a.com" ]
+            non-proxy-hosts = [ "a.com" ]
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
@@ -2300,7 +2300,7 @@ UNUSED = "unused"
             config.proxy_config.http,
             Some(Url::parse("http://proxy-for-http").unwrap())
         );
-        assert_eq!(config.proxy_config.no_proxy_domains.len(), 1);
-        assert_eq!(config.proxy_config.no_proxy_domains[0], "a.com");
+        assert_eq!(config.proxy_config.non_proxy_hosts.len(), 1);
+        assert_eq!(config.proxy_config.non_proxy_hosts[0], "a.com");
     }
 }
