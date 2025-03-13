@@ -95,7 +95,7 @@ impl BuildFrontend {
         }
     }
 
-    /// Constructs a new [`Protocol`] for the given request. This object can be
+    /// Constructs a new [`JsonRPCBuildProtocol`] for the given request. This object can be
     /// used to build the package.
     pub async fn setup_protocol(
         &self,
