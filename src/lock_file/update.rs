@@ -4,6 +4,7 @@ use std::{
     future::{ready, Future},
     iter,
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -393,13 +394,28 @@ impl<'p> LockFileDerivedData<'p> {
         ))?;
 
         tracing::info!("Updating prefix: '{}'", environment.dir().display());
-        // Get the prefix with the conda packages installed.
+
         let platform = environment.best_platform();
-        let (prefix, python_status) = self.conda_prefix(environment, todo!()).await?;
         let pixi_records = self
             .pixi_records(environment, platform)
             .into_diagnostic()?
             .unwrap_or_default();
+
+        let conda_reinstall_packages = match reinstall_packages {
+            ReinstallPackages::None => None,
+            ReinstallPackages::Some(p) => Some(
+                p.into_iter()
+                    .filter_map(|p| PackageName::from_str(&p).ok())
+                    .collect(),
+            ),
+            ReinstallPackages::All => Some(pixi_records.iter().map(|r| r.name().clone()).collect()),
+        };
+
+        // Get the prefix with the conda packages installed.
+        let (prefix, python_status) = self
+            .conda_prefix(environment, conda_reinstall_packages)
+            .await?;
+
         let pypi_records = self
             .pypi_records(environment, platform)
             .into_diagnostic()?
