@@ -45,6 +45,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
             no_install: args.no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
+        None,
     )
     .await?;
     workspace.save().await.into_diagnostic()?;

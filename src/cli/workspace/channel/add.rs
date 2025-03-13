@@ -31,6 +31,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
                 && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
+        None,
     )
     .await?;
 

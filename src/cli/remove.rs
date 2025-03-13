@@ -124,6 +124,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 no_install: prefix_update_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
+            None,
         )
         .await?;
     }

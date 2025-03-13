@@ -265,7 +265,7 @@ impl<'a> LazyBuildDispatch<'a> {
             );
             let prefix = self
                 .prefix_updater
-                .update(self.repodata_records.clone())
+                .update(self.repodata_records.clone(), None)
                 .await
                 .map_err(|err| {
                     LazyBuildDispatchError::InitializationError(format!(

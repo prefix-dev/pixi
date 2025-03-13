@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
 use crate::build::{BuildContext, SourceCheckoutReporter};
@@ -16,7 +17,7 @@ use pixi_record::PixiRecord;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, Platform, PrefixRecord, RepoDataRecord,
+    ChannelUrl, GenericVirtualPackage, PackageName, Platform, PrefixRecord, RepoDataRecord,
 };
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
@@ -178,6 +179,7 @@ impl CondaPrefixUpdater {
     pub async fn update(
         &self,
         pixi_records: Vec<PixiRecord>,
+        reinstall_packages: Option<HashSet<PackageName>>,
     ) -> miette::Result<&CondaPrefixUpdated> {
         self.inner
             .created
@@ -224,6 +226,7 @@ impl CondaPrefixUpdater {
                     "  ",
                     self.inner.io_concurrency_limit.clone().into(),
                     self.inner.build_context.clone(),
+                    reinstall_packages,
                 )
                 .await?;
 
@@ -256,6 +259,7 @@ pub async fn update_prefix_conda(
     progress_bar_prefix: &str,
     io_concurrency_limit: Arc<Semaphore>,
     build_context: BuildContext,
+    reinstall_packages: Option<HashSet<PackageName>>,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
@@ -336,7 +340,7 @@ pub async fn update_prefix_conda(
     let result = await_in_progress(
         format!("{progress_bar_prefix}{progress_bar_message}",),
         |pb| async {
-            Installer::new()
+            let mut installer = Installer::new()
                 .with_download_client(authenticated_client)
                 .with_io_concurrency_semaphore(io_concurrency_limit)
                 .with_execute_link_scripts(false)
@@ -353,7 +357,12 @@ pub async fn update_prefix_conda(
                         )
                         .clear_when_done(true)
                         .finish(),
-                )
+                );
+            if let Some(reinstall_packages) = reinstall_packages {
+                installer.set_reinstall_packages(reinstall_packages);
+            }
+
+            installer
                 .install(prefix.root(), repodata_records)
                 .await
                 .into_diagnostic()

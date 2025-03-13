@@ -6,7 +6,7 @@ mod python_status;
 mod reporters;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     io::ErrorKind,
     path::{Path, PathBuf},
@@ -19,7 +19,7 @@ use pixi_git::credentials::store_credentials_from_url;
 use pixi_manifest::{FeaturesExt, PyPiRequirement};
 use pixi_progress::await_in_progress;
 use pixi_spec::{GitSpec, PixiSpec};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{PackageName, Platform};
 use rattler_lock::LockedPackageRef;
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
@@ -392,6 +392,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     environment: &Environment<'env>,
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
+    reinstall_packages: Option<HashSet<PackageName>>,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let current_platform = environment.best_platform();
     let project = environment.workspace();
@@ -423,7 +424,9 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     let prefix = if no_install {
         Prefix::new(environment.dir())
     } else {
-        lock_file.prefix(environment, update_mode).await?
+        lock_file
+            .prefix(environment, update_mode, reinstall_packages)
+            .await?
     };
 
     Ok((lock_file, prefix))
