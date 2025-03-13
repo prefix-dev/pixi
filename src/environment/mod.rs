@@ -320,11 +320,13 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
     Ok(())
 }
 
-/// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
+/// Ensure that the `.pixi/` directory exists and contains a `.gitignore` and a `CACHEDIR.TAG` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
+/// If the `CACHEDIR.TAG` file doesn't exist, create it with the appropriate content.
 async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
     let gitignore_path = pixi_dir.join(".gitignore");
+    let cachedir_tag_path = pixi_dir.join("CACHEDIR.TAG");
 
     // Create the `.pixi/` directory if it doesn't exist
     if !pixi_dir.exists() {
@@ -345,6 +347,21 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
             .wrap_err(format!(
                 "Failed to create .gitignore file at {}",
                 gitignore_path.display()
+            ))?;
+    }
+
+    // Create or check the CACHEDIR.TAG file
+    let cachedir_tag_content = r#"Signature: 8a477f597d28d172789f06886806bc55
+# This file is a cache directory tag automatically created by pixi.
+# For information about cache directory tags see https://bford.info/cachedir/
+"#;
+    if !cachedir_tag_path.exists() {
+        tokio::fs::write(&cachedir_tag_path, cachedir_tag_content)
+            .await
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Failed to create CACHEDIR.TAG file at {}",
+                cachedir_tag_path.display()
             ))?;
     }
 
