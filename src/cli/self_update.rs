@@ -5,6 +5,7 @@ use tar::Archive;
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
+use pixi_utils::reqwest::build_reqwest_clients;
 use reqwest::redirect::Policy;
 use reqwest::Client;
 
@@ -170,7 +171,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
 
-    let client = Client::new();
+    let client = build_reqwest_clients(None, None)?.1;
     let mut res = client
         .get(&download_url)
         .header("User-Agent", user_agent())
