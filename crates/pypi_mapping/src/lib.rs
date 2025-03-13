@@ -208,9 +208,11 @@ impl MappingClient {
 
         // Fetch custom mapped channels if any.
         let custom_mappings = if let MappingSource::Custom(mapping_url) = mapping_source {
-            CustomMappingClient::from(mapping_url.fetch_custom_mapping(&self.client).await?)
+            Some(CustomMappingClient::from(
+                mapping_url.fetch_custom_mapping(&self.client).await?,
+            ))
         } else {
-            CustomMappingClient::default()
+            None
         };
 
         let mut amend_futures = FuturesUnordered::new();
@@ -225,7 +227,10 @@ impl MappingClient {
 
                 let derived_purls = if matches!(mapping_source, MappingSource::Disabled) {
                     Ok(None)
-                } else if custom_mappings.is_mapping_for_record(record) {
+                } else if let Some(custom_mappings) = custom_mappings
+                    .as_ref()
+                    .filter(|mapping| mapping.is_mapping_for_record(record))
+                {
                     custom_mappings.derive_purls(record).await
                 } else {
                     self.derive_purls_from_clients(record).await
