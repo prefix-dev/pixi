@@ -136,7 +136,7 @@ Config {
     proxy_config: ProxyConfig {
         https: None,
         http: None,
-        no_proxy_domains: [],
+        non_proxy_hosts: [],
     },
     change_ps1: None,
     force_activate: None,
