@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
-use pixi_config::{Config, ConfigCli};
+use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
@@ -100,29 +100,19 @@ impl ChannelsConfig {
     }
 }
 
-/// Configuration for how to update the prefix
 #[derive(Parser, Debug, Default, Clone)]
-pub struct PrefixUpdateConfig {
+#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
+pub struct LockFileUpdateConfig {
     /// Don't update lockfile, implies the no-install as well.
-    #[clap(long, conflicts_with = "no_install")]
+    #[clap(long)]
     pub no_lockfile_update: bool,
 
     /// Lock file usage from the CLI
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
-
-    /// Don't modify the environment, only modify the lock-file.
-    #[arg(long)]
-    pub no_install: bool,
-
-    #[clap(flatten)]
-    pub config: ConfigCli,
-
-    /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long)]
-    pub revalidate: bool,
+    pub lock_file_usage: super::LockFileUsageConfig,
 }
-impl PrefixUpdateConfig {
+
+impl LockFileUpdateConfig {
     pub fn lock_file_usage(&self) -> LockFileUsage {
         if self.lock_file_usage.locked {
             LockFileUsage::Locked
@@ -132,12 +122,22 @@ impl PrefixUpdateConfig {
             LockFileUsage::Update
         }
     }
+}
 
-    /// Decide whether to install or not.
-    pub(crate) fn no_install(&self) -> bool {
-        self.no_install || self.no_lockfile_update
-    }
+/// Configuration for how to update the prefix
+#[derive(Parser, Debug, Default, Clone)]
+#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
+pub struct PrefixUpdateConfig {
+    /// Don't modify the environment, only modify the lock-file.
+    #[arg(long)]
+    pub no_install: bool,
 
+    /// Run the complete environment validation. This will reinstall a broken environment.
+    #[arg(long)]
+    pub revalidate: bool,
+}
+
+impl PrefixUpdateConfig {
     /// Which `[UpdateMode]` to use
     pub(crate) fn update_mode(&self) -> UpdateMode {
         if self.revalidate {

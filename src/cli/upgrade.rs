@@ -6,11 +6,12 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pep508_rs::{MarkerTree, Requirement};
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, PyPiRequirement, SpecType};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
 
-use super::cli_config::PrefixUpdateConfig;
+use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
 use crate::{
     cli::cli_config::WorkspaceConfig,
     diff::LockFileJsonDiff,
@@ -28,6 +29,12 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     #[clap(flatten)]
     pub specs: UpgradeSpecsArgs,
@@ -60,7 +67,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
     let mut workspace = workspace.modify()?;
 
@@ -85,6 +92,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             pypi_deps,
             IndexMap::default(),
             &args.prefix_update_config,
+            &args.lock_file_update_config,
             &args.specs.feature,
             &[],
             false,

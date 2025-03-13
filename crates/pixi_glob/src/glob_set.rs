@@ -7,7 +7,8 @@ use itertools::{Either, Itertools};
 use thiserror::Error;
 use wax::{Glob, WalkEntry};
 
-pub(crate) struct GlobSet<'t> {
+/// A set of globs to include and exclude from a directory.
+pub struct GlobSet<'t> {
     /// The globs to include in the filter.
     pub include: Vec<Glob<'t>>,
     /// The globs to exclude from the filter.
@@ -15,6 +16,7 @@ pub(crate) struct GlobSet<'t> {
 }
 
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
 pub enum GlobSetError {
     #[error("failed to access {}", .0.display())]
     Io(PathBuf, #[source] io::Error),
@@ -30,6 +32,10 @@ pub enum GlobSetError {
 }
 
 impl<'t> GlobSet<'t> {
+    /// Create a new `GlobSet` from a list of globs.
+    ///
+    /// The globs are split into inclusion and exclusion globs based on whether they
+    /// start with `!`.
     pub fn create(globs: impl IntoIterator<Item = &'t str>) -> Result<GlobSet<'t>, GlobSetError> {
         // Split the globs into inclusion and exclusion globs based on whether they
         // start with `!`.

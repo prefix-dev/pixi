@@ -16,10 +16,10 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 :  Explicit path to export the environment file to
 
 ## Options
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to render the environment file for. Defaults to the default environment
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform to render the environment file for. Defaults to the current platform
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to render the environment file for. Defaults to the default environment
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

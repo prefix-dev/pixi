@@ -177,8 +177,9 @@ pub enum Command {
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
+#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 /// Lock file usage from the CLI
-pub struct LockFileUsageArgs {
+pub struct LockFileUsageConfig {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
@@ -189,8 +190,8 @@ pub struct LockFileUsageArgs {
     pub locked: bool,
 }
 
-impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
-    fn from(value: LockFileUsageArgs) -> Self {
+impl From<LockFileUsageConfig> for crate::environment::LockFileUsage {
+    fn from(value: LockFileUsageConfig) -> Self {
         if value.frozen {
             Self::Frozen
         } else if value.locked {

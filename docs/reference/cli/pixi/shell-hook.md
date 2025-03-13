@@ -12,44 +12,48 @@ pixi shell-hook [OPTIONS]
 ```
 
 ## Options
+- <a id="arg---shell" href="#arg---shell">`--shell (-s) <SHELL>`</a>
+:  Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`, `powershell`,  `fish`,  `nushell`]
+
+## Config Options
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
-- <a id="arg---change-ps1" href="#arg---change-ps1">`--change-ps1 <CHANGE_PS1>`</a>
-:  Do not change the PS1 variable when starting a prompt
-<br>**options**: `true`, `false`
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
-- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
-:  Max concurrent solves, default is the number of CPUs
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to activate in the script
-- <a id="arg---force-activate" href="#arg---force-activate">`--force-activate`</a>
-:  Do not use the environment activation cache. (default: true except in experimental mode)
-- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-<br>**env**: `PIXI_FROZEN`
-- <a id="arg---json" href="#arg---json">`--json`</a>
-:  Emit the environment variables set by running the activation as JSON
-<br>**default**: `false`
-- <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-<br>**env**: `PIXI_LOCKED`
-- <a id="arg---no-completion" href="#arg---no-completion">`--no-completion <NO_COMPLETION>`</a>
-:  Do not source the autocompletion scripts from the environment
-<br>**options**: `true`, `false`
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
-- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Don't update lockfile, implies the no-install as well
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is `50`
+- <a id="arg---force-activate" href="#arg---force-activate">`--force-activate`</a>
+:  Do not use the environment activation cache. (default: true except in experimental mode)
+- <a id="arg---no-completion" href="#arg---no-completion">`--no-completion <NO_COMPLETION>`</a>
+:  Do not source the autocompletion scripts from the environment
+<br>**options**: `true`, `false`
+- <a id="arg---change-ps1" href="#arg---change-ps1">`--change-ps1 <CHANGE_PS1>`</a>
+:  Do not change the PS1 variable when starting a prompt
+<br>**options**: `true`, `false`
+
+## Update Options
+- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
+:  Don't modify the environment, only modify the lock-file
 - <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
 :  Run the complete environment validation. This will reinstall a broken environment
-- <a id="arg---shell" href="#arg---shell">`--shell (-s) <SHELL>`</a>
-:  Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`, `powershell`,  `fish`,  `nushell`]
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
+- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
+:  Don't update lockfile, implies the no-install as well
+- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
+:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+<br>**env**: `PIXI_FROZEN`
+- <a id="arg---locked" href="#arg---locked">`--locked`</a>
+:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+<br>**env**: `PIXI_LOCKED`
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to activate in the script
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Emit the environment variables set by running the activation as JSON
+<br>**default**: `false`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
