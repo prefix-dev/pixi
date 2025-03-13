@@ -38,7 +38,7 @@ This shift towards projects offers a more organized and efficient way to manage 
 In `pixi`, a workspace is a folder containing a [manifest](../reference/pixi_manifest.md)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
 
 This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment.
-It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../environments/multi_environment.md))
+It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../workspace/multi_environment.md))
 
 ## Global environments
 `conda` installs all environments in one global location.
