@@ -403,10 +403,10 @@ impl<'p> LockFileDerivedData<'p> {
 
         let conda_reinstall_packages = match reinstall_packages {
             ReinstallPackages::None => None,
-            ReinstallPackages::Some(p) => Some(
-                p.into_iter()
-                    .filter_map(|p| PackageName::from_str(&p).ok())
-                    .filter(|n| pixi_records.iter().any(|r| r.name() == n))
+            ReinstallPackages::Some(ref p) => Some(
+                p.iter()
+                    .filter_map(|p| PackageName::from_str(p).ok())
+                    .filter(|name| pixi_records.iter().any(|r| r.name() == name))
                     .collect(),
             ),
             ReinstallPackages::All => Some(pixi_records.iter().map(|r| r.name().clone()).collect()),
@@ -427,9 +427,30 @@ impl<'p> LockFileDerivedData<'p> {
             return Ok(prefix);
         }
 
+        let pypi_lock_file_names = pypi_records
+            .iter()
+            .filter_map(|(data, _)| to_uv_normalize(&data.name).ok())
+            .collect::<HashSet<_>>();
+
+        // Figure out uv reinstall
+        let (uv_reinstall, uv_packages) = match reinstall_packages {
+            ReinstallPackages::None => (Some(false), None),
+            ReinstallPackages::All => (Some(true), None),
+            ReinstallPackages::Some(pkgs) => (
+                None,
+                Some(
+                    pkgs.into_iter()
+                        .filter_map(|pkg| uv_pep508::PackageName::new(pkg).ok())
+                        .filter(|name| pypi_lock_file_names.contains(name))
+                        .collect(),
+                ),
+            ),
+        };
+
         let uv_context = match &self.uv_context {
             None => {
-                let context = UvResolutionContext::from_workspace(self.workspace)?;
+                let context = UvResolutionContext::from_workspace(self.workspace)?
+                    .set_cache_refresh(uv_reinstall, uv_packages);
                 self.uv_context = Some(context.clone());
                 context
             }

@@ -81,8 +81,9 @@ impl UvResolutionContext {
         mut self,
         all: Option<bool>,
         specific_packages: Option<Vec<uv_pep508::PackageName>>,
-    ) {
+    ) -> Self {
         let policy = uv_cache::Refresh::from_args(all, specific_packages.unwrap_or_default());
         self.cache = self.cache.with_refresh(policy);
+        self
     }
 }
