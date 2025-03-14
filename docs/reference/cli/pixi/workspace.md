@@ -22,6 +22,7 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`export`](workspace/export.md) | Commands to export workspaces to other formats |
 | [`name`](workspace/name.md) | Commands to manage workspace name |
 | [`system-requirements`](workspace/system-requirements.md) | Commands to manage workspace system requirements |
+| [`pixi-minimum`](workspace/pixi-minimum.md) | Commands to manage the pixi minimum version requirement |
 
 
 ## Global Options
