@@ -3,10 +3,12 @@ use std::{
     time::Duration,
 };
 
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver};
 use tracing::{info, warn};
+use wax;
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use rayon::prelude::*;
 
 use crate::task::ExecutableTask;
 
@@ -24,6 +26,10 @@ pub enum FileWatchError {
     /// Task execution error.
     #[error("Task execution error: {0}")]
     TaskExecutionError(String),
+
+    /// Pattern error.
+    #[error("Pattern error: {0}")]
+    PatternError(#[from] wax::BuildError),
 }
 
 /// Config for the auto-reload feature.
@@ -38,21 +44,6 @@ impl Default for AutoReloadConfig {
             debounce: Duration::from_millis(500),
         }
     }
-}
-
-/// Checks if a task has watched files defined
-pub fn has_watched_files(task: &ExecutableTask<'_>) -> bool {
-    task.task()
-        .as_execute()
-        .and_then(|e| e.watched_files.as_ref())
-        .is_some()
-}
-
-/// Get the watched files from a task
-pub fn get_watched_files(task: &ExecutableTask<'_>) -> Option<Vec<String>> {
-    task.task()
-        .as_execute()
-        .and_then(|e| e.watched_files.clone())
 }
 
 /// Watches files for changes and triggers task execution when they change.
@@ -78,27 +69,101 @@ impl FileWatcher {
 
         let mut watched_paths = Vec::new();
 
-        // Watch each path
-        for path in paths {
-            let path = path.as_ref().to_path_buf();
-            if path.exists() {
-                let mode = if path.is_dir() {
-                    RecursiveMode::Recursive
+        // Convert to concrete PathBuf collection first
+        let concrete_paths: Vec<PathBuf> = paths
+            .iter()
+            .map(|p| p.as_ref().to_path_buf())
+            .collect();
+
+        // Now use parallel iterator on concrete type
+        let path_results: Vec<Result<Vec<PathBuf>, FileWatchError>> = concrete_paths
+            .par_iter()
+            .map(|path| {
+                let mut paths_to_watch = Vec::new();
+                let path_str = path.to_string_lossy();
+
+                // Check if this is a glob pattern
+                if path_str.contains('*') || path_str.contains('?') || path_str.contains('[') {
+                    info!("Detected glob pattern: {}", path_str);
+
+                    // Use wax crate to expand the pattern
+                    let pattern = wax::Glob::new(&path_str)?;
+                    let entries = pattern.walk(&current_dir);
+
+                    // Collect entries into Vec first, then process in parallel
+                    let entries_vec: Vec<_> = entries.collect();
+                    
+                    // Use std::sync::atomic for thread-safe found_match
+                    let found_match_atomic = std::sync::atomic::AtomicBool::new(false);
+                    let paths_mutex = std::sync::Mutex::new(Vec::new());
+                    
+                    entries_vec.par_iter().for_each(|entry| {
+                        match entry {
+                            Ok(entry) => {
+                                found_match_atomic.store(true, std::sync::atomic::Ordering::Relaxed);
+                                // Convert WalkEntry to PathBuf
+                                let path = entry.path().to_path_buf();
+                                if path.exists() {
+                                    if let Ok(mut paths) = paths_mutex.lock() {
+                                        paths.push(path.clone());
+                                    }
+                                    info!("Found path from glob: {}", path.display());
+                                }
+                            }
+                            Err(e) => warn!("Error in glob pattern '{}': {}", path_str, e),
+                        }
+                    });
+                    
+                    // Get processed paths
+                    let found_match = found_match_atomic.load(std::sync::atomic::Ordering::Relaxed);
+                    if let Ok(processed_paths) = paths_mutex.lock() {
+                        paths_to_watch.extend(processed_paths.iter().cloned());
+                    }
+
+                    // If no matches found, watch the parent directory
+                    if !found_match {
+                        info!(
+                            "No existing files match glob pattern '{}', watching current directory",
+                            path_str
+                        );
+                        paths_to_watch.push(current_dir.clone());
+                    }
                 } else {
-                    RecursiveMode::NonRecursive
-                };
-                watcher.watch(&path, mode)?;
-                watched_paths.push(path);
-            } else {
-                info!("Path does not exist, skipping: {}", path.display());
-                // Try to watch the parent directory if it exists
-                if let Some(parent) = path.parent() {
-                    if parent.exists() {
-                        info!("Watching parent directory instead: {}", parent.display());
-                        watcher.watch(parent, RecursiveMode::Recursive)?;
-                        watched_paths.push(parent.to_path_buf());
+                    // Regular path handling
+                    if path.exists() {
+                        paths_to_watch.push(path.to_path_buf());
+                    } else {
+                        info!("Path does not exist, skipping: {}", path.display());
+                        // Try to watch the parent directory if it exists
+                        if let Some(parent) = path.parent() {
+                            if parent.exists() {
+                                info!("Watching parent directory instead: {}", parent.display());
+                                paths_to_watch.push(parent.to_path_buf());
+                            }
+                        }
                     }
                 }
+
+                Ok(paths_to_watch)
+            })
+            .collect();
+
+        // Process results and set up watchers
+        for result in path_results {
+            match result {
+                Ok(paths) => {
+                    for path in paths {
+                        let mode = if path.is_dir() {
+                            RecursiveMode::Recursive
+                        } else {
+                            RecursiveMode::NonRecursive
+                        };
+                        watcher.watch(&path, mode)?;
+                        watched_paths.push(path.to_path_buf());
+                        info!("Watching path: {}", path.display());
+                    }
+                }
+                Err(e) => return Err(e),
             }
         }
 
@@ -117,14 +182,20 @@ impl FileWatcher {
 
     /// Creates a file watcher from a task with watched_files.
     pub fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, FileWatchError> {
-        let watched_files = match get_watched_files(task) {
-            Some(files) if !files.is_empty() => files,
+        // Get inputs from the task
+        let inputs = match task.task().as_execute() {
+            Some(execute) => {
+                if execute.inputs.is_none() {
+                    return Ok(None);
+                }
+                execute.inputs.clone().expect("inputs should not be None") // Unwrap the Option<Vec<String>>
+            },
             _ => return Ok(None),
         };
 
         // Convert the glob patterns to absolute paths
         let root_path = task.project().root();
-        let paths: Vec<_> = watched_files
+        let paths: Vec<PathBuf> = inputs
             .iter()
             .map(|pattern| root_path.join(pattern))
             .collect();

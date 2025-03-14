@@ -28,6 +28,7 @@ pub mod lock;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
+pub mod watch;
 pub mod search;
 pub mod self_update;
 pub mod shell;
@@ -142,6 +143,8 @@ pub enum Command {
 
     #[clap(visible_alias = "r")]
     Run(run::Args),
+    #[clap(visible_alias = "w")]
+    Watch(watch::Args),
     #[clap(visible_alias = "x")]
     Exec(exec::Args),
     #[clap(visible_alias = "s")]
@@ -269,6 +272,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Add(cmd) => add::execute(cmd).await,
         Command::Clean(cmd) => clean::execute(cmd).await,
         Command::Run(cmd) => run::execute(cmd).await,
+        Command::Watch(cmd) => watch::execute(cmd).await,
         Command::Global(cmd) => global::execute(cmd).await,
         Command::Auth(cmd) => rattler::cli::auth::execute(cmd).await.into_diagnostic(),
         Command::Install(cmd) => install::execute(cmd).await,

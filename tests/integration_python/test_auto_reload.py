@@ -30,14 +30,14 @@ def test_file_watching_and_rerunning(pixi: Path, tmp_pixi_workspace: Path) -> No
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
     [tasks]
-    watch-test = {{ cmd = "echo Running with content: $(cat input.txt)", watched-files = ["input.txt"] }}
+    watch-test = {{ cmd = "echo Running with content: $(cat input.txt)", inputs = ["input.txt"] }}
     """
     manifest.write_text(toml)
 
     input_file = tmp_pixi_workspace.joinpath("input.txt")
     input_file.write_text("initial content")
 
-    cmd = [pixi, "run", "--manifest-path", str(manifest), "watch-test"]
+    cmd = [pixi, "watch", "--manifest-path", str(manifest), "watch-test"]
     process = subprocess.Popen(
         [str(c) for c in cmd],
         stdout=subprocess.PIPE,
@@ -86,7 +86,7 @@ def test_multiple_files_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
     [tasks]
-    watch-multiple = {{ cmd = "echo FILES: f1=$(cat file1.txt) f2=$(cat file2.txt)", watched-files = ["file1.txt", "file2.txt"] }}
+    watch-multiple = {{ cmd = "echo FILES: f1=$(cat file1.txt) f2=$(cat file2.txt)", inputs = ["file1.txt", "file2.txt"] }}
     """
     manifest.write_text(toml)
 
@@ -144,14 +144,14 @@ def test_glob_pattern_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
     [tasks]
-    watch-glob = {{ cmd = "echo LOG_CONTENT=$(cat test.log)", watched-files = ["*.log"] }}
+    watch-glob = {{ cmd = "echo LOG_CONTENT=$(cat test.log)", inputs = ["*.log"] }}
     """
     manifest.write_text(toml)
 
     log_file = tmp_pixi_workspace.joinpath("test.log")
     log_file.write_text("initial_data")
 
-    cmd = [str(pixi), "run", "--manifest-path", str(manifest), "watch-glob"]
+    cmd = [str(pixi), "watch", "--manifest-path", str(manifest), "watch-glob"]
 
     process = subprocess.Popen(
         cmd,
@@ -179,11 +179,11 @@ def test_empty_watched_files(pixi: Path, tmp_pixi_workspace: Path) -> None:
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
     [tasks]
-    watch-empty = {{ cmd = "echo Empty watched files", watched-files = [] }}
+    watch-empty = {{ cmd = "echo Empty watched files", inputs = [] }}
     """
     manifest.write_text(toml)
 
-    cmd = [str(pixi), "run", "--manifest-path", str(manifest), "watch-empty"]
+    cmd = [str(pixi), "watch", "--manifest-path", str(manifest), "watch-empty"]
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
@@ -204,11 +204,11 @@ def test_nonexistent_watched_file(pixi: Path, tmp_pixi_workspace: Path) -> None:
     toml = f"""
     {EMPTY_BOILERPLATE_PROJECT}
     [tasks]
-    watch-nonexistent = {{ cmd = "echo File created", watched-files = ["does_not_exist_yet.txt"] }}
+    watch-nonexistent = {{ cmd = "echo File created", inputs = ["does_not_exist_yet.txt"] }}
     """
     manifest.write_text(toml)
 
-    cmd = [str(pixi), "run", "--manifest-path", str(manifest), "watch-nonexistent"]
+    cmd = [str(pixi), "watch", "--manifest-path", str(manifest), "watch-nonexistent"]
     process = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,

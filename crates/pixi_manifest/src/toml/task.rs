@@ -58,7 +58,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 .map(TomlIndexMap::into_inner);
             let description = th.optional("description");
             let clean_env = th.optional("clean-env").unwrap_or(false);
-            let watched_files = th.optional("watched-files");
 
             th.finalize(None)?;
 
@@ -71,7 +70,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 env,
                 description,
                 clean_env,
-                watched_files,
             })
         } else {
             let depends_on = depends_on(&mut th).unwrap_or_default();

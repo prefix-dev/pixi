@@ -100,10 +100,6 @@ pub struct AddArgs {
     /// environment to run the task.
     #[arg(long)]
     pub clean_env: bool,
-
-    /// Automatically reload the task when the watched files change
-    #[arg(long)]
-    pub watched_files: Option<Vec<String>>,
 }
 
 /// Parse a single key-value pair
@@ -206,8 +202,6 @@ impl From<AddArgs> for Task {
                 Some(env)
             };
 
-            let watched_files = value.watched_files;
-
             Self::Execute(Execute {
                 cmd: CmdArgs::Single(cmd_args),
                 depends_on,
@@ -217,7 +211,6 @@ impl From<AddArgs> for Task {
                 env,
                 description,
                 clean_env,
-                watched_files,
             })
         }
     }

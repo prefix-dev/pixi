@@ -185,14 +185,6 @@ impl Task {
             _ => None,
         }
     }
-
-    /// Returns the watched files of the task.
-    pub fn watched_files(&self) -> Option<&[String]> {
-        match self {
-            Task::Execute(exe) => exe.watched_files.as_deref(),
-            _ => None,
-        }
-    }
 }
 
 /// A command script executes a single command from the environment
@@ -226,9 +218,6 @@ pub struct Execute {
 
     /// Isolate the task from the running machine
     pub clean_env: bool,
-
-    /// Automatically reload the task when the inputs change
-    pub watched_files: Option<Vec<String>>,
 }
 
 impl From<Execute> for Task {

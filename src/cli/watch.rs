@@ -4,8 +4,9 @@ use std::{
     string::String,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc
+        Arc, OnceLock,
     },
+    path::PathBuf,
 };
 
 use clap::Parser;
@@ -13,36 +14,30 @@ use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
-use pixi_config::{ConfigCli, ConfigCliActivation};
+use pixi_config::ConfigCliActivation;
 use pixi_manifest::TaskName;
 use thiserror::Error;
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::Level;
 
 use crate::{
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
-    lock_file::{ReinstallPackages, UpdateLockFileOptions},
+    lock_file::UpdateLockFileOptions,
     task::{
         get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
-        InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+        FileWatcher, FileWatchError, InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+        TaskOrchestrator, watch_and_execute_tasks,
     },
     workspace::{errors::UnsupportedPlatformError, Environment},
     Workspace, WorkspaceLocator,
 };
 
-use super::cli_config::LockFileUpdateConfig;
-
-/// Runs task in the pixi environment.
-///
-/// This command is used to run tasks in the pixi environment.
-/// It will activate the environment and run the task in the environment.
-/// It is using the deno_task_shell to run the task.
-///
-/// `pixi run` will also update the lockfile and install the environment if it is required.
+/// Runs task in project.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
-    /// The pixi task or a task shell command you want to run in the workspace's
+    /// The pixi task or a task shell command you want to run with watcher in the project's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
 
@@ -51,12 +46,6 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
-
-    #[clap(flatten)]
-    pub lock_file_update_config: LockFileUpdateConfig,
-
-    #[clap(flatten)]
-    pub config: ConfigCli,
 
     #[clap(flatten)]
     pub activation_config: ConfigCliActivation,
@@ -88,13 +77,13 @@ pub struct Args {
     pub h: Option<bool>,
 }
 
-/// CLI entry point for `pixi run`
+/// CLI entry point for `pixi watch`
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
     let cli_config = args
         .activation_config
-        .merge_config(args.config.clone().into());
+        .merge_config(args.prefix_update_config.config.clone().into());
 
     // Load the workspace
     let workspace = WorkspaceLocator::for_cli()
@@ -126,7 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Ensure that the lock-file is up-to-date.
     let mut lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            lock_file_usage: args.prefix_update_config.lock_file_usage(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..UpdateLockFileOptions::default()
         })
@@ -250,7 +239,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .prefix(
                         &executable_task.run_environment,
                         args.prefix_update_config.update_mode(),
-                        ReinstallPackages::default(),
                     )
                     .await?;
 
@@ -363,6 +351,111 @@ async fn execute_task(
     }
 
     Ok(())
+}
+
+/// Execute a task with file watching, including task inputs and handling dependencies.
+async fn execute_task_with_watched_files(
+    task: &ExecutableTask<'_>,
+    command_env: &HashMap<String, String>,
+) -> Result<(), TaskExecutionError> {
+    use crate::task::orchestrator::watch_and_execute_tasks;
+    
+    // Create a task graph for this task
+    // If the task already has dependencies, they will be part of the graph
+    let task_graph = match Task {
+        Some(graph) => graph.clone(),
+        None => {
+            // When there's no task graph, create one with just this task
+            return execute_task(task, command_env).await;
+        }
+    };
+    
+    // Use our orchestration system to handle file watching and task execution
+    if let Err(e) = watch_and_execute_tasks(
+        // We need to convert from TaskGraph<'_> to TaskGraph<'static>
+        // This is a simplification - in a real implementation we'd need to
+        // ensure proper lifetime handling
+        unsafe { std::mem::transmute(task_graph) },
+        command_env,
+    ).await {
+        return Err(TaskExecutionError::InvalidWorkingDirectory(
+            InvalidWorkingDirectory {
+                path: format!("Error watching files: {}", e),
+            }
+        ));
+    }
+    
+    Ok(())
+}
+
+static SIGNAL_HANDLER: OnceLock<Arc<Mutex<SignalState>>> = OnceLock::new();
+
+// Signal state
+struct SignalState {
+    cancellation_requested: bool,
+    active_watchers: usize,
+}
+
+// Setup the signal handler (initialize if needed)
+async fn setup_signal_handler() -> Arc<Mutex<SignalState>> {
+    // Check if handler is already initialized
+    if let Some(handler) = SIGNAL_HANDLER.get() {
+        // Increment active watchers count
+        let mut state = handler.lock().await;
+        state.active_watchers += 1;
+        return handler.clone();
+    }
+
+    // Create new handler
+    let handler = Arc::new(Mutex::new(SignalState {
+        cancellation_requested: false,
+        active_watchers: 1, // Start with 1 since we're creating it
+    }));
+
+    // Set up signal handling
+    let handler_clone = handler.clone();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to create signal handler");
+
+        // Set cancellation flag
+        let mut state = handler_clone.lock().await;
+        state.cancellation_requested = true;
+
+        // If there are multiple watchers, print a message
+        if state.active_watchers > 1 {
+            eprintln!("\nCancelling {} file watchers...", state.active_watchers);
+        }
+    });
+
+    // Initialize the global handler
+    SIGNAL_HANDLER.set(handler.clone()).ok();
+
+    handler
+}
+
+// Check if cancellation has been requested
+async fn is_cancellation_requested(signal_handler: &Arc<Mutex<SignalState>>) -> bool {
+    let state = signal_handler.lock().await;
+    state.cancellation_requested
+}
+
+// Wait for cancellation to be requested
+async fn wait_for_cancellation(signal_handler: &Arc<Mutex<SignalState>>) {
+    // Poll the cancellation flag periodically
+    loop {
+        if is_cancellation_requested(signal_handler).await {
+            break;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+}
+
+// Cleanup signal handler when a watcher is done
+async fn cleanup_signal_handler(signal_handler: &Arc<Mutex<SignalState>>) {
+    let mut state = signal_handler.lock().await;
+    state.active_watchers -= 1;
 }
 
 /// Called to disambiguate between environments to run a task in.

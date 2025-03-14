@@ -129,6 +129,7 @@ rattler_repodata_gateway = { version = "0.22.3", default-features = false }
 rattler_shell = { version = "0.22.24", default-features = false }
 rattler_solve = { version = "1.4.2", default-features = false }
 rattler_virtual_packages = { version = "2.0.8", default-features = false }
+rayon = { version = "1.10.0" }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
@@ -300,7 +301,7 @@ pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
-rayon = "1.10.0"
+rayon = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
   "http2",
@@ -346,6 +347,7 @@ uv-workspace = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
+wax = { workspace = true, features = ["miette"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
