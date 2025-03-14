@@ -72,7 +72,6 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             project.manifest.add_shortcut(env_name, name)?;
         }
         state_changes |= project.sync_environment(env_name, None).await?;
-        project.manifest.save().await?;
         Ok(state_changes)
     }
 
