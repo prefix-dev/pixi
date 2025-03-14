@@ -2,6 +2,8 @@ self-hosted-runner:
   labels:
     - 8core_ubuntu_latest_runner
     - 16core_windows_latest_runner
+    - windows_arm64_2025_large
+    - windows_x64_2025_large
 
 paths:
   .github/workflows/release.yml:

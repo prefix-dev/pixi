@@ -222,11 +222,11 @@ jobs:
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   cargo-test-windows:
-    name: "cargo test | windows"
+    name: "cargo test | windows x64"
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: 16core_windows_latest_runner
+    runs-on: windows_x64_2025_large
     steps:
       - uses: actions/checkout@v4
       - name: Create Dev Drive using ReFS
@@ -323,7 +323,7 @@ jobs:
   build-binary-windows-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: 16core_windows_latest_runner
+    runs-on: windows_x64_2025_large
     name: "build binary | windows x86_64"
     steps:
       - uses: actions/checkout@v4
@@ -352,7 +352,7 @@ jobs:
   build-binary-windows-aarch64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
-    runs-on: 16core_windows_latest_runner
+    runs-on: windows_arm64_2025_large
     name: "build binary | windows aarch64"
     steps:
       - uses: actions/checkout@v4
