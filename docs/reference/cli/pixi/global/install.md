@@ -8,12 +8,12 @@ Installs the defined packages in a globally accessible location and exposes thei
 
 ## Usage
 ```
-pixi global install [OPTIONS] <PACKAGES>...
+pixi global install [OPTIONS] <PACKAGE>...
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
-:  Specifies the packages that are to be installed
+- <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
+:  Specifies the package that should be installed
 <br>May be provided more than once.
 <br>**required**: `true`
 

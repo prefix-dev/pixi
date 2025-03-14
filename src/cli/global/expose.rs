@@ -17,13 +17,13 @@ use crate::{
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct AddArgs {
-    /// Add one or more mapping which describe which executables are exposed.
+    /// Add mapping which describe which executables are exposed.
     /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
     /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., value_name = "MAPPING")]
     mappings: Vec<Mapping>,
 
-    /// The environment to which the binaries should be exposed
+    /// The environment to which the binaries should be exposed.
     #[clap(short, long)]
     environment: EnvironmentName,
 
@@ -38,7 +38,8 @@ pub struct AddArgs {
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The exposed names that should be removed
-    #[arg(num_args = 1..)]
+    /// Can be specified multiple times.
+    #[arg(num_args = 1.., id = "EXPOSED_NAME")]
     exposed_names: Vec<ExposedName>,
 
     #[clap(flatten)]

@@ -8,14 +8,14 @@ Add a command to the workspace
 
 ## Usage
 ```
-pixi task add [OPTIONS] <NAME> <COMMANDS>...
+pixi task add [OPTIONS] <NAME> <COMMAND>...
 ```
 
 ## Arguments
 - <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
 :  Task name
 <br>**required**: `true`
-- <a id="arg-<COMMANDS>" href="#arg-<COMMANDS>">`<COMMANDS>`</a>
+- <a id="arg-<COMMAND>" href="#arg-<COMMAND>">`<COMMAND>`</a>
 :  One or more commands to actually execute
 <br>May be provided more than once.
 <br>**required**: `true`

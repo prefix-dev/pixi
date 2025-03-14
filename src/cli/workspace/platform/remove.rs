@@ -11,8 +11,8 @@ use crate::{
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
-    /// The platform name(s) to remove.
-    #[clap(required = true, num_args=1..)]
+    /// The platform name to remove.
+    #[clap(required = true, num_args=1.., value_name = "PLATFORM")]
     pub platforms: Vec<Platform>,
 
     /// Don't update the environment, only remove the platform(s) from the

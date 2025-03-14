@@ -8,12 +8,12 @@ Removes dependencies from an environment
 
 ## Usage
 ```
-pixi global remove [OPTIONS] <PACKAGES>...
+pixi global remove [OPTIONS] <PACKAGE>...
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
-:  Specifies the packages that are to be removed
+- <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
+:  Specifies the package that should be removed
 <br>May be provided more than once.
 <br>**required**: `true`
 
