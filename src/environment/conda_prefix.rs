@@ -315,6 +315,11 @@ pub async fn update_prefix_conda(
             let build_context = &build_context;
             let channels = &channels;
             let virtual_packages = &virtual_packages;
+            let rebuild = reinstall_packages
+                .as_ref()
+                .map(|packages| packages.iter().any(|p| p == &record.package_record.name))
+                .unwrap_or(true);
+
             async move {
                 build_context
                     .build_source_record(
@@ -326,6 +331,7 @@ pub async fn update_prefix_conda(
                         progress_reporter.clone(),
                         Some(source_reporter),
                         build_id,
+                        rebuild,
                     )
                     .await
             }
