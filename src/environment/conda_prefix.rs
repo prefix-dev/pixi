@@ -318,7 +318,7 @@ pub async fn update_prefix_conda(
             let rebuild = reinstall_packages
                 .as_ref()
                 .map(|packages| packages.iter().any(|p| p == &record.package_record.name))
-                .unwrap_or(true);
+                .unwrap_or(false);
 
             async move {
                 build_context
