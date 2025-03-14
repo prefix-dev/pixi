@@ -19,8 +19,10 @@ pixi init [OPTIONS] [PATH]
 ## Options
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  Channels to use in the workspace
+<br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  Platforms that the workspace supports
+<br>May be provided more than once.
 - <a id="arg---import" href="#arg---import">`--import (-i) <ENVIRONMENT_FILE>`</a>
 :  Environment.yml file to bootstrap the workspace
 - <a id="arg---format" href="#arg---format">`--format <FORMAT>`</a>

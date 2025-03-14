@@ -19,6 +19,7 @@ pixi workspace environment add [OPTIONS] <NAME>
 ## Options
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURES>`</a>
 :  Features to add to the environment
+<br>May be provided more than once.
 - <a id="arg---solve-group" href="#arg---solve-group">`--solve-group <SOLVE_GROUP>`</a>
 :  The solve-group to add the environment to
 - <a id="arg---no-default-feature" href="#arg---no-default-feature">`--no-default-feature`</a>

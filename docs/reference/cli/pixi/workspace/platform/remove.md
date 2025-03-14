@@ -14,6 +14,7 @@ pixi workspace platform remove [OPTIONS] <PLATFORMS>...
 ## Arguments
 - <a id="arg-<PLATFORMS>" href="#arg-<PLATFORMS>">`<PLATFORMS>`</a>
 :  The platform name(s) to remove
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options

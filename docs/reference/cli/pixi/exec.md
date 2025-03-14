@@ -14,12 +14,15 @@ pixi exec [OPTIONS] [COMMAND]...
 ## Arguments
 - <a id="arg-<COMMAND>" href="#arg-<COMMAND>">`<COMMAND>`</a>
 :  The executable to run, followed by any arguments
+<br>May be provided more than once.
 
 ## Options
 - <a id="arg---spec" href="#arg---spec">`--spec (-s) <SPECS>`</a>
 :  Matchspecs of packages to install. If this is not provided, the package is guessed from the command
+<br>May be provided more than once.
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
+<br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform to create the environment for
 <br>**default**: `current_platform`

@@ -231,7 +231,7 @@ impl From<GitRev> for GitReference {
 #[derive(Parser, Debug, Default)]
 pub struct DependencyConfig {
     /// The dependencies as names, conda MatchSpecs or PyPi requirements
-    #[arg(required = true)]
+    #[arg(required = true, value_name = "SPEC")]
     pub specs: Vec<String>,
 
     /// The specified dependencies are host dependencies. Conflicts with `build`
@@ -250,7 +250,7 @@ pub struct DependencyConfig {
     pub pypi: bool,
 
     /// The platform(s) for which the dependency should be modified
-    #[arg(long = "platform", short)]
+    #[arg(long = "platform", short, value_name = "PLATFORM")]
     pub platforms: Vec<Platform>,
 
     /// The feature for which the dependency should be modified

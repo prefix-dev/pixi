@@ -17,11 +17,13 @@ pixi task add [OPTIONS] <NAME> <COMMANDS>...
 <br>**required**: `true`
 - <a id="arg-<COMMANDS>" href="#arg-<COMMANDS>">`<COMMANDS>`</a>
 :  One or more commands to actually execute
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options
 - <a id="arg---depends-on" href="#arg---depends-on">`--depends-on <DEPENDS_ON>`</a>
 :  Depends on these other commands
+<br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform for which the task should be added
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
@@ -30,6 +32,7 @@ pixi task add [OPTIONS] <NAME> <COMMANDS>...
 :  The working directory relative to the root of the workspace
 - <a id="arg---env" href="#arg---env">`--env <ENV>`</a>
 :  The environment variable to set, use --env key=value multiple times for more than one variable
+<br>May be provided more than once.
 - <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
 :  A description of the task to be added
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>

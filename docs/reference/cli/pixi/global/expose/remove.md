@@ -14,6 +14,7 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAMES]...
 ## Arguments
 - <a id="arg-<EXPOSED_NAMES>" href="#arg-<EXPOSED_NAMES>">`<EXPOSED_NAMES>`</a>
 :  The exposed names that should be removed
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>

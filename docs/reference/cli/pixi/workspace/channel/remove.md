@@ -14,6 +14,7 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 ## Arguments
 - <a id="arg-<CHANNEL>" href="#arg-<CHANNEL>">`<CHANNEL>`</a>
 :  The channel name or URL
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options

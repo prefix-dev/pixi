@@ -14,6 +14,7 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGES>...
 ## Arguments
 - <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
 :  Specifies the packages that are to be added to the environment
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options
@@ -22,6 +23,7 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGES>...
 <br>**required**: `true`
 - <a id="arg---expose" href="#arg---expose">`--expose <EXPOSE>`</a>
 :  Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
