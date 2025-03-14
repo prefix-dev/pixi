@@ -7,7 +7,7 @@ use crate::cli::cli_config::WorkspaceConfig;
 use crate::WorkspaceLocator;
 use clap::Parser;
 
-/// Commands to manage workspace name.
+/// Commands to manage the pixi minimum version requirement.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
