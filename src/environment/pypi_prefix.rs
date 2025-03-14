@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use uv_distribution_types::{InstalledDist, Name};
 
 use crate::{install_pypi, lock_file::UvResolutionContext, prefix::Prefix};
+use url::Url;
 
 use super::PythonStatus;
 
@@ -83,6 +84,7 @@ pub async fn update_prefix_pypi(
     platform: Platform,
     non_isolated_packages: Option<Vec<String>>,
     no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
+    mirror_map: &std::collections::HashMap<Url, Vec<Url>>,
 ) -> miette::Result<()> {
     // If we have changed interpreter, we need to uninstall all site-packages from
     // the old interpreter We need to do this before the pypi prefix update,
@@ -149,6 +151,7 @@ pub async fn update_prefix_pypi(
                 platform,
                 non_isolated_packages,
                 no_build,
+                mirror_map,
             )
         },
     )
