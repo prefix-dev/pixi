@@ -1241,7 +1241,7 @@ def test_pixi_reinstall_default_env(
 
     # Modify the Python files
     pypi_package_init.write_text(pypi_package_init.read_text().replace("1", "2"))
-    pixi_build_package_init.write_text(pypi_package_init.read_text().replace("1", "2"))
+    pixi_build_package_init.write_text(pixi_build_package_init.read_text().replace("1", "2"))
 
     # That shouldn't trigger a re-install, so running still returns "number 1"
     verify_cli_command(
@@ -1313,7 +1313,7 @@ def test_pixi_reinstall_multi_env(
 
     # Modify the Python files
     pypi_package_init.write_text(pypi_package_init.read_text().replace("1", "2"))
-    pixi_build_package_init.write_text(pypi_package_init.read_text().replace("1", "2"))
+    pixi_build_package_init.write_text(pixi_build_package_init.read_text().replace("1", "2"))
 
     # That shouldn't trigger a re-install, so running still returns "number 1"
     verify_cli_command(
