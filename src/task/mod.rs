@@ -1,6 +1,7 @@
 mod error;
 mod executable_task;
 mod file_hashes;
+pub mod orchestrator;
 mod reload;
 mod task_environment;
 mod task_graph;
@@ -8,8 +9,9 @@ mod task_hash;
 
 pub use file_hashes::{FileHashes, FileHashesError};
 pub use pixi_manifest::{Task, TaskName};
+pub use orchestrator::{TaskOrchestrator, watch_and_execute_tasks};
 pub use reload::{
-    get_watched_files, has_watched_files, AutoReloadConfig, FileWatchError, FileWatcher,
+    AutoReloadConfig, FileWatchError, FileWatcher,
 };
 pub use task_hash::{ComputationHash, EnvironmentHash, InputHashes, TaskHash};
 

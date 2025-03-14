@@ -347,6 +347,8 @@ uv-types = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
+rayon = "1.10.0"
+wax = { workspace = true, features = ["miette"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }

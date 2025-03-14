@@ -30,8 +30,20 @@ use crate::{
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Ord, Hash)]
 pub struct TaskId(usize);
 
+impl TaskId {
+    /// Returns the inner index value
+    pub fn index(&self) -> usize {
+        self.0
+    }
+    
+    /// Creates a new TaskId from an index
+    pub fn new(index: usize) -> Self {
+        Self(index)
+    }
+}
+
 /// A node in the [`TaskGraph`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TaskNode<'p> {
     /// The name of the task or `None` if the task is a custom task.
     pub name: Option<TaskName>,
@@ -96,7 +108,7 @@ impl TaskNode<'_> {
 
 /// A [`TaskGraph`] is a graph of tasks that defines the relationships between
 /// different executable tasks.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TaskGraph<'p> {
     /// The project that this graph references
     project: &'p Workspace,
@@ -126,6 +138,11 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
 impl<'p> TaskGraph<'p> {
     pub(crate) fn project(&self) -> &'p Workspace {
         self.project
+    }
+    
+    /// Returns the number of nodes in the graph
+    pub fn nodes_len(&self) -> usize {
+        self.nodes.len()
     }
 
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
@@ -349,6 +366,36 @@ impl<'p> TaskGraph<'p> {
         self.task_ids()
             .filter(|id| !all_deps.contains(id))
             .collect()
+    }
+
+    /// Creates an empty task graph with just a reference to the workspace
+    pub fn empty(project: &'p Workspace) -> Self {
+        Self {
+            project,
+            nodes: Vec::new(),
+        }
+    }
+    
+    /// Add a task to the graph and return its TaskId
+    pub fn add_task(
+        &mut self,
+        name: Option<TaskName>,
+        task: Cow<'p, Task>,
+        run_environment: Environment<'p>,
+        additional_args: Vec<String>,
+        dependencies: Vec<TaskId>,
+    ) -> TaskId {
+        let task_id = TaskId(self.nodes.len());
+        
+        self.nodes.push(TaskNode {
+            name,
+            task,
+            run_environment,
+            additional_args,
+            dependencies,
+        });
+        
+        task_id
     }
 }
 
