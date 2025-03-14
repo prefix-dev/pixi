@@ -11,7 +11,7 @@ We'll later combine this example together with a Python package.
     `pixi-build` is a preview feature, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
-## Creating a new workspace
+## Creating a New Workspace
 
 To get started, create a new workspace with pixi:
 

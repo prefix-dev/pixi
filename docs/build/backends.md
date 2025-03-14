@@ -6,6 +6,7 @@ The backends we are currently developing are available in the following [conda c
 And are being developed in the [pixi-build-backends](https://github.com/prefix-dev/pixi-build-backends) repository.
 
 ### Installation
+
 When looking at the following build-section:
 
 ```toml
@@ -15,6 +16,7 @@ When looking at the following build-section:
 5. This will allow Pixi to install desired backends from the `pixi-build-backends` channel, and any requirements from `conda-forge`. Backends are installed into isolated environments, and will be shared across Pixi workspaces.
 
 ### Overriding the Build Backend
+
 Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[package.build]`](../reference/pixi_manifest.md#the-build-system). We currently have two environment variables that allow for this:
 
 1. `PIXI_BUILD_BACKEND_OVERRIDE`: This environment variable allows for overriding of one or multiple backends.  Use `{name}={path}` to specify a backend name mapped to a path and `,` to separate multiple backends.

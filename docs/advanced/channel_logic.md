@@ -6,7 +6,7 @@ The actual code regarding this is in the [`rattler_solve`](https://github.com/co
 This might however be hard to read.
 Therefore, this document will continue with simplified flow charts.
 
-## Channel specific dependencies
+## Channel Specific Dependencies
 
 When a user defines a channel per dependency, the solver needs to know the other channels are unusable for this dependency.
 ```toml
@@ -31,7 +31,8 @@ flowchart TD
     D --> E
 ```
 
-# Channel priority
+# Channel Priority
+
 Channel priority is dictated by the order in the `workspace.channels` array, where the first channel is the highest priority.
 For instance:
 ```toml
@@ -62,7 +63,7 @@ flowchart TD
 This method ensures the solver only adds a package to the candidates if it's found in the highest priority channel available.
 If you have 10 channels and the package is found in the 5th channel it will exclude the next 5 channels from the candidates if they also contain the package.
 
-# Use case: pytorch and nvidia with conda-forge
+# Use Case: pytorch and nvidia with conda-forge
 A common use case is to use `pytorch` with `nvidia` drivers, while also needing the `conda-forge` channel for the main dependencies.
 ```toml
 [workspace]
@@ -90,7 +91,7 @@ We don't define the `pytorch` channel before `conda-forge` because we want to ge
 For example, it also ships the `ffmpeg` package, but only an old version which doesn't work with the newer pytorch versions.
 Thus breaking the installation if we would skip the `conda-forge` channel for `ffmpeg` with the priority logic.
 
-## Force a specific channel priority
+## Force a Specific Channel Priority
 If you want to force a specific priority for a channel, you can use the `priority` (int) key in the channel definition.
 The higher the number, the higher the priority.
 Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.
