@@ -1,0 +1,20 @@
+recipe:
+  name: post-link-script-package
+  version: 1.0.0
+
+outputs:
+  - package:
+      name: post-link-script-package
+      version: 0.1.0
+    source:
+      path: .
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - cp post-link.bat $PREFIX/bin/.post-link-script-package-post-link.bat
+          else:
+            - cp post-link.sh $PREFIX/bin/.post-link-script-package-post-link.sh
+            - chmod +x $PREFIX/bin/.post-link-script-package-post-link.sh

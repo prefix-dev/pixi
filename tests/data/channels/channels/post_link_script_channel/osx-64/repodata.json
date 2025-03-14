@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "osx-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "post-link-script-package-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "3c398d5c27f734d6c45851dc2e08445e",
+      "name": "post-link-script-package",
+      "platform": "osx",
+      "sha256": "d5de9900d0974709c9bff6bfea90d4867c7e17cca3e67695b525971eb2ac0ac4",
+      "size": 1319,
+      "subdir": "osx-64",
+      "timestamp": 1741859869722,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
