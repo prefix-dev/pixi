@@ -2220,14 +2220,15 @@
 <li>pixi <code>pypi-dependencies</code> tables of the default or a named feature (if a feature is specified)</li>
 </ul>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi remove [OPTIONS] &lt;SPECS&gt;...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi remove [OPTIONS] &lt;SPEC&gt;...
 </span></code></pre></div>
 <h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h2>
 <ul>
 <li>
 <dl>
-<dt><a id="arg-\<SPECS>" href="#arg-\<SPECS>"><code>&lt;SPECS&gt;</code></a></dt>
+<dt><a id="arg-\<SPEC>" href="#arg-\<SPEC>"><code>&lt;SPEC&gt;</code></a></dt>
 <dd>The dependencies as names, conda MatchSpecs or PyPi requirements
+<br>May be provided more than once.
 <br><strong>required</strong>: <code>true</code></dd>
 </dl>
 </li>
@@ -2242,8 +2243,9 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORMS&gt;</code></a></dt>
-<dd>The platform(s) for which the dependency should be modified</dd>
+<dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORM&gt;</code></a></dt>
+<dd>The platform(s) for which the dependency should be modified
+<br>May be provided more than once.</dd>
 </dl>
 </li>
 <li>
