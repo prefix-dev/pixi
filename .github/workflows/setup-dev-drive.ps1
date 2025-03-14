@@ -6,8 +6,6 @@
 # Sometimes using a larger runner is still more performant (e.g., when running
 # the test suite) and we need to create a dev drive. This script automatically
 # configures the appropriate drive.
-
-# Note we use `Get-PSDrive` is not sufficient because the drive letter is assigned.
 if (Test-Path "D:\") {
     Write-Output "Using existing drive at D:"
     $Drive = "D:"
