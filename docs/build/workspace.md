@@ -1,4 +1,4 @@
-# Tutorial: Integrating multiple packages in a workspace
+# Tutorial: Integrating Multiple Packages in a Workspace
 
 In this tutorial, we will show you how to integrate multiple Pixi packages into a single workspace.
 
@@ -6,7 +6,7 @@ In this tutorial, we will show you how to integrate multiple Pixi packages into 
     `pixi-build` is a preview feature, and will change until it is stabilized.
     Please keep that in mind when you use it for your projects.
 
-## Why is this useful?
+## Why is This Useful?
 
 The packages coming from conda channels are already built and ready to use.
 If you want to depend on a package you therefore typically get that package from such a channel.
@@ -14,7 +14,7 @@ However, there are situations where you want to depend on the source of a packag
 This is the case for example if you want to develop on multiple packages within the same repository.
 Or if you need the changes of an unreleased version of one of your dependencies.
 
-## Let's get started
+## Let's Get Started
 
 In this tutorial we will showcase how to develop two packages in one workspace.
 For that we will use the `rich_example` Python package developed in chapter [Building a Python package](python.md) and let it depend on the `python_binding` C++ package developed in chapter [Building a C++ package](cpp.md).

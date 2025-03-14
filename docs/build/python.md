@@ -1,4 +1,4 @@
-# Tutorial: Building a Python package
+# Tutorial: Building a Python Package
 
 In this tutorial, we will show you how to create a simple Python package with pixi.
 
@@ -6,7 +6,7 @@ In this tutorial, we will show you how to create a simple Python package with pi
     `pixi-build` is a preview feature, and will change until it is stabilized.
     Please keep that in mind when you use it for your projects.
 
-## Why is this useful?
+## Why is This Useful?
 
 Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
 Unlike PyPI, the conda ecosystem is cross-language and also offers packages written in Rust, R, C, C++ and many other languages.
@@ -18,7 +18,7 @@ By building a Python package with pixi, you can:
 
 In this tutorial we will focus on point 1.
 
-## Let's get started
+## Let's Get Started
 
 First, we create a simple Python package with a `pyproject.toml` and a single Python file.
 The package will be called `rich_example`, so we will create the following structure:
