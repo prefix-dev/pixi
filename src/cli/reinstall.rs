@@ -7,36 +7,38 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 
-/// Install an environment, both updating the lockfile and installing the environment.
+/// Re-install an environment, both updating the lockfile and re-installing the environment.
 ///
-/// This command installs an environment, if the lockfile is not up-to-date it will be updated.
+/// This command reinstalls an environment, if the lockfile is not up-to-date it will be updated.
+/// If packages are specified, only those packages will be reinstalled.
+/// Otherwise the whole environment will be reinstalled.
 ///
-/// `pixi install` only installs one environment at a time,
+/// `pixi reinstall` only re-installs one environment at a time,
 /// if you have multiple environments you can select the right one with the `--environment` flag.
-/// If you don't provide an environment, the `default` environment will be installed.
+/// If you don't provide an environment, the `default` environment will be re-installed.
 ///
-/// If you want to install all environments, you can use the `--all` flag.
-///
-/// Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`.
-/// These commands will automatically install the environment if it is not already installed.
-///
-/// You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
+/// If you want to re-install all environments, you can use the `--all` flag.
 #[derive(Parser, Debug)]
 pub struct Args {
+    /// Specifies the package that should be reinstalled.
+    /// If no package is given, the whole environment will be reinstalled.
+    #[arg(value_name = "PACKAGE")]
+    packages: Option<Vec<String>>,
+
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageConfig,
 
-    /// The environment to install
+    /// The environment to install.
     #[arg(long, short)]
     pub environment: Option<Vec<String>>,
 
     #[clap(flatten)]
     pub config: ConfigCli,
 
-    /// Install all environments
+    /// Install all environments.
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 }
@@ -64,6 +66,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         vec![workspace.default_environment().name().to_string()]
     };
 
+    let reinstall_packages = args
+        .packages
+        .map(|p| p.into_iter().collect())
+        .map(ReinstallPackages::Some)
+        .unwrap_or(ReinstallPackages::All);
+
     let mut installed_envs = Vec::with_capacity(envs.len());
     for env in envs {
         let environment = workspace.environment_from_name_or_env_var(Some(env))?;
@@ -77,7 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
-            ReinstallPackages::default(),
+            reinstall_packages.clone(),
         )
         .await?;
 
@@ -94,14 +102,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if installed_envs.len() == 1 {
         eprintln!(
-            "{}The {} environment has been installed{}.",
+            "{}The {} environment has been re-installed{}.",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs[0].fancy_display(),
             detached_envs_message
         );
     } else {
         eprintln!(
-            "{}The following environments have been installed: {}\t{}",
+            "{}The following environments have been re-installed: {}\t{}",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs.iter().map(|n| n.fancy_display()).join(", "),
             detached_envs_message

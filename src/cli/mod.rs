@@ -25,6 +25,7 @@ pub mod init;
 pub mod install;
 pub mod list;
 pub mod lock;
+pub mod reinstall;
 pub mod remove;
 pub mod run;
 pub mod search;
@@ -134,6 +135,7 @@ pub enum Command {
     Remove(remove::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
+    Reinstall(reinstall::Args),
     Update(update::Args),
     Upgrade(upgrade::Args),
     Lock(lock::Args),
@@ -270,6 +272,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Global(cmd) => global::execute(cmd).await,
         Command::Auth(cmd) => rattler::cli::auth::execute(cmd).await.into_diagnostic(),
         Command::Install(cmd) => install::execute(cmd).await,
+        Command::Reinstall(cmd) => reinstall::execute(cmd).await,
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::ShellHook(cmd) => shell_hook::execute(cmd).await,
         Command::Task(cmd) => task::execute(cmd).await,

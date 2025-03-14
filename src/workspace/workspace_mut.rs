@@ -25,7 +25,7 @@ use crate::{
     cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
     diff::LockFileDiff,
     environment::LockFileUsage,
-    lock_file::{LockFileDerivedData, UpdateContext, UpdateMode},
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
         grouped_environment::GroupedEnvironment, MatchSpecs, PypiDeps, SourceSpecs, UpdateDeps,
         NON_SEMVER_PACKAGES,
@@ -422,6 +422,7 @@ impl WorkspaceMut {
                 .prefix(
                     &self.workspace().default_environment(),
                     UpdateMode::Revalidate,
+                    ReinstallPackages::default(),
                 )
                 .await?;
         }

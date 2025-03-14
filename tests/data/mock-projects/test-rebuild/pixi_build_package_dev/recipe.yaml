@@ -1,0 +1,18 @@
+package:
+  name: pixi_build_package_dev
+  version: 0.1.0
+
+source:
+  path: .
+  use_gitignore: true
+
+build:
+  noarch: python
+  number: 0
+  script: |
+    pip install . --no-deps -vv
+requirements:
+  host:
+    - pip
+    - python
+    - hatchling

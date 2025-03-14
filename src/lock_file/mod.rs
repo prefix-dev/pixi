@@ -20,7 +20,7 @@ pub use satisfiability::{
     verify_environment_satisfiability, verify_platform_satisfiability, EnvironmentUnsat,
     PlatformUnsat,
 };
-pub(crate) use update::{LockFileDerivedData, UpdateContext};
+pub use update::{LockFileDerivedData, ReinstallPackages, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
 pub(crate) use utils::filter_lock_file;
 

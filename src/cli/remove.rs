@@ -2,7 +2,7 @@ use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
-    lock_file::UpdateMode,
+    lock_file::{ReinstallPackages, UpdateMode},
     DependencyType, UpdateLockFileOptions, WorkspaceLocator,
 };
 use clap::Parser;
@@ -124,6 +124,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 no_install: prefix_update_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
+            ReinstallPackages::default(),
         )
         .await?;
     }

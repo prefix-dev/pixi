@@ -6,7 +6,7 @@ use crate::common::{
 };
 use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
-use pixi::lock_file::UpdateMode;
+use pixi::lock_file::{ReinstallPackages, UpdateMode};
 use pixi::{
     build::BuildContext,
     cli::{
@@ -598,6 +598,7 @@ async fn test_old_lock_install() {
             no_install: false,
             ..Default::default()
         },
+        ReinstallPackages::default(),
     )
     .await
     .unwrap();
@@ -969,7 +970,7 @@ async fn test_multiple_prefix_update() {
         let pixi_records = pixi_records.clone();
         // tasks.push(conda_prefix_updater.update(pixi_records));
         let updater = conda_prefix_updater.clone();
-        sets.spawn(async move { updater.update(pixi_records).await.cloned() });
+        sets.spawn(async move { updater.update(pixi_records, None).await.cloned() });
     }
 
     let mut first_modified = None;

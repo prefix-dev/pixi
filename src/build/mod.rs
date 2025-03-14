@@ -257,6 +257,7 @@ impl BuildContext {
         build_reporter: Arc<dyn BuildReporter>,
         source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
+        rebuild: bool,
     ) -> Result<RepoDataRecord, BuildError> {
         let source_checkout = SourceCheckout {
             path: self
@@ -287,10 +288,12 @@ impl BuildContext {
             .await?;
 
         // Check if there are already cached builds
-        if let Some(build) = cached_build {
-            if let Some(record) = Self::cached_build_source_record(build, &source_checkout)? {
-                build_reporter.on_build_cached(build_id);
-                return Ok(record);
+        if !rebuild {
+            if let Some(build) = cached_build {
+                if let Some(record) = Self::cached_build_source_record(build, &source_checkout)? {
+                    build_reporter.on_build_cached(build_id);
+                    return Ok(record);
+                }
             }
         }
 
