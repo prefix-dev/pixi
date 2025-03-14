@@ -16,8 +16,8 @@ use std::str::FromStr;
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
-    /// Specifies the packages that are to be removed.
-    #[arg(num_args = 1.., required = true)]
+    /// Specifies the package that should be removed.
+    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
     packages: Vec<String>,
 
     /// Specifies the environment that the dependencies need to be removed from.

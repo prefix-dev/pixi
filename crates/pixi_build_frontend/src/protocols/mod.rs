@@ -114,6 +114,13 @@ impl ProtocolError {
 /// protocol. This protocol is generic over the manifest what are passed to the
 /// build backends. This means that, for rattler-build, the manifest is a
 /// recipe.yaml file, and for pixi it's a pixi.toml or a pyproject.toml file.
+///
+/// Using this JSON-RPC interface means we can evolve the backend and frontend
+/// tools as long as both tools can establish a shared protocol. The JSON-RPC
+/// protocol is engineered in such a way that this is possible. This allows a
+/// much newer frontend to still be able to interact with a very old backend
+/// which is important if you want to be able to use very old packages in the
+/// far future.
 #[derive(Debug)]
 pub struct JsonRPCBuildProtocol {
     /// The identifier of the backend.

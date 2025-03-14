@@ -19,6 +19,7 @@ pixi search [OPTIONS] <PACKAGE>
 ## Options
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
+<br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform to search for, defaults to current platform
 <br>**default**: `current_platform`

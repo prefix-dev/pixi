@@ -6,7 +6,7 @@ use chrono::Utc;
 use itertools::Itertools;
 use miette::Diagnostic;
 use miette::IntoDiagnostic;
-use pixi_build_frontend::{BackendOverride, Protocol, SetupRequest, ToolContext};
+use pixi_build_frontend::{BackendOverride, JsonRPCBuildProtocol, SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
@@ -324,13 +324,13 @@ impl BuildContext {
                         WorkDirKey {
                             source: source_checkout.clone(),
                             host_platform,
-                            build_backend: protocol.identifier().to_string(),
+                            build_backend: protocol.backend_identifier().to_string(),
                         }
                         .key(),
                     ),
                     variant_configuration: Some(self.resolve_variant(host_platform)),
                 },
-                build_reporter.as_conda_build_reporter(),
+                build_reporter.as_conda_build_reporter().as_ref(),
             )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
@@ -660,13 +660,13 @@ impl BuildContext {
                         WorkDirKey {
                             source: source.clone(),
                             host_platform,
-                            build_backend: protocol.identifier().to_string(),
+                            build_backend: protocol.backend_identifier().to_string(),
                         }
                         .key(),
                     ),
                     variant_configuration: Some(variant_configuration),
                 },
-                metadata_reporter.as_conda_metadata_reporter().clone(),
+                metadata_reporter.as_conda_metadata_reporter().as_ref(),
             )
             .await
             .map_err(|e| BuildError::BackendError(e.into()))?;
@@ -719,7 +719,7 @@ impl BuildContext {
         &self,
         source: &SourceCheckout,
         build_id: usize,
-    ) -> Result<Protocol, BuildError> {
+    ) -> Result<JsonRPCBuildProtocol, BuildError> {
         // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
         LazyLock::force(&RAYON_INITIALIZE);
 

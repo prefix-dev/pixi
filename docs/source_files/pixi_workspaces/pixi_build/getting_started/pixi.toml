@@ -53,3 +53,6 @@ rich = ">=13.9.4,<14"
 # --8<-- [end:run-dependencies]
 
 # --8<-- [end:full]
+
+[tasks]
+start = "rich-example-main"

@@ -33,6 +33,7 @@ pixi install [OPTIONS]
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to install
+<br>May be provided more than once.
 - <a id="arg---all" href="#arg---all">`--all (-a)`</a>
 :  Install all environments
 

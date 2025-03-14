@@ -14,6 +14,7 @@ pixi update [OPTIONS] [PACKAGES]...
 ## Arguments
 - <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
 :  The packages to update, space separated. If no packages are provided, all packages will be updated
+<br>May be provided more than once.
 
 ## Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
@@ -22,8 +23,10 @@ pixi update [OPTIONS] [PACKAGES]...
 :  Don't actually write the lockfile or update any environment
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENTS>`</a>
 :  The environments to update. If none is specified, all environments are updated
+<br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORMS>`</a>
 :  The platforms to update. If none is specified, all platforms are updated
+<br>May be provided more than once.
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
 
