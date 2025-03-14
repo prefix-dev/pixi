@@ -11,9 +11,10 @@
 
 ## Why the name `pixi`
 Starting with the name `prefix` we iterated until we had a name that was easy to pronounce, spell and remember.
-There also wasn't a cli tool yet using that name.
+There also wasn't a CLI tool yet using that name.
 Unlike `px`, `pex`, `pax`, etc.
-We think it sparks curiosity and fun, if you don't agree, I'm sorry, but you can always alias it to whatever you like.
+When in code mode we spell it like this `pixi`, otherwise we always start with an uppercase letter: Pixi.
+We think the name sparks curiosity and fun, if you don't agree, I'm sorry, but you can always alias it to whatever you like.
 
 === "Linux & macOS"
     ```shell
