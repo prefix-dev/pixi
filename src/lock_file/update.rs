@@ -406,6 +406,7 @@ impl<'p> LockFileDerivedData<'p> {
             ReinstallPackages::Some(p) => Some(
                 p.into_iter()
                     .filter_map(|p| PackageName::from_str(&p).ok())
+                    .filter(|n| pixi_records.iter().any(|r| r.name() == n))
                     .collect(),
             ),
             ReinstallPackages::All => Some(pixi_records.iter().map(|r| r.name().clone()).collect()),
