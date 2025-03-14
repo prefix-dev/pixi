@@ -16,11 +16,11 @@ python = ">=3.13.2,<3.14"
 pypi_package = { path = "pypi_package" }
 
 [feature.dev.dependencies]
-pixi_build_package = { path = "pixi_build_package" }
+pixi_build_package_dev = { path = "pixi_build_package_dev" }
 python = ">=3.13.2,<3.14"
 
 [feature.dev.pypi-dependencies]
-pypi_package = { path = "pypi_package" }
+pypi_package_dev = { path = "pypi_package_dev" }
 
 [environments]
 dev = { features = ["dev"], no-default-feature = true }
