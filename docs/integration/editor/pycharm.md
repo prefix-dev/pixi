@@ -64,7 +64,7 @@ You can now run your programs and tests as usual.
 
 ### Multiple environments
 
-If your workspace uses [multiple environments](../../environments/multi_environment.md) to tests different Python versions or dependencies, you can add multiple environments to PyCharm
+If your workspace uses [multiple environments](../../workspace/multi_environment.md) to tests different Python versions or dependencies, you can add multiple environments to PyCharm
 by specifying _Use existing environment_ in the _Add Python Interpreter_ dialog.
 
 ![Multiple Pixi environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/python-interpreters-multi-env-light.png#only-light)
@@ -94,7 +94,7 @@ Please attach the logs when [filing a bug report](https://github.com/pavelzw/pix
 ## Install as an optional dependency
 
 In some cases, you might only want to install `pixi-pycharm` on your local dev-machines but not in production.
-To achieve this, we can use [multiple environments](../../environments/multi_environment.md).
+To achieve this, we can use [multiple environments](../../workspace/multi_environment.md).
 
 ```toml
 [workspace]

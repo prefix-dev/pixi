@@ -13,7 +13,7 @@ However, you might wonder why we need to specify the platforms if Pixi could jus
 That is because every dependency in your environment is stored in the lockfile called `pixi.lock`.
 This ensures that even if you run your workspace on a different platform, the environment will contain exactly the dependencies that were solved on your machine.
 This is one of the core features that makes Pixi reproducible.
-Learn more about lock files in [this chapter](./environments/lockfile.md).
+Learn more about lock files in [this chapter](./workspace/lockfile.md).
 
 
 ## Multiple environments
