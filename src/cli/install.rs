@@ -94,14 +94,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if installed_envs.len() == 1 {
         eprintln!(
-            "{}The {} environment has been re-installed{}.",
+            "{}The {} environment has been installed{}.",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs[0].fancy_display(),
             detached_envs_message
         );
     } else {
         eprintln!(
-            "{}The following environments have been re-installed: {}\t{}",
+            "{}The following environments have been installed: {}\t{}",
             console::style(console::Emoji("✔ ", "")).green(),
             installed_envs.iter().map(|n| n.fancy_display()).join(", "),
             detached_envs_message
