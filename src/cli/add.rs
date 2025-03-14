@@ -108,6 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(args.config.clone());
 
     sanity_check_project(&workspace).await?;
+    workspace.pixi_minimum_version()?;
 
     let mut workspace = workspace.modify()?;
 

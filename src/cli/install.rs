@@ -47,6 +47,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config);
 
+    workspace.pixi_minimum_version()?;
+
     // Install either:
     //
     // 1. specific environments

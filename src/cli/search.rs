@@ -115,7 +115,7 @@ pub async fn execute_impl<W: Write>(
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {
-        Ok(project) => Some(project),
+        Ok(project) => Some(project).filter(|w| w.pixi_minimum_version().is_ok()),
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             debug!("No project file found, continuing without project configuration.",);
             None

@@ -69,6 +69,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config.clone());
 
+    workspace.pixi_minimum_version()?;
+
     let mut workspace = workspace.modify()?;
 
     // Ensure that the given feature exists

@@ -6,6 +6,7 @@ pub mod description;
 pub mod environment;
 pub mod export;
 pub mod name;
+pub mod pixi_minimum;
 pub mod platform;
 pub mod system_requirements;
 pub mod version;
@@ -20,6 +21,7 @@ pub enum Command {
     Export(export::Args),
     Name(name::Args),
     SystemRequirements(system_requirements::Args),
+    PixiMinimum(pixi_minimum::Args),
 }
 
 /// Modify the workspace configuration file through the command line.
@@ -42,6 +44,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Export(cmd) => export::execute(cmd).await?,
         Command::Name(args) => name::execute(args).await?,
         Command::SystemRequirements(args) => system_requirements::execute(args).await?,
+        Command::PixiMinimum(args) => pixi_minimum::execute(args).await?,
     };
     Ok(())
 }

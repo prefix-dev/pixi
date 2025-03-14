@@ -8,6 +8,7 @@ use std::{
 
 use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
+use rattler_conda_types::Version;
 use thiserror::Error;
 use toml_span::Deserialize;
 
@@ -165,6 +166,13 @@ pub enum ExplicitManifestError {
 
     #[error(transparent)]
     InvalidManifest(ProvenanceError),
+
+    #[error(transparent)]
+    ParseVersionError(#[from] rattler_conda_types::ParseVersionError),
+
+    /// The pixi version could not match the minimum requirement.
+    #[error("workspace requires pixi {}, but I am {}", .pixi_minimum, consts::PIXI_VERSION)]
+    SelfVersionMatchError { pixi_minimum: Version },
 }
 
 #[derive(Debug, Error, Diagnostic)]

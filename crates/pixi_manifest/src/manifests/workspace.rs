@@ -721,6 +721,27 @@ impl WorkspaceManifestMut<'_> {
 
         Ok(result)
     }
+
+    /// Set/Unset the minimum pixi version
+    ///
+    /// Both functions modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_pixi_minimum(&mut self, version: &str) -> miette::Result<()> {
+        // Update in both the manifest and the toml
+        self.workspace.workspace.pixi_minimum = Some(
+            Version::from_str(version)
+                .into_diagnostic()
+                .context("could not convert version to a valid project version")?,
+        );
+        self.document.set_pixi_minimum(version);
+        Ok(())
+    }
+    pub fn unset_pixi_minimum(&mut self) -> miette::Result<()> {
+        // Update in both the manifest and the toml
+        self.workspace.workspace.pixi_minimum = None;
+        self.document.unset_pixi_minimum();
+        Ok(())
+    }
 }
 
 // Handles the target missing error cases
@@ -2868,5 +2889,31 @@ bar = "*"
         channels = ['conda-forge']
         platforms = [ 'win-64']
         "###);
+    }
+
+    #[test]
+    fn test_pixi_minimum() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+        pixi-minimum = "0.1"
+        "#;
+        let manifest = parse_pixi_toml(contents).manifest;
+
+        assert_eq!(
+            manifest.workspace.pixi_minimum,
+            Version::from_str("0.1.0").ok()
+        );
+
+        let contents_no = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+        "#;
+        let manifest_no = parse_pixi_toml(contents_no).manifest;
+        assert_eq!(manifest_no.workspace.pixi_minimum, None);
     }
 }

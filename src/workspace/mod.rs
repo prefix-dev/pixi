@@ -15,6 +15,7 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -31,13 +32,13 @@ use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
     pypi::PyPiPackageName, AssociateProvenance, EnvironmentName, Environments,
-    HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
-    SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    ExplicitManifestError, HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests,
+    PackageManifest, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
@@ -612,6 +613,19 @@ impl Workspace {
                 true
             }
         })
+    }
+
+    /// Verify the pixi version requirement.
+    pub fn pixi_minimum_version(&self) -> Result<Option<&Version>, ExplicitManifestError> {
+        let req = self.workspace.value.workspace.pixi_minimum.as_ref();
+        if let Some(pixi_minimum) = req {
+            if Version::from_str(consts::PIXI_VERSION)? < *pixi_minimum {
+                return Err(ExplicitManifestError::SelfVersionMatchError {
+                    pixi_minimum: pixi_minimum.clone(),
+                });
+            }
+        }
+        Ok(req)
     }
 }
 
