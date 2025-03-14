@@ -1183,6 +1183,10 @@ impl Project {
         }
         Ok(state_changes)
     }
+
+    pub fn activate_proxy_envs(&self) {
+        self.config.activate_proxy_envs();
+    }
 }
 
 impl Repodata for Project {

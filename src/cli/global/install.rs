@@ -90,6 +90,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
+    project_original.activate_proxy_envs();
+
     let env_names = match &args.environment {
         Some(env_name) => Vec::from([env_name.clone()]),
         None => args
