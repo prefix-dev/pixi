@@ -20,8 +20,12 @@ use std::str::FromStr;
 #[derive(Debug, clap::Parser)]
 pub struct Args {
     /// The desired version (to downgrade or upgrade to).
-    #[clap(long)]
+    #[clap(long, conflicts_with = "force_latest")]
     version: Option<Version>,
+
+    /// Force upgrade to the latest version, ignore with the current version.
+    #[clap(long, default_value_t = false, conflicts_with = "version")]
+    force_latest: bool,
 }
 
 fn user_agent() -> String {
@@ -114,15 +118,24 @@ async fn latest_version() -> miette::Result<Version> {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Get the target version, without 'v' prefix
-    let target_version = match &args.version {
-        Some(version) => version,
-        None => &latest_version().await?,
+    let args_resolved = if args.force_latest {
+        Args {
+            version: args.version.clone(),
+            force_latest: true,
+        }
+    } else {
+        Args {
+            version: Some(latest_version().await?),
+            force_latest: false,
+        }
     };
+    let target_version = args_resolved.version.as_ref();
+
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
     // Stop here if the target version is the same as the current version
-    if *target_version == current_version {
+    if target_version.filter(|t| **t == current_version).is_some() {
         eprintln!(
             "{}pixi is already up-to-date (version {})",
             console::style(console::Emoji("✔ ", "")).green(),
@@ -131,13 +144,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    let action = if *target_version < current_version {
-        if args.version.is_none() {
+    let action = if target_version.filter(|t| **t < current_version).is_some() {
+        if args.version.as_ref().is_none() {
             // Ask if --version was not passed
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
                     "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
-                    current_version, target_version
+                    current_version, target_version.as_ref().expect("must be some(..)")
                 ))
                 .default(false)
                 .show_default(true)
@@ -152,24 +165,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         "updated"
     };
 
-    eprintln!(
-        "{}Pixi will be {} from {} to {}",
-        console::style(console::Emoji("✔ ", "")).green(),
-        action,
-        current_version,
-        target_version
-    );
+    if let Some(target_version) = target_version {
+        eprintln!(
+            "{}Pixi will be {} from {} to {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            action,
+            current_version,
+            target_version
+        );
+    } else {
+        eprintln!(
+            "{}Pixi will be force {} to latest",
+            console::style(console::Emoji("✔ ", "")).green(),
+            action
+        );
+    }
 
     // Get the name of the binary to download and install based on the current platform
     let archive_name = default_archive_name()
         .expect("Could not find the default archive name for the current platform");
 
-    let download_url = format!(
-        "{}/download/v{}/{}",
-        consts::RELEASES_URL,
-        target_version,
-        archive_name
-    );
+    let download_url = if let Some(target_version) = target_version {
+        format!(
+            "{}/download/v{}/{}",
+            consts::RELEASES_URL,
+            target_version,
+            archive_name
+        )
+    } else {
+        format!("{}/latest/download/{}", consts::RELEASES_URL, archive_name)
+    };
     // Create a temp file to download the archive
     let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
 
@@ -230,11 +255,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Replace the current binary with the new binary
     self_replace::self_replace(new_binary_path).into_diagnostic()?;
 
-    eprintln!(
-        "{}Pixi has been updated to version {}.",
-        console::style(console::Emoji("✔ ", "")).green(),
-        target_version
-    );
+    if let Some(target_version) = target_version {
+        eprintln!(
+            "{}Pixi has been updated to version {}.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            target_version
+        );
+    } else {
+        eprintln!(
+            "{}Pixi has been updated to latest release.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
+    }
 
     Ok(())
 }
