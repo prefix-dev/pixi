@@ -14,6 +14,7 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
 :  Specifies the package that should be reinstalled. If no package is given, the whole environment will be reinstalled
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -37,6 +38,7 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to install
+<br>May be provided more than once.
 - <a id="arg---all" href="#arg---all">`--all (-a)`</a>
 :  Install all environments
 
