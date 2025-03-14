@@ -5,7 +5,7 @@ $Volume = New-VHD -Path C:/pixi_dev_drive.vhdx -SizeBytes 20GB |
         Mount-VHD -Passthru |
         Initialize-Disk -Passthru |
         New-Partition -AssignDriveLetter -UseMaximumSize |
-        Format-Volume -FileSystem ReFS -Confirm:$false -Force
+        Format-Volume -FileSystem NTFS -Confirm:$false -Force
 
 Write-Output $Volume
 
