@@ -106,13 +106,9 @@ impl PtyProcess {
                     close(slave_fd)?;
                 }
 
-                // set echo off
+                // Set `echo` and `window_size` for the pty
                 set_echo(io::stdin(), opts.echo)?;
                 set_window_size(io::stdout().as_raw_fd(), window_size)?;
-
-                // let mut flags = termios::tcgetattr(io::stdin())?;
-                // flags.local_flags |= termios::LocalFlags::ECHO;
-                // termios::tcsetattr(io::stdin(), termios::SetArg::TCSANOW, &flags)?;
 
                 let _ = command.exec();
                 Err(nix::Error::last())
