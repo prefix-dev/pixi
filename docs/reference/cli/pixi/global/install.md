@@ -33,7 +33,7 @@ pixi global install [OPTIONS] <PACKAGE>...
 <br>May be provided more than once.
 - <a id="arg---force-reinstall" href="#arg---force-reinstall">`--force-reinstall`</a>
 :  Specifies that the environment should be reinstalled
-- <a id="arg---no-shortcut" href="#arg---no-shortcut">`--no-shortcut`</a>
+- <a id="arg---no-shortcuts" href="#arg---no-shortcuts">`--no-shortcuts`</a>
 :  Specifies that no shortcuts should be created for the installed packages
 
 ## Config Options

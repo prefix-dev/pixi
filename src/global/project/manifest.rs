@@ -488,9 +488,65 @@ impl Manifest {
         *shortcuts_array = existing_shortcuts.iter().collect();
 
         tracing::debug!(
-            "Added channel {} for environment {env_name} in toml document",
-            console::style(shortcut.as_normalized()).green()
+            "Added shortcut {} for environment {} in toml document",
+            console::style(shortcut.as_normalized()).green(),
+            env_name.fancy_display()
         );
+        Ok(())
+    }
+
+    /// Removes shortcut from the manifest of any environment
+    pub fn remove_shortcut(
+        &mut self,
+        shortcut: &PackageName,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+        }
+        let environment = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("[envs.{env_name}] needs to exist"))?;
+
+        // Remove shortcut from parsed environment
+        if let Some(shortcuts) = environment.shortcuts.as_mut() {
+            if !shortcuts.contains(shortcut) {
+                miette::bail!("The shortcut {} doesn't exist", shortcut.as_normalized());
+            }
+
+            shortcuts.swap_remove(shortcut);
+            tracing::debug!(
+                "Removed shortcut '{}' from toml document",
+                shortcut.as_normalized()
+            );
+        }
+
+        // Remove from the document
+        let env_key = format!("envs.{env_name}");
+        let shortcuts_array = self
+            .document
+            .get_mut_toml_array(&env_key, "shortcuts")?
+            .ok_or_else(|| miette::miette!("No shortcuts found for environment {}", env_name))?;
+
+        let shortcut_str = shortcut.as_normalized();
+        // First find the index without holding onto the iterator
+        let maybe_index = shortcuts_array
+            .iter()
+            .position(|item| item.as_str() == Some(shortcut_str));
+
+        if let Some(index) = maybe_index {
+            shortcuts_array.remove(index);
+            tracing::debug!("Removed shortcut '{}' from toml document", shortcut_str);
+        } else {
+            return Err(miette::miette!(
+                "The shortcut '{}' doesn't exist",
+                shortcut_str
+            ));
+        }
+
         Ok(())
     }
 
