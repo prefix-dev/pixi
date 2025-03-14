@@ -8,12 +8,12 @@ Adds dependencies to an environment
 
 ## Usage
 ```
-pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGES>...
+pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
-:  Specifies the packages that are to be added to the environment
+- <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
+:  Specifies the package that should be added to the environment
 <br>May be provided more than once.
 <br>**required**: `true`
 

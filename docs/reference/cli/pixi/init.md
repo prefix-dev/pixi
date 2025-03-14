@@ -18,7 +18,7 @@ pixi init [OPTIONS] [PATH]
 
 ## Options
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
-:  Channels to use in the workspace
+:  Channel to use in the workspace
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  Platforms that the workspace supports

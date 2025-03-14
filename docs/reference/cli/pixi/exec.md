@@ -17,8 +17,8 @@ pixi exec [OPTIONS] [COMMAND]...
 <br>May be provided more than once.
 
 ## Options
-- <a id="arg---spec" href="#arg---spec">`--spec (-s) <SPECS>`</a>
-:  Matchspecs of packages to install. If this is not provided, the package is guessed from the command
+- <a id="arg---spec" href="#arg---spec">`--spec (-s) <SPEC>`</a>
+:  Matchspecs of package to install. If this is not provided, the package is guessed from the command
 <br>May be provided more than once.
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
