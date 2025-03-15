@@ -40,6 +40,7 @@ pub struct WorkspaceLocator {
     with_closest_package: bool,
     emit_warnings: bool,
     consider_environment: bool,
+    ignore_pixi_version_check: bool,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -118,6 +119,15 @@ impl WorkspaceLocator {
         }
     }
 
+    /// When the current version conflicts with the workspace requirement,
+    /// whether to generate an error.
+    pub fn with_ignore_pixi_version_check(self, ignore_pixi_version_check: bool) -> Self {
+        Self {
+            ignore_pixi_version_check,
+            ..self
+        }
+    }
+
     /// Called to locate the workspace or error out if none could be located.
     pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
         // Determine the search root
@@ -191,7 +201,13 @@ impl WorkspaceLocator {
             );
         }
 
-        Ok(Workspace::from_manifests(discovered_manifests))
+        let workspace = Workspace::from_manifests(discovered_manifests);
+
+        if !self.ignore_pixi_version_check {
+            workspace.verify_current_pixi_meets_requirement()?;
+        }
+
+        Ok(workspace)
     }
 
     /// Apply any environment overrides to a potentially discovered workspace.

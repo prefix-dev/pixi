@@ -715,4 +715,22 @@ impl ManifestDocument {
             table["workspace"]["version"] = value(version);
         }
     }
+
+    /// Unsets/Sets the pixi minimum version of the project
+    pub fn set_requires_pixi(&mut self, version: &str) {
+        let table = self.as_table_mut();
+        if table.contains_key("project") {
+            table["project"]["requires-pixi"] = value(version);
+        } else {
+            table["workspace"]["requires-pixi"] = value(version);
+        }
+    }
+    pub fn unset_requires_pixi(&mut self) {
+        let table = self.as_table_mut();
+        if table.contains_key("project") {
+            table["project"]["requires-pixi"] = Item::None;
+        } else {
+            table["workspace"]["requires-pixi"] = Item::None;
+        }
+    }
 }

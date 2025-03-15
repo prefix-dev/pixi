@@ -1,10 +1,13 @@
 pub mod get;
 pub mod set;
+pub mod unset;
+pub mod verify;
 
-use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
+use crate::cli::cli_config::WorkspaceConfig;
+use crate::WorkspaceLocator;
 use clap::Parser;
 
-/// Commands to manage workspace description.
+/// Commands to manage the pixi minimum version requirement.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
@@ -17,16 +20,17 @@ pub struct Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// Get the workspace description.
-    ///
-    /// Example:
-    /// `pixi workspace description get`
+    /// Get the pixi minimum version requirement.
     Get,
-    /// Set the workspace description.
+    /// Set the pixi minimum version requirement.
     ///
     /// Example:
-    /// `pixi workspace description set "My awesome workspace"`
+    /// `pixi workspace pixi-minimum set 0.42`
     Set(set::Args),
+    /// Remove the pixi minimum version requirement.
+    Unset,
+    /// Verify the pixi minimum version requirement.
+    Verify,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -38,6 +42,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Command::Get => get::execute(workspace).await?,
         Command::Set(args) => set::execute(workspace, args).await?,
+        Command::Unset => unset::execute(workspace).await?,
+        Command::Verify => verify::execute(workspace).await?,
     }
 
     Ok(())
