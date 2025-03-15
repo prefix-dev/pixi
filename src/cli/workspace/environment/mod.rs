@@ -36,6 +36,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_emit_warnings(
             !matches!(args.command, Command::Add(_)) && !matches!(args.command, Command::Remove(_)),
         )
+        .with_ignore_pixi_version_check(true)
         .locate()?;
 
     match args.command {

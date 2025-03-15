@@ -372,8 +372,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
-        .ok()
-        .filter(|w| w.pixi_minimum_version().is_ok());
+        .ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = workspace.as_ref().map(|p| p.pixi_dir());

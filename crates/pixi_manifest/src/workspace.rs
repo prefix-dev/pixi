@@ -68,7 +68,7 @@ pub struct Workspace {
     pub build_variants: Targets<Option<HashMap<String, Vec<String>>>>,
 
     /// pixi self requirement
-    pub pixi_minimum: Option<Version>,
+    pub requires_pixi: Option<Version>,
 }
 
 #[derive(

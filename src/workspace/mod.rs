@@ -616,16 +616,15 @@ impl Workspace {
     }
 
     /// Verify the pixi version requirement.
-    pub fn pixi_minimum_version(&self) -> Result<Option<&Version>, ExplicitManifestError> {
-        let req = self.workspace.value.workspace.pixi_minimum.as_ref();
-        if let Some(pixi_minimum) = req {
-            if Version::from_str(consts::PIXI_VERSION)? < *pixi_minimum {
+    pub fn verify_current_pixi_meets_requirement(&self) -> Result<(), ExplicitManifestError> {
+        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi {
+            if Version::from_str(consts::PIXI_VERSION)? < *requires_pixi {
                 return Err(ExplicitManifestError::SelfVersionMatchError {
-                    pixi_minimum: pixi_minimum.clone(),
+                    requires_pixi: requires_pixi.clone(),
                 });
             }
         }
-        Ok(req)
+        Ok(())
     }
 }
 

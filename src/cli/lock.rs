@@ -26,8 +26,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    workspace.pixi_minimum_version()?;
-
     // Save the original lockfile to compare with the new one.
     let original_lock_file = workspace.load_lock_file().await?;
     let new_lock_file = workspace

@@ -171,8 +171,8 @@ pub enum ExplicitManifestError {
     ParseVersionError(#[from] rattler_conda_types::ParseVersionError),
 
     /// The pixi version could not match the minimum requirement.
-    #[error("workspace requires pixi {}, but I am {}", .pixi_minimum, consts::PIXI_VERSION)]
-    SelfVersionMatchError { pixi_minimum: Version },
+    #[error("workspace requires pixi {}, but I am {}", .requires_pixi, consts::PIXI_VERSION)]
+    SelfVersionMatchError { requires_pixi: Version },
 }
 
 #[derive(Debug, Error, Diagnostic)]

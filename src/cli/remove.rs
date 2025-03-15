@@ -54,8 +54,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .modify()?;
     let dependency_type = dependency_config.dependency_type();
 
-    workspace.workspace().pixi_minimum_version()?;
-
     // Prevent removing Python if PyPI dependencies exist
     if let DependencyType::CondaDependency(_) = dependency_type {
         for name in dependency_config.specs()?.keys() {

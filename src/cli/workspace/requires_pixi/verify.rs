@@ -7,7 +7,7 @@ pub async fn execute(workspace: Workspace) -> miette::Result<()> {
     //   1: failed to parse manifest
     //   2: failed to parse command line arguments
     //   3: current pixi version is old
-    match workspace.pixi_minimum_version() {
+    match workspace.verify_current_pixi_meets_requirement() {
         Ok(_) => Ok(()),
         Err(ExplicitManifestError::SelfVersionMatchError { .. }) => std::process::exit(3),
         Err(e) => Err(e.into()),

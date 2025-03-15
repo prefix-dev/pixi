@@ -49,7 +49,7 @@ pub struct TomlWorkspace {
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
-    pub pixi_minimum: Option<Version>,
+    pub requires_pixi: Option<Version>,
 
     pub span: Span,
 }
@@ -141,7 +141,7 @@ impl TomlWorkspace {
                     .map(|(k, v)| (k, v.build_variants))
                     .collect(),
             ),
-            pixi_minimum: self.pixi_minimum,
+            requires_pixi: self.requires_pixi,
         })
         .with_warnings(warnings))
     }
@@ -194,8 +194,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let build_variants = th
             .optional::<TomlHashMap<_, _>>("build-variants")
             .map(TomlHashMap::into_inner);
-        let pixi_minimum = th
-            .optional::<TomlFromStr<_>>("pixi-minimum")
+        let requires_pixi = th
+            .optional::<TomlFromStr<_>>("requires-pixi")
             .map(TomlFromStr::into_inner);
 
         th.finalize(None)?;
@@ -220,7 +220,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             preview,
             target: target.unwrap_or_default(),
             build_variants,
-            pixi_minimum,
+            requires_pixi,
             span: value.span,
         })
     }

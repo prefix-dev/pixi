@@ -153,8 +153,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(config);
 
-    workspace.pixi_minimum_version()?;
-
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(

@@ -717,20 +717,20 @@ impl ManifestDocument {
     }
 
     /// Unsets/Sets the pixi minimum version of the project
-    pub fn set_pixi_minimum(&mut self, version: &str) {
+    pub fn set_requires_pixi(&mut self, version: &str) {
         let table = self.as_table_mut();
         if table.contains_key("project") {
-            table["project"]["pixi-minimum"] = value(version);
+            table["project"]["requires-pixi"] = value(version);
         } else {
-            table["workspace"]["pixi-minimum"] = value(version);
+            table["workspace"]["requires-pixi"] = value(version);
         }
     }
-    pub fn unset_pixi_minimum(&mut self) {
+    pub fn unset_requires_pixi(&mut self) {
         let table = self.as_table_mut();
         if table.contains_key("project") {
-            table["project"]["pixi-minimum"] = Item::None;
+            table["project"]["requires-pixi"] = Item::None;
         } else {
-            table["workspace"]["pixi-minimum"] = Item::None;
+            table["workspace"]["requires-pixi"] = Item::None;
         }
     }
 }

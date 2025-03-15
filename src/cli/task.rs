@@ -287,7 +287,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
-    workspace.pixi_minimum_version()?;
     match args.operation {
         Operation::Add(args) => add_task(workspace.modify()?, args).await,
         Operation::Remove(args) => remove_tasks(workspace.modify()?, args).await,

@@ -726,20 +726,20 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// Both functions modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_pixi_minimum(&mut self, version: &str) -> miette::Result<()> {
+    pub fn set_requires_pixi(&mut self, version: &str) -> miette::Result<()> {
         // Update in both the manifest and the toml
-        self.workspace.workspace.pixi_minimum = Some(
+        self.workspace.workspace.requires_pixi = Some(
             Version::from_str(version)
                 .into_diagnostic()
                 .context("could not convert version to a valid project version")?,
         );
-        self.document.set_pixi_minimum(version);
+        self.document.set_requires_pixi(version);
         Ok(())
     }
-    pub fn unset_pixi_minimum(&mut self) -> miette::Result<()> {
+    pub fn unset_requires_pixi(&mut self) -> miette::Result<()> {
         // Update in both the manifest and the toml
-        self.workspace.workspace.pixi_minimum = None;
-        self.document.unset_pixi_minimum();
+        self.workspace.workspace.requires_pixi = None;
+        self.document.unset_requires_pixi();
         Ok(())
     }
 }
@@ -2892,18 +2892,18 @@ bar = "*"
     }
 
     #[test]
-    fn test_pixi_minimum() {
+    fn test_requires_pixi() {
         let contents = r#"
         [project]
         name = "foo"
         channels = []
         platforms = []
-        pixi-minimum = "0.1"
+        requires-pixi = "0.1"
         "#;
         let manifest = parse_pixi_toml(contents).manifest;
 
         assert_eq!(
-            manifest.workspace.pixi_minimum,
+            manifest.workspace.requires_pixi,
             Version::from_str("0.1.0").ok()
         );
 
@@ -2914,6 +2914,6 @@ bar = "*"
         platforms = []
         "#;
         let manifest_no = parse_pixi_toml(contents_no).manifest;
-        assert_eq!(manifest_no.workspace.pixi_minimum, None);
+        assert_eq!(manifest_no.workspace.requires_pixi, None);
     }
 }

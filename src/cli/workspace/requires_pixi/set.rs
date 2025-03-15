@@ -15,20 +15,20 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     // Set the new workspace name
     workspace
         .manifest()
-        .set_pixi_minimum(args.version.as_str())?;
+        .set_requires_pixi(args.version.as_str())?;
 
     // Save workspace
     let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     eprintln!(
-        "{}Updated workspace pixi-minimum to '{}'.",
+        "{}Updated workspace requires-pixi to '{}'.",
         console::style(console::Emoji("✔ ", "")).green(),
         workspace
             .workspace
             .value
             .workspace
-            .pixi_minimum
+            .requires_pixi
             .expect("should be set a valid version")
     );
 

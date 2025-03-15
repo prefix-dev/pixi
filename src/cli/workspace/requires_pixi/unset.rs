@@ -5,14 +5,14 @@ pub async fn execute(workspace: Workspace) -> miette::Result<()> {
     let mut workspace = workspace.modify()?;
 
     // Set the new workspace name
-    workspace.manifest().unset_pixi_minimum()?;
+    workspace.manifest().unset_requires_pixi()?;
 
     // Save workspace
     workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     eprintln!(
-        "{}Remove workspace pixi-minimum.",
+        "{}Remove workspace requires-pixi.",
         console::style(console::Emoji("✔ ", "")).green()
     );
 

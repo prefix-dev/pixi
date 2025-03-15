@@ -131,8 +131,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(config);
 
-    workspace.pixi_minimum_version()?;
-
     let specs = UpdateSpecs::from(args.specs);
 
     // If the user specified an environment name, check to see if it exists.

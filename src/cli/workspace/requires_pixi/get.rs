@@ -7,7 +7,7 @@ pub async fn execute(workspace: Workspace) -> miette::Result<()> {
             .workspace
             .value
             .workspace
-            .pixi_minimum
+            .requires_pixi
             .unwrap_or(rattler_conda_types::Version::major(0))
     );
     Ok(())
