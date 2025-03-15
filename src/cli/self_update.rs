@@ -137,7 +137,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
     // Stop here if the target version is the same as the current version
-    if target_version.is_some() && *target_version.expect("checked") == current_version {
+    if target_version.is_some_and(|t| *t == current_version) {
         eprintln!(
             "{}pixi is already up-to-date (version {})",
             console::style(console::Emoji("✔ ", "")).green(),
@@ -146,14 +146,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    let action = if target_version.is_some() && *target_version.expect("checked") < current_version
-    {
-        if is_resolved {
+    let action = match target_version {
+        Some(target_version) if *target_version < current_version && is_resolved => {
             // Ask if --version was not passed
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
                     "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
-                    current_version, target_version.expect("must be some(..)")
+                    current_version, target_version
                 ))
                 .default(false)
                 .show_default(true)
@@ -162,10 +161,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if !confirmation {
                 return Ok(());
             };
-        };
-        "downgraded"
-    } else {
-        "updated"
+            "downgraded"
+        }
+        Some(target_version) if *target_version < current_version && !is_resolved => "downgraded",
+        _ => "upgrade",
     };
 
     if let Some(target_version) = target_version {
