@@ -153,7 +153,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
                     "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
-                    current_version, target_version.as_ref().expect("must be some(..)")
+                    current_version, target_version.expect("must be some(..)")
                 ))
                 .default(false)
                 .show_default(true)
