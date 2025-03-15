@@ -117,25 +117,27 @@ async fn latest_version() -> miette::Result<Version> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Get the target version, without 'v' prefix
-    let args_resolved = if args.force_latest {
-        Args {
-            version: args.version.clone(),
-            force_latest: true,
-        }
+    let mut is_resolved = false;
+    let target_version = if args.force_latest {
+        None
     } else {
-        Args {
-            version: Some(latest_version().await?),
-            force_latest: false,
+        // Get the target version, without 'v' prefix
+        match args.version {
+            Some(version) => Some(version),
+            None => {
+                is_resolved = true;
+                Some(latest_version().await?)
+            }
         }
     };
-    let target_version = args_resolved.version.as_ref();
+
+    let target_version = target_version.as_ref();
 
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
     // Stop here if the target version is the same as the current version
-    if target_version.filter(|t| **t == current_version).is_some() {
+    if target_version.is_some() && *target_version.expect("checked") == current_version {
         eprintln!(
             "{}pixi is already up-to-date (version {})",
             console::style(console::Emoji("✔ ", "")).green(),
@@ -144,8 +146,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    let action = if target_version.filter(|t| **t < current_version).is_some() {
-        if args.version.as_ref().is_none() {
+    let action = if target_version.is_some() && *target_version.expect("checked") < current_version
+    {
+        if is_resolved {
             // Ask if --version was not passed
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
