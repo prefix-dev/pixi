@@ -41,6 +41,7 @@ pub struct WorkspaceLocator {
     emit_warnings: bool,
     consider_environment: bool,
     ignore_pixi_version_check: bool,
+    only_parse_requires_pixi: bool,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -77,6 +78,10 @@ pub enum WorkspaceLocatorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ExplicitManifestError(#[from] ExplicitManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TomlDirect(#[from] Box<WithSourceCode<TomlError, String>>),
 }
 
 impl WorkspaceLocator {
@@ -128,6 +133,14 @@ impl WorkspaceLocator {
         }
     }
 
+    /// Whether to only parse requires-pixi key, ignore all known and unknown tables and keys
+    pub fn with_only_parse_requires_pixi(self, only_parse_requires_pixi: bool) -> Self {
+        Self {
+            only_parse_requires_pixi,
+            ..self
+        }
+    }
+
     /// Called to locate the workspace or error out if none could be located.
     pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
         // Determine the search root
@@ -146,6 +159,7 @@ impl WorkspaceLocator {
         // Discover the workspace manifest for the current path.
         let workspace_manifests = match pixi_manifest::WorkspaceDiscoverer::new(discovery_start)
             .with_closest_package(self.with_closest_package)
+            .with_only_parse_requires_pixi(self.only_parse_requires_pixi)
             .discover()
         {
             Ok(manifests) => manifests,
@@ -158,6 +172,9 @@ impl WorkspaceLocator {
             }
             Err(WorkspaceDiscoveryError::Canonicalize(source, path)) => {
                 return Err(WorkspaceLocatorError::Canonicalize { path, source })
+            }
+            Err(WorkspaceDiscoveryError::TomlDirect(err)) => {
+                return Err(WorkspaceLocatorError::TomlDirect(err))
             }
         };
 

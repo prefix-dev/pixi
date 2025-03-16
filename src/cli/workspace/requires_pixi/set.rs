@@ -15,7 +15,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     // Set the new workspace name
     workspace
         .manifest()
-        .set_requires_pixi(args.version.as_str())?;
+        .set_requires_pixi(Some(args.version.as_str()))?;
 
     // Save workspace
     let workspace = workspace.save().await.into_diagnostic()?;

@@ -716,21 +716,28 @@ impl ManifestDocument {
         }
     }
 
-    /// Unsets/Sets the pixi minimum version of the project
-    pub fn set_requires_pixi(&mut self, version: &str) {
-        let table = self.as_table_mut();
-        if table.contains_key("project") {
-            table["project"]["requires-pixi"] = value(version);
+    /// Unsets/Sets the pixi version requirement of the project
+    pub fn set_requires_pixi(&mut self, version: Option<&str>) -> Result<(), TomlError> {
+        // For both 'pyproject.toml' and 'pixi.toml' manifest,
+        // try and remove the dependency from pixi native tables
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(table_name.to_string().as_str())?;
+
+        if let Some(version) = version {
+            if let Some(item) = table.get_mut("requires-pixi") {
+                *item = value(version);
+            } else {
+                table.insert("requires-pixi", value(version));
+            }
         } else {
-            table["workspace"]["requires-pixi"] = value(version);
+            table.remove("requires-pixi");
         }
-    }
-    pub fn unset_requires_pixi(&mut self) {
-        let table = self.as_table_mut();
-        if table.contains_key("project") {
-            table["project"]["requires-pixi"] = Item::None;
-        } else {
-            table["workspace"]["requires-pixi"] = Item::None;
-        }
+
+        Ok(())
     }
 }
