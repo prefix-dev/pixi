@@ -34,16 +34,29 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace_locator = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_ignore_pixi_version_check(true)
-        .locate()?;
+        .with_ignore_pixi_version_check(true);
 
     match args.command {
-        Command::Get => get::execute(workspace).await?,
-        Command::Set(args) => set::execute(workspace, args).await?,
-        Command::Unset => unset::execute(workspace).await?,
-        Command::Verify => verify::execute(workspace).await?,
+        Command::Get => {
+            get::execute(
+                workspace_locator
+                    .with_only_parse_requires_pixi(true)
+                    .locate()?,
+            )
+            .await?
+        }
+        Command::Set(args) => set::execute(workspace_locator.locate()?, args).await?,
+        Command::Unset => unset::execute(workspace_locator.locate()?).await?,
+        Command::Verify => {
+            verify::execute(
+                workspace_locator
+                    .with_only_parse_requires_pixi(true)
+                    .locate()?,
+            )
+            .await?
+        }
     }
 
     Ok(())

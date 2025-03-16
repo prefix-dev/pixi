@@ -5,7 +5,7 @@ pub async fn execute(workspace: Workspace) -> miette::Result<()> {
     let mut workspace = workspace.modify()?;
 
     // Set the new workspace name
-    workspace.manifest().unset_requires_pixi()?;
+    workspace.manifest().set_requires_pixi(None)?;
 
     // Save workspace
     workspace.save().await.into_diagnostic()?;

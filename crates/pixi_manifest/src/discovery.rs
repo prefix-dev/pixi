@@ -35,6 +35,9 @@ pub struct WorkspaceDiscoverer {
 
     /// Also discover the package closest to the current directory.
     discover_package: bool,
+
+    /// Whether to only parse requires-pixi key, ignore all known and unknown tables and keys
+    only_parse_requires_pixi: bool,
 }
 
 /// A workspace discovered by calling [`WorkspaceDiscoverer::discover`].
@@ -190,6 +193,10 @@ pub enum WorkspaceDiscoveryError {
 
     #[error("cannot canonicalize path '{1}' while searching for a manifest.")]
     Canonicalize(#[source] std::io::Error, PathBuf),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TomlDirect(#[from] Box<WithSourceCode<TomlError, String>>),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -232,6 +239,7 @@ impl WorkspaceDiscoverer {
         Self {
             start,
             discover_package: false,
+            only_parse_requires_pixi: false,
         }
     }
 
@@ -244,6 +252,14 @@ impl WorkspaceDiscoverer {
     pub fn with_closest_package(self, discover_package: bool) -> Self {
         Self {
             discover_package,
+            ..self
+        }
+    }
+
+    /// When set to true, only parse requires-pixi key, ignore all known and unknown tables and keys
+    pub fn with_only_parse_requires_pixi(self, only_parse_requires_pixi: bool) -> Self {
+        Self {
+            only_parse_requires_pixi,
             ..self
         }
     }
@@ -360,34 +376,50 @@ impl WorkspaceDiscoverer {
                     }
 
                     // Parse as a pixi.toml manifest
-                    let manifest = match TomlManifest::deserialize(&mut toml) {
-                        Ok(manifest) => manifest,
-                        Err(err) => {
-                            return Err(Box::new(WithSourceCode {
-                                error: TomlError::from(err),
-                                source,
-                            })
-                            .into())
+                    if self.only_parse_requires_pixi {
+                        let requires_pixi = toml
+                            .pointer("/workspace/requires-pixi")
+                            .or_else(|| toml.pointer("/project/requires-pixi"))
+                            .map(|v| v.as_str())
+                            .unwrap_or(None);
+                        let lean_workspace_manifest =
+                            WorkspaceManifest::lean_for_requires_pixi(requires_pixi);
+                        match lean_workspace_manifest {
+                            Ok(lean_workspace_manifest) => {
+                                Ok((lean_workspace_manifest, None, Vec::new()))
+                            }
+                            Err(err) => return Err(err.into()),
                         }
-                    };
-
-                    if manifest.has_workspace() {
-                        // Parse the manifest as a workspace manifest if it contains a workspace
-                        manifest.into_workspace_manifest(
-                            ExternalWorkspaceProperties::default(),
-                            Some(manifest_dir),
-                        )
                     } else {
-                        if self.discover_package {
-                            // Otherwise store the manifest for later to parse as the closest
-                            // package manifest.
-                            closest_package_manifest = closest_package_manifest.or(Some((
-                                EitherManifest::Pixi(manifest),
-                                source,
-                                provenance,
-                            )));
+                        let manifest = match TomlManifest::deserialize(&mut toml) {
+                            Ok(manifest) => manifest,
+                            Err(err) => {
+                                return Err(Box::new(WithSourceCode {
+                                    error: TomlError::from(err),
+                                    source,
+                                })
+                                .into())
+                            }
+                        };
+
+                        if manifest.has_workspace() {
+                            // Parse the manifest as a workspace manifest if it contains a workspace
+                            manifest.into_workspace_manifest(
+                                ExternalWorkspaceProperties::default(),
+                                Some(manifest_dir),
+                            )
+                        } else {
+                            if self.discover_package {
+                                // Otherwise store the manifest for later to parse as the closest
+                                // package manifest.
+                                closest_package_manifest = closest_package_manifest.or(Some((
+                                    EitherManifest::Pixi(manifest),
+                                    source,
+                                    provenance,
+                                )));
+                            }
+                            continue;
                         }
-                        continue;
                     }
                 }
                 ManifestKind::Pyproject => {
@@ -399,32 +431,49 @@ impl WorkspaceDiscoverer {
                         continue;
                     }
 
-                    let manifest = match PyProjectManifest::deserialize(&mut toml) {
-                        Ok(manifest) => manifest,
-                        Err(err) => {
-                            return Err(Box::new(WithSourceCode {
-                                error: TomlError::from(err),
-                                source,
-                            })
-                            .into())
+                    // Parse as a pixi.toml manifest
+                    if self.only_parse_requires_pixi {
+                        let requires_pixi = toml
+                            .pointer("/tool/pixi/workspace/requires-pixi")
+                            .or_else(|| toml.pointer("/tool/pixi/project/requires-pixi"))
+                            .map(|v| v.as_str())
+                            .unwrap_or(None);
+                        let lean_workspace_manifest =
+                            WorkspaceManifest::lean_for_requires_pixi(requires_pixi);
+                        match lean_workspace_manifest {
+                            Ok(lean_workspace_manifest) => {
+                                Ok((lean_workspace_manifest, None, Vec::new()))
+                            }
+                            Err(err) => return Err(err.into()),
                         }
-                    };
-
-                    if manifest.has_pixi_workspace() {
-                        // Parse the manifest as a workspace manifest if it
-                        // contains a workspace
-                        manifest.into_workspace_manifest(Some(manifest_dir))
                     } else {
-                        if self.discover_package {
-                            // Otherwise store the manifest for later to parse as the closest
-                            // package manifest.
-                            closest_package_manifest = closest_package_manifest.or(Some((
-                                EitherManifest::Pyproject(manifest),
-                                source,
-                                provenance,
-                            )));
+                        let manifest = match PyProjectManifest::deserialize(&mut toml) {
+                            Ok(manifest) => manifest,
+                            Err(err) => {
+                                return Err(Box::new(WithSourceCode {
+                                    error: TomlError::from(err),
+                                    source,
+                                })
+                                .into())
+                            }
+                        };
+
+                        if manifest.has_pixi_workspace() {
+                            // Parse the manifest as a workspace manifest if it
+                            // contains a workspace
+                            manifest.into_workspace_manifest(Some(manifest_dir))
+                        } else {
+                            if self.discover_package {
+                                // Otherwise store the manifest for later to parse as the closest
+                                // package manifest.
+                                closest_package_manifest = closest_package_manifest.or(Some((
+                                    EitherManifest::Pyproject(manifest),
+                                    source,
+                                    provenance,
+                                )));
+                            }
+                            continue;
                         }
-                        continue;
                     }
                 }
             };
