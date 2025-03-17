@@ -52,7 +52,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: tj-actions/changed-files@v45
+      - uses: step-security/changed-files@v45
         id: changed
         with:
           files_yaml: |
