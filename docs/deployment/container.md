@@ -1,4 +1,4 @@
-# Bringing Pixi to production
+# Bringing Pixi to Production
 
 One way to bring a Pixi package into production is to containerize it using tools like Docker or Podman.
 
@@ -19,7 +19,7 @@ There are different tags for different base images available:
 !!!tip "All tags"
     For all tags, take a look at the [build script](https://github.com/prefix-dev/pixi-docker/blob/main/.github/workflows/build.yml).
 
-### Example usage
+### Example Usage
 
 The following example uses the Pixi docker image as a base image for a multi-stage build.
 It also makes use of `pixi shell-hook` to not rely on Pixi being installed in the production container.

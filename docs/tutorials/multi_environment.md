@@ -1,8 +1,8 @@
-# Tutorial: Using multiple environments
+# Tutorial: Using Multiple Environments
 
 In this tutorial we will show you how to use multiple environments in one Pixi workspace.
 
-## Why is this useful?
+## Why Is This Useful?
 
 When developing a workspace you often need different tools, libraries or test environments.
 With Pixi you can define multiple environments in one workspace and switch between them easily.
@@ -11,6 +11,7 @@ Setting up different environments for these different use cases can be a hassle,
 
 ## Glossary
 This tutorial possibly uses some new terms, here is a quick overview:
+
 #### **Feature**
 A feature defines a part of an environment, but are not useful without being part of an environment.
 You can define multiple features in one workspace.
@@ -26,7 +27,7 @@ Defining environments is done by adding them to the `[environments]` table in th
 Instead of specifying `[feature.<name>.dependencies]`, one can populate `[dependencies]` directly.
 These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.
 
-## Let's get started
+## Let's Get Started
 
 We'll simply start with a new workspace, you can skip this step if you already have a Pixi workspace.
 
