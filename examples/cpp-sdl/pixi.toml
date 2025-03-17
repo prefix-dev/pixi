@@ -14,7 +14,7 @@ depends-on = ["build"]
 sdl2 = "2.26.5.*"
 
 [feature.build.dependencies]
-compilers = ">=1.9.0, <2"
+cxx-compiler = ">=1.9.0, <2"
 ninja = ">=1.12.1,<2"
 
 [feature.build.tasks.configure]
