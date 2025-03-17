@@ -11,6 +11,7 @@ cmd = ".build/bin/sdl_example"
 depends-on = ["build"]
 
 [dependencies]
+cmake = ">=3.31.6,<4"
 sdl2 = "2.26.5.*"
 
 [feature.build.dependencies]
