@@ -14,6 +14,7 @@ pixi global shortcut add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
 :  The package name to add the shortcuts from
+<br>May be provided more than once.
 
 ## Options
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
