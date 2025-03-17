@@ -138,7 +138,7 @@ impl PtySession {
             // Check if we have waited long enough for the pattern
             if pattern_start.elapsed() > pattern_timeout && !write_stdout {
                 io::stdout().write_all(
-                    "WARNING: Did not detect successful shell initialization within 1 second\n\r"
+                    "WARNING: Did not detect successful shell initialization within 1 second\n\rPlease check on https://pixi.sh/advanced/pixi_shell/#issues-with-pixi-shell for more tips\n\r"
                         .as_bytes(),
                 )?;
                 io::stdout().write_all(&self.rolling_buffer)?;
