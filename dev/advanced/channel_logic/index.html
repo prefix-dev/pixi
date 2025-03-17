@@ -1788,7 +1788,7 @@
         <li class="md-nav__item">
   <a href="#channel-specific-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
-      Channel specific dependencies
+      Channel Specific Dependencies
     </span>
   </a>
   
@@ -2155,7 +2155,7 @@
         <li class="md-nav__item">
   <a href="#channel-specific-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
-      Channel specific dependencies
+      Channel Specific Dependencies
     </span>
   </a>
   
@@ -2190,7 +2190,7 @@
 <p>The actual code regarding this is in the <a href="https://github.com/conda/rattler/blob/02e68c9539c6009cc1370fbf46dc69ca5361d12d/crates/rattler_solve/src/resolvo/mod.rs"><code>rattler_solve</code></a> crate.
 This might however be hard to read.
 Therefore, this document will continue with simplified flow charts.</p>
-<h2 id="channel-specific-dependencies">Channel specific dependencies<a class="headerlink" href="#channel-specific-dependencies" title="Permanent link">#</a></h2>
+<h2 id="channel-specific-dependencies">Channel Specific Dependencies<a class="headerlink" href="#channel-specific-dependencies" title="Permanent link">#</a></h2>
 <p>When a user defines a channel per dependency, the solver needs to know the other channels are unusable for this dependency.
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;my-channel&quot;</span><span class="p">]</span>
@@ -2208,7 +2208,7 @@ In the <code>packagex</code> example, the solver will understand that the packag
     E --&gt;|Yes| B
     E --&gt;|No| F[End]
     D --&gt; E</code></pre>
-<h1 id="channel-priority">Channel priority<a class="headerlink" href="#channel-priority" title="Permanent link">#</a></h1>
+<h1 id="channel-priority">Channel Priority<a class="headerlink" href="#channel-priority" title="Permanent link">#</a></h1>
 <p>Channel priority is dictated by the order in the <code>workspace.channels</code> array, where the first channel is the highest priority.
 For instance:
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[workspace]</span>
@@ -2234,7 +2234,7 @@ This diagram explains the logic:
     I --&gt;|Yes| B</code></pre></p>
 <p>This method ensures the solver only adds a package to the candidates if it's found in the highest priority channel available.
 If you have 10 channels and the package is found in the 5th channel it will exclude the next 5 channels from the candidates if they also contain the package.</p>
-<h1 id="use-case-pytorch-and-nvidia-with-conda-forge">Use case: pytorch and nvidia with conda-forge<a class="headerlink" href="#use-case-pytorch-and-nvidia-with-conda-forge" title="Permanent link">#</a></h1>
+<h1 id="use-case-pytorch-and-nvidia-with-conda-forge">Use Case: pytorch and nvidia with conda-forge<a class="headerlink" href="#use-case-pytorch-and-nvidia-with-conda-forge" title="Permanent link">#</a></h1>
 <p>A common use case is to use <code>pytorch</code> with <code>nvidia</code> drivers, while also needing the <code>conda-forge</code> channel for the main dependencies.
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;nvidia/label/cuda-11.8.0&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">]</span>
@@ -2255,7 +2255,7 @@ Like the <code>cuda-cudart</code> package, which will now only be retrieved from
 <p>We don't define the <code>pytorch</code> channel before <code>conda-forge</code> because we want to get as much as possible from the <code>conda-forge</code> as the pytorch channel is not always shipping the best versions of all packages.</p>
 <p>For example, it also ships the <code>ffmpeg</code> package, but only an old version which doesn't work with the newer pytorch versions.
 Thus breaking the installation if we would skip the <code>conda-forge</code> channel for <code>ffmpeg</code> with the priority logic.</p>
-<h2 id="force-a-specific-channel-priority">Force a specific channel priority<a class="headerlink" href="#force-a-specific-channel-priority" title="Permanent link">#</a></h2>
+<h2 id="force-a-specific-channel-priority">Force a Specific Channel Priority<a class="headerlink" href="#force-a-specific-channel-priority" title="Permanent link">#</a></h2>
 <p>If you want to force a specific priority for a channel, you can use the <code>priority</code> (int) key in the channel definition.
 The higher the number, the higher the priority.
 Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.</p>

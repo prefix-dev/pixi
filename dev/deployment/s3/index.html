@@ -953,7 +953,7 @@
         <li class="md-nav__item">
   <a href="#using-pixis-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Using pixi's configuration
+      Using Pixi's Configuration
     </span>
   </a>
   
@@ -962,7 +962,7 @@
         <li class="md-nav__item">
   <a href="#public-s3-buckets" class="md-nav__link">
     <span class="md-ellipsis">
-      Public S3 buckets
+      Public S3 Buckets
     </span>
   </a>
   
@@ -971,11 +971,11 @@
         <li class="md-nav__item">
   <a href="#s3-compatible-storage" class="md-nav__link">
     <span class="md-ellipsis">
-      S3-compatible storage
+      S3-Compatible Storage
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="S3-compatible storage">
+    <nav class="md-nav" aria-label="S3-Compatible Storage">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1050,7 +1050,7 @@
           <li class="md-nav__item">
   <a href="#re-indexing-s3-buckets-after-uploading-new-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      Re-indexing S3 buckets after uploading new packages
+      Re-indexing S3 buckets After Uploading new Packages
     </span>
   </a>
   
@@ -2275,7 +2275,7 @@
         <li class="md-nav__item">
   <a href="#using-pixis-configuration" class="md-nav__link">
     <span class="md-ellipsis">
-      Using pixi's configuration
+      Using Pixi's Configuration
     </span>
   </a>
   
@@ -2284,7 +2284,7 @@
         <li class="md-nav__item">
   <a href="#public-s3-buckets" class="md-nav__link">
     <span class="md-ellipsis">
-      Public S3 buckets
+      Public S3 Buckets
     </span>
   </a>
   
@@ -2293,11 +2293,11 @@
         <li class="md-nav__item">
   <a href="#s3-compatible-storage" class="md-nav__link">
     <span class="md-ellipsis">
-      S3-compatible storage
+      S3-Compatible Storage
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="S3-compatible storage">
+    <nav class="md-nav" aria-label="S3-Compatible Storage">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2372,7 +2372,7 @@
           <li class="md-nav__item">
   <a href="#re-indexing-s3-buckets-after-uploading-new-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      Re-indexing S3 buckets after uploading new packages
+      Re-indexing S3 buckets After Uploading new Packages
     </span>
   </a>
   
@@ -2407,7 +2407,7 @@
   
 
 
-<h1 id="use-s3-with-pixi">Use S3 with pixi<a class="headerlink" href="#use-s3-with-pixi" title="Permanent link">#</a></h1>
+<h1 id="use-s3-with-pixi">Use S3 with Pixi<a class="headerlink" href="#use-s3-with-pixi" title="Permanent link">#</a></h1>
 <p>If you want to use S3 object storage to fetch your packages, you can use the <code>s3://</code> protocol as a channel.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># ...</span>
@@ -2477,7 +2477,7 @@ You can either use the AWS credentials from the conventional locations (by not s
 </span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">        </span><span class="c1"># AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set by aws-actions/configure-aws-credentials</span>
 </span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.3</span>
 </span></code></pre></div>
-<h2 id="using-pixis-configuration">Using pixi's configuration<a class="headerlink" href="#using-pixis-configuration" title="Permanent link">#</a></h2>
+<h2 id="using-pixis-configuration">Using Pixi's Configuration<a class="headerlink" href="#using-pixis-configuration" title="Permanent link">#</a></h2>
 <p>You can specify the <code>workspace.s3-options</code> in your <code>pixi.toml</code> file.
 This might be useful when you want to use a custom S3-compatible host and not AWS's configuration.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[workspace.s3-options.my-bucket]</span>
@@ -2523,7 +2523,7 @@ This might be useful when you want to use a custom S3-compatible host and not AW
 </span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">          </span><span class="nt">auth-s3-session-token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ steps.aws.outputs.aws-session-token }}</span>
 </span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">          </span><span class="nt">auth-host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3://my-s3-bucket</span>
 </span></code></pre></div>
-<h2 id="public-s3-buckets">Public S3 buckets<a class="headerlink" href="#public-s3-buckets" title="Permanent link">#</a></h2>
+<h2 id="public-s3-buckets">Public S3 Buckets<a class="headerlink" href="#public-s3-buckets" title="Permanent link">#</a></h2>
 <p>Public buckets that don't need authentication can be used by just specifying the endpoint as a regular <code>https</code> URL.
 For example, on AWS, you might have a bucket that is publicly accessible via <code>https://my-public-bucket.s3.eu-central-1.amazonaws.com</code>.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[workspace]</span>
@@ -2553,7 +2553,7 @@ Here is an example policy for AWS S3:</p>
 </span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>Cloudflare R2 also supports public buckets through a Cloudflare-managed <code>r2.dev</code> subdomain or a custom domain under your control, see <a href="https://developers.cloudflare.com/r2/buckets/public-buckets/">here</a>.</p>
-<h2 id="s3-compatible-storage">S3-compatible storage<a class="headerlink" href="#s3-compatible-storage" title="Permanent link">#</a></h2>
+<h2 id="s3-compatible-storage">S3-Compatible Storage<a class="headerlink" href="#s3-compatible-storage" title="Permanent link">#</a></h2>
 <p>Many other cloud providers offer S3-compatible storage APIs.
 You can use them with Pixi by specifying the <code>s3-options</code> in your manifest file.</p>
 <h3 id="minio">MinIO<a class="headerlink" href="#minio" title="Permanent link">#</a></h3>
@@ -2591,7 +2591,7 @@ You can use them with Pixi by specifying the <code>s3-options</code> in your man
 <h2 id="uploading-to-s3">Uploading to S3<a class="headerlink" href="#uploading-to-s3" title="Permanent link">#</a></h2>
 <p>You can upload to S3 using <code>rattler-build upload s3</code>.
 For more information, see <a href="https://rattler.build/latest/authentication_and_upload/#s3">rattler-build's documentation</a>.</p>
-<h3 id="re-indexing-s3-buckets-after-uploading-new-packages">Re-indexing S3 buckets after uploading new packages<a class="headerlink" href="#re-indexing-s3-buckets-after-uploading-new-packages" title="Permanent link">#</a></h3>
+<h3 id="re-indexing-s3-buckets-after-uploading-new-packages">Re-indexing S3 buckets After Uploading new Packages<a class="headerlink" href="#re-indexing-s3-buckets-after-uploading-new-packages" title="Permanent link">#</a></h3>
 <p>Every time you upload new packages to your package repository, the <code>repodata.json</code> file needs to be updated.
 This is done automatically for conda package servers like anaconda.org or prefix.dev.
 For S3 buckets, on the other hand, we need to do this manually since an S3 bucket is only a storage system and not a package server.</p>

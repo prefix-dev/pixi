@@ -2268,7 +2268,7 @@ Typical examples of host dependencies are:</p>
 <li>Base interpreters: a Python package would list <code>python</code> here and an R package would list <code>mro-base</code> or <code>r-base</code>.</li>
 <li>Libraries your package links against like <code>openssl</code>, <code>rapidjson</code>, or <code>xtensor</code>.</li>
 </ul>
-<h4 id="python-code">Python code<a class="headerlink" href="#python-code" title="Permanent link">#</a></h4>
+<h4 id="python-code">Python Code<a class="headerlink" href="#python-code" title="Permanent link">#</a></h4>
 <p>Because of the way building currently works, dependencies like <code>hatchling</code>,<code>pip</code>,<code>uv</code> etc. are host dependencies.
 Otherwise, it would use the wrong python prefix during the build process.</p>
 <p>This is more of a technical limitation, and we are looking into ways to make this less of a hassle.
@@ -2279,7 +2279,7 @@ You need to use, something like this in your manifest file:</p>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">hatchling</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">uv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
-<h4 id="native-code">Native code<a class="headerlink" href="#native-code" title="Permanent link">#</a></h4>
+<h4 id="native-code">Native Code<a class="headerlink" href="#native-code" title="Permanent link">#</a></h4>
 <p>When cross-compiling, you might need to specify host dependencies that should have the <em>target</em> machine architecture, and are used during the build process.
 When linking a library, for example.
 Let's recap an explanation that can be found here <a href="https://ruvi-d.medium.com/a-master-guide-to-linux-cross-compiling-b894bf909386">A Master Guide To Linux Cross-Compiling</a></p>
@@ -2288,7 +2288,7 @@ Let's recap an explanation that can be found here <a href="https://ruvi-d.medium
 <li><em>Host machine</em>: where the built code runs.</li>
 <li><em>Target machine</em>: where the binaries spit out by the built code runs.</li>
 </ul>
-<p>Lets say we are using a Linux PC (linux-64) to cross compile a CMake application called <code>Awesome</code> to run on a Linux ARM target machine (linux-aarch64).
+<p>Let's say we are using a Linux PC (linux-64) to cross compile a CMake application called <code>Awesome</code> to run on a Linux ARM target machine (linux-aarch64).
 We would get the following table:</p>
 <table>
 <thead>
@@ -2331,7 +2331,7 @@ As the machine running <code>Awesome</code> will have a different host architect
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">[host-dependencies]</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">sdl2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
-<h4 id="run-exports">Run-exports<a class="headerlink" href="#run-exports" title="Permanent link">#</a></h4>
+<h4 id="run-exports">Run-Exports<a class="headerlink" href="#run-exports" title="Permanent link">#</a></h4>
 <p>Conda packages, can define <code>run-exports</code>, that are dependencies that when specified in the <code>host-dependencies</code> section, will be implicitly be added to the <code>run-dependencies</code> section.
 This is useful to avoid having to specify the same dependencies in both sections.
 As most packages on conda-forge will have these <code>run-exports</code> defined.

@@ -736,7 +736,7 @@
         <li class="md-nav__item">
   <a href="#why-is-this-useful" class="md-nav__link">
     <span class="md-ellipsis">
-      Why is this useful?
+      Why is This Useful?
     </span>
   </a>
   
@@ -745,7 +745,7 @@
         <li class="md-nav__item">
   <a href="#lets-get-started" class="md-nav__link">
     <span class="md-ellipsis">
-      Let's get started
+      Let's Get Started
     </span>
   </a>
   
@@ -2175,7 +2175,7 @@
         <li class="md-nav__item">
   <a href="#why-is-this-useful" class="md-nav__link">
     <span class="md-ellipsis">
-      Why is this useful?
+      Why is This Useful?
     </span>
   </a>
   
@@ -2184,7 +2184,7 @@
         <li class="md-nav__item">
   <a href="#lets-get-started" class="md-nav__link">
     <span class="md-ellipsis">
-      Let's get started
+      Let's Get Started
     </span>
   </a>
   
@@ -2223,7 +2223,7 @@
   
 
 
-<h1 id="tutorial-adding-variants">Tutorial: Adding variants<a class="headerlink" href="#tutorial-adding-variants" title="Permanent link">#</a></h1>
+<h1 id="tutorial-adding-variants">Tutorial: Adding Variants<a class="headerlink" href="#tutorial-adding-variants" title="Permanent link">#</a></h1>
 <p>In this tutorial, we will show you how to use variants in order to build a Pixi package against different versions of a dependency.
 Some might call this functionality, build matrix, build configurations or parameterized builds, in the conda ecosystem this is referred to as a variant.</p>
 <div class="admonition warning">
@@ -2231,13 +2231,13 @@ Some might call this functionality, build matrix, build configurations or parame
 <p><code>pixi-build</code> is a preview feature, and will change until it is stabilized.
 Please keep that in mind when you use it for your projects.</p>
 </div>
-<h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
+<h2 id="why-is-this-useful">Why is This Useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
 <p>When we depend on a Pixi package, the dependency versions of the package itself are already set.
 For example, in the <a href="../cpp/">C++ tutorial</a> the <code>python_bindings</code> package we built depended on Python 3.12.
 Pixi would report a version conflict, if we'd add use both Python 3.11 and <code>python_bindings</code> to our workspace.
 By using variants, we can add a set of allowed versions for a specific dependency.
 Pixi will then resolve the package with all the different variants.</p>
-<h2 id="lets-get-started">Let's get started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
+<h2 id="lets-get-started">Let's Get Started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
 <p>In this tutorial we will continue with the result of the <a href="../workspace/">workspace tutorial</a> so we can test it against multiple Python versions.
 As a reminder, we ended up with a top-level <code>pixi.toml</code> containing the workspace and the Python package <code>rich_example</code>.
 Our workspace then depended on <code>rich_example</code> and <code>python_bindings</code>.</p>

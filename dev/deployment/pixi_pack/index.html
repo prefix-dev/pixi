@@ -878,7 +878,7 @@
         <li class="md-nav__item">
   <a href="#unpacking-an-environment" class="md-nav__link">
     <span class="md-ellipsis">
-      Unpacking an environment
+      Unpacking an Environment
     </span>
   </a>
   
@@ -887,7 +887,7 @@
         <li class="md-nav__item">
   <a href="#cross-platform-packs" class="md-nav__link">
     <span class="md-ellipsis">
-      Cross-platform packs
+      Cross-platform Packs
     </span>
   </a>
   
@@ -896,7 +896,7 @@
         <li class="md-nav__item">
   <a href="#inject-additional-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      Inject additional packages
+      Inject Additional Packages
     </span>
   </a>
   
@@ -905,7 +905,7 @@
         <li class="md-nav__item">
   <a href="#cache-downloaded-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      Cache downloaded packages
+      Cache Downloaded Packages
     </span>
   </a>
   
@@ -914,7 +914,7 @@
         <li class="md-nav__item">
   <a href="#unpacking-without-pixi-pack" class="md-nav__link">
     <span class="md-ellipsis">
-      Unpacking without pixi-pack
+      Unpacking Without pixi-pack
     </span>
   </a>
   
@@ -2191,7 +2191,7 @@
         <li class="md-nav__item">
   <a href="#unpacking-an-environment" class="md-nav__link">
     <span class="md-ellipsis">
-      Unpacking an environment
+      Unpacking an Environment
     </span>
   </a>
   
@@ -2200,7 +2200,7 @@
         <li class="md-nav__item">
   <a href="#cross-platform-packs" class="md-nav__link">
     <span class="md-ellipsis">
-      Cross-platform packs
+      Cross-platform Packs
     </span>
   </a>
   
@@ -2209,7 +2209,7 @@
         <li class="md-nav__item">
   <a href="#inject-additional-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      Inject additional packages
+      Inject Additional Packages
     </span>
   </a>
   
@@ -2218,7 +2218,7 @@
         <li class="md-nav__item">
   <a href="#cache-downloaded-packages" class="md-nav__link">
     <span class="md-ellipsis">
-      Cache downloaded packages
+      Cache Downloaded Packages
     </span>
   </a>
   
@@ -2227,7 +2227,7 @@
         <li class="md-nav__item">
   <a href="#unpacking-without-pixi-pack" class="md-nav__link">
     <span class="md-ellipsis">
-      Unpacking without pixi-pack
+      Unpacking Without pixi-pack
     </span>
   </a>
   
@@ -2288,21 +2288,21 @@
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>|         ├── ...
 </span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>|         └── repodata.json
 </span></code></pre></div>
-<h3 id="unpacking-an-environment">Unpacking an environment<a class="headerlink" href="#unpacking-an-environment" title="Permanent link">#</a></h3>
+<h3 id="unpacking-an-environment">Unpacking an Environment<a class="headerlink" href="#unpacking-an-environment" title="Permanent link">#</a></h3>
 <p>With <code>pixi-pack unpack environment.tar</code>, you can unpack the environment on your target system. This will create a new conda environment in <code>./env</code> that contains all packages specified in your <code>pixi.toml</code>. It also creates an <code>activate.sh</code> (or <code>activate.bat</code> on Windows) file that lets you activate the environment without needing to have <code>conda</code> or <code>micromamba</code> installed.</p>
-<h3 id="cross-platform-packs">Cross-platform packs<a class="headerlink" href="#cross-platform-packs" title="Permanent link">#</a></h3>
+<h3 id="cross-platform-packs">Cross-platform Packs<a class="headerlink" href="#cross-platform-packs" title="Permanent link">#</a></h3>
 <p>Since <code>pixi-pack</code> just downloads the <code>.conda</code> and <code>.tar.bz2</code> files from the conda repositories, you can trivially create packs for different platforms.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--platform<span class="w"> </span>win-64
 </span></code></pre></div>
 <div class="admonition note">
 <p>You can only unpack a pack on a system that has the same platform as the pack was created for.</p>
 </div>
-<h3 id="inject-additional-packages">Inject additional packages<a class="headerlink" href="#inject-additional-packages" title="Permanent link">#</a></h3>
+<h3 id="inject-additional-packages">Inject Additional Packages<a class="headerlink" href="#inject-additional-packages" title="Permanent link">#</a></h3>
 <p>You can inject additional packages into the environment that are not specified in <code>pixi.lock</code> by using the <code>--inject</code> flag:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>--manifest-pack<span class="w"> </span>pixi.toml
 </span></code></pre></div>
 <p>This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use <code>pixi.lock</code> from the workspace.</p>
-<h3 id="cache-downloaded-packages">Cache downloaded packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
+<h3 id="cache-downloaded-packages">Cache Downloaded Packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
 <p>You can cache downloaded packages to speed up subsequent pack operations by using the <code>--use-cache</code> flag:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
 </span></code></pre></div>
@@ -2314,7 +2314,7 @@
 <li>Operating in environments with limited bandwidth</li>
 <li>Running CI/CD pipelines where package caching can significantly improve build times</li>
 </ul>
-<h3 id="unpacking-without-pixi-pack">Unpacking without pixi-pack<a class="headerlink" href="#unpacking-without-pixi-pack" title="Permanent link">#</a></h3>
+<h3 id="unpacking-without-pixi-pack">Unpacking Without pixi-pack<a class="headerlink" href="#unpacking-without-pixi-pack" title="Permanent link">#</a></h3>
 <p>If you don't have <code>pixi-pack</code> available on your target system, you can still install the environment if you have <code>conda</code> or <code>micromamba</code> available.
 Just unarchive the <code>environment.tar</code>, then you have a local channel on your system where all necessary packages are available.
 Next to this local channel, you will find an <code>environment.yml</code> file that contains the environment specification.
