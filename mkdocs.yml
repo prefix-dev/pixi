@@ -157,7 +157,7 @@ nav:
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli/pixi.md
   - Misc:
-      - Changelog: misc/CHANGELOG.md
+      - Changelog: CHANGELOG.md
       - Pixi Vision: misc/vision.md
       - Packaging Pixi: misc/packaging.md
       - Community: misc/Community.md
@@ -200,7 +200,6 @@ plugins:
         "advanced/s3.md": "deployment/s3.md"
         "advanced/third_party.md": "integration/third_party/starship.md"
         "reference/cli.md": "reference/cli/pixi.md"
-        "CHANGELOG.md": "misc/CHANGELOG.md"
         "vision.md": "misc/vision.md"
         "packaging.md": "misc/packaging.md"
         "Community.md": "misc/Community.md"
