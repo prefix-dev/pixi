@@ -32,9 +32,9 @@ pub struct Args {
     #[clap(num_args = 1.., value_hint = ValueHint::CommandWithArguments)]
     pub command: Vec<String>,
 
-    /// Matchspecs of packages to install. If this is not provided, the package
-    /// is guessed from the command.
-    #[clap(long = "spec", short = 's')]
+    /// Matchspecs of package to install.
+    /// If this is not provided, the package is guessed from the command.
+    #[clap(long = "spec", short = 's', value_name = "SPEC")]
     pub specs: Vec<MatchSpec>,
 
     #[clap(flatten)]

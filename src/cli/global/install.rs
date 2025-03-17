@@ -30,8 +30,8 @@ use pixi_config::{self, Config, ConfigCli};
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
-    /// Specifies the packages that are to be installed.
-    #[arg(num_args = 1.., required = true)]
+    /// Specifies the package that should be installed.
+    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
     packages: Vec<String>,
 
     /// The channels to consider as a name or a url.

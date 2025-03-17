@@ -14,6 +14,7 @@ pixi global uninstall [OPTIONS] <ENVIRONMENT>...
 ## Arguments
 - <a id="arg-<ENVIRONMENT>" href="#arg-<ENVIRONMENT>">`<ENVIRONMENT>`</a>
 :  Specifies the environments that are to be removed
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Config Options

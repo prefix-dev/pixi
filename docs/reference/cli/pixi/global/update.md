@@ -14,6 +14,7 @@ pixi global update [OPTIONS] [ENVIRONMENTS]...
 ## Arguments
 - <a id="arg-<ENVIRONMENTS>" href="#arg-<ENVIRONMENTS>">`<ENVIRONMENTS>`</a>
 :  Specifies the environments that are to be updated
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>

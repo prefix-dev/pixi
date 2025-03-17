@@ -15,8 +15,8 @@ use rattler_conda_types::MatchSpec;
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
-    /// Specifies the packages that are to be added to the environment.
-    #[arg(num_args = 1.., required = true)]
+    /// Specifies the package that should be added to the environment.
+    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
     packages: Vec<String>,
 
     /// Specifies the environment that the dependencies need to be added to.

@@ -34,6 +34,7 @@ This shift towards projects offers a more organized and efficient way to manage 
     ```
 
 ## Environment vs Workspace
+
 `Conda` and `mamba` focus on managing environments, while `pixi` emphasizes projects.
 In `pixi`, a workspace is a folder containing a [manifest](../reference/pixi_manifest.md)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
 
@@ -41,6 +42,7 @@ This workspace-centric approach allows for easy sharing and collaboration, as th
 It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../workspace/multi_environment.md))
 
 ## Global environments
+
 `conda` installs all environments in one global location.
 When this is important to you for filesystem reasons, you can use the [detached-environments](../reference/pixi_configuration.md#detached-environments) feature of pixi.
 ```shell
@@ -65,6 +67,7 @@ bat pixi.toml
 
 
 ## Automated switching
+
 With `pixi` you can import `environment.yml` files into a Pixi workspace. (See [import](../reference/cli/pixi/init.md))
 ```shell
 pixi init --import environment.yml
@@ -79,6 +82,7 @@ This will create a new workspace with the dependencies from the `environment.yml
     Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export.md).
 
 ## Troubleshooting
+
 Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:
 
 - Dependency `is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'`

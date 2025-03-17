@@ -8,12 +8,13 @@ Remove platform(s) from the workspace file and updates the lockfile
 
 ## Usage
 ```
-pixi workspace platform remove [OPTIONS] <PLATFORMS>...
+pixi workspace platform remove [OPTIONS] <PLATFORM>...
 ```
 
 ## Arguments
-- <a id="arg-<PLATFORMS>" href="#arg-<PLATFORMS>">`<PLATFORMS>`</a>
-:  The platform name(s) to remove
+- <a id="arg-<PLATFORM>" href="#arg-<PLATFORM>">`<PLATFORM>`</a>
+:  The platform name to remove
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options

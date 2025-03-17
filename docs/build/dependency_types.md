@@ -45,7 +45,7 @@ Typical examples of host dependencies are:
 - Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
 - Libraries your package links against like `openssl`, `rapidjson`, or `xtensor`.
 
-#### Python code
+#### Python Code
 Because of the way building currently works, dependencies like `hatchling`,`pip`,`uv` etc. are host dependencies.
 Otherwise, it would use the wrong python prefix during the build process.
 
@@ -61,7 +61,7 @@ hatchling = "*"
 uv = "*"
 ```
 
-#### Native code
+#### Native Code
 When cross-compiling, you might need to specify host dependencies that should have the *target* machine architecture, and are used during the build process.
 When linking a library, for example.
 Let's recap an explanation that can be found here [A Master Guide To Linux Cross-Compiling](https://ruvi-d.medium.com/a-master-guide-to-linux-cross-compiling-b894bf909386)
@@ -70,7 +70,7 @@ Let's recap an explanation that can be found here [A Master Guide To Linux Cross
 - *Host machine*: where the built code runs.
 - *Target machine*: where the binaries spit out by the built code runs.
 
-Lets say we are using a Linux PC (linux-64) to cross compile a CMake application called `Awesome` to run on a Linux ARM target machine (linux-aarch64).
+Let's say we are using a Linux PC (linux-64) to cross compile a CMake application called `Awesome` to run on a Linux ARM target machine (linux-aarch64).
 We would get the following table:
 
 | Component |    Type     | Build  |  Host  | Target |
@@ -90,7 +90,7 @@ Giving you something like this in your manifest file:
 sdl2 = "*"
 ```
 
-#### Run-exports
+#### Run-Exports
 
 Conda packages, can define `run-exports`, that are dependencies that when specified in the `host-dependencies` section, will be implicitly be added to the `run-dependencies` section.
 This is useful to avoid having to specify the same dependencies in both sections.

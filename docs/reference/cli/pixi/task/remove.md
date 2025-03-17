@@ -8,12 +8,13 @@ Remove a command from the workspace
 
 ## Usage
 ```
-pixi task remove [OPTIONS] [NAMES]...
+pixi task remove [OPTIONS] [TASK_NAME]...
 ```
 
 ## Arguments
-- <a id="arg-<NAMES>" href="#arg-<NAMES>">`<NAMES>`</a>
-:  Task names to remove
+- <a id="arg-<TASK_NAME>" href="#arg-<TASK_NAME>">`<TASK_NAME>`</a>
+:  Task name to remove
+<br>May be provided more than once.
 
 ## Options
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>

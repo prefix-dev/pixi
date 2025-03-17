@@ -17,6 +17,7 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 <br>**required**: `true`
 - <a id="arg-<DEPENDS_ON>" href="#arg-<DEPENDS_ON>">`<DEPENDS_ON>`</a>
 :  Depends on these tasks to execute
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options

@@ -14,6 +14,7 @@ pixi run [OPTIONS] [TASK]...
 ## Arguments
 - <a id="arg-<TASK>" href="#arg-<TASK>">`<TASK>`</a>
 :  The pixi task or a task shell command you want to run in the workspace's environment, which can be an executable in the environment's PATH
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
