@@ -18,11 +18,11 @@ pixi config set [OPTIONS] <KEY> [VALUE]
 - <a id="arg-<VALUE>" href="#arg-<VALUE>">`<VALUE>`</a>
 :  Configuration value to set (key will be unset if value not provided)
 
-## Options
-- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
-:  Operation on global configuration
+## Config Options
 - <a id="arg---local" href="#arg---local">`--local (-l)`</a>
 :  Operation on project-local configuration
+- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
+:  Operation on global configuration
 - <a id="arg---system" href="#arg---system">`--system (-s)`</a>
 :  Operation on system configuration
 

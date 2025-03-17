@@ -20,9 +20,9 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
-:  The description of the alias task
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform for which the alias should be added
+- <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
+:  The description of the alias task
 
 --8<-- "docs/reference/cli/pixi/task/alias_extender.md:example"

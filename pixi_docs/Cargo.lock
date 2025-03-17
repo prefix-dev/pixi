@@ -4167,7 +4167,6 @@ dependencies = [
  "futures",
  "human_bytes",
  "humantime",
- "ignore",
  "indexmap 2.7.1",
  "indicatif",
  "is_executable",
@@ -4208,6 +4207,7 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
+ "rayon",
  "regex",
  "reqwest",
  "reqwest-middleware",
@@ -4372,6 +4372,7 @@ name = "pixi_docs"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "fs-err",
  "itertools 0.14.0",
  "pixi",
  "rattler_conda_types",

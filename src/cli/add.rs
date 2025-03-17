@@ -1,11 +1,12 @@
 use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use super::has_specs::HasSpecs;
+use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
@@ -82,22 +83,29 @@ pub struct Args {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
+
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, workspace_config) = (
+    let (dependency_config, prefix_update_config, lock_file_update_config, workspace_config) = (
         args.dependency_config,
         args.prefix_update_config,
+        args.lock_file_update_config,
         args.workspace_config,
     );
 
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
     sanity_check_project(&workspace).await?;
 
@@ -167,6 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         pypi_deps,
         source_specs,
         &prefix_update_config,
+        &lock_file_update_config,
         &dependency_config.feature,
         &dependency_config.platforms,
         args.editable,

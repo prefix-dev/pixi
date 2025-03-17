@@ -23,7 +23,7 @@
 //! }
 //! ```
 
-use pixi::cli::cli_config::{GitRev, PrefixUpdateConfig, WorkspaceConfig};
+use pixi::cli::cli_config::{GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -120,12 +120,18 @@ pub trait HasPrefixUpdateConfig: Sized {
         self.prefix_update_config().no_install = !install;
         self
     }
+}
+
+/// A trait used by AddBuilder and RemoveBuilder to set their inner
+/// DependencyConfig
+pub trait HasLockFileUpdateConfig: Sized {
+    fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig;
 
     /// Skip updating lockfile, this will only check if it can add a
     /// dependencies. If it can add it will only add it to the manifest.
     /// Install will be skipped by default.
     fn without_lockfile_update(mut self) -> Self {
-        self.prefix_update_config().no_lockfile_update = true;
+        self.lock_file_update_config().no_lockfile_update = true;
         self
     }
 }
@@ -229,7 +235,7 @@ impl AddBuilder {
     }
 
     pub fn with_no_lockfile_update(mut self, no_lockfile_update: bool) -> Self {
-        self.args.prefix_update_config.no_lockfile_update = no_lockfile_update;
+        self.args.lock_file_update_config.no_lockfile_update = no_lockfile_update;
         self
     }
 }
@@ -243,6 +249,12 @@ impl HasDependencyConfig for AddBuilder {
 impl HasPrefixUpdateConfig for AddBuilder {
     fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig {
         &mut self.args.prefix_update_config
+    }
+}
+
+impl HasLockFileUpdateConfig for AddBuilder {
+    fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig {
+        &mut self.args.lock_file_update_config
     }
 }
 
