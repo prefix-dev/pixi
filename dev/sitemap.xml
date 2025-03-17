@@ -5,23 +5,7 @@
          <lastmod>2025-03-17</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/Community/</loc>
-         <lastmod>2025-03-17</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/FAQ/</loc>
-         <lastmod>2025-03-17</lastmod>
-    </url>
-    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/getting_started/</loc>
-         <lastmod>2025-03-17</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/packaging/</loc>
-         <lastmod>2025-03-17</lastmod>
-    </url>
-    <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/vision/</loc>
          <lastmod>2025-03-17</lastmod>
     </url>
     <url>
@@ -122,6 +106,26 @@
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/third_party/starship/</loc>
+         <lastmod>2025-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/misc/Community/</loc>
+         <lastmod>2025-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/misc/FAQ/</loc>
+         <lastmod>2025-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/misc/documenting_pixi/</loc>
+         <lastmod>2025-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/misc/packaging/</loc>
+         <lastmod>2025-03-17</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/misc/vision/</loc>
          <lastmod>2025-03-17</lastmod>
     </url>
     <url>
