@@ -4983,9 +4983,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.33.0"
+version = "0.33.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca1e7955660f5717aa727376dbb031ee0d541ed545d1006adbb49765ba8fd986"
+checksum = "454e5091f529a7c24f0b568b7c00b3c978ffb9c4020db8bb1e10dd6e73c9aaec"
 dependencies = [
  "anyhow",
  "clap",
@@ -5027,9 +5027,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.3.14"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f5e8a6816a944c9f213aced8b5c705afbe206ae2ee6aeb5833ea499a484b629"
+checksum = "8f84f8ac550603c11d8c681e83c441c0565a29907c40583114b78fc3e31f72bb"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5059,9 +5059,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.31.4"
+version = "0.31.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "363f737d32024159a5ef4924a688a4cb0aa0d12a483ef04461cdbbd6669978bd"
+checksum = "0ea41e41b171d7185f57c4fa0e19ef145c96604ba151479ec070f928325dbe1a"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -5115,9 +5115,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.47"
+version = "0.22.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7705311b8999eaa43831113fff16cf209b61727894312723d5d43bd07de0f79a"
+checksum = "d53b8a7a04cefca5f0ed5463c72bdcb232d7ae3eb27f979569bc6e90eb391763"
 dependencies = [
  "chrono",
  "file_url",
@@ -5150,9 +5150,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c37a0dc31ac7873df2fae69ed680b40152ec6eeeb71e01b14014073eb64cb18f"
+checksum = "c82434c783daf87bdcfee820db93fe12119cf469ca5abc174c8c45963d48aff2"
 dependencies = [
  "chrono",
  "configparser",
@@ -5180,9 +5180,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.22.9"
+version = "0.22.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2825d73f0c93abd84083e63cdbc892565b30effbb573e4fed6fa340ca3525f51"
+checksum = "6bb7aa16bcfa0f53ddbf580c58e43bd8ad7fd8a643c767c365ebf033734d4cd1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5211,9 +5211,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.33"
+version = "0.22.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3ad4e41b0d7cff5d4aad9f608f88ed0cc28c2a3dfcff334c17bc63f30da0643"
+checksum = "d55a377f9b969915695c7aa994740ca157221f6a63d03812404e8d393d81e517"
 dependencies = [
  "bzip2",
  "chrono",
@@ -5252,9 +5252,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.22.1"
+version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13e99b0495d5cc946c808ab417ddc735cd9125020d66b3c12bc2a898a0b985f3"
+checksum = "e6073881466bbd0e726061451e20341df1c4331220d5b489b09549388856d5da"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5309,9 +5309,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.23"
+version = "0.22.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9afdea22518ce07cd94dda80edb82ea1ebc6cc3388d21b6933de1bd2dc3ca530"
+checksum = "7c25e56d8c1b003bae96de82c498d550ddea9677825ad52a4d1ececf3ef33613"
 dependencies = [
  "enum_dispatch",
  "fs-err",
@@ -5328,9 +5328,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.4.1"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c656c89048348a6675f29f886cfc001cf4af1bae156b18dd9c39fcea5dfa4687"
+checksum = "fc403ea44cf8a4c8f382992ce172fb184b1bd99703bf981c46a4acd6ea010dae"
 dependencies = [
  "chrono",
  "futures",
@@ -5348,9 +5348,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.0.6"
+version = "2.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf18e5372605eb4b4548108af4fd1ca39906d6af1498f8e1db4ffd734b303fb9"
+checksum = "ef443a173c98db5ed56c8de62caad2f2f9569a2945cb520c2e73ab800b029708"
 dependencies = [
  "archspec",
  "libloading",
