@@ -158,10 +158,10 @@ nav:
       - CLI: reference/cli/pixi.md
   - Misc:
       - Changelog: CHANGELOG.md
-      - Pixi Vision: vision.md
-      - Packaging Pixi: packaging.md
-      - Community: Community.md
-      - FAQ: FAQ.md
+      - Pixi Vision: misc/vision.md
+      - Packaging Pixi: misc/packaging.md
+      - Community: misc/Community.md
+      - FAQ: misc/FAQ.md
 
 hooks:
   - schema/docs_hooks.py
@@ -200,6 +200,10 @@ plugins:
         "advanced/s3.md": "deployment/s3.md"
         "advanced/third_party.md": "integration/third_party/starship.md"
         "reference/cli.md": "reference/cli/pixi.md"
+        "vision.md": "misc/vision.md"
+        "packaging.md": "misc/packaging.md"
+        "Community.md": "misc/Community.md"
+        "FAQ.md": "misc/FAQ.md"
 
   - search
   - social
