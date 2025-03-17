@@ -2269,7 +2269,7 @@
 <p><code>pixi install</code> only installs one environment at a time, if you have multiple environments you can select the right one with the <code>--environment</code> flag. If you don't provide an environment, the <code>default</code> environment will be installed.</p>
 <p>If you want to install all environments, you can use the <code>--all</code> flag.</p>
 <p>Running <code>pixi install</code> is not required before running other commands like <code>pixi run</code> or <code>pixi shell</code>. These commands will automatically install the environment if it is not already installed.</p>
-<p>You can use <code>pixi clean</code> to remove the installed environments and start fresh.</p>
+<p>You can use <code>pixi reinstall</code> to reinstall all environments, one environment or just some packages of an environment.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>install<span class="w">  </span><span class="c1"># (1)!</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--manifest-path<span class="w"> </span>~/myworkspace/pixi.toml<span class="w"> </span><span class="c1"># (2)!</span>
