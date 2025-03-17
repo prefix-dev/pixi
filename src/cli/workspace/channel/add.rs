@@ -1,6 +1,6 @@
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    lock_file::UpdateMode,
+    lock_file::{ReinstallPackages, UpdateMode},
     UpdateLockFileOptions, WorkspaceLocator,
 };
 use miette::IntoDiagnostic;
@@ -31,6 +31,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
                 && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
+        ReinstallPackages::default(),
     )
     .await?;
 
