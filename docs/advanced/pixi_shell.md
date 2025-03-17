@@ -1,7 +1,7 @@
 # pixi shell
 
 The `pixi shell` command is similar to `conda activate` but works a little different under the hood.
-Instead of requiring a change to your `~/.bashrc` or other files, it will launch a fresh shell. 
+Instead of requiring a change to your `~/.bashrc` or other files, it will launch a fresh shell.
 That also means that, instead of `conda deactivate`, it's enough to just exit the current shell, e.g. by pressing `Ctrl+D`.
 
 ```shell
@@ -74,7 +74,7 @@ function pixi_activate
     # default to current directory if no path is given
     set -l manifest_path $argv[1]
     test -z "$manifest_path"; and set manifest_path "."
-    
+
     pixi shell-hook --manifest-path "$manifest_path" | source
 end
 ```
