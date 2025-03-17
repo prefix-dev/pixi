@@ -4,6 +4,7 @@ use std::{
     future::{ready, Future},
     iter,
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -31,7 +32,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, ParseStrictness, Platform};
+use rattler_conda_types::{Arch, MatchSpec, PackageName, ParseStrictness, Platform};
 use rattler_lock::{
     LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
 };
@@ -212,6 +213,14 @@ pub struct UpdateLockFileOptions {
     pub max_concurrent_solves: usize,
 }
 
+#[derive(Debug, Clone, Default)]
+pub enum ReinstallPackages {
+    #[default]
+    None,
+    All,
+    Some(HashSet<String>),
+}
+
 /// A struct that holds the lock-file and any potential derived data that was
 /// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
@@ -286,6 +295,7 @@ impl<'p> LockFileDerivedData<'p> {
         &mut self,
         environment: &Environment<'p>,
         update_mode: UpdateMode,
+        reinstall_packages: ReinstallPackages,
     ) -> miette::Result<Prefix> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
@@ -297,7 +307,7 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         // Get the up-to-date prefix
-        let prefix = self.update_prefix(environment).await?;
+        let prefix = self.update_prefix(environment, reinstall_packages).await?;
 
         // Save an environment file to the environment directory after the update.
         // Avoiding writing the cache away before the update is done.
@@ -361,7 +371,11 @@ impl<'p> LockFileDerivedData<'p> {
     }
 
     /// Returns the up-to-date prefix for the given environment.
-    async fn update_prefix(&mut self, environment: &Environment<'p>) -> miette::Result<Prefix> {
+    async fn update_prefix(
+        &mut self,
+        environment: &Environment<'p>,
+        reinstall_packages: ReinstallPackages,
+    ) -> miette::Result<Prefix> {
         // If we previously updated this environment, early out.
         if let Some(prefix) = self.updated_pypi_prefixes.get(environment.name()) {
             return Ok(prefix.clone());
@@ -380,13 +394,29 @@ impl<'p> LockFileDerivedData<'p> {
         ))?;
 
         tracing::info!("Updating prefix: '{}'", environment.dir().display());
-        // Get the prefix with the conda packages installed.
+
         let platform = environment.best_platform();
-        let (prefix, python_status) = self.conda_prefix(environment).await?;
         let pixi_records = self
             .pixi_records(environment, platform)
             .into_diagnostic()?
             .unwrap_or_default();
+
+        let conda_reinstall_packages = match reinstall_packages {
+            ReinstallPackages::None => None,
+            ReinstallPackages::Some(ref p) => Some(
+                p.iter()
+                    .filter_map(|p| PackageName::from_str(p).ok())
+                    .filter(|name| pixi_records.iter().any(|r| r.name() == name))
+                    .collect(),
+            ),
+            ReinstallPackages::All => Some(pixi_records.iter().map(|r| r.name().clone()).collect()),
+        };
+
+        // Get the prefix with the conda packages installed.
+        let (prefix, python_status) = self
+            .conda_prefix(environment, conda_reinstall_packages)
+            .await?;
+
         let pypi_records = self
             .pypi_records(environment, platform)
             .into_diagnostic()?
@@ -397,9 +427,30 @@ impl<'p> LockFileDerivedData<'p> {
             return Ok(prefix);
         }
 
+        let pypi_lock_file_names = pypi_records
+            .iter()
+            .filter_map(|(data, _)| to_uv_normalize(&data.name).ok())
+            .collect::<HashSet<_>>();
+
+        // Figure out uv reinstall
+        let (uv_reinstall, uv_packages) = match reinstall_packages {
+            ReinstallPackages::None => (Some(false), None),
+            ReinstallPackages::All => (Some(true), None),
+            ReinstallPackages::Some(pkgs) => (
+                None,
+                Some(
+                    pkgs.into_iter()
+                        .filter_map(|pkg| uv_pep508::PackageName::new(pkg).ok())
+                        .filter(|name| pypi_lock_file_names.contains(name))
+                        .collect(),
+                ),
+            ),
+        };
+
         let uv_context = match &self.uv_context {
             None => {
-                let context = UvResolutionContext::from_workspace(self.workspace)?;
+                let context = UvResolutionContext::from_workspace(self.workspace)?
+                    .set_cache_refresh(uv_reinstall, uv_packages);
                 self.uv_context = Some(context.clone());
                 context
             }
@@ -507,6 +558,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn conda_prefix(
         &mut self,
         environment: &Environment<'p>,
+        reinstall_packages: Option<HashSet<PackageName>>,
     ) -> miette::Result<(Prefix, PythonStatus)> {
         // If we previously updated this environment, early out.
         if let Some((prefix, python_status)) = self.updated_conda_prefixes.get(environment.name()) {
@@ -536,7 +588,9 @@ impl<'p> LockFileDerivedData<'p> {
             prefix,
             python_status,
             ..
-        } = conda_prefix_updater.update(records).await?;
+        } = conda_prefix_updater
+            .update(records, reinstall_packages)
+            .await?;
 
         // Store that we updated the environment, so we won't have to do it again.
         self.updated_conda_prefixes.insert(
