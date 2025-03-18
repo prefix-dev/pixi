@@ -1,14 +1,13 @@
-use std::path::Path;
-
 use async_once_cell::OnceCell as AsyncCell;
 use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::ClientWithMiddleware;
+use std::path::Path;
 use url::Url;
 
 use crate::{
-    CompressedMapping, DerivePurls, MappingByChannel, MappingError, MappingLocation, MappingMap,
-    PurlSource,
+    CacheMetrics, CompressedMapping, DerivePurls, MappingByChannel, MappingError, MappingLocation,
+    MappingMap, PurlSource,
 };
 
 /// Struct with a mapping of channel names to their respective mapping locations
@@ -149,6 +148,7 @@ impl DerivePurls for CustomMappingClient {
     async fn derive_purls(
         &self,
         record: &RepoDataRecord,
+        _cache_metrics: &CacheMetrics,
     ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
         let Some(channel) = record.channel.as_ref() else {
             return Ok(None);

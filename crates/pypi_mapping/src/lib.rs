@@ -2,7 +2,8 @@ use std::{
     collections::{BTreeSet, HashMap},
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -15,6 +16,7 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use thiserror::Error;
 use tokio::sync::Semaphore;
+use tracing::Instrument;
 use url::Url;
 
 mod custom_mapping;
@@ -192,6 +194,8 @@ impl MappingClient {
         conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
         reporter: Option<Arc<dyn Reporter>>,
     ) -> miette::Result<()> {
+        let start = Instant::now();
+
         // Collect the records into a vec so we can iterate multiple times.
         let mut records = conda_packages.into_iter().collect_vec();
 
@@ -205,6 +209,8 @@ impl MappingClient {
 
         // Discard all records for which we already have pypi purls.
         records.retain(|record| !has_pypi_purl(record));
+
+        let metrics = CacheMetrics::default();
 
         // Fetch custom mapped channels if any.
         let custom_mappings = if let MappingSource::Custom(mapping_url) = mapping_source {
@@ -220,6 +226,8 @@ impl MappingClient {
         for record in records.into_iter() {
             let reporter = reporter.clone();
             let custom_mappings = &custom_mappings;
+            let cache_metrics = &metrics;
+            let file_name = record.file_name.clone();
             let derive_purls_future = async move {
                 if let Some(reporter) = reporter.as_deref() {
                     reporter.download_started(record, total_records);
@@ -231,9 +239,9 @@ impl MappingClient {
                     .as_ref()
                     .filter(|mapping| mapping.is_mapping_for_record(record))
                 {
-                    custom_mappings.derive_purls(record).await
+                    custom_mappings.derive_purls(record, cache_metrics).await
                 } else {
-                    self.derive_purls_from_clients(record).await
+                    self.derive_purls_from_clients(record, cache_metrics).await
                 };
 
                 match derived_purls {
@@ -250,27 +258,53 @@ impl MappingClient {
                         Err(err)
                     }
                 }
-            };
+            }
+            .instrument(tracing::info_span!("derive_purl", record = file_name));
 
             // Add all futures to the futures queue to ensure all can run concurrently.
             amend_futures.push(derive_purls_future);
         }
 
+        let mut amended_records = 0;
+        let mut total_records = 0;
         while let Some(next) = amend_futures.next().await {
             let (record, mut derived_purls) = next.into_diagnostic()?;
 
             // As a last resort use the verbatim conda-forge purls.
             if derived_purls.is_none() {
                 derived_purls = CondaForgeVerbatim
-                    .derive_purls(record)
+                    .derive_purls(record, &metrics)
                     .await
                     .into_diagnostic()?;
             }
 
             if let Some(derived_purls) = derived_purls {
-                amend_purls(record, derived_purls)
+                amend_purls(record, derived_purls);
+                amended_records += 1;
             }
+
+            total_records += 1;
         }
+
+        drop(amend_futures);
+
+        let duration = start.elapsed();
+        let data = metrics
+            .data
+            .into_inner()
+            .expect("locking shouldnt fail in this case");
+        tracing::info!(
+            "Amended {} out of {} records with purls in {:?}. {} cache hits and {} cache misses ({}%).",
+            amended_records,
+            total_records,
+            Duration::from_millis(duration.as_millis() as u64),
+            data.cache_hits, data.cache_misses,
+            if data.cache_hits == 0 && data.cache_misses == 0 {
+                100.0
+            } else {
+                ((data.cache_hits as f64)/((data.cache_misses + data.cache_hits) as f64) * 10000.0).round() / 100.0
+            },
+        );
 
         Ok(())
     }
@@ -278,13 +312,20 @@ impl MappingClient {
     async fn derive_purls_from_clients(
         &self,
         record: &RepoDataRecord,
+        cache_metrics: &CacheMetrics,
     ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
         // Try to get the purls from the hash mapping.
-        let mut purls = self.hash_mapping.derive_purls(record).await?;
+        let mut purls = self
+            .hash_mapping
+            .derive_purls(record, cache_metrics)
+            .await?;
 
         // Otherwise try from the compressed mapping
         if purls.is_none() {
-            purls = self.compressed_mapping.derive_purls(record).await?;
+            purls = self
+                .compressed_mapping
+                .derive_purls(record, cache_metrics)
+                .await?;
         }
 
         Ok(purls)
@@ -322,6 +363,7 @@ trait DerivePurls {
     async fn derive_purls(
         &self,
         record: &RepoDataRecord,
+        _cache_metrics: &CacheMetrics,
     ) -> Result<Option<Vec<PackageUrl>>, MappingError>;
 }
 
@@ -335,6 +377,7 @@ impl DerivePurls for CondaForgeVerbatim {
     async fn derive_purls(
         &self,
         record: &RepoDataRecord,
+        _cache_metrics: &CacheMetrics,
     ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
         if !is_conda_forge_record(record) {
             return Ok(None);
@@ -354,4 +397,29 @@ impl DerivePurls for CondaForgeVerbatim {
         let built_purl = purl.build().expect("valid pypi package url");
         Ok(Some(vec![built_purl]))
     }
+}
+
+#[derive(Default)]
+pub struct CacheMetrics {
+    data: Mutex<CacheMetricsData>,
+}
+
+impl CacheMetrics {
+    pub fn record_request_response(&self, response: &reqwest::Response) {
+        let cache_header = response.headers().get("x-cache");
+        if cache_header.and_then(|h| h.to_str().ok()) == Some("HIT") {
+            let mut data = self.data.lock().unwrap();
+            data.cache_hits += 1;
+        } else {
+            let mut data = self.data.lock().unwrap();
+            data.cache_misses += 1;
+            tracing::debug!("Cache miss on '{}' ({})", response.url(), response.status());
+        }
+    }
+}
+
+#[derive(Default)]
+struct CacheMetricsData {
+    cache_hits: usize,
+    cache_misses: usize,
 }

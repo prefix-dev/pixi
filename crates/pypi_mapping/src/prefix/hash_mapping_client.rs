@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{broadcast, Semaphore};
 
-use crate::{DerivePurls, MappingError, PurlSource};
+use crate::{CacheMetrics, DerivePurls, MappingError, PurlSource};
 
 const STORAGE_URL: &str = "https://conda-mapping.prefix.dev";
 const HASH_DIR: &str = "hash-v0";
@@ -127,8 +127,9 @@ impl HashMappingClient {
     pub async fn get_mapping(
         &self,
         sha256: Sha256Hash,
+        cache_metrics: &CacheMetrics,
     ) -> Result<Option<PackagePypiMapping>, HashMappingClientError> {
-        self.inner.get_mapping(sha256).await
+        self.inner.get_mapping(sha256, cache_metrics).await
     }
 }
 
@@ -138,6 +139,7 @@ impl HashMappingClientInner {
     pub async fn get_mapping(
         &self,
         sha256: Sha256Hash,
+        cache_metrics: &CacheMetrics,
     ) -> Result<Option<PackagePypiMapping>, HashMappingClientError> {
         let sender = match self.entries.entry(sha256) {
             Entry::Vacant(entry) => {
@@ -218,7 +220,7 @@ impl HashMappingClientInner {
                 ),
                 None => None,
             };
-            try_fetch_mapping(&self.client, &sha256).await?
+            try_fetch_mapping(&self.client, &sha256, cache_metrics).await?
         };
 
         // Store the fetched files in the entry.
@@ -236,12 +238,15 @@ impl HashMappingClientInner {
 async fn try_fetch_mapping(
     client: &ClientWithMiddleware,
     sha256: &Sha256Hash,
+    cache_metrics: &CacheMetrics,
 ) -> Result<Option<PackagePypiMapping>, HashMappingClientError> {
     let hash_str = format!("{:x}", sha256);
     let url = format!("{STORAGE_URL}/{HASH_DIR}/{}", hash_str);
 
     // Fetch the mapping from the server
     let response = client.get(&url).send().await?;
+
+    cache_metrics.record_request_response(&response);
 
     // If no mapping was found for the hash, return None.
     if response.status() == StatusCode::NOT_FOUND {
@@ -258,6 +263,7 @@ impl DerivePurls for HashMappingClient {
     async fn derive_purls(
         &self,
         record: &RepoDataRecord,
+        cache_metrics: &CacheMetrics,
     ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
         // Get the hash from the record, if there is no sha we cannot derive purls
         let Some(sha256) = record.package_record.sha256 else {
@@ -265,7 +271,7 @@ impl DerivePurls for HashMappingClient {
         };
 
         // Fetch the mapping from the server, or return None if it doesn't exist
-        let Some(mapped_package) = self.get_mapping(sha256).await? else {
+        let Some(mapped_package) = self.get_mapping(sha256, cache_metrics).await? else {
             return Ok(None);
         };
 

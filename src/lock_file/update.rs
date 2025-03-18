@@ -1249,7 +1249,6 @@ impl<'p> UpdateContext<'p> {
                 repodata_solve_platform_future,
                 repodata_current_platform,
                 conda_prefix_updater,
-                self.mapping_client.clone(),
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
                 locked_group_records,
@@ -2029,7 +2028,6 @@ async fn spawn_solve_pypi_task<'p>(
     repodata_solve_records: impl Future<Output = Arc<PixiRecordsByName>>,
     repodata_current_records: impl Future<Output = Arc<PixiRecordsByName>>,
     prefix_task: CondaPrefixUpdater,
-    mapping_client: MappingClient,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,
@@ -2059,20 +2057,8 @@ async fn spawn_solve_pypi_task<'p>(
 
     let environment_name = grouped_environment.name().clone();
 
-    let pypi_name_mapping_location = grouped_environment.workspace().pypi_name_mapping_source()?;
-
-    let mut pixi_solve_records = repodata_records.records.clone();
-    let locked_pypi_records = locked_pypi_packages.records.clone();
-
-    mapping_client
-        .amend_purls(
-            pypi_name_mapping_location,
-            pixi_solve_records
-                .iter_mut()
-                .filter_map(PixiRecord::as_binary_mut),
-            None,
-        )
-        .await?;
+    let pixi_solve_records = &repodata_records.records;
+    let locked_pypi_records = &locked_pypi_packages.records;
 
     let pypi_options = environment.pypi_options();
     let (pypi_packages, duration, prefix_task_result) = async move {
@@ -2098,8 +2084,8 @@ async fn spawn_solve_pypi_task<'p>(
             &pypi_options,
             requirements,
             system_requirements,
-            &pixi_solve_records,
-            &locked_pypi_records,
+            pixi_solve_records,
+            locked_pypi_records,
             platform,
             &pb.pb,
             &project_root,

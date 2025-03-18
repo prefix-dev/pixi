@@ -6,7 +6,9 @@ use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use url::Url;
 
-use crate::{is_conda_forge_record, CompressedMapping, DerivePurls, MappingError, PurlSource};
+use crate::{
+    is_conda_forge_record, CacheMetrics, CompressedMapping, DerivePurls, MappingError, PurlSource,
+};
 
 const COMPRESSED_MAPPING: &str =
     "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json";
@@ -76,7 +78,10 @@ impl CompressedMappingClient {
 
     /// Fetches the compressed mapping and caches it to ensure that any
     /// subsequent request does not hit the network.
-    pub async fn get_mapping(&self) -> Result<&CompressedMapping, reqwest_middleware::Error> {
+    pub async fn get_mapping(
+        &self,
+        cache_metrics: &CacheMetrics,
+    ) -> Result<&CompressedMapping, reqwest_middleware::Error> {
         let inner = &self.inner;
         inner
             .mapping
@@ -93,16 +98,17 @@ impl CompressedMappingClient {
                     ),
                     None => None,
                 };
-                inner
+                let response = inner
                     .client
                     .get(compressed_mapping_url)
                     .send()
                     .await?
                     .error_for_status()
-                    .map_err(reqwest_middleware::Error::from)?
-                    .json()
-                    .await
-                    .map_err(Into::into)
+                    .map_err(reqwest_middleware::Error::from)?;
+
+                cache_metrics.record_request_response(&response);
+
+                response.json().await.map_err(Into::into)
             })
             .await
     }
@@ -112,6 +118,7 @@ impl DerivePurls for CompressedMappingClient {
     async fn derive_purls(
         &self,
         record: &RepoDataRecord,
+        cache_metrics: &CacheMetrics,
     ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
         // If the record does not refer to a conda-forge mapping we can skip it
         if !is_conda_forge_record(record) {
@@ -119,7 +126,7 @@ impl DerivePurls for CompressedMappingClient {
         }
 
         // Get the mapping from the server
-        let mapping = self.get_mapping().await?;
+        let mapping = self.get_mapping(cache_metrics).await?;
 
         // Determine the mapping for the record
         let Some(potential_pypi_name) = mapping.get(record.package_record.name.as_normalized())
