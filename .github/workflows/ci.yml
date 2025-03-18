@@ -412,7 +412,34 @@ jobs:
       - name: Run pytests
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi run --locked test-integration-ci
-#
+
+  test-pytest-large-windows:
+    timeout-minutes: 10
+    name: Pytest | large windows x86_64
+    runs-on: windows_x64_2025_large
+    needs: build-binary-windows-x86_64
+    env:
+      TARGET_RELEASE: "target/pixi/release"
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Dev Drive
+        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+      - name: Copy Git Repo to Dev Drive
+        run: |
+          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
+          echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
+      - name: Download binary from build
+        uses: actions/download-artifact@v4
+        with:
+          name: pixi-windows-x86_64-${{ github.sha }}
+          path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
+      - name: Verify pixi installation
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        run: pixi info
+
+      - name: Run pytests
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        run: pixi run --locked test-integration-ci
 #  test-pytest-macos-aarch64:
 #    timeout-minutes: 10
 #    name: Pytest | macos aarch64
