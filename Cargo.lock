@@ -1922,8 +1922,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f75ca0511313d95b0ca15b916b4532975b31b92ed882ddeaa23cbfca4955f32a"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -5154,9 +5153,8 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca1e7955660f5717aa727376dbb031ee0d541ed545d1006adbb49765ba8fd986"
+version = "0.33.2"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "anyhow",
  "clap",
@@ -5198,9 +5196,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.3.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f5e8a6816a944c9f213aced8b5c705afbe206ae2ee6aeb5833ea499a484b629"
+version = "0.3.15"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5230,9 +5227,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.31.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "363f737d32024159a5ef4924a688a4cb0aa0d12a483ef04461cdbbd6669978bd"
+version = "0.31.5"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -5270,8 +5266,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d81b39557a833c5820f4c373f2b36147672e0c02f44a63387186d1f6f1f240f3"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "blake2",
  "digest",
@@ -5286,9 +5281,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.47"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7705311b8999eaa43831113fff16cf209b61727894312723d5d43bd07de0f79a"
+version = "0.22.48"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "chrono",
  "file_url",
@@ -5312,8 +5306,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52efa676b94d13ff3888074a8eb662e0a603ddddd5697cedc58b21de5f478cfb"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "quote",
  "syn",
@@ -5321,9 +5314,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c37a0dc31ac7873df2fae69ed680b40152ec6eeeb71e01b14014073eb64cb18f"
+version = "0.2.5"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "chrono",
  "configparser",
@@ -5351,9 +5343,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.22.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2825d73f0c93abd84083e63cdbc892565b30effbb573e4fed6fa340ca3525f51"
+version = "0.22.10"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5382,9 +5373,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.33"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3ad4e41b0d7cff5d4aad9f608f88ed0cc28c2a3dfcff334c17bc63f30da0643"
+version = "0.22.34"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "bzip2",
  "chrono",
@@ -5413,8 +5403,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fb481bc7af5d6564f120307bc4481efb4e55c8502424acec3409a4e5d61ef12"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -5423,9 +5412,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13e99b0495d5cc946c808ab417ddc735cd9125020d66b3c12bc2a898a0b985f3"
+version = "0.22.3"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5480,9 +5468,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9afdea22518ce07cd94dda80edb82ea1ebc6cc3388d21b6933de1bd2dc3ca530"
+version = "0.22.24"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "enum_dispatch",
  "fs-err",
@@ -5499,9 +5486,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c656c89048348a6675f29f886cfc001cf4af1bae156b18dd9c39fcea5dfa4687"
+version = "1.4.2"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "chrono",
  "futures",
@@ -5519,9 +5505,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf18e5372605eb4b4548108af4fd1ca39906d6af1498f8e1db4ffd734b303fb9"
+version = "2.0.8"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "archspec",
  "libloading",
@@ -6634,8 +6619,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "tokio",
 ]

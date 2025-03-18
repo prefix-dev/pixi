@@ -1917,6 +1917,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "file_url"
+version = "0.2.3"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+dependencies = [
+ "itertools 0.14.0",
+ "percent-encoding",
+ "thiserror 2.0.12",
+ "typed-path",
+ "url",
+]
+
+[[package]]
 name = "filetime"
 version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4198,8 +4210,8 @@ dependencies = [
  "pypi_mapping",
  "pypi_modifiers",
  "rattler",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "rattler_lock",
  "rattler_menuinst",
  "rattler_networking",
@@ -4280,7 +4292,7 @@ dependencies = [
  "pixi_spec",
  "pixi_utils",
  "rattler",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
@@ -4305,7 +4317,7 @@ dependencies = [
  "pixi_build_types",
  "pixi_manifest",
  "pixi_spec",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
 ]
 
 [[package]]
@@ -4313,8 +4325,8 @@ name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
  "indexmap 2.7.1",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "serde",
  "serde_json",
  "serde_with",
@@ -4333,7 +4345,7 @@ dependencies = [
  "miette 7.5.0",
  "pixi_consts",
  "rattler",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "rattler_networking",
  "rattler_repodata_gateway",
  "reqwest-middleware",
@@ -4352,7 +4364,7 @@ version = "0.1.0"
 dependencies = [
  "console",
  "rattler_cache",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "url",
 ]
 
@@ -4360,7 +4372,7 @@ dependencies = [
 name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
 ]
 
 [[package]]
@@ -4371,7 +4383,7 @@ dependencies = [
  "fs-err",
  "itertools 0.14.0",
  "pixi",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.4",
 ]
 
 [[package]]
@@ -4401,7 +4413,7 @@ dependencies = [
  "fs-err",
  "itertools 0.14.0",
  "memchr",
- "rattler_digest",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "thiserror 2.0.12",
  "tokio",
  "wax",
@@ -4426,7 +4438,7 @@ dependencies = [
  "pixi_spec",
  "pixi_toml",
  "pyproject-toml",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "rattler_lock",
  "rattler_solve",
  "rattler_virtual_packages",
@@ -4464,12 +4476,12 @@ dependencies = [
 name = "pixi_record"
 version = "0.1.0"
 dependencies = [
- "file_url",
+ "file_url 0.2.3 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "miette 7.5.0",
  "pixi_git",
  "pixi_spec",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "rattler_lock",
  "serde",
  "thiserror 2.0.12",
@@ -4482,12 +4494,12 @@ name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
  "dirs 6.0.0",
- "file_url",
+ "file_url 0.2.3 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "itertools 0.14.0",
  "pixi_git",
  "pixi_toml",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "serde",
  "serde-untagged",
  "serde_with",
@@ -4523,7 +4535,7 @@ dependencies = [
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "rattler_networking",
  "reqwest",
  "reqwest-middleware",
@@ -4780,8 +4792,8 @@ dependencies = [
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
@@ -4798,7 +4810,7 @@ dependencies = [
  "miette 7.5.0",
  "pixi_default_versions",
  "pixi_manifest",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "rattler_virtual_packages",
  "regex",
  "thiserror 2.0.12",
@@ -4983,9 +4995,8 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca1e7955660f5717aa727376dbb031ee0d541ed545d1006adbb49765ba8fd986"
+version = "0.33.2"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "anyhow",
  "clap",
@@ -5003,8 +5014,8 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.3",
  "rattler_cache",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "rattler_menuinst",
  "rattler_networking",
  "rattler_package_streaming",
@@ -5027,9 +5038,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.3.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f5e8a6816a944c9f213aced8b5c705afbe206ae2ee6aeb5833ea499a484b629"
+version = "0.3.15"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5041,8 +5051,8 @@ dependencies = [
  "fxhash",
  "itertools 0.14.0",
  "parking_lot 0.12.3",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "rattler_networking",
  "rattler_package_streaming",
  "rayon",
@@ -5065,7 +5075,7 @@ checksum = "363f737d32024159a5ef4924a688a4cb0aa0d12a483ef04461cdbbd6669978bd"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
- "file_url",
+ "file_url 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "fs-err",
  "fxhash",
  "glob",
@@ -5075,9 +5085,47 @@ dependencies = [
  "lazy-regex",
  "nom",
  "purl",
- "rattler_digest",
- "rattler_macros",
- "rattler_redaction",
+ "rattler_digest 1.0.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rattler_macros 1.0.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rattler_redaction 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rayon",
+ "regex",
+ "serde",
+ "serde-untagged",
+ "serde_json",
+ "serde_repr",
+ "serde_with",
+ "serde_yaml",
+ "simd-json",
+ "smallvec",
+ "strum",
+ "tempfile",
+ "thiserror 2.0.12",
+ "tracing",
+ "typed-path",
+ "url",
+]
+
+[[package]]
+name = "rattler_conda_types"
+version = "0.31.5"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+dependencies = [
+ "chrono",
+ "dirs 6.0.0",
+ "file_url 0.2.3 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
+ "fs-err",
+ "fxhash",
+ "glob",
+ "hex",
+ "indexmap 2.7.1",
+ "itertools 0.14.0",
+ "lazy-regex",
+ "nom",
+ "purl",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
+ "rattler_macros 1.0.7 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
+ "rattler_redaction 0.1.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "rayon",
  "regex",
  "serde",
@@ -5110,24 +5158,38 @@ dependencies = [
  "serde",
  "serde_with",
  "sha2",
+]
+
+[[package]]
+name = "rattler_digest"
+version = "1.0.8"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+dependencies = [
+ "blake2",
+ "digest",
+ "generic-array",
+ "hex",
+ "md-5",
+ "serde",
+ "serde_with",
+ "sha2",
  "tokio",
 ]
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.47"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7705311b8999eaa43831113fff16cf209b61727894312723d5d43bd07de0f79a"
+version = "0.22.48"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "chrono",
- "file_url",
+ "file_url 0.2.3 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "fxhash",
  "indexmap 2.7.1",
  "itertools 0.14.0",
  "pep440_rs",
  "pep508_rs",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "serde",
  "serde-value",
  "serde_repr",
@@ -5149,10 +5211,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_macros"
+version = "1.0.7"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "rattler_menuinst"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c37a0dc31ac7873df2fae69ed680b40152ec6eeeb71e01b14014073eb64cb18f"
+version = "0.2.5"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "chrono",
  "configparser",
@@ -5162,7 +5232,7 @@ dependencies = [
  "once_cell",
  "plist",
  "quick-xml 0.37.2",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "rattler_shell",
  "regex",
  "serde",
@@ -5180,9 +5250,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.22.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2825d73f0c93abd84083e63cdbc892565b30effbb573e4fed6fa340ca3525f51"
+version = "0.22.10"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5211,19 +5280,18 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.33"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3ad4e41b0d7cff5d4aad9f608f88ed0cc28c2a3dfcff334c17bc63f30da0643"
+version = "0.22.34"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "bzip2",
  "chrono",
  "fs-err",
  "futures-util",
  "num_cpus",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "rattler_networking",
- "rattler_redaction",
+ "rattler_redaction 0.1.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "reqwest",
  "reqwest-middleware",
  "serde_json",
@@ -5245,6 +5313,14 @@ version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fb481bc7af5d6564f120307bc4481efb4e55c8502424acec3409a4e5d61ef12"
 dependencies = [
+ "url",
+]
+
+[[package]]
+name = "rattler_redaction"
+version = "0.1.8"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+dependencies = [
  "reqwest",
  "reqwest-middleware",
  "url",
@@ -5252,9 +5328,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.22.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13e99b0495d5cc946c808ab417ddc735cd9125020d66b3c12bc2a898a0b985f3"
+version = "0.22.3"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5267,7 +5342,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "dirs 6.0.0",
- "file_url",
+ "file_url 0.2.3 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "fs-err",
  "futures",
  "hex",
@@ -5282,10 +5357,10 @@ dependencies = [
  "parking_lot 0.12.3",
  "pin-project-lite",
  "rattler_cache",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "rattler_networking",
- "rattler_redaction",
+ "rattler_redaction 0.1.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "reqwest",
  "reqwest-middleware",
  "retry-policies",
@@ -5309,15 +5384,14 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9afdea22518ce07cd94dda80edb82ea1ebc6cc3388d21b6933de1bd2dc3ca530"
+version = "0.22.24"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "enum_dispatch",
  "fs-err",
  "indexmap 2.7.1",
  "itertools 0.14.0",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "serde_json",
  "shlex",
  "sysinfo",
@@ -5328,16 +5402,15 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c656c89048348a6675f29f886cfc001cf4af1bae156b18dd9c39fcea5dfa4687"
+version = "1.4.2"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "chrono",
  "futures",
  "indexmap 2.7.1",
  "itertools 0.14.0",
- "rattler_conda_types",
- "rattler_digest",
+ "rattler_conda_types 0.31.5",
+ "rattler_digest 1.0.8 (git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation)",
  "resolvo",
  "serde",
  "tempfile",
@@ -5348,16 +5421,15 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.0.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf18e5372605eb4b4548108af4fd1ca39906d6af1498f8e1db4ffd734b303fb9"
+version = "2.0.8"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "archspec",
  "libloading",
  "nom",
  "once_cell",
  "plist",
- "rattler_conda_types",
+ "rattler_conda_types 0.31.5",
  "regex",
  "serde",
  "thiserror 2.0.12",
@@ -6454,8 +6526,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
+source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
 dependencies = [
  "tokio",
 ]
