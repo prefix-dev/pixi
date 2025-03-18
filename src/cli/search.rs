@@ -148,7 +148,7 @@ pub async fn execute_impl<W: Write>(
     let config = Config::load_global();
 
     // Fetch the all names from the repodata using gateway
-    let gateway = config.gateway(client.clone());
+    let gateway = config.gateway().with_client(client).finish();
 
     let all_names = await_in_progress("loading all package names", |_| async {
         gateway

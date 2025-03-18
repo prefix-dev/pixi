@@ -4502,7 +4502,6 @@ dependencies = [
  "rattler_conda_types",
  "rattler_networking",
  "rattler_repodata_gateway",
- "reqwest-middleware",
  "rstest",
  "serde",
  "serde_ignored",
@@ -4941,6 +4940,7 @@ name = "pypi_mapping"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
+ "dashmap",
  "fs-err",
  "futures",
  "http-cache-reqwest",
@@ -4957,7 +4957,9 @@ dependencies = [
  "reqwest-retry",
  "serde",
  "serde_json",
+ "thiserror 2.0.11",
  "tokio",
+ "tracing",
  "url",
 ]
 
@@ -5154,9 +5156,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.33.1"
+version = "0.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "454e5091f529a7c24f0b568b7c00b3c978ffb9c4020db8bb1e10dd6e73c9aaec"
+checksum = "1f2f6a77d473028c29adf77cbc29d651d6566ca551bad3434e2314d992c6c1f9"
 dependencies = [
  "anyhow",
  "clap",
@@ -5321,9 +5323,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c82434c783daf87bdcfee820db93fe12119cf469ca5abc174c8c45963d48aff2"
+checksum = "cd9d126c14a5f5a50027c9f05992e7caf2122acb7ce528b9009ee92d475dd329"
 dependencies = [
  "chrono",
  "configparser",
@@ -5423,9 +5425,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6073881466bbd0e726061451e20341df1c4331220d5b489b09549388856d5da"
+checksum = "ba15cb481b9d065194160fddff2fd21d15cac723622a1acddc8fae6b65ce0c7c"
 dependencies = [
  "anyhow",
  "async-compression",
