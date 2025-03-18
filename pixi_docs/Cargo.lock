@@ -4988,9 +4988,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.33.2"
+version = "0.33.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c094b08dc1ee7b8456ad3c3dbacb4784d43f2761d8b90bbacd76acedaba56e5e"
+checksum = "1f2f6a77d473028c29adf77cbc29d651d6566ca551bad3434e2314d992c6c1f9"
 dependencies = [
  "anyhow",
  "clap",
