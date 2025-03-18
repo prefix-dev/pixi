@@ -1,0 +1,37 @@
+{
+  "info": {
+    "subdir": "osx-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-trampoline-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "37596a5926f76e0138535ce34f6b4688",
+      "name": "dummy-trampoline",
+      "platform": "osx",
+      "sha256": "65cd5cc60743de6c465d17fec66416f399367551a90e1820fa2147ce7578c447",
+      "size": 1624,
+      "subdir": "osx-64",
+      "timestamp": 1742286356485,
+      "version": "0.1.0"
+    },
+    "dummy-trampoline-0.2.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "efa4997ccc7e55c7240e7f881fdd2424",
+      "name": "dummy-trampoline",
+      "platform": "osx",
+      "sha256": "489ef5f8a04e89f309d1001d01e5b56812ddb1ba16f3dca12b95c45e3a7035df",
+      "size": 1631,
+      "subdir": "osx-64",
+      "timestamp": 1742286356622,
+      "version": "0.2.0"
+    }
+  },
+  "repodata_version": 2
+}
