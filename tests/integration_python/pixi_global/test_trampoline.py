@@ -43,7 +43,6 @@ def test_trampoline_respect_activation_variables(
     if platform.system() == "Windows":
         original_dummy_b = original_dummy_b.with_suffix(".bat")
     assert pathlib.Path(trampoline_metadata["exe"]) == pathlib.Path(original_dummy_b)
-    assert trampoline_metadata["path"] == str(original_dummy_b.parent)
 
     # now execute the binary
     verify_cli_command([dummy_b], stdout_contains="Success:")

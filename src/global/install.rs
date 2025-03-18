@@ -14,7 +14,7 @@ use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use std::{path::PathBuf, str::FromStr};
+use std::{env, ops::Not, path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
 
@@ -100,7 +100,14 @@ pub(crate) async fn create_executable_trampolines(
 
     let mut state_changes = StateChanges::default();
 
+    // Get PATH environment variables
+    let path_current = std::env::var("PATH").into_diagnostic()?;
     let activation_variables = prefix.run_activation().await?;
+    let path_after_activation = activation_variables
+        .get("PATH")
+        .ok_or_else(|| miette::miette!("Activation variables need to contain PATH"))?;
+
+    let path_diff = path_diff(&path_current, path_after_activation)?;
 
     for ScriptExecMapping {
         global_script_path,
@@ -109,15 +116,8 @@ pub(crate) async fn create_executable_trampolines(
     {
         tracing::debug!("Create trampoline {}", global_script_path.display());
         let exe = prefix.root().join(original_executable);
-        let path = prefix
-            .root()
-            .join(original_executable.parent().ok_or_else(|| {
-                miette::miette!(
-                    "Cannot find parent directory of '{}'",
-                    original_executable.display()
-                )
-            })?);
-        let metadata = Configuration::new(exe, path, Some(activation_variables.clone()));
+
+        let metadata = Configuration::new(exe, path_diff.clone(), activation_variables.clone());
 
         let parent_dir = global_script_path.parent().ok_or_else(|| {
             miette::miette!(
@@ -190,6 +190,22 @@ pub(crate) async fn create_executable_trampolines(
         }
     }
     Ok(state_changes)
+}
+
+/// Compute the difference between two PATH variables (the entries split by `;` or `:`)
+fn path_diff(path_current: &str, path_after: &str) -> miette::Result<String> {
+    // Split paths into vectors using platform-specific delimiter
+    let paths_current: Vec<PathBuf> = std::env::split_paths(&path_current).collect();
+    let paths_after: Vec<PathBuf> = std::env::split_paths(path_after).collect();
+
+    // Calculate the PATH diff
+    let path_diff = paths_current
+        .iter()
+        .filter(|p| paths_after.contains(p).not());
+
+    env::join_paths(path_diff)
+        .map(|p| p.to_string_lossy().to_string())
+        .into_diagnostic()
 }
 
 /// Checks if the local environment matches the given specifications.

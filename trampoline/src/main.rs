@@ -97,7 +97,11 @@ fn trampoline() -> miette::Result<()> {
 
     // Spawn the child process
     #[cfg(target_family = "unix")]
-    cmd.exec();
+    {
+        let err = cmd.exec();
+        eprintln!("Failed to execute command: {:?}", err);
+        std::process::exit(1);
+    }
 
     #[cfg(target_os = "windows")]
     {
@@ -115,7 +119,6 @@ fn trampoline() -> miette::Result<()> {
         // Exit with the same status code as the child process
         std::process::exit(status.code().unwrap_or(1));
     }
-    Ok(())
 }
 
 // Entry point for the trampoline

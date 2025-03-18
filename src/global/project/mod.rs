@@ -1301,11 +1301,8 @@ mod tests {
             .unwrap();
         tokio_fs::File::create(&non_exposed_env_path).await.unwrap();
 
-        let non_exposed_manifest = Configuration::new(
-            non_exposed_env_path,
-            project.env_root.path().join("test/bin"),
-            None,
-        );
+        let non_exposed_manifest =
+            Configuration::new(non_exposed_env_path, String::new(), HashMap::new());
         let non_exposed_trampoline = Trampoline::new(
             non_exposed_name.clone(),
             project.bin_dir.path().to_path_buf(),
@@ -1330,11 +1327,8 @@ mod tests {
             .await
             .unwrap();
 
-        let exposed_manifest = Configuration::new(
-            python_exposed_env_path,
-            project.env_root.path().join("test/bin"),
-            None,
-        );
+        let exposed_manifest =
+            Configuration::new(python_exposed_env_path, String::new(), HashMap::new());
         let exposed_trampoline = Trampoline::new(
             python,
             project.bin_dir.path().to_path_buf(),
