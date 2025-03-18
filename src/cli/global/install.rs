@@ -74,8 +74,8 @@ pub struct Args {
     force_reinstall: bool,
 
     /// Specifies that no shortcuts should be created for the installed packages.
-    #[arg(action, long)]
-    no_shortcut: bool,
+    #[arg(action, long, alias = "no-shortcut")]
+    no_shortcuts: bool,
 }
 
 impl HasSpecs for Args {
@@ -226,7 +226,7 @@ async fn setup_environment(
     sync_exposed_names(env_name, project, args).await?;
 
     // Add shortcuts
-    if !args.no_shortcut {
+    if !args.no_shortcuts {
         let prefix = project.environment_prefix(env_name).await?;
         for (package_name, _) in specs.iter() {
             let prefix_record = prefix.find_designated_package(package_name).await?;

@@ -22,6 +22,7 @@ pixi global <COMMAND>
 | [`list`](global/list.md) | Lists all packages previously installed into a globally accessible location via `pixi global install`. |
 | [`sync`](global/sync.md) | Sync global manifest with installed environments |
 | [`expose`](global/expose.md) | Interact with the exposure of binaries in the global environment |
+| [`shortcut`](global/shortcut.md) | Interact with the shortcuts on your machine |
 | [`update`](global/update.md) | Updates environments in the global environment |
 
 
