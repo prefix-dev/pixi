@@ -1975,10 +1975,10 @@ def test_update_env_not_installed(
     [envs.test.dependencies]
     dummy-a = "*"
     [envs.test.exposed]
-    dummy-a = "custom/dummy-a"
+    dummy-a = "bin/dummy-a"
     """
     manifest.write_text(original_toml)
-    dummy_a = tmp_pixi_workspace / "custom" / exec_extension("dummy-a")
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
 
     # Test install env when updating with no error
     verify_cli_command(
@@ -2004,10 +2004,10 @@ def test_update_custom_exposed(pixi: Path, tmp_pixi_workspace: Path, dummy_chann
     [envs.test.dependencies]
     dummy-a = "*"
     [envs.test.exposed]
-    dummy-a = "custom/dummy-a"
+    dummy-a = "bin/dummy-a"
     """
     manifest.write_text(original_toml)
-    dummy_a = tmp_pixi_workspace / "custom" / exec_extension("dummy-a")
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command(
