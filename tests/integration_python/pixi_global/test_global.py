@@ -1,10 +1,11 @@
-from pathlib import Path
+import platform
 import tomllib
+from pathlib import Path
 
 import pytest
 import tomli_w
-from ..common import verify_cli_command, ExitCode, exec_extension, bat_extension
-import platform
+
+from ..common import ExitCode, bat_extension, exec_extension, verify_cli_command
 
 MANIFEST_VERSION = 1
 
@@ -1958,3 +1959,70 @@ def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1
         env=env,
         stderr_contains="Environment dummy-a doesn't exist",
     )
+
+
+def test_update_env_not_installed(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "custom/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # Test install env when updating with no error
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_a.is_file()
+    print(manifest.read_text())
+    # The tables in the manifest have been preserved
+    assert manifest.read_text() == original_toml
+
+
+def test_update_custom_exposed(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "custom/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # Test basic commands
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_a.is_file()
+    print(manifest.read_text())
+    assert manifest.read_text() == original_toml
+
+    # Test Update with custom reposed package in manifest preserved
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_a.is_file()
+    print(manifest.read_text())
+    assert manifest.read_text() == original_toml
