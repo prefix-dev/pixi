@@ -114,18 +114,18 @@ which = "7.0.2"
 
 # Rattler crates
 file_url = "0.2.3"
-rattler = { version = "0.33.0", default-features = false }
+rattler = { version = "0.33.2", default-features = false }
 rattler_cache = { version = "0.3.14", default-features = false }
 rattler_conda_types = { version = "0.31.4", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.0.8", default-features = false }
 rattler_lock = { version = "0.22.47", default-features = false }
-rattler_menuinst = { version = "0.2.3", default-features = false }
+rattler_menuinst = { version = "0.2.5", default-features = false }
 rattler_networking = { version = "0.22.9", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { version = "0.22.1", default-features = false }
+rattler_repodata_gateway = { version = "0.22.3", default-features = false }
 rattler_shell = { version = "0.22.23", default-features = false }
 rattler_solve = { version = "1.4.1", default-features = false }
 rattler_virtual_packages = { version = "2.0.6", default-features = false }

@@ -43,6 +43,7 @@ use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
+use tokio::sync::Semaphore;
 use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
@@ -153,8 +154,12 @@ pub struct Workspace {
 
     /// The global configuration as loaded from the config file(s)
     config: Config,
+
     /// The S3 configuration
     s3_config: HashMap<String, s3_middleware::S3Config>,
+
+    /// The concurrent request semaphore
+    concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
 }
 
 impl Debug for Workspace {
@@ -216,6 +221,7 @@ impl Workspace {
             config,
             s3_config,
             repodata_gateway: Default::default(),
+            concurrent_downloads_semaphore: OnceCell::default(),
         }
     }
 
@@ -435,6 +441,17 @@ impl Workspace {
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
         Ok(&self.client_and_authenticated_client()?.1)
+    }
+
+    /// Returns a semaphore than can be used to limit the number of concurrent
+    /// according to the user configuration.
+    pub fn concurrent_downloads_semaphore(&self) -> Arc<Semaphore> {
+        self.concurrent_downloads_semaphore
+            .get_or_init(|| {
+                let max_concurrent_downloads = self.config().max_concurrent_downloads();
+                Arc::new(Semaphore::new(max_concurrent_downloads))
+            })
+            .clone()
     }
 
     fn client_and_authenticated_client(

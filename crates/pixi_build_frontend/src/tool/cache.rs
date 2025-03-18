@@ -6,6 +6,7 @@ use std::{
 };
 
 use dashmap::{DashMap, Entry};
+use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{ChannelConfig, Matches, Platform, PrefixRecord};
@@ -13,8 +14,6 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
 };
-
-use fs_err::tokio as tokio_fs;
 use tokio::sync::broadcast;
 
 use super::{installer::ToolInstaller, IsolatedTool};
@@ -40,7 +39,8 @@ pub struct ToolCache {
     cache: DashMap<IsolatedToolSpec, PendingOrFetched<Arc<IsolatedTool>>>,
 }
 
-/// Finds the `PrefixRecord`s from `conda-meta` directory which starts with `Matchspec` names.
+/// Finds the `PrefixRecord`s from `conda-meta` directory which starts with
+/// `Matchspec` names.
 pub(crate) async fn find_spec_records(
     conda_meta: &Path,
     name_to_match: Vec<String>,
@@ -312,8 +312,8 @@ mod tests {
 
     const BAT_META_JSON: &str = "bat-0.24.0-h3bba108_1.json";
 
-    /// A test helper to create a temporary directory and write conda meta files.
-    /// This is used to simulate already installed tools.
+    /// A test helper to create a temporary directory and write conda meta
+    /// files. This is used to simulate already installed tools.
     struct CondaMetaWriter {
         pub tmp_dir: PathBuf,
     }
@@ -328,7 +328,8 @@ mod tests {
         }
 
         /// Write a meta-json file to the conda-meta directory.
-        /// If `override_name` is provided, the file will be written with that name.
+        /// If `override_name` is provided, the file will be written with that
+        /// name.
         async fn write_meta_json(
             &self,
             meta_json: &str,
@@ -391,7 +392,7 @@ mod tests {
         let tool_context = ToolContext::for_tests()
             .with_platform(compatible_target_platform())
             .with_client(auth_client.clone())
-            .with_gateway(config.gateway(auth_client))
+            .with_gateway(config.gateway().with_client(auth_client).finish())
             .build();
 
         let tool_spec = IsolatedToolSpec {
@@ -491,8 +492,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_handle_a_failure() {
         // This test verifies that during the installation of a tool, if an error occurs
-        // the tool is not cached and the next request will try to install the tool again.
-        // A test installer that will fail on the first request.
+        // the tool is not cached and the next request will try to install the tool
+        // again. A test installer that will fail on the first request.
         #[derive(Default, Clone)]
         struct TestInstaller {
             count: Arc<Mutex<HashMap<IsolatedToolSpec, u8>>>,

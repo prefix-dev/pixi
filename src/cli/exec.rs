@@ -141,7 +141,7 @@ pub async fn create_exec_prefix(
         .context("failed to write lock status to prefix guard")?;
 
     // Construct a gateway to get repodata.
-    let gateway = config.gateway(client.clone());
+    let gateway = config.gateway().with_client(client.clone()).finish();
 
     // Determine the specs to use for the environment
     let specs = if args.specs.is_empty() {

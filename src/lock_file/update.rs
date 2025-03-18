@@ -1036,7 +1036,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
         let mapping_client = self.mapping_client.unwrap_or_else(|| {
             MappingClient::builder(client)
-                .with_concurrency_limit(Arc::new(Semaphore::new(100)))
+                .with_concurrency_limit(project.concurrent_downloads_semaphore())
                 .finish()
         });
 
