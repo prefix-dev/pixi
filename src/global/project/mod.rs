@@ -746,6 +746,8 @@ impl Project {
             .iter()
             .filter_map(|mapping| {
                 // If the executable isn't requested, remove the mapping
+                // Use file name of executable relname here for custom exposed path.
+                // `exposed = {dotnet = 'dotnet\dotnet' }`, file_name will be `dotnet`, eg.
                 if execs_all.iter().all(|executable| {
                     executable_from_path(&executable.path)
                         != PathBuf::from(mapping.executable_relname())
