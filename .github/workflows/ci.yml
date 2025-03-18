@@ -351,8 +351,9 @@ jobs:
 
   build-binary-windows-aarch64:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
-    runs-on: windows_arm64_2025_large
+    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main'  || contains(github.event.pull_request.labels.*.name, 'test:extra_slow')}} # Only run on the main branch
+    # Using windows-latest as it's only run on main, thus speed is not that important
+    runs-on: windows-latest
     name: "build binary | windows aarch64"
     steps:
       - uses: actions/checkout@v4
