@@ -1922,7 +1922,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.3"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -5154,7 +5154,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.33.2"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "anyhow",
  "clap",
@@ -5197,7 +5197,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.3.15"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5228,7 +5228,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.31.5"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -5266,7 +5266,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.0.8"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "blake2",
  "digest",
@@ -5282,7 +5282,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.22.48"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "chrono",
  "file_url",
@@ -5306,7 +5306,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.7"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "quote",
  "syn",
@@ -5315,7 +5315,7 @@ dependencies = [
 [[package]]
 name = "rattler_menuinst"
 version = "0.2.5"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "chrono",
  "configparser",
@@ -5344,7 +5344,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.22.10"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5374,7 +5374,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.34"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "bzip2",
  "chrono",
@@ -5403,7 +5403,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.8"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -5413,7 +5413,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.22.3"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5469,7 +5469,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.22.24"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "enum_dispatch",
  "fs-err",
@@ -5487,7 +5487,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "1.4.2"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "chrono",
  "futures",
@@ -5506,7 +5506,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "2.0.8"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "archspec",
  "libloading",
@@ -6619,7 +6619,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "git+https://github.com/ruben-arts/rattler?branch=debug%2Ftrash_dir_creation#4c8197e50659d8069a3e9625ac8928b1b1ef9dc7"
+source = "git+https://github.com/wolfv/rattler?branch=use-create-dir-all-for-trash#acc110b5737ed1bd44612e0c0d741db36c20c66e"
 dependencies = [
  "tokio",
 ]

@@ -113,22 +113,22 @@ wax = "0.6.0"
 which = "7.0.2"
 
 # Rattler crates
-file_url = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/file_url" }
-rattler = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler", default-features = false }
-rattler_cache = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_cache", default-features = false }
-rattler_conda_types = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_conda_types", default-features = false, features = [
+file_url = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/file_url" }
+rattler = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler", default-features = false }
+rattler_cache = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_cache", default-features = false }
+rattler_conda_types = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_conda_types", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_digest", default-features = false }
-rattler_lock = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_lock", default-features = false }
-rattler_menuinst = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_menuinst", default-features = false }
-rattler_networking = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_networking", default-features = false, features = [
+rattler_digest = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_digest", default-features = false }
+rattler_lock = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_lock", default-features = false }
+rattler_menuinst = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_menuinst", default-features = false }
+rattler_networking = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_networking", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_repodata_gateway", default-features = false }
-rattler_shell = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_shell", default-features = false }
-rattler_solve = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_solve", default-features = false }
-rattler_virtual_packages = { git = "https://github.com/ruben-arts/rattler", branch = "debug/trash_dir_creation", subdir = "crates/rattler_virtual_packages", default-features = false }
+rattler_repodata_gateway = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_repodata_gateway", default-features = false }
+rattler_shell = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_shell", default-features = false }
+rattler_solve = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_solve", default-features = false }
+rattler_virtual_packages = { git = "https://github.com/wolfv/rattler", branch = "use-create-dir-all-for-trash", subdir = "crates/rattler_virtual_packages", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
