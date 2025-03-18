@@ -30,13 +30,13 @@ pub fn format_asciiart_section(label: &str, content: String, last: bool, more: b
     format!("\n{}   {}─ {}: {}", prefix, symbol, label, content)
 }
 
-pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
+pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool, more: bool) -> Option<String> {
     if exposed.is_empty() {
         Some(format_asciiart_section(
             "exposes",
             console::style("Nothing").dim().red().to_string(),
             last,
-            false,
+            more,
         ))
     } else {
         let formatted_exposed = exposed.iter().map(format_mapping).join(", ");
@@ -44,7 +44,7 @@ pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String>
             "exposes",
             formatted_exposed,
             last,
-            false,
+            more,
         ))
     }
 }
@@ -257,9 +257,22 @@ pub async fn list_all_global_environments(
             message.push_str(&dep_message);
         }
 
+        // Check for shortcuts
+        let shortcuts = env.shortcuts.clone().unwrap_or_else(IndexSet::new);
+
         // Write exposed binaries
-        if let Some(exp_message) = format_exposed(&env.exposed, last) {
+        if let Some(exp_message) = format_exposed(&env.exposed, last, !shortcuts.is_empty()) {
             message.push_str(&exp_message);
+        }
+
+        // Write shortcuts
+        if !shortcuts.is_empty() {
+            message.push_str(&format_asciiart_section(
+                "shortcuts",
+                shortcuts.iter().map(PackageName::as_normalized).join(", "),
+                last,
+                false,
+            ));
         }
 
         if !last {
