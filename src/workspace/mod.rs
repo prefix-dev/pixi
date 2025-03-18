@@ -432,10 +432,11 @@ impl Workspace {
             })
     }
 
-    /// Returns the reqwest client used for http networking
-    pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
-        Ok(&self.client_and_authenticated_client()?.0)
-    }
+    // /// Returns the reqwest client used for http networking
+    // /// this api is not used now, uncomment when use in the future
+    // pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
+    //     Ok(&self.client_and_authenticated_client()?.0)
+    // }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
