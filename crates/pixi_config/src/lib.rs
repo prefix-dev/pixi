@@ -1,3 +1,10 @@
+use std::{
+    collections::{BTreeSet as Set, HashMap},
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    str::FromStr,
+};
+
 use clap::{ArgAction, Parser};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
@@ -7,15 +14,8 @@ use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
 use rattler_networking::s3_middleware;
-use rattler_repodata_gateway::{Gateway, SourceConfig};
-use reqwest_middleware::ClientWithMiddleware;
+use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
-use std::{
-    collections::{BTreeSet as Set, HashMap},
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-    str::FromStr,
-};
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
@@ -182,7 +182,8 @@ impl RepodataConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCliActivation {
-    /// Do not use the environment activation cache. (default: true except in experimental mode)
+    /// Do not use the environment activation cache. (default: true except in
+    /// experimental mode)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     force_activate: bool,
 
@@ -339,7 +340,8 @@ impl Default for DetachedEnvironments {
 #[serde(rename_all = "kebab-case")]
 pub struct ExperimentalConfig {
     /// The option to opt into the environment activation cache feature.
-    /// This is an experimental feature and may be removed in the future or made default.
+    /// This is an experimental feature and may be removed in the future or made
+    /// default.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_environment_activation_cache: Option<bool>,
@@ -362,7 +364,8 @@ impl ExperimentalConfig {
     }
 }
 
-// Making the default values part of pixi_config to allow for printing the default settings in the future.
+// Making the default values part of pixi_config to allow for printing the
+// default settings in the future.
 /// The default maximum number of concurrent solves that can be run at once.
 /// Defaulting to the number of CPUs available.
 fn default_max_concurrent_solves() -> usize {
@@ -380,12 +383,14 @@ fn default_max_concurrent_downloads() -> usize {
 #[serde(rename_all = "kebab-case")]
 pub struct ConcurrencyConfig {
     /// The maximum number of concurrent solves that can be run at once.
-    // Needing to set this default next to the default of the full struct to avoid serde defaulting to 0 of partial struct was omitted.
+    // Needing to set this default next to the default of the full struct to avoid serde defaulting
+    // to 0 of partial struct was omitted.
     #[serde(default = "default_max_concurrent_solves")]
     pub solves: usize,
 
     /// The maximum number of concurrent HTTP requests to make.
-    // Needing to set this default next to the default of the full struct to avoid serde defaulting to 0 of partial struct was omitted.
+    // Needing to set this default next to the default of the full struct to avoid serde defaulting
+    // to 0 of partial struct was omitted.
     #[serde(default = "default_max_concurrent_downloads")]
     pub downloads: usize,
 }
@@ -1444,8 +1449,8 @@ impl Config {
             .wrap_err(format!("failed to write config to '{}'", to.display()))
     }
 
-    /// Constructs a [`Gateway`] using a [`ClientWithMiddleware`]
-    pub fn gateway(&self, client: ClientWithMiddleware) -> Gateway {
+    /// Constructs a [`GatewayBuilder`] with preconfigured settings.
+    pub fn gateway(&self) -> GatewayBuilder {
         // Determine the cache directory and fall back to sane defaults otherwise.
         let cache_dir = get_cache_dir().unwrap_or_else(|e| {
             tracing::error!("failed to determine repodata cache directory: {e}");
@@ -1454,11 +1459,9 @@ impl Config {
 
         // Construct the gateway
         Gateway::builder()
-            .with_client(client)
             .with_cache_dir(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR))
             .with_channel_config(self.into())
             .with_max_concurrent_requests(self.max_concurrent_downloads())
-            .finish()
     }
 
     pub fn compute_s3_config(&self) -> HashMap<String, s3_middleware::S3Config> {

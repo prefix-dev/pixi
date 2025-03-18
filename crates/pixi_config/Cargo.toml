@@ -21,7 +21,6 @@ rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_networking = { workspace = true, features = ["s3"] }
 rattler_repodata_gateway = { workspace = true, features = ["gateway"] }
-reqwest-middleware = { workspace = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_json = { workspace = true }
