@@ -1961,7 +1961,9 @@ def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1
     )
 
 
-def test_update_env_not_installed(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+def test_update_env_not_installed(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
     manifests = tmp_pixi_workspace.joinpath("manifests")
     manifests.mkdir()
