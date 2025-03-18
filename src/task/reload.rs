@@ -3,12 +3,12 @@ use std::{
     time::Duration,
 };
 
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+use rayon::prelude::*;
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver};
 use tracing::{info, warn};
 use wax;
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-use rayon::prelude::*;
 
 use crate::task::ExecutableTask;
 
@@ -70,10 +70,7 @@ impl FileWatcher {
         let mut watched_paths = Vec::new();
 
         // Convert to concrete PathBuf collection first
-        let concrete_paths: Vec<PathBuf> = paths
-            .iter()
-            .map(|p| p.as_ref().to_path_buf())
-            .collect();
+        let concrete_paths: Vec<PathBuf> = paths.iter().map(|p| p.as_ref().to_path_buf()).collect();
 
         // Now use parallel iterator on concrete type
         let path_results: Vec<Result<Vec<PathBuf>, FileWatchError>> = concrete_paths
@@ -92,15 +89,16 @@ impl FileWatcher {
 
                     // Collect entries into Vec first, then process in parallel
                     let entries_vec: Vec<_> = entries.collect();
-                    
+
                     // Use std::sync::atomic for thread-safe found_match
                     let found_match_atomic = std::sync::atomic::AtomicBool::new(false);
                     let paths_mutex = std::sync::Mutex::new(Vec::new());
-                    
+
                     entries_vec.par_iter().for_each(|entry| {
                         match entry {
                             Ok(entry) => {
-                                found_match_atomic.store(true, std::sync::atomic::Ordering::Relaxed);
+                                found_match_atomic
+                                    .store(true, std::sync::atomic::Ordering::Relaxed);
                                 // Convert WalkEntry to PathBuf
                                 let path = entry.path().to_path_buf();
                                 if path.exists() {
@@ -113,7 +111,7 @@ impl FileWatcher {
                             Err(e) => warn!("Error in glob pattern '{}': {}", path_str, e),
                         }
                     });
-                    
+
                     // Get processed paths
                     let found_match = found_match_atomic.load(std::sync::atomic::Ordering::Relaxed);
                     if let Ok(processed_paths) = paths_mutex.lock() {
@@ -189,7 +187,7 @@ impl FileWatcher {
                     return Ok(None);
                 }
                 execute.inputs.clone().expect("inputs should not be None") // Unwrap the Option<Vec<String>>
-            },
+            }
             _ => return Ok(None),
         };
 

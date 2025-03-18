@@ -4,7 +4,7 @@ use std::{
     string::String,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc
+        Arc,
     },
 };
 

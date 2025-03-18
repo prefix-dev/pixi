@@ -28,7 +28,6 @@ pub mod lock;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
-pub mod watch;
 pub mod search;
 pub mod self_update;
 pub mod shell;
@@ -39,6 +38,7 @@ pub mod update;
 pub mod upgrade;
 pub mod upload;
 pub mod workspace;
+pub mod watch;
 
 #[derive(Parser, Debug)]
 #[command(

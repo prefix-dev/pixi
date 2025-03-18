@@ -35,7 +35,7 @@ impl TaskId {
     pub fn index(&self) -> usize {
         self.0
     }
-    
+
     /// Creates a new TaskId from an index
     pub fn new(index: usize) -> Self {
         Self(index)
@@ -139,7 +139,7 @@ impl<'p> TaskGraph<'p> {
     pub(crate) fn project(&self) -> &'p Workspace {
         self.project
     }
-    
+
     /// Returns the number of nodes in the graph
     pub fn nodes_len(&self) -> usize {
         self.nodes.len()
@@ -375,7 +375,7 @@ impl<'p> TaskGraph<'p> {
             nodes: Vec::new(),
         }
     }
-    
+
     /// Add a task to the graph and return its TaskId
     pub fn add_task(
         &mut self,
@@ -386,7 +386,7 @@ impl<'p> TaskGraph<'p> {
         dependencies: Vec<TaskId>,
     ) -> TaskId {
         let task_id = TaskId(self.nodes.len());
-        
+
         self.nodes.push(TaskNode {
             name,
             task,
@@ -394,8 +394,13 @@ impl<'p> TaskGraph<'p> {
             additional_args,
             dependencies,
         });
-        
+
         task_id
+    }
+
+    /// Update the dependencies of a task
+    pub fn update_task_dependencies(&mut self, task_id: TaskId, dependencies: Vec<TaskId>) {
+        self.nodes[task_id.index()].dependencies = dependencies;
     }
 }
 
