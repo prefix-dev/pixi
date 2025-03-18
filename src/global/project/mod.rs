@@ -747,7 +747,12 @@ impl Project {
             .filter_map(|mapping| {
                 // If the executable isn't requested, remove the mapping
                 if execs_all.iter().all(|executable| {
-                    executable_from_path(&executable.path) != mapping.executable_relname()
+                    executable_from_path(&executable.path)
+                        != PathBuf::from(mapping.executable_relname())
+                            .file_name()
+                            .unwrap()
+                            .to_string_lossy()
+                            .to_string()
                 }) {
                     Some(mapping.exposed_name().clone())
                 } else {
