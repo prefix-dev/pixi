@@ -1,6 +1,5 @@
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::convert::identity;
-use std::process::Stdio;
 use std::string::String;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -9,7 +8,6 @@ use std::sync::{
 use std::time::{Duration, Instant};
 
 use clap::Parser;
-use dashmap::DashMap;
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -17,7 +15,8 @@ use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::ConfigCliActivation;
 use pixi_manifest::TaskName;
 use thiserror::Error;
-use tokio::{process::Command, sync::broadcast};
+use tokio::sync::broadcast;
+use tokio::task::LocalSet;
 use tracing::Level;
 
 use crate::{
@@ -131,16 +130,42 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let task_graph =
         TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps)?;
 
+    // Currently only supporting a single task
+    let topological_order = task_graph.topological_order();
+    if topological_order.len() > 1 {
+        eprintln!(
+            "{}{}",
+            console::Emoji("🚫 ", ""),
+            console::style("Watch mode currently only supports single tasks without dependencies.")
+                .yellow()
+                .bold()
+        );
+        return Ok(());
+    } else if topological_order.is_empty() {
+        return Ok(());
+    }
+
+    // Get the single task
+    let task_id = topological_order[0];
+    let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
+
+    // If the task is not executable (e.g. an alias), we can't proceed
+    if !executable_task.task().is_executable() {
+        eprintln!(
+            "{}{}",
+            console::Emoji("🚫 ", ""),
+            console::style("The specified task is not executable.")
+                .yellow()
+                .bold()
+        );
+        return Ok(());
+    }
+
     tracing::info!("Task graph: {}", task_graph);
 
     // Create a broadcast channel for cancellation signals
     let (cancel_tx, _) = broadcast::channel::<()>(16);
     let cancel_tx = Arc::new(cancel_tx);
-
-    // Track running tasks in reverse topological order
-    let running_tasks: Arc<DashMap<String, Option<tokio::process::Child>>> =
-        Arc::new(DashMap::new());
-    let running_tasks_for_handler = running_tasks.clone();
 
     // Set up Ctrl+C handler
     let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
@@ -149,38 +174,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     ctrlc::set_handler(move || {
         reset_cursor();
-
-        // Send cancellation signal to all running tasks regardless of exit state
+        
+        // Send cancellation signal
         let _ = cancel_tx_clone.send(());
 
-        // Get task names from running tasks
-        let task_names: Vec<String> = running_tasks_for_handler
-            .iter()
-            .filter_map(|entry| {
-                if entry.value().is_some() {
-                    Some(entry.key().clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if !task_names.is_empty() {
-            // Print what tasks are being canceled
-            for task_name in &task_names {
-                eprintln!(
-                    "{}{}",
-                    console::Emoji("🛑 ", ""),
-                    console::style(format!("Cancelling task: {}", task_name))
-                        .yellow()
-                        .bold()
-                );
-            }
-
-            // Give tasks a moment to handle cancellation signal
-            std::thread::sleep(std::time::Duration::from_millis(200));
-        }
-
+        // Give tasks a moment to handle cancellation signal
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        
         // Exit the process if needed
         if ctrlc_should_exit_process_clone.load(Ordering::Relaxed) {
             exit_process_on_sigint();
@@ -198,29 +198,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .bold(),
         );
         eprintln!();
-    }
-
-    // Traverse the task graph in topological order and execute each individual
-    // task.
-    let mut task_idx = 0;
-    let mut task_envs = HashMap::new();
-    let topological_order = task_graph.topological_order();
-
-    for (order_idx, task_id) in topological_order.iter().enumerate() {
-        let executable_task = ExecutableTask::from_task_graph(&task_graph, *task_id);
-
-        // If the task is not executable (e.g. an alias), we skip it. This ensures we
-        // don't instantiate a prefix for an alias.
-        if !executable_task.task().is_executable() {
-            continue;
-        }
-
-        // Showing which command is being run if the level and type allows it.
+        
+        // Display the task that would be executed
         if tracing::enabled!(Level::WARN) && !executable_task.task().is_custom() {
-            if task_idx > 0 {
-                // Add a newline between task outputs
-                eprintln!();
-            }
             eprintln!(
                 "{}{}{}{}{}{}{}",
                 console::Emoji("✨ ", ""),
@@ -246,92 +226,106 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             );
         }
-
-        // on dry-run mode, we just print the command and skip the execution
-        if args.dry_run {
-            task_idx += 1;
-            continue;
-        }
-
-        // check task cache
-        let task_cache = match executable_task
-            .can_skip(&lock_file.lock_file)
-            .await
-            .into_diagnostic()?
-        {
-            CanSkip::No(cache) => cache,
-            CanSkip::Yes => {
-                eprintln!(
-                    "Task '{}' can be skipped (cache hit) 🚀",
-                    console::style(executable_task.name().unwrap_or("")).bold()
-                );
-                task_idx += 1;
-                continue;
-            }
-        };
-
-        // If we don't have a command environment yet, we need to compute it. We lazily
-        // compute the task environment because we only need the environment if
-        // a task is actually executed.
-        let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
-            Entry::Occupied(env) => env.into_mut(),
-            Entry::Vacant(entry) => {
-                // Ensure there is a valid prefix
-                lock_file
-                    .prefix(
-                        &executable_task.run_environment,
-                        args.prefix_update_config.update_mode(),
-                    )
-                    .await?;
-
-                let command_env = get_task_env(
-                    &executable_task.run_environment,
-                    args.clean_env || executable_task.task().clean_env(),
-                    Some(&lock_file.lock_file),
-                    workspace.config().force_activate(),
-                    workspace.config().experimental_activation_cache_usage(),
-                )
-                .await?;
-                entry.insert(command_env)
-            }
-        };
-
-        ctrlc_should_exit_process.store(false, Ordering::Relaxed);
-
-        // Execute the task itself within the command environment. If one of the tasks
-        // failed with a non-zero exit code, we exit this parent process with the same code.
-        match execute_task_with_watched_files(
-            &executable_task,
-            task_env,
-            cancel_tx.clone(),
-            ctrlc_should_exit_process.clone(),
-            running_tasks.clone(),
-            format!("{:?}:{}", task_id, order_idx),
-            order_idx,
-        )
-        .await
-        {
-            Ok(_) => {
-                task_idx += 1;
-            }
-            Err(TaskExecutionError::NonZeroExitCode(code)) => {
-                if code == 127 {
-                    command_not_found(&workspace, explicit_environment);
-                }
-                std::process::exit(code);
-            }
-            Err(err) => return Err(err.into()),
-        }
-
-        // Handle CTRL-C ourselves again
-        ctrlc_should_exit_process.store(true, Ordering::Relaxed);
-
-        // Update the task cache with the new hash
-        executable_task
-            .save_cache(&lock_file, task_cache)
-            .await
-            .into_diagnostic()?;
+        
+        return Ok(());
     }
+
+    // Check task cache
+    let task_cache = match executable_task
+        .can_skip(&lock_file.lock_file)
+        .await
+        .into_diagnostic()?
+    {
+        CanSkip::No(cache) => cache,
+        CanSkip::Yes => {
+            eprintln!(
+                "Task '{}' can be skipped (cache hit) 🚀",
+                console::style(executable_task.name().unwrap_or("")).bold()
+            );
+            return Ok(());
+        }
+    };
+
+    // If we don't have a command environment yet, we need to compute it
+    let command_env = {
+        // Ensure there is a valid prefix
+        lock_file
+            .prefix(
+                &executable_task.run_environment,
+                args.prefix_update_config.update_mode(),
+            )
+            .await?;
+
+        get_task_env(
+            &executable_task.run_environment,
+            args.clean_env || executable_task.task().clean_env(),
+            Some(&lock_file.lock_file),
+            workspace.config().force_activate(),
+            workspace.config().experimental_activation_cache_usage(),
+        )
+        .await?
+    };
+
+    // Display the task that will be executed
+    if tracing::enabled!(Level::WARN) && !executable_task.task().is_custom() {
+        eprintln!(
+            "{}{}{}{}{}{}{}",
+            console::Emoji("✨ ", ""),
+            console::style("Pixi task (").bold(),
+            console::style(executable_task.name().unwrap_or("unnamed"))
+                .green()
+                .bold(),
+            // Only print environment if multiple environments are available
+            if workspace.environments().len() > 1 {
+                format!(
+                    " in {}",
+                    executable_task.run_environment.name().fancy_display()
+                )
+            } else {
+                "".to_string()
+            },
+            console::style("): ").bold(),
+            executable_task.display_command(),
+            if let Some(description) = executable_task.task().description() {
+                console::style(format!(": ({})", description)).yellow()
+            } else {
+                console::style("".to_string()).yellow()
+            }
+        );
+    }
+
+    ctrlc_should_exit_process.store(false, Ordering::Relaxed);
+
+    // Create a LocalSet for spawn_local
+    let local = LocalSet::new();
+    
+    // Execute the task with file watching within the LocalSet
+    let task_result = local.run_until(execute_task_with_watched_files(
+        &executable_task,
+        &command_env,
+        cancel_tx.clone(),
+        ctrlc_should_exit_process.clone(),
+    )).await;
+    
+    match task_result {
+        Ok(_) => {}
+        Err(TaskExecutionError::NonZeroExitCode(code)) => {
+            if code == 127 {
+                command_not_found(&workspace, explicit_environment);
+            }
+            std::process::exit(code);
+        }
+        Err(err) => return Err(err.into()),
+    }
+
+    // Handle CTRL-C ourselves again
+    ctrlc_should_exit_process.store(true, Ordering::Relaxed);
+
+    // Update the task cache with the new hash
+    executable_task
+        .save_cache(&lock_file, task_cache)
+        .await
+        .into_diagnostic()?;
 
     Ok(())
 }
@@ -380,135 +374,12 @@ enum TaskExecutionError {
     ShellError { error: String },
 }
 
-/// Kill a running task gracefully
-async fn kill_task(
-    child: &mut tokio::process::Child,
-    task_id: &str,
-) -> Result<(), TaskExecutionError> {
-    tracing::info!("Terminating task: {}", task_id);
-
-    println!("Terminating task: {}", task_id);
-
-    // Try to kill the process gracefully
-    match child.kill().await {
-        Ok(_) => {
-            eprintln!(
-                "{}{}",
-                console::Emoji("🛑 ", ""),
-                console::style(format!("Task {} was terminated", task_id))
-                    .yellow()
-                    .bold()
-            );
-            Ok(())
-        }
-        Err(e) => {
-            // Process might have already exited
-            if e.kind() == std::io::ErrorKind::InvalidInput {
-                // This is fine - process already exited
-                Ok(())
-            } else {
-                Err(TaskExecutionError::ShellError {
-                    error: format!("Failed to kill task: {}", e),
-                })
-            }
-        }
-    }
-}
-
-/// Reload a task by killing the current one and starting a new one
-async fn reload_task(
-    task: &ExecutableTask<'_>,
-    command_env: &HashMap<String, String>,
-    current_child: &mut Option<tokio::process::Child>,
-    cancel_rx: &mut broadcast::Receiver<()>,
-) -> Result<(), TaskExecutionError> {
-    let task_name = task.name().unwrap_or("unnamed");
-
-    // First kill the current task if it exists
-    if let Some(child) = current_child.as_mut() {
-        println!("Killing task kir to soroush: {}", task_name);
-        let _ = kill_task(child, task_name).await;
-        *current_child = None;
-    }
-
-    // Print reloading message
-    eprintln!(
-        "{}{}{} {}",
-        console::Emoji("🔄 ", ""),
-        console::style("Reloading task: ").cyan().bold(),
-        console::style(task_name).green().bold(),
-        console::style(task.display_command().to_string())
-            .yellow()
-            .bold()
-    );
-
-    // Execute the task
-    match execute_task(task, command_env, cancel_rx).await {
-        Ok(child) => {
-            *current_child = Some(child);
-            Ok(())
-        }
-        Err(e) => {
-            tracing::error!("Error reloading task {}: {}", task_name, e);
-            Err(e)
-        }
-    }
-}
-
-/// Function to execute a single task.
-async fn execute_task(
-    task: &ExecutableTask<'_>,
-    command_env: &HashMap<String, String>,
-    _cancel_rx: &mut broadcast::Receiver<()>,
-) -> Result<tokio::process::Child, TaskExecutionError> {
-    let task_name = task.name().unwrap_or("unnamed");
-    tracing::info!("Executing task: {}", task_name);
-
-    let Some(_script) = task.as_deno_script()? else {
-        return Err(TaskExecutionError::ShellError {
-            error: "No script to execute".to_string(),
-        });
-    };
-    let cwd = task.working_directory()?;
-    let command_env = command_env.clone();
-
-    // We can't use deno_task_shell directly across threads, so instead:
-    // 1. We'll extract the command to run using the shell
-    let command_to_run = match task.full_command() {
-        Some(cmd) => cmd,
-        None => {
-            return Err(TaskExecutionError::ShellError {
-                error: "No command to execute".to_string(),
-            })
-        }
-    };
-
-    let child = Command::new("sh")
-        .arg("-c")
-        .arg(&command_to_run)
-        .current_dir(&cwd)
-        .env_clear()
-        .envs(command_env)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .stdin(Stdio::inherit())
-        .spawn()
-        .map_err(|e| TaskExecutionError::ShellError {
-            error: format!("Failed to start command: {}", e),
-        })?;
-
-    Ok(child)
-}
-
-/// Execute a task with file watching, including task inputs and handling dependencies.
+/// Execute a task with file watching, including task inputs.
 async fn execute_task_with_watched_files(
     task: &ExecutableTask<'_>,
     command_env: &HashMap<String, String>,
     cancel_tx: Arc<broadcast::Sender<()>>,
     ctrlc_should_exit_process: Arc<AtomicBool>,
-    running_tasks: Arc<DashMap<String, Option<tokio::process::Child>>>,
-    task_id: String,
-    _order_idx: usize,
 ) -> Result<(), TaskExecutionError> {
     // Create a receiver for cancellation signals
     let mut cancel_rx = cancel_tx.subscribe();
@@ -516,66 +387,83 @@ async fn execute_task_with_watched_files(
     // Set ctrlc behavior - don't exit process on Ctrl+C during task execution
     ctrlc_should_exit_process.store(false, Ordering::Relaxed);
 
-    // Execute the task
-    let child = match execute_task(task, command_env, &mut cancel_rx).await {
-        Ok(child) => child,
-        Err(e) => {
-            // Reset ctrlc behavior and return the error
-            ctrlc_should_exit_process.store(true, Ordering::Relaxed);
-            return Err(e);
-        }
+    // Get the script and working directory
+    let Some(script) = task.as_deno_script()? else {
+        return Err(TaskExecutionError::ShellError {
+            error: "No script to execute".to_string(),
+        });
     };
-
-    // Register the task in the running tasks map
-    let task_name = task.name().unwrap_or("unnamed").to_string();
-    let task_id_clone = task_id.clone();
-    running_tasks.insert(task_id_clone, Some(child));
-
-    // Keep track of the current child process
-    let mut current_child = running_tasks
-        .get_mut(&task_id)
-        .and_then(|mut entry| entry.take());
-
+    let cwd = task.working_directory()?;
+    
     // Check for inputs to watch
     let inputs = task.task().as_execute().map_or(Vec::new(), |execute| {
         execute.inputs.as_ref().unwrap_or(&Vec::new()).clone()
     });
 
+    // Create the kill signal for the initial run
+    let kill_signal = deno_task_shell::KillSignal::default();
+    let task_name = task.name().unwrap_or("unnamed").to_string();
+    
+    // Flag to indicate if the task was cancelled
+    let was_cancelled = Arc::new(AtomicBool::new(false));
+    let was_cancelled_clone = was_cancelled.clone();
+    
+    // Clone values that will be moved into the task
+    let script_clone = script.clone();
+    let command_env_clone = command_env.clone();
+    let cwd_clone = cwd.clone();
+    
+    // Run the task once before watching
+    let mut task_handle = tokio::task::spawn_local(async move {
+        let status_code = deno_task_shell::execute(
+            script_clone,
+            command_env_clone,
+            &cwd_clone,
+            Default::default(),
+            kill_signal,
+        ).await;
+        
+        if status_code != 0 && !was_cancelled_clone.load(Ordering::SeqCst) {
+            tracing::error!("Task exited with status code: {}", status_code);
+        }
+        
+        status_code
+    });
+
     if inputs.is_empty() {
-        // No inputs to watch, just wait for the task to complete
-        if let Some(mut child) = current_child {
-            // Wait for the task to complete or be cancelled
-            tokio::select! {
-                status = child.wait() => {
-                    // Reset ctrlc behavior
-                    ctrlc_should_exit_process.store(true, Ordering::Relaxed);
-
-                    // Remove task from running tasks
-                    running_tasks.remove(&task_id);
-
-                    match status {
-                        Ok(status) => {
-                            if !status.success() {
-                                let code = status.code().unwrap_or(1);
-                                return Err(TaskExecutionError::NonZeroExitCode(code));
-                            }
-                        },
-                        Err(e) => {
-                            tracing::error!("Error waiting for task: {}", e);
+        // No inputs to watch, just wait for cancellation or task completion
+        tokio::select! {
+            // Handle cancellation
+            _ = cancel_rx.recv() => {
+                was_cancelled.store(true, Ordering::SeqCst);
+                // We can't cancel the task directly anymore since kill_signal was moved
+                // Let's just log it and wait for the task to complete naturally or timeout
+                eprintln!(
+                    "{}{}",
+                    console::Emoji("🛑 ", ""),
+                    console::style(format!("Task {} was terminated", task_name))
+                        .yellow()
+                        .bold()
+                );
+            },
+            
+            // Wait for task to complete
+            status = &mut task_handle => {
+                match status {
+                    Ok(code) => {
+                        if code != 0 {
+                            return Err(TaskExecutionError::NonZeroExitCode(code));
                         }
+                    },
+                    Err(e) => {
+                        tracing::error!("Error waiting for task: {}", e);
                     }
-                },
-                _ = cancel_rx.recv() => {
-                    // Kill the process
-                    let _ = kill_task(&mut child, &task_name).await;
-                    // Reset ctrlc behavior
-                    ctrlc_should_exit_process.store(true, Ordering::Relaxed);
-                    // Remove task from running tasks
-                    running_tasks.remove(&task_id);
                 }
             }
         }
-
+        
+        // Reset ctrlc behavior
+        ctrlc_should_exit_process.store(true, Ordering::Relaxed);
         return Ok(());
     }
 
@@ -585,7 +473,7 @@ async fn execute_task_with_watched_files(
             path: format!("Error creating file watcher: {}", e),
         })
     })?;
-
+    
     tracing::info!("Watching for changes in: {:?}", inputs);
 
     // For debouncing (avoid multiple rapid triggers)
@@ -593,47 +481,41 @@ async fn execute_task_with_watched_files(
     let mut last_reload = Instant::now()
         .checked_sub(debounce_time)
         .unwrap_or_else(Instant::now);
-
-    // Main task loop
+    
+    // Main watching loop
     loop {
         tokio::select! {
-            // Check if current task has completed (only if we have a current task)
-            status = async {
-                if let Some(child) = &mut current_child {
-                    child.wait().await
-                } else {
-                    // No current task, wait forever
-                    std::future::pending::<Result<std::process::ExitStatus, std::io::Error>>().await
-                }
-            }, if current_child.is_some() => {
+            // Handle cancellation
+            _ = cancel_rx.recv() => {
+                was_cancelled.store(true, Ordering::SeqCst);
+                // We can't cancel the task directly anymore since kill_signal was moved
+                eprintln!(
+                    "{}{}",
+                    console::Emoji("🛑 ", ""),
+                    console::style(format!("Task {} was terminated", task_name))
+                        .yellow()
+                        .bold()
+                );
+                break;
+            },
+            
+            // Check task completion
+            status = &mut task_handle => {
                 match status {
-                    Ok(status) => {
-                        if !status.success() {
-                            let code = status.code().unwrap_or(1);
-                            tracing::error!("Task exited with non-zero status: {}", code);
-                        } else {
-                            tracing::info!("Task completed successfully");
+                    Ok(code) => {
+                        if code != 0 && !was_cancelled.load(Ordering::SeqCst) {
+                            return Err(TaskExecutionError::NonZeroExitCode(code));
                         }
-                        // Task completed, reset current_child
-                        current_child = None;
                     },
                     Err(e) => {
                         tracing::error!("Error waiting for task: {}", e);
-                        // Something went wrong with the task, clear current_child
-                        current_child = None;
                     }
                 }
+                
+                // Task finished on its own, just wait for file changes
+                // but don't explicitly break out of the loop
             },
-
-            // Handle cancellation
-            _ = cancel_rx.recv() => {
-                // Kill the current task if it exists
-                if let Some(mut child) = current_child.take() {
-                    let _ = kill_task(&mut child, &task_name).await;
-                }
-                break;
-            },
-
+            
             // Handle file changes
             Some(event) = watcher.next_event() => {
                 match event {
@@ -647,14 +529,53 @@ async fn execute_task_with_watched_files(
                                 if now.duration_since(last_reload) >= debounce_time {
                                     tracing::info!("Detected file change: {:?}", event.paths);
                                     last_reload = now;
-
-                                    // Create a new cancellation receiver for the new task
-                                    let mut new_cancel_rx = cancel_tx.subscribe();
-
-                                    // Reload the task using the reload_task function
-                                    if let Err(e) = reload_task(task, command_env, &mut current_child, &mut new_cancel_rx).await {
-                                        tracing::error!("Error executing task after file change: {}", e);
-                                    }
+                                    
+                                    // Mark the current task as cancelled
+                                    was_cancelled.store(true, Ordering::SeqCst);
+                                    
+                                    // Wait a bit for the task to finish (we can't kill it directly anymore)
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                    
+                                    // Create new kill signal for the restarted task
+                                    let new_kill_signal = deno_task_shell::KillSignal::default();
+                                    let new_was_cancelled = Arc::new(AtomicBool::new(false));
+                                    let new_was_cancelled_clone = new_was_cancelled.clone();
+                                    
+                                    // Print reloading message
+                                    eprintln!(
+                                        "{}{}{} {}",
+                                        console::Emoji("🔄 ", ""),
+                                        console::style("Reloading task: ").cyan().bold(),
+                                        console::style(task_name.clone()).green().bold(),
+                                        console::style(task.display_command().to_string())
+                                            .yellow()
+                                            .bold()
+                                    );
+                                    
+                                    // Reset cancellation flag for the new task
+                                    was_cancelled.store(false, Ordering::SeqCst);
+                                    
+                                    // Clone values for the new task
+                                    let script_clone = script.clone();
+                                    let command_env_clone = command_env.clone();  
+                                    let cwd_clone = cwd.clone();
+                                    
+                                    // Start the task again
+                                    task_handle = tokio::task::spawn_local(async move {
+                                        let status_code = deno_task_shell::execute(
+                                            script_clone,
+                                            command_env_clone,
+                                            &cwd_clone,
+                                            Default::default(),
+                                            new_kill_signal,
+                                        ).await;
+                                        
+                                        if status_code != 0 && !new_was_cancelled_clone.load(Ordering::SeqCst) {
+                                            tracing::error!("Task exited with status code: {}", status_code);
+                                        }
+                                        
+                                        status_code
+                                    });
                                 } else {
                                     tracing::debug!("Ignoring file change (debouncing): {:?}", event.paths);
                                 }
@@ -673,15 +594,7 @@ async fn execute_task_with_watched_files(
 
     // Reset ctrlc behavior before returning
     ctrlc_should_exit_process.store(true, Ordering::Relaxed);
-
-    // Make sure any remaining task is killed
-    if let Some(mut child) = current_child {
-        let _ = kill_task(&mut child, &task_name).await;
-    }
-
-    // Don't forget to clean up at the end
-    running_tasks.remove(&task_id);
-
+    
     Ok(())
 }
 
