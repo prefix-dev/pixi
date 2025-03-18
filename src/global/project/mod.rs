@@ -754,7 +754,6 @@ impl Project {
                             .file_name()
                             .unwrap_or(OsStr::new(""))
                             .to_string_lossy()
-                    
                 }) {
                     Some(mapping.exposed_name().clone())
                 } else {
