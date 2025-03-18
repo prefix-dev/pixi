@@ -1978,7 +1978,7 @@ def test_update_env_not_installed(
     dummy-a = "custom/dummy-a"
     """
     manifest.write_text(original_toml)
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+    dummy_a = tmp_pixi_workspace / "custom" / exec_extension("dummy-a")
 
     # Test install env when updating with no error
     verify_cli_command(
@@ -2007,7 +2007,7 @@ def test_update_custom_exposed(pixi: Path, tmp_pixi_workspace: Path, dummy_chann
     dummy-a = "custom/dummy-a"
     """
     manifest.write_text(original_toml)
-    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+    dummy_a = tmp_pixi_workspace / "custom" / exec_extension("dummy-a")
 
     # Test basic commands
     verify_cli_command(
