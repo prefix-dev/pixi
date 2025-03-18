@@ -4406,7 +4406,7 @@ dependencies = [
  "uv-resolver",
  "uv-types",
  "xxhash-rust",
- "zip 2.2.3",
+ "zip 2.4.1",
  "zstd",
 ]
 
@@ -4445,14 +4445,10 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
- "regex",
  "reqwest-middleware",
  "rstest",
  "serde",
  "serde_json",
- "serde_with",
- "serde_yaml",
- "sha1",
  "tempfile",
  "thiserror 2.0.11",
  "tokio",
@@ -5292,9 +5288,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.22.47"
+version = "0.22.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7705311b8999eaa43831113fff16cf209b61727894312723d5d43bd07de0f79a"
+checksum = "d53b8a7a04cefca5f0ed5463c72bdcb232d7ae3eb27f979569bc6e90eb391763"
 dependencies = [
  "chrono",
  "file_url",
@@ -5412,7 +5408,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
- "zip 2.2.3",
+ "zip 2.4.1",
  "zstd",
 ]
 
@@ -5505,9 +5501,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.4.1"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c656c89048348a6675f29f886cfc001cf4af1bae156b18dd9c39fcea5dfa4687"
+checksum = "fc403ea44cf8a4c8f382992ce172fb184b1bd99703bf981c46a4acd6ea010dae"
 dependencies = [
  "chrono",
  "futures",
@@ -5525,9 +5521,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.0.6"
+version = "2.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf18e5372605eb4b4548108af4fd1ca39906d6af1498f8e1db4ffd734b303fb9"
+checksum = "ef443a173c98db5ed56c8de62caad2f2f9569a2945cb520c2e73ab800b029708"
 dependencies = [
  "archspec",
  "libloading",
@@ -9546,9 +9542,9 @@ dependencies = [
 
 [[package]]
 name = "zip"
-version = "2.2.3"
+version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b280484c454e74e5fff658bbf7df8fdbe7a07c6b2de4a53def232c15ef138f3a"
+checksum = "938cc23ac49778ac8340e366ddc422b2227ea176edb447e23fc0627608dddadd"
 dependencies = [
  "arbitrary",
  "crc32fast",

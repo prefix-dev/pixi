@@ -14,6 +14,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Arguments
 - <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
 :  The packages to upgrade
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -46,6 +47,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 <br>**default**: `default`
 - <a id="arg---exclude" href="#arg---exclude">`--exclude <EXCLUDE>`</a>
 :  The packages which should be excluded
+<br>May be provided more than once.
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>

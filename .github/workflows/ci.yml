@@ -52,7 +52,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: tj-actions/changed-files@v45
+      - uses: step-security/changed-files@v45
         id: changed
         with:
           files_yaml: |
@@ -222,14 +222,14 @@ jobs:
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
   cargo-test-windows:
-    name: "cargo test | windows"
+    name: "cargo test | windows x64"
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: 16core_windows_latest_runner
+    runs-on: windows_x64_2025_large
     steps:
       - uses: actions/checkout@v4
-      - name: Create Dev Drive using ReFS
+      - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - uses: prefix-dev/setup-pixi@v0.8.3
         with:
@@ -323,11 +323,11 @@ jobs:
   build-binary-windows-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: 16core_windows_latest_runner
+    runs-on: windows_x64_2025_large
     name: "build binary | windows x86_64"
     steps:
       - uses: actions/checkout@v4
-      - name: Create Dev Drive using ReFS
+      - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
         run: |
@@ -352,11 +352,11 @@ jobs:
   build-binary-windows-aarch64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }} # Only run on the main branch
-    runs-on: 16core_windows_latest_runner
+    runs-on: windows_arm64_2025_large
     name: "build binary | windows aarch64"
     steps:
       - uses: actions/checkout@v4
-      - name: Create Dev Drive using ReFS
+      - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
         run: |
@@ -394,7 +394,7 @@ jobs:
       TARGET_RELEASE: "target/pixi/release"
     steps:
       - uses: actions/checkout@v4
-      - name: Create Dev Drive using ReFS
+      - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
         run: |
@@ -471,7 +471,7 @@ jobs:
       TARGET_RELEASE: "target/pixi/release"
     steps:
       - uses: actions/checkout@v4
-      - name: Create Dev Drive using ReFS
+      - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
         run: |
@@ -575,7 +575,7 @@ jobs:
       TARGET_RELEASE: "target/pixi/release"
     steps:
       - uses: actions/checkout@v4
-      - name: Create Dev Drive using ReFS
+      - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - name: Copy Git Repo to Dev Drive
         run: |

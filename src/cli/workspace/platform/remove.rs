@@ -5,14 +5,14 @@ use rattler_conda_types::Platform;
 
 use crate::{
     environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    lock_file::UpdateMode,
+    lock_file::{ReinstallPackages, UpdateMode},
     UpdateLockFileOptions, Workspace,
 };
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
-    /// The platform name(s) to remove.
-    #[clap(required = true, num_args=1..)]
+    /// The platform name to remove.
+    #[clap(required = true, num_args=1.., value_name = "PLATFORM")]
     pub platforms: Vec<Platform>,
 
     /// Don't update the environment, only remove the platform(s) from the
@@ -45,6 +45,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
             no_install: args.no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
+        ReinstallPackages::default(),
     )
     .await?;
     workspace.save().await.into_diagnostic()?;

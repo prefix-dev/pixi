@@ -8,12 +8,13 @@ Remove exposed binaries from the global environment
 
 ## Usage
 ```
-pixi global expose remove [OPTIONS] [EXPOSED_NAMES]...
+pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 ```
 
 ## Arguments
-- <a id="arg-<EXPOSED_NAMES>" href="#arg-<EXPOSED_NAMES>">`<EXPOSED_NAMES>`</a>
-:  The exposed names that should be removed
+- <a id="arg-<EXPOSED_NAME>" href="#arg-<EXPOSED_NAME>">`<EXPOSED_NAME>`</a>
+:  The exposed names that should be removed Can be specified multiple times
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>

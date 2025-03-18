@@ -1150,7 +1150,7 @@ impl Project {
         }
 
         for record in records_to_uninstall {
-            rattler_menuinst::remove_menu_items(&record.installed_system_menus)
+            rattler_menuinst::remove_menuitems_for_record(prefix.root(), record.clone())
                 .into_diagnostic()?;
 
             state_changes.insert_change(

@@ -343,7 +343,7 @@ Similar to `npm` scripts or something you would specify in a `Justfile`.
 !!! tip "Pixi tasks"
     Tasks are a cool Pixi feature that is powerful and runs in a cross-platform shell.
     You can do caching, dependencies and more.
-    Read more about tasks in the [tasks](../environments/advanced_tasks.md) section.
+    Read more about tasks in the [tasks](../workspace/advanced_tasks.md) section.
 
 ```shell
 pixi run test

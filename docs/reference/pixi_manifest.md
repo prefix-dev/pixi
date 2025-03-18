@@ -216,8 +216,8 @@ channel-priority = "disabled"
 Tasks are a way to automate certain custom commands in your project.
 For example, a `lint` or `format` step.
 Tasks in a Pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For more in-depth information, check the [Advanced tasks documentation](../environments/advanced_tasks.md).
-Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../environments/advanced_tasks.md#our-task-runner-deno_task_shell).
+For more in-depth information, check the [Advanced tasks documentation](../workspace/advanced_tasks.md).
+Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../workspace/advanced_tasks.md#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -263,7 +263,7 @@ e.g. `libc = { family="glibc", version="2.28" }`
 - `macos`: The minimal version of the macOS operating system.
 - `cuda`: The minimal version of the CUDA library.
 
-More information in the [system requirements documentation](../environments/system_requirements.md).
+More information in the [system requirements documentation](../workspace/system_requirements.md).
 
 ## The `pypi-options` table
 
@@ -700,7 +700,7 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../environments/multi_environment.md).
+The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../workspace/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]

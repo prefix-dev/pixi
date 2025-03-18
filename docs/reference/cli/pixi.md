@@ -15,6 +15,7 @@ pixi [OPTIONS] <COMMAND>
 | [`add`](pixi/add.md) | Adds dependencies to the workspace |
 | [`remove`](pixi/remove.md) | Removes dependencies from the workspace |
 | [`install`](pixi/install.md) | Install an environment, both updating the lockfile and installing the environment |
+| [`reinstall`](pixi/reinstall.md) | Re-install an environment, both updating the lockfile and re-installing the environment |
 | [`update`](pixi/update.md) | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
 | [`upgrade`](pixi/upgrade.md) | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |

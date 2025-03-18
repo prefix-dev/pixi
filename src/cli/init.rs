@@ -44,11 +44,11 @@ pub struct Args {
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
-    /// Channels to use in the workspace.
+    /// Channel to use in the workspace.
     #[arg(
         short,
         long = "channel",
-        id = "CHANNEL",
+        value_name = "CHANNEL",
         conflicts_with = "ENVIRONMENT_FILE"
     )]
     pub channels: Option<Vec<NamedChannelOrUrl>>,

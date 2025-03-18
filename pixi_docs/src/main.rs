@@ -310,6 +310,11 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
             writeln!(buffer).unwrap();
         }
 
+        // Write if it might be provided more than once
+        if matches!(opt.get_action(), clap::ArgAction::Append) {
+            writeln!(buffer, "<br>May be provided more than once.").unwrap();
+        }
+
         // Add required
         if opt.is_required_set() {
             writeln!(buffer, "<br>**required**: `true`").unwrap();

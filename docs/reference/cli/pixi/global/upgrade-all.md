@@ -14,6 +14,7 @@ pixi global upgrade-all [OPTIONS]
 ## Options
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
+<br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform <PLATFORM>`</a>
 :  The platform to install the package for
 <br>**default**: `current_platform`

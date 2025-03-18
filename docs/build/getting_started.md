@@ -25,7 +25,7 @@ The vision is to enable building of packages from source, for any language, on a
 This is an overview of the Pixi manifest using `pixi-build`.
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:full"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:full"
 ```
 
 
@@ -35,14 +35,14 @@ Since the build feature is still in preview, you have to add "pixi-build" to `wo
 
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:preview"
 ```
 
 
 In `package` you specify properties specific to the package you want to build.
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:package"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:package"
 ```
 
 
@@ -52,21 +52,32 @@ There are different build backends. Pixi backends can describe how to build a co
 In this example, we are using `pixi-build-python` backend in order to build a Python package.
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:build-system"
 ```
 
 
-We need to add our package `simple_python` as dependency to the workspace.
+We need to add our package `rich_example` as source dependency to the workspace.
 
-`pixi` also supports `git` dependencies, allowing you to specify a `branch`, `tag`, or `rev` to pin the dependency.
-If none are specified, the latest commit on the default branch is used. The `subdirectory` is optional and specifies the location of the package within the repository.
+!!! hint
+    Pixi dependencies fall into two main categories: `binary` and `source` dependencies.
+    `binary` dependencies are pre-built packages, while `source` dependencies are source code that needs to be built.
+
+
+Source dependencies can be specified either by providing a local path to the directory containing the package or a `git` dependency. When using `git`, you can optionally define a `branch`, `tag`, or `rev` to pin the dependency. If none are specified, the latest commit on the default branch is used. Additionally, a `subdirectory` can be specified to indicate the package’s location within the repository.
+
+Source dependencies are defined in one of two ways:
+
+* `Pixi`-based dependencies are built using the backend specified in the `[package.build]` section of pixi.toml.
+* `rattler-build`-based dependencies are built using a `recipe.yaml` file. You can specify the path to the folder containing the recipe file, or the path to the `recipe.yaml` file itself.
+
 
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:dependencies"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:dependencies"
 ```
 
-`simple_python` uses `hatchling` as Python build backend, so this needs to be mentioned in `host-dependencies`.
+
+`rich_example` uses `hatchling` as Python build backend, so this needs to be mentioned in `host-dependencies`.
 
 Python PEP517 backends like `hatchling` know how to build a Python package.
 So `hatchling` creates a Python package, and `pixi-build-python` turns the Python package into a conda package.
@@ -74,14 +85,14 @@ So `hatchling` creates a Python package, and `pixi-build-python` turns the Pytho
 Read up on host-dependencies in the [dependency types chapter](./dependency_types.md#host-dependencies)
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:host-dependencies"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:host-dependencies"
 ```
 
 We add `rich` as a run dependency to the package. This is necessary because the package uses `rich` during runtime.
 You can read up on run-dependencies in the [dependency types chapter](./dependency_types.md#dependencies-run-dependencies)
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:run-dependencies"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:run-dependencies"
 ```
 
 ## CLI Commands
