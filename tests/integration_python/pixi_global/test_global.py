@@ -2150,7 +2150,9 @@ def test_update_remove_old_env(
     assert manifest.read_text() == original_toml
 
     # Test remove env and update
-    original_toml = f" version = {MANIFEST_VERSION}"
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    """
     manifest.write_text(original_toml)
     verify_cli_command(
         [pixi, "global", "update"],
