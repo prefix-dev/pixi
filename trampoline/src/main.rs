@@ -14,23 +14,24 @@ use std::process::{Command, Stdio};
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
 
 #[derive(Deserialize, Debug)]
-struct Metadata {
+struct Configuration {
     exe: String,
     env: HashMap<String, String>,
 }
 
-fn read_metadata(current_exe: &Path) -> miette::Result<Metadata> {
-    // the metadata file is next to the current executable parent folder,
+fn read_configuration(current_exe: &Path) -> miette::Result<Configuration> {
+    // the configuration file is next to the current executable parent folder,
     // under trampoline_configuration/current_exe_name.json
     if let Some(exe_parent) = current_exe.parent() {
-        let metadata_path = exe_parent
+        let configuration_path = exe_parent
             .join(TRAMPOLINE_CONFIGURATION)
             .join(format!("{}.json", executable_from_path(current_exe),));
-        let metadata_file = File::open(&metadata_path)
+        let configuration_file = File::open(&configuration_path)
             .into_diagnostic()
-            .wrap_err(format!("Couldn't open {:?}", metadata_path))?;
-        let metadata: Metadata = serde_json::from_reader(metadata_file).into_diagnostic()?;
-        return Ok(metadata);
+            .wrap_err(format!("Couldn't open {:?}", configuration_path))?;
+        let configuration: Configuration =
+            serde_json::from_reader(configuration_file).into_diagnostic()?;
+        return Ok(configuration);
     }
     miette::bail!(
         "Couldn't get the parent folder of the current executable: {:?}",
@@ -72,13 +73,13 @@ fn trampoline() -> miette::Result<()> {
         .into_diagnostic()
         .wrap_err("Couldn't set the ctrl-c handler")?;
 
-    let metadata = read_metadata(&current_exe)?;
+    let configuration = read_configuration(&current_exe)?;
 
     // Create a new Command for the specified executable
-    let mut cmd = Command::new(metadata.exe);
+    let mut cmd = Command::new(configuration.exe);
 
     // Set any additional environment variables
-    for (key, value) in metadata.env.iter() {
+    for (key, value) in configuration.env.iter() {
         // Special case for PATH, which needs to be updated with the current PATH elements
         if key.to_uppercase() == "PATH" {
             cmd.env("PATH", update_path(value));
