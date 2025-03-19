@@ -36,7 +36,7 @@ def test_trampoline_respect_activation_variables(
     trampoline_env = trampoline_metadata["env"]
     assert trampoline_env["TRAMPOLINE_TEST_ENV"] == "teapot"
     assert "CONDA_PREFIX" in trampoline_env
-    assert "PATH" in trampoline_env
+    assert "PATH" not in trampoline_env
 
     # verify that exe and root folder is correctly set to the original one
     original_dummy_b = tmp_pixi_workspace / "envs" / "dummy-trampoline" / "bin" / "dummy-trampoline"
@@ -237,7 +237,9 @@ def test_trampoline_extends_path(
     dummy_trampoline_path = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline-path")
 
     original_path = os.environ["PATH"]
-    path_diff = "/test/path"
+    path_diff = os.pathsep.join(
+        ["/test/path", str(tmp_pixi_workspace.joinpath("envs", "dummy-trampoline-path", "bin"))]
+    )
 
     verify_cli_command(
         [

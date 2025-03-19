@@ -193,15 +193,15 @@ pub(crate) async fn create_executable_trampolines(
 }
 
 /// Compute the difference between two PATH variables (the entries split by `;` or `:`)
-fn path_diff(path_current: &str, path_after: &str) -> miette::Result<String> {
+fn path_diff(path_before: &str, path_after: &str) -> miette::Result<String> {
     // Split paths into vectors using platform-specific delimiter
-    let paths_current: Vec<PathBuf> = std::env::split_paths(&path_current).collect();
+    let paths_before: Vec<PathBuf> = std::env::split_paths(&path_before).collect();
     let paths_after: Vec<PathBuf> = std::env::split_paths(path_after).collect();
 
     // Calculate the PATH diff
-    let path_diff = paths_current
+    let path_diff = paths_after
         .iter()
-        .filter(|p| paths_after.contains(p).not());
+        .filter(|p| paths_before.contains(p).not());
 
     env::join_paths(path_diff)
         .map(|p| p.to_string_lossy().to_string())

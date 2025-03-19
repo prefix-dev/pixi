@@ -46,13 +46,19 @@ fn read_configuration(current_exe: &Path) -> miette::Result<Configuration> {
 /// Compute the difference between two PATH variables (the entries split by `;` or `:`)
 fn setup_path(path_diff: &str) -> miette::Result<String> {
     let current_path = std::env::var("PATH").into_diagnostic()?;
-    let path_diffs = std::env::split_paths(path_diff);
     let current_paths = std::env::split_paths(&current_path);
+    let path_diffs = std::env::split_paths(path_diff);
 
     let paths: Vec<PathBuf> = if let Ok(base_path) = std::env::var("PIXI_BASE_PATH") {
         let base_paths: Vec<PathBuf> = std::env::split_paths(&base_path).collect();
-        let new_parts = current_paths.filter(|current| base_paths.contains(current).not());
-        new_parts.chain(path_diffs).collect()
+        let new_parts: Vec<PathBuf> = current_paths
+            .filter(|current| base_paths.contains(current).not())
+            .collect();
+        new_parts
+            .into_iter()
+            .chain(path_diffs)
+            .chain(base_paths)
+            .collect()
     } else {
         path_diffs.chain(current_paths).collect()
     };
