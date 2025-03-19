@@ -1,10 +1,12 @@
-from pathlib import Path
+import platform
+import shutil
 import tomllib
+from pathlib import Path
 
 import pytest
 import tomli_w
-from ..common import verify_cli_command, ExitCode, exec_extension, bat_extension
-import platform
+
+from ..common import ExitCode, bat_extension, exec_extension, verify_cli_command
 
 MANIFEST_VERSION = 1
 
@@ -316,11 +318,7 @@ def test_expose_basic(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
     nested_dummy = tmp_pixi_workspace / "bin" / exec_extension("dummy")
 
     # Add dummy-a with simple syntax
-    verify_cli_command(
-        [pixi, "global", "expose", "add", "--environment=test", "dummy-a"],
-        ExitCode.SUCCESS,
-        env=env,
-    )
+    verify_cli_command([pixi, "global", "expose", "add", "--environment=test", "dummy-a"], env=env)
     assert dummy_a.is_file()
 
     # Add dummy1 and dummy3 and nested/dummy
@@ -405,10 +403,8 @@ dummy-a = "dummy-a"
 
     verify_cli_command(
         [pixi, "global", "expose", "add", "--environment=test", "dummy-aa=dummy-a"],
-        ExitCode.SUCCESS,
         env=env,
     )
-    print(manifest.read_text())
     # The tables in the manifest have been preserved
     assert manifest.read_text() == original_toml + 'dummy-aa = "dummy-a"\n'
 
@@ -1958,3 +1954,124 @@ def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1
         env=env,
         stderr_contains="Environment dummy-a doesn't exist",
     )
+
+
+def test_update_env_not_installed(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # If the environment isn't installed already,
+    # `pixi global update` will install it first
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    # The tables in the manifest have been preserved
+    assert manifest.read_text() == original_toml
+
+
+@pytest.mark.parametrize(
+    ("delete_exposed_on_second", "delete_env_on_second"),
+    [(True, False), (False, True), (False, False)],
+)
+def test_update_custom_exposed_twice(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    dummy_channel_1: str,
+    delete_exposed_on_second: bool,
+    delete_env_on_second: bool,
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # Test first update
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+    # Test second update
+    if delete_exposed_on_second:
+        dummy_a.unlink()
+    if delete_env_on_second:
+        shutil.rmtree(tmp_pixi_workspace / "envs")
+
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+
+def test_update_remove_old_env(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    dummy_channel_1: str,
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # Test first update
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+    # Test remove env from manifest and then update
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    """
+    manifest.write_text(original_toml)
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    assert manifest.read_text() == original_toml

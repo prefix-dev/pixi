@@ -27,6 +27,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
+        // If the environment isn't up-to-date our executable detection afterwards will not work
+        if !project.environment_in_sync(env_name).await? {
+            let _ = project.install_environment(env_name).await?;
+        }
+
         // See what executables were installed prior to update
         let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
 
@@ -67,7 +72,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Update all environments if the user did not specify any
     let env_names = match args.environments {
         Some(env_names) => env_names,
-        None => project_original.environments().keys().cloned().collect(),
+        None => {
+            // prune old environments
+            let state_changes = project_original.prune_old_environments().await?;
+            state_changes.report();
+            project_original.environments().keys().cloned().collect()
+        }
     };
 
     // Apply changes to each environment, only revert changes if an error occurs
