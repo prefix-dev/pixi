@@ -2021,7 +2021,6 @@ def test_update_custom_exposed_twice(
     manifest.write_text(original_toml)
     dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
 
-    
     # Test first update
     verify_cli_command(
         [pixi, "global", "update"],
