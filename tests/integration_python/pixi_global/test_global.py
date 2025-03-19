@@ -1,4 +1,6 @@
+import os
 import platform
+import shutil
 import tomllib
 from pathlib import Path
 
@@ -2026,5 +2028,66 @@ def test_update_custom_exposed(pixi: Path, tmp_pixi_workspace: Path, dummy_chann
         env=env,
     )
     assert dummy_a.is_file()
+    print(manifest.read_text())
+    assert manifest.read_text() == original_toml
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("delete_exposed_on_second", "delete_env_on_second"),
+    [(True, False), (False, True), (False, False)],
+)
+def test_update_custom_exposed_twice(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    delete_exposed_on_second: bool,
+    delete_env_on_second: bool,
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = """
+    version = {MANIFEST_VERSION}
+    [envs.dotnet]
+    channels = ["conda-forge"]
+    dependencies = { dotnet = "*" }
+    exposed = {dotnet = 'dotnet/dotnet' }
+    """
+    manifest.write_text(original_toml)
+    dotnet = tmp_pixi_workspace / "bin" / exec_extension("dotnet")
+
+    # Test first update with on env installed
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    assert dotnet.is_file()
+    print(manifest.read_text())
+    assert manifest.read_text() == original_toml
+    verify_cli_command(
+        [dotnet, "help"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+
+    # Test second update
+    if delete_exposed_on_second:
+        os.remove(dotnet)
+    if delete_env_on_second:
+        shutil.rmtree(tmp_pixi_workspace / "env")
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dotnet.is_file()
+    verify_cli_command(
+        [dotnet, "help"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
     print(manifest.read_text())
     assert manifest.read_text() == original_toml
