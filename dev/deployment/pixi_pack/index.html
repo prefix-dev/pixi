@@ -2329,7 +2329,7 @@ You can then install the environment using <code>conda</code> or <code>micromamb
 </div>
 <div class="admonition note">
 <p>Both <code>conda</code> and <code>mamba</code> are always installing pip as a side effect when they install python, see <a href="https://docs.conda.io/projects/conda/en/25.1.x/user-guide/configuration/settings.html#add-pip-as-python-dependency-add-pip-as-python-dependency"><code>conda</code>'s documentation</a>.
-This is not different from how <code>pixi</code> works and can lead to solver errors when using <code>pixi-pack</code>'s compatibility mode since <code>pixi-pack</code> doesn't include <code>pip</code> by default.
+This is different from how <code>pixi</code> works and can lead to solver errors when using <code>pixi-pack</code>'s compatibility mode since <code>pixi-pack</code> doesn't include <code>pip</code> by default.
 You can fix this issue in two ways:</p>
 <ul>
 <li>Add <code>pip</code> to your <code>pixi.lock</code> file using <code>pixi add pip</code>.</li>
