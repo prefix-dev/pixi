@@ -756,12 +756,12 @@ impl Project {
                 // If the executable isn't requested, remove the mapping
                 // Use file name of executable relname here for custom exposed path.
                 // `exposed = {dotnet = 'dotnet\dotnet' }`, file_name will be `dotnet`, eg.
+                let executable_file_name = PathBuf::from(mapping.executable_relname())
+                    .file_name()?
+                    .to_string_lossy()
+                    .to_string();
                 if execs_all.iter().all(|executable| {
-                    executable_from_path(&executable.path)
-                        != PathBuf::from(mapping.executable_relname())
-                            .file_name()
-                            .unwrap_or(OsStr::new(""))
-                            .to_string_lossy()
+                    executable_from_path(&executable.path) != executable_file_name
                 }) {
                     Some(mapping.exposed_name().clone())
                 } else {

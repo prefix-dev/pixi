@@ -1,4 +1,3 @@
-import os
 import platform
 import shutil
 import tomllib
@@ -411,7 +410,6 @@ dummy-a = "dummy-a"
         ExitCode.SUCCESS,
         env=env,
     )
-    print(manifest.read_text())
     # The tables in the manifest have been preserved
     assert manifest.read_text() == original_toml + 'dummy-aa = "dummy-a"\n'
 
@@ -1982,14 +1980,14 @@ def test_update_env_not_installed(
     manifest.write_text(original_toml)
     dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
 
-    # Test install env when updating with no error
+    # If the environment isn't installed already,
+    # `pixi global update` will install it first
     verify_cli_command(
         [pixi, "global", "update"],
         ExitCode.SUCCESS,
         env=env,
     )
     assert dummy_a.is_file()
-    print(manifest.read_text())
     # The tables in the manifest have been preserved
     assert manifest.read_text() == original_toml
 
@@ -1997,10 +1995,6 @@ def test_update_env_not_installed(
 @pytest.mark.parametrize(
     ("delete_exposed_on_second", "delete_env_on_second"),
     [(True, False), (False, True), (False, False)],
-)
-@pytest.mark.skipif(
-    platform.system() == "Windows",
-    reason="require admin permissions to delete env",
 )
 def test_update_custom_exposed_twice(
     pixi: Path,
@@ -2032,12 +2026,11 @@ def test_update_custom_exposed_twice(
         env=env,
     )
     assert dummy_a.is_file()
-    print(manifest.read_text())
     assert manifest.read_text() == original_toml
 
     # Test second update
     if delete_exposed_on_second:
-        os.remove(dummy_a)
+        dummy_a.unlink()
     if delete_env_on_second:
         shutil.rmtree(tmp_pixi_workspace / "envs")
 
@@ -2047,7 +2040,6 @@ def test_update_custom_exposed_twice(
         env=env,
     )
     assert dummy_a.is_file()
-    print(manifest.read_text())
     assert manifest.read_text() == original_toml
 
 
@@ -2055,10 +2047,6 @@ def test_update_custom_exposed_twice(
 @pytest.mark.parametrize(
     ("delete_exposed_on_second", "delete_env_on_second"),
     [(True, False), (False, True), (False, False)],
-)
-@pytest.mark.skipif(
-    platform.system() == "Windows",
-    reason="require admin permissions to delete env",
 )
 def test_update_custom_exposed_twice_slow(
     pixi: Path,
@@ -2090,7 +2078,6 @@ def test_update_custom_exposed_twice_slow(
     )
 
     assert dotnet.is_file()
-    print(manifest.read_text())
     assert manifest.read_text() == original_toml
     verify_cli_command(
         [dotnet, "help"],
@@ -2100,7 +2087,7 @@ def test_update_custom_exposed_twice_slow(
 
     # Test second update
     if delete_exposed_on_second:
-        os.remove(dotnet)
+        dotnet.unlink()
     if delete_env_on_second:
         shutil.rmtree(tmp_pixi_workspace / "envs")
     verify_cli_command(
@@ -2114,7 +2101,6 @@ def test_update_custom_exposed_twice_slow(
         ExitCode.SUCCESS,
         env=env,
     )
-    print(manifest.read_text())
     assert manifest.read_text() == original_toml
 
 
@@ -2146,7 +2132,6 @@ def test_update_remove_old_env(
         env=env,
     )
     assert dummy_a.is_file()
-    print(manifest.read_text())
     assert manifest.read_text() == original_toml
 
     # Test remove env from manifest and then update
@@ -2160,5 +2145,4 @@ def test_update_remove_old_env(
         env=env,
     )
     assert not dummy_a.is_file()
-    print(manifest.read_text())
     assert manifest.read_text() == original_toml

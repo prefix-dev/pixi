@@ -27,7 +27,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
-        // If the environment ins't up-to-date our executable detection afterwards will not work
+        // If the environment isn't up-to-date our executable detection afterwards will not work
         if !project.environment_in_sync(env_name).await? {
             let _ = project.install_environment(env_name).await?;
         }
