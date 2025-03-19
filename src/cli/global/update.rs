@@ -30,7 +30,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // See what executables were installed prior to update
         let env_binaries = match project.executables_of_direct_dependencies(env_name).await {
             Ok(env_binaries) => env_binaries,
-            // try to install env if env is not existed.
+            // try to install env when env is not existed.
             Err(_) => {
                 let _ = project.install_environment(env_name).await?;
                 project.executables_of_direct_dependencies(env_name).await?
@@ -38,10 +38,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Get the exposed binaries from mapping
-        let exposed_mapping_binaries = &project
-            .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?
-            .exposed;
+        let exposed_mapping_binaries = match &project.environment(env_name) {
+            Some(env) => &env.exposed,
+            None => {
+                // try to install env when env is not existed but exposed exists.
+                let _ = project.install_environment(env_name).await?;
+                &project
+                    .environment(env_name)
+                    .ok_or_else(|| {
+                        miette::miette!("Environment {} not found", env_name.fancy_display())
+                    })?
+                    .exposed
+            }
+        };
 
         // Check if they were all auto-exposed, or if the user manually exposed a subset of them
         let expose_type = if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
