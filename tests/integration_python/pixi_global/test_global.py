@@ -318,11 +318,7 @@ def test_expose_basic(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
     nested_dummy = tmp_pixi_workspace / "bin" / exec_extension("dummy")
 
     # Add dummy-a with simple syntax
-    verify_cli_command(
-        [pixi, "global", "expose", "add", "--environment=test", "dummy-a"],
-        ExitCode.SUCCESS,
-        env=env,
-    )
+    verify_cli_command([pixi, "global", "expose", "add", "--environment=test", "dummy-a"], env=env)
     assert dummy_a.is_file()
 
     # Add dummy1 and dummy3 and nested/dummy
@@ -407,7 +403,6 @@ dummy-a = "dummy-a"
 
     verify_cli_command(
         [pixi, "global", "expose", "add", "--environment=test", "dummy-aa=dummy-a"],
-        ExitCode.SUCCESS,
         env=env,
     )
     # The tables in the manifest have been preserved
@@ -1984,7 +1979,6 @@ def test_update_env_not_installed(
     # `pixi global update` will install it first
     verify_cli_command(
         [pixi, "global", "update"],
-        ExitCode.SUCCESS,
         env=env,
     )
     assert dummy_a.is_file()
@@ -2022,7 +2016,6 @@ def test_update_custom_exposed_twice(
     # Test first update
     verify_cli_command(
         [pixi, "global", "update"],
-        ExitCode.SUCCESS,
         env=env,
     )
     assert dummy_a.is_file()
@@ -2036,7 +2029,6 @@ def test_update_custom_exposed_twice(
 
     verify_cli_command(
         [pixi, "global", "update"],
-        ExitCode.SUCCESS,
         env=env,
     )
     assert dummy_a.is_file()
@@ -2067,7 +2059,6 @@ def test_update_remove_old_env(
     # Test first update
     verify_cli_command(
         [pixi, "global", "update"],
-        ExitCode.SUCCESS,
         env=env,
     )
     assert dummy_a.is_file()
@@ -2080,7 +2071,6 @@ def test_update_remove_old_env(
     manifest.write_text(original_toml)
     verify_cli_command(
         [pixi, "global", "update"],
-        ExitCode.SUCCESS,
         env=env,
     )
     assert not dummy_a.is_file()
