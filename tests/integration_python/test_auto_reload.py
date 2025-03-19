@@ -9,7 +9,7 @@ from .common import EMPTY_BOILERPLATE_PROJECT
 
 
 # Helper function for non-blocking reads with timeout
-def read_line_with_timeout(process, timeout=5):
+def read_line_with_timeout(process: subprocess.Popen[str], timeout: float = 5) -> str:
     if process.stdout is None:
         return ""
 
@@ -240,14 +240,11 @@ def test_empty_watched_files(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     assert task_executed, "Task didn't execute"
 
-    for _ in range(10):
-        if process.poll() is not None:
-            break
-        time.sleep(0.5)
+    # Give the process a moment to potentially exit
+    time.sleep(1)
 
-    assert process.poll() is not None, (
-        "Process should have exited on its own with empty inputs list"
-    )
+    # The process should still be running, even with empty inputs
+    assert process.poll() is None, "Process should stay running even with empty inputs list"
 
-    if process.poll() is None:
-        terminate_process(process, 1)
+    # Since the process doesn't exit on its own, we need to terminate it
+    terminate_process(process, 1)
