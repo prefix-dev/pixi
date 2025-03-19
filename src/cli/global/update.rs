@@ -27,15 +27,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
+        // If the environment ins't up-to-date our executable detection afterwards will not work
+        if !project.environment_in_sync(env_name).await? {
+            let _ = project.install_environment(env_name).await?;
+        }
+
         // See what executables were installed prior to update
-        let env_binaries = match project.executables_of_direct_dependencies(env_name).await {
-            Ok(env_binaries) => env_binaries,
-            // try to install env if env is not existed.
-            Err(_) => {
-                let _ = project.install_environment(env_name).await?;
-                project.executables_of_direct_dependencies(env_name).await?
-            }
-        };
+        let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
 
         // Get the exposed binaries from mapping
         let exposed_mapping_binaries = &project
