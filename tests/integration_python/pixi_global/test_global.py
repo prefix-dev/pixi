@@ -2043,67 +2043,6 @@ def test_update_custom_exposed_twice(
     assert manifest.read_text() == original_toml
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize(
-    ("delete_exposed_on_second", "delete_env_on_second"),
-    [(True, False), (False, True), (False, False)],
-)
-def test_update_custom_exposed_twice_slow(
-    pixi: Path,
-    tmp_pixi_workspace: Path,
-    delete_exposed_on_second: bool,
-    delete_env_on_second: bool,
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
-    manifests.mkdir()
-    manifest = manifests.joinpath("pixi-global.toml")
-    original_toml = f"""
-    version = {MANIFEST_VERSION}
-    [envs.test]
-    channels = ["conda-forge"]
-    [envs.test.dependencies]
-    dotnet = "*"
-    [envs.test.exposed]
-    dotnet = "dotnet/dotnet"
-    """
-    manifest.write_text(original_toml)
-    dotnet = tmp_pixi_workspace / "bin" / exec_extension("dotnet")
-
-    # Test first update with on env installed
-    verify_cli_command(
-        [pixi, "global", "update"],
-        ExitCode.SUCCESS,
-        env=env,
-    )
-
-    assert dotnet.is_file()
-    assert manifest.read_text() == original_toml
-    verify_cli_command(
-        [dotnet, "help"],
-        ExitCode.SUCCESS,
-        env=env,
-    )
-
-    # Test second update
-    if delete_exposed_on_second:
-        dotnet.unlink()
-    if delete_env_on_second:
-        shutil.rmtree(tmp_pixi_workspace / "envs")
-    verify_cli_command(
-        [pixi, "global", "update"],
-        ExitCode.SUCCESS,
-        env=env,
-    )
-    assert dotnet.is_file()
-    verify_cli_command(
-        [dotnet, "help"],
-        ExitCode.SUCCESS,
-        env=env,
-    )
-    assert manifest.read_text() == original_toml
-
-
 def test_update_remove_old_env(
     pixi: Path,
     tmp_pixi_workspace: Path,
