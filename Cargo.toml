@@ -281,6 +281,7 @@ uv-pypi-types = { workspace = true }
 ctrlc = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 notify = "8.0.0"
+notify-debouncer-full = "0.5.0"
 pixi_allocator = { workspace = true, optional = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
@@ -349,8 +350,6 @@ xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
 wax = { workspace = true, features = ["miette"] }
-notify-debouncer-mini = "0.6.0"
-notify-debouncer-full = "0.5.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }

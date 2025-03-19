@@ -13,7 +13,7 @@ use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
-use pixi_config::ConfigCliActivation;
+use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_manifest::TaskName;
 use thiserror::Error;
 use tokio::sync::broadcast;
@@ -21,7 +21,7 @@ use tokio::task::LocalSet;
 use tracing::{error, info, Level};
 
 use crate::{
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
     lock_file::UpdateLockFileOptions,
     task::{
@@ -33,11 +33,18 @@ use crate::{
     Workspace, WorkspaceLocator,
 };
 
-/// Runs task in project.
+/// Runs task in the pixi environment and watch files for changes.
+///
+/// This command is used to run tasks in the pixi environment.
+/// The tasks are killed and ran again when the files specified in `inputs` change.
+/// It will activate the environment and run the task in the environment.
+/// It is using the deno_task_shell to run the task.
+///
+/// `pixi watch` will also update the lockfile and install the environment if it is required.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
-    /// The pixi task or a task shell command you want to run with watcher in the project's
+    /// The pixi task or a task shell command you want to run in the workspace's
     /// environment, which can be an executable in the environment's PATH.
     pub task: Vec<String>,
 
@@ -46,6 +53,12 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
 
     #[clap(flatten)]
     pub activation_config: ConfigCliActivation,
@@ -83,7 +96,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let cli_config = args
         .activation_config
-        .merge_config(args.prefix_update_config.config.clone().into());
+        .merge_config(args.config.clone().into());
 
     // Load the workspace
     let workspace = WorkspaceLocator::for_cli()
@@ -113,9 +126,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let best_platform = environment.best_platform();
 
     // Ensure that the lock-file is up-to-date.
-    let mut lock_file = workspace
+    let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..UpdateLockFileOptions::default()
         })
@@ -249,24 +262,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // If we don't have a command environment yet, we need to compute it
-    let command_env = {
-        // Ensure there is a valid prefix
-        lock_file
-            .prefix(
-                &executable_task.run_environment,
-                args.prefix_update_config.update_mode(),
-            )
-            .await?;
-
-        get_task_env(
-            &executable_task.run_environment,
-            args.clean_env || executable_task.task().clean_env(),
-            Some(&lock_file.lock_file),
-            workspace.config().force_activate(),
-            workspace.config().experimental_activation_cache_usage(),
-        )
-        .await?
-    };
+    let command_env = get_task_env(
+        &executable_task.run_environment,
+        args.clean_env || executable_task.task().clean_env(),
+        Some(&lock_file.lock_file),
+        workspace.config().force_activate(),
+        workspace.config().experimental_activation_cache_usage(),
+    )
+    .await?;
 
     // Display the task that will be executed
     if tracing::enabled!(Level::WARN) && !executable_task.task().is_custom() {
