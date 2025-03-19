@@ -14,9 +14,13 @@ use std::process::{Command, Stdio};
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
 
 #[derive(Deserialize, Debug)]
-struct Configuration {
-    exe: String,
-    env: HashMap<String, String>,
+pub struct Configuration {
+    /// Path to the original executable.
+    pub exe: PathBuf,
+    /// Root path of the original executable that should be prepended to the PATH.
+    pub path_diff: String,
+    /// Environment variables to be set before executing the original executable.
+    pub env: HashMap<String, String>,
 }
 
 fn read_configuration(current_exe: &Path) -> miette::Result<Configuration> {
