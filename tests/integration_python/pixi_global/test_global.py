@@ -2149,7 +2149,7 @@ def test_update_remove_old_env(
     print(manifest.read_text())
     assert manifest.read_text() == original_toml
 
-    # Test remove env and update
+    # Test remove env from manifest and then update
     original_toml = f"""
     version = {MANIFEST_VERSION}
     """
