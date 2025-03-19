@@ -75,7 +75,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env_names = match args.environments {
         Some(env_names) => env_names,
         None => {
-            let _ = project_original.prune_old_environments().await?;
+            // prune old environments whose env is still existed but already removed from manifest
+            match project_original.prune_old_environments().await {
+                Ok(state_changes) => state_changes.report(),
+                Err(err) => return Err(err),
+            }
             project_original.environments().keys().cloned().collect()
         }
     };
