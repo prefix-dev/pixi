@@ -2116,3 +2116,47 @@ def test_update_custom_exposed_twice_slow(
     )
     print(manifest.read_text())
     assert manifest.read_text() == original_toml
+
+
+def test_update_remove_old_env(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    dummy_channel_1: str,
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # Test first update
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert dummy_a.is_file()
+    print(manifest.read_text())
+    assert manifest.read_text() == original_toml
+
+    # Test remove env and update
+    original_toml = f" version = {MANIFEST_VERSION}"
+    manifest.write_text(original_toml)
+    verify_cli_command(
+        [pixi, "global", "update"],
+        ExitCode.SUCCESS,
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    print(manifest.read_text())
+    assert manifest.read_text() == original_toml
