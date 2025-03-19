@@ -102,12 +102,12 @@ pub(crate) async fn create_executable_trampolines(
 
     // Get PATH environment variables
     let path_current = std::env::var("PATH").into_diagnostic()?;
-    let activation_variables = prefix.run_activation().await?;
+    let mut activation_variables = prefix.run_activation().await?;
     let path_after_activation = activation_variables
-        .get("PATH")
+        .remove("PATH")
         .ok_or_else(|| miette::miette!("Activation variables need to contain PATH"))?;
 
-    let path_diff = path_diff(&path_current, path_after_activation)?;
+    let path_diff = path_diff(&path_current, &path_after_activation)?;
 
     for ScriptExecMapping {
         global_script_path,
