@@ -2036,7 +2036,7 @@ def test_update_custom_exposed_twice(
     if delete_exposed_on_second:
         os.remove(dummy_a)
     if delete_env_on_second:
-        shutil.rmtree(tmp_pixi_workspace / "env")
+        shutil.rmtree(tmp_pixi_workspace / "envs")
 
     verify_cli_command(
         [pixi, "global", "update"],
