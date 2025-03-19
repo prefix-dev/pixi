@@ -74,7 +74,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Update all environments if the user did not specify any
     let env_names = match args.environments {
         Some(env_names) => env_names,
-        None => project_original.environments().keys().cloned().collect(),
+        None => {
+            let _ = project_original.prune_old_environments().await?;
+            project_original.environments().keys().cloned().collect()
+        }
     };
 
     // Apply changes to each environment, only revert changes if an error occurs

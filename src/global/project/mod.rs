@@ -1061,6 +1061,7 @@ impl Project {
 
         let mut state_changes = StateChanges::default();
         for env_path in self.env_root.directories().await? {
+            println!("{}", env_path.to_str().unwrap());
             let Some(Ok(env_name)) = env_path
                 .file_name()
                 .and_then(|name| name.to_str())
