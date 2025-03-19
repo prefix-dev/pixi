@@ -2047,12 +2047,14 @@ def test_update_custom_exposed_twice(
     manifests = tmp_pixi_workspace.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
-    original_toml = """
+    original_toml = f"""
     version = {MANIFEST_VERSION}
-    [envs.dotnet]
+    [envs.test]
     channels = ["conda-forge"]
-    dependencies = { dotnet = "*" }
-    exposed = {dotnet = 'dotnet/dotnet' }
+    [envs.test.dependencies]
+    dotnet = "*"
+    [envs.test.exposed]
+    dotnet = "dotnet/dotnet"
     """
     manifest.write_text(original_toml)
     dotnet = tmp_pixi_workspace / "bin" / exec_extension("dotnet")
