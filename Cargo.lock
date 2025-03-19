@@ -4441,7 +4441,6 @@ dependencies = [
  "crossbeam-channel",
  "csv",
  "ctrlc",
- "dashmap",
  "deno_task_shell",
  "dialoguer",
  "dirs 6.0.0",
