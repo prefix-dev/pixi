@@ -243,5 +243,5 @@ def test_empty_watched_files(pixi: Path, tmp_pixi_workspace: Path) -> None:
     time.sleep(2)
 
     assert process.poll() is not None, "Process should exit automatically with empty inputs list"
-    
+
     assert process.returncode == 0, f"Process exited with non-zero code: {process.returncode}"
