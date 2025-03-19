@@ -1998,6 +1998,10 @@ def test_update_env_not_installed(
     ("delete_exposed_on_second", "delete_env_on_second"),
     [(True, False), (False, True), (False, False)],
 )
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="require admin permissions to delete env",
+)
 def test_update_custom_exposed_twice(
     pixi: Path,
     tmp_pixi_workspace: Path,
@@ -2051,6 +2055,10 @@ def test_update_custom_exposed_twice(
 @pytest.mark.parametrize(
     ("delete_exposed_on_second", "delete_env_on_second"),
     [(True, False), (False, True), (False, False)],
+)
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="require admin permissions to delete env",
 )
 def test_update_custom_exposed_twice_slow(
     pixi: Path,
