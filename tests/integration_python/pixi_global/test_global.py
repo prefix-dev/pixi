@@ -1994,7 +1994,17 @@ def test_update_env_not_installed(
     assert manifest.read_text() == original_toml
 
 
-def test_update_custom_exposed(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+@pytest.mark.parametrize(
+    ("delete_exposed_on_second", "delete_env_on_second"),
+    [(True, False), (False, True), (False, False)],
+)
+def test_update_custom_exposed_twice(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    dummy_channel_1: str,
+    delete_exposed_on_second: bool,
+    delete_env_on_second: bool,
+) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
     manifests = tmp_pixi_workspace.joinpath("manifests")
     manifests.mkdir()
@@ -2011,7 +2021,8 @@ def test_update_custom_exposed(pixi: Path, tmp_pixi_workspace: Path, dummy_chann
     manifest.write_text(original_toml)
     dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
 
-    # Test basic commands
+    
+    # Test first update
     verify_cli_command(
         [pixi, "global", "update"],
         ExitCode.SUCCESS,
@@ -2021,7 +2032,12 @@ def test_update_custom_exposed(pixi: Path, tmp_pixi_workspace: Path, dummy_chann
     print(manifest.read_text())
     assert manifest.read_text() == original_toml
 
-    # Test Update with custom reposed package in manifest preserved
+    # Test second update
+    if delete_exposed_on_second:
+        os.remove(dummy_a)
+    if delete_env_on_second:
+        shutil.rmtree(tmp_pixi_workspace / "env")
+
     verify_cli_command(
         [pixi, "global", "update"],
         ExitCode.SUCCESS,
@@ -2037,7 +2053,7 @@ def test_update_custom_exposed(pixi: Path, tmp_pixi_workspace: Path, dummy_chann
     ("delete_exposed_on_second", "delete_env_on_second"),
     [(True, False), (False, True), (False, False)],
 )
-def test_update_custom_exposed_twice(
+def test_update_custom_exposed_twice_slow(
     pixi: Path,
     tmp_pixi_workspace: Path,
     delete_exposed_on_second: bool,
@@ -2079,7 +2095,7 @@ def test_update_custom_exposed_twice(
     if delete_exposed_on_second:
         os.remove(dotnet)
     if delete_env_on_second:
-        shutil.rmtree(tmp_pixi_workspace / "env")
+        shutil.rmtree(tmp_pixi_workspace / "envs")
     verify_cli_command(
         [pixi, "global", "update"],
         ExitCode.SUCCESS,
