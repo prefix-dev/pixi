@@ -240,11 +240,8 @@ def test_empty_watched_files(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     assert task_executed, "Task didn't execute"
 
-    # Give the process a moment to potentially exit
-    time.sleep(1)
+    time.sleep(2)
 
-    # The process should still be running, even with empty inputs
-    assert process.poll() is None, "Process should stay running even with empty inputs list"
-
-    # Since the process doesn't exit on its own, we need to terminate it
-    terminate_process(process, 1)
+    assert process.poll() is not None, "Process should exit automatically with empty inputs list"
+    
+    assert process.returncode == 0, f"Process exited with non-zero code: {process.returncode}"
