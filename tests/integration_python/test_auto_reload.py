@@ -245,9 +245,9 @@ def test_empty_watched_files(pixi: Path, tmp_pixi_workspace: Path) -> None:
             break
         time.sleep(0.5)
 
-    assert (
-        process.poll() is not None
-    ), "Process should have exited on its own with empty inputs list"
+    assert process.poll() is not None, (
+        "Process should have exited on its own with empty inputs list"
+    )
 
     if process.poll() is None:
         terminate_process(process, 1)

@@ -428,7 +428,9 @@ async fn execute_task_with_watcher(
         eprintln!(
             "{}{}",
             console::Emoji("⚠️ ", ""),
-            console::style("No inputs found. Task will run once and exit automatically").yellow().bold(),
+            console::style("No inputs found. Task will run once and exit automatically")
+                .yellow()
+                .bold(),
         );
 
         let status_code = deno_task_shell::execute(

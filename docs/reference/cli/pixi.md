@@ -20,6 +20,7 @@ pixi [OPTIONS] <COMMAND>
 | [`upgrade`](pixi/upgrade.md) | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |
 | [`run`](pixi/run.md) | Runs task in the pixi environment |
+| [`watch`](pixi/watch.md) | Runs task in the pixi environment and watch files for changes |
 | [`exec`](pixi/exec.md) | Run a command and install it in a temporary environment |
 | [`shell`](pixi/shell.md) | Start a shell in a pixi environment, run `exit` to leave the shell |
 | [`shell-hook`](pixi/shell-hook.md) | Print the pixi environment activation script |
