@@ -424,6 +424,29 @@ async fn execute_task_with_watcher(
     let command_env_clone = command_env.clone();
     let cwd_clone = cwd.clone();
 
+    if inputs.is_empty() {
+        eprintln!(
+            "{}{}",
+            console::Emoji("⚠️ ", ""),
+            console::style("No inputs found. Task will run once and exit automatically").yellow().bold(),
+        );
+
+        let status_code = deno_task_shell::execute(
+            script_clone,
+            command_env_clone,
+            &cwd_clone,
+            Default::default(),
+            Default::default(),
+        )
+        .await;
+
+        if status_code != 0 && !was_cancelled_clone.load(Ordering::SeqCst) {
+            tracing::error!("Task exited with status code: {}", status_code);
+        }
+
+        return Ok(());
+    }
+
     let mut task_handle = Some(tokio::task::spawn_local(async move {
         let status_code = deno_task_shell::execute(
             script_clone,
