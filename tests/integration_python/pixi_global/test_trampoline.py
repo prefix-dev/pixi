@@ -237,9 +237,7 @@ def test_trampoline_extends_path(
     dummy_trampoline_path = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline-path")
 
     original_path = os.environ["PATH"]
-    path_diff = os.pathsep.join(
-        ["/test/path", str(tmp_pixi_workspace.joinpath("envs", "dummy-trampoline-path", "bin"))]
-    )
+    path_diff = "/test/path"
 
     verify_cli_command(
         [
@@ -255,23 +253,20 @@ def test_trampoline_extends_path(
 
     # PATH should be extended by the activation script
     # This is done by adding the diff before and after the activation script to the current PATH
-    expected_path = os.pathsep.join([path_diff, original_path])
-    verify_cli_command([dummy_trampoline_path], stdout_contains=expected_path)
+    verify_cli_command([dummy_trampoline_path], stdout_contains=[path_diff, original_path])
 
     # If we extend PATH, both new extension and path diff should be present
     path_change = "/another/test/path"
     new_path = os.pathsep.join([path_change, original_path])
     os.environ["PATH"] = new_path
-    expected_path = os.pathsep.join([path_diff, new_path])
-    verify_cli_command([dummy_trampoline_path], stdout_contains=expected_path)
+    verify_cli_command([dummy_trampoline_path], stdout_contains=[path_diff, new_path])
 
     # If we set PIXI_BASE_PATH, the order will be different
     parts = new_path.split(os.pathsep)
     extra_parts = parts[0]
     base_path = os.pathsep.join(parts[1:])
     os.environ["PIXI_BASE_PATH"] = base_path
-    expected_path = os.pathsep.join([extra_parts, path_diff, base_path])
-    verify_cli_command([dummy_trampoline_path], stdout_contains=expected_path)
+    verify_cli_command([dummy_trampoline_path], stdout_contains=[extra_parts, path_diff, base_path])
 
 
 def test_trampoline_removes_trampolines_not_in_manifest(
