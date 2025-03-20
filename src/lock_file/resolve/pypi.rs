@@ -282,6 +282,7 @@ pub async fn resolve_pypi(
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
 
     // TODO: create a cached registry client per index_url set?
+    // TODO: enable proxy for uv registry_client
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
     let registry_client = Arc::new(
         RegistryClientBuilder::new(context.cache.clone())

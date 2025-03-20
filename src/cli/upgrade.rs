@@ -84,8 +84,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     };
 
-    workspace.workspace().activate_proxy_envs();
-
     let (match_specs, pypi_deps) = parse_specs(feature, &args, &workspace)?;
 
     let (update_deps, workspace) = match workspace

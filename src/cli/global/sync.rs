@@ -17,8 +17,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    project.activate_proxy_envs();
-
     let mut has_changed = false;
 
     // Prune environments that are not listed

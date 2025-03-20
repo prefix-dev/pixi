@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
+    sync::LazyLock,
 };
 
 use clap::{ArgAction, Parser};
@@ -15,6 +16,7 @@ use rattler_conda_types::{
 };
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
+use reqwest::{NoProxy, Proxy};
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
@@ -54,6 +56,25 @@ pub fn get_default_author() -> Option<(String, String)> {
 
     Some((name?, email.unwrap_or_else(|| "".into())))
 }
+
+// detect proxy env vars like curl: https://curl.se/docs/manpage.html
+static ENV_HTTP_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["http_proxy", "all_proxy", "ALL_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static ENV_HTTPS_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static ENV_NO_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["no_proxy", "NO_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static USE_PROXY_FROM_ENV: LazyLock<bool> =
+    LazyLock::new(|| (*ENV_HTTPS_PROXY).is_some() || (*ENV_HTTP_PROXY).is_some());
 
 /// Get pixi home directory, default to `$HOME/.pixi`
 ///
@@ -949,6 +970,23 @@ impl Config {
             .validate()
             .map_err(|e| ConfigError::ValidationError(e, path.to_path_buf()))?;
 
+        // check proxy config
+        if config.proxy_config.https.is_none() && config.proxy_config.http.is_none() {
+            if !config.proxy_config.non_proxy_hosts.is_empty() {
+                tracing::warn!("proxy_config.non_proxy_hosts is not empty but will be ignored")
+            }
+        } else if *USE_PROXY_FROM_ENV {
+            let config_no_proxy = Some(config.proxy_config.non_proxy_hosts.iter().join(","))
+                .filter(|v| !v.is_empty());
+            if (*ENV_HTTPS_PROXY).as_deref() != config.proxy_config.https.as_ref().map(Url::as_str)
+                || (*ENV_HTTP_PROXY).as_deref()
+                    != config.proxy_config.http.as_ref().map(Url::as_str)
+                || *ENV_NO_PROXY != config_no_proxy
+            {
+                tracing::info!("proxy configs are overridden by proxy environment vars.")
+            }
+        }
+
         Ok(config)
     }
 
@@ -1208,55 +1246,41 @@ impl Config {
         self.concurrency.downloads
     }
 
-    pub fn activate_proxy_envs(&self) {
-        if self.proxy_config.https.is_none() && self.proxy_config.http.is_none() {
-            if !self.proxy_config.non_proxy_hosts.is_empty() {
-                tracing::info!("proxy_config.non_proxy_hosts is ignored")
-            }
-            return;
+    pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
+        if (self.proxy_config.https.is_none() && self.proxy_config.http.is_none())
+            || *USE_PROXY_FROM_ENV
+        {
+            return Ok(vec![]);
         }
-
-        // detect proxy env vars like curl: https://curl.se/docs/manpage.html
-        let env_https_proxy = ["https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
-            .iter()
-            .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()));
-        let env_http_proxy = ["http_proxy", "all_proxy", "ALL_PROXY"]
-            .iter()
-            .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()));
-        let env_no_proxy = ["no_proxy", "NO_PROXY"]
-            .iter()
-            .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()));
 
         let config_no_proxy =
             Some(self.proxy_config.non_proxy_hosts.iter().join(",")).filter(|v| !v.is_empty());
 
-        if env_https_proxy.is_some() || env_http_proxy.is_some() {
-            if env_https_proxy.as_deref() != self.proxy_config.https.as_ref().map(Url::as_str)
-                || env_http_proxy.as_deref() != self.proxy_config.http.as_ref().map(Url::as_str)
-                || env_no_proxy != config_no_proxy
-            {
-                tracing::info!("proxy configs are overridden by proxy environment vars.")
+        let mut result: Vec<Proxy> = Vec::new();
+        let config_no_proxy: Option<NoProxy> =
+            config_no_proxy.as_deref().and_then(NoProxy::from_string);
+
+        if self.proxy_config.https == self.proxy_config.http {
+            result.push(
+                Proxy::all(
+                    self.proxy_config
+                        .https
+                        .as_ref()
+                        .expect("must be some")
+                        .as_str(),
+                )?
+                .no_proxy(config_no_proxy),
+            );
+        } else {
+            if let Some(url) = &self.proxy_config.http {
+                result.push(Proxy::http(url.as_str())?.no_proxy(config_no_proxy.clone()));
             }
-            return;
-        }
-
-        if let Some(url) = &self.proxy_config.https {
-            std::env::set_var("https_proxy", url.as_str());
-            tracing::debug!("use https proxy: {}", url.as_str());
-        }
-        if let Some(url) = &self.proxy_config.http {
-            std::env::set_var("http_proxy", url.as_str());
-            tracing::debug!("use http proxy: {}", url.as_str());
-        }
-
-        if config_no_proxy != env_no_proxy {
-            if let Some(no_proxy_str) = &config_no_proxy {
-                std::env::set_var("no_proxy", no_proxy_str);
-                tracing::debug!("no proxy hosts: {}", no_proxy_str);
-            } else {
-                std::env::remove_var("no_proxy");
+            if let Some(url) = &self.proxy_config.https {
+                result.push(Proxy::https(url.as_str())?.no_proxy(config_no_proxy));
             }
         }
+
+        Ok(result)
     }
 
     /// Modify this config with the given key and value

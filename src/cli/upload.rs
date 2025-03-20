@@ -54,9 +54,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         HumanBytes(filesize)
     );
 
-    Config::load_global().activate_proxy_envs();
+    let mut raw_builder = reqwest::Client::builder();
+    for p in Config::load_global().get_proxies().into_diagnostic()? {
+        raw_builder = raw_builder.proxy(p);
+    }
 
-    let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+    let client = reqwest_middleware::ClientBuilder::new(raw_builder.build().into_diagnostic()?)
         .with_arc(Arc::new(
             AuthenticationMiddleware::from_env_and_defaults().into_diagnostic()?,
         ))

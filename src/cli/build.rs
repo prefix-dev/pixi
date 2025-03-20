@@ -89,8 +89,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config_cli);
 
-    workspace.activate_proxy_envs();
-
     // TODO: Implement logic to take the source code from a VCS instead of from a
     // local channel so that that information is also encoded in the manifest.
 
