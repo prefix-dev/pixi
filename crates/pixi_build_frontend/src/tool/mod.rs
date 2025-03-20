@@ -98,6 +98,7 @@ impl Tool {
     }
 
     /// Construct a new command that enables invocation of the tool.
+    /// TODO: whether to inject proxy config
     pub fn command(&self) -> std::process::Command {
         match self {
             Tool::Isolated(tool) => {

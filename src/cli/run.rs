@@ -102,8 +102,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(cli_config);
 
-    workspace.activate_proxy_envs();
-
     // Extract the passed in environment name.
     let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
 

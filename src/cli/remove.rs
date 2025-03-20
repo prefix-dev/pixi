@@ -116,8 +116,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
     if !lock_file_update_config.no_lockfile_update {
-        workspace.activate_proxy_envs();
-
         get_update_lock_file_and_prefix(
             &workspace.default_environment(),
             UpdateMode::Revalidate,

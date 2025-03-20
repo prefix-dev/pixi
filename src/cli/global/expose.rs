@@ -77,8 +77,6 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    project_original.activate_proxy_envs();
-
     async fn apply_changes(
         args: &AddArgs,
         project: &mut global::Project,

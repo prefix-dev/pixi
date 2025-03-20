@@ -78,6 +78,7 @@ pub async fn update_python_distributions(
         .into_diagnostic()?;
     let build_options = no_build_to_build_options(no_build).into_diagnostic()?;
 
+    // TODO: enable proxy for uv registry_client
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
             .allow_insecure_host(uv_context.allow_insecure_host.clone())

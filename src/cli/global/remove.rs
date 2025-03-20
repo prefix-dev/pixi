@@ -47,8 +47,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", env_name);
     }
 
-    project_original.activate_proxy_envs();
-
     async fn apply_changes(
         env_name: &EnvironmentName,
         specs: &[MatchSpec],

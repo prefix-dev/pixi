@@ -145,8 +145,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    workspace.activate_proxy_envs();
-
     // Load the current lock-file, if any. If none is found, a dummy lock-file is
     // returned.
     let loaded_lock_file = &workspace.load_lock_file().await?;

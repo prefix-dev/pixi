@@ -47,8 +47,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config);
 
-    workspace.activate_proxy_envs();
-
     // Install either:
     //
     // 1. specific environments
