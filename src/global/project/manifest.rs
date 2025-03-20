@@ -359,7 +359,7 @@ impl Manifest {
         // Update self.document
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.exposed"),
-            &mapping.exposed_name.to_string(),
+            mapping.exposed_name.as_ref(),
             toml_edit::Value::from(mapping.executable_relname.clone()),
         )?;
 

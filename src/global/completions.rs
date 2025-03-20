@@ -32,7 +32,7 @@ pub fn find_completions(
         let bash_path = prefix
             .root()
             .join(Bash.completion_script_location().expect("is set"))
-            .join(name.to_string());
+            .join(name);
         let zsh_path = prefix
             .root()
             .join(Zsh.completion_script_location().expect("is set"))
