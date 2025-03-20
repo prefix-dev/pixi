@@ -354,8 +354,8 @@ pub(crate) enum StateChange {
     UpdatedEnvironment(EnvironmentUpdate),
     InstalledShortcut(String),
     UninstalledShortcut(String),
-    ExposedCompletion(String),
-    RemoveCompletion(String),
+    AddedCompletion(String),
+    RemovedCompletion(String),
 }
 
 #[must_use]
@@ -651,8 +651,8 @@ impl StateChanges {
                             }
                         }
                     }
-                    StateChange::ExposedCompletion(name) => {}
-                    StateChange::RemoveCompletion(name) => {}
+                    StateChange::AddedCompletion(name) => {}
+                    StateChange::RemovedCompletion(name) => {}
                 }
             }
         }
