@@ -5,6 +5,83 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.43.0] - 2025-03-20
+#### ✨ Highlights
+
+- 🚀 Added support for [shortcuts](https://pixi.sh/v0.43.0/global_tools/introduction/#shortcuts) in `pixi global`.
+- 🔄 Introduced [`pixi reinstall`](https://pixi.sh/v0.43.0/reference/cli/pixi/reinstall/).
+- 🗃️ Enabled [sharded repodata](https://prefix.v0.43.0/blog/sharded_repodata) by default.
+- 📚 Big documentation improvements
+  - Restructuring of chapters
+  - Generated [CLI docs](https://pixi.sh/v0.43.0/reference/cli/pixi/)
+  - Renaming `[project]` to `[workspace]`
+
+#### Added
+
+- Support for shortcuts in `pixi global` by @Hofer-Julian in [#3226](https://github.com/prefix-dev/pixi/pull/3226)
+- Add tutorial for pixi build rattler build by @nichmor in [#3330](https://github.com/prefix-dev/pixi/pull/3330)
+- Add `pixi reinstall` by @Hofer-Julian in [#3344](https://github.com/prefix-dev/pixi/pull/3344)
+- Add `pixi global shortcut` CLI by @ruben-arts in [#3341](https://github.com/prefix-dev/pixi/pull/3341)
+- `pixi exec --list` by @lucascolley in [#3311](https://github.com/prefix-dev/pixi/pull/3311)
+- Autogeneration of the CLI documentation. by @ruben-arts in [#3268](https://github.com/prefix-dev/pixi/pull/3268)
+
+
+#### Changed
+
+- Default to "workspace" with `pixi init` by @Hofer-Julian in [#3277](https://github.com/prefix-dev/pixi/pull/3277)
+- Enable sharded repodata by default by @ruben-arts in [#3285](https://github.com/prefix-dev/pixi/pull/3285)
+
+
+#### Documentation
+
+- Set sso_region in s3 config example by @pavelzw in [#3289](https://github.com/prefix-dev/pixi/pull/3289)
+- Refactor by @Hofer-Julian in [#3265](https://github.com/prefix-dev/pixi/pull/3265)
+- Adjust keep in sync note by @pavelzw in [#3297](https://github.com/prefix-dev/pixi/pull/3297)
+- Rename project to workspace by @Hofer-Julian in [#3300](https://github.com/prefix-dev/pixi/pull/3300)
+- Use consistently "Pixi" instead of "pixi" by @Hofer-Julian in [#3302](https://github.com/prefix-dev/pixi/pull/3302)
+- More Pixi capitalistation by @lucascolley in [#3304](https://github.com/prefix-dev/pixi/pull/3304)
+- Update README.md to note PATH changes go in `~/.bashrc`, not `~/.bash_profile` by @petebachant in [#3305](https://github.com/prefix-dev/pixi/pull/3305)
+- Clarify pixi spelling by @Hofer-Julian in [#3363](https://github.com/prefix-dev/pixi/pull/3363)
+- Fix typo by @pavelzw in [#3385](https://github.com/prefix-dev/pixi/pull/3385)
+
+
+#### Fixed
+
+- Run test_build_git_source_deps_from_tag again for Windows by @Hofer-Julian in [#3273](https://github.com/prefix-dev/pixi/pull/3273)
+- Print all tasks for the current platform in `pixi info` by @ruben-arts in [#3284](https://github.com/prefix-dev/pixi/pull/3284)
+- Fix "extra-slow" snapshot by @Hofer-Julian in [#3298](https://github.com/prefix-dev/pixi/pull/3298)
+- `pixi global install --force-reinstall` by @Hofer-Julian in [#3307](https://github.com/prefix-dev/pixi/pull/3307)
+- Mark more tests as "slow" by @Hofer-Julian in [#3310](https://github.com/prefix-dev/pixi/pull/3310)
+- Mark `test_pixi_auth` as extra slow by @Hofer-Julian in [#3309](https://github.com/prefix-dev/pixi/pull/3309)
+- Use --locked to run the generation of CLI docs by @ruben-arts in [#3322](https://github.com/prefix-dev/pixi/pull/3322)
+- Make --git work with --branch again by @ruben-arts in [#3323](https://github.com/prefix-dev/pixi/pull/3323)
+- Don't prematurely shutdown runtime by @baszalmstra in [#3325](https://github.com/prefix-dev/pixi/pull/3325)
+- Let amend_pypi_purls() always use reqwest client with the mirror middle ware by @gzm55 in [#3336](https://github.com/prefix-dev/pixi/pull/3336)
+- Update build backend configuration by @nichmor in [#3352](https://github.com/prefix-dev/pixi/pull/3352)
+- Use new windows runners with the dev drive feature by @ruben-arts in [#3361](https://github.com/prefix-dev/pixi/pull/3361)
+- Fix winget releaser job by @ruben-arts in [#3380](https://github.com/prefix-dev/pixi/pull/3380)
+- Use windows latest as arm build runner by @ruben-arts in [#3378](https://github.com/prefix-dev/pixi/pull/3378)
+- Use compilers instead of custom set of dependencies by @ruben-arts in [#3337](https://github.com/prefix-dev/pixi/pull/3337)
+- Some unexpected behavior of `pixi global update` by @Glatzel in [#3373](https://github.com/prefix-dev/pixi/pull/3373)
+
+
+#### Refactor
+
+- Replace ignore crate with pixi_glob by @prsabahrami in [#3333](https://github.com/prefix-dev/pixi/pull/3333)
+- Pypi mapping into cached client by @baszalmstra in [#3318](https://github.com/prefix-dev/pixi/pull/3318)
+
+
+#### Removed
+
+- Remove conda-build protocol by @nichmor in [#3349](https://github.com/prefix-dev/pixi/pull/3349)
+
+
+#### New Contributors
+* @Glatzel made their first contribution in [#3373](https://github.com/prefix-dev/pixi/pull/3373)
+* @prsabahrami made their first contribution in [#3333](https://github.com/prefix-dev/pixi/pull/3333)
+* @gzm55 made their first contribution in [#3336](https://github.com/prefix-dev/pixi/pull/3336)
+* @petebachant made their first contribution in [#3305](https://github.com/prefix-dev/pixi/pull/3305)
+
 ### [0.42.1] - 2025-03-05
 #### Fixed
 

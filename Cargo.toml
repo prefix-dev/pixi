@@ -180,7 +180,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.42.1"
+version = "0.43.0"
 
 [features]
 default = ["online_tests", "rustls-tls"]
