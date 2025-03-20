@@ -1185,7 +1185,7 @@ impl Project {
         Ok(state_changes)
     }
 
-    pub async fn expose_completion_scripts(
+    pub async fn sync_completions(
         &self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
