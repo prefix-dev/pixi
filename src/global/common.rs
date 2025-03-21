@@ -1208,7 +1208,7 @@ mod tests {
             env_dir.path().join("bin/test")
         };
 
-        let manifest = Configuration::new(original_exe, bin_dir.path().join("bin"), None);
+        let manifest = Configuration::new(original_exe, String::new(), HashMap::new());
         let trampoline = Trampoline::new(
             ExposedName::from_str("test").unwrap(),
             bin_dir.path().to_path_buf(),

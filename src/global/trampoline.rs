@@ -139,18 +139,18 @@ pub struct Configuration {
     /// Path to the original executable.
     pub exe: PathBuf,
     /// Root path of the original executable that should be prepended to the PATH.
-    pub path: PathBuf,
+    pub path_diff: String,
     /// Environment variables to be set before executing the original executable.
     pub env: HashMap<String, String>,
 }
 
 impl Configuration {
     /// Create a new configuration of trampoline.
-    pub fn new(exe: PathBuf, path: PathBuf, env: Option<HashMap<String, String>>) -> Self {
+    pub fn new(exe: PathBuf, path_diff: String, env: HashMap<String, String>) -> Self {
         Configuration {
             exe,
-            path,
-            env: env.unwrap_or_default(),
+            path_diff,
+            env,
         }
     }
 
@@ -490,7 +490,7 @@ mod tests {
         let trampoline = Trampoline::new(
             ExposedName::from_str("test_hardlink").unwrap(),
             dir.path().to_path_buf(),
-            Configuration::new(trampoline_path.clone(), dir.path().to_path_buf(), None),
+            Configuration::new(trampoline_path.clone(), String::new(), HashMap::new()),
         );
 
         trampoline.save().await.unwrap();
