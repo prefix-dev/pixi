@@ -24,6 +24,27 @@ def terminate_process(process: subprocess.Popen, number_of_tasks: int) -> None:
             process.wait(timeout=1)
 
 
+def readline_with_timeout(process: subprocess.Popen[str], timeout: float = 5) -> str:
+    if process.stdout is None:
+        return ""
+
+    if os.name == "nt":
+        # Windows doesn't support select on pipes, use a polling approach
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if process.stdout.readable():
+                line = process.stdout.readline()
+                if line:
+                    return line.strip()
+            time.sleep(0.1)
+        return ""
+    else:
+        ready: list[Any] = []
+        while not ready:
+            ready, _, _ = select.select([process.stdout], [], [], timeout)
+        return process.stdout.readline().strip()
+
+
 def test_file_watching_and_rerunning(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
@@ -43,20 +64,12 @@ def test_file_watching_and_rerunning(pixi: Path, tmp_pixi_workspace: Path) -> No
         cwd=str(tmp_pixi_workspace),
     )
 
-    ready: list[Any] = []
-    while not ready:
-        ready, _, _ = select.select([process.stdout], [], [], 0.5)
-    assert process.stdout is not None, "Process didn't start"
-    line = process.stdout.readline().strip()
+    line = readline_with_timeout(process)
     assert "initial content" in line, "Task didn't show initial content"
 
     input_file.write_text("updated content")
 
-    ready = []
-    while not ready:
-        ready, _, _ = select.select([process.stdout], [], [], 0.5)
-    assert process.stdout is not None, "Process didn't start"
-    line = process.stdout.readline().strip()
+    line = readline_with_timeout(process)
     assert "updated content" in line, "Task didn't show updated content"
     terminate_process(process, 1)
 
@@ -82,19 +95,12 @@ def test_multiple_files_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
         cwd=str(tmp_pixi_workspace),
     )
 
-    ready: list[Any] = []
-    while not ready:
-        ready, _, _ = select.select([process.stdout], [], [], 0.5)
-    assert process.stdout is not None, "Process didn't start"
-    line = process.stdout.readline().strip()
+    line = readline_with_timeout(process)
     assert "f1=one" in line and "f2=two" in line, "Task didn't show initial content from both files"
 
     file1.write_text("one-updated")
-    ready = []
-    while not ready:
-        ready, _, _ = select.select([process.stdout], [], [], 0.5)
-    assert process.stdout is not None, "Process didn't start"
-    line = process.stdout.readline().strip()
+
+    line = readline_with_timeout(process)
     assert "f1=one-updated" in line and "f2=two" in line, (
         "Task didn't show updated content from file1"
     )
@@ -172,14 +178,8 @@ def test_nonexistent_watched_file(pixi: Path, tmp_pixi_workspace: Path) -> None:
         text=True,
         cwd=str(tmp_pixi_workspace),
     )
-    # Wait for initial run
-    ready: list[Any] = []
-    while not ready:
-        ready, _, _ = select.select([process.stdout], [], [], 0.5)
 
-    assert process.stdout is not None, "Process didn't start"
-
-    line = process.stdout.readline().strip()
+    line = readline_with_timeout(process)
     assert "File created" in line, "Task didn't run initially"
     nonexistent_file = tmp_pixi_workspace.joinpath("does_not_exist_yet.txt")
     nonexistent_file.write_text("now I exist")
