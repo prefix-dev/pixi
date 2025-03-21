@@ -867,6 +867,47 @@ pub(crate) fn shortcut_sync_status(
     Ok((records_to_install, records_to_uninstall))
 }
 
+pub(crate) fn completions_sync_status(
+    shortcuts: IndexSet<PackageName>,
+    prefix_records: Vec<PrefixRecord>,
+) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
+    todo!()
+    // let mut remaining_shortcuts = shortcuts;
+    // let mut records_to_install = Vec::new();
+    // let mut records_to_uninstall = Vec::new();
+
+    // let records_with_menuinst = prefix_records
+    //     .into_iter()
+    //     .filter(contains_menuinst_document);
+
+    // for record in records_with_menuinst {
+    //     let has_installed_system_menus = record.installed_system_menus.is_empty().not();
+    //     if remaining_shortcuts
+    //         .swap_take(&record.repodata_record.package_record.name)
+    //         .is_some()
+    //     {
+    //         if !has_installed_system_menus {
+    //             // The package record isn't installed, but it is requested
+    //             records_to_install.push(record);
+    //         }
+    //     } else if has_installed_system_menus {
+    //         // The package record is installed, but not requested
+    //         records_to_uninstall.push(record);
+    //     }
+    // }
+
+    // if remaining_shortcuts.is_empty().not() {
+    //     miette::bail!(
+    //         "the following shortcuts are requested but not available: {}",
+    //         remaining_shortcuts
+    //             .iter()
+    //             .map(|n| n.as_normalized())
+    //             .join(", ")
+    //     );
+    // }
+    // Ok((records_to_install, records_to_uninstall))
+}
+
 pub(crate) fn contains_menuinst_document(prefix_record: &PrefixRecord) -> bool {
     prefix_record.files.iter().any(|file| {
         file.extension().is_some_and(|ext| ext == "json")
