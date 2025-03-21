@@ -3804,6 +3804,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "notify"
+version = "8.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fee8403b3d66ac7b26aee6e40a897d85dc5ce26f44da36b8b73e987cc52e943"
+dependencies = [
+ "bitflags 2.9.0",
+ "filetime",
+ "fsevent-sys",
+ "inotify",
+ "kqueue",
+ "libc",
+ "log",
+ "mio",
+ "notify-types",
+ "walkdir",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "notify-debouncer-full"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2d88b1a7538054351c8258338df7c931a590513fb3745e8c15eb9ff4199b8d1"
+dependencies = [
+ "file-id",
+ "log",
+ "notify",
+ "notify-types",
+ "walkdir",
+]
+
+[[package]]
+name = "notify-types"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e0826a989adedc2a244799e823aece04662b66609d96af8dff7ac6df9a8925d"
+
+[[package]]
 name = "ntapi"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4258,7 +4296,6 @@ dependencies = [
  "crossbeam-channel",
  "csv",
  "ctrlc",
- "dashmap",
  "deno_task_shell",
  "dialoguer",
  "dirs 6.0.0",
@@ -4268,7 +4305,6 @@ dependencies = [
  "fs-err",
  "fs_extra",
  "futures",
- "glob",
  "human_bytes",
  "humantime",
  "indexmap 2.8.0",
@@ -4279,6 +4315,8 @@ dependencies = [
  "miette 7.5.0",
  "minijinja",
  "nix",
+ "notify",
+ "notify-debouncer-full",
  "once_cell",
  "parking_lot 0.12.3",
  "pep440_rs",
@@ -4362,6 +4400,8 @@ dependencies = [
  "uv-requirements-txt",
  "uv-resolver",
  "uv-types",
+ "uv-workspace",
+ "wax",
  "xxhash-rust",
  "zip",
  "zstd",

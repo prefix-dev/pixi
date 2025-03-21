@@ -105,7 +105,7 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns the name of the task or `None` if this is an anonymous task.
     pub(crate) fn name(&self) -> Option<&str> {
-        self.name.as_ref().map(|n| n.as_str())
+        self.name.as_ref().map(|name| name.as_str())
     }
 
     /// Returns the task description from the project.

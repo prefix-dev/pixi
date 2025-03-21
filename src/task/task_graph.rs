@@ -31,7 +31,7 @@ use crate::{
 pub struct TaskId(usize);
 
 /// A node in the [`TaskGraph`].
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TaskNode<'p> {
     /// The name of the task or `None` if the task is a custom task.
     pub name: Option<TaskName>,
