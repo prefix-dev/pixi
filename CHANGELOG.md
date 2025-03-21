@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 🚀 Added support for [shortcuts](https://pixi.sh/v0.43.0/global_tools/introduction/#shortcuts) in `pixi global`.
 - 🔄 Introduced [`pixi reinstall`](https://pixi.sh/v0.43.0/reference/cli/pixi/reinstall/).
-- 🗃️ Enabled [sharded repodata](https://prefix.v0.43.0/blog/sharded_repodata) by default.
+- 🗃️ Enabled [sharded repodata](https://prefix.dev/blog/sharded_repodata) by default.
 - 📚 Big documentation improvements
   - Restructuring of chapters
   - Generated [CLI docs](https://pixi.sh/v0.43.0/reference/cli/pixi/)
