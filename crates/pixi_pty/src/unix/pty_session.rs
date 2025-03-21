@@ -83,7 +83,7 @@ impl PtySession {
     /// forward all input from stdin to the process and all output from the process to stdout.
     /// This will block until the process exits.
     pub fn interact(&mut self, wait_until: Option<&str>) -> io::Result<Option<i32>> {
-        let pattern_timeout = Duration::from_secs(1);
+        let pattern_timeout = Duration::from_secs(3);
         let pattern_start = Instant::now();
 
         // Make sure anything we have written so far has been flushed.
