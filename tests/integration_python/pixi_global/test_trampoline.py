@@ -9,7 +9,7 @@ from typing import Any
 from ..common import verify_cli_command, exec_extension, is_binary
 
 
-def break_configuration(configuration_path: Path) -> dict[str, Any]:
+def break_configuration(configuration_path: Path) -> Any:
     """Break trampoline configuration by removing `path_diff`"""
     configuration = json.loads(configuration_path.read_text())
     original_configuration = copy.deepcopy(configuration)
