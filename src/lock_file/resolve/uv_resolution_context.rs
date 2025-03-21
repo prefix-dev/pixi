@@ -22,6 +22,7 @@ pub struct UvResolutionContext {
     pub capabilities: IndexCapabilities,
     pub allow_insecure_host: Vec<TrustedHost>,
     pub shared_state: SharedState,
+    pub proxies: Vec<reqwest::Proxy>,
 }
 
 impl UvResolutionContext {
@@ -71,6 +72,7 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
+            proxies: project.config().get_proxies().into_diagnostic()?,
         })
     }
 
