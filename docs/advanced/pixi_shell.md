@@ -10,7 +10,7 @@ pixi shell
 
 On Unix systems the shell command works by creating a "fake" PTY session that will start the shell, and then send a string like `source /tmp/activation-env-12345.sh` to the `stdin` in order to activate the environment. If you would peek under the hood of the the `shell` command, then you would see that this is the first thing executed in the new shell session.
 
-The temporary script that we generate ends with `echo "PIXI_ENV_ACTIVATED"` which is used to detect if the environment was activated successfully. If we do not receive this string after 1 second, we will issue a warning to the user.
+The temporary script that we generate ends with `echo "PIXI_ENV_ACTIVATED"` which is used to detect if the environment was activated successfully. If we do not receive this string after one second, we will issue a warning to the user.
 
 ## Issues with pixi shell
 
