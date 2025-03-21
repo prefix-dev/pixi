@@ -4,16 +4,16 @@ import platform
 from ..common import exec_extension, verify_cli_command
 
 
-def bash_completions(prefix: Path, executable: str) -> Path:
-    return prefix.joinpath("share", "bash-completions", executable)
+def bash_completions(pixi_home: Path, executable: str) -> Path:
+    return pixi_home.joinpath("completions", "bash", executable)
 
 
-def zsh_completions(prefix: Path, executable: str) -> Path:
-    return prefix.joinpath("zsh", "site-functions", f"_{executable}")
+def zsh_completions(pixi_home: Path, executable: str) -> Path:
+    return pixi_home.joinpath("completions", "zsh", f"_{executable}")
 
 
-def fish_completions(prefix: Path, executable: str) -> Path:
-    return prefix.joinpath("fish", "vendor_completions.d", f"{executable}.fish")
+def fish_completions(pixi_home: Path, executable: str) -> Path:
+    return pixi_home.joinpath("completions", "fish", f"{executable}.fish")
 
 
 def test_sync_exposes_completions(
@@ -31,7 +31,6 @@ def test_sync_exposes_completions(
     """
     manifest.write_text(toml)
     rg = tmp_pixi_workspace / "bin" / exec_extension("rg")
-    prefix = tmp_pixi_workspace.joinpath(".pixi", "envs", "default")
 
     # Test basic commands
     verify_cli_command(
@@ -41,9 +40,9 @@ def test_sync_exposes_completions(
     )
     assert rg.is_file()
 
-    bash = bash_completions(prefix, "rg")
-    zsh = zsh_completions(prefix, "rg")
-    fish = fish_completions(prefix, "rg")
+    bash = bash_completions(tmp_pixi_workspace, "rg")
+    zsh = zsh_completions(tmp_pixi_workspace, "rg")
+    fish = fish_completions(tmp_pixi_workspace, "rg")
 
     if platform.system() == "Windows":
         # Completions are ignored on Windows
