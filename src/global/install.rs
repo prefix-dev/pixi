@@ -145,18 +145,21 @@ pub(crate) async fn create_executable_trampolines(
         // Read previous metadata if it exists and update `changed` accordingly
         if matches!(changed, AddedOrChanged::Unchanged) {
             if json_path.exists() {
-                let previous_manifest_data_bytes = tokio_fs::read_to_string(&json_path)
+                let previous_configuration_data_bytes = tokio_fs::read_to_string(&json_path)
                     .await
                     .into_diagnostic()?;
 
-                let previous_manifest_metadata: Configuration =
-                    serde_json::from_str(&previous_manifest_data_bytes).into_diagnostic()?;
-
-                changed = if previous_manifest_metadata == metadata {
-                    AddedOrChanged::Unchanged
+                if let Ok(previous_manifest_metadata) =
+                    serde_json::from_str::<Configuration>(&previous_configuration_data_bytes)
+                {
+                    changed = if previous_manifest_metadata == metadata {
+                        AddedOrChanged::Unchanged
+                    } else {
+                        AddedOrChanged::Changed
+                    };
                 } else {
-                    AddedOrChanged::Changed
-                };
+                    changed = AddedOrChanged::Changed
+                }
             } else {
                 changed = AddedOrChanged::Added;
             }

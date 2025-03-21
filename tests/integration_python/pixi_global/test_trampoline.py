@@ -1,10 +1,21 @@
+import copy
 import json
 import pathlib
 from pathlib import Path
 import platform
 import os
+from typing import Any
 
 from ..common import verify_cli_command, exec_extension, is_binary
+
+
+def break_configuration(configuration_path: Path) -> dict[str, Any]:
+    """Break trampoline configuration by removing `path_diff`"""
+    configuration = json.loads(configuration_path.read_text())
+    original_configuration = copy.deepcopy(configuration)
+    del configuration["path_diff"]
+    configuration_path.write_text(json.dumps(configuration))
+    return original_configuration
 
 
 def test_trampoline_respect_activation_variables(
@@ -226,6 +237,77 @@ def test_trampoline_migrate_with_newer_trampoline(
         env=env,
         stderr_contains="Environment dummy-trampoline was already up-to-date",
         stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
+    )
+
+
+def test_trampoline_migrate_with_newer_configuration(
+    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+) -> None:
+    # this test will validate if new trampoline will migrate the older trampoline
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+
+    # create a dummy bin that will act as already installed package
+    dummy_trampoline = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
+    dummy_trampoline.parent.mkdir(exist_ok=True)
+    dummy_trampoline.write_text("hello")
+
+    # now run install again, this time it should migrate the script to the new trampoline
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_channel,
+            "dummy-trampoline",
+        ],
+        env=env,
+    )
+
+    assert dummy_trampoline.is_file()
+    assert is_binary(dummy_trampoline)
+
+    dummy_trampoline_json = (
+        tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
+    )
+
+    assert dummy_trampoline_json.is_file()
+    # run an update, it should say that everything is up to date
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "update",
+        ],
+        env=env,
+        stderr_contains="Environment dummy-trampoline was already up-to-date",
+        stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
+    )
+
+    original_configuration = break_configuration(dummy_trampoline_json)
+
+    # run an update again it should remove the modified configuration and install the valid one again
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "update",
+        ],
+        env=env,
+    )
+    assert json.loads(dummy_trampoline_json.read_text()) == original_configuration
+
+    # now change the trampoline binary and configuration at the same time
+    dummy_trampoline.write_text("new content")
+    original_configuration = break_configuration(dummy_trampoline_json)
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "update",
+        ],
+        env=env,
+        stderr_contains="Updated executable dummy-trampoline of environment dummy-trampoline",
     )
 
 
