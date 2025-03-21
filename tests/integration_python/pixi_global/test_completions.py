@@ -34,7 +34,11 @@ def test_sync_exposes_completions(
     prefix = tmp_pixi_workspace.joinpath(".pixi", "envs", "default")
 
     # Test basic commands
-    verify_cli_command([pixi, "global", "sync"], env=env)
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        env=env,
+        stdout_contains="Exposed completion ripgrep-completions of environment test.",
+    )
     assert rg.is_file()
 
     bash = bash_completions(prefix, "rg")

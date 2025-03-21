@@ -605,14 +605,14 @@ impl StateChanges {
 
                         if installed_items.len() == 1 {
                             eprintln!(
-                                "{}Installed shortcut {} in environment {}.",
+                                "{}Installed shortcut {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 installed_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
                             eprintln!(
-                                "{}Installed shortcuts in environment {}:",
+                                "{}Installed shortcuts of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
@@ -635,14 +635,14 @@ impl StateChanges {
 
                         if uninstalled_items.len() == 1 {
                             eprintln!(
-                                "{}Uninstalled shortcut {} in environment {}.",
+                                "{}Uninstalled shortcut {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 uninstalled_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
                             eprintln!(
-                                "{}Uninstalled shortcuts in environment {}:",
+                                "{}Uninstalled shortcuts of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
@@ -651,8 +651,66 @@ impl StateChanges {
                             }
                         }
                     }
-                    StateChange::AddedCompletion(name) => {}
-                    StateChange::RemovedCompletion(name) => {}
+                    StateChange::AddedCompletion(name) => {
+                        let mut installed_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::InstalledShortcut(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        installed_items.sort();
+
+                        if installed_items.len() == 1 {
+                            eprintln!(
+                                "{}Exposed completion {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                installed_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Exposed completions of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for installed_item in installed_items {
+                                eprintln!("   - {}", installed_item);
+                            }
+                        }
+                    }
+                    StateChange::RemovedCompletion(name) => {
+                        let mut uninstalled_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::UninstalledShortcut(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        uninstalled_items.sort();
+
+                        if uninstalled_items.len() == 1 {
+                            eprintln!(
+                                "{}Removed completion {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                uninstalled_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Removed completions of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for uninstalled_item in uninstalled_items {
+                                eprintln!("   - {}", uninstalled_item);
+                            }
+                        }
+                    }
                 }
             }
         }
