@@ -47,7 +47,7 @@ pub struct FileWatcher {
 impl FileWatcher {
     /// Creates a new file watcher
     pub async fn new(
-        cwd: &Path,
+        root: &Path,
         patterns: &[impl AsRef<Path>],
         debounce: Duration,
     ) -> Result<Self, FileWatchError> {
@@ -69,16 +69,16 @@ impl FileWatcher {
             let glob = Glob::new(&path_str)?;
 
             // Try to find existing files matching the pattern
-            for entry in glob.walk(cwd).flatten() {
+            for entry in glob.walk(root).flatten() {
                 let path = entry.path().to_path_buf();
                 // Convert to absolute path if it's relative
                 let path = if path.is_absolute() {
                     path
                 } else {
-                    cwd.join(path)
+                    root.join(path)
                 };
 
-                debouncer.watch(&path, RecursiveMode::Recursive)?;
+                debouncer.watch(&path, RecursiveMode::NonRecursive)?;
             }
         }
 

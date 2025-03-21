@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::identity;
-use std::path::PathBuf;
 use std::string::String;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -404,10 +403,7 @@ async fn execute_task_with_watcher(
     // Get inputs directly from the task
     let inputs = if let Some(execute) = task.task().as_execute() {
         if let Some(inputs) = &execute.inputs {
-            inputs
-                .iter()
-                .map(|i| task.project().root().join(i))
-                .collect::<Vec<PathBuf>>()
+            inputs.clone()
         } else {
             Vec::new()
         }
@@ -469,8 +465,20 @@ async fn execute_task_with_watcher(
     // Configure file watcher with debouncing
     let debounce = Duration::from_millis(700);
 
+    let root = if let Some(cwd) = task
+        .task()
+        .as_execute()
+        .expect("Task should be an execute task")
+        .cwd
+        .clone()
+    {
+        cwd
+    } else {
+        task.project().root().to_path_buf()
+    };
+
     // Create the file watcher
-    let mut watcher = FileWatcher::new(&cwd, &inputs, debounce)
+    let mut watcher = FileWatcher::new(&root, &inputs, debounce)
         .await
         .map_err(|e| {
             error!("Failed to watch files: {}", e);
