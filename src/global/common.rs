@@ -867,22 +867,6 @@ pub(crate) fn shortcut_sync_status(
     Ok((records_to_install, records_to_uninstall))
 }
 
-pub(crate) fn completions_sync_status(
-    completions: IndexSet<PackageName>,
-    prefix_records: Vec<PrefixRecord>,
-) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
-    let mut records_to_install = Vec::new();
-    let mut records_to_uninstall = Vec::new();
-
-    let records_with_menuinst = prefix_records
-        .into_iter()
-        .filter(contains_menuinst_document);
-
-    todo!("Use `contained_completions` here");
-
-    Ok((records_to_install, records_to_uninstall))
-}
-
 pub(crate) fn contains_menuinst_document(prefix_record: &PrefixRecord) -> bool {
     prefix_record.files.iter().any(|file| {
         file.extension().is_some_and(|ext| ext == "json")

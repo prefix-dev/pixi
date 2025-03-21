@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexSet;
+use rattler_conda_types::{PackageName, PrefixRecord};
 use rattler_shell::shell::{Bash, Fish, Shell, Zsh};
 
 use super::Mapping;
@@ -32,7 +33,7 @@ pub fn find_completions(
     Ok(completion_scripts)
 }
 
-fn contained_completions(root: &Path, exe: &Mapping) -> Vec<CompletionScript> {
+pub fn contained_completions(root: &Path, exe: &Mapping) -> Vec<CompletionScript> {
     let mut completion_scripts = Vec::new();
 
     let name = exe.executable_name();
@@ -61,4 +62,24 @@ fn contained_completions(root: &Path, exe: &Mapping) -> Vec<CompletionScript> {
         completion_scripts.push(CompletionScript::Fish(fish_path));
     }
     completion_scripts
+}
+
+pub(crate) fn completions_sync_status(
+    completions: IndexSet<PackageName>,
+    prefix_records: Vec<PrefixRecord>,
+) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
+    let mut records_to_install = Vec::new();
+    let mut records_to_uninstall = Vec::new();
+
+    for record in prefix_records {
+        if completions.contains(&record.repodata_record.package_record.name) {
+            todo!("Check if completions are already installed, if not, install them");
+            records_to_install.push(record);
+        } else {
+            todo!("Check if complations are already installed, if yes, uninstall them ");
+            records_to_uninstall.push(record);
+        }
+    }
+
+    Ok((records_to_install, records_to_uninstall))
 }

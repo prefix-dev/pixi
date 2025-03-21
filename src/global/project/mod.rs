@@ -870,6 +870,7 @@ impl Project {
 
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
+        todo!("add `completions_sync_status` here");
         let (shortcuts_to_remove, shortcuts_to_add) =
             shortcut_sync_status(shortcuts, prefix_records)?;
         if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
@@ -1004,6 +1005,8 @@ impl Project {
 
         // Install shortcuts
         state_changes |= self.sync_shortcuts(env_name).await?;
+
+        todo!("Install completions");
 
         Ok(state_changes)
     }
