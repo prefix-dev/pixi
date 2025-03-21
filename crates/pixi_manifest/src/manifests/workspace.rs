@@ -56,6 +56,29 @@ impl WorkspaceManifest {
             .map_err(|e| WithSourceCode { source, error: e })
     }
 
+    /// Generate a lean WorkspaceManifest with only "requires-pixi" field.
+    pub fn lean_for_requires_pixi(
+        requires_pixi_raw: Option<&str>,
+    ) -> Result<Self, Box<WithSourceCode<TomlError, String>>> {
+        const WORKSPACE_LEAN: &str = r#"
+[project]
+name = ""
+channels = []
+"#;
+        let toml = match requires_pixi_raw {
+            None => WORKSPACE_LEAN.to_string(),
+            Some(requires_pixi_raw) => format!(
+                "{}requires-pixi = \"{}\"",
+                WORKSPACE_LEAN, requires_pixi_raw
+            ),
+        };
+
+        match Self::from_toml_str(toml) {
+            Ok(s) => Ok(s),
+            Err(e) => Err(Box::new(e)),
+        }
+    }
+
     /// Returns the default feature.
     ///
     /// This is the feature that is added implicitly by the tables at the root
@@ -720,6 +743,23 @@ impl WorkspaceManifestMut<'_> {
             .into_diagnostic()?;
 
         Ok(result)
+    }
+
+    /// Set/Unset the pixi version requirements
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_requires_pixi(&mut self, version: Option<&str>) -> miette::Result<()> {
+        // Update in both the manifest and the toml
+        self.workspace.workspace.requires_pixi = match version {
+            Some(version) => Some(
+                Version::from_str(version)
+                    .into_diagnostic()
+                    .context("could not convert version to a valid version")?,
+            ),
+            None => None,
+        };
+        self.document.set_requires_pixi(version).into_diagnostic()
     }
 }
 
@@ -2868,5 +2908,47 @@ bar = "*"
         channels = ['conda-forge']
         platforms = [ 'win-64']
         "###);
+    }
+
+    #[test]
+    fn test_requires_pixi() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+        requires-pixi = "0.1"
+        "#;
+        let manifest = parse_pixi_toml(contents).manifest;
+
+        assert_eq!(
+            manifest.workspace.requires_pixi,
+            Version::from_str("0.1.0").ok()
+        );
+
+        let contents_no = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+        "#;
+        let manifest_no = parse_pixi_toml(contents_no).manifest;
+        assert_eq!(manifest_no.workspace.requires_pixi, None);
+    }
+
+    #[test]
+    fn test_lean_requires_pixi() {
+        let w1 = WorkspaceManifest::lean_for_requires_pixi(None);
+        assert!(w1.is_ok());
+        let w1 = w1.unwrap();
+        assert_eq!(w1.workspace.requires_pixi, None);
+
+        let w2 = WorkspaceManifest::lean_for_requires_pixi(Some("1.2.3"));
+        assert!(w2.is_ok());
+        let w2 = w2.unwrap();
+        assert_eq!(w2.workspace.requires_pixi, Version::from_str("1.2.3").ok());
+
+        let w3 = WorkspaceManifest::lean_for_requires_pixi(Some("..."));
+        assert!(w3.is_err());
     }
 }

@@ -10,6 +10,7 @@ use super::AddRemoveArgs;
 pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_ignore_pixi_version_check(true)
         .locate()?
         .with_cli_config(args.config.clone())
         .modify()?;
