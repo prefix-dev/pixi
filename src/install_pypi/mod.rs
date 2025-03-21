@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
 
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use itertools::Itertools;
@@ -25,6 +25,7 @@ use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::FlatIndex;
 use uv_types::HashStrategy;
+use uv_workspace::WorkspaceCache;
 
 use crate::{
     lock_file::UvResolutionContext,
@@ -79,7 +80,6 @@ pub async fn update_python_distributions(
 
     let registry_client = Arc::new(
         RegistryClientBuilder::new(uv_context.cache.clone())
-            .client(uv_context.client.clone())
             .allow_insecure_host(uv_context.allow_insecure_host.clone())
             .index_urls(index_locations.index_urls())
             .keyring(uv_context.keyring_provider)
@@ -139,6 +139,7 @@ pub async fn update_python_distributions(
         &uv_context.hash_strategy,
         None,
         uv_context.source_strategy,
+        WorkspaceCache::default(),
         uv_context.concurrency,
         PreviewMode::Disabled,
     )
@@ -175,7 +176,7 @@ pub async fn update_python_distributions(
         python_packages
             .iter()
             .map(|(pkg, _)| {
-                let uv_name = uv_normalize::PackageName::new(pkg.name.to_string())
+                let uv_name = uv_normalize::PackageName::from_str(pkg.name.as_ref())
                     .expect("should be correct");
                 (uv_name, pkg)
             })
@@ -328,7 +329,7 @@ pub async fn update_python_distributions(
         let resolution = Resolution::default();
         let remote_dists = preparer
             .prepare(
-                remote.iter().map(|(d, _)| d.clone()).collect(),
+                remote.iter().map(|(d, _)| Arc::new(d.clone())).collect(),
                 &uv_context.in_flight,
                 &resolution,
             )
@@ -366,11 +367,11 @@ pub async fn update_python_distributions(
 
                     // Sanity check to avoid calling remove all on a bad path.
                     if dist_info
-                        .path()
+                        .install_path()
                         .iter()
                         .any(|segment| Path::new(segment) == Path::new("site-packages"))
                     {
-                        tokio::fs::remove_dir_all(dist_info.path())
+                        tokio::fs::remove_dir_all(dist_info.install_path())
                             .await
                             .into_diagnostic()?;
                     }

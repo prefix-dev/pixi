@@ -81,7 +81,7 @@ impl InstallPlanner {
 
         // First, check if we need to revalidate the package
         // then we should get it from the remote
-        if self.uv_cache.must_revalidate(name) {
+        if self.uv_cache.must_revalidate_package(name) {
             remote.push((
                 convert_to_dist(required_pkg, &self.lock_file_dir)?,
                 op_to_reason.stale(),
@@ -160,7 +160,7 @@ impl InstallPlanner {
                         match need_reinstall(dist, required_pkg, &self.lock_file_dir)? {
                             ValidateCurrentInstall::Keep => {
                                 //
-                                if self.uv_cache.must_revalidate(dist.name()) {
+                                if self.uv_cache.must_revalidate_package(dist.name()) {
                                     reinstalls.push((
                                         dist.clone(),
                                         NeedReinstall::ReinstallationRequested,
