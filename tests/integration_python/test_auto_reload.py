@@ -4,6 +4,7 @@ import signal
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 from .common import EMPTY_BOILERPLATE_PROJECT
 
 
@@ -42,17 +43,19 @@ def test_file_watching_and_rerunning(pixi: Path, tmp_pixi_workspace: Path) -> No
         cwd=str(tmp_pixi_workspace),
     )
 
-    ready = False
+    ready: list[Any] = []
     while not ready:
         ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    assert process.stdout is not None, "Process didn't start"
     line = process.stdout.readline().strip()
     assert "initial content" in line, "Task didn't show initial content"
 
     input_file.write_text("updated content")
 
-    ready = False
+    ready = []
     while not ready:
         ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    assert process.stdout is not None, "Process didn't start"
     line = process.stdout.readline().strip()
     assert "updated content" in line, "Task didn't show updated content"
     terminate_process(process, 1)
@@ -79,16 +82,18 @@ def test_multiple_files_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
         cwd=str(tmp_pixi_workspace),
     )
 
-    ready = False
+    ready: list[Any] = []
     while not ready:
         ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    assert process.stdout is not None, "Process didn't start"
     line = process.stdout.readline().strip()
     assert "f1=one" in line and "f2=two" in line, "Task didn't show initial content from both files"
 
     file1.write_text("one-updated")
-    ready = False
+    ready = []
     while not ready:
         ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    assert process.stdout is not None, "Process didn't start"
     line = process.stdout.readline().strip()
     assert "f1=one-updated" in line and "f2=two" in line, (
         "Task didn't show updated content from file1"
@@ -168,9 +173,12 @@ def test_nonexistent_watched_file(pixi: Path, tmp_pixi_workspace: Path) -> None:
         cwd=str(tmp_pixi_workspace),
     )
     # Wait for initial run
-    ready = False
+    ready: list[Any] = []
     while not ready:
         ready, _, _ = select.select([process.stdout], [], [], 0.5)
+
+    assert process.stdout is not None, "Process didn't start"
+
     line = process.stdout.readline().strip()
     assert "File created" in line, "Task didn't run initially"
     nonexistent_file = tmp_pixi_workspace.joinpath("does_not_exist_yet.txt")
