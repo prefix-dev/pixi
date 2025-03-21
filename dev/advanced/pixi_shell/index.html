@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/deployment/s3/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/pixi_shell/">
       
       
-        <link rel="prev" href="../container/">
+        <link rel="prev" href="../shebang/">
       
       
-        <link rel="next" href="../../python/tutorial/">
+        <link rel="next" href="../../reference/pixi_manifest/">
       
       
       <link rel="icon" href="../../assets/pixi.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>S3 - Pixi by prefix.dev</title>
+        <title>Shell - Pixi by prefix.dev</title>
       
     
     
@@ -59,11 +59,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="S3 - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Shell - Pixi by prefix.dev" >
       
         <meta  property="og:description"  content="None" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/deployment/s3.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/pixi_shell.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -71,15 +71,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/deployment/s3/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/pixi_shell/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="S3 - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Shell - Pixi by prefix.dev" >
       
         <meta  name="twitter:description"  content="None" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/deployment/s3.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/pixi_shell.png" >
       
     
     
@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#use-s3-with-pixi" class="md-skip">
+        <a href="#pixi-shell" class="md-skip">
           Skip to content
         </a>
       
@@ -141,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              S3
+              Shell
             
           </span>
         </div>
@@ -782,8 +782,6 @@
       
   
   
-    
-  
   
   
     
@@ -795,11 +793,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
@@ -814,7 +812,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             Distributing
@@ -828,7 +826,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -850,7 +848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../authentication/" class="md-nav__link">
+      <a href="../../deployment/authentication/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -872,7 +870,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../container/" class="md-nav__link">
+      <a href="../../deployment/container/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -891,31 +889,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  <span class="md-ellipsis">
-    S3
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../deployment/s3/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -925,146 +902,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#using-aws-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using AWS configuration
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#using-pixis-configuration" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using Pixi's Configuration
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#public-s3-buckets" class="md-nav__link">
-    <span class="md-ellipsis">
-      Public S3 Buckets
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#s3-compatible-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      S3-Compatible Storage
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="S3-Compatible Storage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#minio" class="md-nav__link">
-    <span class="md-ellipsis">
-      MinIO
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudflare-r2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Cloudflare R2
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#wasabi" class="md-nav__link">
-    <span class="md-ellipsis">
-      Wasabi
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#backblaze-b2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Backblaze B2
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#google-cloud-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Google Cloud Storage
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#hetzner-object-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Hetzner Object Storage
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#uploading-to-s3" class="md-nav__link">
-    <span class="md-ellipsis">
-      Uploading to S3
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Uploading to S3">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#re-indexing-s3-buckets-after-uploading-new-packages" class="md-nav__link">
-    <span class="md-ellipsis">
-      Re-indexing S3 buckets After Uploading new Packages
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1833,8 +1670,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -1844,11 +1683,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" checked>
         
           
           <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="">
@@ -1863,7 +1702,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_11">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -1877,7 +1716,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/installation/" class="md-nav__link">
+      <a href="../installation/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1899,7 +1738,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/channel_logic/" class="md-nav__link">
+      <a href="../channel_logic/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1921,7 +1760,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../explain_info_command/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1943,7 +1782,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../advanced/shebang/" class="md-nav__link">
+      <a href="../shebang/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -1962,10 +1801,31 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../advanced/pixi_shell/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Shell
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -1975,6 +1835,59 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#issues-with-pixi-shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      Issues with pixi shell
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#emulating-conda-activate-with-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Emulating conda activate with pixi
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Emulating conda activate with pixi">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-fish-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      For fish users
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2286,115 +2199,28 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#using-aws-configuration" class="md-nav__link">
+  <a href="#issues-with-pixi-shell" class="md-nav__link">
     <span class="md-ellipsis">
-      Using AWS configuration
+      Issues with pixi shell
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#using-pixis-configuration" class="md-nav__link">
+  <a href="#emulating-conda-activate-with-pixi" class="md-nav__link">
     <span class="md-ellipsis">
-      Using Pixi's Configuration
+      Emulating conda activate with pixi
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#public-s3-buckets" class="md-nav__link">
-    <span class="md-ellipsis">
-      Public S3 Buckets
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#s3-compatible-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      S3-Compatible Storage
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="S3-Compatible Storage">
+    <nav class="md-nav" aria-label="Emulating conda activate with pixi">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#minio" class="md-nav__link">
+  <a href="#for-fish-users" class="md-nav__link">
     <span class="md-ellipsis">
-      MinIO
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#cloudflare-r2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Cloudflare R2
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#wasabi" class="md-nav__link">
-    <span class="md-ellipsis">
-      Wasabi
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#backblaze-b2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Backblaze B2
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#google-cloud-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Google Cloud Storage
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#hetzner-object-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      Hetzner Object Storage
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#uploading-to-s3" class="md-nav__link">
-    <span class="md-ellipsis">
-      Uploading to S3
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Uploading to S3">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#re-indexing-s3-buckets-after-uploading-new-packages" class="md-nav__link">
-    <span class="md-ellipsis">
-      Re-indexing S3 buckets After Uploading new Packages
+      For fish users
     </span>
   </a>
   
@@ -2421,7 +2247,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/deployment/s3.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/pixi_shell.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -2429,201 +2255,56 @@
   
 
 
-<h1 id="use-s3-with-pixi">Use S3 with Pixi<a class="headerlink" href="#use-s3-with-pixi" title="Permanent link">#</a></h1>
-<p>If you want to use S3 object storage to fetch your packages, you can use the <code>s3://</code> protocol as a channel.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># ...</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;s3://my-bucket/custom-channel&quot;</span><span class="p">]</span>
+<h1 id="pixi-shell">pixi shell<a class="headerlink" href="#pixi-shell" title="Permanent link">#</a></h1>
+<p>The <code>pixi shell</code> command is similar to <code>conda activate</code> but works a little different under the hood.
+Instead of requiring a change to your <code>~/.bashrc</code> or other files, it will launch a fresh shell.
+That also means that, instead of <code>conda deactivate</code>, it's enough to just exit the current shell, e.g. by pressing <code>Ctrl+D</code>.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>shell
 </span></code></pre></div>
-<p>In the bucket, your objects need to adhere to the standard conda repository structure:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>my-bucket/
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    custom-channel/
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>        noarch/
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>            repodata.json
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>            ...
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>        linux-64/
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>            repodata.json
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>            ...
+<p>On Unix systems the shell command works by creating a "fake" PTY session that will start the shell, and then send a string like <code>source /tmp/activation-env-12345.sh</code> to the <code>stdin</code> in order to activate the environment. If you would peek under the hood of the the <code>shell</code> command, then you would see that this is the first thing executed in the new shell session.</p>
+<p>The temporary script that we generate ends with <code>echo "PIXI_ENV_ACTIVATED"</code> which is used to detect if the environment was activated successfully. If we do not receive this string after one second, we will issue a warning to the user.</p>
+<h2 id="issues-with-pixi-shell">Issues with pixi shell<a class="headerlink" href="#issues-with-pixi-shell" title="Permanent link">#</a></h2>
+<p>As explained, <code>pixi shell</code> only works well if we execute the activation script <em>after</em> launching shell. Certain commands that are run in the <code>~/.bashrc</code> might swallow the activation command, and the environment won't be activated.</p>
+<p>For example, if your <code>~/.bashrc</code> contains code like the following, <code>pixi shell</code> has little chance to succeed:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># on WSL - the `wsl.exe` somehow takes over `stdin` and prevents `pixi shell` from succeeding</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>wsl.exe<span class="w"> </span>-d<span class="w"> </span>wsl-vpnkit<span class="w"> </span>--cd<span class="w"> </span>/app<span class="w"> </span>service<span class="w"> </span>wsl-vpnkit<span class="w"> </span>start
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># on macOS or Linux, some users start fish or nushell from their `bashrc`</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">if</span><span class="w"> </span><span class="o">[[</span><span class="w"> </span><span class="nv">$-</span><span class="w"> </span><span class="o">=</span><span class="w"> </span>*i*<span class="w"> </span><span class="o">]]</span><span class="p">;</span><span class="w"> </span><span class="k">then</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nb">exec</span><span class="w"> </span>~/.pixi/bin/fish
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="k">fi</span>
 </span></code></pre></div>
-<p>Pixi supports two ways to configure access to your S3 bucket:</p>
-<ol>
-<li>Using AWS credentials from environment variables or AWS configuration files, like in any other AWS tool</li>
-<li>Using pixi's configuration in combination with storing the credentials in pixi's authentication storage</li>
-</ol>
-<div class="admonition warning">
-<p>These two options are mutually exclusive!
-Specifying <code>s3-options</code> (see below) will deactivate the AWS credentials fetching.
-You can either use the AWS credentials from the conventional locations (by not specifying <code>s3-options</code>) or from pixi's authentication storage (by specifying <code>s3-options</code>).</p>
-</div>
-<h2 id="using-aws-configuration">Using AWS configuration<a class="headerlink" href="#using-aws-configuration" title="Permanent link">#</a></h2>
-<p>You can specify <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> in your environment variables for Pixi to use them.</p>
-<p>You can also specify <code>AWS_CONFIG_FILE</code> and <code>AWS_PROFILE</code> to use a custom AWS configuration file and profile.</p>
-<div class="language-cfg highlight"><span class="filename">aws.config</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[profile conda]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="na">sso_account_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">123456789012</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="na">sso_role_name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">PowerUserAccess</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="na">sso_start_url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">https://my-company.awsapps.com/start</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="na">sso_region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">eu-central-1</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="na">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">eu-central-1</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="na">output</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">json</span>
+<p>In order to fix this, we would advise you to follow the steps below to use <code>pixi shell-hook</code> instead.</p>
+<h2 id="emulating-conda-activate-with-pixi">Emulating <code>conda activate</code> with pixi<a class="headerlink" href="#emulating-conda-activate-with-pixi" title="Permanent link">#</a></h2>
+<p>To emulate <code>conda activate</code> - which activates a conda environment in the current shell - you can use the <code>pixi shell-hook</code> subcommand. The <code>shell-hook</code> is going to print a shell script to your <code>stdout</code> that can be used by your shell to activate the environment.</p>
+<p>For example, with <code>bash</code> and <code>zsh</code> you can use the following command:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
 </span></code></pre></div>
-<div class="language-bash highlight"><span class="filename">CLI usage</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>$<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="nv">AWS_CONFIG_FILE</span><span class="o">=</span>/path/to/aws.config
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>$<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="nv">AWS_PROFILE</span><span class="o">=</span>conda
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>$<span class="w"> </span>aws<span class="w"> </span>sso<span class="w"> </span>login
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Attempting<span class="w"> </span>to<span class="w"> </span>automatically<span class="w"> </span>open<span class="w"> </span>the<span class="w"> </span>SSO<span class="w"> </span>authorization<span class="w"> </span>page<span class="w"> </span><span class="k">in</span><span class="w"> </span>your<span class="w"> </span>default<span class="w"> </span>browser.
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>If<span class="w"> </span>the<span class="w"> </span>browser<span class="w"> </span>does<span class="w"> </span>not<span class="w"> </span>open<span class="w"> </span>or<span class="w"> </span>you<span class="w"> </span>wish<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>a<span class="w"> </span>different<span class="w"> </span>device<span class="w"> </span>to<span class="w"> </span>authorize<span class="w"> </span>this<span class="w"> </span>request,<span class="w"> </span>open<span class="w"> </span>the<span class="w"> </span>following<span class="w"> </span>URL:
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>https://my-company.awsapps.com/start/#/device
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>Then<span class="w"> </span>enter<span class="w"> </span>the<span class="w"> </span>code:
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>DTBC-WFXC
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>Successfully<span class="w"> </span>logged<span class="w"> </span>into<span class="w"> </span>Start<span class="w"> </span>URL:<span class="w"> </span>https://my-company.awsapps.com/start
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>$<span class="w"> </span>pixi<span class="w"> </span>search<span class="w"> </span>-c<span class="w"> </span>s3://my-s3-bucket/channel<span class="w"> </span>my-private-package
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># ...</span>
+<p>With the <code>--manifest-path</code> option you can also specify which environment to activate. If you want to add a <code>bash</code> function to your <code>~/.bashrc</code> that will activate the environment, you can use the following command:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">function</span><span class="w"> </span>pixi_activate<span class="o">()</span><span class="w"> </span><span class="o">{</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span><span class="c1"># default to current directory if no path is given</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nb">local</span><span class="w"> </span><span class="nv">manifest_path</span><span class="o">=</span><span class="s2">&quot;</span><span class="si">${</span><span class="nv">1</span><span class="k">:-</span><span class="p">.</span><span class="si">}</span><span class="s2">&quot;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="w"> </span>--manifest-path<span class="w"> </span><span class="s1">&#39;$manifest_path&#39;</span><span class="k">)</span><span class="s2">&quot;</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="o">}</span>
 </span></code></pre></div>
-<div class="language-yaml highlight"><span class="filename">ci.yml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">jobs</span><span class="p">:</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">ci</span><span class="p">:</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Check out repository</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">      </span><span class="c1"># temporary credentials via OIDC</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Log in to AWS</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws-actions/configure-aws-credentials@v4</span>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">          </span><span class="nt">role-to-assume</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/github-poweruser</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">          </span><span class="nt">aws-region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eu-central-1</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Set up pixi</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">        </span><span class="c1"># AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set by aws-actions/configure-aws-credentials</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.3</span>
+<p>After adding this function to your <code>~/.bashrc</code>, you can activate the environment by running:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi_activate
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="c1"># or with a specific manifest</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>pixi_activate<span class="w"> </span>~/projects/my_project
 </span></code></pre></div>
-<h2 id="using-pixis-configuration">Using Pixi's Configuration<a class="headerlink" href="#using-pixis-configuration" title="Permanent link">#</a></h2>
-<p>You can specify the <code>workspace.s3-options</code> in your <code>pixi.toml</code> file.
-This might be useful when you want to use a custom S3-compatible host and not AWS's configuration.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[workspace.s3-options.my-bucket]</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://my-s3-host&quot;</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<h3 id="for-fish-users">For <code>fish</code> users<a class="headerlink" href="#for-fish-users" title="Permanent link">#</a></h3>
+<p>With fish, you can also evaluate the output of <code>pixi shell-hook</code>:</p>
+<div class="language-fish highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi shell-hook <span class="o">|</span> <span class="nb">source</span>
 </span></code></pre></div>
-<div class="admonition note">
-<p>You need to configure this per bucket you use, i.e. use <code>[workspace.s3-options.&lt;bucket-name&gt;]</code>.</p>
-</div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--aws-access-key-id<span class="o">=</span>...<span class="w"> </span>--aws-secret-access-key<span class="o">=</span>...<span class="w"> </span>s3://my-s3-bucket
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Authenticating<span class="w"> </span>with<span class="w"> </span>s3://my-s3-bucket
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>$<span class="w"> </span>pixi<span class="w"> </span>search<span class="w"> </span>my-private-package
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># ...</span>
-</span></code></pre></div>
-<p>You can also specify the <code>s3-options</code> in your <a href="../../reference/pixi_configuration/">Pixi configuration</a>.</p>
-<div class="language-toml highlight"><span class="filename">Global configuration</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[s3-options.my-bucket]</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://my-s3-host&quot;</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span></code></pre></div>
-<div class="language-yaml highlight"><span class="filename">ci.yml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">jobs</span><span class="p">:</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">ci</span><span class="p">:</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">runs-on</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ubuntu-latest</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">steps</span><span class="p">:</span>
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Check out repository</span>
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">actions/checkout@v4</span>
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">      </span><span class="c1"># temporary credentials via OIDC</span>
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Log in to AWS</span>
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws-actions/configure-aws-credentials@v4</span>
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">        </span><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">aws</span>
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">          </span><span class="nt">role-to-assume</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">arn:aws:iam::123456789012:role/github-poweruser</span>
-</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="w">          </span><span class="nt">aws-region</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">eu-central-1</span>
-</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>
-</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Set up pixi</span>
-</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a><span class="w">        </span><span class="c1"># AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set by aws-actions/configure-aws-credentials</span>
-</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="w">        </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.3</span>
-</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a><span class="w">        </span><span class="nt">with</span><span class="p">:</span>
-</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a><span class="w">          </span><span class="nt">auth-s3-access-key-id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ steps.aws.outputs.aws-access-key-id }}</span>
-</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a><span class="w">          </span><span class="nt">auth-s3-secret-access-key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ steps.aws.outputs.aws-secret-access-key }}</span>
-</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a><span class="w">          </span><span class="nt">auth-s3-session-token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ steps.aws.outputs.aws-session-token }}</span>
-</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="w">          </span><span class="nt">auth-host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3://my-s3-bucket</span>
-</span></code></pre></div>
-<h2 id="public-s3-buckets">Public S3 Buckets<a class="headerlink" href="#public-s3-buckets" title="Permanent link">#</a></h2>
-<p>Public buckets that don't need authentication can be used by just specifying the endpoint as a regular <code>https</code> URL.
-For example, on AWS, you might have a bucket that is publicly accessible via <code>https://my-public-bucket.s3.eu-central-1.amazonaws.com</code>.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://my-public-bucket.s3.eu-central-1.amazonaws.com/channel&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-<p>Note that for this, you need to configure your S3 bucket in such a way that it allows public access.
-On AWS, you need the <code>GetObject</code> and <code>ListBucket</code> permissions for this.
-Here is an example policy for AWS S3:</p>
-<div class="language-json highlight"><span class="filename">Bucket policy</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">    </span><span class="nt">&quot;Version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2012-10-17&quot;</span><span class="p">,</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">&quot;Statement&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">        </span><span class="p">{</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">            </span><span class="nt">&quot;Sid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PublicReadGetObject&quot;</span><span class="p">,</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">            </span><span class="nt">&quot;Effect&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Allow&quot;</span><span class="p">,</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">            </span><span class="nt">&quot;Principal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span>
-</span><span id="__span-10-8"><a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">            </span><span class="nt">&quot;Action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;s3:GetObject&quot;</span><span class="p">,</span>
-</span><span id="__span-10-9"><a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">            </span><span class="nt">&quot;Resource&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;arn:aws:s3:::my-public-bucket/*&quot;</span>
-</span><span id="__span-10-10"><a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">        </span><span class="p">},</span>
-</span><span id="__span-10-11"><a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">        </span><span class="p">{</span>
-</span><span id="__span-10-12"><a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">            </span><span class="nt">&quot;Sid&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PublicReadListBucket&quot;</span><span class="p">,</span>
-</span><span id="__span-10-13"><a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">            </span><span class="nt">&quot;Effect&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Allow&quot;</span><span class="p">,</span>
-</span><span id="__span-10-14"><a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">            </span><span class="nt">&quot;Principal&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span>
-</span><span id="__span-10-15"><a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="w">            </span><span class="nt">&quot;Action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;s3:ListBucket&quot;</span><span class="p">,</span>
-</span><span id="__span-10-16"><a id="__codelineno-10-16" name="__codelineno-10-16" href="#__codelineno-10-16"></a><span class="w">            </span><span class="nt">&quot;Resource&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;arn:aws:s3:::my-public-bucket&quot;</span>
-</span><span id="__span-10-17"><a id="__codelineno-10-17" name="__codelineno-10-17" href="#__codelineno-10-17"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-10-18"><a id="__codelineno-10-18" name="__codelineno-10-18" href="#__codelineno-10-18"></a><span class="w">    </span><span class="p">]</span>
-</span><span id="__span-10-19"><a id="__codelineno-10-19" name="__codelineno-10-19" href="#__codelineno-10-19"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>Cloudflare R2 also supports public buckets through a Cloudflare-managed <code>r2.dev</code> subdomain or a custom domain under your control, see <a href="https://developers.cloudflare.com/r2/buckets/public-buckets/">here</a>.</p>
-<h2 id="s3-compatible-storage">S3-Compatible Storage<a class="headerlink" href="#s3-compatible-storage" title="Permanent link">#</a></h2>
-<p>Many other cloud providers offer S3-compatible storage APIs.
-You can use them with Pixi by specifying the <code>s3-options</code> in your manifest file.</p>
-<h3 id="minio">MinIO<a class="headerlink" href="#minio" title="Permanent link">#</a></h3>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[workspace.s3-options]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://minio.example.com&quot;</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
-</span></code></pre></div>
-<h3 id="cloudflare-r2">Cloudflare R2<a class="headerlink" href="#cloudflare-r2" title="Permanent link">#</a></h3>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://&lt;account-id&gt;.eu.r2.cloudflarestorage.com&quot;</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;WEUR&quot;</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span></code></pre></div>
-<h3 id="wasabi">Wasabi<a class="headerlink" href="#wasabi" title="Permanent link">#</a></h3>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://s3.de-1.wasabisys.com&quot;</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;de-1&quot;</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span></code></pre></div>
-<h3 id="backblaze-b2">Backblaze B2<a class="headerlink" href="#backblaze-b2" title="Permanent link">#</a></h3>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://s3.us-west-004.backblazeb2.com&quot;</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-west-004&quot;</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
-</span></code></pre></div>
-<h3 id="google-cloud-storage">Google Cloud Storage<a class="headerlink" href="#google-cloud-storage" title="Permanent link">#</a></h3>
-<p>Note Pixi also supports <code>gcs://</code> URLs.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://storage.googleapis.com&quot;</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span></code></pre></div>
-<h3 id="hetzner-object-storage">Hetzner Object Storage<a class="headerlink" href="#hetzner-object-storage" title="Permanent link">#</a></h3>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://fsn1.your-objectstorage.com&quot;</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;US&quot;</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span></code></pre></div>
-<h2 id="uploading-to-s3">Uploading to S3<a class="headerlink" href="#uploading-to-s3" title="Permanent link">#</a></h2>
-<p>You can upload to S3 using <code>rattler-build upload s3</code>.
-For more information, see <a href="https://rattler.build/latest/authentication_and_upload/#s3">rattler-build's documentation</a>.</p>
-<h3 id="re-indexing-s3-buckets-after-uploading-new-packages">Re-indexing S3 buckets After Uploading new Packages<a class="headerlink" href="#re-indexing-s3-buckets-after-uploading-new-packages" title="Permanent link">#</a></h3>
-<p>Every time you upload new packages to your package repository, the <code>repodata.json</code> file needs to be updated.
-This is done automatically for conda package servers like anaconda.org or prefix.dev.
-For S3 buckets, on the other hand, we need to do this manually since an S3 bucket is only a storage system and not a package server.</p>
-<p>To re-index an S3 bucket, you can use the <code>rattler-index</code> package which is available on <a href="https://prefix.dev/channels/conda-forge/packages/rattler-index">conda-forge</a>.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>rattler-index<span class="w"> </span>s3<span class="w"> </span>s3://my-s3-bucket/my-channel<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">    </span>--endpoint-url<span class="w"> </span>https://my-s3-host<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span>--region<span class="w"> </span>us-east-1<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span>--force-path-style<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span>--access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span>--secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;
+<p>Or, if you want to add a function to your <code>~/.config/fish/config.fish</code>:</p>
+<div class="language-fish highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">function</span> pixi_activate
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>    <span class="c"># default to current directory if no path is given</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>    <span class="k">set</span> -l manifest_path <span class="nv">$argv</span><span class="o">[</span>1<span class="o">]</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>    <span class="k">test</span> -z <span class="s2">&quot;</span><span class="nv">$manifest_path</span><span class="s2">&quot;</span><span class="p">;</span> <span class="k">and</span> <span class="k">set</span> manifest_path <span class="s2">&quot;.&quot;</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>    pixi shell-hook --manifest-path <span class="s2">&quot;</span><span class="nv">$manifest_path</span><span class="s2">&quot;</span> <span class="o">|</span> <span class="nb">source</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="k">end</span>
 </span></code></pre></div>
 
 
@@ -2696,9 +2377,9 @@ For S3 buckets, on the other hand, we need to do this manually since an S3 bucke
           
             
             <a
-              href="../container/"
+              href="../shebang/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Container"
+              aria-label="Previous: Shebang"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2709,7 +2390,7 @@ For S3 buckets, on the other hand, we need to do this manually since an S3 bucke
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Container
+                  Shebang
                 </div>
               </div>
             </a>
@@ -2719,16 +2400,16 @@ For S3 buckets, on the other hand, we need to do this manually since an S3 bucke
           
             
             <a
-              href="../../python/tutorial/"
+              href="../../reference/pixi_manifest/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Tutorial"
+              aria-label="Next: Pixi Manifest"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Tutorial
+                  Pixi Manifest
                 </div>
               </div>
               <div class="md-footer__button md-icon">
