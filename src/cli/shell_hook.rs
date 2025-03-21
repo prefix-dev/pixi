@@ -15,6 +15,7 @@ use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
+    lock_file::ReinstallPackages,
     prompt,
     workspace::{get_activated_environment_variables, Environment, HasWorkspaceRef},
     UpdateLockFileOptions, Workspace, WorkspaceLocator,
@@ -163,6 +164,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
+        ReinstallPackages::default(),
     )
     .await?;
 

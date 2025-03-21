@@ -8,7 +8,7 @@ from ..common import verify_cli_command, exec_extension, is_binary
 
 
 def test_trampoline_respect_activation_variables(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
@@ -20,8 +20,8 @@ def test_trampoline_respect_activation_variables(
             "global",
             "install",
             "--channel",
-            trampoline_channel_1,
-            "dummy-trampoline",
+            trampoline_channel,
+            "dummy-trampoline==0.1.0",
         ],
         env=env,
     )
@@ -50,7 +50,7 @@ def test_trampoline_respect_activation_variables(
 
 
 def test_trampoline_new_activation_scripts(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel_1: str, trampoline_channel_2: str
+    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
@@ -62,7 +62,7 @@ def test_trampoline_new_activation_scripts(
             "global",
             "install",
             "--channel",
-            trampoline_channel_1,
+            trampoline_channel,
             "dummy-trampoline==0.1.0",
         ],
         env=env,
@@ -77,12 +77,7 @@ def test_trampoline_new_activation_scripts(
     # get envs of the trampoline
     assert trampoline_metadata["env"]["TRAMPOLINE_TEST_ENV"] == "teapot"
 
-    # now install newever version that have different activation scripts
-
-    # Replace the version with a "*"
-    manifest = tmp_pixi_workspace.joinpath("manifests", "pixi-global.toml")
-    manifest.write_text(manifest.read_text().replace("trampoline_1", "trampoline_2"))
-
+    # now install newer version that have different activation scripts
     verify_cli_command(
         [
             pixi,
@@ -93,7 +88,7 @@ def test_trampoline_new_activation_scripts(
         env=env,
     )
 
-    # verify that newever activation is recorded
+    # verify that newer activation is recorded
     dummy_b_json = tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
@@ -108,7 +103,7 @@ def test_trampoline_new_activation_scripts(
 
 
 def test_trampoline_migrate_previous_script(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
     # this test will validate if new trampoline will migrate the previous way of running packages (using scripts)
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
@@ -123,7 +118,7 @@ def test_trampoline_migrate_previous_script(
             "global",
             "install",
             "--channel",
-            trampoline_channel_1,
+            trampoline_channel,
             "dummy-trampoline",
         ],
         env=env,
@@ -140,7 +135,7 @@ def test_trampoline_migrate_previous_script(
 
 
 def test_trampoline_dot_in_exe(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
@@ -151,7 +146,7 @@ def test_trampoline_dot_in_exe(
             "global",
             "install",
             "--channel",
-            trampoline_channel_1,
+            trampoline_channel,
             "dummy-trampoline",
             "--expose",
             "exe.test=dummy-trampoline",
@@ -165,7 +160,7 @@ def test_trampoline_dot_in_exe(
 
 
 def test_trampoline_migrate_with_newer_trampoline(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
     # this test will validate if new trampoline will migrate the older trampoline
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
@@ -182,7 +177,7 @@ def test_trampoline_migrate_with_newer_trampoline(
             "global",
             "install",
             "--channel",
-            trampoline_channel_1,
+            trampoline_channel,
             "dummy-trampoline",
         ],
         env=env,
@@ -262,13 +257,12 @@ def test_trampoline_extends_path(
     os.environ["PATH"] = "/another/test/path" + os.pathsep + os.environ["PATH"]
 
     verify_cli_command(
-        [dummy_trampoline_path],
-        stdout_contains=["/another/test/path", "/test/path"],
+        [dummy_trampoline_path], stdout_contains=["/another/test/path", "/test/path"]
     )
 
 
 def test_trampoline_removes_trampolines_not_in_manifest(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
@@ -280,7 +274,7 @@ def test_trampoline_removes_trampolines_not_in_manifest(
             "global",
             "install",
             "--channel",
-            trampoline_channel_1,
+            trampoline_channel,
             "dummy-trampoline",
         ],
         env=env,
@@ -290,9 +284,6 @@ def test_trampoline_removes_trampolines_not_in_manifest(
         dummy_trampoline_original.parent / exec_extension("dummy-trampoline-new")
     )
 
-    verify_cli_command(
-        [pixi, "global", "sync"],
-        env=env,
-    )
+    verify_cli_command([pixi, "global", "sync"], env=env)
     assert dummy_trampoline_original.is_file()
     assert not dummy_trampoline_new.is_file()

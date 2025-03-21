@@ -8,6 +8,7 @@ mod expose;
 mod install;
 mod list;
 mod remove;
+mod shortcut;
 mod sync;
 mod uninstall;
 mod update;
@@ -31,6 +32,8 @@ pub enum Command {
     #[clap(visible_alias = "e")]
     #[command(subcommand)]
     Expose(expose::SubCommand),
+    #[command(subcommand)]
+    Shortcut(shortcut::SubCommand),
     Update(update::Args),
     #[command(hide = true)]
     Upgrade(upgrade::Args),
@@ -59,6 +62,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::List(args) => list::execute(args).await?,
         Command::Sync(args) => sync::execute(args).await?,
         Command::Expose(subcommand) => expose::execute(subcommand).await?,
+        Command::Shortcut(subcommand) => shortcut::execute(subcommand).await?,
         Command::Update(args) => update::execute(args).await?,
         Command::Upgrade(args) => upgrade::execute(args).await?,
         Command::UpgradeAll(args) => upgrade_all::execute(args).await?,

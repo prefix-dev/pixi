@@ -1,5 +1,5 @@
 
-[Pixi's vision](../vision.md) includes being supported on all major platforms. Sometimes that needs some extra configuration to work well.
+[Pixi's vision](../misc/vision.md) includes being supported on all major platforms. Sometimes that needs some extra configuration to work well.
 On this page, you will learn what you can configure to align better with the platform you are making your application for.
 
 Here is an example manifest file that highlights some of the features:

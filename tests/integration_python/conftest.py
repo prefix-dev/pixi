@@ -50,6 +50,11 @@ def test_data() -> Path:
 
 
 @pytest.fixture
+def mock_projects(test_data: Path) -> Path:
+    return test_data.joinpath("mock-projects")
+
+
+@pytest.fixture
 def channels(test_data: Path) -> Path:
     return test_data.joinpath("channels", "channels")
 

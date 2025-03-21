@@ -52,7 +52,7 @@ If you want to install all environments, you can use the `--all` flag.
 
 Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`. These commands will automatically install the environment if it is not already installed.
 
-You can use `pixi clean` to remove the installed environments and start fresh.
+You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
 
 
 --8<-- "docs/reference/cli/pixi/install_extender.md:example"

@@ -18,7 +18,7 @@
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.42.1
+    Version: v0.43.0
 #>
 param (
     [string] $PixiVersion = 'latest',
