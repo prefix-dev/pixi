@@ -2738,6 +2738,8 @@ This will be added as dependencies to the <code>my-env</code> environment but wo
 <li>Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.</li>
 <li>When installing a new binary, a new trampoline is placed in the <code>.pixi/bin</code> directory and is hard-linked to the <code>.pixi/bin/trampoline_configuration/trampoline_bin</code>. This optimizes storage space and avoids duplication of the same trampoline.</li>
 </ul>
+<p>The trampoline will take care that the <code>PATH</code> contains the newest changes on your local <code>PATH</code> while avoiding to cache temporary <code>PATH</code> changes during installation.
+If you want to control the base <code>PATH</code>, pixi considers you can set <code>export PIXI_BASE_PATH=$PATH</code> in your shell startup script.</p>
 <h3 id="shortcuts">Shortcuts<a class="headerlink" href="#shortcuts" title="Permanent link">#</a></h3>
 <p>Especially for graphical user interfaces it is useful to add shortcuts so that the operating system knows that about the application.
 This way the application can show up in the start menu or be suggested when you want to open a file type the application supports.
