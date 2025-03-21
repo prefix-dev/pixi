@@ -9,7 +9,7 @@ from .common import EMPTY_BOILERPLATE_PROJECT
 
 
 # Cross-platform process termination function
-def terminate_process(process: subprocess.Popen, number_of_tasks: int) -> None:
+def terminate_process(process: subprocess.Popen[str], number_of_tasks: int) -> None:
     """Terminate a process in a cross-platform way."""
     if os.name == "nt":  # Windows
         # On Windows, we can use terminate() which sends Ctrl+C
@@ -126,15 +126,14 @@ def test_glob_pattern_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
         cwd=str(tmp_pixi_workspace),
     )
 
-    time.sleep(1)  # Wait for process to start
+    # Wait for process to start and capture initial output
+    line = readline_with_timeout(process)
+    assert "initial_data" in line, "Task didn't show initial content"
 
     log_file.write_text("modified_data")
 
-    time.sleep(1)  # Wait for change to be detected
-
-    stdout, stderr = process.communicate(timeout=2)
-    assert "initial_data" in stdout or "modified_data" in stdout, "Expected output not found"
-
+    line = readline_with_timeout(process)
+    assert "modified_data" in line, "Task didn't show modified content"
     terminate_process(process, 1)
 
 

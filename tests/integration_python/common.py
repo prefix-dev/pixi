@@ -55,7 +55,6 @@ def verify_cli_command(
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
     reset_env: bool = False,
-    ctrl_c: bool = False,
 ) -> Output:
     base_env = {} if reset_env else dict(os.environ)
     complete_env = base_env if env is None else base_env | env
