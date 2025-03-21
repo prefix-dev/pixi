@@ -37,8 +37,8 @@ pub mod tree;
 pub mod update;
 pub mod upgrade;
 pub mod upload;
-pub mod workspace;
 pub mod watch;
+pub mod workspace;
 
 #[derive(Parser, Debug)]
 #[command(

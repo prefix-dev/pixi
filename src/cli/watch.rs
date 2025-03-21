@@ -19,6 +19,7 @@ use tokio::sync::broadcast;
 use tokio::task::LocalSet;
 use tracing::{error, info, Level};
 
+use crate::lock_file::LockFileDerivedData;
 use crate::{
     cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
@@ -244,22 +245,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    // Check task cache
-    let task_cache = match executable_task
-        .can_skip(&lock_file.lock_file)
-        .await
-        .into_diagnostic()?
-    {
-        CanSkip::No(cache) => cache,
-        CanSkip::Yes => {
-            eprintln!(
-                "Task '{}' can be skipped (cache hit) 🚀",
-                console::style(executable_task.name().unwrap_or("")).bold()
-            );
-            return Ok(());
-        }
-    };
-
     // If we don't have a command environment yet, we need to compute it
     let command_env = get_task_env(
         &executable_task.run_environment,
@@ -307,6 +292,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let task_result = local
         .run_until(execute_task_with_watcher(
             &executable_task,
+            &lock_file,
             &command_env,
             cancel_tx.clone(),
             ctrlc_should_exit_process.clone(),
@@ -326,12 +312,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Handle CTRL-C ourselves again
     ctrlc_should_exit_process.store(true, Ordering::Relaxed);
-
-    // Update the task cache with the new hash
-    executable_task
-        .save_cache(&lock_file, task_cache)
-        .await
-        .into_diagnostic()?;
 
     Ok(())
 }
@@ -368,24 +348,32 @@ enum TaskExecutionError {
     NonZeroExitCode(i32),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FailedToParseShellScript(#[from] FailedToParseShellScript),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     UnsupportedPlatformError(#[from] UnsupportedPlatformError),
 
     #[error("shell error: {error}")]
     ShellError { error: String },
 
     #[error("watcher error: {0}")]
+    #[diagnostic(code(pixi::watcher::error))]
     WatcherError(String),
+
+    #[error("cache error: {0}")]
+    CacheError(String),
 }
 
 /// Execute a task with file watching using the notify-rs based watcher.
 async fn execute_task_with_watcher(
     task: &ExecutableTask<'_>,
+    lock_file: &LockFileDerivedData<'_>,
     command_env: &HashMap<String, String>,
     cancel_tx: Arc<broadcast::Sender<()>>,
     ctrlc_should_exit_process: Arc<AtomicBool>,
@@ -429,6 +417,26 @@ async fn execute_task_with_watcher(
                 .bold(),
         );
 
+        let task_cache = match task
+            .can_skip(&lock_file.lock_file)
+            .await
+            .map_err(|e| TaskExecutionError::CacheError(e.to_string()))?
+        {
+            CanSkip::No(cache) => cache,
+            CanSkip::Yes => {
+                eprintln!(
+                    "Task '{}' can be skipped (cache hit) 🚀",
+                    console::style(task.name().unwrap_or("")).bold()
+                );
+                return Ok(());
+            }
+        };
+
+        // Update the task cache with the new hash
+        task.save_cache(lock_file, task_cache)
+            .await
+            .map_err(|e| TaskExecutionError::CacheError(e.to_string()))?;
+
         let status_code = deno_task_shell::execute(
             script_clone,
             command_env_clone,
@@ -445,22 +453,42 @@ async fn execute_task_with_watcher(
         return Ok(());
     }
 
-    let mut task_handle = Some(tokio::task::spawn_local(async move {
-        let status_code = deno_task_shell::execute(
-            script_clone,
-            command_env_clone,
-            &cwd_clone,
-            Default::default(),
-            Default::default(),
-        )
-        .await;
+    let mut task_handle = match task
+        .can_skip(&lock_file.lock_file)
+        .await
+        .map_err(|e| TaskExecutionError::CacheError(e.to_string()))?
+    {
+        CanSkip::No(cache) => {
+            let _ = task
+                .save_cache(lock_file, cache)
+                .await
+                .map_err(|e| TaskExecutionError::CacheError(e.to_string()));
 
-        if status_code != 0 && !was_cancelled_clone.load(Ordering::SeqCst) {
-            tracing::error!("Task exited with status code: {}", status_code);
+            Some(tokio::task::spawn_local(async move {
+                let status_code = deno_task_shell::execute(
+                    script_clone,
+                    command_env_clone,
+                    &cwd_clone,
+                    Default::default(),
+                    Default::default(),
+                )
+                .await;
+
+                if status_code != 0 && !was_cancelled_clone.load(Ordering::SeqCst) {
+                    tracing::error!("Task exited with status code: {}", status_code);
+                }
+
+                status_code
+            }))
         }
-
-        status_code
-    }));
+        CanSkip::Yes => {
+            eprintln!(
+                "Task '{}' can be skipped (cache hit) 🚀",
+                console::style(task.name().unwrap_or("")).bold()
+            );
+            None
+        }
+    };
 
     // Configure file watcher with debouncing
     let debounce = Duration::from_millis(700);
@@ -480,10 +508,7 @@ async fn execute_task_with_watcher(
     // Create the file watcher
     let mut watcher = FileWatcher::new(&root, &inputs, debounce)
         .await
-        .map_err(|e| {
-            error!("Failed to watch files: {}", e);
-            TaskExecutionError::WatcherError(e.to_string())
-        })?;
+        .map_err(|e| TaskExecutionError::WatcherError(e.to_string()))?;
 
     loop {
         tokio::select! {
@@ -520,8 +545,8 @@ async fn execute_task_with_watcher(
                             handle.abort();
                         }
 
-                        let new_was_cancelled = Arc::new(AtomicBool::new(false));
-                        let new_was_cancelled_clone = new_was_cancelled.clone();
+                        // Reset the cancellation flag before starting a new task
+                        was_cancelled.store(false, Ordering::SeqCst);
 
                         eprintln!(
                             "{}{}{}{}",
@@ -531,28 +556,42 @@ async fn execute_task_with_watcher(
                             console::style(format!(" {}", task.display_command())).yellow()
                         );
 
-                        was_cancelled.store(false, Ordering::SeqCst);
-
                         let script_clone = script.clone();
                         let command_env_clone = command_env.clone();
                         let cwd_clone = cwd.clone();
+                        let was_cancelled_clone_for_task = was_cancelled.clone();
 
-                        task_handle = Some(tokio::task::spawn_local(async move {
-                            let status_code = deno_task_shell::execute(
-                                script_clone,
-                                command_env_clone,
-                                &cwd_clone,
-                                Default::default(),
-                                Default::default(),
-                            ).await;
+                        task_handle = match task.can_skip(&lock_file.lock_file).await
+                            .map_err(|e| TaskExecutionError::CacheError(e.to_string()))? {
+                            CanSkip::No(cache) => {
+                                let _ = task.save_cache(lock_file, cache)
+                                    .await
+                                    .map_err(|e| TaskExecutionError::CacheError(e.to_string()));
 
-                            if status_code != 0 && !new_was_cancelled_clone.load(Ordering::SeqCst) {
-                                tracing::error!("Task exited with status code: {}", status_code);
+                                Some(tokio::task::spawn_local(async move {
+                                    let status_code = deno_task_shell::execute(
+                                        script_clone,
+                                        command_env_clone,
+                                        &cwd_clone,
+                                        Default::default(),
+                                        Default::default(),
+                                    ).await;
+
+                                    if status_code != 0 && !was_cancelled_clone_for_task.load(Ordering::SeqCst) {
+                                        tracing::error!("Task exited with status code: {}", status_code);
+                                    }
+
+                                status_code
+                                }))
                             }
-
-                            status_code
-                        }));
-
+                            CanSkip::Yes => {
+                                eprintln!(
+                                    "Task '{}' can be skipped (cache hit) 🚀",
+                                    console::style(task.name().unwrap_or("")).bold()
+                                );
+                                None
+                            }
+                        };
                     }
                     Some(Err(e)) => {
                         error!("Error watching files: {}", e);

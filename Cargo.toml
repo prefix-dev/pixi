@@ -345,10 +345,10 @@ uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
+wax = { workspace = true, features = ["miette"] }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
-wax = { workspace = true, features = ["miette"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
