@@ -78,6 +78,8 @@ pub enum AsPep508Error {
     ExtensionError(#[from] uv_distribution_filename::ExtensionError),
     #[error("error in parsing version specifiers")]
     VersionSpecifiersError(#[from] uv_pep440::VersionSpecifiersParseError),
+    #[error(transparent)]
+    GitUrlParseError(#[from] uv_git_types::GitUrlParseError),
 }
 
 /// Convert into a [`uv_pypi_types::Requirement`], which is an uv extended
@@ -87,7 +89,7 @@ pub fn as_uv_req(
     name: &str,
     project_root: &Path,
 ) -> Result<uv_pypi_types::Requirement, AsPep508Error> {
-    let name = PackageName::new(name.to_owned())?;
+    let name = PackageName::from_str(name)?;
     let source = match req {
         PyPiRequirement::Version { version, index, .. } => {
             // TODO: implement index later
@@ -109,7 +111,7 @@ pub fn as_uv_req(
             // Url is already a git url, should look like:
             // - 'ssh://git@github.com/user/repo'
             // - 'https://github.com/user/repo'
-            repository: {
+            git: uv_git_types::GitUrl::from_fields(
                 if git.scheme().strip_prefix("git+").is_some() {
                     // Setting the scheme might fail, so using string manipulation instead
                     let url_str = git.to_string();
@@ -121,20 +123,18 @@ pub fn as_uv_req(
                     })?
                 } else {
                     git.clone()
-                }
-            },
-            // Unique identifier for the commit, as Git object identifier
-            precise: rev
-                .as_ref()
-                .map(|s| s.as_full_commit())
-                .and_then(|s| s.map(uv_git_types::GitOid::from_str))
-                .transpose()
-                .expect("could not parse sha"),
-            // The reference to the commit to use, which could be a branch, tag or revision.
-            reference: rev
-                .as_ref()
-                .map(|rev| into_uv_git_reference(rev.clone().into()))
-                .unwrap_or(uv_git_types::GitReference::DefaultBranch),
+                },
+                // The reference to the commit to use, which could be a branch, tag or revision.
+                rev.as_ref()
+                    .map(|rev| into_uv_git_reference(rev.clone().into()))
+                    .unwrap_or(uv_git_types::GitReference::DefaultBranch),
+                // Unique identifier for the commit, as Git object identifier
+                rev.as_ref()
+                    .map(|s| s.as_full_commit())
+                    .and_then(|s| s.map(uv_git_types::GitOid::from_str))
+                    .transpose()
+                    .expect("could not parse sha"),
+            )?,
             subdirectory: subdirectory.as_ref().and_then(|s| s.parse().ok()),
             // The full url used to clone, comparable to the git+ url in pip. e.g:
             // - 'git+SCHEMA://HOST/PATH@REF#subdirectory=SUBDIRECTORY'
@@ -208,7 +208,7 @@ pub fn as_uv_req(
         extras: req
             .extras()
             .iter()
-            .map(|e| uv_pep508::ExtraName::new(e.to_string()).expect("conversion failed"))
+            .map(|e| uv_pep508::ExtraName::from_str(e.as_ref()).expect("conversion failed"))
             .collect(),
         marker: Default::default(),
         groups: Default::default(),
@@ -236,9 +236,10 @@ mod tests {
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
 
         let expected_uv_req = RequirementSource::Git {
-            repository: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
-            precise: Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
-            reference: uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
+            git: uv_git_types::GitUrl::from_fields(
+                Url::parse("ssh://git@github.com/user/test.git").unwrap(),
+                uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
+                Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap())).unwrap(),
             subdirectory: None,
             url: VerbatimUrl::from_url(Url::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
         };
@@ -258,13 +259,17 @@ mod tests {
         };
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
         let expected_uv_req = RequirementSource::Git {
-            repository: Url::parse("https://github.com/user/test.git").unwrap(),
-            precise: Some(
-                uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap(),
-            ),
-            reference: uv_git_types::GitReference::BranchOrTagOrCommit(
-                "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
-            ),
+            git: uv_git_types::GitUrl::from_fields(
+                Url::parse("https://github.com/user/test.git").unwrap(),
+                uv_git_types::GitReference::BranchOrTagOrCommit(
+                    "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
+                ),
+                Some(
+                    uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b")
+                        .unwrap(),
+                ),
+            )
+            .unwrap(),
             subdirectory: None,
             url: VerbatimUrl::from_url(
                 Url::parse(

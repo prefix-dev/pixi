@@ -20,8 +20,8 @@ struct InstalledDistBuilder;
 
 impl InstalledDistBuilder {
     pub fn registry<S: AsRef<str>>(name: S, version: S, path: PathBuf) -> InstalledDist {
-        let name =
-            uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
+        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
@@ -41,8 +41,8 @@ impl InstalledDistBuilder {
         source_path: PathBuf,
         editable: bool,
     ) -> (InstalledDist, DirectUrl) {
-        let name =
-            uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
+        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
         let directory_url = Url::from_file_path(&source_path).unwrap();
@@ -72,8 +72,8 @@ impl InstalledDistBuilder {
         install_path: PathBuf,
         url: Url,
     ) -> (InstalledDist, DirectUrl) {
-        let name =
-            uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
+        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
@@ -104,8 +104,8 @@ impl InstalledDistBuilder {
         install_path: PathBuf,
         url: Url,
     ) -> (InstalledDist, DirectUrl) {
-        let name =
-            uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
+        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
@@ -419,7 +419,7 @@ impl<'a> CachedDistProvider<'a> for AllCached {
         let dist = uv_distribution_types::CachedRegistryDist {
             filename: wheel_filename,
             path: Default::default(),
-            hashes: vec![],
+            hashes: vec![].into(),
             cache_info: Default::default(),
         };
         Some(dist)
@@ -439,8 +439,8 @@ impl RequiredPackages {
 
     /// Add a registry package to the required packages
     pub fn add_registry<S: AsRef<str>>(mut self, name: S, version: S) -> Self {
-        let package_name =
-            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
         let data = PyPIPackageDataBuilder::registry(name, version);
         self.required.insert(package_name, data);
         self
@@ -454,24 +454,24 @@ impl RequiredPackages {
         path: PathBuf,
         editable: bool,
     ) -> Self {
-        let package_name =
-            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
         let data = PyPIPackageDataBuilder::directory(name, version, path, editable);
         self.required.insert(package_name, data);
         self
     }
 
     pub fn add_archive<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
-        let package_name =
-            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
         let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Direct);
         self.required.insert(package_name, data);
         self
     }
 
     pub fn add_git<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
-        let package_name =
-            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
         let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Other);
         self.required.insert(package_name, data);
         self

@@ -58,8 +58,8 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
             // so just fill it up with empty fields
             let file = File {
                 dist_info_metadata: false,
-                filename: identifier.name.as_normalized().clone().to_string(),
-                hashes: vec![],
+                filename: identifier.name.as_normalized().as_ref().into(),
+                hashes: vec![].into(),
                 requires_python: None,
                 size: None,
                 upload_time_utc_ms: None,
@@ -69,20 +69,20 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                     }
                     PixiRecord::Source(_source) => {
                         // TODO(baszalmstra): Does this matter??
-                        FileLocation::RelativeUrl("foo".to_string(), "bar".to_string())
+                        FileLocation::RelativeUrl("foo".into(), "bar".into())
                     }
                 },
                 yanked: None,
             };
 
             let source_dist = RegistrySourceDist {
-                name: uv_normalize::PackageName::new(identifier.name.as_normalized().to_string())
+                name: uv_normalize::PackageName::from_str(identifier.name.as_normalized().as_ref())
                     .expect("invalid package name"),
                 version: version.parse().expect("could not convert to pypi version"),
                 file: Box::new(file),
-                index: IndexUrl::Pypi(uv_pep508::VerbatimUrl::from_url(
+                index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
                     consts::DEFAULT_PYPI_INDEX_URL.clone(),
-                )),
+                ))),
                 wheels: vec![],
                 ext: SourceDistExtension::TarGz,
             };
@@ -134,7 +134,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 // create fake metadata with no dependencies. We assume that all conda installed
                 // packages are properly installed including its dependencies.
                 //
-                let name = uv_normalize::PackageName::new(iden.name.as_normalized().to_string())
+                let name = uv_normalize::PackageName::from_str(iden.name.as_normalized().as_ref())
                     .expect("invalid package name");
                 let version = uv_pep440::Version::from_str(&iden.version.to_string())
                     .expect("could not convert to pypi version");
@@ -148,7 +148,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                         dependency_groups: Default::default(),
                         dynamic: false,
                     },
-                    hashes: vec![],
+                    hashes: vec![].into(),
                 })))
                 .left_future();
             }
