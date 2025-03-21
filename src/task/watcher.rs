@@ -91,15 +91,10 @@ impl FileWatcher {
                     Ok(events) => {
                         let events = events
                             .into_iter()
-                            .filter(|event| {
-                                match event.event.kind {
-                                    EventKind::Modify(kind) => {
-                                        // Filter out metadata changes
-                                        !matches!(kind, ModifyKind::Metadata(_))
-                                    }
-                                    // Keep only modify events
-                                    _ => false,
-                                }
+                            .filter(|event| match event.event.kind {
+                                EventKind::Modify(kind) => !matches!(kind, ModifyKind::Metadata(_)),
+                                EventKind::Create(_) | EventKind::Remove(_) => true,
+                                _ => false,
                             })
                             .collect::<Vec<_>>();
                         // Extract all paths from the events

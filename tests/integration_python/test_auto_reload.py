@@ -1,3 +1,4 @@
+import select
 import os
 import signal
 import subprocess
@@ -32,39 +33,28 @@ def test_file_watching_and_rerunning(pixi: Path, tmp_pixi_workspace: Path) -> No
     manifest.write_text(toml)
     input_file = tmp_pixi_workspace.joinpath("input.txt")
     input_file.write_text("initial content")
-    cmd = [pixi, "watch", "--manifest-path", str(manifest), "watch-test"]
+    cmd = [str(pixi), "watch", "--manifest-path", str(manifest), "watch-test"]
     process = subprocess.Popen(
-        [str(c) for c in cmd],
+        cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         cwd=str(tmp_pixi_workspace),
     )
-    initial_output_found = False
-    # Check if stdout is None before trying to read from it
-    for _ in range(10):
-        if process.stdout is None:
-            time.sleep(0.3)
-            continue
-        line = process.stdout.readline().strip()
-        if line and "initial content" in line:
-            initial_output_found = True
-            break
-        time.sleep(0.3)
-    assert initial_output_found, "Task didn't show initial content"
-    time.sleep(1)  # Wait for watcher to set up
+
+    ready = False
+    while not ready:
+        ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    line = process.stdout.readline().strip()
+    assert "initial content" in line, "Task didn't show initial content"
+
     input_file.write_text("updated content")
-    rerun_output_found = False
-    for _ in range(10):
-        if process.stdout is None:
-            time.sleep(0.3)
-            continue
-        line = process.stdout.readline().strip()
-        if line and "updated content" in line:
-            rerun_output_found = True
-            break
-        time.sleep(0.3)
-    assert rerun_output_found, "Task didn't rerun after file was modified"
+
+    ready = False
+    while not ready:
+        ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    line = process.stdout.readline().strip()
+    assert "updated content" in line, "Task didn't show updated content"
     terminate_process(process, 1)
 
 
@@ -88,32 +78,21 @@ def test_multiple_files_watching(pixi: Path, tmp_pixi_workspace: Path) -> None:
         text=True,
         cwd=str(tmp_pixi_workspace),
     )
-    # Wait for initial output
-    initial_output_found = False
-    for _ in range(10):
-        if process.stdout is None:
-            time.sleep(0.3)
-            continue
-        line = process.stdout.readline().strip()
-        if line and "f1=one" in line and "f2=two" in line:
-            initial_output_found = True
-            break
-        time.sleep(0.3)
-    assert initial_output_found, "Task didn't show initial content from both files"
-    time.sleep(1)  # Wait for watcher to set up
-    # Modify first file and verify rerun
+
+    ready = False
+    while not ready:
+        ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    line = process.stdout.readline().strip()
+    assert "f1=one" in line and "f2=two" in line, "Task didn't show initial content from both files"
+
     file1.write_text("one-updated")
-    rerun1_found = False
-    for _ in range(10):
-        if process.stdout is None:
-            time.sleep(0.3)
-            continue
-        line = process.stdout.readline().strip()
-        if line and "f1=one-updated" in line and "f2=two" in line:
-            rerun1_found = True
-            break
-        time.sleep(0.3)
-    assert rerun1_found, "Task didn't rerun after file1 was modified"
+    ready = False
+    while not ready:
+        ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    line = process.stdout.readline().strip()
+    assert "f1=one-updated" in line and "f2=two" in line, (
+        "Task didn't show updated content from file1"
+    )
     terminate_process(process, 2)
 
 
@@ -189,18 +168,11 @@ def test_nonexistent_watched_file(pixi: Path, tmp_pixi_workspace: Path) -> None:
         cwd=str(tmp_pixi_workspace),
     )
     # Wait for initial run
-    initial_run = False
-    for _ in range(5):
-        if process.stdout is None:
-            time.sleep(0.3)
-            continue
-        line = process.stdout.readline().strip()
-        if line and "File created" in line:
-            initial_run = True
-            break
-        time.sleep(0.3)
-    assert initial_run, "Task didn't run initially"
-    time.sleep(1)  # Wait for watcher to set up
+    ready = False
+    while not ready:
+        ready, _, _ = select.select([process.stdout], [], [], 0.5)
+    line = process.stdout.readline().strip()
+    assert "File created" in line, "Task didn't run initially"
     nonexistent_file = tmp_pixi_workspace.joinpath("does_not_exist_yet.txt")
     nonexistent_file.write_text("now I exist")
     terminate_process(process, 1)
