@@ -269,8 +269,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ctrlc_should_exit_process.store(false, Ordering::Relaxed);
 
         // Execute the task itself within the command environment. If one of the tasks
-        // failed with a non-zero exit code, we exit this parent process with
-        // the same code.
+        // failed with a non-zero exit code, we exit this parent process with the same code.
         match execute_task(&executable_task, task_env).await {
             Ok(_) => {
                 task_idx += 1;
