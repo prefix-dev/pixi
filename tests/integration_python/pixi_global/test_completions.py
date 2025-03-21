@@ -16,7 +16,7 @@ def fish_completions(prefix: Path, executable: str) -> Path:
     return prefix.joinpath("fish", "vendor_completions.d", f"{executable}.fish")
 
 
-def test_sync_change_expose(
+def test_sync_exposes_completions(
     pixi: Path, tmp_pixi_workspace: Path, completions_channel_1: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
@@ -26,9 +26,8 @@ def test_sync_change_expose(
     toml = f"""
     [envs.test]
     channels = ["{completions_channel_1}"]
-    [envs.test]
     dependencies = {{ ripgrep-completions = "*" }}
-    exposed = {{ rg = rg }}
+    exposed = {{ rg = "rg" }}
     """
     manifest.write_text(toml)
     rg = tmp_pixi_workspace / "bin" / exec_extension("rg")
@@ -43,10 +42,11 @@ def test_sync_change_expose(
     fish = fish_completions(prefix, "rg")
 
     if platform.system() == "Windows":
-        bash.is_file()
-        zsh.is_file()
-        fish.is_file()
+        # Completions are ignored on Windows
+        assert not bash.is_file()
+        assert not zsh.is_file()
+        assert not fish.is_file()
     else:
-        not bash.is_file()
-        not zsh.is_file()
-        not fish.is_file()
+        assert bash.is_file()
+        assert zsh.is_file()
+        assert fish.is_file()
