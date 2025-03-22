@@ -5,9 +5,8 @@ use tar::Archive;
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
-use pixi_utils::reqwest::build_reqwest_clients;
+use pixi_utils::reqwest::{build_reqwest_clients, reqwest_client_builder};
 use reqwest::redirect::Policy;
-use reqwest::Client;
 
 use tempfile::{NamedTempFile, TempDir};
 use url::Url;
@@ -64,7 +63,7 @@ async fn latest_version() -> miette::Result<Version> {
     let url = format!("{}/latest", consts::RELEASES_URL);
 
     // Create a client with a redirect policy
-    let no_redirect_client = Client::builder()
+    let no_redirect_client = reqwest_client_builder()
         .redirect(Policy::none()) // Prevent automatic redirects
         .build()
         .into_diagnostic()?;
