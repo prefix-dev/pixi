@@ -20,6 +20,21 @@ pub struct Args {
     /// The desired version (to downgrade or upgrade to).
     #[clap(long)]
     version: Option<Version>,
+
+	/// Only show release notes, do not update the binary.
+	#[clap(long)]
+	release_notes_only: bool,
+}
+
+#[derive(Debug, serde::Deserialize)]
+/// Response from the Github API when fetching a release by tag.
+// https://docs.github.com/de/rest/releases/releases?apiVersion=2022-11-28#get-a-release-by-tag-name
+struct ReleaseResponse {
+	/// Markdown body of the release as seen on the Github release page.
+    body: String,
+
+	/// The time and date when the release was published. (seems to be ISO 8601)
+	published_at: String,
 }
 
 fn user_agent() -> String {
@@ -109,6 +124,32 @@ async fn latest_version() -> miette::Result<Version> {
     }
 }
 
+async fn get_release_notes(version: &Version) -> miette::Result<String> {
+    let url = format!("{}/v{}", consts::RELEASES_API_BY_TAG, version);
+
+    let client = Client::new();
+    let response = client
+        .get(&url)
+        .header("User-Agent", user_agent())
+        .send()
+        .await
+        .into_diagnostic()?;
+
+    if response.status().is_success() {
+        let release_response: ReleaseResponse = response.json().await.into_diagnostic()?;
+
+	    // We only care for the date, not the time
+	    let date = release_response.published_at.split('T').next().unwrap_or("unknown");
+
+	    Ok(format!("Release notes for version {} ({}): {}\n",
+            version,
+            date,
+            release_response.body.trim()))
+    } else {
+        miette::bail!("Status code {}", response.status())
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Get the target version, without 'v' prefix
     let target_version = match &args.version {
@@ -117,6 +158,35 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
+
+    // Get release notes
+	// failure to fetch release notes must not prevent self-update, epscially if format changes
+    let release_notes = match get_release_notes(target_version).await {
+		Ok(release_notes) => format!("{}{}", console::style(console::Emoji("📝 ", "")).yellow(), release_notes),
+		Err(err) => {
+			let release_url = format!("{}/v{}",
+				consts::RELEASES_URL,
+				target_version);
+			format!("{}Failed to fetch release notes ({}). Check the release page for more information: {}",
+		        console::style(console::Emoji("⚠️ ", "")).yellow(),
+		        err,
+		        release_url)
+		}
+	};
+
+	// We only want to print the release notes once
+	let mut has_printed_release_notes = false;
+
+	// If the user only wants to see the release notes, print them and exit
+	if args.release_notes_only {
+		eprintln!("{}", release_notes);
+		eprintln!(
+			"{}To update to this version, run `pixi self-update --version {}`",
+			console::style(console::Emoji("ℹ️ ", "")).yellow(),
+			target_version
+		);
+		return Ok(());
+	}
 
     // Stop here if the target version is the same as the current version
     if *target_version == current_version {
@@ -130,6 +200,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let action = if *target_version < current_version {
         if args.version.is_none() {
+	        // If prompting user, we display release notes before switching binaries, otherwise we display them after
+	        eprintln!("{}", release_notes);
+	        has_printed_release_notes = true;
+
             // Ask if --version was not passed
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
@@ -168,7 +242,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         archive_name
     );
     // Create a temp file to download the archive
-    let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
+    let mut archived_tempfile = NamedTempFile::new().into_diagnostic()?;
 
     let client = Client::new();
     let mut res = client
@@ -200,7 +274,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     );
 
     // Seek to the beginning of the file before uncompressing it
-    let _ = archived_tempfile.rewind();
+    archived_tempfile.rewind().expect("Failed to rewind the archive file");
 
     // Create a temporary directory to unpack the archive
     let binary_tempdir = &tempfile::tempdir().into_diagnostic()?;
@@ -227,8 +301,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Replace the current binary with the new binary
     self_replace::self_replace(new_binary_path).into_diagnostic()?;
 
-    eprintln!(
-        "{}Pixi has been updated to version {}.",
+	// Print release notes after switching binaries if we haven't already
+	if !has_printed_release_notes {
+		eprintln!("{}", release_notes);
+	}
+
+	eprintln!(
+		"{}Pixi has been updated to version {}.",
         console::style(console::Emoji("✔ ", "")).green(),
         target_version
     );
