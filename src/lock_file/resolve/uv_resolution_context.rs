@@ -1,5 +1,6 @@
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
+use uv_client::ExtraMiddleware;
 use uv_configuration::{Concurrency, SourceStrategy, TrustedHost};
 use uv_dispatch::SharedState;
 use uv_distribution_types::IndexCapabilities;
@@ -8,6 +9,7 @@ use uv_types::{HashStrategy, InFlight};
 use crate::Workspace;
 use pixi_config::{self, get_cache_dir};
 use pixi_consts::consts;
+use pixi_utils::reqwest::uv_middlewares;
 use pixi_uv_conversions::{to_uv_trusted_host, ConversionError};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
@@ -22,6 +24,7 @@ pub struct UvResolutionContext {
     pub capabilities: IndexCapabilities,
     pub allow_insecure_host: Vec<TrustedHost>,
     pub shared_state: SharedState,
+    pub extra_middleware: ExtraMiddleware,
 }
 
 impl UvResolutionContext {
@@ -71,6 +74,7 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
+            extra_middleware: ExtraMiddleware(uv_middlewares(project.config())),
         })
     }
 

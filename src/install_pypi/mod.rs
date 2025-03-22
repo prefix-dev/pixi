@@ -84,6 +84,7 @@ pub async fn update_python_distributions(
             .index_urls(index_locations.index_urls())
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
+            .extra_middleware(uv_context.extra_middleware.clone())
             .build(),
     );
 
