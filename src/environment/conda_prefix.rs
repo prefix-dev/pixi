@@ -349,7 +349,7 @@ pub async fn update_prefix_conda(
             let mut installer = Installer::new()
                 .with_download_client(authenticated_client)
                 .with_io_concurrency_semaphore(io_concurrency_limit)
-                .with_execute_link_scripts(false)
+                .with_execute_link_scripts(true)
                 .with_installed_packages(installed_packages)
                 .with_target_platform(host_platform)
                 .with_package_cache(package_cache)
