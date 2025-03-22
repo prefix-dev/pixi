@@ -141,7 +141,7 @@ async fn get_release_notes(version: &Version) -> miette::Result<String> {
 	    // We only care for the date, not the time
 	    let date = release_response.published_at.split('T').next().unwrap_or("unknown");
 
-	    Ok(format!("Release notes for version {} ({}): {}\n",
+	    Ok(format!("Release notes for version {} ({}):\n{}\n",
             version,
             date,
             release_response.body.trim()))
@@ -153,15 +153,27 @@ async fn get_release_notes(version: &Version) -> miette::Result<String> {
 pub async fn execute(args: Args) -> miette::Result<()> {
     // Get the target version, without 'v' prefix
     let target_version = match &args.version {
-        Some(version) => version,
-        None => &latest_version().await?,
+        Some(version) => {
+	        // Remove leading 'v' if present and inform the user
+	        if version.to_string().starts_with('v') {
+		        eprintln!(
+		            "{}Warning: Leading 'v' removed from version {}",
+		            console::style(console::Emoji("⚠️ ", "")).yellow(),
+		            version
+		        );
+		        Version::from_str(&version.to_string()[1..]).into_diagnostic()?
+	        } else {
+		        version.clone()
+	        }
+        },
+        None => latest_version().await?,
     };
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
     // Get release notes
-	// failure to fetch release notes must not prevent self-update, epscially if format changes
-    let release_notes = match get_release_notes(target_version).await {
+	// failure to fetch release notes must not prevent self-update, especially if format changes
+    let release_notes = match get_release_notes(&target_version).await {
 		Ok(release_notes) => format!("{}{}", console::style(console::Emoji("📝 ", "")).yellow(), release_notes),
 		Err(err) => {
 			let release_url = format!("{}/v{}",
@@ -189,7 +201,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 	}
 
     // Stop here if the target version is the same as the current version
-    if *target_version == current_version {
+    if target_version == current_version {
         eprintln!(
             "{}pixi is already up-to-date (version {})",
             console::style(console::Emoji("✔ ", "")).green(),
@@ -198,7 +210,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    let action = if *target_version < current_version {
+    let action = if target_version < current_version {
         if args.version.is_none() {
 	        // If prompting user, we display release notes before switching binaries, otherwise we display them after
 	        eprintln!("{}", release_notes);
