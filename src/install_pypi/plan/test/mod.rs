@@ -18,12 +18,7 @@ fn test_no_installed_require_one() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     // We should install a single package
@@ -41,12 +36,7 @@ fn test_no_installed_require_one_cached() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            AllCached,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, AllCached, &required.to_borrowed())
         .expect("should install");
 
     // We should install a single package
@@ -70,12 +60,7 @@ fn test_install_required_equivalent() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     // Should not install package
@@ -103,12 +88,7 @@ fn test_install_required_mismatch() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     // We should install a single package
@@ -138,12 +118,7 @@ fn test_install_required_mismatch_cached() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            AllCached,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, AllCached, &required.to_borrowed())
         .expect("should install");
 
     // We should install a single package
@@ -172,12 +147,7 @@ fn test_install_required_installer_mismatch() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_matches!(
@@ -203,12 +173,7 @@ fn test_installed_one_other_installer() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     // We should not do anything
@@ -230,12 +195,7 @@ fn test_install_required_python_mismatch() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_matches!(
@@ -264,12 +224,7 @@ fn test_installed_one_none_required() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
     assert_eq!(install_plan.extraneous.len(), 1);
 }
@@ -293,12 +248,7 @@ fn test_installed_registry_required_local_source() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_matches!(
@@ -324,12 +274,7 @@ fn test_installed_local_required_registry() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_matches!(
@@ -363,12 +308,7 @@ fn test_installed_local_required_local() {
     // so we do not expect a re-installation
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_eq!(
@@ -418,12 +358,7 @@ fn test_local_source_newer_than_local_metadata() {
     // We expect a reinstall, because the pyproject.toml file is newer than the cache
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
     assert_matches!(
         install_plan.reinstalls[0].1,
@@ -465,12 +400,7 @@ fn test_local_source_older_than_local_metadata() {
     // Install plan should not reinstall anything
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
     assert_eq!(install_plan.reinstalls.len(), 0);
     assert_eq!(install_plan.local.len(), 0);
@@ -500,12 +430,7 @@ fn test_installed_editable_required_non_editable() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_matches!(
@@ -534,12 +459,7 @@ fn test_installed_archive_require_registry() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_matches!(
@@ -550,12 +470,7 @@ fn test_installed_archive_require_registry() {
     // If we have the correct archive installed it should not reinstall
     let required = RequiredPackages::new().add_archive("aiofiles", "0.6.0", remote_url.clone());
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
     assert!(install_plan.local.is_empty());
     assert!(install_plan.remote.is_empty());
@@ -581,12 +496,7 @@ fn test_installed_git_require_registry() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_matches!(
@@ -601,12 +511,7 @@ fn test_installed_git_require_registry() {
     // Okay now we require the same git package, it should not reinstall
     let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url.clone());
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert!(
@@ -638,12 +543,7 @@ fn test_installed_git_require_git_commit_mismatch() {
 
     let plan = harness::install_planner();
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert_matches!(
@@ -678,12 +578,7 @@ fn test_installed_git_the_same() {
     // Okay now we require the same git package, it should not reinstall
     let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url.clone());
     let install_plan = plan
-        .plan(
-            &site_packages,
-            NoCache,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, NoCache, &required.to_borrowed())
         .expect("should install");
 
     assert!(
@@ -710,12 +605,7 @@ fn test_uv_refresh() {
         vec![uv_pep508::PackageName::from_str("aiofiles").unwrap()],
     ));
     let install_plan = plan
-        .plan(
-            &site_packages,
-            AllCached,
-            &required.to_borrowed(),
-            &std::collections::HashMap::new(),
-        )
+        .plan(&site_packages, AllCached, &required.to_borrowed())
         .expect("should install");
 
     // Should not install package

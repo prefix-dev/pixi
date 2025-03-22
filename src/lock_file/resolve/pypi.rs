@@ -291,6 +291,7 @@ pub async fn resolve_pypi(
             .markers(&marker_environment)
             .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
+            .extra_middleware(context.extra_middleware.clone())
             .build(),
     );
     let build_options =

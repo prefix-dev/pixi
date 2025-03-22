@@ -27,8 +27,6 @@ use uv_resolver::FlatIndex;
 use uv_types::HashStrategy;
 use uv_workspace::WorkspaceCache;
 
-use url::Url;
-
 use crate::{
     lock_file::UvResolutionContext,
     prefix::Prefix,
@@ -60,7 +58,6 @@ pub async fn update_python_distributions(
     platform: Platform,
     non_isolated_packages: Option<Vec<String>>,
     no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
-    mirror_map: &std::collections::HashMap<Url, Vec<Url>>,
 ) -> miette::Result<()> {
     let start = std::time::Instant::now();
 
@@ -87,6 +84,7 @@ pub async fn update_python_distributions(
             .index_urls(index_locations.index_urls())
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
+            .extra_middleware(uv_context.extra_middleware.clone())
             .build(),
     );
 
@@ -194,7 +192,7 @@ pub async fn update_python_distributions(
         reinstalls,
         extraneous,
     } = InstallPlanner::new(uv_context.cache.clone(), lock_file_dir)
-        .plan(&site_packages, registry_index, &required_map, mirror_map)
+        .plan(&site_packages, registry_index, &required_map)
         .into_diagnostic()
         .context("error while determining PyPI installation plan")?;
 
