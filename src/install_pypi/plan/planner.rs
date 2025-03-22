@@ -64,7 +64,6 @@ impl InstallPlanner {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     /// Decide if we need to get the distribution from the local cache or the registry
     /// this method will add the distribution to the local or remote vector,
     /// depending on whether the version is stale, available locally or not
