@@ -784,7 +784,7 @@ pub(crate) fn shortcut_sync_status(
             .is_some()
         {
             // Alway install shortcut.
-            // Because pixi doesn't know if it is already installed to system,
+            // Because pixi doesn't know if it is already installed,
             // and still exists in system.
             records_to_install.push(record);
         } else if has_installed_system_menus {
