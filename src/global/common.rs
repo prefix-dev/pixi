@@ -783,7 +783,7 @@ pub(crate) fn shortcut_sync_status(
             .swap_take(&record.repodata_record.package_record.name)
             .is_some()
         {
-            // Alway install shortcut.
+            // Always install shortcut.
             // Because pixi doesn't know if it is already installed,
             // and still exists in system.
             records_to_install.push(record);
