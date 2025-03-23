@@ -792,10 +792,6 @@ pub(crate) fn shortcut_sync_status(
             // Because pixi doesn't know if it is already installed to system,
             // and still exists in system.
             records_to_install.push(record);
-            // if !has_installed_system_menus {
-            //     // The package record isn't installed, but it is requested
-            //     records_to_install.push(record);
-            // }
         } else if has_installed_system_menus {
             // The package record is installed, but not requested
             records_to_uninstall.push(record);
