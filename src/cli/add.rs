@@ -11,7 +11,7 @@ use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
     workspace::DependencyType,
-    WorkspaceLocator,
+    RequiresPixiPolicy, WorkspaceLocator,
 };
 
 /// Adds dependencies to the workspace
@@ -104,6 +104,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_config.workspace_locator_start())
+        .with_pixi_version_check_policy(if lock_file_update_config.lock_file_usage.locked {
+            RequiresPixiPolicy::ERROR
+        } else {
+            RequiresPixiPolicy::default()
+        })
         .locate()?
         .with_cli_config(args.config.clone());
 

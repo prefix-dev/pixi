@@ -16,7 +16,7 @@ use regex::Regex;
 
 use crate::{
     cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions, workspace::Environment,
-    WorkspaceLocator,
+    RequiresPixiPolicy, WorkspaceLocator,
 };
 
 use super::cli_config::LockFileUpdateConfig;
@@ -76,6 +76,11 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_pixi_version_check_policy(if args.lock_file_update_config.lock_file_usage.locked {
+            RequiresPixiPolicy::ERROR
+        } else {
+            RequiresPixiPolicy::default()
+        })
         .locate()?;
 
     let environment = workspace

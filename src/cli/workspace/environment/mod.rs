@@ -2,7 +2,7 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
+use crate::{cli::cli_config::WorkspaceConfig, RequiresPixiPolicy, WorkspaceLocator};
 use clap::Parser;
 
 /// Commands to manage project environments.
@@ -36,7 +36,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_emit_warnings(
             !matches!(args.command, Command::Add(_)) && !matches!(args.command, Command::Remove(_)),
         )
-        .with_ignore_pixi_version_check(true)
+        .with_pixi_version_check_policy(RequiresPixiPolicy::IGNORE)
         .locate()?;
 
     match args.command {

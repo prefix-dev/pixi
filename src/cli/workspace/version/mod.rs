@@ -2,7 +2,7 @@ pub mod bump;
 pub mod get;
 pub mod set;
 
-use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
+use crate::{cli::cli_config::WorkspaceConfig, RequiresPixiPolicy, WorkspaceLocator};
 use clap::Parser;
 use rattler_conda_types::VersionBumpType;
 
@@ -34,7 +34,7 @@ pub enum Command {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_ignore_pixi_version_check(true)
+        .with_pixi_version_check_policy(RequiresPixiPolicy::IGNORE)
         .locate()?;
 
     match args.command {

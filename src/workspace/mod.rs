@@ -20,7 +20,7 @@ use std::{
 };
 
 use async_once_cell::OnceCell as AsyncCell;
-pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
+pub use discovery::{DiscoveryStart, RequiresPixiPolicy, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::Equivalent;

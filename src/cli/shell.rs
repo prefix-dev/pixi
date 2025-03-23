@@ -12,7 +12,7 @@ use crate::lock_file::UpdateMode;
 use crate::workspace::get_activated_environment_variables;
 use crate::{
     activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
-    UpdateLockFileOptions, WorkspaceLocator,
+    RequiresPixiPolicy, UpdateLockFileOptions, WorkspaceLocator,
 };
 use crate::{
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
@@ -271,6 +271,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_pixi_version_check_policy(if args.lock_file_update_config.lock_file_usage.locked {
+            RequiresPixiPolicy::ERROR
+        } else {
+            RequiresPixiPolicy::default()
+        })
         .locate()?
         .with_cli_config(config);
 

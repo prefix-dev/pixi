@@ -2,6 +2,7 @@ pub mod add;
 pub mod list;
 
 use crate::cli::cli_config::WorkspaceConfig;
+use crate::RequiresPixiPolicy;
 use crate::WorkspaceLocator;
 use clap::{Parser, ValueEnum};
 
@@ -46,7 +47,7 @@ pub enum Command {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_ignore_pixi_version_check(true)
+        .with_pixi_version_check_policy(RequiresPixiPolicy::IGNORE)
         .locate()?;
 
     match args.command {

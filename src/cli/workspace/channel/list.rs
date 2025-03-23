@@ -1,7 +1,7 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
 
-use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
+use crate::{cli::cli_config::WorkspaceConfig, RequiresPixiPolicy, WorkspaceLocator};
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 
@@ -18,7 +18,7 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
     // Workspace without cli config as it shouldn't be needed here.
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_ignore_pixi_version_check(true)
+        .with_pixi_version_check_policy(RequiresPixiPolicy::IGNORE)
         .locate()?;
 
     let channel_config = workspace.channel_config();

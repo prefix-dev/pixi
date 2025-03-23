@@ -3,11 +3,8 @@ use std::{cmp::Ordering, collections::HashSet};
 use crate::{
     cli::cli_config::WorkspaceConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
-    WorkspaceLocator,
-};
-use crate::{
     lock_file::{filter_lock_file, UpdateContext},
-    Workspace,
+    RequiresPixiPolicy, Workspace, WorkspaceLocator,
 };
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -128,6 +125,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args.config;
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
+        .with_pixi_version_check_policy(RequiresPixiPolicy::ERROR)
         .locate()?
         .with_cli_config(config);
 

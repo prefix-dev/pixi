@@ -3,7 +3,7 @@ use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
     lock_file::{ReinstallPackages, UpdateMode},
-    DependencyType, UpdateLockFileOptions, WorkspaceLocator,
+    DependencyType, RequiresPixiPolicy, UpdateLockFileOptions, WorkspaceLocator,
 };
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
@@ -49,6 +49,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_config.workspace_locator_start())
+        .with_pixi_version_check_policy(if lock_file_update_config.lock_file_usage.locked {
+            RequiresPixiPolicy::ERROR
+        } else {
+            RequiresPixiPolicy::default()
+        })
         .locate()?
         .with_cli_config(args.config.clone())
         .modify()?;
