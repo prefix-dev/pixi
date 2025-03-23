@@ -66,6 +66,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .expose_executables_from_environment(env_name)
             .await?;
 
+        // Sync shortcuts
+        state_changes |= project.sync_shortcuts(env_name).await?;
+
         Ok(state_changes)
     }
 

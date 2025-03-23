@@ -778,15 +778,24 @@ pub(crate) fn shortcut_sync_status(
         .filter(contains_menuinst_document);
 
     for record in records_with_menuinst {
-        let has_installed_system_menus = record.installed_system_menus.is_empty().not();
+        let has_installed_system_menus = record.installed_system_menus.is_empty().not(); println!(
+            "{},has_installed_system_menus:{}",
+            record.file_name(),
+            has_installed_system_menus
+        );
+
         if remaining_shortcuts
             .swap_take(&record.repodata_record.package_record.name)
             .is_some()
         {
-            if !has_installed_system_menus {
-                // The package record isn't installed, but it is requested
-                records_to_install.push(record);
-            }
+            // Alway install shortcut.
+            // Because pixi doesn't know if it is already installed to system,
+            // and still exists in system.
+            records_to_install.push(record);
+            // if !has_installed_system_menus {
+            //     // The package record isn't installed, but it is requested
+            //     records_to_install.push(record);
+            // }
         } else if has_installed_system_menus {
             // The package record is installed, but not requested
             records_to_uninstall.push(record);
