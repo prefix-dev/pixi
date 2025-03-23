@@ -778,12 +778,7 @@ pub(crate) fn shortcut_sync_status(
         .filter(contains_menuinst_document);
 
     for record in records_with_menuinst {
-        let has_installed_system_menus = record.installed_system_menus.is_empty().not(); println!(
-            "{},has_installed_system_menus:{}",
-            record.file_name(),
-            has_installed_system_menus
-        );
-
+        let has_installed_system_menus = record.installed_system_menus.is_empty().not();
         if remaining_shortcuts
             .swap_take(&record.repodata_record.package_record.name)
             .is_some()
