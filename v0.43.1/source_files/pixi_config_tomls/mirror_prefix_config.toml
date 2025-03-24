@@ -1,0 +1,4 @@
+#  --8<-- [start:mirrors]
+[mirrors]
+"https://conda.anaconda.org" = ["https://prefix.dev/"]
+#  --8<-- [end:mirrors]
