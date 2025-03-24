@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Fixed
 
-- Upgrade zip to 2.4.2, update Cargo.lock by @gzm55 in [#3389](https://github.com/prefix-dev/pixi/pull/3389)
+- Upgrade zip to 2.4.2 by @gzm55 in [#3389](https://github.com/prefix-dev/pixi/pull/3389)
 - Some more things to get the shell to work in all cases by @wolfv in [#3321](https://github.com/prefix-dev/pixi/pull/3321)
 - Stop requiring `PATH` for `pixi global` activation by @Hofer-Julian in [#3403](https://github.com/prefix-dev/pixi/pull/3403)
 - Improve error message for python integration tests by @Hofer-Julian in [#3408](https://github.com/prefix-dev/pixi/pull/3408)
