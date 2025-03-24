@@ -41,6 +41,10 @@ pub struct Args {
     /// Whether to build incrementally if possible
     #[clap(long, short)]
     pub no_incremental: bool,
+
+    /// The cached directory to use for incremental builds
+    #[clap(long, short)]
+    pub cache_dir: Option<PathBuf>,
 }
 
 struct ProgressReporter {
@@ -86,6 +90,7 @@ impl CondaBuildReporter for ProgressReporter {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
+        .with_closest_package(true)
         .locate()?
         .with_cli_config(args.config_cli);
 
@@ -99,6 +104,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_gateway(workspace.repodata_gateway()?.clone())
         .with_client(workspace.authenticated_client()?.clone())
         .build();
+
+    tracing::debug!("workspace: {:?}", workspace);
 
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
@@ -134,9 +141,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Determine if we want to re-use existing build data
     let (_tmp, work_dir) = if incremental {
         // Specify the cache directory
+        let cache_dir = args
+            .cache_dir
+            .unwrap_or_else(|| workspace.root().to_path_buf());
         let key = WorkDirKey::new(
             SourceCheckout::new(
-                workspace.root().to_path_buf(),
+                cache_dir,
                 PinnedSourceSpec::Path(PinnedPathSpec {
                     path: Utf8TypedPath::derive(&workspace.root().to_string_lossy()).to_path_buf(),
                 }),
@@ -149,9 +159,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         // Construct a temporary directory to build the package in. This path is also
         // automatically removed after the build finishes.
+        let cache_dir = args.cache_dir.unwrap_or_else(|| workspace.pixi_dir());
         let tmp = tempfile::Builder::new()
             .prefix("pixi-build-")
-            .tempdir_in(workspace.pixi_dir())
+            .tempdir_in(cache_dir)
             .into_diagnostic()
             .context("failed to create temporary working directory in the .pixi directory")?;
         let work_dir = tmp.path().to_path_buf();
