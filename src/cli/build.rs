@@ -142,6 +142,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (_tmp, work_dir) = if incremental {
         // Specify the cache directory
         let cache_dir = args.cache_dir.unwrap_or_else(|| workspace.pixi_dir());
+        tokio::fs::create_dir_all(&cache_dir)
+            .await
+            .into_diagnostic()
+            .with_context(|| {
+                format!(
+                    "failed to create cache dir for pixi build'{}'",
+                    pixi_dir.display()
+                )
+            })?;
+
         let key = WorkDirKey::new(
             SourceCheckout::new(
                 workspace.root().to_path_buf(),
@@ -158,6 +168,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Construct a temporary directory to build the package in. This path is also
         // automatically removed after the build finishes.
         let cache_dir = args.cache_dir.unwrap_or_else(|| workspace.pixi_dir());
+        tokio::fs::create_dir_all(&cache_dir)
+            .await
+            .into_diagnostic()
+            .with_context(|| {
+                format!(
+                    "failed to create the .pixi directory at '{}'",
+                    pixi_dir.display()
+                )
+            })?;
         let tmp = tempfile::Builder::new()
             .prefix("pixi-build-")
             .tempdir_in(cache_dir)
