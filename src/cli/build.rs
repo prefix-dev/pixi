@@ -141,12 +141,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Determine if we want to re-use existing build data
     let (_tmp, work_dir) = if incremental {
         // Specify the cache directory
-        let cache_dir = args
-            .cache_dir
-            .unwrap_or_else(|| workspace.root().to_path_buf());
+        let cache_dir = args.cache_dir.unwrap_or_else(|| workspace.pixi_dir());
         let key = WorkDirKey::new(
             SourceCheckout::new(
-                cache_dir,
+                workspace.root().to_path_buf(),
                 PinnedSourceSpec::Path(PinnedPathSpec {
                     path: Utf8TypedPath::derive(&workspace.root().to_string_lossy()).to_path_buf(),
                 }),
@@ -155,7 +153,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             protocol.backend_identifier().to_string(),
         )
         .key();
-        (None, workspace.pixi_dir().join(key))
+        (None, cache_dir.join(key))
     } else {
         // Construct a temporary directory to build the package in. This path is also
         // automatically removed after the build finishes.
