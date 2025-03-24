@@ -49,6 +49,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Reinstall the environment
+        todo!("Skip reinstall if env is not existed and installed above");
         let environment_update = project.install_environment(env_name).await?;
 
         let mut state_changes = StateChanges::default();
