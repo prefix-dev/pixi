@@ -11,7 +11,7 @@ use rattler_networking::{
 };
 
 use reqwest::Client;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
 use tracing::debug;
@@ -159,4 +159,15 @@ pub fn build_reqwest_clients(
     let authenticated_client = client_builder.build();
 
     Ok((client, authenticated_client))
+}
+
+pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
+    if config.mirror_map().is_empty() {
+        vec![]
+    } else {
+        vec![
+            Arc::new(mirror_middleware(config)),
+            Arc::new(oci_middleware()),
+        ]
+    }
 }
