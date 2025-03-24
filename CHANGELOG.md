@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Upgrade uv to 0.6.9 by @gzm55 in [#3374](https://github.com/prefix-dev/pixi/pull/3374)
 - Global path diff by @Hofer-Julian in [#3384](https://github.com/prefix-dev/pixi/pull/3384)
-- Let uv use the same mirror middlewares by @gzm55 in [#3306](https://github.com/prefix-dev/pixi/pull/3306)
+- Add uv mirror middlewares by @gzm55 in [#3306](https://github.com/prefix-dev/pixi/pull/3306)
 
 
 #### Documentation
