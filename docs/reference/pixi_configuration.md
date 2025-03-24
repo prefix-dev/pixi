@@ -285,6 +285,8 @@ You can also specify mirrors for an entire "host", e.g.
 
 This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.
+You can override the behavior for specific channels (like conda-forge's label channels)
+by providing a longer prefix that points to itself.
 
 ### OCI Mirrors
 
