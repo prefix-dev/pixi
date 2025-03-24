@@ -2100,6 +2100,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#mirrors-for-pypi-resolving-and-pypi-package-downloading" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mirrors for PyPi resolving and PyPi package downloading
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2479,6 +2488,15 @@
   <a href="#oci-mirrors" class="md-nav__link">
     <span class="md-ellipsis">
       OCI Mirrors
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mirrors-for-pypi-resolving-and-pypi-package-downloading" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mirrors for PyPi resolving and PyPi package downloading
     </span>
   </a>
   
@@ -2910,6 +2928,13 @@ team. You can use it like this:</p>
 </span></code></pre></div>
 <p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
 packages on Github</a>.</p>
+<h3 id="mirrors-for-pypi-resolving-and-pypi-package-downloading">Mirrors for PyPi resolving and PyPi package downloading<a class="headerlink" href="#mirrors-for-pypi-resolving-and-pypi-package-downloading" title="Permanent link">#</a></h3>
+<p>The mirrors also affect the PyPi resolving and downloading steps of <code>uv</code>.
+You can set mirrors for the main pypi index and extra indices. But the base part of
+downloading urls may vary from their index urls. For example, the default pypi index
+is <code>https://pypi.org/simple</code>, and the package downloading urls are in the form of
+<code>https://files.pythonhosted.org/packages/&lt;h1&gt;/&lt;h2&gt;/&lt;hash&gt;/&lt;package&gt;.whl</code>. You need two mirror
+config entries for <code>https://pypi.org/simple</code> and <code>https://files.pythonhosted.org/packages</code>.</p>
 
 
 
