@@ -9,10 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{
-    environment::{CondaPrefixUpdated, CondaPrefixUpdaterBuilder},
-    workspace::{get_activated_environment_variables, EnvironmentVars},
-};
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
@@ -49,11 +45,11 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::{BuildContext, GlobHashCache, SourceCheckoutReporter},
+    build::{BuildContext, BuildError, GlobHashCache, SourceCheckoutReporter},
     environment::{
-        self, read_environment_file, write_environment_file, EnvironmentFile, LockFileUsage,
-        LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
-        PythonStatus,
+        self, read_environment_file, write_environment_file, CondaPrefixUpdated,
+        CondaPrefixUpdaterBuilder, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
     },
     lock_file::{
         self,
@@ -65,8 +61,9 @@ use crate::{
     prefix::Prefix,
     repodata::Repodata,
     workspace::{
+        get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        Environment, HasWorkspaceRef,
+        Environment, EnvironmentVars, HasWorkspaceRef,
     },
     Workspace,
 };
@@ -74,15 +71,16 @@ use crate::{
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
     ///
-    /// This function will return a `LockFileDerivedData` struct that contains the
-    /// lock-file and any potential derived data that was computed as part of this
-    /// function. The derived data might be usable by other functions to avoid
-    /// recomputing the same data.
+    /// This function will return a `LockFileDerivedData` struct that contains
+    /// the lock-file and any potential derived data that was computed as
+    /// part of this function. The derived data might be usable by other
+    /// functions to avoid recomputing the same data.
     ///
-    /// This function starts by checking if the lock-file is up-to-date. If it is
-    /// not up-to-date it will construct a task graph of all the work that needs to
-    /// be done to update the lock-file. The tasks are awaited in a specific order
-    /// to make sure that we can start instantiating prefixes as soon as possible.
+    /// This function starts by checking if the lock-file is up-to-date. If it
+    /// is not up-to-date it will construct a task graph of all the work
+    /// that needs to be done to update the lock-file. The tasks are awaited
+    /// in a specific order to make sure that we can start instantiating
+    /// prefixes as soon as possible.
     pub async fn update_lock_file(
         &self,
         options: UpdateLockFileOptions,
@@ -157,8 +155,8 @@ impl Workspace {
         Ok(lock_file_derived_data)
     }
 
-    /// Loads the lockfile for the workspace or returns `Lockfile::default` if none
-    /// could be found.
+    /// Loads the lockfile for the workspace or returns `Lockfile::default` if
+    /// none could be found.
     pub async fn load_lock_file(&self) -> miette::Result<LockFile> {
         let lock_file_path = self.lock_file_path();
         if lock_file_path.is_file() {
@@ -397,8 +395,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         let platform = environment.best_platform();
         let pixi_records = self
-            .pixi_records(environment, platform)
-            .into_diagnostic()?
+            .pixi_records(environment, platform)?
             .unwrap_or_default();
 
         let conda_reinstall_packages = match reinstall_packages {
@@ -418,8 +415,7 @@ impl<'p> LockFileDerivedData<'p> {
             .await?;
 
         let pypi_records = self
-            .pypi_records(environment, platform)
-            .into_diagnostic()?
+            .pypi_records(environment, platform)?
             .unwrap_or_default();
 
         // No `uv` support for WASM right now
@@ -485,7 +481,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             &uv_context,
-            self.pypi_indexes(environment).into_diagnostic()?.as_ref(),
+            self.pypi_indexes(environment)?.as_ref(),
             env_variables,
             self.workspace.root(),
             environment.best_platform(),
@@ -580,8 +576,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the locked environment from the lock-file.
         let records = self
-            .pixi_records(environment, platform)
-            .into_diagnostic()?
+            .pixi_records(environment, platform)?
             .unwrap_or_default();
         // Update the conda prefix
         let CondaPrefixUpdated {
@@ -1168,10 +1163,7 @@ impl<'p> UpdateContext<'p> {
 
             // Determine the channel priority, if no channel priority is set we use the
             // default.
-            let channel_priority = source
-                .channel_priority()
-                .into_diagnostic()?
-                .unwrap_or_default();
+            let channel_priority = source.channel_priority()?.unwrap_or_default();
 
             for platform in ordered_platforms {
                 // Is there an existing pending task to solve the group?
@@ -1747,11 +1739,21 @@ async fn spawn_solve_conda_environment_task(
                             Some(source_reporter.clone()),
                             build_id,
                         )
-                        .map_err(|e| {
-                            Report::new(e).wrap_err(format!(
-                                "failed to extract metadata for '{}'",
-                                name.as_source()
-                            ))
+                        .map_err(|error| {
+                            // A helper struct to pass along the diagnostics from the BuildError.
+                            #[derive(Debug, Error, Diagnostic)]
+                            #[error("failed to extract metadata for package '{name}'")]
+                            struct ExtractSourceError {
+                                name: String,
+                                #[source]
+                                #[diagnostic_source]
+                                error: BuildError,
+                            }
+
+                            ExtractSourceError {
+                                name: name.as_source().to_string(),
+                                error,
+                            }
                         }),
                 );
 
