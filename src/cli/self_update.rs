@@ -270,12 +270,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    // We only want to print the release notes once
-    let mut has_printed_release_notes = false;
+    // Print release notes
+    eprintln!("{}", release_notes);
 
     // If the user only wants to see the release notes, print them and exit
     if args.release_notes_only {
-        eprintln!("{}", release_notes);
         eprintln!(
             "{}To update to this version, run `pixi self-update --version {}`",
             console::style(console::Emoji("ℹ️ ", "")).yellow(),
@@ -296,10 +295,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let action = if target_version < current_version {
         if args.version.is_none() {
-            // If prompting user, we display release notes before switching binaries, otherwise we display them after
-            eprintln!("{}", release_notes);
-            has_printed_release_notes = true;
-
             // Ask if --version was not passed
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
@@ -398,11 +393,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Replace the current binary with the new binary
     self_replace::self_replace(new_binary_path).into_diagnostic()?;
-
-    // Print release notes after switching binaries if we haven't already
-    if !has_printed_release_notes {
-        eprintln!("{}", release_notes);
-    }
 
     eprintln!(
         "{}Pixi has been updated to version {}.",
