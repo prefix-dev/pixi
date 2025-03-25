@@ -409,7 +409,7 @@ pub async fn update_prefix_conda(
                 .join(LinkScriptType::PostLink.get_path(&package.package_record, &host_platform));
 
             if post_link_script.exists() {
-                tracing::warn!("The package '{}' contains a post-link script that has not been executed.\n      Run `pixi config set --local run-post-link-scripts insecure` to enable post-link / pre-unlink scripts.", package.package_record.name.as_normalized());
+                tracing::warn!("The package '{}' contains a post-link script that has not been executed (https://pixi.sh/latest/reference/pixi_configuration/#run-post-link-scripts).\n      Run `pixi config set --local run-post-link-scripts insecure` to enable post-link / pre-unlink scripts.", package.package_record.name.as_normalized());
             }
         }
     }
