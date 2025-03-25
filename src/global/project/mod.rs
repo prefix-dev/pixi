@@ -892,14 +892,8 @@ impl Project {
             tracing::debug!(
                 "Environment {} completions are not in sync: to_remove: {}, to_add: {}",
                 env_name.fancy_display(),
-                completions_to_remove
-                    .iter()
-                    .map(|s| s.repodata_record.package_record.name.as_normalized())
-                    .join(", "),
-                completions_to_remove
-                    .iter()
-                    .map(|s| s.repodata_record.package_record.name.as_normalized())
-                    .join(", ")
+                completions_to_remove.iter().map(|c| c.name()).join(", "),
+                completions_to_add.iter().map(|c| c.name()).join(", ")
             );
             return Ok(false);
         }
