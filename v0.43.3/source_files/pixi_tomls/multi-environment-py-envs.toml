@@ -1,0 +1,19 @@
+[project]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi"
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+
+[feature.test.dependencies]
+pytest = "*"
+
+# --8<-- [start:py-envs]
+[feature.py311.dependencies]
+python = "3.11.*"
+
+[feature.py312.dependencies]
+python = "3.12.*"
+
+[environments]
+test-py311 = ["py311", "test"]
+test-py312 = ["py312", "test"]
+# --8<-- [end:py-envs]
