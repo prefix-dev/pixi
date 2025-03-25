@@ -222,7 +222,7 @@ def test_build_git_source_deps(
     This one tries to build the rich example project
     """
 
-    project = pypi_data / "rich"
+    project = pypi_data / "rich_table"
     target_git_dir = tmp_pixi_workspace / "git_project"
     shutil.copytree(project, target_git_dir)
     shutil.rmtree(target_git_dir.joinpath(".pixi"), ignore_errors=True)
@@ -269,8 +269,8 @@ def test_build_git_source_deps(
     # now we update source code so we can verify that
     # both pixi-git will discover a new commit
     # and pixi build will rebuild it
-    rich_example = target_git_dir / "src" / "rich_example" / "__init__.py"
-    rich_example.write_text(rich_example.read_text().replace("John Doe", "John Doe Jr."))
+    rich_table = target_git_dir / "src" / "rich_table" / "__init__.py"
+    rich_table.write_text(rich_table.read_text().replace("John Doe", "John Doe Jr."))
     # commit the change
     verify_cli_command(["git", "add", "."], cwd=target_git_dir)
     verify_cli_command(["git", "commit", "-m", "update John Doe"], cwd=target_git_dir)

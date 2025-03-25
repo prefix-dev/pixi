@@ -8,4 +8,4 @@ platforms = ["CURRENT_PLATFORM"]
 python = "3.12.*"
 
 [pypi-dependencies]
-rich_example = { "git" = "file://" }
+rich-table = { "git" = "file://" }

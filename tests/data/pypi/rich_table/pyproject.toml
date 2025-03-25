@@ -1,8 +1,8 @@
 [project]
-dependencies = ["rich"]                       # (1)!
-name = "rich"
+dependencies = ["rich"]                             # (1)!
+name = "rich_table"
 requires-python = ">= 3.11"
-scripts = { rich-example-main = "rich:main" } # (2)!
+scripts = { rich-example-main = "rich_table:main" } # (2)!
 version = "0.1.0"
 
 [build-system] # (3)!

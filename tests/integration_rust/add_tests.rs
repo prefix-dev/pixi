@@ -828,7 +828,9 @@ preview = ['pixi-build']"#,
     // Add a package
     pixi.add("boost-check")
         .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_git_rev(GitRev::new().with_tag("v0.1.0".to_string()))
+        .with_git_rev(
+            GitRev::new().with_rev("8a1d9b9b1755825165a615d563966aaa59a5361c".to_string()),
+        )
         .with_git_subdir("boost-check".to_string())
         .await
         .unwrap();
@@ -844,6 +846,7 @@ preview = ['pixi-build']"#,
 
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (r"rev=([a-f0-9]+)", "rev=[REV]"),
     ]}, {
         insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
     });

@@ -101,6 +101,7 @@ impl ProtocolBuilder {
             }
         }
 
+        tracing::error!("No protocol found for source directory");
         // TODO: Add additional formats later
         Err(DiscoveryError::UnsupportedFormat)
     }
