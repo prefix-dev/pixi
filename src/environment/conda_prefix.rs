@@ -14,6 +14,7 @@ use miette::IntoDiagnostic;
 use pixi_manifest::FeaturesExt;
 use pixi_progress::{await_in_progress, global_multi_progress};
 use pixi_record::PixiRecord;
+use rattler::install::link_script::LinkScriptType;
 use rattler::install::{DefaultProgressFormatter, IndicatifReporter, Installer};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{
@@ -381,6 +382,7 @@ pub async fn update_prefix_conda(
                         .clear_when_done(true)
                         .finish(),
                 );
+
             if let Some(reinstall_packages) = reinstall_packages {
                 installer.set_reinstall_packages(reinstall_packages);
             }
@@ -396,6 +398,21 @@ pub async fn update_prefix_conda(
     // Mark the location of the prefix
     create_prefix_location_file(prefix.root())?;
     create_history_file(prefix.root())?;
+
+    // Check in the prefix if there are any `post-link` scripts that have not been executed, and if yes,
+    // issue a one-time warning to the user.
+    if matches!(run_post_link_scripts, RunPostLinkScripts::False) {
+        for package in result.transaction.installed_packages() {
+            // Check if the prefix contains a file called `name-post-link.sh`
+            let post_link_script = prefix
+                .root()
+                .join(LinkScriptType::PostLink.get_path(&package.package_record, &host_platform));
+
+            if post_link_script.exists() {
+                tracing::warn!("The package '{}' contains a post-link script that has not been executed.\n      Run `pixi config set --local run-post-link-scripts insecure` to enable post-link / pre-unlink scripts.", package.package_record.name.as_normalized());
+            }
+        }
+    }
 
     // Determine if the python version changed.
     Ok(PythonStatus::from_transaction(&result.transaction))
