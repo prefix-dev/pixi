@@ -44,11 +44,11 @@ This will create a `environment.tar` file that contains all conda packages requi
 |         └── repodata.json
 ```
 
-### Unpacking an environment
+### Unpacking an Environment
 
 With `pixi-pack unpack environment.tar`, you can unpack the environment on your target system. This will create a new conda environment in `./env` that contains all packages specified in your `pixi.toml`. It also creates an `activate.sh` (or `activate.bat` on Windows) file that lets you activate the environment without needing to have `conda` or `micromamba` installed.
 
-### Cross-platform packs
+### Cross-platform Packs
 
 Since `pixi-pack` just downloads the `.conda` and `.tar.bz2` files from the conda repositories, you can trivially create packs for different platforms.
 
@@ -59,7 +59,7 @@ pixi-pack pack --platform win-64
 !!!note ""
     You can only unpack a pack on a system that has the same platform as the pack was created for.
 
-### Inject additional packages
+### Inject Additional Packages
 
 You can inject additional packages into the environment that are not specified in `pixi.lock` by using the `--inject` flag:
 
@@ -69,7 +69,7 @@ pixi-pack pack --inject local-package-1.0.0-hbefa133_0.conda --manifest-pack pix
 
 This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use `pixi.lock` from the workspace.
 
-### Cache downloaded packages
+### Cache Downloaded Packages
 
 You can cache downloaded packages to speed up subsequent pack operations by using the `--use-cache` flag:
 
@@ -86,7 +86,7 @@ Using a cache is particularly useful when:
 - Operating in environments with limited bandwidth
 - Running CI/CD pipelines where package caching can significantly improve build times
 
-### Unpacking without pixi-pack
+### Unpacking Without pixi-pack
 
 If you don't have `pixi-pack` available on your target system, you can still install the environment if you have `conda` or `micromamba` available.
 Just unarchive the `environment.tar`, then you have a local channel on your system where all necessary packages are available.
@@ -105,7 +105,7 @@ conda env create -p ./env --file environment.yml
 
 !!!note ""
     Both `conda` and `mamba` are always installing pip as a side effect when they install python, see [`conda`'s documentation](https://docs.conda.io/projects/conda/en/25.1.x/user-guide/configuration/settings.html#add-pip-as-python-dependency-add-pip-as-python-dependency).
-    This is not different from how `pixi` works and can lead to solver errors when using `pixi-pack`'s compatibility mode since `pixi-pack` doesn't include `pip` by default.
+    This is different from how `pixi` works and can lead to solver errors when using `pixi-pack`'s compatibility mode since `pixi-pack` doesn't include `pip` by default.
     You can fix this issue in two ways:
 
     - Add `pip` to your `pixi.lock` file using `pixi add pip`.

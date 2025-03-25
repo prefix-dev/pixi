@@ -830,6 +830,7 @@ pub(crate) fn channel_url_to_prioritized_channel(
 pub(crate) fn shortcut_sync_status(
     shortcuts: IndexSet<PackageName>,
     prefix_records: Vec<PrefixRecord>,
+    prefix_root: &Path,
 ) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
     let mut remaining_shortcuts = shortcuts;
     let mut records_to_install = Vec::new();
@@ -837,7 +838,7 @@ pub(crate) fn shortcut_sync_status(
 
     let records_with_menuinst = prefix_records
         .into_iter()
-        .filter(contains_menuinst_document);
+        .filter(|record| contains_menuinst_document(record, prefix_root));
 
     for record in records_with_menuinst {
         let has_installed_system_menus = record.installed_system_menus.is_empty().not();
@@ -867,13 +868,37 @@ pub(crate) fn shortcut_sync_status(
     Ok((records_to_install, records_to_uninstall))
 }
 
-pub(crate) fn contains_menuinst_document(prefix_record: &PrefixRecord) -> bool {
-    prefix_record.files.iter().any(|file| {
-        file.extension().is_some_and(|ext| ext == "json")
-            && file
-                .parent()
-                .is_some_and(|parent| parent.file_name().is_some_and(|f| f == "Menu"))
-    })
+pub(crate) fn contains_menuinst_document(prefix_record: &PrefixRecord, prefix_root: &Path) -> bool {
+    for file in &prefix_record.files {
+        if file.extension().is_some_and(|ext| ext == "json") {
+            if let Some(parent) = file.parent() {
+                if parent.file_name().is_some_and(|f| f == "Menu") {
+                    if let Ok(content) = fs::read_to_string(prefix_root.join(file)) {
+                        if let Err(err) = serde_json::from_str::<
+                            rattler_menuinst::schema::MenuInstSchema,
+                        >(&content)
+                        {
+                            tracing::warn!(
+                                "{} contains shortcuts, but they couldn't be parsed: {}",
+                                console::style(
+                                    prefix_record
+                                        .repodata_record
+                                        .package_record
+                                        .name
+                                        .as_normalized()
+                                )
+                                .green(),
+                                err
+                            )
+                        } else {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
 }
 
 /// Figures out what the status is of the exposed binaries of the environment.
@@ -1270,7 +1295,7 @@ mod tests {
             env_dir.path().join("bin/test")
         };
 
-        let manifest = Configuration::new(original_exe, bin_dir.path().join("bin"), None);
+        let manifest = Configuration::new(original_exe, String::new(), HashMap::new());
         let trampoline = Trampoline::new(
             ExposedName::from_str("test").unwrap(),
             bin_dir.path().to_path_buf(),

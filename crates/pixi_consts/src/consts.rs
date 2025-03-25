@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.42.1",
+    None => "0.43.1",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -83,6 +83,10 @@ pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
 pub const ENVIRONMENT_FILE_NAME: &str = "pixi";
 
 pub const RELEASES_URL: &str = "https://github.com/prefix-dev/pixi/releases";
+pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
+pub const CLAP_GIT_OPTIONS: &str = "Git Options";
+pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
+pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
 
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());

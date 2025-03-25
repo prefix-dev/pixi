@@ -8,9 +8,10 @@ use rattler_conda_types::ChannelConfig;
 
 use crate::{
     backend_override::BackendOverride,
-    conda_protocol, pixi_protocol,
+    pixi_protocol,
     protocol::{DiscoveryError, FinishError},
-    rattler_build_protocol, BuildFrontendError, Protocol, ToolContext,
+    protocols::JsonRPCBuildProtocol,
+    rattler_build_protocol, BuildFrontendError, ToolContext,
 };
 
 /// Configuration to enable or disable certain protocols discovery.
@@ -20,8 +21,6 @@ pub struct EnabledProtocols {
     pub enable_rattler_build: bool,
     /// Enable the pixi protocol.
     pub enable_pixi: bool,
-    /// Enable the conda-build protocol.
-    pub enable_conda_build: bool,
 }
 
 impl Default for EnabledProtocols {
@@ -30,19 +29,17 @@ impl Default for EnabledProtocols {
         Self {
             enable_rattler_build: true,
             enable_pixi: true,
-            enable_conda_build: true,
         }
     }
 }
 
 #[derive(Debug)]
+// for some reason, the clippy calculates wrong the size
+// for this enum variants, so we need to disable the warning
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum ProtocolBuilder {
     /// A pixi project.
-    Pixi(Box<pixi_protocol::ProtocolBuilder>),
-
-    /// A directory containing a `meta.yaml` that can be interpreted by
-    /// conda-build.
-    CondaBuild(conda_protocol::ProtocolBuilder),
+    Pixi(pixi_protocol::ProtocolBuilder),
 
     /// A directory containing a `recipe.yaml` that can be built with
     /// rattler-build.
@@ -51,13 +48,7 @@ pub(crate) enum ProtocolBuilder {
 
 impl From<pixi_protocol::ProtocolBuilder> for ProtocolBuilder {
     fn from(value: pixi_protocol::ProtocolBuilder) -> Self {
-        Self::Pixi(Box::new(value))
-    }
-}
-
-impl From<conda_protocol::ProtocolBuilder> for ProtocolBuilder {
-    fn from(value: conda_protocol::ProtocolBuilder) -> Self {
-        Self::CondaBuild(value)
+        Self::Pixi(value)
     }
 }
 
@@ -110,14 +101,6 @@ impl ProtocolBuilder {
             }
         }
 
-        // Try to discover as a conda build project
-        if enabled_protocols.enable_conda_build {
-            if let Some(protocol) = conda_protocol::ProtocolBuilder::discover(source_path).unwrap()
-            {
-                return Ok(protocol.into());
-            }
-        }
-
         // TODO: Add additional formats later
         Err(DiscoveryError::UnsupportedFormat)
     }
@@ -125,12 +108,7 @@ impl ProtocolBuilder {
     /// Sets the channel configuration used by the protocol.
     pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
         match self {
-            Self::Pixi(protocol) => {
-                Self::Pixi(Box::new(protocol.with_channel_config(channel_config)))
-            }
-            Self::CondaBuild(protocol) => {
-                Self::CondaBuild(protocol.with_channel_config(channel_config))
-            }
+            Self::Pixi(protocol) => Self::Pixi(protocol.with_channel_config(channel_config)),
             Self::RattlerBuild(protocol) => {
                 Self::RattlerBuild(protocol.with_channel_config(channel_config))
             }
@@ -141,10 +119,7 @@ impl ProtocolBuilder {
         if let Some(backend_override) = backend_override {
             match self {
                 Self::Pixi(protocol) => {
-                    Self::Pixi(Box::new(protocol.with_backend_override(backend_override)))
-                }
-                Self::CondaBuild(protocol) => {
-                    Self::CondaBuild(protocol.with_backend_override(backend_override))
+                    Self::Pixi(protocol.with_backend_override(backend_override))
                 }
                 Self::RattlerBuild(protocol) => {
                     Self::RattlerBuild(protocol.with_backend_override(backend_override))
@@ -158,12 +133,7 @@ impl ProtocolBuilder {
     /// Sets the cache directory to use for any caching.
     pub fn with_opt_cache_dir(self, cache_directory: Option<PathBuf>) -> Self {
         match self {
-            Self::Pixi(protocol) => {
-                Self::Pixi(Box::new(protocol.with_opt_cache_dir(cache_directory)))
-            }
-            Self::CondaBuild(protocol) => {
-                Self::CondaBuild(protocol.with_opt_cache_dir(cache_directory))
-            }
+            Self::Pixi(protocol) => Self::Pixi(protocol.with_opt_cache_dir(cache_directory)),
             Self::RattlerBuild(protocol) => {
                 Self::RattlerBuild(protocol.with_opt_cache_dir(cache_directory))
             }
@@ -174,7 +144,6 @@ impl ProtocolBuilder {
     pub fn name(&self) -> &str {
         match self {
             Self::Pixi(_) => "pixi",
-            Self::CondaBuild(_) => "conda-build",
             Self::RattlerBuild(_) => "rattler-build",
         }
     }
@@ -184,23 +153,16 @@ impl ProtocolBuilder {
         self,
         tool_context: Arc<ToolContext>,
         build_id: usize,
-    ) -> Result<Protocol, BuildFrontendError> {
+    ) -> Result<JsonRPCBuildProtocol, BuildFrontendError> {
         match self {
             Self::Pixi(protocol) => Ok(protocol
                 .finish(tool_context, build_id)
                 .await
-                .map_err(FinishError::Pixi)?
-                .into()),
-            Self::CondaBuild(protocol) => Ok(protocol
-                .finish(tool_context, build_id)
-                .await
-                .map_err(FinishError::CondaBuild)?
-                .into()),
+                .map_err(FinishError::Pixi)?),
             Self::RattlerBuild(protocol) => Ok(protocol
                 .finish(tool_context, build_id)
                 .await
-                .map_err(FinishError::RattlerBuild)?
-                .into()),
+                .map_err(FinishError::RattlerBuild)?),
         }
     }
 }

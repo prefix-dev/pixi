@@ -1,4 +1,9 @@
 #  --8<-- [start:mirrors]
 [mirrors]
 "https://conda.anaconda.org" = ["https://prefix.dev/"]
+# prefix.dev doesn't mirror conda-forge's label channels
+# pixi uses the longest matching prefix for the mirror
+"https://conda.anaconda.org/conda-forge/label" = [
+  "https://conda.anaconda.org/conda-forge/label",
+]
 #  --8<-- [end:mirrors]

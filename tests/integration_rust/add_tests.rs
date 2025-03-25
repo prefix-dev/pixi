@@ -11,7 +11,7 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
-    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
+    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig},
     package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
 };
@@ -317,7 +317,7 @@ async fn add_pypi_functionality() {
     ));
 
     // Add a pypi package with a git url
-    pixi.add("requests @ git+https://github.com/psf/requests.git")
+    pixi.add("httpx @ git+https://github.com/encode/httpx.git")
         .set_type(DependencyType::PypiDependency)
         .set_platforms(&[Platform::Linux64])
         .with_install(true)
@@ -342,7 +342,7 @@ async fn add_pypi_functionality() {
     assert!(lock.contains_pypi_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::Linux64,
-        "requests"
+        "httpx"
     ));
     assert!(lock.contains_pypi_package(
         consts::DEFAULT_ENVIRONMENT_NAME,

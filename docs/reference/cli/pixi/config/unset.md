@@ -16,17 +16,17 @@ pixi config unset [OPTIONS] <KEY>
 :  Configuration key to unset
 <br>**required**: `true`
 
-## Options
-- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
-:  Operation on global configuration
+## Config Options
 - <a id="arg---local" href="#arg---local">`--local (-l)`</a>
 :  Operation on project-local configuration
+- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
+:  Operation on global configuration
 - <a id="arg---system" href="#arg---system">`--system (-s)`</a>
 :  Operation on system configuration
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 Unset a configuration value

@@ -38,11 +38,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@v0.8.3
+      - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
 
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
@@ -68,7 +68,7 @@ jobs:
         run: |
           git checkout tags/${{ github.event.inputs.tag }}
 
-      - uses: prefix-dev/setup-pixi@v0.8.3
+      - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
 
@@ -95,13 +95,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           # fetch everything so we can checkout the tag
           fetch-depth: 0
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@v0.8.3
+      - uses: prefix-dev/setup-pixi@main
         with:
           environments: docs
 

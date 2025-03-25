@@ -3,7 +3,7 @@ The `pixi.toml` is the project manifest, also known as the Pixi project configur
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check Pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
+For more technical documentation check Pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/workspace/manifest/struct.ProjectManifest.html).
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
@@ -216,8 +216,8 @@ channel-priority = "disabled"
 Tasks are a way to automate certain custom commands in your project.
 For example, a `lint` or `format` step.
 Tasks in a Pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For more in-depth information, check the [Advanced tasks documentation](../environments/advanced_tasks.md).
-Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../environments/advanced_tasks.md#our-task-runner-deno_task_shell).
+For more in-depth information, check the [Advanced tasks documentation](../workspace/advanced_tasks.md).
+Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../workspace/advanced_tasks.md#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -263,7 +263,7 @@ e.g. `libc = { family="glibc", version="2.28" }`
 - `macos`: The minimal version of the macOS operating system.
 - `cuda`: The minimal version of the CUDA library.
 
-More information in the [system requirements documentation](../environments/system_requirements.md).
+More information in the [system requirements documentation](../workspace/system_requirements.md).
 
 ## The `pypi-options` table
 
@@ -489,7 +489,7 @@ pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
 # With ssh
 flask = { git = "ssh://git@github.com/pallets/flask" }
 # With https and a specific revision
-requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
+httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 
 # With https and a specific branch
 boltons = { git = "https://github.com/mahmoud/boltons.git", branch = "master" }
@@ -564,7 +564,7 @@ Use `git` in combination with `rev` or `subdirectory`:
 ```toml
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
-requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
+httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
 ```
 
@@ -700,7 +700,7 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../environments/multi_environment.md).
+The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../workspace/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]

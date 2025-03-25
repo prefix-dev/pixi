@@ -8,31 +8,35 @@ Adds dependencies to an environment
 
 ## Usage
 ```
-pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGES>...
+pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
-:  Specifies the packages that are to be added to the environment
+- <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
+:  Specifies the package that should be added to the environment
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
-:  Path to the file containing the authentication token
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
-- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
-:  Max concurrent solves, default is the number of CPUs
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  Specifies the environment that the dependencies need to be added to
 <br>**required**: `true`
 - <a id="arg---expose" href="#arg---expose">`--expose <EXPOSE>`</a>
 :  Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
+<br>May be provided more than once.
+
+## Config Options
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
+- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
+:  Path to the file containing the authentication token
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is `50`
 
 ## Description
 Adds dependencies to an environment

@@ -8,40 +8,46 @@ Installs the defined packages in a globally accessible location and exposes thei
 
 ## Usage
 ```
-pixi global install [OPTIONS] <PACKAGES>...
+pixi global install [OPTIONS] <PACKAGE>...
 ```
 
 ## Arguments
-- <a id="arg-<PACKAGES>" href="#arg-<PACKAGES>">`<PACKAGES>`</a>
-:  Specifies the packages that are to be installed
+- <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
+:  Specifies the package that should be installed
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
-:  Path to the file containing the authentication token
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
-- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
-:  Max concurrent solves, default is the number of CPUs
+<br>May be provided more than once.
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
+:  The platform to install the packages for
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  Ensures that all packages will be installed in the same environment
 - <a id="arg---expose" href="#arg---expose">`--expose <EXPOSE>`</a>
 :  Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
+<br>May be provided more than once.
+- <a id="arg---with" href="#arg---with">`--with <WITH>`</a>
+:  Add additional dependencies to the environment. Their executables will not be exposed
+<br>May be provided more than once.
 - <a id="arg---force-reinstall" href="#arg---force-reinstall">`--force-reinstall`</a>
 :  Specifies that the environment should be reinstalled
-- <a id="arg---no-shortcut" href="#arg---no-shortcut">`--no-shortcut`</a>
+- <a id="arg---no-shortcuts" href="#arg---no-shortcuts">`--no-shortcuts`</a>
 :  Specifies that no shortcuts should be created for the installed packages
-- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:
+
+## Config Options
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
+- <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
+:  Path to the file containing the authentication token
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
-- <a id="arg---with" href="#arg---with">`--with <WITH>`</a>
-:  Add additional dependencies to the environment. Their executables will not be exposed
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is `50`
 
 ## Description
 Installs the defined packages in a globally accessible location and exposes their command line applications.

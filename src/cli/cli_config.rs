@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
-use pixi_config::{Config, ConfigCli};
+use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
@@ -27,8 +27,8 @@ use pixi_git::GIT_URL_QUERY_REV_TYPE;
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
-    /// The path to `pixi.toml`, `pyproject.toml`, or the project directory
-    #[arg(long, global = true)]
+    /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+    #[arg(long, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 }
 
@@ -100,29 +100,19 @@ impl ChannelsConfig {
     }
 }
 
-/// Configuration for how to update the prefix
 #[derive(Parser, Debug, Default, Clone)]
-pub struct PrefixUpdateConfig {
+#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
+pub struct LockFileUpdateConfig {
     /// Don't update lockfile, implies the no-install as well.
-    #[clap(long, conflicts_with = "no_install")]
+    #[clap(long)]
     pub no_lockfile_update: bool,
 
     /// Lock file usage from the CLI
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
-
-    /// Don't modify the environment, only modify the lock-file.
-    #[arg(long)]
-    pub no_install: bool,
-
-    #[clap(flatten)]
-    pub config: ConfigCli,
-
-    /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long)]
-    pub revalidate: bool,
+    pub lock_file_usage: super::LockFileUsageConfig,
 }
-impl PrefixUpdateConfig {
+
+impl LockFileUpdateConfig {
     pub fn lock_file_usage(&self) -> LockFileUsage {
         if self.lock_file_usage.locked {
             LockFileUsage::Locked
@@ -132,12 +122,22 @@ impl PrefixUpdateConfig {
             LockFileUsage::Update
         }
     }
+}
 
-    /// Decide whether to install or not.
-    pub(crate) fn no_install(&self) -> bool {
-        self.no_install || self.no_lockfile_update
-    }
+/// Configuration for how to update the prefix
+#[derive(Parser, Debug, Default, Clone)]
+#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
+pub struct PrefixUpdateConfig {
+    /// Don't modify the environment, only modify the lock-file.
+    #[arg(long)]
+    pub no_install: bool,
 
+    /// Run the complete environment validation. This will reinstall a broken environment.
+    #[arg(long)]
+    pub revalidate: bool,
+}
+
+impl PrefixUpdateConfig {
     /// Which `[UpdateMode]` to use
     pub(crate) fn update_mode(&self) -> UpdateMode {
         if self.revalidate {
@@ -151,15 +151,15 @@ impl PrefixUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
-    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"], group="git_group")]
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub branch: Option<String>,
 
     /// The git tag
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"], group="git_group")]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub tag: Option<String>,
 
     /// The git revision
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"], group="git_group")]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub rev: Option<String>,
 }
 
@@ -230,18 +230,18 @@ impl From<GitRev> for GitReference {
 
 #[derive(Parser, Debug, Default)]
 pub struct DependencyConfig {
-    /// The dependencies as names, conda MatchSpecs or PyPi requirements
-    #[arg(required = true)]
+    /// The dependency as names, conda MatchSpecs or PyPi requirements
+    #[arg(required = true, value_name = "SPEC")]
     pub specs: Vec<String>,
 
     /// The specified dependencies are host dependencies. Conflicts with `build`
     /// and `pypi`
-    #[arg(long, conflicts_with_all = ["build", "pypi"])]
+    #[arg(long, conflicts_with_all = ["build", "pypi"], hide = true)]
     pub host: bool,
 
     /// The specified dependencies are build dependencies. Conflicts with `host`
     /// and `pypi`
-    #[arg(long, conflicts_with_all = ["host", "pypi"])]
+    #[arg(long, conflicts_with_all = ["host", "pypi"], hide = true)]
     pub build: bool,
 
     /// The specified dependencies are pypi dependencies. Conflicts with `host`
@@ -249,16 +249,16 @@ pub struct DependencyConfig {
     #[arg(long, conflicts_with_all = ["host", "build"])]
     pub pypi: bool,
 
-    /// The platform(s) for which the dependency should be modified
-    #[arg(long = "platform", short)]
+    /// The platform for which the dependency should be modified.
+    #[arg(long = "platform", short, value_name = "PLATFORM")]
     pub platforms: Vec<Platform>,
 
-    /// The feature for which the dependency should be modified
+    /// The feature for which the dependency should be modified.
     #[clap(long, short, default_value_t)]
     pub feature: FeatureName,
 
     /// The git url to use when adding a git dependency
-    #[clap(long, short, group = "git_group")]
+    #[clap(long, short, help_heading = consts::CLAP_GIT_OPTIONS)]
     pub git: Option<Url>,
 
     #[clap(flatten)]
@@ -266,7 +266,7 @@ pub struct DependencyConfig {
     pub rev: Option<GitRev>,
 
     /// The subdirectory of the git repository to use
-    #[clap(long, short, requires = "git", group = "git_group")]
+    #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdir: Option<String>,
 }
 

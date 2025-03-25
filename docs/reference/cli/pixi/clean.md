@@ -18,14 +18,14 @@ pixi clean [OPTIONS] [COMMAND]
 
 
 ## Options
-- <a id="arg---activation-cache" href="#arg---activation-cache">`--activation-cache`</a>
-:  Only remove the activation cache
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment directory to remove
+- <a id="arg---activation-cache" href="#arg---activation-cache">`--activation-cache`</a>
+:  Only remove the activation cache
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 Cleanup the environments.

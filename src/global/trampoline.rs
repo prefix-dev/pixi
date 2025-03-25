@@ -18,7 +18,6 @@
 use std::{
     collections::HashMap,
     io::ErrorKind,
-    ops::Not,
     path::{Path, PathBuf},
     str::FromStr,
     sync::LazyLock,
@@ -139,18 +138,18 @@ pub struct Configuration {
     /// Path to the original executable.
     pub exe: PathBuf,
     /// Root path of the original executable that should be prepended to the PATH.
-    pub path: PathBuf,
+    pub path_diff: String,
     /// Environment variables to be set before executing the original executable.
     pub env: HashMap<String, String>,
 }
 
 impl Configuration {
     /// Create a new configuration of trampoline.
-    pub fn new(exe: PathBuf, path: PathBuf, env: Option<HashMap<String, String>>) -> Self {
+    pub fn new(exe: PathBuf, path_diff: String, env: HashMap<String, String>) -> Self {
         Configuration {
             exe,
-            path,
-            env: env.unwrap_or_default(),
+            path_diff,
+            env,
         }
     }
 
@@ -347,23 +346,24 @@ impl Trampoline {
     }
 
     async fn write_trampoline(&self) -> miette::Result<()> {
+        tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
+            .await
+            .into_diagnostic()?;
+
         let trampoline_path = self.trampoline_path();
 
         // We need to check that there's indeed a trampoline at the path
-        if trampoline_path.is_file().not()
-            || Trampoline::is_trampoline(&self.trampoline_path())
-                .await?
-                .not()
-        {
-            tokio_fs::create_dir_all(self.root_path.join(TRAMPOLINE_CONFIGURATION))
+        if !trampoline_path.is_file() {
+            tokio_fs::write(&trampoline_path, Trampoline::decompressed_trampoline())
                 .await
                 .into_diagnostic()?;
-            tokio_fs::write(
-                self.trampoline_path(),
-                Trampoline::decompressed_trampoline(),
-            )
-            .await
-            .into_diagnostic()?;
+        } else if !Trampoline::is_trampoline(&self.trampoline_path()).await? {
+            tokio_fs::remove_file(&trampoline_path)
+                .await
+                .into_diagnostic()?;
+            tokio_fs::write(&trampoline_path, Trampoline::decompressed_trampoline())
+                .await
+                .into_diagnostic()?;
         }
 
         // If the path doesn't exist yet, create a hard link to the shared trampoline binary
@@ -490,7 +490,7 @@ mod tests {
         let trampoline = Trampoline::new(
             ExposedName::from_str("test_hardlink").unwrap(),
             dir.path().to_path_buf(),
-            Configuration::new(trampoline_path.clone(), dir.path().to_path_buf(), None),
+            Configuration::new(trampoline_path.clone(), String::new(), HashMap::new()),
         );
 
         trampoline.save().await.unwrap();

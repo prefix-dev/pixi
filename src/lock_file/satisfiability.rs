@@ -380,13 +380,13 @@ impl IntoUvRequirement for pep508_rs::Requirement {
 
         let marker = to_uv_marker_tree(&self.marker)?;
         let converted = uv_pep508::Requirement {
-            name: uv_pep508::PackageName::new(self.name.to_string())
+            name: uv_pep508::PackageName::from_str(self.name.as_ref())
                 .expect("cannot normalize name"),
             extras: self
                 .extras
                 .iter()
                 .map(|e| {
-                    uv_pep508::ExtraName::new(e.to_string()).expect("cannot convert extra name")
+                    uv_pep508::ExtraName::from_str(e.as_ref()).expect("cannot convert extra name")
                 })
                 .collect(),
             marker,
@@ -809,12 +809,10 @@ pub(crate) fn pypi_satifisfies_requirement(
             Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(spec.name.to_string()).into())
         }
         RequirementSource::Git {
-            repository,
-            reference,
-            precise: _precise,
-            subdirectory,
-            ..
+            git, subdirectory, ..
         } => {
+            let repository = git.repository();
+            let reference = git.reference();
             match &locked_data.location {
                 UrlOrPath::Url(url) => {
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
@@ -1276,7 +1274,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .iter()
         .filter(|record| record.0.editable)
         .map(|record| {
-            uv_normalize::PackageName::new(record.0.name.to_string()).expect("cannot convert name")
+            uv_normalize::PackageName::from_str(record.0.name.as_ref())
+                .expect("cannot convert name")
         })
         .collect::<HashSet<_>>();
     let expected_editable = expected_editable_pypi_packages.sub(&locked_editable_packages);

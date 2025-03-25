@@ -8,25 +8,26 @@ Remove exposed binaries from the global environment
 
 ## Usage
 ```
-pixi global expose remove [OPTIONS] [EXPOSED_NAMES]...
+pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 ```
 
 ## Arguments
-- <a id="arg-<EXPOSED_NAMES>" href="#arg-<EXPOSED_NAMES>">`<EXPOSED_NAMES>`</a>
-:  The exposed names that should be removed
+- <a id="arg-<EXPOSED_NAME>" href="#arg-<EXPOSED_NAME>">`<EXPOSED_NAME>`</a>
+:  The exposed names that should be removed Can be specified multiple times
+<br>May be provided more than once.
 
-## Options
+## Config Options
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
-- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
-:  Max concurrent solves, default is the number of CPUs
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is `50`
 
 ## Description
 Remove exposed binaries from the global environment

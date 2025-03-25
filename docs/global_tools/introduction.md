@@ -219,6 +219,9 @@ When you execute a global install binary, a trampoline performs the following se
 * Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.
 * When installing a new binary, a new trampoline is placed in the `.pixi/bin` directory and is hard-linked to the `.pixi/bin/trampoline_configuration/trampoline_bin`. This optimizes storage space and avoids duplication of the same trampoline.
 
+The trampoline will take care that the `PATH` contains the newest changes on your local `PATH` while avoiding to cache temporary `PATH` changes during installation.
+If you want to control the base `PATH`, pixi considers you can set `export PIXI_BASE_PATH=$PATH` in your shell startup script.
+
 ### Shortcuts
 
 Especially for graphical user interfaces it is useful to add shortcuts so that the operating system knows that about the application.

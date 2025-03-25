@@ -24,7 +24,7 @@ pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::Equivalent;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_config::Config;
@@ -43,7 +43,8 @@ use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
-use url::{ParseError, Url};
+use tokio::sync::Semaphore;
+use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -153,8 +154,12 @@ pub struct Workspace {
 
     /// The global configuration as loaded from the config file(s)
     config: Config,
+
     /// The S3 configuration
     s3_config: HashMap<String, s3_middleware::S3Config>,
+
+    /// The concurrent request semaphore
+    concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
 }
 
 impl Debug for Workspace {
@@ -182,7 +187,8 @@ impl Workspace {
         // Canonicalize the root path
         let root = &manifest.workspace.provenance.path;
         let root = dunce::canonicalize(root).unwrap_or(root.to_path_buf());
-        // Take the parent after canonicalizing to ensure this works even when the manifest
+        // Take the parent after canonicalizing to ensure this works even when the
+        // manifest
         let root = root
             .parent()
             .expect("manifest path should always have a parent")
@@ -215,6 +221,7 @@ impl Workspace {
             config,
             s3_config,
             repodata_gateway: Default::default(),
+            concurrent_downloads_semaphore: OnceCell::default(),
         }
     }
 
@@ -425,15 +432,27 @@ impl Workspace {
             })
     }
 
-    /// Returns the reqwest client used for http networking
-    pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
-        Ok(&self.client_and_authenticated_client()?.0)
-    }
+    // /// Returns the reqwest client used for http networking
+    // /// this api is not used now, uncomment when use in the future
+    // pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
+    //     Ok(&self.client_and_authenticated_client()?.0)
+    // }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
         Ok(&self.client_and_authenticated_client()?.1)
+    }
+
+    /// Returns a semaphore than can be used to limit the number of concurrent
+    /// according to the user configuration.
+    pub fn concurrent_downloads_semaphore(&self) -> Arc<Semaphore> {
+        self.concurrent_downloads_semaphore
+            .get_or_init(|| {
+                let max_concurrent_downloads = self.config().max_concurrent_downloads();
+                Arc::new(Semaphore::new(max_concurrent_downloads))
+            })
+            .clone()
     }
 
     fn client_and_authenticated_client(
@@ -533,18 +552,32 @@ impl Workspace {
                     let mapping = channel_to_location_map
                         .iter()
                         .map(|(channel, mapping_location)| {
-                            let url_or_path = match Url::parse(mapping_location) {
-                                Ok(url) => MappingLocation::Url(url),
-                                Err(err) => {
-                                    if let ParseError::RelativeUrlWithoutBase = err {
-                                        MappingLocation::Path(PathBuf::from(mapping_location))
-                                    } else {
-                                        miette::bail!("Could not convert {mapping_location} to neither URL or Path")
+                            let url_or_path = if mapping_location.starts_with("https://")
+                                || mapping_location.starts_with("http://")
+                                || mapping_location.starts_with("file://")
+                            {
+                                match Url::parse(mapping_location) {
+                                    Ok(url) => MappingLocation::Url(url),
+                                    Err(err) => {
+                                        return Err(err).into_diagnostic().context(format!(
+                                            "Could not convert {mapping_location} to URL"
+                                        ))
                                     }
                                 }
+                            } else {
+                                let path = PathBuf::from(mapping_location);
+                                let abs_path = if path.is_relative() {
+                                    channel_config.root_dir.join(path)
+                                } else {
+                                    path
+                                };
+                                MappingLocation::Path(abs_path)
                             };
 
-                            Ok((channel.canonical_name().trim_end_matches('/').into(), url_or_path))
+                            Ok((
+                                channel.canonical_name().trim_end_matches('/').into(),
+                                url_or_path,
+                            ))
                         })
                         .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
@@ -1020,7 +1053,12 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &MappingLocation::Path(PathBuf::from("mapping.json"))
+            &MappingLocation::Path(
+                workspace
+                    .channel_config()
+                    .root_dir
+                    .join(PathBuf::from("mapping.json"))
+            )
         );
     }
 

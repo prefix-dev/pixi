@@ -27,11 +27,11 @@ use crate::{
 
 #[derive(Parser, Debug)]
 pub enum Operation {
-    /// Add a command to the project
+    /// Add a command to the workspace
     #[clap(visible_alias = "a")]
     Add(AddArgs),
 
-    /// Remove a command from the project
+    /// Remove a command from the workspace
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
 
@@ -39,7 +39,7 @@ pub enum Operation {
     #[clap(alias = "@")]
     Alias(AliasArgs),
 
-    /// List all tasks in the project
+    /// List all tasks in the workspace
     #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 }
@@ -47,14 +47,15 @@ pub enum Operation {
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct RemoveArgs {
-    /// Task names to remove
+    /// Task name to remove.
+    #[arg(value_name = "TASK_NAME")]
     pub names: Vec<TaskName>,
 
-    /// The platform for which the task should be removed
+    /// The platform for which the task should be removed.
     #[arg(long, short)]
     pub platform: Option<Platform>,
 
-    /// The feature for which the task should be removed
+    /// The feature for which the task should be removed.
     #[arg(long, short)]
     pub feature: Option<String>,
 }
@@ -62,32 +63,32 @@ pub struct RemoveArgs {
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AddArgs {
-    /// Task name
+    /// Task name.
     pub name: TaskName,
 
-    /// One or more commands to actually execute
-    #[clap(required = true, num_args = 1..)]
+    /// One or more commands to actually execute.
+    #[clap(required = true, num_args = 1.., id = "COMMAND")]
     pub commands: Vec<String>,
 
-    /// Depends on these other commands
+    /// Depends on these other commands.
     #[clap(long)]
     #[clap(num_args = 1..)]
     pub depends_on: Option<Vec<TaskName>>,
 
-    /// The platform for which the task should be added
+    /// The platform for which the task should be added.
     #[arg(long, short)]
     pub platform: Option<Platform>,
 
-    /// The feature for which the task should be added
+    /// The feature for which the task should be added.
     #[arg(long, short)]
     pub feature: Option<String>,
 
-    /// The working directory relative to the root of the project
+    /// The working directory relative to the root of the workspace.
     #[arg(long)]
     pub cwd: Option<PathBuf>,
 
     /// The environment variable to set, use --env key=value multiple times for
-    /// more than one variable
+    /// more than one variable.
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
 
@@ -96,7 +97,7 @@ pub struct AddArgs {
     pub description: Option<String>,
 
     /// Isolate the task from the shell environment, and only use the pixi
-    /// environment to run the task
+    /// environment to run the task.
     #[arg(long)]
     pub clean_env: bool,
 }

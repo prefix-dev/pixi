@@ -101,19 +101,20 @@ nav:
   - Frontpage: index.md
   - Getting Started: getting_started.md
   - Workspace:
-      - Environments: environments/environment.md
-      - Tasks: environments/advanced_tasks.md
-      - Multi Platform: environments/multi_platform_configuration.md
-      - Multi Environment: environments/multi_environment.md
-      - Lockfile: environments/lockfile.md
-      - System Requirements: environments/system_requirements.md
+      - Environments: workspace/environment.md
+      - Tasks: workspace/advanced_tasks.md
+      - Multi Platform: workspace/multi_platform_configuration.md
+      - Multi Environment: workspace/multi_environment.md
+      - Lockfile: workspace/lockfile.md
+      - System Requirements: workspace/system_requirements.md
   - Building:
       - Getting started: build/getting_started.md
       - Tutorials:
-          - Building a Python package: build/python.md
+          - Building a Python Package: build/python.md
           - Building a C++ Package: build/cpp.md
           - Multiple Packages in Workspace: build/workspace.md
           - Variants: build/variants.md
+          - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
   - Distributing:
@@ -151,16 +152,17 @@ nav:
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
       - Shebang: advanced/shebang.md
+      - Shell: advanced/pixi_shell.md
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli/pixi.md
   - Misc:
       - Changelog: CHANGELOG.md
-      - Pixi Vision: vision.md
-      - Packaging Pixi: packaging.md
-      - Community: Community.md
-      - FAQ: FAQ.md
+      - Pixi Vision: misc/vision.md
+      - Packaging Pixi: misc/packaging.md
+      - Community: misc/Community.md
+      - FAQ: misc/FAQ.md
 
 hooks:
   - schema/docs_hooks.py
@@ -170,13 +172,36 @@ hooks:
 plugins:
   - redirects:
       redirect_maps:
-        "advanced/advanced_tasks.md": "environments/advanced_tasks.md"
-        "environment.md": "environments/environment.md"
-        "design_proposals/multi_environment_proposal.md": "environments/multi_environment.md"
-        "advanced/multi_platform_configuration.md": "environments/multi_platform_configuration.md"
         "configuration.md": "reference/pixi_manifest.md"
         "reference/project_configuration.md": "reference/pixi_manifest.md"
-        "advanced/global_configuration.md": "reference/pixi_configuration.md"
+        "basic_usage.md": "getting_started.md"
+        "tutorials/python.md": "python/tutorial.md"
+        "features/environment.md": "workspace/environment.md"
+        "features/advanced_tasks.md": "workspace/advanced_tasks.md"
+        "features/multi_platform_configuration.md": "workspace/multi_platform_configuration.md"
+        "features/multi_environment.md": "workspace/multi_environment.md"
+        "features/lockfile.md": "workspace/lockfile.md"
+        "features/system_requirements.md": "workspace/system_requirements.md"
+        "features/global_tools.md": "global_tools/introduction.md"
+        "features/pytorch.md": "python/pytorch.md"
+        "ide_integration/jupyterlab.md": "integration/editor/jupyterlab.md"
+        "ide_integration/pycharm.md": "integration/editor/pycharm.md"
+        "ide_integration/r_studio.md": "integration/editor/r_studio.md"
+        "ide_integration/devcontainer.md": "integration/editor/devcontainer.md"
+        "advanced/authentication.md": "deployment/authentication.md"
+        "advanced/channel_priority.md": "advanced/channel_logic.md"
+        "advanced/github_actions.md": "integration/ci/github_actions.md"
+        "advanced/updates_github_actions.md": "integration/ci/updates_github_actions.md"
+        "advanced/lockfile_diffs.md": "integration/third_party/pixi_diff.md"
+        "advanced/production_deployment.md": "deployment/container.md"
+        "advanced/pyproject_toml.md": "python/pyproject_toml.md"
+        "advanced/s3.md": "deployment/s3.md"
+        "advanced/third_party.md": "integration/third_party/starship.md"
+        "reference/cli.md": "reference/cli/pixi.md"
+        "vision.md": "misc/vision.md"
+        "packaging.md": "misc/packaging.md"
+        "Community.md": "misc/Community.md"
+        "FAQ.md": "misc/FAQ.md"
 
   - search
   - social

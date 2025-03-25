@@ -18,14 +18,16 @@ pixi init [OPTIONS] [PATH]
 
 ## Options
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
-:  Channels to use in the workspace
+:  Channel to use in the workspace
+<br>May be provided more than once.
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
+:  Platforms that the workspace supports
+<br>May be provided more than once.
+- <a id="arg---import" href="#arg---import">`--import (-i) <ENVIRONMENT_FILE>`</a>
+:  Environment.yml file to bootstrap the workspace
 - <a id="arg---format" href="#arg---format">`--format <FORMAT>`</a>
 :  The manifest format to create
 <br>**options**: `pixi`, `pyproject`
-- <a id="arg---import" href="#arg---import">`--import (-i) <ENVIRONMENT_FILE>`</a>
-:  Environment.yml file to bootstrap the workspace
-- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  Platforms that the workspace supports
 - <a id="arg---scm" href="#arg---scm">`--scm (-s) <SCM>`</a>
 :  Source Control Management used for this workspace
 <br>**options**: `github`, `gitlab`, `codeberg`

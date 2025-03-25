@@ -54,17 +54,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0 # Fetch full history so we have branch information
 
       - name: Set up Rust
-        uses: taiki-e/setup-cross-toolchain-action@v1
+        uses: taiki-e/setup-cross-toolchain-action@0d2c6fcce937ba2ba77abf40e06449b74d60fa04 # v1
         with:
           target: ${{ matrix.target }}
 
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@v0.8.3
+        uses: prefix-dev/setup-pixi@main
         with:
           environments: trampoline
 
@@ -72,7 +72,7 @@ jobs:
         run: pixi run build-trampoline --target ${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
         with:
           name: trampoline-${{ matrix.target }}
           path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
@@ -82,10 +82,10 @@ jobs:
     needs: build # This ensures the aggregation job runs after the build jobs
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Download all binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
         with:
           path: trampoline/binaries/
           merge-multiple: true
@@ -94,7 +94,7 @@ jobs:
         run: ls -R trampoline/binaries/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
         with:
           name: trampolines
           path: trampoline/binaries/

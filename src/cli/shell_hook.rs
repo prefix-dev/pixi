@@ -2,7 +2,7 @@ use std::{collections::HashMap, default::Default};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
+use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -15,10 +15,13 @@ use crate::{
     activation::{get_activator, CurrentEnvVarBehavior},
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
+    lock_file::ReinstallPackages,
     prompt,
     workspace::{get_activated_environment_variables, Environment, HasWorkspaceRef},
     UpdateLockFileOptions, Workspace, WorkspaceLocator,
 };
+
+use super::cli_config::LockFileUpdateConfig;
 
 /// Print the pixi environment activation script.
 ///
@@ -36,6 +39,12 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     #[clap(flatten)]
     activation_config: ConfigCliActivation,
@@ -138,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
         .prompt_config
         .merge_config(args.activation_config.into())
-        .merge_config(args.prefix_update_config.config.clone().into());
+        .merge_config(args.config.clone().into());
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
@@ -150,10 +159,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.update_mode(),
         UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            no_install: args.prefix_update_config.no_install
+                && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
+        ReinstallPackages::default(),
     )
     .await?;
 

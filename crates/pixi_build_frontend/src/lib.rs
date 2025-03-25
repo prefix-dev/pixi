@@ -6,7 +6,8 @@ mod protocols;
 
 use std::fmt::{Debug, Formatter};
 
-pub use protocols::builders::{conda_protocol, pixi_protocol, rattler_build_protocol};
+pub use protocols::builders::{pixi_protocol, rattler_build_protocol};
+pub use protocols::JsonRPCBuildProtocol;
 
 mod protocol_builder;
 mod reporters;
@@ -20,8 +21,6 @@ pub use reporters::{NoopCondaBuildReporter, NoopCondaMetadataReporter};
 use tokio::io::{AsyncRead, AsyncWrite};
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolContext, ToolSpec};
 use url::Url;
-
-pub use crate::protocol::Protocol;
 
 pub use backend_override::BackendOverride;
 pub use protocol_builder::EnabledProtocols;

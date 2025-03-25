@@ -1,6 +1,6 @@
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::environment::get_update_lock_file_and_prefix;
-use crate::lock_file::UpdateMode;
+use crate::lock_file::{ReinstallPackages, UpdateMode};
 use crate::{UpdateLockFileOptions, WorkspaceLocator};
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -20,14 +20,14 @@ use pixi_config::ConfigCli;
 /// Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`.
 /// These commands will automatically install the environment if it is not already installed.
 ///
-/// You can use `pixi clean` to remove the installed environments and start fresh.
+/// You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
+    pub lock_file_usage: super::LockFileUsageConfig,
 
     /// The environment to install
     #[arg(long, short)]
@@ -77,6 +77,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
+            ReinstallPackages::default(),
         )
         .await?;
 

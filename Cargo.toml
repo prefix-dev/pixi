@@ -24,7 +24,6 @@ base64 = "0.22.1"
 bytes = "1.10.0"
 chrono = "0.4.40"
 clap = { version = "4.5.31", default-features = false }
-clap-verbosity-flag = "3.0.2"
 clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 concat-idents = "1.1.5"
@@ -48,7 +47,6 @@ http = "1.2.0"
 http-cache-reqwest = "0.15.1"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
-ignore = "0.4.23"
 indexmap = "2.7.1"
 indicatif = "0.17.11"
 insta = "1.42.1"
@@ -101,56 +99,58 @@ toml_edit = "0.22.24"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 typed-path = "0.10.0"
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
 
 wax = "0.6.0"
 which = "7.0.2"
 
 # Rattler crates
 file_url = "0.2.3"
-rattler = { version = "0.32.4", default-features = false }
-rattler_cache = { version = "0.3.13", default-features = false }
-rattler_conda_types = { version = "0.31.3", default-features = false, features = [
+rattler = { version = "0.33.3", default-features = false }
+rattler_cache = { version = "0.3.14", default-features = false }
+rattler_conda_types = { version = "0.31.4", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.0.7", default-features = false }
-rattler_lock = { version = "0.22.46", default-features = false }
-rattler_menuinst = { version = "0.2.2", default-features = false }
-rattler_networking = { version = "0.22.8", default-features = false, features = [
+rattler_digest = { version = "1.0.8", default-features = false }
+rattler_lock = { version = "0.22.48", default-features = false }
+rattler_menuinst = { version = "0.2.5", default-features = false }
+rattler_networking = { version = "0.22.10", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { version = "0.22.0", default-features = false }
-rattler_shell = { version = "0.22.22", default-features = false }
-rattler_solve = { version = "1.4.0", default-features = false }
-rattler_virtual_packages = { version = "2.0.6", default-features = false }
+rattler_repodata_gateway = { version = "0.22.3", default-features = false }
+rattler_shell = { version = "0.22.24", default-features = false }
+rattler_solve = { version = "1.4.2", default-features = false }
+rattler_virtual_packages = { version = "2.0.8", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.15"
-zip = { version = "2.2.3", default-features = false }
+zip = { version = "2.4.2", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
 
 fancy_display = { path = "crates/fancy_display" }
@@ -182,7 +182,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.42.1"
+version = "0.43.1"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -226,7 +226,6 @@ clap = { workspace = true, features = [
   "error-context",
   "env",
 ] }
-clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
@@ -242,7 +241,6 @@ fs_extra = { workspace = true }
 futures = { workspace = true }
 human_bytes = { workspace = true }
 humantime = { workspace = true }
-ignore = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -251,6 +249,7 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
+priority-queue = ">=2.1.2,<2.2.1" # need by uv, avoid update edition to 2024
 rstest = { workspace = true }
 uv-build-frontend = { workspace = true }
 uv-distribution-filename = { workspace = true }
@@ -300,6 +299,7 @@ pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
+rayon = "1.10.0"
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
   "http2",
@@ -328,6 +328,7 @@ typed-path = { workspace = true }
 url = { workspace = true }
 uv-auth = { workspace = true }
 uv-cache = { workspace = true }
+uv-cache-info = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }
@@ -340,6 +341,7 @@ uv-requirements = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
+uv-workspace = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
@@ -425,3 +427,6 @@ gcc-aarch64-linux-gnu = { version = '*', targets = [
 # Package config for `dist`
 [package.metadata.dist]
 features = ["self_update", "performance"]
+
+[package.metadata.cargo-machete]
+ignored = ["priority-queue"] # need by uv, avoid update edition to 2024

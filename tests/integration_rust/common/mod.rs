@@ -16,14 +16,14 @@ use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
     cli::{
         add,
-        cli_config::{ChannelsConfig, PrefixUpdateConfig, WorkspaceConfig},
+        cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
-        project, remove, run, search,
+        remove, run, search,
         task::{self, AddArgs, AliasArgs},
-        update, LockFileUsageArgs,
+        update, workspace, LockFileUsageConfig,
     },
-    lock_file::UpdateMode,
+    lock_file::{ReinstallPackages, UpdateMode},
     task::{
         get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
         TaskGraphError, TaskName,
@@ -348,12 +348,15 @@ impl PixiControl {
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
+
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageConfig::default(),
+                },
+                config: Default::default(),
                 editable: false,
             },
         }
@@ -384,12 +387,14 @@ impl PixiControl {
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageConfig::default(),
+                },
+                config: Default::default(),
             },
         }
     }
@@ -397,18 +402,20 @@ impl PixiControl {
     /// Add a new channel to the project.
     pub fn project_channel_add(&self) -> ProjectChannelAddBuilder {
         ProjectChannelAddBuilder {
-            args: project::channel::AddRemoveArgs {
+            args: workspace::channel::AddRemoveArgs {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageConfig::default(),
+                },
+                config: Default::default(),
                 feature: None,
                 priority: None,
                 prepend: false,
@@ -420,18 +427,20 @@ impl PixiControl {
     pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
         ProjectChannelRemoveBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: project::channel::AddRemoveArgs {
+            args: workspace::channel::AddRemoveArgs {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageConfig::default(),
+                },
+                config: Default::default(),
                 feature: None,
                 priority: None,
                 prepend: false,
@@ -442,7 +451,7 @@ impl PixiControl {
     pub fn project_environment_add(&self, name: EnvironmentName) -> ProjectEnvironmentAddBuilder {
         ProjectEnvironmentAddBuilder {
             manifest_path: Some(self.manifest_path()),
-            args: project::environment::add::Args {
+            args: workspace::environment::add::Args {
                 name,
                 features: None,
                 solve_group: None,
@@ -477,7 +486,7 @@ impl PixiControl {
         // Ensure the lock-file is up-to-date
         let mut lock_file = project
             .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.prefix_update_config.lock_file_usage(),
+                lock_file_usage: args.lock_file_update_config.lock_file_usage(),
                 ..UpdateLockFileOptions::default()
             })
             .await?;
@@ -504,7 +513,11 @@ impl PixiControl {
             let task_env = match task_env.as_ref() {
                 None => {
                     lock_file
-                        .prefix(&task.run_environment, UpdateMode::Revalidate)
+                        .prefix(
+                            &task.run_environment,
+                            UpdateMode::Revalidate,
+                            ReinstallPackages::default(),
+                        )
                         .await?;
                     let env =
                         get_task_env(&task.run_environment, args.clean_env, None, false, false)
@@ -535,7 +548,7 @@ impl PixiControl {
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
-                lock_file_usage: LockFileUsageArgs {
+                lock_file_usage: LockFileUsageConfig {
                     frozen: false,
                     locked: false,
                 },

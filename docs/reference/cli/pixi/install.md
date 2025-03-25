@@ -11,32 +11,35 @@ Install an environment, both updating the lockfile and installing the environmen
 pixi install [OPTIONS]
 ```
 
-## Options
-- <a id="arg---all" href="#arg---all">`--all (-a)`</a>
-:  Install all environments
+## Config Options
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
+- <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
+:  Specifies whether to use the keyring to look up credentials for PyPI
+<br>**options**: `disabled`, `subprocess`
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
 :  Max concurrent solves, default is the number of CPUs
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to install
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is `50`
+
+## Update Options
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
-:  Specifies whether to use the keyring to look up credentials for PyPI
-<br>**options**: `disabled`, `subprocess`
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to install
+<br>May be provided more than once.
+- <a id="arg---all" href="#arg---all">`--all (-a)`</a>
+:  Install all environments
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
-:  The path to `pixi.toml`, `pyproject.toml`, or the project directory
+:  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
 ## Description
 Install an environment, both updating the lockfile and installing the environment.
@@ -49,7 +52,7 @@ If you want to install all environments, you can use the `--all` flag.
 
 Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`. These commands will automatically install the environment if it is not already installed.
 
-You can use `pixi clean` to remove the installed environments and start fresh.
+You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
 
 
 --8<-- "docs/reference/cli/pixi/install_extender.md:example"
