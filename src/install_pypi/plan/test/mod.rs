@@ -2,6 +2,7 @@ use self::harness::{InstalledDistOptions, MockedSitePackages, NoCache, RequiredP
 use crate::install_pypi::plan::test::harness::AllCached;
 use crate::install_pypi::NeedReinstall;
 use assert_matches::assert_matches;
+use std::str::FromStr;
 use url::Url;
 
 mod harness;
@@ -601,7 +602,7 @@ fn test_uv_refresh() {
     let plan = harness::install_planner();
     let plan = plan.with_uv_refresh(uv_cache::Refresh::from_args(
         Some(true),
-        vec![uv_pep508::PackageName::new("aiofiles".to_string()).unwrap()],
+        vec![uv_pep508::PackageName::from_str("aiofiles").unwrap()],
     ));
     let install_plan = plan
         .plan(&site_packages, AllCached, &required.to_borrowed())

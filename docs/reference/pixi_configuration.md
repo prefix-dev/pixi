@@ -285,6 +285,8 @@ You can also specify mirrors for an entire "host", e.g.
 
 This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.
+You can override the behavior for specific channels (like conda-forge's label channels)
+by providing a longer prefix that points to itself.
 
 ### OCI Mirrors
 
@@ -298,3 +300,12 @@ team. You can use it like this:
 
 The GHCR mirror also contains `bioconda` packages. You can search the [available
 packages on Github](https://github.com/orgs/channel-mirrors/packages).
+
+### Mirrors for PyPi resolving and PyPi package downloading
+
+The mirrors also affect the PyPi resolving and downloading steps of `uv`.
+You can set mirrors for the main pypi index and extra indices. But the base part of
+downloading urls may vary from their index urls. For example, the default pypi index
+is `https://pypi.org/simple`, and the package downloading urls are in the form of
+`https://files.pythonhosted.org/packages/<h1>/<h2>/<hash>/<package>.whl`. You need two mirror
+config entries for `https://pypi.org/simple` and `https://files.pythonhosted.org/packages`.

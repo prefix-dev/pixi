@@ -5,12 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.43.1] - 2025-03-24
+#### ✨ Highlights
+
+- Fixes problems introduced with `0.43.0`
+- Adds support for uv mirror middleware
+- Makes `pixi shell` more robust.
+
+
+#### Changed
+
+- Upgrade uv to 0.6.9 by @gzm55 in [#3374](https://github.com/prefix-dev/pixi/pull/3374)
+- Global path diff by @Hofer-Julian in [#3384](https://github.com/prefix-dev/pixi/pull/3384)
+- Add uv mirror middlewares by @gzm55 in [#3306](https://github.com/prefix-dev/pixi/pull/3306)
+
+
+#### Documentation
+
+- Fix broken link in changelog by @Hofer-Julian in [#3391](https://github.com/prefix-dev/pixi/pull/3391)
+- Fix a typo in set_extender.md by @trim21 in [#3386](https://github.com/prefix-dev/pixi/pull/3386)
+- Fix redirect by @Hofer-Julian in [#3396](https://github.com/prefix-dev/pixi/pull/3396)
+
+
+#### Fixed
+
+- Upgrade zip to 2.4.2 by @gzm55 in [#3389](https://github.com/prefix-dev/pixi/pull/3389)
+- Improve shell execution by covering more edge-cases by @wolfv in [#3321](https://github.com/prefix-dev/pixi/pull/3321)
+- Stop requiring `PATH` for `pixi global` activation by @Hofer-Julian in [#3403](https://github.com/prefix-dev/pixi/pull/3403)
+- Improve error message for python integration tests by @Hofer-Julian in [#3408](https://github.com/prefix-dev/pixi/pull/3408)
+
+
+#### New Contributors
+* @trim21 made their first contribution in [#3386](https://github.com/prefix-dev/pixi/pull/3386)
+
 ### [0.43.0] - 2025-03-20
 #### ✨ Highlights
 
 - 🚀 Added support for [shortcuts](https://pixi.sh/v0.43.0/global_tools/introduction/#shortcuts) in `pixi global`.
 - 🔄 Introduced [`pixi reinstall`](https://pixi.sh/v0.43.0/reference/cli/pixi/reinstall/).
-- 🗃️ Enabled [sharded repodata](https://prefix.v0.43.0/blog/sharded_repodata) by default.
+- 🗃️ Enabled [sharded repodata](https://prefix.dev/blog/sharded_repodata) by default.
 - 📚 Big documentation improvements
   - Restructuring of chapters
   - Generated [CLI docs](https://pixi.sh/v0.43.0/reference/cli/pixi/)

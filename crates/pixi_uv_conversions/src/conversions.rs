@@ -18,6 +18,8 @@ use uv_python::PythonEnvironment;
 
 use crate::VersionError;
 
+use miette::IntoDiagnostic;
+
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
     #[error("could not convert path to flat index location {1}")]
@@ -33,7 +35,7 @@ pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, Inv
         NoBuild::All => uv_configuration::NoBuild::All,
         NoBuild::Packages(ref vec) => uv_configuration::NoBuild::Packages(
             vec.iter()
-                .map(|s| PackageName::new(s.to_string()))
+                .map(|s| PackageName::from_str(s.as_ref()))
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     };
@@ -276,9 +278,12 @@ pub fn to_parsed_git_url(
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
     // Construct manually [`ParsedGitUrl`] from locked url.
     let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
-        RepositoryUrl::new(&locked_git_url.to_url()).into(),
-        into_uv_git_reference(git_source.reference.into()),
-        Some(into_uv_git_sha(git_source.commit)),
+        uv_git_types::GitUrl::from_fields(
+            RepositoryUrl::new(&locked_git_url.to_url()).into(),
+            into_uv_git_reference(git_source.reference.into()),
+            Some(into_uv_git_sha(git_source.commit)),
+        )
+        .into_diagnostic()?,
         git_source.subdirectory.map(|s| PathBuf::from(s.as_str())),
     );
 

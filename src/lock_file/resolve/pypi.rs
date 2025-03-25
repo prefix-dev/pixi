@@ -39,7 +39,7 @@ use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
     IndexUrl, Name, Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
-use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigest, RequirementSource};
+use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, RequirementSource};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -68,13 +68,11 @@ use crate::{
 #[error("Invalid hash: {0} type: {1}")]
 struct InvalidHash(String, String);
 
-fn parse_hashes_from_hash_vec(
-    hashes: &Vec<HashDigest>,
-) -> Result<Option<PackageHashes>, InvalidHash> {
+fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHashes>, InvalidHash> {
     let mut sha256 = None;
     let mut md5 = None;
 
-    for hash in hashes {
+    for hash in hashes.iter() {
         match hash.algorithm() {
             HashAlgorithm::Sha256 => {
                 sha256 = Some(hash.digest.to_string());
@@ -203,7 +201,7 @@ pub async fn resolve_pypi(
         })
         .map_ok(|(record, p)| {
             Ok((
-                uv_normalize::PackageName::new(p.name.as_normalized().to_string())?,
+                uv_normalize::PackageName::from_str(p.name.as_normalized().as_ref())?,
                 (record.clone(), p),
             ))
         })
@@ -287,13 +285,13 @@ pub async fn resolve_pypi(
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
     let registry_client = Arc::new(
         RegistryClientBuilder::new(context.cache.clone())
-            .client(context.client.clone())
             .allow_insecure_host(context.allow_insecure_host.clone())
             .index_urls(index_locations.index_urls())
             .index_strategy(index_strategy)
             .markers(&marker_environment)
             .keyring(context.keyring_provider)
             .connectivity(Connectivity::Online)
+            .extra_middleware(context.extra_middleware.clone())
             .build(),
     );
     let build_options =
@@ -580,9 +578,9 @@ fn get_url_or_path(
                 // because we only lock absolute URLs, we need to join with the base
                 FileLocation::RelativeUrl(base, relative) => {
                     let base = Url::from_str(base)
-                        .map_err(|_| GetUrlOrPathError::InvalidBaseUrl(base.clone()))?;
+                        .map_err(|_| GetUrlOrPathError::InvalidBaseUrl(base.to_string()))?;
                     let url = base.join(relative).map_err(|_| {
-                        GetUrlOrPathError::CannotJoin(base.to_string(), relative.clone())
+                        GetUrlOrPathError::CannotJoin(base.to_string(), relative.to_string())
                     })?;
                     UrlOrPath::Url(url)
                 }
@@ -626,13 +624,13 @@ fn get_url_or_path(
                     // This is the same logic as the `AbsoluteUrl` case
                     // basically but we just make an absolute path first
                     let base = Url::from_str(base)
-                        .map_err(|_| GetUrlOrPathError::InvalidBaseUrl(base.clone()))?;
+                        .map_err(|_| GetUrlOrPathError::InvalidBaseUrl(base.to_string()))?;
                     let base = base
                         .to_file_path()
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(base.to_string()))?;
 
                     let relative = PathBuf::from_str(relative)
-                        .map_err(|_| GetUrlOrPathError::ExpectedPath(relative.clone()))?;
+                        .map_err(|_| GetUrlOrPathError::ExpectedPath(relative.to_string()))?;
                     let absolute = base.join(relative);
 
                     let relative = absolute.strip_prefix(abs_project_root);
@@ -677,181 +675,182 @@ async fn lock_pypi_packages(
                 continue;
             }
 
-            ResolvedDist::Installable {
-                dist: Dist::Built(dist),
-                ..
-            } => {
-                let (location, hash) = match &dist {
-                    BuiltDist::Registry(dist) => {
-                        let best_wheel = dist.best_wheel();
-                        let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes)
-                            .into_diagnostic()
-                            .context("cannot parse hashes for registry dist")?;
-                        let url_or_path = get_url_or_path(
-                            &best_wheel.index,
-                            &best_wheel.file.url,
-                            abs_project_root,
-                        )
-                        .into_diagnostic()
-                        .context("cannot convert registry dist")?;
-                        (url_or_path, hash)
-                    }
-                    BuiltDist::DirectUrl(dist) => {
-                        let url = dist.url.to_url();
-                        let direct_url = Url::parse(&format!("direct+{url}"))
-                            .into_diagnostic()
-                            .context("cannot create direct url")?;
-
-                        (UrlOrPath::Url(direct_url), None)
-                    }
-                    BuiltDist::Path(dist) => (
-                        UrlOrPath::Path(Utf8TypedPathBuf::from(
-                            process_uv_path_url(&dist.url)
-                                .into_diagnostic()?
-                                .to_string_lossy()
-                                .to_string(),
-                        )),
-                        None,
-                    ),
-                };
-
-                let metadata = registry_client
-                    .wheel_metadata(dist, index_capabilities)
-                    .await
-                    .into_diagnostic()
-                    .wrap_err("cannot get wheel metadata")?;
-                PypiPackageData {
-                    name: pep508_rs::PackageName::new(metadata.name.to_string())
-                        .into_diagnostic()
-                        .context("cannot convert name")?,
-                    version: pep440_rs::Version::from_str(&metadata.version.to_string())
-                        .into_diagnostic()
-                        .context("cannot convert version")?,
-                    requires_python: metadata
-                        .requires_python
-                        .map(|r| to_version_specifiers(&r))
-                        .transpose()
-                        .into_diagnostic()?,
-                    requires_dist: convert_uv_requirements_to_pep508(metadata.requires_dist.iter())
-                        .into_diagnostic()?,
-                    editable: false,
-                    location,
-                    hash,
-                }
-            }
-            ResolvedDist::Installable {
-                dist: Dist::Source(source),
-                ..
-            } => {
-                // Handle new hash stuff
-                let hash = source
-                    .file()
-                    .and_then(|file| {
-                        parse_hashes_from_hash_vec(&file.hashes)
-                            .into_diagnostic()
-                            .context("cannot parse hashes for sdist")
-                            .transpose()
-                    })
-                    .transpose()?;
-
-                let metadata_response = database
-                    .get_or_build_wheel_metadata(&Dist::Source(source.clone()), HashPolicy::None)
-                    .await
-                    .into_diagnostic()?;
-                let metadata = metadata_response.metadata;
-
-                // Use the precise url if we got it back
-                // otherwise try to construct it from the source
-                let (location, hash, editable) = match source {
-                    SourceDist::Registry(reg) => {
-                        let url_or_path =
-                            get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
+            ResolvedDist::Installable { dist, .. } => match &**dist {
+                Dist::Built(dist) => {
+                    let (location, hash) = match &dist {
+                        BuiltDist::Registry(dist) => {
+                            let best_wheel = dist.best_wheel();
+                            let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes)
                                 .into_diagnostic()
-                                .context("cannot convert registry sdist")?;
-                        (url_or_path, hash, false)
-                    }
-                    SourceDist::DirectUrl(direct) => {
-                        let url = direct.url.to_url();
-                        let direct_url = Url::parse(&format!("direct+{url}"))
+                                .context("cannot parse hashes for registry dist")?;
+                            let url_or_path = get_url_or_path(
+                                &best_wheel.index,
+                                &best_wheel.file.url,
+                                abs_project_root,
+                            )
                             .into_diagnostic()
-                            .context("could not create direct-url")?;
-                        (direct_url.into(), hash, false)
-                    }
-                    SourceDist::Git(git) => {
-                        // convert resolved source dist into a pinned git spec
-                        let pinned_git_spec = into_pinned_git_spec(git.clone());
-                        (
-                            pinned_git_spec.into_locked_git_url().to_url().into(),
-                            hash,
-                            false,
+                            .context("cannot convert registry dist")?;
+                            (url_or_path, hash)
+                        }
+                        BuiltDist::DirectUrl(dist) => {
+                            let url = dist.url.to_url();
+                            let direct_url = Url::parse(&format!("direct+{url}"))
+                                .into_diagnostic()
+                                .context("cannot create direct url")?;
+
+                            (UrlOrPath::Url(direct_url), None)
+                        }
+                        BuiltDist::Path(dist) => (
+                            UrlOrPath::Path(Utf8TypedPathBuf::from(
+                                process_uv_path_url(&dist.url)
+                                    .into_diagnostic()?
+                                    .to_string_lossy()
+                                    .to_string(),
+                            )),
+                            None,
+                        ),
+                    };
+
+                    let metadata = registry_client
+                        .wheel_metadata(dist, index_capabilities)
+                        .await
+                        .into_diagnostic()
+                        .wrap_err("cannot get wheel metadata")?;
+                    PypiPackageData {
+                        name: pep508_rs::PackageName::new(metadata.name.to_string())
+                            .into_diagnostic()
+                            .context("cannot convert name")?,
+                        version: pep440_rs::Version::from_str(&metadata.version.to_string())
+                            .into_diagnostic()
+                            .context("cannot convert version")?,
+                        requires_python: metadata
+                            .requires_python
+                            .map(|r| to_version_specifiers(&r))
+                            .transpose()
+                            .into_diagnostic()?,
+                        requires_dist: convert_uv_requirements_to_pep508(
+                            metadata.requires_dist.iter(),
                         )
-                    }
-                    SourceDist::Path(path) => {
-                        // Compute the hash of the package based on the source tree.
-                        let hash = if path.install_path.is_dir() {
-                            Some(
-                                PypiSourceTreeHashable::from_directory(&path.install_path)
-                                    .into_diagnostic()
-                                    .context("failed to compute hash of pypi source tree")?
-                                    .hash(),
-                            )
-                        } else {
-                            None
-                        };
-
-                        // process the path or url that we get back from uv
-                        let given_path = process_uv_path_url(&path.url).into_diagnostic()?;
-
-                        // Create the url for the lock file. This is based on the passed in URL
-                        // instead of from the source path to copy the path that was passed in from
-                        // the requirement.
-                        let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
-                            given_path.to_string_lossy().to_string(),
-                        ));
-                        (url_or_path, hash, false)
-                    }
-                    SourceDist::Directory(dir) => {
-                        // Compute the hash of the package based on the source tree.
-                        let hash = if dir.install_path.is_dir() {
-                            Some(
-                                PypiSourceTreeHashable::from_directory(&dir.install_path)
-                                    .into_diagnostic()
-                                    .context("failed to compute hash of pypi source tree")?
-                                    .hash(),
-                            )
-                        } else {
-                            None
-                        };
-
-                        // process the path or url that we get back from uv
-                        let given_path = process_uv_path_url(&dir.url).into_diagnostic()?;
-
-                        // Create the url for the lock file. This is based on the passed in URL
-                        // instead of from the source path to copy the path that was passed in from
-                        // the requirement.
-                        let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
-                            given_path.to_string_lossy().to_string(),
-                        ));
-                        (url_or_path, hash, dir.editable)
-                    }
-                };
-
-                PypiPackageData {
-                    name: to_normalize(&metadata.name).into_diagnostic()?,
-                    version: pep440_rs::Version::from_str(&metadata.version.to_string())
                         .into_diagnostic()?,
-                    requires_python: metadata
-                        .requires_python
-                        .map(|r| to_version_specifiers(&r))
-                        .transpose()
-                        .into_diagnostic()?,
-                    location,
-                    requires_dist: to_requirements(metadata.requires_dist.iter())
-                        .into_diagnostic()?,
-                    hash,
-                    editable,
+                        editable: false,
+                        location,
+                        hash,
+                    }
                 }
-            }
+                Dist::Source(source) => {
+                    // Handle new hash stuff
+                    let hash = source
+                        .file()
+                        .and_then(|file| {
+                            parse_hashes_from_hash_vec(&file.hashes)
+                                .into_diagnostic()
+                                .context("cannot parse hashes for sdist")
+                                .transpose()
+                        })
+                        .transpose()?;
+
+                    let metadata_response = database
+                        .get_or_build_wheel_metadata(
+                            &Dist::Source(source.clone()),
+                            HashPolicy::None,
+                        )
+                        .await
+                        .into_diagnostic()?;
+                    let metadata = metadata_response.metadata;
+
+                    // Use the precise url if we got it back
+                    // otherwise try to construct it from the source
+                    let (location, hash, editable) = match source {
+                        SourceDist::Registry(reg) => {
+                            let url_or_path =
+                                get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
+                                    .into_diagnostic()
+                                    .context("cannot convert registry sdist")?;
+                            (url_or_path, hash, false)
+                        }
+                        SourceDist::DirectUrl(direct) => {
+                            let url = direct.url.to_url();
+                            let direct_url = Url::parse(&format!("direct+{url}"))
+                                .into_diagnostic()
+                                .context("could not create direct-url")?;
+                            (direct_url.into(), hash, false)
+                        }
+                        SourceDist::Git(git) => {
+                            // convert resolved source dist into a pinned git spec
+                            let pinned_git_spec = into_pinned_git_spec(git.clone());
+                            (
+                                pinned_git_spec.into_locked_git_url().to_url().into(),
+                                hash,
+                                false,
+                            )
+                        }
+                        SourceDist::Path(path) => {
+                            // Compute the hash of the package based on the source tree.
+                            let hash = if path.install_path.is_dir() {
+                                Some(
+                                    PypiSourceTreeHashable::from_directory(&path.install_path)
+                                        .into_diagnostic()
+                                        .context("failed to compute hash of pypi source tree")?
+                                        .hash(),
+                                )
+                            } else {
+                                None
+                            };
+
+                            // process the path or url that we get back from uv
+                            let given_path = process_uv_path_url(&path.url).into_diagnostic()?;
+
+                            // Create the url for the lock file. This is based on the passed in URL
+                            // instead of from the source path to copy the path that was passed in from
+                            // the requirement.
+                            let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
+                                given_path.to_string_lossy().to_string(),
+                            ));
+                            (url_or_path, hash, false)
+                        }
+                        SourceDist::Directory(dir) => {
+                            // Compute the hash of the package based on the source tree.
+                            let hash = if dir.install_path.is_dir() {
+                                Some(
+                                    PypiSourceTreeHashable::from_directory(&dir.install_path)
+                                        .into_diagnostic()
+                                        .context("failed to compute hash of pypi source tree")?
+                                        .hash(),
+                                )
+                            } else {
+                                None
+                            };
+
+                            // process the path or url that we get back from uv
+                            let given_path = process_uv_path_url(&dir.url).into_diagnostic()?;
+
+                            // Create the url for the lock file. This is based on the passed in URL
+                            // instead of from the source path to copy the path that was passed in from
+                            // the requirement.
+                            let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
+                                given_path.to_string_lossy().to_string(),
+                            ));
+                            (url_or_path, hash, dir.editable)
+                        }
+                    };
+
+                    PypiPackageData {
+                        name: to_normalize(&metadata.name).into_diagnostic()?,
+                        version: pep440_rs::Version::from_str(&metadata.version.to_string())
+                            .into_diagnostic()?,
+                        requires_python: metadata
+                            .requires_python
+                            .map(|r| to_version_specifiers(&r))
+                            .transpose()
+                            .into_diagnostic()?,
+                        location,
+                        requires_dist: to_requirements(metadata.requires_dist.iter())
+                            .into_diagnostic()?,
+                        hash,
+                        editable,
+                    }
+                }
+            },
         };
 
         // TODO: Store extras in the lock-file

@@ -42,6 +42,7 @@ use uv_pypi_types::Requirement;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildContext, BuildStack, HashStrategy};
+use uv_workspace::WorkspaceCache;
 
 use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
 use crate::{
@@ -186,6 +187,8 @@ pub struct LazyBuildDispatch<'a> {
 
     /// Whether to disallow installing the conda prefix.
     pub disallow_install_conda_prefix: bool,
+
+    workspace_cache: WorkspaceCache,
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
@@ -248,6 +251,7 @@ impl<'a> LazyBuildDispatch<'a> {
             build_dispatch: AsyncCell::new(),
             lazy_deps,
             disallow_install_conda_prefix,
+            workspace_cache: WorkspaceCache::default(),
         }
     }
 
@@ -334,6 +338,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 self.params.hasher,
                 self.params.exclude_newer,
                 self.params.sources,
+                WorkspaceCache::default(),
                 self.params.concurrency,
                 self.params.preview_mode,
             )
@@ -485,5 +490,10 @@ impl BuildContext for LazyBuildDispatch<'_> {
             .direct_build(source, subdirectory, output_dir, build_kind, version_id)
             .await
             .map_err(LazyBuildDispatchError::from)
+    }
+
+    /// Workspace discovery caching.
+    fn workspace_cache(&self) -> &WorkspaceCache {
+        &self.workspace_cache
     }
 }

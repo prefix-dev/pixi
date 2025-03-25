@@ -858,10 +858,8 @@ impl Project {
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
-        let prefix_records = self
-            .environment_prefix(env_name)
-            .await?
-            .find_installed_packages()?;
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
         let specs_in_sync =
             environment_specs_in_sync(&prefix_records, &specs, environment.platform).await?;
         if !specs_in_sync {
@@ -884,7 +882,7 @@ impl Project {
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (shortcuts_to_remove, shortcuts_to_add) =
-            shortcut_sync_status(shortcuts, prefix_records)?;
+            shortcut_sync_status(shortcuts, prefix_records, prefix.root())?;
         if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
             tracing::debug!(
                 "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
@@ -1131,7 +1129,7 @@ impl Project {
 
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (records_to_install, records_to_uninstall) =
-            shortcut_sync_status(shortcuts, prefix_records)?;
+            shortcut_sync_status(shortcuts, prefix_records, prefix.root())?;
 
         for record in records_to_install {
             rattler_menuinst::install_menuitems_for_record(
@@ -1333,11 +1331,8 @@ mod tests {
             .unwrap();
         tokio_fs::File::create(&non_exposed_env_path).await.unwrap();
 
-        let non_exposed_manifest = Configuration::new(
-            non_exposed_env_path,
-            project.env_root.path().join("test/bin"),
-            None,
-        );
+        let non_exposed_manifest =
+            Configuration::new(non_exposed_env_path, String::new(), HashMap::new());
         let non_exposed_trampoline = Trampoline::new(
             non_exposed_name.clone(),
             project.bin_dir.path().to_path_buf(),
@@ -1362,11 +1357,8 @@ mod tests {
             .await
             .unwrap();
 
-        let exposed_manifest = Configuration::new(
-            python_exposed_env_path,
-            project.env_root.path().join("test/bin"),
-            None,
-        );
+        let exposed_manifest =
+            Configuration::new(python_exposed_env_path, String::new(), HashMap::new());
         let exposed_trampoline = Trampoline::new(
             python,
             project.bin_dir.path().to_path_buf(),
