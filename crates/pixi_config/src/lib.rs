@@ -973,7 +973,7 @@ impl Config {
         // check proxy config
         if config.proxy_config.https.is_none() && config.proxy_config.http.is_none() {
             if !config.proxy_config.non_proxy_hosts.is_empty() {
-                tracing::warn!("proxy_config.non_proxy_hosts is not empty but will be ignored")
+                tracing::warn!("proxy-config.non-proxy-hosts is not empty but will be ignored, as no https or http config is set.")
             }
         } else if *USE_PROXY_FROM_ENV {
             let config_no_proxy = Some(config.proxy_config.non_proxy_hosts.iter().join(","))
