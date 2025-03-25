@@ -34,13 +34,17 @@ pub struct Args {
     #[clap(long, short, default_value_t = Platform::current())]
     pub target_platform: Platform,
 
-    /// The output directory to place the build artifacts
+    /// The output directory to place the built artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
 
     /// Whether to build incrementally if possible
     #[clap(long, short)]
     pub no_incremental: bool,
+
+    /// The directory to use for incremental builds artifacts
+    #[clap(long, short)]
+    pub build_dir: Option<PathBuf>,
 }
 
 struct ProgressReporter {
@@ -131,10 +135,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
+    // Create the build directory if it does not exist
+    if let Some(build_dir) = args.build_dir.as_ref() {
+        tokio::fs::create_dir_all(build_dir)
+            .await
+            .into_diagnostic()
+            .with_context(|| {
+                format!(
+                    "failed to create the build directory at '{}'",
+                    build_dir.display()
+                )
+            })?;
+    }
+
     let incremental = !args.no_incremental;
+    let build_dir = args.build_dir.unwrap_or_else(|| workspace.pixi_dir());
     // Determine if we want to re-use existing build data
     let (_tmp, work_dir) = if incremental {
-        // Specify the cache directory
+        // Specify the build directory
         let key = WorkDirKey::new(
             SourceCheckout::new(
                 workspace.root().to_path_buf(),
@@ -146,13 +164,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             protocol.backend_identifier().to_string(),
         )
         .key();
-        (None, workspace.pixi_dir().join(key))
+
+        (None, build_dir.join(key))
     } else {
         // Construct a temporary directory to build the package in. This path is also
         // automatically removed after the build finishes.
         let tmp = tempfile::Builder::new()
             .prefix("pixi-build-")
-            .tempdir_in(workspace.pixi_dir())
+            .tempdir_in(build_dir)
             .into_diagnostic()
             .context("failed to create temporary working directory in the .pixi directory")?;
         let work_dir = tmp.path().to_path_buf();
