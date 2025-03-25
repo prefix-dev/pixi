@@ -34,7 +34,7 @@ pub struct Args {
     #[clap(long, short, default_value_t = Platform::current())]
     pub target_platform: Platform,
 
-    /// The output directory to place the build artifacts
+    /// The output directory to place the built artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
 
@@ -42,9 +42,9 @@ pub struct Args {
     #[clap(long, short)]
     pub no_incremental: bool,
 
-    /// The cached directory to use for incremental builds
+    /// The directory to use for incremental builds artifacts
     #[clap(long, short)]
-    pub cache_dir: Option<PathBuf>,
+    pub build_dir: Option<PathBuf>,
 }
 
 struct ProgressReporter {
@@ -90,7 +90,6 @@ impl CondaBuildReporter for ProgressReporter {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
-        .with_closest_package(true)
         .locate()?
         .with_cli_config(args.config_cli);
 
@@ -104,8 +103,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_gateway(workspace.repodata_gateway()?.clone())
         .with_client(workspace.authenticated_client()?.clone())
         .build();
-
-    tracing::debug!("workspace: {:?}", workspace);
 
     let protocol = pixi_build_frontend::BuildFrontend::default()
         .with_channel_config(channel_config.clone())
@@ -137,20 +134,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
-    let incremental = !args.no_incremental;
-    // Determine if we want to re-use existing build data
-    let (_tmp, work_dir) = if incremental {
-        // Specify the cache directory
-        let cache_dir = args.cache_dir.unwrap_or_else(|| workspace.pixi_dir());
-        tokio::fs::create_dir_all(&cache_dir)
+    // Create the build directory if it does not exist
+    if let Some(build_dir) = args.build_dir.as_ref() {
+        tokio::fs::create_dir_all(build_dir)
             .await
             .into_diagnostic()
             .with_context(|| {
                 format!(
-                    "failed to create cache dir for pixi build'{}'",
-                    pixi_dir.display()
+                    "failed to create the build directory at '{}'",
+                    build_dir.display()
                 )
             })?;
+    }
+
+    let incremental = !args.no_incremental;
+    // Determine if we want to re-use existing build data
+    let (_tmp, work_dir) = if incremental {
+        // Specify the cache directory
+        let build_dir = args.build_dir.unwrap_or_else(|| workspace.pixi_dir());
 
         let key = WorkDirKey::new(
             SourceCheckout::new(
@@ -163,23 +164,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             protocol.backend_identifier().to_string(),
         )
         .key();
-        (None, cache_dir.join(key))
+
+        (None, build_dir.join(key))
     } else {
         // Construct a temporary directory to build the package in. This path is also
         // automatically removed after the build finishes.
-        let cache_dir = args.cache_dir.unwrap_or_else(|| workspace.pixi_dir());
-        tokio::fs::create_dir_all(&cache_dir)
-            .await
-            .into_diagnostic()
-            .with_context(|| {
-                format!(
-                    "failed to create the .pixi directory at '{}'",
-                    pixi_dir.display()
-                )
-            })?;
+        let build_dir = args.build_dir.unwrap_or_else(|| workspace.pixi_dir());
+
         let tmp = tempfile::Builder::new()
             .prefix("pixi-build-")
-            .tempdir_in(cache_dir)
+            .tempdir_in(build_dir)
             .into_diagnostic()
             .context("failed to create temporary working directory in the .pixi directory")?;
         let work_dir = tmp.path().to_path_buf();
