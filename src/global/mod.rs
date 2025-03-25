@@ -6,7 +6,6 @@ pub(crate) mod project;
 pub(crate) mod trampoline;
 
 pub(crate) use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChange, StateChanges};
-pub(crate) use completions::find_completions;
 use pixi_utils::executable_from_path;
 pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};
 

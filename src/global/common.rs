@@ -827,7 +827,7 @@ pub(crate) fn channel_url_to_prioritized_channel(
 /// This function filters the provided `prefix_records` to find those that contain menuinst JSON files.
 /// It then compares these records with the requested `shortcuts` to
 /// determine which records need to be installed and which need to be uninstalled.
-pub(crate) fn shortcut_sync_status(
+pub(crate) fn shortcuts_sync_status(
     shortcuts: IndexSet<PackageName>,
     prefix_records: Vec<PrefixRecord>,
     prefix_root: &Path,

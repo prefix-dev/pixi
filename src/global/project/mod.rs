@@ -1,7 +1,6 @@
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
-    common::{get_install_changes, shortcut_sync_status, EnvironmentUpdate},
-    find_completions,
+    common::{get_install_changes, shortcuts_sync_status, EnvironmentUpdate},
     install::find_binary_by_name,
     trampoline::{self, GlobalExecutable},
     BinDir, EnvRoot, StateChange, StateChanges,
@@ -11,6 +10,7 @@ use crate::{
         common::{
             channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
         },
+        completions::{completions_sync_status, CompletionsDir},
         find_executables, find_executables_for_many_records,
         install::{create_executable_trampolines, script_exec_mapping},
         project::environment::environment_specs_in_sync,
@@ -879,11 +879,35 @@ impl Project {
             return Ok(false);
         }
 
+        tracing::debug!("Verify that the completions are in sync with the environment");
+        let completions_dir = CompletionsDir::from_env().await?;
+        let (completions_to_remove, completions_to_add) = completions_sync_status(
+            environment.exposed.clone(),
+            prefix_records.clone(),
+            prefix.root(),
+            &completions_dir,
+        )
+        .await?;
+        if !completions_to_remove.is_empty() || !completions_to_add.is_empty() {
+            tracing::debug!(
+                "Environment {} completions are not in sync: to_remove: {}, to_add: {}",
+                env_name.fancy_display(),
+                completions_to_remove
+                    .iter()
+                    .map(|s| s.repodata_record.package_record.name.as_normalized())
+                    .join(", "),
+                completions_to_remove
+                    .iter()
+                    .map(|s| s.repodata_record.package_record.name.as_normalized())
+                    .join(", ")
+            );
+            return Ok(false);
+        }
+
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
-        todo!("add `completions_sync_status` here");
         let (shortcuts_to_remove, shortcuts_to_add) =
-            shortcut_sync_status(shortcuts, prefix_records, prefix.root())?;
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
         if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
             tracing::debug!(
                 "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
@@ -1132,7 +1156,7 @@ impl Project {
 
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (records_to_install, records_to_uninstall) =
-            shortcut_sync_status(shortcuts, prefix_records, prefix.root())?;
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
 
         for record in records_to_install {
             rattler_menuinst::install_menuitems_for_record(
@@ -1210,9 +1234,21 @@ impl Project {
             return Ok(state_changes);
         };
 
+        let environment = self.environment(env_name).ok_or(miette::miette!(
+            "Environment {} not found in manifest.",
+            env_name.fancy_display()
+        ))?;
         let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
+        let completions_dir = CompletionsDir::from_env().await?;
 
-        let completions = find_completions(&prefix, &env.exposed);
+        let (completions_to_remove, completions_to_add) = completions_sync_status(
+            environment.exposed.clone(),
+            prefix_records.clone(),
+            prefix.root(),
+            &completions_dir,
+        )
+        .await?;
 
         // for mapping in &env.exposed {
         //     println!("Mapping: {:?}", mapping);
