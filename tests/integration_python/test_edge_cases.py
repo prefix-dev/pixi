@@ -259,9 +259,6 @@ def test_build_git_source_deps(
     )
 
     # install it
-    import pdb
-
-    pdb.set_trace()
     verify_cli_command([pixi, "install", "--manifest-path", minimal_workspace / "pixi.toml"])
 
     # verify that we indeed recorded the git url with it's commit
