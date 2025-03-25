@@ -64,28 +64,6 @@ use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
 
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
-use super::{
-    common::{get_install_changes, shortcut_sync_status, EnvironmentUpdate},
-    install::find_binary_by_name,
-    trampoline::{self, GlobalExecutable},
-    BinDir, EnvRoot, StateChange, StateChanges,
-};
-use crate::{
-    global::{
-        common::{
-            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
-        EnvDir,
-    },
-    prefix::{Executable, Prefix},
-    repodata::Repodata,
-    rlimit::try_increase_rlimit_to_sensible,
-};
-
 mod environment;
 mod manifest;
 mod parsed_manifest;
