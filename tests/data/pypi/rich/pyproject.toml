@@ -1,0 +1,10 @@
+[project]
+dependencies = ["rich"]                       # (1)!
+name = "rich"
+requires-python = ">= 3.11"
+scripts = { rich-example-main = "rich:main" } # (2)!
+version = "0.1.0"
+
+[build-system] # (3)!
+build-backend = "hatchling.build"
+requires = ["hatchling"]
