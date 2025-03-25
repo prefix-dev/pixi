@@ -27,10 +27,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
         // If the environment isn't up-to-date our executable detection afterwards will not work
-        if !project.environment_in_sync(env_name).await? {
-            let _ = project.install_environment(env_name).await?;
-        }
+        let require_reinstall = if !project.environment_in_sync(env_name).await? {
+            let environment_update = project.install_environment(env_name).await?;
+            state_changes.insert_change(
+                env_name,
+                global::StateChange::UpdatedEnvironment(environment_update),
+            );
+            false
+        } else {
+            true
+        };
 
         // See what executables were installed prior to update
         let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
@@ -49,16 +57,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Reinstall the environment
-        todo!("Skip reinstall if env is not existed and installed above");
-        let environment_update = project.install_environment(env_name).await?;
+        if require_reinstall {
+            let environment_update = project.install_environment(env_name).await?;
 
-        let mut state_changes = StateChanges::default();
-
-        state_changes.insert_change(
-            env_name,
-            global::StateChange::UpdatedEnvironment(environment_update),
-        );
-
+            state_changes.insert_change(
+                env_name,
+                global::StateChange::UpdatedEnvironment(environment_update),
+            );
+        }
         // Sync executables exposed names with the manifest
         project.sync_exposed_names(env_name, expose_type).await?;
 
