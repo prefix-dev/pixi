@@ -243,7 +243,6 @@ def test_trampoline_migrate_with_newer_trampoline(
 def test_trampoline_install_should_only_migrate_own_environment(
     pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
-    # this test will validate if new trampoline will migrate the older trampoline
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
     # now run install again, this time it should migrate the script to the new trampoline
@@ -260,7 +259,6 @@ def test_trampoline_install_should_only_migrate_own_environment(
         env=env,
     )
 
-    # create a dummy bin that will act as already installed package
     dummy_trampoline = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
     dummy_trampoline_2 = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline-2")
     dummy_trampoline_json = (
