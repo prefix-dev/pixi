@@ -100,7 +100,7 @@ impl GitResolver {
 
         write_guard.finish().await?;
 
-        debug!("Fetched source distribution from Git: {url}");
+        tracing::debug!("Fetched source distribution from Git: {url}");
         Ok(fetch)
     }
 

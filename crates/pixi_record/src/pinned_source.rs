@@ -638,7 +638,7 @@ impl Display for PinnedSourceSpec {
         match self {
             PinnedSourceSpec::Path(spec) => write!(f, "{}", spec.path),
             PinnedSourceSpec::Url(spec) => write!(f, "{}", spec.url),
-            PinnedSourceSpec::Git(spec) => write!(f, "{}", spec.git),
+            PinnedSourceSpec::Git(spec) => write!(f, "{}@{}", spec.git, spec.source.commit),
         }
     }
 }

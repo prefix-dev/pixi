@@ -894,30 +894,59 @@ preview = ['pixi-build']"#,
 #[tokio::test]
 async fn add_pypi_git() {
     let pixi = PixiControl::from_manifest(
-        r#"
+        format!(
+            r#"
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
+platforms = ["{}"]
 
 "#,
+            Platform::current()
+        )
+        .as_str(),
     )
     .unwrap();
+
+    // Add python
+    pixi.add("python")
+        // .with_no_lockfile_update(true)
+        .await
+        .unwrap();
 
     // Add a package
     pixi.add("boltons")
         .set_pypi(true)
         .with_git_url(Url::parse("https://github.com/mahmoud/boltons.git").unwrap())
-        .with_no_lockfile_update(true)
+        // .with_no_lockfile_update(true)
         .await
         .unwrap();
 
     // Check the manifest itself
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (r"platforms = \[.*\]", "platforms = [\"<PLATFORM>\"]"),
     ]}, {
         insta::assert_snapshot!(pixi.workspace().unwrap().workspace.provenance.read().unwrap().into_inner());
     });
+
+    let lock_file = pixi.lock_file().await.unwrap();
+
+    let (boltons, _) = lock_file
+        .default_environment()
+        .unwrap()
+        .pypi_packages(Platform::current())
+        .unwrap()
+        .find(|(p, _)| p.name.to_string() == "boltons")
+        .unwrap();
+
+    insta::with_settings!( {filters => vec![
+        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+    ]}, {
+        insta::assert_snapshot!(boltons.location);
+    });
+
+    // eprintln!("lockfile {:?} ", pixi.lock_file().await.unwrap());
 }
 
 #[tokio::test]

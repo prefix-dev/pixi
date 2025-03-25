@@ -251,6 +251,19 @@ pub(crate) fn need_reinstall(
                                     },
                                 ));
                             }
+
+                            if let (Some(installed_commit), Some(locked_commit)) =
+                                (vcs_info.commit_id, locked_git_url.url.precise())
+                            {
+                                if installed_commit != locked_commit.as_str() {
+                                    return Ok(ValidateCurrentInstall::Reinstall(
+                                        NeedReinstall::GitRevMismatch {
+                                            installed_rev: installed_commit,
+                                            locked_rev: locked_commit.to_string(),
+                                        },
+                                    ));
+                                }
+                            }
                         }
                         Err(_) => {
                             return Ok(ValidateCurrentInstall::Reinstall(
