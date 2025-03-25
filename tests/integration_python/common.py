@@ -8,7 +8,7 @@ from typing import Generator
 
 from rattler import Platform
 
-PIXI_VERSION = "0.43.1"
+PIXI_VERSION = "0.43.2"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
