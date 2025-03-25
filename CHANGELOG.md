@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.43.2] - 2025-03-25
+#### ✨ Highlights
+
+- Various `pixi global` fixes: [#3420](https://github.com/prefix-dev/pixi/pull/3420), [#3420](https://github.com/prefix-dev/pixi/pull/3420)
+- Start a non-login shell using `pixi shell`: [#3419](https://github.com/prefix-dev/pixi/pull/3419)
+
+#### Documentation
+
+- Don't mirror conda-forge's label channels by @pavelzw in [#3409](https://github.com/prefix-dev/pixi/pull/3409)
+
+#### Fixed
+
+- Broken `pixi global` migration by @Hofer-Julian in [#3420](https://github.com/prefix-dev/pixi/pull/3420)
+- Ignore broken shortcuts by @Hofer-Julian in [#3422](https://github.com/prefix-dev/pixi/pull/3422)
+- Start a non-login shell using `pixi shell` by @Ehab-Ibrahim in [#3419](https://github.com/prefix-dev/pixi/pull/3419)
+
+
+#### New Contributors
+* @Ehab-Ibrahim made their first contribution in [#3419](https://github.com/prefix-dev/pixi/pull/3419)
+
 ### [0.43.1] - 2025-03-24
 #### ✨ Highlights
 
