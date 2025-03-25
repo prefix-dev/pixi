@@ -148,11 +148,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let incremental = !args.no_incremental;
+    let build_dir = args.build_dir.unwrap_or_else(|| workspace.pixi_dir());
     // Determine if we want to re-use existing build data
     let (_tmp, work_dir) = if incremental {
-        // Specify the cache directory
-        let build_dir = args.build_dir.unwrap_or_else(|| workspace.pixi_dir());
-
+        // Specify the build directory
         let key = WorkDirKey::new(
             SourceCheckout::new(
                 workspace.root().to_path_buf(),
@@ -169,8 +168,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         // Construct a temporary directory to build the package in. This path is also
         // automatically removed after the build finishes.
-        let build_dir = args.build_dir.unwrap_or_else(|| workspace.pixi_dir());
-
         let tmp = tempfile::Builder::new()
             .prefix("pixi-build-")
             .tempdir_in(build_dir)
