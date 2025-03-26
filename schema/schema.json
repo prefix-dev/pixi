@@ -1817,6 +1817,15 @@
           "format": "uri",
           "minLength": 1
         },
+        "requires-pixi": {
+          "title": "Requires-Pixi",
+          "description": "The required version spec for pixi itself to resolve and build the project.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            ">=0.40"
+          ]
+        },
         "s3-options": {
           "title": "S3-Options",
           "description": "Options related to S3 for this project",
