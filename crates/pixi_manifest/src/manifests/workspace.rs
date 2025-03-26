@@ -4,7 +4,7 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic, SourceCode};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{Platform, Version};
+use rattler_conda_types::{ParseStrictness::Lenient, Platform, Version, VersionSpec};
 use toml_edit::Value;
 
 use crate::manifests::document::ManifestDocument;
@@ -753,9 +753,9 @@ impl WorkspaceManifestMut<'_> {
         // Update in both the manifest and the toml
         self.workspace.workspace.requires_pixi = match version {
             Some(version) => Some(
-                Version::from_str(version)
+                VersionSpec::from_str(version, Lenient)
                     .into_diagnostic()
-                    .context("could not convert version to a valid version")?,
+                    .context("could not convert to a valid version spec")?,
             ),
             None => None,
         };
@@ -2917,13 +2917,13 @@ bar = "*"
         name = "foo"
         channels = []
         platforms = []
-        requires-pixi = "0.1"
+        requires-pixi = "=0.1"
         "#;
         let manifest = parse_pixi_toml(contents).manifest;
 
         assert_eq!(
             manifest.workspace.requires_pixi,
-            Version::from_str("0.1.0").ok()
+            VersionSpec::from_str("=0.1.*", Lenient).ok()
         );
 
         let contents_no = r#"
@@ -2943,10 +2943,13 @@ bar = "*"
         let w1 = w1.unwrap();
         assert_eq!(w1.workspace.requires_pixi, None);
 
-        let w2 = WorkspaceManifest::lean_for_requires_pixi(Some("1.2.3"));
+        let w2 = WorkspaceManifest::lean_for_requires_pixi(Some(">=1.2.3,<2"));
         assert!(w2.is_ok());
         let w2 = w2.unwrap();
-        assert_eq!(w2.workspace.requires_pixi, Version::from_str("1.2.3").ok());
+        assert_eq!(
+            w2.workspace.requires_pixi,
+            VersionSpec::from_str(">=1.2.3,<2", Lenient).ok()
+        );
 
         let w3 = WorkspaceManifest::lean_for_requires_pixi(Some("..."));
         assert!(w3.is_err());

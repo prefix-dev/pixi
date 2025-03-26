@@ -5,7 +5,7 @@ use std::{
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
+use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
 use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
 use url::Url;
 
@@ -49,7 +49,7 @@ pub struct TomlWorkspace {
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
-    pub requires_pixi: Option<Version>,
+    pub requires_pixi: Option<VersionSpec>,
 
     pub span: Span,
 }

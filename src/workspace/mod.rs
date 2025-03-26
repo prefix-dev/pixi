@@ -618,7 +618,7 @@ impl Workspace {
     /// Verify the pixi version requirement.
     pub fn verify_current_pixi_meets_requirement(&self) -> Result<(), ExplicitManifestError> {
         if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi {
-            if Version::from_str(consts::PIXI_VERSION)? < *requires_pixi {
+            if !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?) {
                 return Err(ExplicitManifestError::SelfVersionMatchError {
                     requires_pixi: requires_pixi.clone(),
                 });

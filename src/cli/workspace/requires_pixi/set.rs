@@ -29,7 +29,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
             .value
             .workspace
             .requires_pixi
-            .expect("should be set a valid version")
+            .expect("should be set a valid version spec")
     );
 
     Ok(())
