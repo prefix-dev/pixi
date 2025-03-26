@@ -204,6 +204,9 @@ def test_build_git_source_deps_from_rev(
     workspace_manifest.write_text(
         workspace_manifest.read_text().replace("file:///", target_git_url)
     )
+    workspace_manifest.write_text(
+        workspace_manifest.read_text().replace("CURRENT_PLATFORM", CURRENT_PLATFORM)
+    )
 
     # build it
     verify_cli_command([pixi, "install", "--manifest-path", minimal_workspace / "pixi.toml"])
