@@ -242,6 +242,91 @@ def test_trampoline_migrate_with_newer_trampoline(
     )
 
 
+def test_trampoline_install_should_only_migrate_own_environment(
+    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+
+    # now run install again, this time it should migrate the script to the new trampoline
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_channel,
+            "dummy-trampoline",
+            "dummy-trampoline-2",
+        ],
+        env=env,
+    )
+
+    dummy_trampoline = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
+    dummy_trampoline_2 = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline-2")
+    dummy_trampoline_json = (
+        tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
+    )
+    dummy_trampoline_2_json = (
+        tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline-2.json"
+    )
+
+    assert dummy_trampoline.is_file()
+    assert is_binary(dummy_trampoline)
+    assert dummy_trampoline_2.is_file()
+    assert is_binary(dummy_trampoline_2)
+    assert dummy_trampoline_2.read_bytes() == dummy_trampoline.read_bytes()
+    assert dummy_trampoline_json.is_file()
+    assert dummy_trampoline_2_json.is_file()
+
+    original_trampoline = dummy_trampoline.read_bytes()
+
+    # Break both dummy-trampoline and dummy-trampoline-2
+    # Since they are hardlinked, they have now the same content
+    broken_trampoline = b"\x00\x01\x02\x03\x04"
+    dummy_trampoline.write_bytes(broken_trampoline)
+
+    original_dummy_trampoline_configuration = break_configuration(dummy_trampoline_json)
+    original_dummy_trampoline_2_configuration = break_configuration(dummy_trampoline_2_json)
+    broken_dummy_trampoline_2_configuration = json.loads(dummy_trampoline_2_json.read_text())
+
+    # Install "dummy-trampoline" package, this should update its trampoline and configuration
+    # However, it shouldn't touch trampoline nor configuration of dummy-trampoline-2
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_channel,
+            "dummy-trampoline",
+        ],
+        env=env,
+    )
+    assert dummy_trampoline.read_bytes() == original_trampoline
+    assert dummy_trampoline_2.read_bytes() == broken_trampoline
+    assert json.loads(dummy_trampoline_json.read_text()) == original_dummy_trampoline_configuration
+    assert (
+        json.loads(dummy_trampoline_2_json.read_text()) == broken_dummy_trampoline_2_configuration
+    )
+
+    # run sync, all trampolines and configurations should be updated
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "sync",
+        ],
+        env=env,
+    )
+
+    assert dummy_trampoline.read_bytes() == original_trampoline
+    assert dummy_trampoline_2.read_bytes() == original_trampoline
+    assert json.loads(dummy_trampoline_json.read_text()) == original_dummy_trampoline_configuration
+    assert (
+        json.loads(dummy_trampoline_2_json.read_text()) == original_dummy_trampoline_2_configuration
+    )
+
+
 def test_trampoline_migrate_with_newer_configuration(
     pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:

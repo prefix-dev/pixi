@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use indexmap::IndexSet;
 use pixi_toml::TomlEnum;
-use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
+use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
 use serde::Deserialize;
 use toml_span::{DeserError, Value};
 use url::Url;
@@ -66,6 +66,9 @@ pub struct Workspace {
 
     /// Build variants
     pub build_variants: Targets<Option<HashMap<String, Vec<String>>>>,
+
+    /// Version requirement for pixi itself
+    pub requires_pixi: Option<VersionSpec>,
 }
 
 #[derive(

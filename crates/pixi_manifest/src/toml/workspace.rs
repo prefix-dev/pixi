@@ -3,12 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use indexmap::{IndexMap, IndexSet};
-use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
-use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
-use url::Url;
-
 use crate::toml::manifest::ExternalWorkspaceProperties;
 use crate::{
     error::GenericError,
@@ -18,6 +12,12 @@ use crate::{
     workspace::ChannelPriority,
     PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
 };
+use indexmap::{IndexMap, IndexSet};
+use pixi_spec::TomlVersionSpecStr;
+use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
+use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
+use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
+use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct TomlWorkspaceTarget {
@@ -49,6 +49,7 @@ pub struct TomlWorkspace {
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
+    pub requires_pixi: Option<VersionSpec>,
 
     pub span: Span,
 }
@@ -140,6 +141,7 @@ impl TomlWorkspace {
                     .map(|(k, v)| (k, v.build_variants))
                     .collect(),
             ),
+            requires_pixi: self.requires_pixi,
         })
         .with_warnings(warnings))
     }
@@ -192,6 +194,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let build_variants = th
             .optional::<TomlHashMap<_, _>>("build-variants")
             .map(TomlHashMap::into_inner);
+        let requires_pixi = th
+            .optional::<TomlVersionSpecStr>("requires-pixi")
+            .map(TomlVersionSpecStr::into_inner);
 
         th.finalize(None)?;
 
@@ -215,6 +220,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             preview,
             target: target.unwrap_or_default(),
             build_variants,
+            requires_pixi,
             span: value.span,
         })
     }

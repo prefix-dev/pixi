@@ -8,6 +8,7 @@ use std::{
 
 use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
+use rattler_conda_types::VersionSpec;
 use thiserror::Error;
 use toml_span::Deserialize;
 
@@ -165,6 +166,13 @@ pub enum ExplicitManifestError {
 
     #[error(transparent)]
     InvalidManifest(ProvenanceError),
+
+    #[error(transparent)]
+    ParseVersionError(#[from] rattler_conda_types::ParseVersionError),
+
+    /// The pixi version could not match the minimum requirement.
+    #[error("workspace requires pixi '{}', but I am {}", .requires_pixi, consts::PIXI_VERSION)]
+    SelfVersionMatchError { requires_pixi: VersionSpec },
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -391,6 +399,7 @@ impl WorkspaceDiscoverer {
                         continue;
                     }
 
+                    // Parse as a pixi.toml manifest
                     let manifest = match PyProjectManifest::deserialize(&mut toml) {
                         Ok(manifest) => manifest,
                         Err(err) => {
