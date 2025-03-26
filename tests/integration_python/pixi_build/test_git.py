@@ -131,9 +131,14 @@ def test_build_git_source_deps_from_branch(
     # Replace the rich_example entry using string manipulation
     original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = '[dependencies]\nrich_example = { "git" = "file:///", "branch" = "test-branch"}'
+
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
         workspace_manifest.read_text().replace("file:///", target_git_url)
+    )
+
+    workspace_manifest.write_text(
+        workspace_manifest.read_text().replace("CURRENT_PLATFORM", CURRENT_PLATFORM)
     )
 
     # build it
@@ -257,6 +262,10 @@ def test_build_git_source_deps_from_tag(
     workspace_manifest.write_text(workspace_manifest.read_text().replace(original, replacement))
     workspace_manifest.write_text(
         workspace_manifest.read_text().replace("file:///", target_git_dir.as_uri())
+    )
+
+    workspace_manifest.write_text(
+        workspace_manifest.read_text().replace("CURRENT_PLATFORM", CURRENT_PLATFORM)
     )
 
     # build it

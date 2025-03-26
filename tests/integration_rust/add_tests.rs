@@ -902,26 +902,22 @@ async fn add_pypi_git() {
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{}"]
+platforms = ["{platform}"]
 
 "#,
-            Platform::current()
+            platform = Platform::current()
         )
         .as_str(),
     )
     .unwrap();
 
     // Add python
-    pixi.add("python")
-        // .with_no_lockfile_update(true)
-        .await
-        .unwrap();
+    pixi.add("python").await.unwrap();
 
     // Add a package
     pixi.add("boltons")
         .set_pypi(true)
         .with_git_url(Url::parse("https://github.com/mahmoud/boltons.git").unwrap())
-        // .with_no_lockfile_update(true)
         .await
         .unwrap();
 
@@ -948,8 +944,6 @@ platforms = ["{}"]
     ]}, {
         insta::assert_snapshot!(boltons.location);
     });
-
-    // eprintln!("lockfile {:?} ", pixi.lock_file().await.unwrap());
 }
 
 #[tokio::test]
