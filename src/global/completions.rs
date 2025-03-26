@@ -1,7 +1,9 @@
+/// This module contains code facilitating shell completion support for `pixi global`
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexSet;
 use itertools::Itertools;
+use miette::Context;
 use miette::IntoDiagnostic;
 use pixi_config::pixi_home;
 use rattler_shell::shell::{Bash, Fish, Shell as _, Zsh};
@@ -53,14 +55,7 @@ impl Completion {
         &self.name
     }
 
-    fn exposed_file_name(source: &Path) -> String {
-        source
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string()
-    }
-
+    /// Install the shell completion
     #[cfg(unix)]
     pub async fn install(&self) -> miette::Result<Option<StateChange>> {
         // Ensure the parent directory of the destination exists
@@ -85,6 +80,7 @@ impl Completion {
         Ok(None)
     }
 
+    /// Remove the shell completion
     pub async fn remove(&self) -> miette::Result<StateChange> {
         tokio_fs::remove_file(&self.destination)
             .await
@@ -94,53 +90,82 @@ impl Completion {
     }
 }
 
+/// Generates a list of shell completion scripts for a given executable name.
+///
+/// This function checks for the existence of shell completion scripts for Bash, Zsh, and Fish
+/// in the specified `prefix_root` directory. If the scripts exist, it creates a list of
+/// `Completion` objects that represent the source and destination paths for these scripts.
 pub fn contained_completions(
     prefix_root: &Path,
     name: &str,
     completions_dir: &CompletionsDir,
-) -> Vec<Completion> {
+) -> miette::Result<Vec<Completion>> {
     let mut completion_scripts = Vec::new();
 
     let zsh_name = format!("_{name}");
     let fish_name = format!("{name}.fish");
 
-    let bash_path = prefix_root
-        .join(Bash.completion_script_location().expect("is set"))
-        .join(name);
-    let zsh_path = prefix_root
-        .join(Zsh.completion_script_location().expect("is set"))
-        .join(zsh_name);
-    let fish_path = prefix_root
-        .join(Fish.completion_script_location().expect("is set"))
-        .join(fish_name);
+    let bash_path =
+        prefix_root
+            .join(Bash.completion_script_location().wrap_err_with(|| {
+                miette::miette!("Bash needs to have a completion script location")
+            })?)
+            .join(name);
+    let zsh_path =
+        prefix_root
+            .join(Zsh.completion_script_location().wrap_err_with(|| {
+                miette::miette!("Zsh needs to have a completion script location")
+            })?)
+            .join(zsh_name);
+    let fish_path =
+        prefix_root
+            .join(Fish.completion_script_location().wrap_err_with(|| {
+                miette::miette!("Fish needs to have a completion script location")
+            })?)
+            .join(fish_name);
 
     if bash_path.exists() {
-        let destination = completions_dir
-            .path()
-            .join("bash")
-            .join(Completion::exposed_file_name(&bash_path));
+        let destination =
+            completions_dir
+                .path()
+                .join("bash")
+                .join(bash_path.file_name().wrap_err_with(|| {
+                    miette::miette!("Bash completion path needs to have a file name")
+                })?);
 
         completion_scripts.push(Completion::new(name.to_string(), bash_path, destination));
     }
 
     if zsh_path.exists() {
-        let destination = completions_dir
-            .path()
-            .join("zsh")
-            .join(Completion::exposed_file_name(&zsh_path));
+        let destination =
+            completions_dir
+                .path()
+                .join("zsh")
+                .join(zsh_path.file_name().wrap_err_with(|| {
+                    miette::miette!("Zsh completion path needs to have a file name")
+                })?);
         completion_scripts.push(Completion::new(name.to_string(), zsh_path, destination));
     }
 
     if fish_path.exists() {
-        let destination = completions_dir
-            .path()
-            .join("fish")
-            .join(Completion::exposed_file_name(&fish_path));
+        let destination =
+            completions_dir
+                .path()
+                .join("fish")
+                .join(fish_path.file_name().wrap_err_with(|| {
+                    miette::miette!("Fish completion path needs to have a file name")
+                })?);
         completion_scripts.push(Completion::new(name.to_string(), fish_path, destination));
     }
-    completion_scripts
+    Ok(completion_scripts)
 }
 
+/// Synchronizes the shell completion scripts for the given executable names.
+///
+/// This function determines which shell completion scripts need to be removed or added
+/// based on the provided `exposed_mappings` and `executable_names`. It compares the
+/// current state of the completion scripts in the `completions_dir` with the expected
+/// state derived from the `exposed_mappings`.
 pub(crate) async fn completions_sync_status(
     exposed_mappings: IndexSet<Mapping>,
     executable_names: Vec<String>,
@@ -157,7 +182,7 @@ pub(crate) async fn completions_sync_status(
         .collect_vec();
 
     for name in executable_names {
-        let completions = contained_completions(prefix_root, &name, completions_dir);
+        let completions = contained_completions(prefix_root, &name, completions_dir)?;
 
         if completions.is_empty() {
             continue;
