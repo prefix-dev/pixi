@@ -230,7 +230,7 @@ async fn setup_environment(
         let prefix = project.environment_prefix(env_name).await?;
         for (package_name, _) in specs.iter() {
             let prefix_record = prefix.find_designated_package(package_name).await?;
-            if contains_menuinst_document(&prefix_record) {
+            if contains_menuinst_document(&prefix_record, prefix.root()) {
                 project.manifest.add_shortcut(env_name, package_name)?;
             }
         }

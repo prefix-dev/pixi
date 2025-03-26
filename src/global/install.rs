@@ -105,7 +105,7 @@ pub(crate) async fn create_executable_trampolines(
     let mut activation_variables = prefix.run_activation().await?;
     let path_after_activation = activation_variables
         .remove("PATH")
-        .ok_or_else(|| miette::miette!("Activation variables need to contain PATH"))?;
+        .unwrap_or_else(|| path_current.clone());
 
     let path_diff = path_diff(&path_current, &path_after_activation)?;
 

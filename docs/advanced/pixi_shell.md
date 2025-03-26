@@ -23,6 +23,8 @@ For example, if your `~/.bashrc` contains code like the following, `pixi shell` 
 wsl.exe -d wsl-vpnkit --cd /app service wsl-vpnkit start
 
 # on macOS or Linux, some users start fish or nushell from their `bashrc`
+# If you wish to start an alternative shell from bash, it's better to do so
+# from `~/.bash_profile` or `~/.profile`
 if [[ $- = *i* ]]; then
   exec ~/.pixi/bin/fish
 fi
