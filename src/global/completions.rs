@@ -35,6 +35,7 @@ impl CompletionsDir {
 #[derive(Debug, Clone)]
 pub struct Completion {
     name: String,
+    #[allow(dead_code)] // This member variable is not used on Windows
     source: PathBuf,
     destination: PathBuf,
 }
@@ -60,26 +61,28 @@ impl Completion {
             .to_string()
     }
 
+    #[cfg(unix)]
     pub async fn install(&self) -> miette::Result<Option<StateChange>> {
-        if cfg!(unix) {
-            // Ensure the parent directory of the destination exists
-            if let Some(parent) = self.destination.parent() {
-                tokio_fs::create_dir_all(parent).await.into_diagnostic()?;
-            }
-
-            // Attempt to create the symlink
-            tokio_fs::symlink(&self.source, &self.destination)
-                .await
-                .into_diagnostic()?;
-
-            Ok(Some(StateChange::AddedCompletion(self.name.clone())))
-        } else {
-            tracing::info!(
-                "Symlinks are only supported on unix-like platforms. Skipping completion installation for {}.",
-                self.name
-            );
-            Ok(None)
+        // Ensure the parent directory of the destination exists
+        if let Some(parent) = self.destination.parent() {
+            tokio_fs::create_dir_all(parent).await.into_diagnostic()?;
         }
+
+        // Attempt to create the symlink
+        tokio_fs::symlink(&self.source, &self.destination)
+            .await
+            .into_diagnostic()?;
+
+        Ok(Some(StateChange::AddedCompletion(self.name.clone())))
+    }
+
+    #[cfg(not(unix))]
+    pub async fn install(&self) -> miette::Result<Option<StateChange>> {
+        tracing::info!(
+            "Symlinks are only supported on unix-like platforms. Skipping completion installation for {}.",
+            self.name
+        );
+        Ok(None)
     }
 
     pub async fn remove(&self) -> miette::Result<StateChange> {

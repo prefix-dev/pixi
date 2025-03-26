@@ -354,6 +354,7 @@ pub(crate) enum StateChange {
     UpdatedEnvironment(EnvironmentUpdate),
     InstalledShortcut(String),
     UninstalledShortcut(String),
+    #[allow(dead_code)] // This variant is not used on Windows
     AddedCompletion(String),
     RemovedCompletion(String),
 }
