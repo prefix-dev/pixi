@@ -11,7 +11,7 @@ use std::{
 
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
-use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -20,7 +20,7 @@ use pixi_build_frontend::ToolContext;
 use pixi_consts::consts;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_record::{ParseLockFileError, PinnedSourceSpec, PixiRecord};
 use pixi_uv_conversions::{
     to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
     ConversionError,
@@ -161,26 +161,26 @@ impl Workspace {
         if lock_file_path.is_file() {
             // Spawn a background task because loading the file might be IO bound.
             tokio::task::spawn_blocking(move || {
-            LockFile::from_path(&lock_file_path)
-                .map_err(|err| match err {
-                    ParseCondaLockError::IncompatibleVersion{ lock_file_version, max_supported_version} => {
-                        miette::miette!(
+                LockFile::from_path(&lock_file_path)
+                    .map_err(|err| match err {
+                        ParseCondaLockError::IncompatibleVersion { lock_file_version, max_supported_version } => {
+                            miette::miette!(
                             help="Please update pixi to the latest version and try again.",
                             "The lock file version is {}, but only up to including version {} is supported by the current version.",
                             lock_file_version, max_supported_version
                         )
-                    }
-                    _ => miette::miette!(err),
-                })
-                .wrap_err_with(|| {
-                    format!(
-                        "Failed to load lock file from `{}`",
-                        lock_file_path.display()
-                    )
-                })
-        })
-            .await
-            .unwrap_or_else(|e| Err(e).into_diagnostic())
+                        }
+                        _ => miette::miette!(err),
+                    })
+                    .wrap_err_with(|| {
+                        format!(
+                            "Failed to load lock file from `{}`",
+                            lock_file_path.display()
+                        )
+                    })
+            })
+                .await
+                .unwrap_or_else(|e| Err(e).into_diagnostic())
         } else {
             Ok(LockFile::default())
         }
@@ -1726,49 +1726,88 @@ async fn spawn_solve_conda_environment_task(
             let source_futures = FuturesUnordered::new();
             for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
                 // Create a metadata reporter if it doesn't exist yet.
-                let metadata_reporter = metadata_progress.get_or_insert_with(|| {
-                    Arc::new(CondaMetadataProgress::new(
-                        &pb.pb,
-                        source_specs.len() as u64,
-                    ))
-                });
-                let source_reporter = source_progress.get_or_insert_with(|| {
-                    Arc::new(SourceCheckoutReporter::new(
-                        root_pb.clone(),
-                        global_multi_progress(),
-                    ))
-                });
+                let metadata_reporter = metadata_progress
+                    .get_or_insert_with(|| {
+                        Arc::new(CondaMetadataProgress::new(
+                            &pb.pb,
+                            source_specs.len() as u64,
+                        ))
+                    })
+                    .clone();
+                let source_reporter = source_progress
+                    .get_or_insert_with(|| {
+                        Arc::new(SourceCheckoutReporter::new(
+                            root_pb.clone(),
+                            global_multi_progress(),
+                        ))
+                    })
+                    .clone();
 
-                source_futures.push(
-                    build_context
+                let build_context = &build_context;
+                let channel_urls = &channel_urls;
+                let virtual_packages = virtual_packages.clone();
+                let extract_source_metadata = async move {
+                    // A helper struct to pass along the diagnostics from the BuildError.
+                    #[derive(Debug, Error, Diagnostic)]
+                    enum ExtractSourceMetadataError {
+                        #[error("failed to extract metadata for package '{name}'")]
+                        BuildError {
+                            name: String,
+                            #[source]
+                            #[diagnostic_source]
+                            error: BuildError,
+                        },
+                        #[error("the package '{name}' is not provided by the project located at '{}'", &.pinned_source)]
+                        PackageMetadataNotFound {
+                            name: String,
+                            pinned_source: Box<PinnedSourceSpec>,
+                            #[help]
+                            help: String,
+                        }
+                    }
+
+                    match build_context
                         .extract_source_metadata(
                             source_spec,
-                            &channel_urls,
+                            channel_urls,
                             platform,
                             virtual_packages.clone(),
                             platform,
-                            virtual_packages.clone(),
-                            metadata_reporter.clone(),
-                            Some(source_reporter.clone()),
+                            virtual_packages,
+                            metadata_reporter,
+                            Some(source_reporter),
                             build_id,
                         )
-                        .map_err(|error| {
-                            // A helper struct to pass along the diagnostics from the BuildError.
-                            #[derive(Debug, Error, Diagnostic)]
-                            #[error("failed to extract metadata for package '{name}'")]
-                            struct ExtractSourceError {
-                                name: String,
-                                #[source]
-                                #[diagnostic_source]
-                                error: BuildError,
+                        .await
+                    {
+                        Ok(source_metadata) => {
+                            // Make sure that a package with the name defined in spec is available from the backend.
+                            if !source_metadata.records.iter().any(|record| &record.package_record.name == name) {
+                                Err(ExtractSourceMetadataError::PackageMetadataNotFound {
+                                    name: name.as_source().to_string(),
+                                    pinned_source: Box::new(source_metadata.source.pinned),
+                                    help: source_metadata
+                                        .records
+                                        .into_iter()
+                                        .map(|record| (strsim::jaro(record.package_record.name.as_normalized(), name.as_normalized()), record))
+                                        .max_by(|(score_a, _), (score_b, _)| score_a.partial_cmp(score_b).unwrap_or(std::cmp::Ordering::Equal))
+                                        .map(|(_, record)| record)
+                                        .map_or_else(|| String::from("No packages are provided by the build-backend"), |record| format!("The build backend does provide other packages, did you mean '{}'?", record.package_record.name.as_normalized())),
+                                })
+                            } else {
+                                Ok(source_metadata)
                             }
-
-                            ExtractSourceError {
+                        },
+                        Err(error) => {
+                            Err(ExtractSourceMetadataError::BuildError {
                                 name: name.as_source().to_string(),
                                 error,
-                            }
-                        }),
-                );
+                            })
+                        }
+                    }
+                };
+
+                source_futures.push(extract_source_metadata);
 
                 // Add a dependency to the source package itself.
                 // TODO: We also need to make sure that only the source package is used when
