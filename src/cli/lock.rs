@@ -6,7 +6,7 @@ use crate::{
     diff::{LockFileDiff, LockFileJsonDiff},
     environment::LockFileUsage,
     lock_file::UpdateLockFileOptions,
-    RequiresPixiPolicy, WorkspaceLocator,
+    WorkspaceLocator,
 };
 
 /// Solve environment and update the lock file without installing the environments.
@@ -24,7 +24,6 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_pixi_version_check_policy(RequiresPixiPolicy::ERROR)
         .locate()?;
 
     // Save the original lockfile to compare with the new one.

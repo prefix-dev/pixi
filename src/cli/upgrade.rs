@@ -16,7 +16,7 @@ use crate::{
     cli::cli_config::WorkspaceConfig,
     diff::LockFileJsonDiff,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
-    RequiresPixiPolicy, WorkspaceLocator,
+    WorkspaceLocator,
 };
 
 /// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
@@ -66,7 +66,6 @@ pub struct UpgradeSpecsArgs {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_pixi_version_check_policy(RequiresPixiPolicy::ERROR)
         .locate()?
         .with_cli_config(args.config.clone());
 

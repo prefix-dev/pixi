@@ -1,7 +1,7 @@
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::environment::get_update_lock_file_and_prefix;
 use crate::lock_file::{ReinstallPackages, UpdateMode};
-use crate::{RequiresPixiPolicy, UpdateLockFileOptions, WorkspaceLocator};
+use crate::{UpdateLockFileOptions, WorkspaceLocator};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -44,11 +44,6 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
-        .with_pixi_version_check_policy(if args.lock_file_usage.locked {
-            RequiresPixiPolicy::ERROR
-        } else {
-            RequiresPixiPolicy::default()
-        })
         .locate()?
         .with_cli_config(args.config);
 

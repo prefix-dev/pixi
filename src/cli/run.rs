@@ -27,7 +27,7 @@ use crate::{
         InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
     },
     workspace::{errors::UnsupportedPlatformError, Environment},
-    RequiresPixiPolicy, Workspace, WorkspaceLocator,
+    Workspace, WorkspaceLocator,
 };
 
 use super::cli_config::LockFileUpdateConfig;
@@ -99,11 +99,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Load the workspace
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_pixi_version_check_policy(if args.lock_file_update_config.lock_file_usage.locked {
-            RequiresPixiPolicy::ERROR
-        } else {
-            RequiresPixiPolicy::default()
-        })
         .locate()?
         .with_cli_config(cli_config);
 

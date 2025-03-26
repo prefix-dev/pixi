@@ -1,6 +1,5 @@
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::workspace::WorkspaceLocatorError;
-use crate::RequiresPixiPolicy;
 use crate::WorkspaceLocator;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
@@ -199,7 +198,7 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
         .with_emit_warnings(false) // No reason to emit warnings
         .with_consider_environment(true)
         .with_search_start(common_args.workspace_config.workspace_locator_start())
-        .with_pixi_version_check_policy(RequiresPixiPolicy::IGNORE)
+        .with_ignore_pixi_version_check(true)
         .locate();
     match workspace {
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {

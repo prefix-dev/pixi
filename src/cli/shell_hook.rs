@@ -18,7 +18,7 @@ use crate::{
     lock_file::ReinstallPackages,
     prompt,
     workspace::{get_activated_environment_variables, Environment, HasWorkspaceRef},
-    RequiresPixiPolicy, UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    UpdateLockFileOptions, Workspace, WorkspaceLocator,
 };
 
 use super::cli_config::LockFileUpdateConfig;
@@ -150,11 +150,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.config.clone().into());
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
-        .with_pixi_version_check_policy(if args.lock_file_update_config.lock_file_usage.locked {
-            RequiresPixiPolicy::ERROR
-        } else {
-            RequiresPixiPolicy::default()
-        })
         .locate()?
         .with_cli_config(config);
 

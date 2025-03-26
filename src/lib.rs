@@ -20,4 +20,4 @@ mod rlimit;
 pub mod utils;
 
 pub use lock_file::UpdateLockFileOptions;
-pub use workspace::{DependencyType, RequiresPixiPolicy, Workspace, WorkspaceLocator};
+pub use workspace::{DependencyType, Workspace, WorkspaceLocator};

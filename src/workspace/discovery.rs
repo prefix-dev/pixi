@@ -32,17 +32,6 @@ pub enum DiscoveryStart {
     ExplicitManifest(PathBuf),
 }
 
-/// Defines the action when the pixi requirement is not satisfied.
-#[derive(Clone, Default, PartialEq)]
-pub enum RequiresPixiPolicy {
-    ERROR,
-
-    #[default]
-    WARN, // now warn is default
-
-    IGNORE,
-}
-
 /// A helper struct that helps discover the workspace root and potentially the
 /// "current" package.
 #[derive(Default)]
@@ -51,7 +40,7 @@ pub struct WorkspaceLocator {
     with_closest_package: bool,
     emit_warnings: bool,
     consider_environment: bool,
-    pixi_version_check_policy: RequiresPixiPolicy,
+    ignore_pixi_version_check: bool,
     only_parse_requires_pixi: bool,
 }
 
@@ -137,12 +126,9 @@ impl WorkspaceLocator {
 
     /// When the current version conflicts with the workspace requirement,
     /// whether to generate an error.
-    pub fn with_pixi_version_check_policy(
-        self,
-        pixi_version_check_policy: RequiresPixiPolicy,
-    ) -> Self {
+    pub fn with_ignore_pixi_version_check(self, ignore_pixi_version_check: bool) -> Self {
         Self {
-            pixi_version_check_policy,
+            ignore_pixi_version_check,
             ..self
         }
     }
@@ -234,18 +220,8 @@ impl WorkspaceLocator {
 
         let workspace = Workspace::from_manifests(discovered_manifests);
 
-        if self.pixi_version_check_policy != RequiresPixiPolicy::IGNORE {
-            if let Err(e) = workspace.verify_current_pixi_meets_requirement() {
-                if let ExplicitManifestError::SelfVersionMatchError { .. } = e {
-                    if self.pixi_version_check_policy == RequiresPixiPolicy::WARN {
-                        tracing::warn!("{}", e);
-                    } else {
-                        return Err(e)?;
-                    }
-                } else {
-                    return Err(e)?;
-                }
-            }
+        if !self.ignore_pixi_version_check {
+            workspace.verify_current_pixi_meets_requirement()?;
         }
 
         Ok(workspace)

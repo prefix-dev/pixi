@@ -6,7 +6,7 @@ use std::{
 use crate::{
     cli::cli_config::{LockFileUpdateConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
-    RequiresPixiPolicy, WorkspaceLocator,
+    WorkspaceLocator,
 };
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
@@ -165,11 +165,7 @@ fn render_env_platform(
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_pixi_version_check_policy(if args.lock_file_update_config.lock_file_usage.locked {
-            RequiresPixiPolicy::ERROR
-        } else {
-            RequiresPixiPolicy::default()
-        })
+        .with_ignore_pixi_version_check(true)
         .locate()?
         .with_cli_config(args.config.clone());
 
