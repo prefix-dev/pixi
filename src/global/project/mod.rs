@@ -881,9 +881,15 @@ impl Project {
 
         tracing::debug!("Verify that the completions are in sync with the environment");
         let completions_dir = CompletionsDir::from_env().await?;
+        let execs_all = self
+            .executables_of_all_dependencies(env_name)
+            .await?
+            .into_iter()
+            .map(|exec| exec.name)
+            .collect();
         let (completions_to_remove, completions_to_add) = completions_sync_status(
             environment.exposed.clone(),
-            prefix_records.clone(),
+            execs_all,
             prefix.root(),
             &completions_dir,
         )
@@ -1230,12 +1236,17 @@ impl Project {
             env_name.fancy_display()
         ))?;
         let prefix = self.environment_prefix(env_name).await?;
-        let prefix_records = prefix.find_installed_packages()?;
         let completions_dir = CompletionsDir::from_env().await?;
+        let execs_all = self
+            .executables_of_all_dependencies(env_name)
+            .await?
+            .into_iter()
+            .map(|exec| exec.name)
+            .collect();
 
         let (completions_to_remove, completions_to_add) = completions_sync_status(
             environment.exposed.clone(),
-            prefix_records.clone(),
+            execs_all,
             prefix.root(),
             &completions_dir,
         )

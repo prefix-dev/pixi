@@ -4,7 +4,6 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::pixi_home;
-use rattler_conda_types::PrefixRecord;
 use rattler_shell::shell::{Bash, Fish, Shell as _, Zsh};
 
 use super::Mapping;
@@ -33,6 +32,7 @@ impl CompletionsDir {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct Completion {
     name: String,
     source: PathBuf,
@@ -142,12 +142,12 @@ pub fn contained_completions(
 
 pub(crate) async fn completions_sync_status(
     exposed_mappings: IndexSet<Mapping>,
-    prefix_records: Vec<PrefixRecord>,
+    executable_names: Vec<String>,
     prefix_root: &Path,
     completions_dir: &CompletionsDir,
 ) -> miette::Result<(Vec<Completion>, Vec<Completion>)> {
-    let mut completions_to_install = Vec::new();
-    let mut completions_to_uninstall = Vec::new();
+    let mut completions_to_add = Vec::new();
+    let mut completions_to_remove = Vec::new();
 
     let exposed_names = exposed_mappings
         .into_iter()
@@ -155,29 +155,27 @@ pub(crate) async fn completions_sync_status(
         .map(|name| name.executable_name().to_string())
         .collect_vec();
 
-    for record in prefix_records {
-        let name = record
-            .repodata_record
-            .package_record
-            .name
-            .as_normalized()
-            .to_string();
+    for name in executable_names {
         let completions = contained_completions(prefix_root, &name, completions_dir);
+
+        if completions.is_empty() {
+            continue;
+        }
 
         if exposed_names.contains(&name) {
             for completion in completions {
                 if !completion.destination.is_file() {
-                    completions_to_install.push(completion);
+                    completions_to_add.push(completion);
                 }
             }
         } else {
             for completion in completions {
                 if completion.destination.is_file() {
-                    completions_to_uninstall.push(completion);
+                    completions_to_remove.push(completion);
                 }
             }
         }
     }
 
-    Ok((completions_to_install, completions_to_uninstall))
+    Ok((completions_to_remove, completions_to_add))
 }

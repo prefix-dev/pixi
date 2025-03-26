@@ -41,7 +41,7 @@ def test_sync_exposes_completions(
     verify_cli_command(
         [pixi, "global", "sync"],
         env=env,
-        stdout_contains="Exposed completion ripgrep-completions of environment test.",
+        stderr_contains="Exposed completion rg of environment test.",
     )
     assert rg.is_file()
 
@@ -56,7 +56,7 @@ def test_sync_exposes_completions(
         assert fish.is_file()
 
     # If the exposed executable is removed, the same should happen for the completions
-    verify_cli_command([pixi, "global", "expose", "remove", "--environment", "test", "rg"], env=env)
+    verify_cli_command([pixi, "global", "expose", "remove", "rg"], env=env)
     assert not bash.is_file()
     assert not zsh.is_file()
     assert not fish.is_file()
