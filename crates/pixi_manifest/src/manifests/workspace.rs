@@ -2900,7 +2900,7 @@ bar = "*"
 
         assert_eq!(
             manifest.workspace.requires_pixi,
-            VersionSpec::from_str("=0.1.*", Lenient).ok()
+            VersionSpec::from_str("==0.1.0", Lenient).ok()
         );
 
         let contents_no = r#"
