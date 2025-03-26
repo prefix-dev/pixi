@@ -39,24 +39,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_ignore_pixi_version_check(true);
 
     match args.command {
-        Command::Get => {
-            get::execute(
-                workspace_locator
-                    .with_only_parse_requires_pixi(true)
-                    .locate()?,
-            )
-            .await?
-        }
+        Command::Get => get::execute(workspace_locator.locate()?).await?,
         Command::Set(args) => set::execute(workspace_locator.locate()?, args).await?,
         Command::Unset => unset::execute(workspace_locator.locate()?).await?,
-        Command::Verify => {
-            verify::execute(
-                workspace_locator
-                    .with_only_parse_requires_pixi(true)
-                    .locate()?,
-            )
-            .await?
-        }
+        Command::Verify => verify::execute(workspace_locator.locate()?).await?,
     }
 
     Ok(())

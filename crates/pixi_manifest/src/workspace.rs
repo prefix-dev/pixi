@@ -67,7 +67,7 @@ pub struct Workspace {
     /// Build variants
     pub build_variants: Targets<Option<HashMap<String, Vec<String>>>>,
 
-    /// pixi self requirement
+    /// Version requirement for pixi itself
     pub requires_pixi: Option<VersionSpec>,
 }
 

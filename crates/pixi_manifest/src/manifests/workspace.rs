@@ -4,7 +4,7 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic, SourceCode};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ParseStrictness::Lenient, Platform, Version, VersionSpec};
+use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
 use toml_edit::Value;
 
 use crate::manifests::document::ManifestDocument;
@@ -54,29 +54,6 @@ impl WorkspaceManifest {
             })
             .map(|manifests| manifests.0)
             .map_err(|e| WithSourceCode { source, error: e })
-    }
-
-    /// Generate a lean WorkspaceManifest with only "requires-pixi" field.
-    pub fn lean_for_requires_pixi(
-        requires_pixi_raw: Option<&str>,
-    ) -> Result<Self, Box<WithSourceCode<TomlError, String>>> {
-        const WORKSPACE_LEAN: &str = r#"
-[project]
-name = ""
-channels = []
-"#;
-        let toml = match requires_pixi_raw {
-            None => WORKSPACE_LEAN.to_string(),
-            Some(requires_pixi_raw) => format!(
-                "{}requires-pixi = \"{}\"",
-                WORKSPACE_LEAN, requires_pixi_raw
-            ),
-        };
-
-        match Self::from_toml_str(toml) {
-            Ok(s) => Ok(s),
-            Err(e) => Err(Box::new(e)),
-        }
     }
 
     /// Returns the default feature.
@@ -753,7 +730,7 @@ impl WorkspaceManifestMut<'_> {
         // Update in both the manifest and the toml
         self.workspace.workspace.requires_pixi = match version {
             Some(version) => Some(
-                VersionSpec::from_str(version, Lenient)
+                VersionSpec::from_str(version, Strict)
                     .into_diagnostic()
                     .context("could not convert to a valid version spec")?,
             ),
@@ -2917,7 +2894,7 @@ bar = "*"
         name = "foo"
         channels = []
         platforms = []
-        requires-pixi = "=0.1"
+        requires-pixi = "==0.1"
         "#;
         let manifest = parse_pixi_toml(contents).manifest;
 
@@ -2934,24 +2911,5 @@ bar = "*"
         "#;
         let manifest_no = parse_pixi_toml(contents_no).manifest;
         assert_eq!(manifest_no.workspace.requires_pixi, None);
-    }
-
-    #[test]
-    fn test_lean_requires_pixi() {
-        let w1 = WorkspaceManifest::lean_for_requires_pixi(None);
-        assert!(w1.is_ok());
-        let w1 = w1.unwrap();
-        assert_eq!(w1.workspace.requires_pixi, None);
-
-        let w2 = WorkspaceManifest::lean_for_requires_pixi(Some(">=1.2.3,<2"));
-        assert!(w2.is_ok());
-        let w2 = w2.unwrap();
-        assert_eq!(
-            w2.workspace.requires_pixi,
-            VersionSpec::from_str(">=1.2.3,<2", Lenient).ok()
-        );
-
-        let w3 = WorkspaceManifest::lean_for_requires_pixi(Some("..."));
-        assert!(w3.is_err());
     }
 }

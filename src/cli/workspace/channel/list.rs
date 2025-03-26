@@ -18,7 +18,6 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
     // Workspace without cli config as it shouldn't be needed here.
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_ignore_pixi_version_check(true)
         .locate()?;
 
     let channel_config = workspace.channel_config();

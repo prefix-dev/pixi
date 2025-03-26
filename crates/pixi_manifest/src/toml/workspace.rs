@@ -3,12 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use indexmap::{IndexMap, IndexSet};
-use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
-use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
-use url::Url;
-
 use crate::toml::manifest::ExternalWorkspaceProperties;
 use crate::{
     error::GenericError,
@@ -18,6 +12,12 @@ use crate::{
     workspace::ChannelPriority,
     PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
 };
+use indexmap::{IndexMap, IndexSet};
+use pixi_spec::TomlVersionSpecStr;
+use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
+use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
+use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
+use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct TomlWorkspaceTarget {
@@ -195,8 +195,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlHashMap<_, _>>("build-variants")
             .map(TomlHashMap::into_inner);
         let requires_pixi = th
-            .optional::<TomlFromStr<_>>("requires-pixi")
-            .map(TomlFromStr::into_inner);
+            .optional::<TomlVersionSpecStr>("requires-pixi")
+            .map(TomlVersionSpecStr::into_inner);
 
         th.finalize(None)?;
 
