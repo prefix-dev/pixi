@@ -211,6 +211,32 @@ channel-priority = "disabled"
     package = {version = "*", channel = "channel-name"}
     ```
 
+### `requires-pixi` (optional)
+
+The required version spec for `pixi` itself to resolve and build the project. If unset (**Default**),
+any version is ok. If set, it must be a string to a valid conda version spec, and the version of
+a running `pixi` must match the required spec before resolving or building the project, or exit with
+an error when not match.
+
+For example, with the following manifest, `pixi shell` will fail on `pixi 0.39.0`, but success after
+upgrading to `pixi 0.40.0`:
+
+```toml
+[workspace]
+requires-pixi = ">=0.40"
+```
+
+The upper bound can also be limit like this:
+
+```toml
+[workspace]
+requires-pixi = ">=0.40,<1.0"
+```
+
+!!! note
+    This option should be used to improve the reproducibility of building the project. A complicated
+    requirement spec may be an obstacle to setup the building environment.
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your project.
