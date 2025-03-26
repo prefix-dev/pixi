@@ -44,7 +44,7 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::{BuildContext, GlobHashCache, SourceCheckoutReporter},
+    build::{BuildContext, BuildError, GlobHashCache, SourceCheckoutReporter},
     environment::{
         self, read_environment_file, write_environment_file, CondaPrefixUpdated,
         CondaPrefixUpdaterBuilder, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
@@ -394,8 +394,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         let platform = environment.best_platform();
         let pixi_records = self
-            .pixi_records(environment, platform)
-            .into_diagnostic()?
+            .pixi_records(environment, platform)?
             .unwrap_or_default();
 
         let conda_reinstall_packages = match reinstall_packages {
@@ -415,8 +414,7 @@ impl<'p> LockFileDerivedData<'p> {
             .await?;
 
         let pypi_records = self
-            .pypi_records(environment, platform)
-            .into_diagnostic()?
+            .pypi_records(environment, platform)?
             .unwrap_or_default();
 
         // No `uv` support for WASM right now
@@ -482,7 +480,7 @@ impl<'p> LockFileDerivedData<'p> {
             &python_status,
             &environment.system_requirements(),
             &uv_context,
-            self.pypi_indexes(environment).into_diagnostic()?.as_ref(),
+            self.pypi_indexes(environment)?.as_ref(),
             env_variables,
             self.workspace.root(),
             environment.best_platform(),
@@ -577,8 +575,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the locked environment from the lock-file.
         let records = self
-            .pixi_records(environment, platform)
-            .into_diagnostic()?
+            .pixi_records(environment, platform)?
             .unwrap_or_default();
         // Update the conda prefix
         let CondaPrefixUpdated {
@@ -1179,10 +1176,7 @@ impl<'p> UpdateContext<'p> {
 
             // Determine the channel priority, if no channel priority is set we use the
             // default.
-            let channel_priority = source
-                .channel_priority()
-                .into_diagnostic()?
-                .unwrap_or_default();
+            let channel_priority = source.channel_priority()?.unwrap_or_default();
 
             for platform in ordered_platforms {
                 // Is there an existing pending task to solve the group?
@@ -1758,11 +1752,21 @@ async fn spawn_solve_conda_environment_task(
                             Some(source_reporter.clone()),
                             build_id,
                         )
-                        .map_err(|e| {
-                            Report::new(e).wrap_err(format!(
-                                "failed to extract metadata for '{}'",
-                                name.as_source()
-                            ))
+                        .map_err(|error| {
+                            // A helper struct to pass along the diagnostics from the BuildError.
+                            #[derive(Debug, Error, Diagnostic)]
+                            #[error("failed to extract metadata for package '{name}'")]
+                            struct ExtractSourceError {
+                                name: String,
+                                #[source]
+                                #[diagnostic_source]
+                                error: BuildError,
+                            }
+
+                            ExtractSourceError {
+                                name: name.as_source().to_string(),
+                                error,
+                            }
                         }),
                 );
 
