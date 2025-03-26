@@ -21,7 +21,7 @@ If it's present, `pixi` will install the shortcut for the `mss` package.
 If you want to package an application yourself that would benefit from this, you can check out the corresponding [documentation](https://conda.github.io/menuinst/).
 
 
-## Completions
+## Shell Completions
 
 When you work in a terminal, you are using a shell and shells can process completions of command line tools.
 That means if you have the tool `rg` and its completions installed on your system, type "rg -" and press `<TAB>`,
