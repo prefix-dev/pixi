@@ -109,3 +109,7 @@ def test_only_self_expose_have_completions(
 
     # By uninstalling the environment, the completions should be removed as well
     verify_cli_command([pixi, "global", "uninstall", "ripgrep-completions"], env=env)
+
+    assert not bash.is_file()
+    assert not zsh.is_file()
+    assert not fish.is_file()
