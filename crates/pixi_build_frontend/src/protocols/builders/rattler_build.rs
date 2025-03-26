@@ -37,6 +37,7 @@ pub enum FinishError {
 #[derive(thiserror::Error, Debug, Diagnostic)]
 pub enum ProtocolBuildError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FailedToBuildPixi(#[from] PixiProtocolBuildError),
 }
 

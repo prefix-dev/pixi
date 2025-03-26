@@ -65,8 +65,3 @@ Kernel](https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets
 `pixi-kernel` searches for a manifest file, either `pixi.toml` or `pyproject.toml`, in the same directory of your
 notebook or in any parent directory. When it finds one, it will use the environment specified in the manifest file to
 start the kernel and run your notebooks.
-
-### Binder
-
-If you just want to check a JupyterLab environment running in the cloud using `pixi-kernel`, you can visit
-[Binder](https://mybinder.org/v2/gh/renan-r-santos/pixi-kernel-binder/main?labpath=example.ipynb).

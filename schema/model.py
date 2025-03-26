@@ -163,6 +163,11 @@ class Workspace(StrictBaseModel):
     build_variants: dict[NonEmptyStr, list[str]] | None = Field(
         None, description="The build variants of the project"
     )
+    requires_pixi: NonEmptyStr | None = Field(
+        None,
+        description="The required version spec for pixi itself to resolve and build the project.",
+        examples=[">=0.40"],
+    )
 
 
 ########################
