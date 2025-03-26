@@ -565,6 +565,10 @@
          <lastmod>2025-03-26</lastmod>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/</loc>
+         <lastmod>2025-03-26</lastmod>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/system-requirements/</loc>
          <lastmod>2025-03-26</lastmod>
     </url>
@@ -630,6 +634,22 @@
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/platform/remove/</loc>
+         <lastmod>2025-03-26</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/get/</loc>
+         <lastmod>2025-03-26</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/set/</loc>
+         <lastmod>2025-03-26</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/unset/</loc>
+         <lastmod>2025-03-26</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/verify/</loc>
          <lastmod>2025-03-26</lastmod>
     </url>
     <url>
