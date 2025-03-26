@@ -1032,10 +1032,11 @@ impl Project {
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
-        // Install shortcuts
+        // Sync shortcuts
         state_changes |= self.sync_shortcuts(env_name).await?;
 
-        todo!("Install completions");
+        // Sync completions
+        state_changes |= self.sync_completions(env_name).await?;
 
         Ok(state_changes)
     }
@@ -1224,10 +1225,6 @@ impl Project {
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
 
-        let Some(env) = self.environment(env_name) else {
-            return Ok(state_changes);
-        };
-
         let environment = self.environment(env_name).ok_or(miette::miette!(
             "Environment {} not found in manifest.",
             env_name.fancy_display()
@@ -1244,10 +1241,18 @@ impl Project {
         )
         .await?;
 
-        // for mapping in &env.exposed {
-        //     println!("Mapping: {:?}", mapping);
+        for completion_to_remove in completions_to_remove {
+            let state_change = completion_to_remove.remove().await?;
+            state_changes.insert_change(env_name, state_change);
+        }
 
-        // }
+        for completion_to_add in completions_to_add {
+            let Some(state_change) = completion_to_add.install().await? else {
+                continue;
+            };
+
+            state_changes.insert_change(env_name, state_change);
+        }
 
         Ok(state_changes)
     }

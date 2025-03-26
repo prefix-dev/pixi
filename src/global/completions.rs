@@ -8,6 +8,7 @@ use rattler_conda_types::PrefixRecord;
 use rattler_shell::shell::{Bash, Fish, Shell as _, Zsh};
 
 use super::Mapping;
+use super::StateChange;
 use fs_err::tokio as tokio_fs;
 
 /// Global completions directory, default to `$HOME/.pixi/completions`
@@ -32,46 +33,18 @@ impl CompletionsDir {
     }
 }
 
-pub enum Shell {
-    Bash,
-    Zsh,
-    Fish,
-}
-
-impl Shell {
-    fn exposed_directory(&self) -> String {
-        match self {
-            Self::Bash => "bash".to_string(),
-            Self::Zsh => "zsh".to_string(),
-            Self::Fish => "fish".to_string(),
-        }
-    }
-}
-
 pub struct Completion {
     name: String,
     source: PathBuf,
     destination: PathBuf,
-    shell: Shell,
 }
 
 impl Completion {
-    pub fn new(
-        name: String,
-        source: PathBuf,
-        completions_dir: &CompletionsDir,
-        shell: Shell,
-    ) -> Self {
-        let destination = completions_dir
-            .path()
-            .join(shell.exposed_directory())
-            .join(Self::exposed_file_name(&source));
-
+    pub fn new(name: String, source: PathBuf, destination: PathBuf) -> Self {
         Self {
             name,
             source,
             destination,
-            shell,
         }
     }
 
@@ -85,6 +58,38 @@ impl Completion {
             .unwrap_or_default()
             .to_string_lossy()
             .to_string()
+    }
+
+    #[cfg(unix)]
+    pub async fn install(&self) -> miette::Result<Option<StateChange>> {
+        // Ensure the parent directory of the destination exists
+        if let Some(parent) = self.destination.parent() {
+            tokio_fs::create_dir_all(parent).await.into_diagnostic()?;
+        }
+
+        // Attempt to create the symlink
+        tokio_fs::symlink(&self.source, &self.destination)
+            .await
+            .into_diagnostic()?;
+
+        Ok(Some(StateChange::AddedCompletion(self.name.clone())))
+    }
+
+    #[cfg(not(unix))]
+    pub async fn install(&self) -> miette::Result<Option<StateChange>> {
+        tracing::info!(
+            "Symlinks are only supported on unix-like platforms. Skipping completion installation for {}.",
+            self.name
+        );
+        Ok(None)
+    }
+
+    pub async fn remove(&self) -> miette::Result<StateChange> {
+        tokio_fs::remove_file(&self.destination)
+            .await
+            .into_diagnostic()?;
+
+        Ok(StateChange::RemovedCompletion(self.name.clone()))
     }
 }
 
@@ -109,30 +114,28 @@ pub fn contained_completions(
         .join(fish_name);
 
     if bash_path.exists() {
-        completion_scripts.push(Completion::new(
-            name.to_string(),
-            bash_path,
-            completions_dir,
-            Shell::Bash,
-        ));
+        let destination = completions_dir
+            .path()
+            .join("bash")
+            .join(Completion::exposed_file_name(&bash_path));
+
+        completion_scripts.push(Completion::new(name.to_string(), bash_path, destination));
     }
 
     if zsh_path.exists() {
-        completion_scripts.push(Completion::new(
-            name.to_string(),
-            zsh_path,
-            completions_dir,
-            Shell::Zsh,
-        ));
+        let destination = completions_dir
+            .path()
+            .join("zsh")
+            .join(Completion::exposed_file_name(&zsh_path));
+        completion_scripts.push(Completion::new(name.to_string(), zsh_path, destination));
     }
 
     if fish_path.exists() {
-        completion_scripts.push(Completion::new(
-            name.to_string(),
-            fish_path,
-            completions_dir,
-            Shell::Fish,
-        ));
+        let destination = completions_dir
+            .path()
+            .join("fish")
+            .join(Completion::exposed_file_name(&fish_path));
+        completion_scripts.push(Completion::new(name.to_string(), fish_path, destination));
     }
     completion_scripts
 }
