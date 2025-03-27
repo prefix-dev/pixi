@@ -58,21 +58,6 @@ impl Completion {
     /// Install the shell completion
     #[cfg(unix)]
     pub async fn install(&self) -> miette::Result<Option<StateChange>> {
-        if self.destination.exists() {
-            if !self.destination.is_symlink() {
-                // Check if the symlink points to the correct destination
-                if let Ok(target) = tokio_fs::read_link(&self.destination).await {
-                    if target == self.source {
-                        return Ok(None);
-                    }
-                }
-            }
-            // If it isn't a symlink pointing to the correct source, remove the file
-            tokio_fs::remove_file(&self.source)
-                .await
-                .into_diagnostic()?;
-        }
-
         // Ensure the parent directory of the destination exists
         if let Some(parent) = self.destination.parent() {
             tokio_fs::create_dir_all(parent).await.into_diagnostic()?;
