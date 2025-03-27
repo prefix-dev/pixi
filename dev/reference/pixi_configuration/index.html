@@ -2683,18 +2683,18 @@ The configuration is loaded in the following order:</p>
 </div>
 <h2 id="configuration-options">Configuration options<a class="headerlink" href="#configuration-options" title="Permanent link">#</a></h2>
 <details class="info">
-<summary>Casing In Configuration</summary>
-<p>In versions of Pixi <code>0.20.1</code> and older the global configuration used <code>snake_case</code> which
+<summary>Naming convention in configuration</summary>
+<p>In Pixi <code>0.20.1</code> and older the global configuration options used <code>snake_case</code> which
 we've changed to <code>kebab-case</code> for consistency with the rest of the configuration.
-But we still support the old <code>snake_case</code> configuration, for older configuration options.
-These are:</p>
+For backwards compatibility, the following configuration options can still be written
+in <code>snake_case</code>:</p>
 <ul>
 <li><code>default_channels</code></li>
 <li><code>change_ps1</code></li>
 <li><code>tls_no_verify</code></li>
 <li><code>authentication_override_file</code></li>
-<li><code>mirrors</code> and sub-options</li>
-<li><code>repodata_config</code> and sub-options</li>
+<li><code>mirrors</code> and its sub-options</li>
+<li><code>repodata_config</code> and its sub-options</li>
 </ul>
 </details>
 <p>The following reference describes all available configuration options.</p>
