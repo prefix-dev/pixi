@@ -343,7 +343,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ShellEnum::Bash(bash) => {
                 start_unix_shell(
                     bash,
-                    vec!["-l", "-i"],
+                    vec!["-i"],
                     env,
                     prompt_hook,
                     &prefix,
@@ -354,7 +354,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ShellEnum::Zsh(zsh) => {
                 start_unix_shell(
                     zsh,
-                    vec!["-l", "-i"],
+                    vec!["-i"],
                     env,
                     prompt_hook,
                     &prefix,

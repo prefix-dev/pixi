@@ -362,10 +362,13 @@ impl TomlSpec {
     }
 }
 
-struct TomlVersionSpecStr(VersionSpec);
+/// A TOML representation wrapper of a [`VersionSpec`]
+/// Used to add custom deserialization for the version spec string
+pub struct TomlVersionSpecStr(VersionSpec);
 
 impl TomlVersionSpecStr {
-    fn into_inner(self) -> VersionSpec {
+    /// Get inner version spec from the toml wrapper
+    pub fn into_inner(self) -> VersionSpec {
         self.0
     }
 }

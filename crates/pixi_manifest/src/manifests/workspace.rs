@@ -4,7 +4,7 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic, SourceCode};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{Platform, Version};
+use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
 use toml_edit::Value;
 
 use crate::manifests::document::ManifestDocument;
@@ -720,6 +720,23 @@ impl WorkspaceManifestMut<'_> {
             .into_diagnostic()?;
 
         Ok(result)
+    }
+
+    /// Set/Unset the pixi version requirements
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_requires_pixi(&mut self, version: Option<&str>) -> miette::Result<()> {
+        // Update in both the manifest and the toml
+        self.workspace.workspace.requires_pixi = match version {
+            Some(version) => Some(
+                VersionSpec::from_str(version, Strict)
+                    .into_diagnostic()
+                    .context("could not convert to a valid version spec")?,
+            ),
+            None => None,
+        };
+        self.document.set_requires_pixi(version).into_diagnostic()
     }
 }
 
@@ -2868,5 +2885,31 @@ bar = "*"
         channels = ['conda-forge']
         platforms = [ 'win-64']
         "###);
+    }
+
+    #[test]
+    fn test_requires_pixi() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+        requires-pixi = "==0.1"
+        "#;
+        let manifest = parse_pixi_toml(contents).manifest;
+
+        assert_eq!(
+            manifest.workspace.requires_pixi,
+            VersionSpec::from_str("==0.1.0", Lenient).ok()
+        );
+
+        let contents_no = r#"
+        [project]
+        name = "foo"
+        channels = []
+        platforms = []
+        "#;
+        let manifest_no = parse_pixi_toml(contents_no).manifest;
+        assert_eq!(manifest_no.workspace.requires_pixi, None);
     }
 }

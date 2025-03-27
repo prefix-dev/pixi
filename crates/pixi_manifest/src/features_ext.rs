@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use indexmap::IndexSet;
+use miette::Diagnostic;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
 };
@@ -13,7 +14,7 @@ use crate::{
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
 /// are set
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 #[error("Multiple channel priorities are not allowed in a single environment")]
 pub struct ChannelPriorityCombinationError;
 

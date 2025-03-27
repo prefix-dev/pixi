@@ -24,7 +24,7 @@ use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
 use thiserror::Error;
-pub use toml::TomlSpec;
+pub use toml::{TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec

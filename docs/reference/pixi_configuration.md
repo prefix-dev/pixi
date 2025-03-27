@@ -48,18 +48,18 @@ The configuration is loaded in the following order:
 
 ## Configuration options
 
-??? info "Casing In Configuration"
-    In versions of Pixi `0.20.1` and older the global configuration used `snake_case` which
+??? info "Naming convention in configuration"
+    In Pixi `0.20.1` and older the global configuration options used `snake_case` which
     we've changed to `kebab-case` for consistency with the rest of the configuration.
-    But we still support the old `snake_case` configuration, for older configuration options.
-    These are:
+    For backwards compatibility, the following configuration options can still be written
+    in `snake_case`:
 
     - `default_channels`
     - `change_ps1`
     - `tls_no_verify`
     - `authentication_override_file`
-    - `mirrors` and sub-options
-    - `repodata_config` and sub-options
+    - `mirrors` and its sub-options
+    - `repodata_config` and its sub-options
 
 The following reference describes all available configuration options.
 
@@ -285,6 +285,8 @@ You can also specify mirrors for an entire "host", e.g.
 
 This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.
+You can override the behavior for specific channels (like conda-forge's label channels)
+by providing a longer prefix that points to itself.
 
 ### OCI Mirrors
 
