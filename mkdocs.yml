@@ -173,6 +173,12 @@ hooks:
   - install/docs_hooks.py
   - docs/docs_hooks.py
 
+validation:
+  omitted_files: ignore
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
 plugins:
   - redirects:
       redirect_maps:
