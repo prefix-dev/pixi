@@ -58,6 +58,8 @@ impl Completion {
     /// Install the shell completion
     #[cfg(unix)]
     pub async fn install(&self) -> miette::Result<Option<StateChange>> {
+        tracing::debug!("Requested to install completion {}.", self.source.display());
+
         // Ensure the parent directory of the destination exists
         if let Some(parent) = self.destination.parent() {
             tokio_fs::create_dir_all(parent).await.into_diagnostic()?;
@@ -181,7 +183,7 @@ pub(crate) async fn completions_sync_status(
         .map(|name| name.executable_name().to_string())
         .collect_vec();
 
-    for name in executable_names {
+    for name in executable_names.into_iter().unique() {
         let completions = contained_completions(prefix_root, &name, completions_dir)?;
 
         if completions.is_empty() {
@@ -197,7 +199,11 @@ pub(crate) async fn completions_sync_status(
         } else {
             for completion in completions {
                 if completion.destination.is_symlink() {
-                    completions_to_remove.push(completion);
+                    if let Ok(target) = tokio_fs::read_link(&completion.destination).await {
+                        if target == completion.source {
+                            completions_to_remove.push(completion);
+                        }
+                    }
                 }
             }
         }

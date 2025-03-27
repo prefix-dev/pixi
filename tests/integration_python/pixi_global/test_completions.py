@@ -109,3 +109,71 @@ def test_only_self_expose_have_completions(
     assert not bash.is_file()
     assert not zsh.is_file()
     assert not fish.is_file()
+
+
+def test_installing_same_package_again_without_expose_shouldnt_remove_it(
+    pixi: Path, tmp_pixi_workspace: Path, completions_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+
+    # Completions
+    bash = bash_completions(tmp_pixi_workspace, "rg")
+    zsh = zsh_completions(tmp_pixi_workspace, "rg")
+    fish = fish_completions(tmp_pixi_workspace, "rg")
+
+    # Install `ripgrep-completions`, and expose `rg` as `rg`
+    # This should install the completions
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            completions_channel_1,
+            "--expose",
+            "rg=rg",
+            "--environment",
+            "test-1",
+            "ripgrep-completions",
+        ],
+        env=env,
+    )
+
+    if platform.system() == "Windows":
+        # Completions are ignored on Windows
+        assert not bash.is_file()
+        assert not zsh.is_file()
+        assert not fish.is_file()
+    else:
+        assert bash.is_file()
+        assert zsh.is_file()
+        assert fish.is_file()
+
+    # Install `ripgrep-completions`, but expose `rg` under `ripgrep`
+    # Therefore no completions should be installed
+    # But existing ones should also not be removed
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            completions_channel_1,
+            "--expose",
+            "ripgrep=rg",
+            "--environment",
+            "test-2",
+            "ripgrep-completions",
+        ],
+        env=env,
+    )
+
+    if platform.system() == "Windows":
+        # Completions are ignored on Windows
+        assert not bash.is_file()
+        assert not zsh.is_file()
+        assert not fish.is_file()
+    else:
+        assert bash.is_file()
+        assert zsh.is_file()
+        assert fish.is_file()
