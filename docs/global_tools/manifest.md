@@ -1,8 +1,7 @@
 # The Global Manifest
 
-Since `v0.33.0` Pixi has a new manifest file that will be created in the global directory.
-This file will contain the list of environments that are installed globally, their dependencies and exposed binaries.
-The manifest can be edited, synced, checked in to a version control system, and shared with others.
+This global manifest contains the list of environments that are installed globally, their dependencies and exposed binaries.
+It can be edited, synced, checked in to a version control system, and shared with others.
 
 Running the commands from the section before results in the following manifest:
 ```toml
@@ -30,7 +29,7 @@ exposed = { py3 = "python" } # (2)!
 ## Manifest locations
 
 The manifest can be found at the following locations depending on your operating system.
-Run `pixi info`, to find the currently used manifest on your system.
+Run [`pixi info`](../reference/cli/pixi/info.md), to find the currently used manifest on your system.
 
 === "Linux"
 
@@ -64,8 +63,10 @@ Run `pixi info`, to find the currently used manifest on your system.
 
 
 ## Channels
-The channels are the conda channels that will be used to search for the packages.
-There is a priority to these, so the first one will have the highest priority, if a package is not found in that channel the next one will be used.
+
+The `channels` key describes the Conda channels that will be used to download the packages.
+There is a priority to these, so the first one will have the highest priority.
+If a package is not found in that channel the next one will be used.
 For example, running:
 ```
 pixi global install --channel conda-forge --channel bioconda snakemake
@@ -84,7 +85,7 @@ More information on channels can be found [here](../advanced/channel_logic.md).
 
 ## Dependencies
 
-Dependencies are the **Conda** packages that will be installed into your environment. For example, running:
+Dependencies are the Conda packages that will be installed into your environment. For example, running:
 ```
 pixi global install "python<3.12"
 ```
@@ -102,6 +103,7 @@ For example, running:
 pixi global install --environment my-env git vim python
 ```
 will create the following entry in the manifest:
+
 ```toml
 [envs.my-env]
 channels = ["conda-forge"]
@@ -109,13 +111,15 @@ dependencies = { git = "*", vim = "*", python = "*" }
 # ...
 ```
 
-You can `add` a dependency to an existing environment by running:
+You can [`add`](../reference/cli/pixi/global/add.md) dependencies to an existing environment by running:
 ```shell
-pixi global install --environment my-env package-a package-b
+pixi global add --environment my-env package-a package-b
 ```
-This will be added as dependencies to the `my-env` environment but won't auto expose the binaries from the new packages.
 
-You can `remove` dependencies by running:
+They will be added as dependencies to the `my-env` environment but won't auto expose the binaries from the new packages.
+
+You can [`remove`](../reference/cli/pixi/global/remove.md) dependencies by running:
+
 ```shell
 pixi global remove --environment my-env package-a package-b
 ```
@@ -144,8 +148,8 @@ You can learn more about how executables are detected in the [concepts chapter](
 
 ## Shortcuts
 
-Especially for graphical user interfaces it is useful to add shortcuts so that the operating system knows that about the application.
-This way the application can show up in the start menu or be suggested when you want to open a file type the application supports.
+Especially for graphical user interfaces it is useful to add shortcuts.
+This way the application shows up in the start menu or is suggested when you want to open a file type the application supports.
 If the package supports shortcuts, nothing has to be done from your side.
 Simply executing `pixi global install` will do the trick.
 For example, `pixi global install mss` will lead to the following manifest:

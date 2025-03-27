@@ -10,6 +10,7 @@
 
 With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory.
 This means that the Pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line.
+Some packages, especially those with graphical user interfaces, will also add start menu entries.
 
 
 ## Basic Usage
@@ -61,7 +62,7 @@ py3 -c "print('Hello World')"
 When you work in a terminal, you are using a shell and shells can process completions of command line tools.
 The process works like this: you type "git -" in your terminal and press `<TAB>`.
 Then, your shell will present you all the flags `git` offers.
-However, that only works if you have the completions installed for the tool in questions.
+However, that only works if you have the completions installed for the tool in question.
 If the tool you installed via `pixi global` contains completions they will be automatically installed.
 At the moment, only Linux and macOS are supported.
 
@@ -72,9 +73,9 @@ First install a tool with `pixi global`:
 pixi global install git
 ```
 
-You can then find the completions under `[$PIXI_HOME](../reference/environment_variables.md)/completions`.
+The completions can be found in under [`$PIXI_HOME`](../reference/environment_variables.md)`/completions`.
 
-Depending on your shell, you can load the completions in your startup script:
+You can then load the completions in the startup script of your shell:
 
 ```bash title="~/.bashrc"
 # bash, default on most Linux distributions
