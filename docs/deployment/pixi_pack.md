@@ -64,29 +64,29 @@ pixi-pack pack --platform win-64
 You can create a self-extracting binary that contains the packed environment and a script that unpacks the environment.
 This can be useful if you want to distribute the environment to users that don't have `pixi-pack` installed.
 
-```bash
-# unix
-$ pixi-pack pack --create-executable
-$ ls
-environment.sh
-$ ./environment.sh
-$ ls
-env/
-activate.sh
-environment.sh
-```
+=== "Linux & macOS"
+    ```bash
+    $ pixi-pack pack --create-executable
+    $ ls
+    environment.sh
+    $ ./environment.sh
+    $ ls
+    env/
+    activate.sh
+    environment.sh
+    ```
 
-```powershell
-# windows
-PS > pixi-pack pack --create-executable
-PS > ls
-environment.ps1
-PS > .\environment.ps1
-PS > ls
-env/
-activate.sh
-environment.ps1
-```
+=== "Windows"
+    ```powershell
+    PS > pixi-pack pack --create-executable
+    PS > ls
+    environment.ps1
+    PS > .\environment.ps1
+    PS > ls
+    env/
+    activate.sh
+    environment.ps1
+    ```
 
 !!! note
 
