@@ -7,7 +7,6 @@ package:
 
 build:
   number: 1
-  noarch: generic
   script:
     - if: unix
       then:
@@ -27,6 +26,7 @@ build:
         - chmod +x $PREFIX/bin/rg
       else:
         - mkdir -p $PREFIX/bin
+        - echo "@echo off" > $PREFIX/bin/rg.bat
         - echo "echo rg on windows" >> $PREFIX/bin/rg.bat
 
 requirements:
