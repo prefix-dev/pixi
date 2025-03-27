@@ -894,6 +894,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#self-extracting-binaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      Self-Extracting Binaries
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inject-additional-packages" class="md-nav__link">
     <span class="md-ellipsis">
       Inject Additional Packages
@@ -2229,6 +2238,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#self-extracting-binaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      Self-Extracting Binaries
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inject-additional-packages" class="md-nav__link">
     <span class="md-ellipsis">
       Inject Additional Packages
@@ -2317,16 +2335,50 @@
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--platform<span class="w"> </span>win-64
 </span></code></pre></div>
 <div class="admonition note">
+<p class="admonition-title">Note</p>
 <p>You can only unpack a pack on a system that has the same platform as the pack was created for.</p>
+</div>
+<h3 id="self-extracting-binaries">Self-Extracting Binaries<a class="headerlink" href="#self-extracting-binaries" title="Permanent link">#</a></h3>
+<p>You can create a self-extracting binary that contains the packed environment and a script that unpacks the environment.
+This can be useful if you want to distribute the environment to users that don't have <code>pixi-pack</code> installed.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>$<span class="w"> </span>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--create-executable
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>$<span class="w"> </span>ls
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>environment.sh
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>$<span class="w"> </span>./environment.sh
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>$<span class="w"> </span>ls
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>env/
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>activate.sh
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>environment.sh
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="n">pixi-pack</span> <span class="n">pack</span> <span class="p">-</span><span class="n">-create-executable</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="nb">ls</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="p">.\</span><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="nb">ls</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">env</span><span class="p">/</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="n">activate</span><span class="p">.</span><span class="n">sh</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The produced executable is a simple shell script that contains both the <code>pixi-pack</code> binary as well as the packed environment.</p>
 </div>
 <h3 id="inject-additional-packages">Inject Additional Packages<a class="headerlink" href="#inject-additional-packages" title="Permanent link">#</a></h3>
 <p>You can inject additional packages into the environment that are not specified in <code>pixi.lock</code> by using the <code>--inject</code> flag:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>--manifest-pack<span class="w"> </span>pixi.toml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>--manifest-pack<span class="w"> </span>pixi.toml
 </span></code></pre></div>
 <p>This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use <code>pixi.lock</code> from the workspace.</p>
 <h3 id="cache-downloaded-packages">Cache Downloaded Packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
 <p>You can cache downloaded packages to speed up subsequent pack operations by using the <code>--use-cache</code> flag:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
 </span></code></pre></div>
 <p>This will store all downloaded packages in the specified directory and reuse them in future pack operations. The cache follows the same structure as conda channels, organizing packages by platform subdirectories (e.g., linux-64, win-64, etc.).</p>
 <p>Using a cache is particularly useful when:</p>
@@ -2337,19 +2389,21 @@
 <li>Running CI/CD pipelines where package caching can significantly improve build times</li>
 </ul>
 <h3 id="unpacking-without-pixi-pack">Unpacking Without pixi-pack<a class="headerlink" href="#unpacking-without-pixi-pack" title="Permanent link">#</a></h3>
-<p>If you don't have <code>pixi-pack</code> available on your target system, you can still install the environment if you have <code>conda</code> or <code>micromamba</code> available.
+<p>If you don't have <code>pixi-pack</code> available on your target system, and do not want to use self-extracting binaries (see above), you can still install the environment if you have <code>conda</code> or <code>micromamba</code> available. 
 Just unarchive the <code>environment.tar</code>, then you have a local channel on your system where all necessary packages are available.
 Next to this local channel, you will find an <code>environment.yml</code> file that contains the environment specification.
 You can then install the environment using <code>conda</code> or <code>micromamba</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># or</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># or</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
 </span></code></pre></div>
 <div class="admonition note">
+<p class="admonition-title">Note</p>
 <p>The <code>environment.yml</code> and <code>repodata.json</code> files are only for this use case, <code>pixi-pack unpack</code> does not use them.</p>
 </div>
 <div class="admonition note">
+<p class="admonition-title">Note</p>
 <p>Both <code>conda</code> and <code>mamba</code> are always installing pip as a side effect when they install python, see <a href="https://docs.conda.io/projects/conda/en/25.1.x/user-guide/configuration/settings.html#add-pip-as-python-dependency-add-pip-as-python-dependency"><code>conda</code>'s documentation</a>.
 This is different from how <code>pixi</code> works and can lead to solver errors when using <code>pixi-pack</code>'s compatibility mode since <code>pixi-pack</code> doesn't include <code>pip</code> by default.
 You can fix this issue in two ways:</p>
