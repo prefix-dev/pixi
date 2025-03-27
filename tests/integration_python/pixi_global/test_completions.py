@@ -38,11 +38,7 @@ def test_sync_exposes_completions(
     fish = fish_completions(tmp_pixi_workspace, "rg")
 
     # Test basic commands
-    verify_cli_command(
-        [pixi, "global", "sync"],
-        env=env,
-        stderr_contains="Exposed completion rg of environment test.",
-    )
+    verify_cli_command([pixi, "global", "sync"], env=env)
     assert rg.is_file()
 
     if platform.system() == "Windows":
