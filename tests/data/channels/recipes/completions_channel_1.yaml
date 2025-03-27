@@ -25,6 +25,9 @@ build:
         - mkdir -p $PREFIX/bin
         - echo "echo rg on unix" > $PREFIX/bin/rg
         - chmod +x $PREFIX/bin/rg
+      else:
+        - mkdir -p $PREFIX/bin
+        - echo "echo rg on windows" >> $PREFIX/bin/rg.bat
 
 requirements:
   build:
