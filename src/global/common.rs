@@ -656,7 +656,7 @@ impl StateChanges {
                         let mut installed_items = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
-                                Some(StateChange::InstalledShortcut(name)) => Some(name.clone()),
+                                Some(StateChange::AddedCompletion(name)) => Some(name.clone()),
                                 _ => None,
                             },
                             Some(name.clone()),
@@ -686,7 +686,7 @@ impl StateChanges {
                         let mut uninstalled_items = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
-                                Some(StateChange::UninstalledShortcut(name)) => Some(name.clone()),
+                                Some(StateChange::RemovedCompletion(name)) => Some(name.clone()),
                                 _ => None,
                             },
                             Some(name.clone()),
