@@ -59,6 +59,38 @@ pixi-pack pack --platform win-64
 !!!note ""
     You can only unpack a pack on a system that has the same platform as the pack was created for.
 
+### Self-extracting binaries
+
+You can create a self-extracting binary that contains the packed environment and a script that unpacks the environment.
+This can be useful if you want to distribute the environment to users that don't have `pixi-pack` installed.
+
+```bash
+# unix
+$ pixi-pack pack --create-executable
+$ ls
+environment.sh
+$ ./environment.sh
+$ ls
+env/
+activate.sh
+environment.sh
+```
+
+```powershell
+# windows
+PS > pixi-pack pack --create-executable
+PS > ls
+environment.ps1
+PS > .\environment.ps1
+PS > ls
+env/
+activate.sh
+environment.ps1
+```
+
+> [!TIP]
+> The produced executable is a simple shell script that contains both the `pixi-pack` binary as well as the packed environment.
+
 ### Inject Additional Packages
 
 You can inject additional packages into the environment that are not specified in `pixi.lock` by using the `--inject` flag:
@@ -88,7 +120,7 @@ Using a cache is particularly useful when:
 
 ### Unpacking Without pixi-pack
 
-If you don't have `pixi-pack` available on your target system, you can still install the environment if you have `conda` or `micromamba` available.
+If you don't have `pixi-pack` available on your target system, and do not want to use self-extracting binaries (see above), you can still install the environment if you have `conda` or `micromamba` available. 
 Just unarchive the `environment.tar`, then you have a local channel on your system where all necessary packages are available.
 Next to this local channel, you will find an `environment.yml` file that contains the environment specification.
 You can then install the environment using `conda` or `micromamba`:
