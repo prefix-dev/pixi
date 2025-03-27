@@ -56,10 +56,10 @@ Since `pixi-pack` just downloads the `.conda` and `.tar.bz2` files from the cond
 pixi-pack pack --platform win-64
 ```
 
-!!!note ""
+!!! note
     You can only unpack a pack on a system that has the same platform as the pack was created for.
 
-### Self-extracting binaries
+### Self-Extracting Binaries
 
 You can create a self-extracting binary that contains the packed environment and a script that unpacks the environment.
 This can be useful if you want to distribute the environment to users that don't have `pixi-pack` installed.
@@ -88,8 +88,9 @@ activate.sh
 environment.ps1
 ```
 
-> [!TIP]
-> The produced executable is a simple shell script that contains both the `pixi-pack` binary as well as the packed environment.
+!!! note
+
+    The produced executable is a simple shell script that contains both the `pixi-pack` binary as well as the packed environment.
 
 ### Inject Additional Packages
 
@@ -132,10 +133,12 @@ micromamba create -p ./env --file environment.yml
 conda env create -p ./env --file environment.yml
 ```
 
-!!!note ""
+!!! note
+
     The `environment.yml` and `repodata.json` files are only for this use case, `pixi-pack unpack` does not use them.
 
-!!!note ""
+!!! note
+
     Both `conda` and `mamba` are always installing pip as a side effect when they install python, see [`conda`'s documentation](https://docs.conda.io/projects/conda/en/25.1.x/user-guide/configuration/settings.html#add-pip-as-python-dependency-add-pip-as-python-dependency).
     This is different from how `pixi` works and can lead to solver errors when using `pixi-pack`'s compatibility mode since `pixi-pack` doesn't include `pip` by default.
     You can fix this issue in two ways:
