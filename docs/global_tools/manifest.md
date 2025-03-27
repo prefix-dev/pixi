@@ -121,9 +121,9 @@ pixi global remove --environment my-env package-a package-b
 ```
 
 
-# Exposed executables
+## Exposed executables
 
-If tell `pixi global install`, under which name it will expose executables:
+One can instruct `pixi global install`, under which name it will expose executables:
 
 ```shell
 pixi global install --expose bird=bat bat
@@ -140,3 +140,25 @@ exposed = { bird = "bat" }
 
 This means that executable `bat` will be exposed under the name `bird`.
 You can learn more about how executables are detected in the [concepts chapter](./concepts.md#automatically-exposed-executables).
+
+
+## Shortcuts
+
+Especially for graphical user interfaces it is useful to add shortcuts so that the operating system knows that about the application.
+This way the application can show up in the start menu or be suggested when you want to open a file type the application supports.
+If the package supports shortcuts, nothing has to be done from your side.
+Simply executing `pixi global install` will do the trick.
+For example, `pixi global install mss` will lead to the following manifest:
+
+```toml
+[envs.mss]
+channels = ["https://prefix.dev/conda-forge"]
+dependencies = { mss = "*" }
+exposed = { ... }
+shortcuts = ["mss"]
+```
+
+Note the `shortcuts` entry.
+If it's present, `pixi` will install the shortcut for the `mss` package.
+This means, the application will show up in the start menu.
+If you want to package an application yourself that would benefit from this, you can check out the corresponding [documentation](https://conda.github.io/menuinst/).

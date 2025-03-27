@@ -1,4 +1,4 @@
-# The configuration of Pixi itself
+# The Configuration of Pixi Itself
 
 Apart from the [project specific configuration](../reference/pixi_manifest.md) Pixi supports configuration options which are not required for the project to work but are local to the machine.
 The configuration is loaded in the following order:

@@ -160,6 +160,7 @@ nav:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli/pixi.md
+      - Environment Variables: reference/environment_variables.md
   - Misc:
       - Changelog: CHANGELOG.md
       - Pixi Vision: misc/vision.md

@@ -55,3 +55,46 @@ You can run `py3` to start the python interpreter.
 ```shell
 py3 -c "print('Hello World')"
 ```
+
+## Shell Completions
+
+When you work in a terminal, you are using a shell and shells can process completions of command line tools.
+The process works like this: you type "git -" in your terminal and press `<TAB>`.
+Then, your shell will present you all the flags `git` offers.
+However, that only works if you have the completions installed for the tool in questions.
+If the tool you installed via `pixi global` contains completions they will be automatically installed.
+At the moment, only Linux and macOS are supported.
+
+
+First install a tool with `pixi global`:
+
+```shell
+pixi global install git
+```
+
+You can then find the completions under `[$PIXI_HOME](../reference/environment_variables.md)/completions`.
+
+Depending on your shell, you can load the completions in your startup script:
+
+```bash title="~/.bashrc"
+# bash, default on most Linux distributions
+source ~/.pixi/completions/bash/*
+```
+
+```zsh title="~/.zshrc"
+# zsh, default on macOS
+fpath+=(~/.pixi/completions/zsh)
+autoload -Uz compinit
+compinit
+```
+
+```fish title="~/.config/fish/config.fish"
+# fish
+for file in ~/.pixi/completions/fish
+    source $file
+end
+```
+
+!!! note
+
+    Completions of packages are installed as long as their binaries are exposed under the same name: e.g. `exposed = { git = "git" }`.
