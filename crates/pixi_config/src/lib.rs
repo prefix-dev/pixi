@@ -598,6 +598,22 @@ impl PinningStrategy {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum RunPostLinkScripts {
+    /// Run the post link scripts, we call this insecure as it may run arbitrary code.
+    Insecure,
+    /// Do not run the post link scripts
+    #[default]
+    False,
+}
+impl FromStr for RunPostLinkScripts {
+    type Err = serde::de::value::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(s.into_deserializer())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct Config {
@@ -672,6 +688,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "ConcurrencyConfig::is_default")]
     pub concurrency: ConcurrencyConfig,
 
+    /// Run the post link scripts
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_post_link_scripts: Option<RunPostLinkScripts>,
+
     /// Https/Http proxy configuration for pixi
     #[serde(default)]
     #[serde(skip_serializing_if = "ProxyConfig::is_default")]
@@ -707,6 +728,7 @@ impl Default for Config {
             shell: ShellConfig::default(),
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
+            run_post_link_scripts: None,
             proxy_config: ProxyConfig::default(),
 
             // Deprecated fields
@@ -1168,6 +1190,7 @@ impl Config {
             experimental: self.experimental.merge(other.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
+            run_post_link_scripts: other.run_post_link_scripts.or(self.run_post_link_scripts),
 
             proxy_config: self.proxy_config.merge(other.proxy_config),
 
@@ -1547,6 +1570,17 @@ impl Config {
                     _ => return Err(err),
                 }
             }
+            key if key.starts_with("run-post-link-scripts") => {
+                if let Some(value) = value {
+                    self.run_post_link_scripts = Some(
+                        value
+                            .parse()
+                            .into_diagnostic()
+                            .wrap_err("failed to parse run-post-link-scripts")?,
+                    );
+                }
+                return Ok(());
+            }
             key if key.starts_with("proxy-config") => {
                 if key == "proxy-config" {
                     if let Some(value) = value {
@@ -1636,6 +1670,11 @@ impl Config {
                 )
             })
             .collect()
+    }
+
+    /// Retrieve the value for the run_post_link_scripts field or default to false.
+    pub fn run_post_link_scripts(&self) -> RunPostLinkScripts {
+        self.run_post_link_scripts.clone().unwrap_or_default()
     }
 }
 
@@ -1885,6 +1924,7 @@ UNUSED = "unused"
                     RepodataChannelConfig::default(),
                 )]),
             },
+            run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
             proxy_config: ProxyConfig::default(),
             // Deprecated keys
             change_ps1: None,

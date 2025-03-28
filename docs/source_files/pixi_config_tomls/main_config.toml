@@ -20,6 +20,10 @@ detached-environments = true
 pinning-strategy = "no-pin"
 #  --8<-- [end:pinning-strategy]
 
+#  --8<-- [start:run-post-link-scripts]
+run-post-link-scripts = "false" # set to "insecure" to allow running post-link scripts
+#  --8<-- [end:run-post-link-scripts]
+
 #  --8<-- [start:repodata-config]
 [repodata-config]
 # disable fetching of jlap, bz2 or zstd repodata files.

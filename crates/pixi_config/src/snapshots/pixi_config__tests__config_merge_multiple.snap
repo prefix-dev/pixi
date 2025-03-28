@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_config/src/lib.rs
 expression: debug
+snapshot_kind: text
 ---
 Config {
     default_channels: [
@@ -133,6 +134,7 @@ Config {
         solves: 1,
         downloads: 50,
     },
+    run_post_link_scripts: None,
     proxy_config: ProxyConfig {
         https: None,
         http: None,

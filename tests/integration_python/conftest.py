@@ -110,5 +110,10 @@ def shortcuts_channel_1(channels: Path) -> str:
     return channels.joinpath("shortcuts_channel_1").as_uri()
 
 
+@pytest.fixture
+def post_link_script_channel(channels: Path) -> str:
+    return channels.joinpath("post_link_script_channel").as_uri()
+
+
 def doc_pixi_workspaces() -> Path:
     return Path(__file__).parents[2].joinpath("docs", "source_files", "pixi_workspaces")

@@ -217,6 +217,20 @@ pixi config set concurrency.solves 1
 pixi config set concurrency.downloads 12
 ```
 
+### `run-post-link-scripts`
+
+Configure whether pixi should execute `post-link` and `pre-unlink` scripts or not.
+
+Some packages contain post-link scripts (`bat` or `sh` files) that are executed after a package is installed. We deem these scripts as insecure because they can contain arbitrary code that is executed on the user's machine without the user's consent. By default, the value of `run-post-link-scripts` is set to `false` which prevents the execution of these scripts.
+
+However, you can opt-in on a global (or project) basis by setting the value to `insecure` (e.g. by running `pixi config set --local run-post-link-scripts insecure`).
+
+In the future we are planning to add a `sandbox` mode to execute these scripts in a controlled environment.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:run-post-link-scripts"
+```
+
 ## Experimental
 This allows the user to set specific experimental features that are not yet stable.
 

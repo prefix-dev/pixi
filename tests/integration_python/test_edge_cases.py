@@ -214,6 +214,54 @@ def test_unused_strict_system_requirements(
     )
 
 
+def test_post_link_scripts(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    post_link_script_channel: str,
+) -> None:
+    """Test that post-link scripts are run correctly"""
+    verify_cli_command([pixi, "init", tmp_pixi_workspace, "--channel", post_link_script_channel])
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest, "post-link-script-package"],
+        ExitCode.SUCCESS,
+    )
+
+    # Make sure script has not ran
+    assert not tmp_pixi_workspace.joinpath(".pixi", "envs", "default", ".message.txt").exists()
+
+    # Set the config to run the script
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest,
+            "--local",
+            "run-post-link-scripts",
+            "insecure",
+        ]
+    )
+    verify_cli_command([pixi, "config", "list", "--manifest-path", manifest])
+
+    # Clean env
+    verify_cli_command(
+        [pixi, "clean", "--manifest-path", manifest],
+        ExitCode.SUCCESS,
+    )
+
+    # Install the package
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest, "-vvv"],
+        ExitCode.SUCCESS,
+    )
+
+    # Make sure script has ran
+    assert tmp_pixi_workspace.joinpath(".pixi", "envs", "default", ".messages.bak.txt").exists()
+
+
 @pytest.mark.extra_slow
 def test_build_git_source_deps(
     pixi: Path, tmp_pixi_workspace: Path, pypi_data: Path, pixi_tomls: Path

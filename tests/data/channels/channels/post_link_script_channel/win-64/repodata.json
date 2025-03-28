@@ -1,0 +1,23 @@
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "post-link-script-package-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "3036928d687de772f902355665400d12",
+      "name": "post-link-script-package",
+      "platform": "win",
+      "sha256": "8e086b887d2bca324a6566fbdba028f0b00f6a9d08779753a8d24f1cf5cd2d4c",
+      "size": 1320,
+      "subdir": "win-64",
+      "timestamp": 1743152762496,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
