@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
+    sync::LazyLock,
 };
 
 use clap::{ArgAction, Parser};
@@ -15,6 +16,7 @@ use rattler_conda_types::{
 };
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
+use reqwest::{NoProxy, Proxy};
 use serde::{de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
@@ -54,6 +56,25 @@ pub fn get_default_author() -> Option<(String, String)> {
 
     Some((name?, email.unwrap_or_else(|| "".into())))
 }
+
+// detect proxy env vars like curl: https://curl.se/docs/manpage.html
+static ENV_HTTP_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["http_proxy", "all_proxy", "ALL_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static ENV_HTTPS_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static ENV_NO_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
+    ["no_proxy", "NO_PROXY"]
+        .iter()
+        .find_map(|&k| std::env::var(k).ok().filter(|v| !v.is_empty()))
+});
+static USE_PROXY_FROM_ENV: LazyLock<bool> =
+    LazyLock::new(|| (*ENV_HTTPS_PROXY).is_some() || (*ENV_HTTP_PROXY).is_some());
 
 /// Get pixi home directory, default to `$HOME/.pixi`
 ///
@@ -672,6 +693,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_post_link_scripts: Option<RunPostLinkScripts>,
 
+    /// Https/Http proxy configuration for pixi
+    #[serde(default)]
+    #[serde(skip_serializing_if = "ProxyConfig::is_default")]
+    pub proxy_config: ProxyConfig,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -703,6 +729,7 @@ impl Default for Config {
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
             run_post_link_scripts: None,
+            proxy_config: ProxyConfig::default(),
 
             // Deprecated fields
             change_ps1: None,
@@ -802,6 +829,40 @@ impl ShellConfig {
 
     pub fn source_completion_scripts(&self) -> bool {
         self.source_completion_scripts.unwrap_or(true)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct ProxyConfig {
+    /// https proxy.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub https: Option<Url>,
+    /// http proxy.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub http: Option<Url>,
+    /// A list of no proxy pattern
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub non_proxy_hosts: Vec<String>,
+}
+
+impl ProxyConfig {
+    pub fn is_default(&self) -> bool {
+        self.https.is_none() && self.https.is_none() && self.non_proxy_hosts.is_empty()
+    }
+    pub fn merge(&self, other: Self) -> Self {
+        Self {
+            https: other.https.as_ref().or(self.https.as_ref()).cloned(),
+            http: other.http.as_ref().or(self.http.as_ref()).cloned(),
+            non_proxy_hosts: if other.is_default() {
+                self.non_proxy_hosts.clone()
+            } else {
+                other.non_proxy_hosts.clone()
+            },
+        }
     }
 }
 
@@ -930,6 +991,23 @@ impl Config {
         config
             .validate()
             .map_err(|e| ConfigError::ValidationError(e, path.to_path_buf()))?;
+
+        // check proxy config
+        if config.proxy_config.https.is_none() && config.proxy_config.http.is_none() {
+            if !config.proxy_config.non_proxy_hosts.is_empty() {
+                tracing::warn!("proxy-config.non-proxy-hosts is not empty but will be ignored, as no https or http config is set.")
+            }
+        } else if *USE_PROXY_FROM_ENV {
+            let config_no_proxy = Some(config.proxy_config.non_proxy_hosts.iter().join(","))
+                .filter(|v| !v.is_empty());
+            if (*ENV_HTTPS_PROXY).as_deref() != config.proxy_config.https.as_ref().map(Url::as_str)
+                || (*ENV_HTTP_PROXY).as_deref()
+                    != config.proxy_config.http.as_ref().map(Url::as_str)
+                || *ENV_NO_PROXY != config_no_proxy
+            {
+                tracing::info!("proxy configs are overridden by proxy environment vars.")
+            }
+        }
 
         Ok(config)
     }
@@ -1069,6 +1147,10 @@ impl Config {
             "s3-options.<bucket>.region",
             "s3-options.<bucket>.force-path-style",
             "experimental.use-environment-activation-cache",
+            "proxy-config",
+            "proxy-config.https",
+            "proxy-config.http",
+            "proxy-config.non-proxy-hosts",
         ]
     }
 
@@ -1109,6 +1191,8 @@ impl Config {
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
             run_post_link_scripts: other.run_post_link_scripts.or(self.run_post_link_scripts),
+
+            proxy_config: self.proxy_config.merge(other.proxy_config),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1183,6 +1267,43 @@ impl Config {
     /// Retrieve the value for the network_requests field.
     pub fn max_concurrent_downloads(&self) -> usize {
         self.concurrency.downloads
+    }
+
+    pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
+        if (self.proxy_config.https.is_none() && self.proxy_config.http.is_none())
+            || *USE_PROXY_FROM_ENV
+        {
+            return Ok(vec![]);
+        }
+
+        let config_no_proxy =
+            Some(self.proxy_config.non_proxy_hosts.iter().join(",")).filter(|v| !v.is_empty());
+
+        let mut result: Vec<Proxy> = Vec::new();
+        let config_no_proxy: Option<NoProxy> =
+            config_no_proxy.as_deref().and_then(NoProxy::from_string);
+
+        if self.proxy_config.https == self.proxy_config.http {
+            result.push(
+                Proxy::all(
+                    self.proxy_config
+                        .https
+                        .as_ref()
+                        .expect("must be some")
+                        .as_str(),
+                )?
+                .no_proxy(config_no_proxy),
+            );
+        } else {
+            if let Some(url) = &self.proxy_config.http {
+                result.push(Proxy::http(url.as_str())?.no_proxy(config_no_proxy.clone()));
+            }
+            if let Some(url) = &self.proxy_config.https {
+                result.push(Proxy::https(url.as_str())?.no_proxy(config_no_proxy));
+            }
+        }
+
+        Ok(result)
     }
 
     /// Modify this config with the given key and value
@@ -1459,6 +1580,41 @@ impl Config {
                     );
                 }
                 return Ok(());
+            key if key.starts_with("proxy-config") => {
+                if key == "proxy-config" {
+                    if let Some(value) = value {
+                        self.proxy_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.proxy_config = ProxyConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("proxy-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("proxy-config.").unwrap();
+                match subkey {
+                    "https" => {
+                        self.proxy_config.https = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "http" => {
+                        self.proxy_config.http = value
+                            .map(|v| Url::parse(&v))
+                            .transpose()
+                            .into_diagnostic()?;
+                    }
+                    "non-proxy-hosts" => {
+                        self.proxy_config.non_proxy_hosts = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
+                    }
+                    _ => return Err(err),
+                }
             }
             _ => return Err(err),
         }
@@ -1768,6 +1924,7 @@ UNUSED = "unused"
                 )]),
             },
             run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
+            proxy_config: ProxyConfig::default(),
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
@@ -2187,5 +2344,26 @@ UNUSED = "unused"
         assert_eq!(anaconda_config.disable_bzip2, Some(false));
         assert_eq!(anaconda_config.disable_zstd, Some(false));
         assert_eq!(anaconda_config.disable_sharded, None);
+    }
+
+    #[test]
+    fn test_proxy_config_parse() {
+        let toml = r#"
+            [proxy-config]
+            https = "http://proxy-for-https"
+            http = "http://proxy-for-http"
+            non-proxy-hosts = [ "a.com" ]
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(
+            config.proxy_config.https,
+            Some(Url::parse("http://proxy-for-https").unwrap())
+        );
+        assert_eq!(
+            config.proxy_config.http,
+            Some(Url::parse("http://proxy-for-http").unwrap())
+        );
+        assert_eq!(config.proxy_config.non_proxy_hosts.len(), 1);
+        assert_eq!(config.proxy_config.non_proxy_hosts[0], "a.com");
     }
 }

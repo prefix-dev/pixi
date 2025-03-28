@@ -135,6 +135,11 @@ Config {
         downloads: 50,
     },
     run_post_link_scripts: None,
+    proxy_config: ProxyConfig {
+        https: None,
+        http: None,
+        non_proxy_hosts: [],
+    },
     change_ps1: None,
     force_activate: None,
 }
