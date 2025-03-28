@@ -71,7 +71,7 @@ Some notable features we envision for upcoming releases are:
 To install Pixi on macOS and Linux, open a terminal and run the following command:
 
 ```bash
-curl -fsSL https://pixi.sh/install.sh | bash
+curl -fsSL https://pixi.sh/install.sh | sh
 # or with brew
 brew install pixi
 ```
