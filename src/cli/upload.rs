@@ -15,8 +15,8 @@ use thiserror::Error;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
-use pixi_config::Config;
 use pixi_progress;
+use pixi_utils::reqwest::reqwest_client_builder;
 
 #[allow(rustdoc::bare_urls)]
 /// Upload a conda package
@@ -54,16 +54,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         HumanBytes(filesize)
     );
 
-    let mut raw_builder = reqwest::Client::builder();
-    for p in Config::load_global().get_proxies().into_diagnostic()? {
-        raw_builder = raw_builder.proxy(p);
-    }
-
-    let client = reqwest_middleware::ClientBuilder::new(raw_builder.build().into_diagnostic()?)
-        .with_arc(Arc::new(
-            AuthenticationMiddleware::from_env_and_defaults().into_diagnostic()?,
-        ))
-        .build();
+    let client = reqwest_middleware::ClientBuilder::new(
+        reqwest_client_builder(None)?.build().into_diagnostic()?,
+    )
+    .with_arc(Arc::new(
+        AuthenticationMiddleware::from_env_and_defaults().into_diagnostic()?,
+    ))
+    .build();
 
     let sha256sum = format!(
         "{:x}",

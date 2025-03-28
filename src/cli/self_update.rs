@@ -4,7 +4,6 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 use miette::IntoDiagnostic;
-use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_utils::reqwest::{build_reqwest_clients, reqwest_client_builder};
 use reqwest::redirect::Policy;
@@ -64,11 +63,10 @@ async fn latest_version() -> miette::Result<Version> {
     let url = format!("{}/latest", consts::RELEASES_URL);
 
     // Create a client with a redirect policy
-    let mut no_redirect_client_builder = reqwest_client_builder().redirect(Policy::none()); // Prevent automatic redirects
-    for p in Config::load_global().get_proxies().into_diagnostic()? {
-        no_redirect_client_builder = no_redirect_client_builder.proxy(p);
-    }
-    let no_redirect_client = no_redirect_client_builder.build().into_diagnostic()?;
+    let no_redirect_client = reqwest_client_builder(None)?
+        .redirect(Policy::none())
+        .build()
+        .into_diagnostic()?; // Prevent automatic redirects
 
     let version: String = match no_redirect_client
         .head(&url)

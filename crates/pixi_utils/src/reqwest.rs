@@ -103,13 +103,26 @@ static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
     LazyLock::new(|| format!("pixi/{}", consts::PIXI_VERSION));
 static DEFAULT_REQWEST_TIMEOUT_SEC: Duration = Duration::from_secs(5 * 60);
 static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
-pub fn reqwest_client_builder() -> reqwest::ClientBuilder {
-    // TODO apply proxies here
-    Client::builder()
+
+pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
+    let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
         .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC)
-        .use_rustls_tls()
+        .use_rustls_tls();
+
+    let proxies = if let Some(config) = config {
+        config.get_proxies()
+    } else {
+        Config::load_global().get_proxies()
+    }
+    .into_diagnostic()?;
+
+    for p in proxies {
+        builder = builder.proxy(p);
+    }
+
+    Ok(builder)
 }
 
 pub fn build_reqwest_clients(
@@ -127,13 +140,10 @@ pub fn build_reqwest_clients(
         tracing::warn!("TLS verification is disabled. This is insecure and should only be used for testing or internal networks.");
     }
 
-    let mut builder = reqwest_client_builder().danger_accept_invalid_certs(config.tls_no_verify());
-
-    for p in config.get_proxies().into_diagnostic()? {
-        builder = builder.proxy(p);
-    }
-
-    let client = builder.build().expect("failed to create reqwest Client");
+    let client = reqwest_client_builder(Some(&config))?
+        .danger_accept_invalid_certs(config.tls_no_verify())
+        .build()
+        .expect("failed to create reqwest Client");
 
     let mut client_builder = ClientBuilder::new(client.clone());
 
