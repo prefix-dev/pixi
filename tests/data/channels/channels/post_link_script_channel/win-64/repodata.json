@@ -9,13 +9,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "a4b5f34047595e35106c3eea92e74478",
+      "md5": "3036928d687de772f902355665400d12",
       "name": "post-link-script-package",
       "platform": "win",
-      "sha256": "13fd9c87cac4aef4d1326730a3296aae77b059fb8cca27427026ab6698e4034f",
-      "size": 1318,
+      "sha256": "8e086b887d2bca324a6566fbdba028f0b00f6a9d08779753a8d24f1cf5cd2d4c",
+      "size": 1320,
       "subdir": "win-64",
-      "timestamp": 1741859868393,
+      "timestamp": 1743152762496,
       "version": "0.1.0"
     }
   },

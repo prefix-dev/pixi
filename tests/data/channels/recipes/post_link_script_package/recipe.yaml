@@ -11,10 +11,11 @@ outputs:
 
     build:
       script:
-        - mkdir -p $PREFIX/bin
         - if: win
           then:
-            - cp post-link.bat $PREFIX/bin/.post-link-script-package-post-link.bat
+            - mkdir -p $PREFIX/Scripts
+            - cp post-link.bat $PREFIX/Scripts/.post-link-script-package-post-link.bat
           else:
+            - mkdir -p $PREFIX/bin
             - cp post-link.sh $PREFIX/bin/.post-link-script-package-post-link.sh
             - chmod +x $PREFIX/bin/.post-link-script-package-post-link.sh
