@@ -1,27 +1,29 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 # Version: v0.43.3
 
 __wrap__() {
 
 VERSION="${PIXI_VERSION:-latest}"
 PIXI_HOME="${PIXI_HOME:-$HOME/.pixi}"
-PIXI_HOME="${PIXI_HOME/#\~/$HOME}"
+case "$PIXI_HOME" in
+    '~'|'~'/*) PIXI_HOME="${HOME-}${PIXI_HOME#\~}" ;; # expand tilde
+esac
 BIN_DIR="$PIXI_HOME/bin"
 
 REPO="prefix-dev/pixi"
 PLATFORM="$(uname -s)"
 ARCH="${PIXI_ARCH:-$(uname -m)}"
 
-if [[ $PLATFORM == "Darwin" ]]; then
+if [ "$PLATFORM" = "Darwin" ]; then
   PLATFORM="apple-darwin"
-elif [[ $PLATFORM == "Linux" ]]; then
+elif [ "$PLATFORM" = "Linux" ]; then
   PLATFORM="unknown-linux-musl"
-elif [[ $(uname -o) == "Msys" ]]; then
+elif [ "$(uname -o)" = "Msys" ]; then
   PLATFORM="pc-windows-msvc"
 fi
 
-if [[ $ARCH == "arm64" ]] || [[ $ARCH == "aarch64" ]]; then
+if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
   ARCH="aarch64"
 fi
 
@@ -29,17 +31,18 @@ fi
 
 BINARY="pixi-${ARCH}-${PLATFORM}"
 EXTENSION="tar.gz"
-if [[ $(uname -o) == "Msys" ]]; then
+if [ "$(uname -o)" = "Msys" ]; then
   EXTENSION="zip"
 fi
 
-if [[ $VERSION == "latest" ]]; then
+if [ "$VERSION" = "latest" ]; then
   DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}"
 else
   # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
-  if [[ ! "$VERSION" =~ ^v ]]; then
-    VERSION="v$VERSION"
-  fi
+  case "$VERSION" in
+      v*) ;;
+      *) VERSION="v$VERSION" ;;
+  esac
   DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.${EXTENSION}"
 fi
 
@@ -64,7 +67,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Test if stdout is a terminal before showing progress
-if [[ ! -t 1 ]]; then
+if [ ! -t 1 ]; then
   CURL_OPTIONS="--silent"  # --no-progress-meter is better, but only available in 7.67+
   WGET_OPTIONS="--no-verbose"
 else
@@ -75,16 +78,16 @@ fi
 if hash curl 2> /dev/null; then
   # Check that the curl version is not 8.8.0, which is broken for --write-out
   # https://github.com/curl/curl/issues/13845
-  if [[ "$(curl --version | head -n 1 | cut -d ' ' -f 2)" == "8.8.0" ]]; then
+  if [ "$(curl --version | head -n 1 | cut -d ' ' -f 2)" = "8.8.0" ]; then
     echo "error: curl 8.8.0 is known to be broken, please use a different version"
-    if [[ $(uname -o) == "Msys" ]]; then
+    if [ "$(uname -o)" = "Msys" ]; then
       echo "A common way to get an updated version of curl is to upgrade Git for Windows:"
       echo "      https://gitforwindows.org/"
     fi
     exit 1
   fi
   HTTP_CODE="$(curl -SL $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")"
-  if [[ "${HTTP_CODE}" -lt 200 || "${HTTP_CODE}" -gt 299 ]]; then
+  if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -gt 299 ]; then
     echo "error: '${DOWNLOAD_URL}' is not available"
     exit 1
   fi
@@ -96,7 +99,7 @@ elif hash wget 2> /dev/null; then
 fi
 
 # Check that file was correctly created (https://github.com/prefix-dev/pixi/issues/446)
-if [[ ! -s "$TEMP_FILE" ]]; then
+if [ ! -s "$TEMP_FILE" ]; then
   echo "error: temporary file ${TEMP_FILE} not correctly created."
   echo "       As a workaround, you can try set TMPDIR env variable to directory with write permissions."
   exit 1
@@ -104,7 +107,7 @@ fi
 
 # Extract pixi from the downloaded file
 mkdir -p "$BIN_DIR"
-if [[ "$(uname -o)" == "Msys" ]]; then
+if [ "$(uname -o)" = "Msys" ]; then
   unzip "$TEMP_FILE" -d "$BIN_DIR"
 else
   # Extract to a temporary directory first
@@ -112,7 +115,7 @@ else
   tar -xzf "$TEMP_FILE" -C "$TEMP_DIR"
 
   # Find and move the `pixi` binary, making sure to handle the case where it's in a subdirectory
-  if [[ -f "$TEMP_DIR/pixi" ]]; then
+  if [ -f "$TEMP_DIR/pixi" ]; then
     mv "$TEMP_DIR/pixi" "$BIN_DIR/"
   else
     mv "$(find "$TEMP_DIR" -type f -name pixi)" "$BIN_DIR/"
@@ -129,7 +132,7 @@ update_shell() {
     LINE="$2"
 
     # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
-    [[ -n "${PIXI_NO_PATH_UPDATE:-}" ]] && echo "No path update because PIXI_NO_PATH_UPDATE has a value" && return
+    [ -n "${PIXI_NO_PATH_UPDATE:-}" ] && echo "No path update because PIXI_NO_PATH_UPDATE has a value" && return
 
     # Create the file if it doesn't exist
     if [ ! -f "$FILE" ]; then
