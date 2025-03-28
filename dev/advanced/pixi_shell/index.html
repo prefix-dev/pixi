@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pixi-shell" class="md-skip">
+        <a href="#issues-with-pixi-shell" class="md-skip">
           Skip to content
         </a>
       
@@ -1810,8 +1810,6 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
-        
-      
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
           
@@ -1842,8 +1840,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -1854,7 +1850,7 @@
         <li class="md-nav__item">
   <a href="#issues-with-pixi-shell" class="md-nav__link">
     <span class="md-ellipsis">
-      Issues with pixi shell
+      Issues With Pixi Shell
     </span>
   </a>
   
@@ -1863,11 +1859,11 @@
         <li class="md-nav__item">
   <a href="#emulating-conda-activate-with-pixi" class="md-nav__link">
     <span class="md-ellipsis">
-      Emulating conda activate with pixi
+      Emulating conda activate With Pixi
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Emulating conda activate with pixi">
+    <nav class="md-nav" aria-label="Emulating conda activate With Pixi">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2189,8 +2185,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -2201,7 +2195,7 @@
         <li class="md-nav__item">
   <a href="#issues-with-pixi-shell" class="md-nav__link">
     <span class="md-ellipsis">
-      Issues with pixi shell
+      Issues With Pixi Shell
     </span>
   </a>
   
@@ -2210,11 +2204,11 @@
         <li class="md-nav__item">
   <a href="#emulating-conda-activate-with-pixi" class="md-nav__link">
     <span class="md-ellipsis">
-      Emulating conda activate with pixi
+      Emulating conda activate With Pixi
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Emulating conda activate with pixi">
+    <nav class="md-nav" aria-label="Emulating conda activate With Pixi">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2255,7 +2249,8 @@
   
 
 
-<h1 id="pixi-shell">pixi shell<a class="headerlink" href="#pixi-shell" title="Permanent link">#</a></h1>
+  <h1>Shell</h1>
+
 <p>The <code>pixi shell</code> command is similar to <code>conda activate</code> but works a little different under the hood.
 Instead of requiring a change to your <code>~/.bashrc</code> or other files, it will launch a fresh shell.
 That also means that, instead of <code>conda deactivate</code>, it's enough to just exit the current shell, e.g. by pressing <code>Ctrl+D</code>.</p>
@@ -2263,7 +2258,7 @@ That also means that, instead of <code>conda deactivate</code>, it's enough to j
 </span></code></pre></div>
 <p>On Unix systems the shell command works by creating a "fake" PTY session that will start the shell, and then send a string like <code>source /tmp/activation-env-12345.sh</code> to the <code>stdin</code> in order to activate the environment. If you would peek under the hood of the the <code>shell</code> command, then you would see that this is the first thing executed in the new shell session.</p>
 <p>The temporary script that we generate ends with <code>echo "PIXI_ENV_ACTIVATED"</code> which is used to detect if the environment was activated successfully. If we do not receive this string after one second, we will issue a warning to the user.</p>
-<h2 id="issues-with-pixi-shell">Issues with pixi shell<a class="headerlink" href="#issues-with-pixi-shell" title="Permanent link">#</a></h2>
+<h2 id="issues-with-pixi-shell">Issues With Pixi Shell<a class="headerlink" href="#issues-with-pixi-shell" title="Permanent link">#</a></h2>
 <p>As explained, <code>pixi shell</code> only works well if we execute the activation script <em>after</em> launching shell. Certain commands that are run in the <code>~/.bashrc</code> might swallow the activation command, and the environment won't be activated.</p>
 <p>For example, if your <code>~/.bashrc</code> contains code like the following, <code>pixi shell</code> has little chance to succeed:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># on WSL - the `wsl.exe` somehow takes over `stdin` and prevents `pixi shell` from succeeding</span>
@@ -2277,7 +2272,7 @@ That also means that, instead of <code>conda deactivate</code>, it's enough to j
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="k">fi</span>
 </span></code></pre></div>
 <p>In order to fix this, we would advise you to follow the steps below to use <code>pixi shell-hook</code> instead.</p>
-<h2 id="emulating-conda-activate-with-pixi">Emulating <code>conda activate</code> with pixi<a class="headerlink" href="#emulating-conda-activate-with-pixi" title="Permanent link">#</a></h2>
+<h2 id="emulating-conda-activate-with-pixi">Emulating <code>conda activate</code> With Pixi<a class="headerlink" href="#emulating-conda-activate-with-pixi" title="Permanent link">#</a></h2>
 <p>To emulate <code>conda activate</code> - which activates a conda environment in the current shell - you can use the <code>pixi shell-hook</code> subcommand. The <code>shell-hook</code> is going to print a shell script to your <code>stdout</code> that can be used by your shell to activate the environment.</p>
 <p>For example, with <code>bash</code> and <code>zsh</code> you can use the following command:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span>
