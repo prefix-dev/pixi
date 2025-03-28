@@ -1,6 +1,3 @@
-
-# Starship
-
 ![Starship with Pixi support](../../assets/starship-light.png#only-light)
 ![Starship with Pixi support](../../assets/starship-dark.png#only-dark)
 

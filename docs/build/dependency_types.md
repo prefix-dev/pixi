@@ -1,5 +1,3 @@
-# Run, Host and Build Dependencies
-
 If you add a package to the [dependency table](../reference/pixi_manifest.md#dependencies) of a feature that dependency will be available in all environments that include that feature.
 The dependencies of a package that is being built are a bit more granular.
 Here you can see the three types of dependencies for a simple C++ package.

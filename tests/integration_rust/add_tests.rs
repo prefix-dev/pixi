@@ -828,7 +828,9 @@ preview = ['pixi-build']"#,
     // Add a package
     pixi.add("boost-check")
         .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_git_rev(GitRev::new().with_tag("v0.1.0".to_string()))
+        .with_git_rev(
+            GitRev::new().with_rev("8a1d9b9b1755825165a615d563966aaa59a5361c".to_string()),
+        )
         .with_git_subdir("boost-check".to_string())
         .await
         .unwrap();
@@ -844,6 +846,7 @@ preview = ['pixi-build']"#,
 
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (r"rev=([a-f0-9]+)", "rev=[REV]"),
     ]}, {
         insta::assert_snapshot!(git_package.unwrap().as_conda().unwrap().location());
     });
@@ -894,29 +897,52 @@ preview = ['pixi-build']"#,
 #[tokio::test]
 async fn add_pypi_git() {
     let pixi = PixiControl::from_manifest(
-        r#"
+        format!(
+            r#"
 [project]
 name = "test-channel-change"
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["linux-64"]
+platforms = ["{platform}"]
 
 "#,
+            platform = Platform::current()
+        )
+        .as_str(),
     )
     .unwrap();
+
+    // Add python
+    pixi.add("python").await.unwrap();
 
     // Add a package
     pixi.add("boltons")
         .set_pypi(true)
         .with_git_url(Url::parse("https://github.com/mahmoud/boltons.git").unwrap())
-        .with_no_lockfile_update(true)
         .await
         .unwrap();
 
     // Check the manifest itself
     insta::with_settings!({filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+        (r"platforms = \[.*\]", "platforms = [\"<PLATFORM>\"]"),
     ]}, {
         insta::assert_snapshot!(pixi.workspace().unwrap().workspace.provenance.read().unwrap().into_inner());
+    });
+
+    let lock_file = pixi.lock_file().await.unwrap();
+
+    let (boltons, _) = lock_file
+        .default_environment()
+        .unwrap()
+        .pypi_packages(Platform::current())
+        .unwrap()
+        .find(|(p, _)| p.name.to_string() == "boltons")
+        .unwrap();
+
+    insta::with_settings!( {filters => vec![
+        (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
+    ]}, {
+        insta::assert_snapshot!(boltons.location);
     });
 }
 
