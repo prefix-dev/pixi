@@ -174,10 +174,13 @@ hooks:
   - docs/docs_hooks.py
 
 validation:
-  omitted_files: ignore
+  omitted_files: warn
   absolute_links: warn
   unrecognized_links: warn
   anchors: warn
+
+not_in_nav: |
+  reference/cli/
 
 plugins:
   - redirects:
