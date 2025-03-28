@@ -402,15 +402,37 @@ pub async fn update_prefix_conda(
     // Check in the prefix if there are any `post-link` scripts that have not been executed, and if yes,
     // issue a one-time warning to the user.
     if matches!(run_post_link_scripts, RunPostLinkScripts::False) {
+        let mut skipped_scripts = Vec::new();
+
         for package in result.transaction.installed_packages() {
-            // Check if the prefix contains a file called `name-post-link.sh`
-            let post_link_script = prefix
-                .root()
-                .join(LinkScriptType::PostLink.get_path(&package.package_record, &host_platform));
+            let rel_script_path =
+                LinkScriptType::PreUnlink.get_path(&package.package_record, &host_platform);
+            let post_link_script = prefix.root().join(&rel_script_path);
 
             if post_link_script.exists() {
-                tracing::warn!("The package '{}' contains a post-link script that has not been executed (https://pixi.sh/latest/reference/pixi_configuration/#run-post-link-scripts).\n      Run `pixi config set --local run-post-link-scripts insecure` to enable post-link / pre-unlink scripts.", package.package_record.name.as_normalized());
+                skipped_scripts.push(rel_script_path);
             }
+        }
+
+        if !skipped_scripts.is_empty() {
+            let script_list = skipped_scripts
+                .iter()
+                .map(|p| format!("\t- {}", console::style(p).yellow()))
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            tracing::warn!(
+                "Skipped running the post-link scripts because `{}` = `{}`\n\
+            {}\n\n\
+            To enable them, run:\n\
+            \t{}\n\n\
+            More info:\n\
+            \thttps://pixi.sh/latest/reference/pixi_configuration/#run-post-link-scripts\n",
+                console::style("run-post-link-scripts").bold(),
+                console::style("false").cyan(),
+                script_list,
+                console::style("pixi config set --local run-post-link-scripts insecure").green(),
+            );
         }
     }
 
