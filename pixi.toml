@@ -106,7 +106,8 @@ lint-pixi_docs = { depends-on = [
   "cargo-fmt-pixi_docs",
   "cargo-clippy-pixi_docs",
 ] }
-pre-commit-install = "pre-commit install --install-hooks"
+pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
+pre-commit-install-minimal = "pre-commit install -t=pre-commit"
 pre-commit-run = "pre-commit run --all-files"
 prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"

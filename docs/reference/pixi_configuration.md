@@ -48,18 +48,18 @@ The configuration is loaded in the following order:
 
 ## Configuration options
 
-??? info "Casing In Configuration"
-    In versions of Pixi `0.20.1` and older the global configuration used `snake_case` which
+??? info "Naming convention in configuration"
+    In Pixi `0.20.1` and older the global configuration options used `snake_case` which
     we've changed to `kebab-case` for consistency with the rest of the configuration.
-    But we still support the old `snake_case` configuration, for older configuration options.
-    These are:
+    For backwards compatibility, the following configuration options can still be written
+    in `snake_case`:
 
     - `default_channels`
     - `change_ps1`
     - `tls_no_verify`
     - `authentication_override_file`
-    - `mirrors` and sub-options
-    - `repodata_config` and sub-options
+    - `mirrors` and its sub-options
+    - `repodata_config` and its sub-options
 
 The following reference describes all available configuration options.
 

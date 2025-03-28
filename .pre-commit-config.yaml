@@ -99,4 +99,4 @@ repos:
         types: [file, rust]
         entry: pixi run --environment=lint cargo-clippy
         pass_filenames: false
-        stages: [pre-commit, manual]
+        stages: [pre-push, manual]
