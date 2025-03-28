@@ -25,6 +25,7 @@ pub struct UvResolutionContext {
     pub allow_insecure_host: Vec<TrustedHost>,
     pub shared_state: SharedState,
     pub extra_middleware: ExtraMiddleware,
+    pub proxies: Vec<reqwest::Proxy>,
 }
 
 impl UvResolutionContext {
@@ -75,6 +76,7 @@ impl UvResolutionContext {
             allow_insecure_host,
             shared_state: SharedState::default(),
             extra_middleware: ExtraMiddleware(uv_middlewares(project.config())),
+            proxies: project.config().get_proxies().into_diagnostic()?,
         })
     }
 
