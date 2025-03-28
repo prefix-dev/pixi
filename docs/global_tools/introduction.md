@@ -73,7 +73,7 @@ First install a tool with `pixi global`:
 pixi global install git
 ```
 
-The completions can be found in under [`$PIXI_HOME`](../reference/environment_variables.md)`/completions`.
+The completions can be found under [`$PIXI_HOME`](../reference/environment_variables.md)`/completions`.
 
 You can then load the completions in the startup script of your shell:
 
