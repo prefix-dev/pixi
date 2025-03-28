@@ -699,7 +699,8 @@ async fn test_setuptools_override_failure() {
 
         # The transitive dependencies of viser were causing issues
         [pypi-dependencies]
-        viser = "==0.2.7"
+        viser = "==0.2.23"
+        xatlas = "==0.0.8"
         "#,
         platform = Platform::current()
     );
