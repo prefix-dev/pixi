@@ -1580,6 +1580,7 @@ impl Config {
                     );
                 }
                 return Ok(());
+            }
             key if key.starts_with("proxy-config") => {
                 if key == "proxy-config" {
                     if let Some(value) = value {
