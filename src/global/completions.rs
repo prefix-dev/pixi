@@ -43,7 +43,9 @@ impl CompletionsDir {
             for entry in fs_err::read_dir(&directory).into_diagnostic()? {
                 let path = entry.into_diagnostic()?.path();
 
-                if (path.is_symlink() && fs_err::read_link(&path).is_err()) || path.is_file() {
+                if (path.is_symlink() && fs_err::read_link(&path).is_err())
+                    || (!path.is_symlink() && path.is_file())
+                {
                     // Remove broken symlink
                     fs_err::remove_file(&path).into_diagnostic()?;
                 }
