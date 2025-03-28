@@ -211,6 +211,32 @@ channel-priority = "disabled"
     package = {version = "*", channel = "channel-name"}
     ```
 
+### `requires-pixi` (optional)
+
+The required version spec for `pixi` itself to resolve and build the project. If unset (**Default**),
+any version is ok. If set, it must be a string to a valid conda version spec, and the version of
+a running `pixi` must match the required spec before resolving or building the project, or exit with
+an error when not match.
+
+For example, with the following manifest, `pixi shell` will fail on `pixi 0.39.0`, but success after
+upgrading to `pixi 0.40.0`:
+
+```toml
+[workspace]
+requires-pixi = ">=0.40"
+```
+
+The upper bound can also be limit like this:
+
+```toml
+[workspace]
+requires-pixi = ">=0.40,<1.0"
+```
+
+!!! note
+    This option should be used to improve the reproducibility of building the project. A complicated
+    requirement spec may be an obstacle to setup the building environment.
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your project.
@@ -489,7 +515,7 @@ pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
 # With ssh
 flask = { git = "ssh://git@github.com/pallets/flask" }
 # With https and a specific revision
-requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
+httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 
 # With https and a specific branch
 boltons = { git = "https://github.com/mahmoud/boltons.git", branch = "master" }
@@ -564,7 +590,7 @@ Use `git` in combination with `rev` or `subdirectory`:
 ```toml
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
-requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
+httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
 ```
 
