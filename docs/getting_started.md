@@ -1,6 +1,3 @@
-# Getting Started
-
-
 Every Pixi workspace is described by a Pixi manifest.
 In this simple example we have a single task `start` which runs a Python file and two dependencies, `cowpy` and `python`.
 

@@ -1,4 +1,3 @@
-
 ## Basic usage
 
 Using JupyterLab with Pixi is very simple.

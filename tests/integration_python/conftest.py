@@ -50,6 +50,22 @@ def test_data() -> Path:
 
 
 @pytest.fixture
+def pypi_data(test_data: Path) -> Path:
+    """
+    Returns the pixi pypi test data
+    """
+    return test_data.joinpath("pypi")
+
+
+@pytest.fixture
+def pixi_tomls(test_data: Path) -> Path:
+    """
+    Returns the pixi pypi test data
+    """
+    return test_data.joinpath("pixi_tomls")
+
+
+@pytest.fixture
 def mock_projects(test_data: Path) -> Path:
     return test_data.joinpath("mock-projects")
 

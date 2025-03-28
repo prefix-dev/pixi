@@ -1,5 +1,3 @@
-# The `pixi.lock` lock file
-
 > A lock file is the protector of the environments, and Pixi is the key to unlock it.
 
 ## What is a lock file?

@@ -1,6 +1,3 @@
-
-# Using `pixi exec` to Create Self-Contained Scripts
-
 !!!warning "Only on Unix-like systems"
     The following approach only works on Unix-like systems (i.e. Linux and macOS) since Windows does not support shebang lines.
 

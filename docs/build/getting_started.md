@@ -1,6 +1,4 @@
 
-## Introduction
-
 Next to managing workflows and environments, Pixi can also build packages.
 This is useful for the following reasons:
 
