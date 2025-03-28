@@ -1,5 +1,3 @@
-# Tutorial: Doing Python development with Pixi
-
 In this tutorial, we will show you how to create a simple Python project with pixi.
 We will show some of the features that Pixi provides, that are currently not a part of `pdm`, `poetry` etc.
 

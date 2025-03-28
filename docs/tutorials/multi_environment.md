@@ -1,5 +1,3 @@
-# Tutorial: Using Multiple Environments
-
 In this tutorial we will show you how to use multiple environments in one Pixi workspace.
 
 ## Why Is This Useful?
