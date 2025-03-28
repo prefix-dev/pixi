@@ -260,6 +260,8 @@ def test_post_link_scripts(
 
     # Make sure script has ran
     assert tmp_pixi_workspace.joinpath(".pixi", "envs", "default", ".messages.bak.txt").exists()
+
+
 @pytest.mark.extra_slow
 def test_build_git_source_deps(
     pixi: Path, tmp_pixi_workspace: Path, pypi_data: Path, pixi_tomls: Path
