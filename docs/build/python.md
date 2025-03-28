@@ -1,5 +1,3 @@
-# Tutorial: Building a Python Package
-
 In this tutorial, we will show you how to create a simple Python package with pixi.
 
 !!! warning

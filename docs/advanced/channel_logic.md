@@ -1,5 +1,3 @@
-# Channel Logic
-
 All logic regarding the decision which dependencies can be installed from which channel is done by the instruction we give the solver.
 
 The actual code regarding this is in the [`rattler_solve`](https://github.com/conda/rattler/blob/02e68c9539c6009cc1370fbf46dc69ca5361d12d/crates/rattler_solve/src/resolvo/mod.rs) crate.
@@ -31,7 +29,7 @@ flowchart TD
     D --> E
 ```
 
-# Channel Priority
+## Channel Priority
 
 Channel priority is dictated by the order in the `workspace.channels` array, where the first channel is the highest priority.
 For instance:
@@ -63,7 +61,7 @@ flowchart TD
 This method ensures the solver only adds a package to the candidates if it's found in the highest priority channel available.
 If you have 10 channels and the package is found in the 5th channel it will exclude the next 5 channels from the candidates if they also contain the package.
 
-# Use Case: pytorch and nvidia with conda-forge
+## Use Case: pytorch and nvidia with conda-forge
 A common use case is to use `pytorch` with `nvidia` drivers, while also needing the `conda-forge` channel for the main dependencies.
 ```toml
 [workspace]

@@ -1,5 +1,3 @@
-# Use pixi inside of a devcontainer
-
 [VSCode Devcontainers](https://code.visualstudio.com/docs/devcontainers/containers) are a popular tool to develop on a workspace with a consistent environment.
 They are also used in [GitHub Codespaces](https://github.com/environments/codespaces) which makes it a great way to develop on a workspace without having to install anything on your local machine.
 

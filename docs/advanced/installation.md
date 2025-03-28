@@ -1,5 +1,3 @@
-# Installation
-
 To install `pixi` you can run the following command in your terminal:
 
 === "Linux & macOS"

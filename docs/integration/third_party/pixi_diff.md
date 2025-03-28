@@ -1,5 +1,3 @@
-# Calculate Lockfile diffs
-
 ![pixi-diff demo](https://raw.githubusercontent.com/pavelzw/pixi-diff/refs/heads/main/.github/assets/demo/demo-light.gif#only-light)
 ![pixi-diff demo](https://raw.githubusercontent.com/pavelzw/pixi-diff/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark)
 
