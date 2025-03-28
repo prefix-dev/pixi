@@ -1,5 +1,3 @@
-# Bringing Pixi to Production
-
 One way to bring a Pixi package into production is to containerize it using tools like Docker or Podman.
 
 <!-- Keep in sync with https://github.com/prefix-dev/pixi-docker/blob/main/README.md -->

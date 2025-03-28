@@ -1,5 +1,3 @@
-# Tutorial: Develop a Rust package using `pixi`
-
 In this tutorial, we will show you how to develop a Rust package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 

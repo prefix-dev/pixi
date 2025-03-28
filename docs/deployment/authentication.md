@@ -1,5 +1,3 @@
-# Authentication
-
 You can authenticate Pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
 Different servers use different authentication methods.
 In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.

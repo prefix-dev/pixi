@@ -1,6 +1,3 @@
-# Tutorial: Building a C++ Package with rattler-build and recipe.yaml
-
-
 In this tutorial, we will show you how to build the same C++ package as from [Building a C++ Package](cpp.md) tutorial using [`rattler-build`](https://rattler.build).
 In this tutorial we assume that you've read the [Building a C++ Package](cpp.md) tutorial.
 If you haven't read it yet, we recommend you to do so before continuing.

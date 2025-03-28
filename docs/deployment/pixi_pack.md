@@ -1,4 +1,3 @@
-# Pixi Pack
 <!-- Keep in sync with https://github.com/quantco/pixi-pack/blob/main/README.md -->
 
 [`pixi-pack`](https://github.com/quantco/pixi-pack) is a simple tool that takes a Pixi environment and packs it into a compressed archive that can be shipped to the target machine.
