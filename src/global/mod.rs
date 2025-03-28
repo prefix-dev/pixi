@@ -1,4 +1,5 @@
 pub(crate) mod common;
+pub(crate) mod completions;
 pub(crate) mod install;
 pub(crate) mod list;
 pub(crate) mod project;

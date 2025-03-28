@@ -1,3 +1,25 @@
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use super::{
+    common::{get_install_changes, shortcuts_sync_status, EnvironmentUpdate},
+    install::find_binary_by_name,
+    trampoline::{self, GlobalExecutable},
+    BinDir, EnvRoot, StateChange, StateChanges,
+};
+use crate::{
+    global::{
+        common::{
+            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
+        },
+        completions::{completions_sync_status, CompletionsDir},
+        find_executables, find_executables_for_many_records,
+        install::{create_executable_trampolines, script_exec_mapping},
+        project::environment::environment_specs_in_sync,
+        EnvDir,
+    },
+    prefix::{Executable, Prefix},
+    repodata::Repodata,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
@@ -42,28 +64,6 @@ use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
 
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
-use super::{
-    common::{get_install_changes, shortcut_sync_status, EnvironmentUpdate},
-    install::find_binary_by_name,
-    trampoline::{self, GlobalExecutable},
-    BinDir, EnvRoot, StateChange, StateChanges,
-};
-use crate::{
-    global::{
-        common::{
-            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
-        EnvDir,
-    },
-    prefix::{Executable, Prefix},
-    repodata::Repodata,
-    rlimit::try_increase_rlimit_to_sensible,
-};
-
 mod environment;
 mod manifest;
 mod parsed_manifest;
@@ -86,6 +86,8 @@ pub struct Project {
     pub(crate) env_root: EnvRoot,
     /// Binary directory
     pub(crate) bin_dir: BinDir,
+    /// Directory where shell completions are located
+    pub(crate) completions_dir: CompletionsDir,
     /// Reqwest client shared for this project.
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
@@ -254,7 +256,12 @@ async fn package_from_conda_meta(
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifest(manifest: Manifest, env_root: EnvRoot, bin_dir: BinDir) -> Self {
+    pub(crate) fn from_manifest(
+        manifest: Manifest,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+        completions_dir: CompletionsDir,
+    ) -> Self {
         let root = manifest
             .path
             .parent()
@@ -271,6 +278,7 @@ impl Project {
             config,
             env_root,
             bin_dir,
+            completions_dir,
             client,
             repodata_gateway,
             concurrent_downloads_semaphore: OnceCell::new(),
@@ -283,9 +291,15 @@ impl Project {
         content: &str,
         env_root: EnvRoot,
         bin_dir: BinDir,
+        completions_dir: CompletionsDir,
     ) -> miette::Result<Self> {
         let manifest = Manifest::from_str(manifest_path, content)?;
-        Ok(Self::from_manifest(manifest, env_root, bin_dir))
+        Ok(Self::from_manifest(
+            manifest,
+            env_root,
+            bin_dir,
+            completions_dir,
+        ))
     }
 
     /// Discovers the project manifest file in path at
@@ -299,6 +313,7 @@ impl Project {
 
         let bin_dir = BinDir::from_env().await?;
         let env_root = EnvRoot::from_env().await?;
+        let completions_dir = CompletionsDir::from_env().await?;
 
         if !manifest_path.exists() {
             tracing::debug!(
@@ -313,11 +328,14 @@ impl Project {
                 tracing::debug!(
                     "Existing installation found. Creating global manifest from that information."
                 );
-                return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
-                    .await
-                    .wrap_err_with(|| {
-                        "Failed to create global manifest from existing installation"
-                    });
+                return Self::try_from_existing_installation(
+                    &manifest_path,
+                    env_root,
+                    bin_dir,
+                    completions_dir,
+                )
+                .await
+                .wrap_err_with(|| "Failed to create global manifest from existing installation");
             } else {
                 tracing::debug!("Create an empty global manifest.");
                 tokio_fs::File::create(&manifest_path)
@@ -326,13 +344,14 @@ impl Project {
             }
         }
 
-        Self::from_path(&manifest_path, env_root, bin_dir)
+        Self::from_path(&manifest_path, env_root, bin_dir, completions_dir)
     }
 
     async fn try_from_existing_installation(
         manifest_path: &Path,
         env_root: EnvRoot,
         bin_dir: BinDir,
+        completions_dir: CompletionsDir,
     ) -> miette::Result<Self> {
         let config = Config::load(env_root.path());
 
@@ -387,7 +406,7 @@ impl Project {
         tokio_fs::write(&manifest_path, &toml)
             .await
             .into_diagnostic()?;
-        Self::from_str(manifest_path, &toml, env_root, bin_dir)
+        Self::from_str(manifest_path, &toml, env_root, bin_dir, completions_dir)
     }
 
     /// Get default dir for the pixi global manifest
@@ -426,9 +445,15 @@ impl Project {
         manifest_path: &Path,
         env_root: EnvRoot,
         bin_dir: BinDir,
+        completions_dir: CompletionsDir,
     ) -> miette::Result<Self> {
         let manifest = Manifest::from_path(manifest_path)?;
-        Ok(Project::from_manifest(manifest, env_root, bin_dir))
+        Ok(Project::from_manifest(
+            manifest,
+            env_root,
+            bin_dir,
+            completions_dir,
+        ))
     }
 
     /// Merge config with existing config project
@@ -646,6 +671,9 @@ impl Project {
                 StateChange::RemovedExposed(binary_path.exposed_name()),
             );
         }
+
+        // Prune old completions
+        self.completions_dir.prune_old_completions()?;
 
         state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
 
@@ -879,10 +907,34 @@ impl Project {
             return Ok(false);
         }
 
+        tracing::debug!("Verify that the completions are in sync with the environment");
+        let execs_all = self
+            .executables_of_all_dependencies(env_name)
+            .await?
+            .into_iter()
+            .map(|exec| exec.name)
+            .collect();
+        let (completions_to_remove, completions_to_add) = completions_sync_status(
+            environment.exposed.clone(),
+            execs_all,
+            prefix.root(),
+            &self.completions_dir,
+        )
+        .await?;
+        if !completions_to_remove.is_empty() || !completions_to_add.is_empty() {
+            tracing::debug!(
+                "Environment {} completions are not in sync: to_remove: {}, to_add: {}",
+                env_name.fancy_display(),
+                completions_to_remove.iter().map(|c| c.name()).join(", "),
+                completions_to_add.iter().map(|c| c.name()).join(", ")
+            );
+            return Ok(false);
+        }
+
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (shortcuts_to_remove, shortcuts_to_add) =
-            shortcut_sync_status(shortcuts, prefix_records, prefix.root())?;
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
         if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
             tracing::debug!(
                 "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
@@ -1013,8 +1065,11 @@ impl Project {
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
-        // Install shortcuts
+        // Sync shortcuts
         state_changes |= self.sync_shortcuts(env_name).await?;
+
+        // Sync completions
+        state_changes |= self.sync_completions(env_name).await?;
 
         Ok(state_changes)
     }
@@ -1129,7 +1184,7 @@ impl Project {
 
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (records_to_install, records_to_uninstall) =
-            shortcut_sync_status(shortcuts, prefix_records, prefix.root())?;
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
 
         for record in records_to_install {
             rattler_menuinst::install_menuitems_for_record(
@@ -1197,6 +1252,48 @@ impl Project {
         Ok(state_changes)
     }
 
+    pub async fn sync_completions(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
+        let environment = self.environment(env_name).ok_or(miette::miette!(
+            "Environment {} not found in manifest.",
+            env_name.fancy_display()
+        ))?;
+        let prefix = self.environment_prefix(env_name).await?;
+        let execs_all = self
+            .executables_of_all_dependencies(env_name)
+            .await?
+            .into_iter()
+            .map(|exec| exec.name)
+            .collect();
+
+        let (completions_to_remove, completions_to_add) = completions_sync_status(
+            environment.exposed.clone(),
+            execs_all,
+            prefix.root(),
+            &self.completions_dir,
+        )
+        .await?;
+
+        for completion_to_remove in completions_to_remove {
+            let state_change = completion_to_remove.remove().await?;
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        for completion_to_add in completions_to_add {
+            let Some(state_change) = completion_to_add.install().await? else {
+                continue;
+            };
+
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        Ok(state_changes)
+    }
+
     /// Returns a semaphore than can be used to limit the number of concurrent
     /// according to the user configuration.
     fn concurrent_downloads_semaphore(&self) -> Arc<Semaphore> {
@@ -1254,9 +1351,16 @@ mod tests {
         let manifest_path: PathBuf = FilePath().fake();
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();
+        let completions_dir = CompletionsDir::from_env().await.unwrap();
 
-        let project =
-            Project::from_str(&manifest_path, SIMPLE_MANIFEST, env_root, bin_dir).unwrap();
+        let project = Project::from_str(
+            &manifest_path,
+            SIMPLE_MANIFEST,
+            env_root,
+            bin_dir,
+            completions_dir,
+        )
+        .unwrap();
         assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 
@@ -1267,11 +1371,13 @@ mod tests {
 
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();
+        let completions_dir = CompletionsDir::from_env().await.unwrap();
 
         // Create and write global manifest
         let mut file = fs::File::create(&manifest_path).unwrap();
         file.write_all(SIMPLE_MANIFEST.as_bytes()).unwrap();
-        let project = Project::from_path(&manifest_path, env_root, bin_dir).unwrap();
+        let project =
+            Project::from_path(&manifest_path, env_root, bin_dir, completions_dir).unwrap();
 
         // Canonicalize both paths
         let canonical_root = project.root.canonicalize().unwrap();
@@ -1286,9 +1392,10 @@ mod tests {
 
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();
+        let completions_dir = CompletionsDir::from_env().await.unwrap();
 
         let manifest = Manifest::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
-        let project = Project::from_manifest(manifest, env_root, bin_dir);
+        let project = Project::from_manifest(manifest, env_root, bin_dir, completions_dir);
         assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 
@@ -1312,6 +1419,7 @@ mod tests {
             "#,
             EnvRoot::new(tempdir.path().to_path_buf()).unwrap(),
             BinDir::new(tempdir.path().to_path_buf()).unwrap(),
+            CompletionsDir::from_env().await.unwrap(),
         )
         .unwrap();
 
@@ -1433,6 +1541,7 @@ mod tests {
             manifest,
             env_root.clone(),
             BinDir::new(env_root.path().parent().unwrap().to_path_buf()).unwrap(),
+            CompletionsDir::from_env().await.unwrap(),
         );
 
         // Call the prune method with a list of environments to keep (env1 and env3) but

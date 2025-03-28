@@ -359,7 +359,7 @@ impl Manifest {
         // Update self.document
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.exposed"),
-            &mapping.exposed_name.to_string(),
+            mapping.exposed_name.as_ref(),
             toml_edit::Value::from(mapping.executable_relname.clone()),
         )?;
 
@@ -391,7 +391,7 @@ impl Manifest {
         // Remove from the document
         self.document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
-            .remove(&exposed_name.to_string())
+            .remove(exposed_name.as_ref())
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
@@ -714,7 +714,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
             .unwrap()
-            .get(&exposed_name.to_string())
+            .get(exposed_name.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -757,7 +757,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name1.to_string())
+            .get(exposed_name1.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -782,7 +782,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name2.to_string())
+            .get(exposed_name2.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -824,7 +824,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name.to_string());
+            .get(exposed_name.as_ref());
         assert!(actual_value.is_none());
 
         // Check parsed

@@ -354,6 +354,9 @@ pub(crate) enum StateChange {
     UpdatedEnvironment(EnvironmentUpdate),
     InstalledShortcut(String),
     UninstalledShortcut(String),
+    #[allow(dead_code)] // This variant is not used on Windows
+    AddedCompletion(String),
+    RemovedCompletion(String),
 }
 
 #[must_use]
@@ -603,14 +606,14 @@ impl StateChanges {
 
                         if installed_items.len() == 1 {
                             eprintln!(
-                                "{}Installed shortcut {} in environment {}.",
+                                "{}Installed shortcut {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 installed_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
                             eprintln!(
-                                "{}Installed shortcuts in environment {}:",
+                                "{}Installed shortcuts of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
@@ -633,14 +636,74 @@ impl StateChanges {
 
                         if uninstalled_items.len() == 1 {
                             eprintln!(
-                                "{}Uninstalled shortcut {} in environment {}.",
+                                "{}Uninstalled shortcut {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 uninstalled_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
                             eprintln!(
-                                "{}Uninstalled shortcuts in environment {}:",
+                                "{}Uninstalled shortcuts of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for uninstalled_item in uninstalled_items {
+                                eprintln!("   - {}", uninstalled_item);
+                            }
+                        }
+                    }
+                    StateChange::AddedCompletion(name) => {
+                        let mut installed_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::AddedCompletion(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        installed_items.sort();
+
+                        if installed_items.len() == 1 {
+                            eprintln!(
+                                "{}Exposed completion {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                installed_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Exposed completions of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for installed_item in installed_items {
+                                eprintln!("   - {}", installed_item);
+                            }
+                        }
+                    }
+                    StateChange::RemovedCompletion(name) => {
+                        let mut uninstalled_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::RemovedCompletion(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        uninstalled_items.sort();
+
+                        if uninstalled_items.len() == 1 {
+                            eprintln!(
+                                "{}Removed completion {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                uninstalled_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Removed completions of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
@@ -765,7 +828,7 @@ pub(crate) fn channel_url_to_prioritized_channel(
 /// This function filters the provided `prefix_records` to find those that contain menuinst JSON files.
 /// It then compares these records with the requested `shortcuts` to
 /// determine which records need to be installed and which need to be uninstalled.
-pub(crate) fn shortcut_sync_status(
+pub(crate) fn shortcuts_sync_status(
     shortcuts: IndexSet<PackageName>,
     prefix_records: Vec<PrefixRecord>,
     prefix_root: &Path,
