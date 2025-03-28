@@ -77,7 +77,19 @@
          <lastmod>2025-03-28</lastmod>
     </url>
     <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/global_tools/concepts/</loc>
+         <lastmod>2025-03-28</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/global_tools/examples/</loc>
+         <lastmod>2025-03-28</lastmod>
+    </url>
+    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/global_tools/introduction/</loc>
+         <lastmod>2025-03-28</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/global_tools/manifest/</loc>
          <lastmod>2025-03-28</lastmod>
     </url>
     <url>
@@ -121,10 +133,6 @@
          <lastmod>2025-03-28</lastmod>
     </url>
     <url>
-         <loc>https://prefix-dev.github.io/pixi/dev/misc/documenting_pixi/</loc>
-         <lastmod>2025-03-28</lastmod>
-    </url>
-    <url>
          <loc>https://prefix-dev.github.io/pixi/dev/misc/packaging/</loc>
          <lastmod>2025-03-28</lastmod>
     </url>
@@ -142,6 +150,10 @@
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/python/tutorial/</loc>
+         <lastmod>2025-03-28</lastmod>
+    </url>
+    <url>
+         <loc>https://prefix-dev.github.io/pixi/dev/reference/environment_variables/</loc>
          <lastmod>2025-03-28</lastmod>
     </url>
     <url>
