@@ -22,6 +22,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Prune environments that are not listed
     let state_change = project.prune_old_environments().await?;
 
+    // Prune broken completions
+    project.completions_dir.prune_old_completions()?;
+
     if state_change.has_changed() {
         has_changed = true;
         state_change.report();

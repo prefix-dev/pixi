@@ -83,9 +83,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env_names = match args.environments {
         Some(env_names) => env_names,
         None => {
-            // prune old environments
+            // prune old environments and completions
             let state_changes = project_original.prune_old_environments().await?;
             state_changes.report();
+            project_original.completions_dir.prune_old_completions()?;
             project_original.environments().keys().cloned().collect()
         }
     };

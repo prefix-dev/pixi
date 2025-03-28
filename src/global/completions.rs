@@ -32,6 +32,38 @@ impl CompletionsDir {
     pub fn path(&self) -> &Path {
         &self.0
     }
+
+    /// Prune old completions
+    pub fn prune_old_completions(&self) -> miette::Result<()> {
+        for directory in [self.bash_path(), self.zsh_path(), self.fish_path()] {
+            if !directory.is_dir() {
+                continue;
+            }
+
+            for entry in fs_err::read_dir(&directory).into_diagnostic()? {
+                let path = entry.into_diagnostic()?.path();
+
+                if (path.is_symlink() && fs_err::read_link(&path).is_err()) || path.is_file() {
+                    // Remove broken symlink
+                    fs_err::remove_file(&path).into_diagnostic()?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn bash_path(&self) -> PathBuf {
+        self.path().join("bash")
+    }
+
+    pub fn zsh_path(&self) -> PathBuf {
+        self.path().join("zsh")
+    }
+
+    pub fn fish_path(&self) -> PathBuf {
+        self.path().join("fish")
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -129,20 +161,17 @@ pub fn contained_completions(
     if bash_path.exists() {
         let destination =
             completions_dir
-                .path()
-                .join("bash")
+                .bash_path()
                 .join(bash_path.file_name().wrap_err_with(|| {
                     miette::miette!("Bash completion path needs to have a file name")
                 })?);
-
         completion_scripts.push(Completion::new(name.to_string(), bash_path, destination));
     }
 
     if zsh_path.exists() {
         let destination =
             completions_dir
-                .path()
-                .join("zsh")
+                .zsh_path()
                 .join(zsh_path.file_name().wrap_err_with(|| {
                     miette::miette!("Zsh completion path needs to have a file name")
                 })?);
@@ -152,8 +181,7 @@ pub fn contained_completions(
     if fish_path.exists() {
         let destination =
             completions_dir
-                .path()
-                .join("fish")
+                .fish_path()
                 .join(fish_path.file_name().wrap_err_with(|| {
                     miette::miette!("Fish completion path needs to have a file name")
                 })?);
