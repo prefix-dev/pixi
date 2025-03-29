@@ -774,11 +774,14 @@ jobs:
   # Test unix installer on a number of common wheels on some platforms
   #
 
-  test-install-sh-linux:
-    name: install.sh | linux
+  test-install-sh-nix:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    name: install.sh | ${{ matrix.os }}
     needs:
       - determine_changes
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4

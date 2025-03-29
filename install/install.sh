@@ -152,7 +152,7 @@ update_shell() {
     fi
 }
 
-case "$(basename "$SHELL")" in
+case "$(basename "${SHELL-}")" in
     bash)
         # Default to bashrc as that is used in non login shells instead of the profile.
         LINE="export PATH=\"${BIN_DIR}:\$PATH\""
@@ -172,6 +172,11 @@ case "$(basename "$SHELL")" in
     tcsh)
         LINE="set path = ( ${BIN_DIR} \$path )"
         update_shell ~/.tcshrc "$LINE"
+        ;;
+
+    '')
+        echo "warn: Could not detect shell type." >&2
+        echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
         ;;
 
     *)
