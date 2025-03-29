@@ -47,6 +47,7 @@ jobs:
     outputs:
       # Flag that is raised when any code is changed
       code: ${{ steps.changed.outputs.code_any_changed }}
+      unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -64,6 +65,13 @@ jobs:
               - "!install/**"
               - "!assets/**"
               - "!**/*.md"
+
+      - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
+        id: unix_installer_changed
+        with:
+          files_yaml: |
+            code:
+              - "install/install.sh"
 
   pre-commit:
     runs-on: ubuntu-latest
@@ -761,3 +769,21 @@ jobs:
       sha: ${{ github.sha }}
       arch: macos-aarch64
       runs-on: macos-14
+
+  #
+  # Test unix installer on a number of common wheels on some platforms
+  #
+
+  test-install-sh-linux:
+    name: install.sh | linux
+    needs:
+      - determine_changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: "Install"
+        run: |
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
