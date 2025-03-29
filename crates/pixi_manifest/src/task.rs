@@ -37,10 +37,35 @@ impl From<String> for TaskName {
         TaskName(name)
     }
 }
-impl From<TaskName> for String {
-    fn from(task_name: TaskName) -> Self {
-        task_name.0 // Assuming TaskName is a tuple struct with the first
-                    // element as String
+
+/// A task dependency with optional args
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct Dependency {
+    pub task_name: TaskName,
+    pub args: Option<Vec<String>>,
+}
+
+impl Dependency {
+    pub fn new(s: &str, args: Option<Vec<String>>) -> Self {
+        Dependency {
+            task_name: TaskName(s.to_string()),
+            args,
+        }
+    }
+}
+
+impl From<&str> for Dependency {
+    fn from(s: &str) -> Self {
+        Dependency::new(s, None)
+    }
+}
+
+impl std::fmt::Display for Dependency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.args {
+            Some(args) if !args.is_empty() => write!(f, "{} with args", self.task_name),
+            _ => write!(f, "{}", self.task_name),
+        }
     }
 }
 
@@ -56,14 +81,14 @@ impl FromStr for TaskName {
 #[derive(Debug, Clone)]
 pub enum Task {
     Plain(String),
-    Execute(Execute),
+    Execute(Box<Execute>),
     Alias(Alias),
     Custom(Custom),
 }
 
 impl Task {
     /// Returns the names of the task that this task depends on
-    pub fn depends_on(&self) -> &[TaskName] {
+    pub fn depends_on(&self) -> &[Dependency] {
         match self {
             Task::Plain(_) | Task::Custom(_) => &[],
             Task::Execute(cmd) => &cmd.depends_on,
@@ -185,6 +210,45 @@ impl Task {
             _ => None,
         }
     }
+
+    /// Returns the arguments of the task.
+    pub fn get_args(&self) -> Option<&IndexMap<TaskArg, Option<String>>> {
+        match self {
+            Task::Execute(exe) => exe.args.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// Creates a new task with updated arguments from the provided values.
+    /// Returns None if the task doesn't support arguments.
+    pub fn with_updated_args(&self, arg_values: &[String]) -> Option<Self> {
+        match self {
+            Task::Execute(exe) => {
+                if arg_values.len() > exe.args.as_ref().map_or(0, |args| args.len()) {
+                    tracing::warn!("Task has more arguments than provided values");
+                    return None;
+                }
+
+                if let Some(args_map) = &exe.args {
+                    let mut new_args = args_map.clone();
+                    for ((arg_name, _), value) in args_map.iter().zip(arg_values.iter()) {
+                        if let Some(arg_value) = new_args.get_mut(arg_name) {
+                            *arg_value = Some(value.clone());
+                        }
+                    }
+
+                    // Create a new Execute with the updated args
+                    let mut new_exe = (**exe).clone();
+                    new_exe.args = Some(new_args);
+
+                    Some(Task::Execute(Box::new(new_exe)))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 /// A command script executes a single command from the environment
@@ -204,7 +268,7 @@ pub struct Execute {
 
     /// A list of commands that should be run before this one
     // BREAK: Make the remove the alias and force kebab-case
-    pub depends_on: Vec<TaskName>,
+    pub depends_on: Vec<Dependency>,
 
     /// The working directory for the command relative to the root of the
     /// project.
@@ -218,11 +282,34 @@ pub struct Execute {
 
     /// Isolate the task from the running machine
     pub clean_env: bool,
+
+    /// The arguments to pass to the task
+    pub args: Option<IndexMap<TaskArg, Option<String>>>,
 }
 
 impl From<Execute> for Task {
     fn from(value: Execute) -> Self {
-        Task::Execute(value)
+        Task::Execute(Box::new(value))
+    }
+}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct TaskArg {
+    /// The name of the argument
+    pub name: String,
+
+    /// The default value of the argument
+    pub default: Option<String>,
+}
+
+impl std::str::FromStr for TaskArg {
+    type Err = miette::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(TaskArg {
+            name: s.to_string(),
+            default: None,
+        })
     }
 }
 
@@ -284,7 +371,7 @@ impl CmdArgs {
 #[derive(Debug, Clone)]
 pub struct Alias {
     /// A list of commands that should be run before this one
-    pub depends_on: Vec<TaskName>,
+    pub depends_on: Vec<Dependency>,
 
     /// A description of the task.
     pub description: Option<String>,
@@ -306,7 +393,7 @@ impl Display for Task {
         let depends_on = self.depends_on();
         if !depends_on.is_empty() {
             if depends_on.len() == 1 {
-                write!(f, ", depends-on = '{}'", depends_on.iter().format(","))?;
+                write!(f, ", depends-on = '{}'", depends_on[0])?;
             } else {
                 write!(f, ", depends-on = [{}]", depends_on.iter().format(","))?;
             }
@@ -366,13 +453,22 @@ impl From<Task> for Item {
                 if !process.depends_on.is_empty() {
                     table.insert(
                         "depends-on",
-                        Value::Array(Array::from_iter(
-                            process
-                                .depends_on
-                                .into_iter()
-                                .map(String::from)
-                                .map(Value::from),
-                        )),
+                        Value::Array(Array::from_iter(process.depends_on.into_iter().map(
+                            |dep| match &dep.args {
+                                Some(args) if !args.is_empty() => {
+                                    let mut table = Table::new().into_inline_table();
+                                    table.insert("task", dep.task_name.to_string().into());
+                                    table.insert(
+                                        "args",
+                                        Value::Array(Array::from_iter(
+                                            args.iter().map(|arg| Value::from(arg.clone())),
+                                        )),
+                                    );
+                                    Value::InlineTable(table)
+                                }
+                                _ => Value::from(dep.task_name.to_string()),
+                            },
+                        ))),
                     );
                 }
                 if let Some(cwd) = process.cwd {
@@ -390,13 +486,22 @@ impl From<Task> for Item {
                 let mut table = Table::new().into_inline_table();
                 table.insert(
                     "depends-on",
-                    Value::Array(Array::from_iter(
-                        alias
-                            .depends_on
-                            .into_iter()
-                            .map(String::from)
-                            .map(Value::from),
-                    )),
+                    Value::Array(Array::from_iter(alias.depends_on.into_iter().map(|dep| {
+                        match &dep.args {
+                            Some(args) if !args.is_empty() => {
+                                let mut table = Table::new().into_inline_table();
+                                table.insert("task", dep.task_name.to_string().into());
+                                table.insert(
+                                    "args",
+                                    Value::Array(Array::from_iter(
+                                        args.iter().map(|arg| Value::from(arg.clone())),
+                                    )),
+                                );
+                                Value::InlineTable(table)
+                            }
+                            _ => Value::from(dep.task_name.to_string()),
+                        }
+                    }))),
                 );
                 Item::Value(Value::InlineTable(table))
             }

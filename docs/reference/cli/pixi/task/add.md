@@ -37,5 +37,8 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 :  A description of the task to be added
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
 :  Isolate the task from the shell environment, and only use the pixi environment to run the task
+- <a id="arg---args" href="#arg---args">`--args <ARGS>`</a>
+:  The arguments to pass to the task
+<br>May be provided more than once.
 
 --8<-- "docs/reference/cli/pixi/task/add_extender.md:example"

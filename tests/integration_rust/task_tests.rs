@@ -86,7 +86,9 @@ pub async fn add_command_types() {
     let project = pixi.workspace().unwrap();
     let tasks = project.default_environment().tasks(None).unwrap();
     let task = tasks.get(&<TaskName>::from("testing")).unwrap();
-    assert!(matches!(task, Task::Alias(a) if a.depends_on.first().unwrap().as_str() == "test"));
+    assert!(
+        matches!(task, Task::Alias(a) if a.depends_on.first().unwrap().task_name.as_str() == "test")
+    );
 }
 
 #[tokio::test]
