@@ -787,6 +787,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: "Install"
         run: |
+          uname -a
           test ! -e ~/.pixi/bin/pixi
           sh < ./install/install.sh
           ~/.pixi/bin/pixi --version
@@ -803,7 +804,28 @@ jobs:
         uses: jirutka/setup-alpine@v1
       - name: "Install"
         run: |
+          uname -a
           test ! -e ~/.pixi/bin/pixi
           sh < ./install/install.sh
           ~/.pixi/bin/pixi --version
         shell: alpine.sh {0}
+
+  test-install-sh-msys2:
+    name: install.sh | msys2
+    needs:
+      - determine_changes
+    runs-on: windows-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup ucrt64 msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+      - name: "Install"
+        run: |
+          uname -a
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+        shell: msys2 {0}
