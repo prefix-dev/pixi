@@ -8,11 +8,13 @@ Update pixi to the latest version or a specific version
 
 ## Usage
 ```
-pixi self-update
+pixi self-update [OPTIONS]
 ```
 
 ## Options
 - <a id="arg---version" href="#arg---version">`--version <VERSION>`</a>
 :  The desired version (to downgrade or upgrade to)
+- <a id="arg---release-notes-only" href="#arg---release-notes-only">`--release-notes-only`</a>
+:  Only show release notes, do not modify the binary
 
 --8<-- "docs/reference/cli/pixi/self-update_extender.md:example"
