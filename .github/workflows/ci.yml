@@ -790,3 +790,20 @@ jobs:
           test ! -e ~/.pixi/bin/pixi
           sh < ./install/install.sh
           ~/.pixi/bin/pixi --version
+
+  test-install-sh-alpine:
+    name: install.sh | alpine linux
+    needs:
+      - determine_changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup latest Alpine Linux
+        uses: jirutka/setup-alpine@v1
+      - name: "Install"
+        run: |
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+        shell: alpine.sh {0}
