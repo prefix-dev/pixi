@@ -801,10 +801,11 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Setup latest Alpine Linux
-        uses: jirutka/setup-alpine@v1
+        uses: jirutka/setup-alpine@cf5fddcea495dcc19c0f991c6f6fa6a7abf3d50a # v1
       - name: "Install"
         run: |
           uname -a
+          cat /etc/alpine-release
           test ! -e ~/.pixi/bin/pixi
           sh < ./install/install.sh
           ~/.pixi/bin/pixi --version
@@ -819,9 +820,10 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
         with:
           msystem: UCRT64
+          install: unzip
       - name: "Install"
         run: |
           uname -a
