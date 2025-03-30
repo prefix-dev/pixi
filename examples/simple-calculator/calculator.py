@@ -27,4 +27,4 @@ def divide(a, b):
 
 if __name__ == "__main__":
     print("Calculator module loaded.")
-    print("Available operations: sum, multiply, subtract, divide") 
+    print("Available operations: sum, multiply, subtract, divide")

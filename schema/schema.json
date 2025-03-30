@@ -1560,6 +1560,28 @@
         }
       }
     },
+    "TaskArgs": {
+      "title": "TaskArgs",
+      "description": "The arguments of a task.",
+      "type": "object",
+      "required": [
+        "arg"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "arg": {
+          "title": "Arg",
+          "type": "string",
+          "minLength": 1
+        },
+        "default": {
+          "title": "Default",
+          "description": "The default value of the argument",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "TaskInlineTable": {
       "title": "TaskInlineTable",
       "description": "A precise definition of a task.",
@@ -1571,8 +1593,15 @@
           "description": "The arguments to pass to the task",
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TaskArgs"
+              },
+              {
+                "type": "string",
+                "minLength": 1
+              }
+            ]
           },
           "examples": [
             "arg1",
@@ -1610,10 +1639,31 @@
         "depends-on": {
           "title": "Depends-On",
           "description": "The tasks that this task depends on. Environment variables will **not** be expanded.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/DependsOn"
-          }
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DependsOn"
+                  },
+                  {
+                    "description": "A valid task name.",
+                    "type": "string",
+                    "pattern": "^[^\\s\\$]+$"
+                  }
+                ]
+              }
+            },
+            {
+              "$ref": "#/$defs/DependsOn"
+            },
+            {
+              "description": "A valid task name.",
+              "type": "string",
+              "pattern": "^[^\\s\\$]+$"
+            }
+          ]
         },
         "depends_on": {
           "title": "Depends On",

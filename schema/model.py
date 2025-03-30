@@ -310,6 +310,13 @@ Dependencies = dict[CondaPackageName, MatchSpec] | None
 TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
 
 
+class TaskArgs(StrictBaseModel):
+    """The arguments of a task."""
+
+    arg: NonEmptyStr
+    default: NonEmptyStr | None = Field(None, description="The default value of the argument")
+
+
 class DependsOn(StrictBaseModel):
     """The dependencies of a task."""
 
@@ -331,7 +338,7 @@ class TaskInlineTable(StrictBaseModel):
         alias="depends_on",
         description="The tasks that this task depends on. Environment variables will **not** be expanded. Deprecated in favor of `depends-on` from v0.21.0 onward.",
     )
-    depends_on: list[DependsOn] | None = Field(
+    depends_on: list[DependsOn | TaskName] | DependsOn | TaskName | None = Field(
         None,
         description="The tasks that this task depends on. Environment variables will **not** be expanded.",
     )
@@ -357,7 +364,7 @@ class TaskInlineTable(StrictBaseModel):
         None,
         description="Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
     )
-    args: list[NonEmptyStr] | None = Field(
+    args: list[TaskArgs | NonEmptyStr] | None = Field(
         None,
         description="The arguments to pass to the task",
         examples=["arg1", "arg2"],
