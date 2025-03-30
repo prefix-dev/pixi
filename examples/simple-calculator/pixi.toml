@@ -1,0 +1,59 @@
+[project]
+name = "simple-calculator"
+version = "0.1.0"
+description = "Example demonstrating task arguments in pixi"
+authors = ["Parsa <parsa@prefix.dev>"]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+[dependencies]
+python = ">=3.10"
+
+[tasks.greeting]
+cmd = "echo Hello, {{ name }}! Welcome to {{ project }}"
+args = [
+    { arg = "name", default = "User" },
+    { arg = "project", default = "Pixi" }
+]
+
+[tasks.calculate]
+cmd = "python -c \"from calculator import {{ operation }}; print({{ operation }}({{ number1 }}, {{ number2 }}))\""
+args = [
+    "operation",
+    "number1",
+    "number2"
+]
+
+[tasks.build]
+cmd = "echo Building {{ project }} in {{ mode }} mode with version {{ version }}"
+args = [
+    "project",
+    { arg = "mode", default = "debug" },
+    { arg = "version", default = "1.0.0" }
+]
+
+[tasks.deploy]
+cmd = "echo Deploying to {{ environment }}"
+args = [
+    { arg = "environment", default = "production" }
+]
+depends-on = [
+    { task = "build", args = ["task-arguments", "release"] }
+]
+
+[tasks.run-pipeline]
+cmd = "echo Pipeline completed"
+depends-on = [
+    { task = "greeting", args = ["Developer", "Task Arguments Example"] },
+    { task = "calculate", args = ["sum", "5", "10"] },
+    { task = "deploy", args = ["staging"] }
+]
+
+[tasks]
+show-calculator = "python calculator.py"
+sum = "python -c \"from calculator import sum; print(sum(5, 10))\""
+multiply = "python -c \"from calculator import multiply; print(multiply(5, 10))\""
+
+[tasks.math-examples]
+cmd = "echo Available math operations:"
+depends-on = ["sum", "multiply"] 
