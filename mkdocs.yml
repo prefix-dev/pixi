@@ -128,6 +128,9 @@ nav:
       - Pytorch Installation: python/pytorch.md
   - Global Tools:
       - Introduction: global_tools/introduction.md
+      - Manifest: global_tools/manifest.md
+      - Concepts: global_tools/concepts.md
+      - Examples: global_tools/examples.md
   - Integration:
       - Editor:
           - JupyterLab: integration/editor/jupyterlab.md
@@ -157,6 +160,7 @@ nav:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli/pixi.md
+      - Environment Variables: reference/environment_variables.md
   - Misc:
       - Changelog: CHANGELOG.md
       - Pixi Vision: misc/vision.md
@@ -168,6 +172,15 @@ hooks:
   - schema/docs_hooks.py
   - install/docs_hooks.py
   - docs/docs_hooks.py
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+not_in_nav: |
+  reference/cli/
 
 plugins:
   - redirects:
