@@ -199,7 +199,6 @@ impl<'p> TaskGraph<'p> {
                         (Some(args), None)
                     };
 
-
                     if skip_deps {
                         return Ok(Self {
                             project,

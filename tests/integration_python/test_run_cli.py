@@ -399,9 +399,9 @@ def test_invalid_task_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "task_invalid_defaults": {
             "cmd": "echo Invalid defaults: {{ arg1 }} {{ arg2 }} {{ arg3 }}",
             "args": [
-                {"name": "arg1", "default": "default1"},
+                {"arg": "arg1", "default": "default1"},
                 "arg2",
-                {"name": "arg3", "default": "default3"},
+                {"arg": "arg3", "default": "default3"},
             ],
         }
     }
@@ -434,9 +434,9 @@ def test_task_args_with_defaults(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "task_with_defaults": {
             "cmd": "echo Running task with {{ arg1 }} and {{ arg2 }} and {{ arg3 }}",
             "args": [
-                {"name": "arg1", "default": "default1"},
-                {"name": "arg2", "default": "default2"},
-                {"name": "arg3", "default": "default3"},
+                {"arg": "arg1", "default": "default1"},
+                {"arg": "arg2", "default": "default2"},
+                {"arg": "arg3", "default": "default3"},
             ],
         }
     }
@@ -487,7 +487,7 @@ def test_task_args_with_some_defaults(pixi: Path, tmp_pixi_workspace: Path) -> N
             "cmd": "echo Testing {{ required_arg }} with {{ optional_arg }}",
             "args": [
                 "required_arg",
-                {"name": "optional_arg", "default": "optional-default"},
+                {"arg": "optional_arg", "default": "optional-default"},
             ],
         }
     }
@@ -566,9 +566,9 @@ def test_task_args_too_many(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "task_with_defaults": {
             "cmd": "echo Running task with {{ arg1 }} and {{ arg2 }} and {{ arg3 }}",
             "args": [
-                {"name": "arg1", "default": "default1"},
-                {"name": "arg2", "default": "default2"},
-                {"name": "arg3", "default": "default3"},
+                {"arg": "arg1", "default": "default1"},
+                {"arg": "arg2", "default": "default2"},
+                {"arg": "arg3", "default": "default3"},
             ],
         }
     }
@@ -602,8 +602,8 @@ def test_task_with_dependency_args(pixi: Path, tmp_pixi_workspace: Path) -> None
         "base-task": {
             "cmd": "echo Base task with {{ arg1 }} and {{ arg2 }}",
             "args": [
-                {"name": "arg1", "default": "default1"},
-                {"name": "arg2", "default": "default2"},
+                {"arg": "arg1", "default": "default1"},
+                {"arg": "arg2", "default": "default2"},
             ],
         },
         "parent-task": {"depends-on": [{"task": "base-task", "args": ["custom1", "custom2"]}]},
@@ -633,8 +633,8 @@ def test_complex_task_dependencies_with_args(pixi: Path, tmp_pixi_workspace: Pat
         "install": {
             "cmd": "echo Installing with manifest {{ path }} and flag {{ flag }}",
             "args": [
-                {"name": "path", "default": "/default/path"},
-                {"name": "flag", "default": "--normal"},
+                {"arg": "path", "default": "/default/path"},
+                {"arg": "flag", "default": "--normal"},
             ],
         },
         "build": {"cmd": "echo Building with {{ mode }}", "args": ["mode"]},
@@ -677,8 +677,8 @@ def test_depends_on_with_complex_args(pixi: Path, tmp_pixi_workspace: Path) -> N
         "helper-task": {
             "cmd": "echo Helper executed with mode={{ mode }} and level={{ level }}",
             "args": [
-                {"name": "mode", "default": "normal"},
-                {"name": "level", "default": "info"},
+                {"arg": "mode", "default": "normal"},
+                {"arg": "level", "default": "info"},
             ],
         },
         "utility-task": {

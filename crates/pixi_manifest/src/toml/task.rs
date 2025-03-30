@@ -24,7 +24,7 @@ impl<'de> toml_span::Deserialize<'de> for TaskArg {
             inner => return Err(expected("string or table", inner, value.span).into()),
         };
 
-        let name = th.required::<String>("name")?;
+        let name = th.required::<String>("arg")?;
         let default = th.optional::<String>("default");
 
         th.finalize(None)?;
@@ -96,7 +96,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ),
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
-                                    let name = th.required::<String>("name")?;
+                                    let name = th.required::<String>("task")?;
                                     let args = th.optional::<Vec<String>>("args");
                                     Ok(Dependency::new(&name, args))
                                 }

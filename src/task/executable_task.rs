@@ -144,7 +144,7 @@ impl<'p> ExecutableTask<'p> {
         self.workspace
     }
     /// Replaces the arguments in the task with the values from the task args.
-    fn replace_args(&self, task: &str) -> Result<String, String> {
+    pub fn replace_args(&self, task: &str) -> Result<String, String> {
         let mut task = task.to_string();
         if let Some(args) = self.task().get_args() {
             for (arg, value) in args {

@@ -207,7 +207,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     "".to_string()
                 },
                 console::style("): ").bold(),
-                executable_task.display_command(),
+                executable_task
+                    .replace_args(&executable_task.display_command().to_string())
+                    .unwrap_or_else(|e| {
+                        eprintln!("Error replacing arguments: {}", e);
+                        executable_task.display_command().to_string()
+                    }),
                 if let Some(description) = executable_task.task().description() {
                     console::style(format!(": ({})", description)).yellow()
                 } else {
