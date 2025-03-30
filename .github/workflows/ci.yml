@@ -771,7 +771,7 @@ jobs:
       runs-on: macos-14
 
   #
-  # Test unix installer on a number of common wheels on some platforms
+  # Test unix installer on some platforms
   #
 
   test-install-sh-nix:
