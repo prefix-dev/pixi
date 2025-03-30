@@ -20,19 +20,6 @@ cmd = "echo Hello, {{ name }}! Welcome to {{ project }}"
 args = ["operation", "number1", "number2"]
 cmd = "python -c \"from calculator import {{ operation }}; print({{ operation }}({{ number1 }}, {{ number2 }}))\""
 
-[tasks.build]
-args = [
-  "project",
-  { arg = "mode", default = "debug" },
-  { arg = "version", default = "1.0.0" },
-]
-cmd = "echo Building {{ project }} in {{ mode }} mode with version {{ version }}"
-
-[tasks.deploy]
-args = [{ arg = "environment", default = "production" }]
-cmd = "echo Deploying to {{ environment }}"
-depends-on = [{ task = "build", args = ["task-arguments", "release"] }]
-
 [tasks.run-pipeline]
 cmd = "echo Pipeline completed"
 depends-on = [
@@ -44,17 +31,5 @@ depends-on = [
     "sum",
     "5",
     "10",
-  ] },
-  { task = "deploy", args = [
-    "staging",
-  ] },
+  ] }
 ]
-
-[tasks]
-multiply = "python -c \"from calculator import multiply; print(multiply(5, 10))\""
-show-calculator = "python calculator.py"
-sum = "python -c \"from calculator import sum; print(sum(5, 10))\""
-
-[tasks.math-examples]
-cmd = "echo Available math operations:"
-depends-on = ["sum", "multiply"]
