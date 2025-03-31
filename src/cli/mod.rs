@@ -143,7 +143,6 @@ pub enum Command {
 
     #[clap(visible_alias = "r")]
     Run(run::Args),
-    #[clap(visible_alias = "w")]
     Watch(watch::Args),
     #[clap(visible_alias = "x")]
     Exec(exec::Args),

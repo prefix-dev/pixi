@@ -82,12 +82,6 @@ pub struct Args {
     /// Run the task in dry-run mode (only print the command that would run)
     #[clap(short = 'n', long)]
     pub dry_run: bool,
-
-    #[clap(long, action = clap::ArgAction::HelpLong)]
-    pub help: Option<bool>,
-
-    #[clap(short, action = clap::ArgAction::HelpShort)]
-    pub h: Option<bool>,
 }
 
 /// CLI entry point for `pixi watch`
@@ -147,7 +141,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Currently only supporting a single task
     let topological_order = task_graph.topological_order();
-    if topological_order.len() > 1 {
+    if topological_order.len() > 1 && !args.skip_deps {
         eprintln!(
             "{}{}",
             console::Emoji("🚫 ", ""),
