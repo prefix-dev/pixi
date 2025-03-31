@@ -1,5 +1,3 @@
-# Multi Environment Support
-
 ### Motivating Example
 
 There are multiple scenarios where multiple environments are useful.

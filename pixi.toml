@@ -35,6 +35,7 @@ test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
 test-slow = """cargo nextest run --workspace --all-targets --retries 2 --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
+update-lockfiles = "python scripts/update-lockfiles.py"
 # TODO: add cargo-edit to conda-forge
 update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
 
@@ -58,12 +59,12 @@ test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/",
   "build-release",
 ] }
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }
-test-integration-ci = "pytest --numprocesses=auto --durations=0 --timeout=200 --verbose -m 'not extra_slow' tests/integration_python"
-test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python", depends-on = [
+test-integration-ci = "pytest --numprocesses=auto --durations=0 --timeout=100 --verbose -m 'not extra_slow' tests/integration_python"
+test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=600 tests/integration_python", depends-on = [
   "build-release",
 ] }
-test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python"
-test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=200 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
+test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=600 tests/integration_python"
+test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ] }
 test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=200 -m 'not extra_slow' tests/integration_python", depends-on = [
@@ -106,7 +107,8 @@ lint-pixi_docs = { depends-on = [
   "cargo-fmt-pixi_docs",
   "cargo-clippy-pixi_docs",
 ] }
-pre-commit-install = "pre-commit install --install-hooks"
+pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
+pre-commit-install-minimal = "pre-commit install -t=pre-commit"
 pre-commit-run = "pre-commit run --all-files"
 prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"

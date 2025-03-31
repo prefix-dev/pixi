@@ -1,0 +1,5 @@
+---
+source: tests/integration_rust/add_tests.rs
+expression: boltons.location
+---
+git+https://github.com/mahmoud/boltons.git#[FULL_COMMIT]

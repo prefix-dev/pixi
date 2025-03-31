@@ -1,11 +1,20 @@
 mod cache;
 mod reporters;
 
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    hash::{Hash, Hasher},
+    ops::Not,
+    path::{Component, Path, PathBuf},
+    str::FromStr,
+    sync::{Arc, LazyLock},
+};
+
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::Utc;
 use itertools::Itertools;
-use miette::Diagnostic;
-use miette::IntoDiagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, JsonRPCBuildProtocol, SetupRequest, ToolContext};
 use pixi_build_types::{
     procedures::{
@@ -16,8 +25,9 @@ use pixi_build_types::{
 };
 use pixi_config::get_cache_dir;
 use pixi_consts::consts::CACHED_GIT_DIR;
-use pixi_git::GitError;
-use pixi_git::{git::GitReference, resolver::GitResolver, source::Fetch, GitUrl, Reporter};
+use pixi_git::{
+    git::GitReference, resolver::GitResolver, source::Fetch, GitError, GitUrl, Reporter,
+};
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
 use pixi_manifest::Targets;
@@ -31,16 +41,6 @@ use rattler_conda_types::{
 use rattler_digest::Sha256;
 use reporters::SourceReporter;
 pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
-use std::sync::LazyLock;
-use std::{
-    collections::HashMap,
-    ffi::OsStr,
-    hash::{Hash, Hasher},
-    ops::Not,
-    path::{Component, Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
-};
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -48,11 +48,13 @@ use url::Url;
 use uv_configuration::RAYON_INITIALIZE;
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::build::cache::{
-    BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
-    SourceMetadataInput,
+use crate::{
+    build::cache::{
+        BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
+        SourceMetadataInput,
+    },
+    Workspace,
 };
-use crate::Workspace;
 
 /// A list of globs that should be ignored when calculating any input hash.
 /// These are typically used for build artifacts that should not be included in
@@ -86,10 +88,12 @@ pub enum BuildError {
     #[error("error calculating sha for {}", &.0.display())]
     CalculateSha(PathBuf, #[source] std::io::Error),
 
-    #[error("failed to initialize a build backend for {}", &.0.pinned)]
+    #[error("the initialization of the build backend for '{}' failed", &.0.pinned)]
     BuildFrontendSetup(
         Box<SourceCheckout>,
-        #[diagnostic_source] pixi_build_frontend::BuildFrontendError,
+        #[source]
+        #[diagnostic_source]
+        pixi_build_frontend::BuildFrontendError,
     ),
 
     #[error(transparent)]
@@ -720,7 +724,8 @@ impl BuildContext {
         source: &SourceCheckout,
         build_id: usize,
     ) -> Result<JsonRPCBuildProtocol, BuildError> {
-        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly initialized.
+        // The RAYON_INITIALIZE is required to ensure that rayon is explicitly
+        // initialized.
         LazyLock::force(&RAYON_INITIALIZE);
 
         // Instantiate a protocol for the source directory.
@@ -734,6 +739,7 @@ impl BuildContext {
             })
             .await
             .map_err(|frontend_error| {
+                tracing::error!("error setting up build frontend: {}", frontend_error);
                 BuildError::BuildFrontendSetup(Box::new(source.clone()), frontend_error)
             })?;
 

@@ -1,5 +1,3 @@
-# Pytorch Integration Guide
-
 ## Overview
 This guide explains how to integrate PyTorch with `pixi`, it supports multiple ways of installing PyTorch.
 

@@ -1,6 +1,3 @@
-
-# Environments
-
 Pixi is a tool to manage virtual environments.
 This document explains what an environment looks like and how to use it.
 

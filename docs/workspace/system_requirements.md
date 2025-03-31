@@ -1,4 +1,3 @@
-# System Requirements in pixi
 **System requirements** tell Pixi the minimum system specifications needed to install and run your workspace’s environment.
 They ensure that the dependencies match the operating system and hardware of your machine.
 

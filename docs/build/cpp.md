@@ -1,5 +1,3 @@
-# Tutorial: Building a C++ package
-
 This example shows how to build a C++ package with CMake and use it together with `pixi-build`.
 To read more about how building packages work with Pixi see the [Getting Started](./getting_started.md) guide.
 

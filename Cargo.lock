@@ -4424,7 +4424,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.43.0"
+version = "0.44.0"
 dependencies = [
  "ahash",
  "assert_matches",
@@ -4648,6 +4648,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_networking",
  "rattler_repodata_gateway",
+ "reqwest",
  "rstest",
  "serde",
  "serde_ignored",

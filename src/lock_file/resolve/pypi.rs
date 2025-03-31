@@ -283,16 +283,21 @@ pub async fn resolve_pypi(
 
     // TODO: create a cached registry client per index_url set?
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
-    let registry_client = Arc::new(
-        RegistryClientBuilder::new(context.cache.clone())
-            .allow_insecure_host(context.allow_insecure_host.clone())
-            .index_urls(index_locations.index_urls())
-            .index_strategy(index_strategy)
-            .markers(&marker_environment)
-            .keyring(context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .build(),
-    );
+    let mut uv_client_builder = RegistryClientBuilder::new(context.cache.clone())
+        .allow_insecure_host(context.allow_insecure_host.clone())
+        .index_urls(index_locations.index_urls())
+        .index_strategy(index_strategy)
+        .markers(&marker_environment)
+        .keyring(context.keyring_provider)
+        .connectivity(Connectivity::Online)
+        .extra_middleware(context.extra_middleware.clone());
+
+    for p in &context.proxies {
+        uv_client_builder = uv_client_builder.proxy(p.clone())
+    }
+
+    let registry_client = Arc::new(uv_client_builder.build());
+
     let build_options =
         no_build_to_build_options(&pypi_options.no_build.clone().unwrap_or_default())
             .into_diagnostic()?;

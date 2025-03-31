@@ -1,6 +1,3 @@
-
-# Vision
-
 We created `pixi` because we want to have a cargo/npm/yarn like package management experience for conda. We really love what the conda packaging ecosystem achieves, but we think that the user experience can be improved a lot.
 Modern package managers like `cargo` have shown us, how great a package manager can be. We want to bring that experience to the conda ecosystem.
 

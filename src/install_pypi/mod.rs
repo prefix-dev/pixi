@@ -78,14 +78,18 @@ pub async fn update_python_distributions(
         .into_diagnostic()?;
     let build_options = no_build_to_build_options(no_build).into_diagnostic()?;
 
-    let registry_client = Arc::new(
-        RegistryClientBuilder::new(uv_context.cache.clone())
-            .allow_insecure_host(uv_context.allow_insecure_host.clone())
-            .index_urls(index_locations.index_urls())
-            .keyring(uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .build(),
-    );
+    let mut uv_client_builder = RegistryClientBuilder::new(uv_context.cache.clone())
+        .allow_insecure_host(uv_context.allow_insecure_host.clone())
+        .index_urls(index_locations.index_urls())
+        .keyring(uv_context.keyring_provider)
+        .connectivity(Connectivity::Online)
+        .extra_middleware(uv_context.extra_middleware.clone());
+
+    for p in &uv_context.proxies {
+        uv_client_builder = uv_client_builder.proxy(p.clone())
+    }
+
+    let registry_client = Arc::new(uv_client_builder.build());
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {

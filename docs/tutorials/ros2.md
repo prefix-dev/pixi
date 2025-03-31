@@ -1,5 +1,3 @@
-# Tutorial: Develop a ROS 2 package with `pixi`
-
 In this tutorial, we will show you how to develop a ROS 2 package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 

@@ -1,10 +1,8 @@
-# Installation
-
 To install `pixi` you can run the following command in your terminal:
 
 === "Linux & macOS"
     ```bash
-    curl -fsSL https://pixi.sh/install.sh | bash
+    curl -fsSL https://pixi.sh/install.sh | sh
     ```
 
     The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.

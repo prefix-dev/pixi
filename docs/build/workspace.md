@@ -1,5 +1,3 @@
-# Tutorial: Integrating Multiple Packages in a Workspace
-
 In this tutorial, we will show you how to integrate multiple Pixi packages into a single workspace.
 
 !!! warning

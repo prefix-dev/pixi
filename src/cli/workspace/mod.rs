@@ -7,6 +7,7 @@ pub mod environment;
 pub mod export;
 pub mod name;
 pub mod platform;
+pub mod requires_pixi;
 pub mod system_requirements;
 pub mod version;
 
@@ -20,6 +21,7 @@ pub enum Command {
     Export(export::Args),
     Name(name::Args),
     SystemRequirements(system_requirements::Args),
+    RequiresPixi(requires_pixi::Args),
 }
 
 /// Modify the workspace configuration file through the command line.
@@ -42,6 +44,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Export(cmd) => export::execute(cmd).await?,
         Command::Name(args) => name::execute(args).await?,
         Command::SystemRequirements(args) => system_requirements::execute(args).await?,
+        Command::RequiresPixi(args) => requires_pixi::execute(args).await?,
     };
     Ok(())
 }

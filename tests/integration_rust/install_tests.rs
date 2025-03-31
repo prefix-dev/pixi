@@ -22,7 +22,7 @@ use pixi::{
 };
 use pixi::{UpdateLockFileOptions, Workspace};
 use pixi_build_frontend::ToolContext;
-use pixi_config::{Config, DetachedEnvironments};
+use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
@@ -696,10 +696,16 @@ async fn test_setuptools_override_failure() {
         [dependencies]
         pip = ">=24.0,<25"
         python = "<3.13"
+        # we need to pin them because xalas start to fail with newer versions
+        ninja = "*"
+        cmake = "<4"
+
+        [pypi-options]
+        no-build-isolation = ["xatlas"]
 
         # The transitive dependencies of viser were causing issues
         [pypi-dependencies]
-        viser = "==0.2.7"
+        viser = "==0.2.23"
         "#,
         platform = Platform::current()
     );
@@ -956,6 +962,7 @@ async fn test_multiple_prefix_update() {
             Arc::new(ToolContext::default()),
         )
         .unwrap(),
+        RunPostLinkScripts::False,
     );
 
     let pixi_records = Vec::from([
