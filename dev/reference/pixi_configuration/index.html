@@ -2118,6 +2118,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#run-post-link-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      run-post-link-scripts
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2528,6 +2537,15 @@
   <a href="#concurrency" class="md-nav__link">
     <span class="md-ellipsis">
       concurrency
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-post-link-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      run-post-link-scripts
     </span>
   </a>
   
@@ -2950,26 +2968,33 @@ Set them through the CLI with:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.solves<span class="w"> </span><span class="m">1</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.downloads<span class="w"> </span><span class="m">12</span>
 </span></code></pre></div></p>
+<h3 id="run-post-link-scripts"><code>run-post-link-scripts</code><a class="headerlink" href="#run-post-link-scripts" title="Permanent link">#</a></h3>
+<p>Configure whether pixi should execute <code>post-link</code> and <code>pre-unlink</code> scripts or not.</p>
+<p>Some packages contain post-link scripts (<code>bat</code> or <code>sh</code> files) that are executed after a package is installed. We deem these scripts as insecure because they can contain arbitrary code that is executed on the user's machine without the user's consent. By default, the value of <code>run-post-link-scripts</code> is set to <code>false</code> which prevents the execution of these scripts.</p>
+<p>However, you can opt-in on a global (or project) basis by setting the value to <code>insecure</code> (e.g. by running <code>pixi config set --local run-post-link-scripts insecure</code>).</p>
+<p>In the future we are planning to add a <code>sandbox</code> mode to execute these scripts in a controlled environment.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">run-post-link-scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;false&quot;</span><span class="w"> </span><span class="c1"># set to &quot;insecure&quot; to allow running post-link scripts</span>
+</span></code></pre></div>
 <h2 id="experimental">Experimental<a class="headerlink" href="#experimental" title="Permanent link">#</a></h2>
 <p>This allows the user to set specific experimental features that are not yet stable.</p>
 <p>Please write a GitHub issue and add the flag <code>experimental</code> to the issue if you find issues with the feature you activated.</p>
 <h3 id="caching-environment-activations">Caching environment activations<a class="headerlink" href="#caching-environment-activations" title="Permanent link">#</a></h3>
 <p>Turn this feature on from configuration with the following command:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># For all your projects</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># For a specific project</span>
-</span><span id="__span-15-5"><a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># For all your projects</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># For a specific project</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
 </span></code></pre></div></p>
 <p>This will cache the environment activation in the <code>.pixi/activation-env-v0</code> folder in the project root.
 It will create a json file for each environment that is activated, and it will be used to activate the environment in the future.
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>&gt;<span class="w"> </span>tree<span class="w"> </span>.pixi/activation-env-v0/
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>.pixi/activation-env-v0/
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>├──<span class="w"> </span>activation_default.json
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>└──<span class="w"> </span>activation_lint.json
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>&gt;<span class="w"> </span>cat<span class="w">  </span>.pixi/activation-env-v0/activation_lint.json
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="o">{</span><span class="s2">&quot;hash&quot;</span>:<span class="s2">&quot;8d8344e0751d377a&quot;</span>,<span class="s2">&quot;environment_variables&quot;</span>:<span class="o">{</span>&lt;ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION&gt;<span class="o">}}</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>&gt;<span class="w"> </span>tree<span class="w"> </span>.pixi/activation-env-v0/
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>.pixi/activation-env-v0/
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>├──<span class="w"> </span>activation_default.json
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>└──<span class="w"> </span>activation_lint.json
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>&gt;<span class="w"> </span>cat<span class="w">  </span>.pixi/activation-env-v0/activation_lint.json
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="o">{</span><span class="s2">&quot;hash&quot;</span>:<span class="s2">&quot;8d8344e0751d377a&quot;</span>,<span class="s2">&quot;environment_variables&quot;</span>:<span class="o">{</span>&lt;ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION&gt;<span class="o">}}</span>
 </span></code></pre></div></p>
 <ul>
 <li>The <code>hash</code> is a hash of the data on that environment in the <code>pixi.lock</code>, plus some important information on the environment activation.
@@ -2977,12 +3002,12 @@ It will create a json file for each environment that is activated, and it will b
 <li>The <code>environment_variables</code> are the environment variables that are set when activating the environment.</li>
 </ul>
 <p>You can ignore the cache by running:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi run/shell/shell-hook --force-activate
+<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi run/shell/shell-hook --force-activate
 </span></code></pre></div></p>
 <p>Set the configuration with:
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[experimental]</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[experimental]</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div></p>
 <div class="admonition note">
 <p class="admonition-title">Why is this experimental?</p>
@@ -3000,13 +3025,13 @@ the repodata (the most important file) from the first mirror in the list. The
 repodata contains all the SHA256 hashes of the individual packages, so it is
 important to get this file from a trusted source.</p>
 <p>You can also specify mirrors for an entire "host", e.g.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
-</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
+</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.
@@ -3016,10 +3041,10 @@ by providing a longer prefix that points to itself.</p>
 <p>You can also specify mirrors on the OCI registry. There is a public mirror on
 the Github container registry (ghcr.io) that is maintained by the conda-forge
 team. You can use it like this:</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
 packages on Github</a>.</p>
