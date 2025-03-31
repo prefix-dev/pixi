@@ -18,6 +18,7 @@ python = "3.12.*"
 [tasks]
 build-debug = "cargo build"
 build-release = "cargo build --release"
+update-lockfiles = "python scripts/update-lockfiles.py"
 bump = "tbump --only-patch $RELEASE_VERSION"
 generate-cli-docs = "cargo run --locked --manifest-path pixi_docs/Cargo.toml"
 install = "cargo install --path . --locked"
