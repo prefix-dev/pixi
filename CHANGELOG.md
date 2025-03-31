@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.44.0] - 2025-03-31
+#### ✨ Highlights
+
+- ⌨️ Support of [shell completions](https://pixi.sh/v0.44.0/global_tools/introduction/#shell-completions) with `pixi global`
+- 🛠️ [`requires-pixi`](https://pixi.sh/v0.44.0/reference/pixi_manifest/#requires-pixi-optional) key in `pixi.toml. This is especially useful to require a minimum Pixi version when using the manifest.
+- ⚙️ Add configuration to run [post link scripts](https://pixi.sh/v0.44.0/reference/pixi_configuration/#run-post-link-scripts). This is useful for workspaces with packages which fail to work otherwise. We advise to only enable the config if it is actually needed.
+
+
+
+#### Added
+
+- Add run export information to search by @baszalmstra in [#3428](https://github.com/prefix-dev/pixi/pull/3428)
+- Add 'requires-pixi' manifest key and subcommands to control the eldest pixi for building a project by @gzm55 in [#3358](https://github.com/prefix-dev/pixi/pull/3358)
+- Add proxy-config and activate https/http proxy for pixi commands by @gzm55 in [#3320](https://github.com/prefix-dev/pixi/pull/3320)
+- Support shell completions with `pixi global` by @wolfv in [#3319](https://github.com/prefix-dev/pixi/pull/3319)
+- Add configuration to run link scripts by @ruben-arts in [#3347](https://github.com/prefix-dev/pixi/pull/3347)
+
+#### Changed
+
+- Make install.sh posix compliant by @gzm55 in [#3450](https://github.com/prefix-dev/pixi/pull/3450)
+
+#### Documentation
+
+- Remove reference to archived mybinder.org example by @scottyhq in [#3435](https://github.com/prefix-dev/pixi/pull/3435)
+- Tweak config naming convention note by @salim-b in [#3444](https://github.com/prefix-dev/pixi/pull/3444)
+- Mention self-extracting binaries in pixi_pack by @gdementen in [#3446](https://github.com/prefix-dev/pixi/pull/3446)
+- Remove main heading by @Hofer-Julian in [#3454](https://github.com/prefix-dev/pixi/pull/3454)
+- Community: add metrology-apis by @lucascolley in [#3461](https://github.com/prefix-dev/pixi/pull/3461)
+
+#### Fixed
+
+- Error on package not provided by build backend by @baszalmstra in [#3430](https://github.com/prefix-dev/pixi/pull/3430)
+- Git does not update source files by @nichmor in [#3425](https://github.com/prefix-dev/pixi/pull/3425)
+- `pixi global` make sure that `prefix_path_entries` are always in `path_diff` by @Hofer-Julian in [#3407](https://github.com/prefix-dev/pixi/pull/3407)
+
+#### Performance
+
+- Skip redundant installation in `pixi global update` by @Glatzel in [#3404](https://github.com/prefix-dev/pixi/pull/3404)
+
+
+#### New Contributors
+* @gdementen made their first contribution in [#3446](https://github.com/prefix-dev/pixi/pull/3446)
+* @scottyhq made their first contribution in [#3435](https://github.com/prefix-dev/pixi/pull/3435)
+
 ### [0.43.3] - 2025-03-25
 
 
