@@ -18,7 +18,6 @@ python = "3.12.*"
 [tasks]
 build-debug = "cargo build"
 build-release = "cargo build --release"
-update-lockfiles = "python scripts/update-lockfiles.py"
 bump = "tbump --only-patch $RELEASE_VERSION"
 generate-cli-docs = "cargo run --locked --manifest-path pixi_docs/Cargo.toml"
 install = "cargo install --path . --locked"
@@ -36,6 +35,7 @@ test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
 test-slow = """cargo nextest run --workspace --all-targets --retries 2 --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
+update-lockfiles = "python scripts/update-lockfiles.py"
 # TODO: add cargo-edit to conda-forge
 update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
 

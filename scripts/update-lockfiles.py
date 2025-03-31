@@ -1,7 +1,7 @@
 import subprocess
 
 
-def main():
+def main() -> None:
     # List of manifest paths
     manifest_paths = ["./Cargo.toml", "pixi_docs/Cargo.toml"]
 
