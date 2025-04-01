@@ -470,21 +470,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Traditional conda activate-like activation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#using-pixi-with-direnv" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using pixi with direnv
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -1606,6 +1591,28 @@
   
   
     <li class="md-nav__item">
+      <a href="../../integration/third_party/direnv/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Direnv
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../integration/third_party/pixi_diff/" class="md-nav__link">
         
   
@@ -2389,21 +2396,6 @@
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="Traditional conda activate-like activation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#using-pixi-with-direnv" class="md-nav__link">
-    <span class="md-ellipsis">
-      Using pixi with direnv
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
 </li>
       
         <li class="md-nav__item">
@@ -2588,36 +2580,9 @@ Find the reference for the <code>activation</code> table <a href="../../referenc
 <p class="admonition-title">Warning</p>
 <p>It is not encouraged to use the traditional <code>conda activate</code>-like activation, as deactivating the environment is not really possible. Use <code>pixi shell</code> instead.</p>
 </div>
-<h3 id="using-pixi-with-direnv">Using <code>pixi</code> with <code>direnv</code><a class="headerlink" href="#using-pixi-with-direnv" title="Permanent link">#</a></h3>
-<details class="note">
-<summary>Installing direnv</summary>
-<p>Of course you can use <code>pixi</code> to install <code>direnv</code> globally. We recommend to run</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi global install direnv
-</span></code></pre></div>
-<p>to install the latest version of <code>direnv</code> on your computer.</p>
-</details>
-<p>This allows you to use <code>pixi</code> in combination with <code>direnv</code>.
-Enter the following into your <code>.envrc</code> file:</p>
-<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>watch_file<span class="w"> </span>pixi.lock<span class="w"> </span><span class="c1"># (1)!</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span></code></pre></div>
-<ol>
-<li>This ensures that every time your <code>pixi.lock</code> changes, <code>direnv</code> invokes the shell-hook again.</li>
-<li>This installs if needed, and activates the environment. <code>direnv</code> ensures that the environment is deactivated when you leave the directory.</li>
-</ol>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>my-project
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>direnv:<span class="w"> </span>error<span class="w"> </span>/my-project/.envrc<span class="w"> </span>is<span class="w"> </span>blocked.<span class="w"> </span>Run<span class="w"> </span><span class="sb">`</span>direnv<span class="w"> </span>allow<span class="sb">`</span><span class="w"> </span>to<span class="w"> </span>approve<span class="w"> </span>its<span class="w"> </span>content
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>$<span class="w"> </span>direnv<span class="w"> </span>allow
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>direnv:<span class="w"> </span>loading<span class="w"> </span>/my-project/.envrc
-</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>✔<span class="w"> </span>Project<span class="w"> </span><span class="k">in</span><span class="w"> </span>/my-project<span class="w"> </span>is<span class="w"> </span>ready<span class="w"> </span>to<span class="w"> </span>use!
-</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>direnv:<span class="w"> </span><span class="nb">export</span><span class="w"> </span>+CONDA_DEFAULT_ENV<span class="w"> </span>+CONDA_PREFIX<span class="w"> </span>+PIXI_ENVIRONMENT_NAME<span class="w"> </span>+PIXI_ENVIRONMENT_PLATFORMS<span class="w"> </span>+PIXI_PROJECT_MANIFEST<span class="w"> </span>+PIXI_PROJECT_NAME<span class="w"> </span>+PIXI_PROJECT_ROOT<span class="w"> </span>+PIXI_PROJECT_VERSION<span class="w"> </span>+PIXI_PROMPT<span class="w"> </span>~PATH
-</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>/my-project/.pixi/envs/default/bin/python
-</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>..
-</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>direnv:<span class="w"> </span>unloading
-</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>python<span class="w"> </span>not<span class="w"> </span>found
-</span></code></pre></div>
+<div class="admonition tip">
+<p>See our <a href="../../integration/third_party/direnv/">direnv page</a> on how to leverage <code>pixi shell-hook</code> to integrate with direnv.</p>
+</div>
 <h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h2>
 <p>The following environment variables are set by pixi, when using the <code>pixi run</code>, <code>pixi shell</code>, or <code>pixi shell-hook</code> command:</p>
 <ul>
