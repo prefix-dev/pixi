@@ -1,4 +1,3 @@
-
 When building a package, you often have to do more than just run the code.
 Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a workspace.
 With Pixi tasks, this should become much easier to do.
@@ -127,6 +126,142 @@ This will add the following line to [manifest file](../reference/pixi_manifest.m
 bar = { cmd = "python bar.py", cwd = "scripts" }
 ```
 
+## Task Arguments
+
+Tasks can accept arguments that can be referenced in the command. This provides more flexibility and reusability for your tasks.
+
+Arguments can be:
+- **Required**: must be provided when running the task
+- **Optional**: can have default values that are used when not explicitly provided
+
+### Defining Task Arguments
+
+Define arguments in your task using the `args` field:
+
+```toml title="pixi.toml"
+[tasks]
+# Task with required arguments
+greet = { 
+    cmd = "echo Hello, {{ name }}!", 
+    args = ["name"] 
+}
+
+# Task with optional arguments (default values)
+build = { 
+    cmd = "echo Building {{ project }} in {{ mode }} mode", 
+    args = [
+        { "arg": "project", "default": "my-app" },
+        { "arg": "mode", "default": "development" }
+    ] 
+}
+
+# Task with mixed required and optional arguments
+deploy = { 
+    cmd = "echo Deploying {{ service }} to {{ environment }}", 
+    args = [
+        "service",
+        { "arg": "environment", "default": "staging" }
+    ] 
+}
+```
+
+### Using Task Arguments
+
+When running a task, provide arguments in the order they are defined:
+
+```shell
+# Required argument
+pixi run greet John
+✨ Pixi task (greet in default): echo Hello, John!
+
+# Default values are used when omitted
+pixi run build
+✨ Pixi task (build in default): echo Building my-app in development mode
+
+# Override default values
+pixi run build my-project production
+✨ Pixi task (build in default): echo Building my-project in production mode
+
+# Mixed argument types
+pixi run deploy auth-service
+✨ Pixi task (deploy in default): echo Deploying auth-service to staging
+pixi run deploy auth-service production
+✨ Pixi task (deploy in default): echo Deploying auth-service to production
+```
+
+### Passing Arguments to Dependent Tasks
+
+You can pass arguments to tasks that are dependencies of other tasks:
+
+```toml title="pixi.toml"
+[tasks]
+# Base task with arguments
+install = { 
+    cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}", 
+    args = [
+        { "arg": "path", "default": "/default/path" },
+        { "arg": "flag", "default": "--normal" }
+    ] 
+}
+
+# Dependent task specifying arguments for the base task
+install-release = { 
+    depends-on = [{ 
+        "task": "install", 
+        "args": ["/path/to/manifest", "--debug"] 
+    }] 
+}
+
+# Task with multiple dependencies, passing different arguments
+deploy = { 
+    cmd = "echo Deploying", 
+    depends-on = [
+        { 
+            "task": "install", 
+            "args": ["/custom/path", "--verbose"] 
+        },
+        # Other dependent tasks can be added here
+    ] 
+}
+```
+
+When executing a dependent task, the arguments are passed to the dependency:
+
+```shell
+pixi run install-release
+✨ Pixi task (install in default): echo Installing with manifest /path/to/manifest and flag --debug
+
+pixi run deploy
+✨ Pixi task (install in default): echo Installing with manifest /custom/path and flag --verbose
+✨ Pixi task (deploy in default): echo Deploying
+```
+
+When a dependent task doesn't specify all arguments, the default values are used for the missing ones:
+
+```toml title="pixi.toml"
+[tasks]
+base-task = { 
+    cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}", 
+    args = [
+        { "arg": "arg1", "default": "default1" },
+        { "arg": "arg2", "default": "default2" }
+    ] 
+}
+
+# Only override the first argument
+partial-override = { 
+    depends-on = [{ 
+        "task": "base-task", 
+        "args": ["override1"] 
+    }] 
+}
+```
+
+```shell
+pixi run partial-override
+✨ Pixi task (base-task in default): echo Base task with override1 and default2
+```
+
 ## Caching
 
 When you specify `inputs` and/or `outputs` to a task, Pixi will reuse the result of the task.
@@ -244,7 +379,7 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
   - Set env variable using: `export ENV_VAR=value`
   - Use env variable using: `$ENV_VAR`
   - unset env variable using `unset ENV_VAR`
-- **Shell variables:** Shell variables are similar to environment variables, but won’t be exported to spawned commands.
+- **Shell variables:** Shell variables are similar to environment variables, but won't be exported to spawned commands.
   - Set them: `VAR=value`
   - use them: `VAR=value && echo $VAR`
 - **Pipelines:** Use the stdout output of a command into the stdin a following command
