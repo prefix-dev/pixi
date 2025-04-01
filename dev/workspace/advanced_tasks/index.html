@@ -2504,14 +2504,16 @@ In that package we have some tasks that depend on each other, so we can assure t
 </span></code></pre></div>
 <h2 id="working-directory">Working directory<a class="headerlink" href="#working-directory" title="Permanent link">#</a></h2>
 <p>Pixi tasks support the definition of a working directory.</p>
-<p><code>cwd</code>" stands for Current Working Directory.
-The directory is relative to the Pixi package root, where the <code>pixi.toml</code> file is located.</p>
-<p>Consider a Pixi workspace structured as follows:</p>
+<p><code>cwd</code> stands for Current Working Directory.
+The directory is relative to the Pixi workspace root, where the <code>pixi.toml</code> file is located.</p>
+<p>By default, tasks are executed from the Pixi workspace root.
+To change this, use the <code>--cwd</code> flag.
+For example, consider a Pixi workspace structured as follows:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>├──<span class="w"> </span>pixi.toml
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>└──<span class="w"> </span>scripts
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span>└──<span class="w"> </span>bar.py
 </span></code></pre></div>
-<p>To add a task to run the <code>bar.py</code> file, use:</p>
+<p>To add a task that runs the <code>bar.py</code> file from the <code>scripts</code> directory, use:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>bar<span class="w"> </span><span class="s2">&quot;python bar.py&quot;</span><span class="w"> </span>--cwd<span class="w"> </span>scripts
 </span></code></pre></div>
 <p>This will add the following line to <a href="../../reference/pixi_manifest/">manifest file</a>:</p>
