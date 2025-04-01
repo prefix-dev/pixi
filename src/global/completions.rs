@@ -34,6 +34,7 @@ impl CompletionsDir {
     }
 
     /// Prune old completions
+    #[cfg(unix)]
     pub fn prune_old_completions(&self) -> miette::Result<()> {
         for directory in [self.bash_path(), self.zsh_path(), self.fish_path()] {
             if !directory.is_dir() {
@@ -52,6 +53,12 @@ impl CompletionsDir {
             }
         }
 
+        Ok(())
+    }
+
+    /// Prune old completions
+    #[cfg(not(unix))]
+    pub fn prune_old_completions(&self) -> miette::Result<()> {
         Ok(())
     }
 
@@ -198,6 +205,7 @@ pub fn contained_completions(
 /// based on the provided `exposed_mappings` and `executable_names`. It compares the
 /// current state of the completion scripts in the `completions_dir` with the expected
 /// state derived from the `exposed_mappings`.
+#[cfg(unix)]
 pub(crate) async fn completions_sync_status(
     exposed_mappings: IndexSet<Mapping>,
     executable_names: Vec<String>,
@@ -240,4 +248,14 @@ pub(crate) async fn completions_sync_status(
     }
 
     Ok((completions_to_remove, completions_to_add))
+}
+
+#[cfg(not(unix))]
+pub(crate) async fn completions_sync_status(
+    exposed_mappings: IndexSet<Mapping>,
+    executable_names: Vec<String>,
+    prefix_root: &Path,
+    completions_dir: &CompletionsDir,
+) -> miette::Result<(Vec<Completion>, Vec<Completion>)> {
+    Ok((Vec::new(), Vec::new()))
 }

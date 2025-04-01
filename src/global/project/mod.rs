@@ -1252,6 +1252,7 @@ impl Project {
         Ok(state_changes)
     }
 
+    #[cfg(unix)]
     pub async fn sync_completions(
         &self,
         env_name: &EnvironmentName,
@@ -1291,6 +1292,15 @@ impl Project {
             state_changes.insert_change(env_name, state_change);
         }
 
+        Ok(state_changes)
+    }
+
+    #[cfg(not(unix))]
+    pub async fn sync_completions(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
         Ok(state_changes)
     }
 
