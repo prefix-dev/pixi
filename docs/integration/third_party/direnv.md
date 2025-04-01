@@ -1,4 +1,3 @@
-# Using `pixi` with `direnv`
 
 ??? note "Installing direnv"
 
