@@ -907,30 +907,6 @@ impl Project {
             return Ok(false);
         }
 
-        tracing::debug!("Verify that the completions are in sync with the environment");
-        let execs_all = self
-            .executables_of_all_dependencies(env_name)
-            .await?
-            .into_iter()
-            .map(|exec| exec.name)
-            .collect();
-        let (completions_to_remove, completions_to_add) = completions_sync_status(
-            environment.exposed.clone(),
-            execs_all,
-            prefix.root(),
-            &self.completions_dir,
-        )
-        .await?;
-        if !completions_to_remove.is_empty() || !completions_to_add.is_empty() {
-            tracing::debug!(
-                "Environment {} completions are not in sync: to_remove: {}, to_add: {}",
-                env_name.fancy_display(),
-                completions_to_remove.iter().map(|c| c.name()).join(", "),
-                completions_to_add.iter().map(|c| c.name()).join(", ")
-            );
-            return Ok(false);
-        }
-
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (shortcuts_to_remove, shortcuts_to_add) =
