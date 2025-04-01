@@ -741,3 +741,95 @@ def test_depends_on_with_complex_args(pixi: Path, tmp_pixi_workspace: Path) -> N
         ExitCode.FAILURE,
         stderr_contains="no value provided for argument required_arg in task utility-task",
     )
+
+
+def test_argument_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test argument forwarding behavior with and without defined args."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    # Simple task with no args defined should just forward arguments
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "test_single": {
+            "cmd": "echo Forwarded args: ",
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # This should work - arguments are simply passed to the shell
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test_single", "arg1", "arg2"],
+        stdout_contains="Forwarded args: arg1 arg2",
+    )
+
+    # Task with defined args should validate them
+    manifest_content["tasks"] = {
+        "test_single": {
+            "cmd": "echo Python file: {{ python-file }}",
+            "args": ["python-file"],  # This argument is mandatory
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # This should work - exactly one argument provided as required
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test_single", "test_file.py"],
+        stdout_contains="Python file: test_file.py",
+    )
+
+    # This should fail - too many arguments provided
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "test_single",
+            "file1.py",
+            "file2.py",
+        ],
+        ExitCode.FAILURE,
+        stderr_contains="task test_single has more arguments than expected",
+    )
+
+    # This should fail - no arguments provided for a required arg
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test_single"],
+        ExitCode.FAILURE,
+        stderr_contains="no value provided for argument python-file in task test_single",
+    )
+
+
+def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test behavior when using undefined arguments in commands."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    # Command with undefined argument
+    manifest_content["tasks"] = {
+        "undefined_arg": {
+            "cmd": "echo Python file: {{ python-file }}",
+            # No args defined, but using {{ python-file }} in command
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "undefined_arg"],
+        ExitCode.FAILURE,
+        stderr_contains="The task failed to parse",
+    )
+
+    manifest_content["tasks"] = {
+        "mixed_args": {
+            "cmd": "echo Python file: {{ python-file }} with {{ non-existing-argument }}",
+            "args": ["python-file"], 
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
+        ExitCode.FAILURE,
+        stderr_contains="The task failed to parse",
+    )

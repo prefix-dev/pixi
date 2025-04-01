@@ -29,6 +29,15 @@ use crate::{
     Workspace,
 };
 
+#[derive(Debug, Error, Diagnostic)]
+#[error("The task failed to parse. task: '{script}'")]
+pub enum ShellParsingError {
+    #[error("Failed to parse shell script")]
+    ParseError(anyhow::Error),
+    #[error("Failed to replace argument placeholders")]
+    ArgumentReplacement(anyhow::Error),
+}
+
 /// Runs task in project.
 #[derive(Default, Debug)]
 pub struct RunOutput {
@@ -38,10 +47,11 @@ pub struct RunOutput {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("The task failed to parse. task: '{script}' error: '{error}'")]
+#[error("The task failed to parse. task: '{script}'")]
 pub struct FailedToParseShellScript {
     pub script: String,
-    pub error: String,
+    #[source]
+    pub error: ShellParsingError,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -144,7 +154,7 @@ impl<'p> ExecutableTask<'p> {
         self.workspace
     }
     /// Replaces the arguments in the task with the values from the task args.
-    pub fn replace_args(&self, task: &str) -> Result<String, String> {
+    pub fn replace_args(&self, task: &str) -> Result<String, ShellParsingError> {
         let mut task = task.to_string();
         if let Some(args) = self.task().get_args() {
             for (arg, value) in args {
@@ -153,19 +163,30 @@ impl<'p> ExecutableTask<'p> {
                 let replacement = match value {
                     Some(val) => val,
                     None => arg.default.as_deref().ok_or_else(|| {
-                        format!(
+                        ShellParsingError::ArgumentReplacement(anyhow::Error::msg(format!(
                             "no value provided for argument {} in task {}",
                             arg.name,
                             self.name().unwrap_or("default")
-                        )
+                        )))
                     })?,
                 };
                 task = regex::Regex::new(&pattern)
-                    .map_err(|e| format!("Invalid regex pattern: {}", e))?
+                    .map_err(|e| ShellParsingError::ArgumentReplacement(e.into()))?
                     .replace_all(&task, replacement)
                     .into_owned();
             }
         }
+        
+        // Check if there are any remaining {{ name }} patterns
+        let remaining_pattern = regex::Regex::new(r"\{\{\s*\w+\s*\}\}")
+            .map_err(|e| ShellParsingError::ArgumentReplacement(e.into()))?;
+        
+        if remaining_pattern.is_match(&task) {
+            return Err(ShellParsingError::ArgumentReplacement(anyhow::Error::msg(
+                format!("unresolved argument placeholders found in task: {}", task)
+            )));
+        }
+        
         Ok(task)
     }
 
@@ -176,7 +197,7 @@ impl<'p> ExecutableTask<'p> {
 
         // Get the export specific environment variables
         let export = get_export_specific_task_env(self.task.as_ref());
-
+ 
         // Append the command line arguments verbatim
         let cli_args = self
             .additional_args
@@ -214,7 +235,7 @@ impl<'p> ExecutableTask<'p> {
             deno_task_shell::parser::parse(full_script.trim())
                 .map_err(|e| FailedToParseShellScript {
                     script: full_script,
-                    error: e.to_string(),
+                    error: ShellParsingError::ParseError(e),
                 })
                 .map(Some)
         } else {
@@ -547,5 +568,40 @@ mod tests {
                 .to_string_lossy()
                 .to_string()
         );
+    }
+
+    #[test]
+    fn test_replace_args() {
+        let file_contents = r#"
+            [tasks]
+            simple = {cmd = "echo Simple task"}
+        "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("simple"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("simple".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            additional_args: vec![],
+        };
+
+        // Test a command with no placeholders works fine
+        let result = executable_task.replace_args("echo No placeholders here").unwrap();
+        assert_eq!(result, "echo No placeholders here");
+
+        // Test that using an undefined argument errors
+        let result = executable_task.replace_args("echo {{ undefined }}");
+        assert!(result.is_err());
     }
 }

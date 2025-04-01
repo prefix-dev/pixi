@@ -132,6 +132,18 @@ bar = { cmd = "python bar.py", cwd = "scripts" }
 
 Tasks can accept arguments that can be referenced in the command. This provides more flexibility and reusability for your tasks.
 
+### Why Use Task Arguments?
+
+Task arguments make your tasks more versatile and maintainable:
+
+- **Reusability**: Create generic tasks that can work with different inputs rather than duplicating tasks for each specific case
+- **Flexibility**: Change behavior at runtime without modifying your pixi.toml file
+- **Clarity**: Make your task intentions clear by explicitly defining what values can be customized
+- **Validation**: Define required arguments to ensure tasks are called correctly
+- **Default values**: Set sensible defaults while allowing overrides when needed
+
+For example, instead of creating separate build tasks for development and production modes, you can create a single parameterized task that handles both cases.
+
 Arguments can be:
 
 - **Required**: must be provided when running the task
@@ -145,7 +157,7 @@ Define arguments in your task using the `args` field:
 [tasks]
 # Task with required arguments
 greet = {
-    cmd = "echo Hello, {{ name }}!",
+    cmd = "echo Hello, {{ name }}!",# name must be provided by the user
     args = ["name"]
 }
 
@@ -153,7 +165,9 @@ greet = {
 build = {
     cmd = "echo Building {{ project }} in {{ mode }} mode",
     args = [
+        # If not provided, "my-app" will be used
         { "arg": "project", "default": "my-app" },
+        # If not provided, "development" will be used
         { "arg": "mode", "default": "development" }
     ]
 }
@@ -162,8 +176,8 @@ build = {
 deploy = {
     cmd = "echo Deploying {{ service }} to {{ environment }}",
     args = [
-        "service",
-        { "arg": "environment", "default": "staging" }
+        "service",                                    # Required argument, no default
+        { "arg": "environment", "default": "staging" } # Optional with default value
     ]
 }
 ```
@@ -192,6 +206,62 @@ pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
 
+### Real-World Examples
+
+Here are some practical examples of how task arguments can be used:
+
+```toml title="pixi.toml"
+[tasks]
+# Run tests for a specific file or module
+test = { 
+    cmd = "pytest {{ path }} {{ extra_args }}", 
+    args = [
+        { "arg": "path", "default": "tests/" },      # Test path, defaults to all tests
+        { "arg": "extra_args", "default": "-v" }     # Extra pytest arguments
+    ] 
+}
+
+# Format specific files or directories
+format = {
+    cmd = "black {{ path }}",
+    args = [
+        { "arg": "path", "default": "." }            # Path to format, defaults to entire project
+    ]
+}
+
+# Generate documentation with configurable output directory
+docs = {
+    cmd = "sphinx-build -b html docs {{ output }}",
+    args = [
+        { "arg": "output", "default": "docs/_build/html" } # Output directory
+    ]
+}
+
+# Database migration task with version control
+migrate = {
+    cmd = "alembic upgrade {{ target }}",
+    args = [
+        { "arg": "target", "default": "head" }       # Migration target, defaults to latest
+    ]
+}
+```
+
+Usage examples:
+
+```shell
+# Run a specific test file with coverage
+pixi run test tests/test_core.py "--cov=src"
+
+# Format only the src directory
+pixi run format src/
+
+# Generate docs to a custom location
+pixi run docs custom_docs_output
+
+# Run migrations to a specific version
+pixi run migrate +2  # Upgrade by 2 migrations
+```
+
 ### Passing Arguments to Dependent Tasks
 
 You can pass arguments to tasks that are dependencies of other tasks:
@@ -202,13 +272,14 @@ You can pass arguments to tasks that are dependencies of other tasks:
 install = {
     cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}",
     args = [
-        { "arg": "path", "default": "/default/path" },
-        { "arg": "flag", "default": "--normal" }
+        { "arg": "path", "default": "/default/path" }, # Path to manifest
+        { "arg": "flag", "default": "--normal" }       # Installation flag
     ]
 }
 
 # Dependent task specifying arguments for the base task
 install-release = {
+    # Override defaults when calling the dependency
     depends-on = [{
         "task": "install",
         "args": ["/path/to/manifest", "--debug"]
@@ -219,6 +290,7 @@ install-release = {
 deploy = {
     cmd = "echo Deploying",
     depends-on = [
+        # Override with custom path and verbosity
         {
             "task": "install",
             "args": ["/custom/path", "--verbose"]
@@ -246,13 +318,14 @@ When a dependent task doesn't specify all arguments, the default values are used
 base-task = {
     cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}",
     args = [
-        { "arg": "arg1", "default": "default1" },
-        { "arg": "arg2", "default": "default2" }
+        { "arg": "arg1", "default": "default1" }, # First argument with default
+        { "arg": "arg2", "default": "default2" }  # Second argument with default
     ]
 }
 
 # Only override the first argument
 partial-override = {
+    # Only the first argument is provided
     depends-on = [{
         "task": "base-task",
         "args": ["override1"]

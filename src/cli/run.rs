@@ -190,6 +190,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 // Add a newline between task outputs
                 eprintln!();
             }
+
+            let display_command = executable_task
+                .replace_args(&executable_task.display_command().to_string())
+                .unwrap_or_else(|_| executable_task.display_command().to_string());
+
             eprintln!(
                 "{}{}{}{}{}{}{}",
                 console::Emoji("✨ ", ""),
@@ -207,12 +212,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     "".to_string()
                 },
                 console::style("): ").bold(),
-                executable_task
-                    .replace_args(&executable_task.display_command().to_string())
-                    .unwrap_or_else(|e| {
-                        eprintln!("Error replacing arguments: {}", e);
-                        executable_task.display_command().to_string()
-                    }),
+                display_command,
                 if let Some(description) = executable_task.task().description() {
                     console::style(format!(": ({})", description)).yellow()
                 } else {

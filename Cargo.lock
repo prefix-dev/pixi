@@ -4330,6 +4330,7 @@ name = "pixi"
 version = "0.44.0"
 dependencies = [
  "ahash",
+ "anyhow",
  "assert_matches",
  "async-fd-lock",
  "async-once-cell",
