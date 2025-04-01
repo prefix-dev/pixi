@@ -9,7 +9,7 @@ Then, create the following two files in the `.devcontainer` directory:
 ```dockerfile title=".devcontainer/Dockerfile"
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.43.3
+ARG PIXI_VERSION=v0.44.0
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \

@@ -102,10 +102,12 @@ pixi run style
 
 Pixi tasks support the definition of a working directory.
 
-`cwd`" stands for Current Working Directory.
-The directory is relative to the Pixi package root, where the `pixi.toml` file is located.
+`cwd` stands for Current Working Directory.
+The directory is relative to the Pixi workspace root, where the `pixi.toml` file is located.
 
-Consider a Pixi workspace structured as follows:
+By default, tasks are executed from the Pixi workspace root.
+To change this, use the `--cwd` flag.
+For example, consider a Pixi workspace structured as follows:
 
 ```shell
 ├── pixi.toml
@@ -113,7 +115,7 @@ Consider a Pixi workspace structured as follows:
     └── bar.py
 ```
 
-To add a task to run the `bar.py` file, use:
+To add a task that runs the `bar.py` file from the `scripts` directory, use:
 
 ```shell
 pixi task add bar "python bar.py" --cwd scripts

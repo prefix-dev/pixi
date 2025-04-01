@@ -22,7 +22,7 @@ use pixi::{
 };
 use pixi::{UpdateLockFileOptions, Workspace};
 use pixi_build_frontend::ToolContext;
-use pixi_config::{Config, DetachedEnvironments};
+use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
@@ -962,6 +962,7 @@ async fn test_multiple_prefix_update() {
             Arc::new(ToolContext::default()),
         )
         .unwrap(),
+        RunPostLinkScripts::False,
     );
 
     let pixi_records = Vec::from([
