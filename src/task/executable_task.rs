@@ -176,17 +176,17 @@ impl<'p> ExecutableTask<'p> {
                     .into_owned();
             }
         }
-        
+
         // Check if there are any remaining {{ name }} patterns
         let remaining_pattern = regex::Regex::new(r"\{\{\s*\w+\s*\}\}")
             .map_err(|e| ShellParsingError::ArgumentReplacement(e.into()))?;
-        
+
         if remaining_pattern.is_match(&task) {
             return Err(ShellParsingError::ArgumentReplacement(anyhow::Error::msg(
-                format!("unresolved argument placeholders found in task: {}", task)
+                format!("unresolved argument placeholders found in task: {}", task),
             )));
         }
-        
+
         Ok(task)
     }
 
@@ -197,7 +197,7 @@ impl<'p> ExecutableTask<'p> {
 
         // Get the export specific environment variables
         let export = get_export_specific_task_env(self.task.as_ref());
- 
+
         // Append the command line arguments verbatim
         let cli_args = self
             .additional_args
@@ -597,7 +597,9 @@ mod tests {
         };
 
         // Test a command with no placeholders works fine
-        let result = executable_task.replace_args("echo No placeholders here").unwrap();
+        let result = executable_task
+            .replace_args("echo No placeholders here")
+            .unwrap();
         assert_eq!(result, "echo No placeholders here");
 
         // Test that using an undefined argument errors
