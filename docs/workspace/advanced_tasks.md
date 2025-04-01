@@ -133,6 +133,7 @@ bar = { cmd = "python bar.py", cwd = "scripts" }
 Tasks can accept arguments that can be referenced in the command. This provides more flexibility and reusability for your tasks.
 
 Arguments can be:
+
 - **Required**: must be provided when running the task
 - **Optional**: can have default values that are used when not explicitly provided
 
@@ -143,27 +144,27 @@ Define arguments in your task using the `args` field:
 ```toml title="pixi.toml"
 [tasks]
 # Task with required arguments
-greet = { 
-    cmd = "echo Hello, {{ name }}!", 
-    args = ["name"] 
+greet = {
+    cmd = "echo Hello, {{ name }}!",
+    args = ["name"]
 }
 
 # Task with optional arguments (default values)
-build = { 
-    cmd = "echo Building {{ project }} in {{ mode }} mode", 
+build = {
+    cmd = "echo Building {{ project }} in {{ mode }} mode",
     args = [
         { "arg": "project", "default": "my-app" },
         { "arg": "mode", "default": "development" }
-    ] 
+    ]
 }
 
 # Task with mixed required and optional arguments
-deploy = { 
-    cmd = "echo Deploying {{ service }} to {{ environment }}", 
+deploy = {
+    cmd = "echo Deploying {{ service }} to {{ environment }}",
     args = [
         "service",
         { "arg": "environment", "default": "staging" }
-    ] 
+    ]
 }
 ```
 
@@ -198,32 +199,32 @@ You can pass arguments to tasks that are dependencies of other tasks:
 ```toml title="pixi.toml"
 [tasks]
 # Base task with arguments
-install = { 
-    cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}", 
+install = {
+    cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}",
     args = [
         { "arg": "path", "default": "/default/path" },
         { "arg": "flag", "default": "--normal" }
-    ] 
+    ]
 }
 
 # Dependent task specifying arguments for the base task
-install-release = { 
-    depends-on = [{ 
-        "task": "install", 
-        "args": ["/path/to/manifest", "--debug"] 
-    }] 
+install-release = {
+    depends-on = [{
+        "task": "install",
+        "args": ["/path/to/manifest", "--debug"]
+    }]
 }
 
 # Task with multiple dependencies, passing different arguments
-deploy = { 
-    cmd = "echo Deploying", 
+deploy = {
+    cmd = "echo Deploying",
     depends-on = [
-        { 
-            "task": "install", 
-            "args": ["/custom/path", "--verbose"] 
+        {
+            "task": "install",
+            "args": ["/custom/path", "--verbose"]
         },
         # Other dependent tasks can be added here
-    ] 
+    ]
 }
 ```
 
@@ -242,20 +243,20 @@ When a dependent task doesn't specify all arguments, the default values are used
 
 ```toml title="pixi.toml"
 [tasks]
-base-task = { 
-    cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}", 
+base-task = {
+    cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}",
     args = [
         { "arg": "arg1", "default": "default1" },
         { "arg": "arg2", "default": "default2" }
-    ] 
+    ]
 }
 
 # Only override the first argument
-partial-override = { 
-    depends-on = [{ 
-        "task": "base-task", 
-        "args": ["override1"] 
-    }] 
+partial-override = {
+    depends-on = [{
+        "task": "base-task",
+        "args": ["override1"]
+    }]
 }
 ```
 
