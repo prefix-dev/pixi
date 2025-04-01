@@ -552,7 +552,7 @@ def test_task_args_all_required(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "task_all_required", "val1"],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument arg2 in task task_all_required",
+        stderr_contains="no value provided for argument arg2",
     )
 
 
@@ -739,7 +739,7 @@ def test_depends_on_with_complex_args(pixi: Path, tmp_pixi_workspace: Path) -> N
             "some-arg",
         ],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument required_arg in task utility-task",
+        stderr_contains="no value provided for argument required_arg",
     )
 
 
@@ -796,7 +796,7 @@ def test_argument_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "test_single"],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument python-file in task test_single",
+        stderr_contains="no value provided for argument python-file",
     )
 
 
@@ -817,7 +817,7 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "undefined_arg"],
         ExitCode.FAILURE,
-        stderr_contains="The task failed to parse",
+        stderr_contains="Failed to replace argument placeholders",
     )
 
     manifest_content["tasks"] = {
@@ -831,5 +831,5 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
         ExitCode.FAILURE,
-        stderr_contains="The task failed to parse",
+        stderr_contains="Failed to replace argument placeholders",
     )

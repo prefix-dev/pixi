@@ -30,12 +30,20 @@ use crate::{
 };
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("The task failed to parse. task: '{script}'")]
 pub enum ShellParsingError {
-    #[error("Failed to parse shell script")]
-    ParseError(anyhow::Error),
-    #[error("Failed to replace argument placeholders")]
-    ArgumentReplacement(anyhow::Error),
+    #[error("Failed to parse shell script. Task: '{task}'")]
+    ParseError {
+        #[source]
+        source: anyhow::Error,
+        task: String,
+    },
+
+    #[error("Failed to replace argument placeholders. Task: '{task}'")]
+    ArgumentReplacement {
+        #[source]
+        source: anyhow::Error,
+        task: String,
+    },
 }
 
 /// Runs task in project.
@@ -47,7 +55,7 @@ pub struct RunOutput {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("The task failed to parse. task: '{script}'")]
+#[error("The task failed to parse")]
 pub struct FailedToParseShellScript {
     pub script: String,
     #[source]
@@ -163,28 +171,40 @@ impl<'p> ExecutableTask<'p> {
                 let replacement = match value {
                     Some(val) => val,
                     None => arg.default.as_deref().ok_or_else(|| {
-                        ShellParsingError::ArgumentReplacement(anyhow::Error::msg(format!(
-                            "no value provided for argument {} in task {}",
-                            arg.name,
-                            self.name().unwrap_or("default")
-                        )))
+                        ShellParsingError::ArgumentReplacement {
+                            source: anyhow::Error::msg(format!(
+                                "no value provided for argument {}",
+                                arg.name,
+                            )),
+                            task: task.to_string(),
+                        }
                     })?,
                 };
                 task = regex::Regex::new(&pattern)
-                    .map_err(|e| ShellParsingError::ArgumentReplacement(e.into()))?
+                    .map_err(|e| ShellParsingError::ArgumentReplacement {
+                        source: e.into(),
+                        task: task.to_string(),
+                    })?
                     .replace_all(&task, replacement)
                     .into_owned();
             }
         }
 
+        eprintln!("Task after replacing args: {}", task);
+
         // Check if there are any remaining {{ name }} patterns
-        let remaining_pattern = regex::Regex::new(r"\{\{\s*\w+\s*\}\}")
-            .map_err(|e| ShellParsingError::ArgumentReplacement(e.into()))?;
+        let remaining_pattern = regex::Regex::new(r"\{\{\s*[\w\-\.]+\s*\}\}").map_err(|e| {
+            ShellParsingError::ArgumentReplacement {
+                source: e.into(),
+                task: task.to_string(),
+            }
+        })?;
 
         if remaining_pattern.is_match(&task) {
-            return Err(ShellParsingError::ArgumentReplacement(anyhow::Error::msg(
-                format!("unresolved argument placeholders found in task: {}", task),
-            )));
+            return Err(ShellParsingError::ArgumentReplacement {
+                source: anyhow::Error::msg("unresolved argument placeholders found"),
+                task: task.to_string(),
+            });
         }
 
         Ok(task)
@@ -223,6 +243,8 @@ impl<'p> ExecutableTask<'p> {
         if let Some(full_script) = self.as_script() {
             tracing::debug!("Parsing shell script: {}", full_script);
 
+            eprintln!("Full script: {}", full_script);
+
             // Replace the arguments with the values
             let full_script =
                 self.replace_args(&full_script)
@@ -231,11 +253,16 @@ impl<'p> ExecutableTask<'p> {
                         error: e,
                     })?;
 
+            eprintln!("Full script: {}", full_script);
+
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
                 .map_err(|e| FailedToParseShellScript {
-                    script: full_script,
-                    error: ShellParsingError::ParseError(e),
+                    script: full_script.clone(),
+                    error: ShellParsingError::ParseError {
+                        source: e,
+                        task: full_script,
+                    },
                 })
                 .map(Some)
         } else {
