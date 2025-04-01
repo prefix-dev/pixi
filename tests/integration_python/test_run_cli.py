@@ -823,7 +823,7 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     manifest_content["tasks"] = {
         "mixed_args": {
             "cmd": "echo Python file: {{ python-file }} with {{ non-existing-argument }}",
-            "args": ["python-file"], 
+            "args": ["python-file"],
         }
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))

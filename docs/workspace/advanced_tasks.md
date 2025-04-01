@@ -157,7 +157,7 @@ Define arguments in your task using the `args` field:
 [tasks]
 # Task with required arguments
 greet = {
-    cmd = "echo Hello, {{ name }}!",# name must be provided by the user
+    cmd = "echo Hello, {{ name }}!", # name must be provided by the user
     args = ["name"]
 }
 
@@ -213,12 +213,12 @@ Here are some practical examples of how task arguments can be used:
 ```toml title="pixi.toml"
 [tasks]
 # Run tests for a specific file or module
-test = { 
-    cmd = "pytest {{ path }} {{ extra_args }}", 
+test = {
+    cmd = "pytest {{ path }} {{ extra_args }}",
     args = [
         { "arg": "path", "default": "tests/" },      # Test path, defaults to all tests
         { "arg": "extra_args", "default": "-v" }     # Extra pytest arguments
-    ] 
+    ]
 }
 
 # Format specific files or directories

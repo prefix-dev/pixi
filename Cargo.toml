@@ -276,6 +276,7 @@ uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 
+anyhow = "1.0.97"
 ctrlc = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 pixi_allocator = { workspace = true, optional = true }
@@ -345,7 +346,6 @@ uv-workspace = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
-anyhow = "1.0.97"
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
