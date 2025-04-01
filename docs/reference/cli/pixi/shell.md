@@ -4,7 +4,7 @@
 ## About
 Start a shell in a pixi environment, run `exit` to leave the shell
 
---8<-- "docs/reference/cli/pixi/shell_extender.md:description"
+--8<-- "docs/reference/cli/pixi/shell_extender:description"
 
 ## Usage
 ```
@@ -52,4 +52,4 @@ pixi shell [OPTIONS]
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/shell_extender.md:example"
+--8<-- "docs/reference/cli/pixi/shell_extender:example"

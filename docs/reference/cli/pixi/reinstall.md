@@ -4,7 +4,7 @@
 ## About
 Re-install an environment, both updating the lockfile and re-installing the environment
 
---8<-- "docs/reference/cli/pixi/reinstall_extender.md:description"
+--8<-- "docs/reference/cli/pixi/reinstall_extender:description"
 
 ## Usage
 ```
@@ -56,4 +56,4 @@ This command reinstalls an environment, if the lockfile is not up-to-date it wil
 If you want to re-install all environments, you can use the `--all` flag.
 
 
---8<-- "docs/reference/cli/pixi/reinstall_extender.md:example"
+--8<-- "docs/reference/cli/pixi/reinstall_extender:example"

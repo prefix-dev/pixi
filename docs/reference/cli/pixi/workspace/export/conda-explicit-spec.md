@@ -4,7 +4,7 @@
 ## About
 Export workspace environment to a conda explicit specification file
 
---8<-- "docs/reference/cli/pixi/workspace/export/conda-explicit-spec_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/export/conda-explicit-spec_extender:description"
 
 ## Usage
 ```
@@ -57,4 +57,4 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/workspace/export/conda-explicit-spec_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/export/conda-explicit-spec_extender:example"

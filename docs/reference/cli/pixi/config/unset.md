@@ -4,7 +4,7 @@
 ## About
 Unset a configuration value
 
---8<-- "docs/reference/cli/pixi/config/unset_extender.md:description"
+--8<-- "docs/reference/cli/pixi/config/unset_extender:description"
 
 ## Usage
 ```
@@ -34,4 +34,4 @@ Unset a configuration value
 Example: `pixi config unset default-channels`
 
 
---8<-- "docs/reference/cli/pixi/config/unset_extender.md:example"
+--8<-- "docs/reference/cli/pixi/config/unset_extender:example"

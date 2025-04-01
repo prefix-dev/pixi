@@ -4,7 +4,7 @@
 ## About
 Login to prefix.dev or anaconda.org servers to access private channels
 
---8<-- "docs/reference/cli/pixi/auth_extender.md:description"
+--8<-- "docs/reference/cli/pixi/auth_extender:description"
 
 ## Usage
 ```
@@ -18,4 +18,4 @@ pixi auth <COMMAND>
 | [`logout`](auth/logout.md) | Remove authentication information for a given host |
 
 
---8<-- "docs/reference/cli/pixi/auth_extender.md:example"
+--8<-- "docs/reference/cli/pixi/auth_extender:example"

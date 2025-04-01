@@ -4,7 +4,7 @@
 ## About
 Interact with the shortcuts on your machine
 
---8<-- "docs/reference/cli/pixi/global/shortcut_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/shortcut_extender:description"
 
 ## Usage
 ```
@@ -18,4 +18,4 @@ pixi global shortcut <COMMAND>
 | [`remove`](shortcut/remove.md) | Remove shortcuts from your machine |
 
 
---8<-- "docs/reference/cli/pixi/global/shortcut_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/shortcut_extender:example"

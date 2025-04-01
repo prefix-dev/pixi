@@ -4,7 +4,7 @@
 ## About
 List workspace's packages
 
---8<-- "docs/reference/cli/pixi/list_extender.md:description"
+--8<-- "docs/reference/cli/pixi/list_extender:description"
 
 ## Usage
 ```
@@ -51,4 +51,4 @@ List workspace's packages.
 Highlighted packages are explicit dependencies.
 
 
---8<-- "docs/reference/cli/pixi/list_extender.md:example"
+--8<-- "docs/reference/cli/pixi/list_extender:example"
