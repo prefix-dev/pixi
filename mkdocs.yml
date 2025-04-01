@@ -141,6 +141,7 @@ nav:
           - GitHub Actions: integration/ci/github_actions.md
           - Lockfile Updates: integration/ci/updates_github_actions.md
       - Third Party:
+          - Direnv: integration/third_party/direnv.md
           - Pixi Diff: integration/third_party/pixi_diff.md
           - Starship: integration/third_party/starship.md
   - Switching from:
