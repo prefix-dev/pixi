@@ -34,7 +34,6 @@ impl CompletionsDir {
     }
 
     /// Prune old completions
-    #[cfg(unix)]
     pub fn prune_old_completions(&self) -> miette::Result<()> {
         for directory in [self.bash_path(), self.zsh_path(), self.fish_path()] {
             if !directory.is_dir() {
@@ -56,12 +55,6 @@ impl CompletionsDir {
         Ok(())
     }
 
-    /// Prune old completions
-    #[cfg(not(unix))]
-    pub fn prune_old_completions(&self) -> miette::Result<()> {
-        Ok(())
-    }
-
     pub fn bash_path(&self) -> PathBuf {
         self.path().join("bash")
     }
@@ -78,7 +71,6 @@ impl CompletionsDir {
 #[derive(Debug, Clone)]
 pub struct Completion {
     name: String,
-    #[allow(dead_code)] // This member variable is not used on Windows
     source: PathBuf,
     destination: PathBuf,
 }
@@ -97,7 +89,6 @@ impl Completion {
     }
 
     /// Install the shell completion
-    #[cfg(unix)]
     pub async fn install(&self) -> miette::Result<Option<StateChange>> {
         tracing::debug!("Requested to install completion {}.", self.source.display());
 
@@ -112,15 +103,6 @@ impl Completion {
             .into_diagnostic()?;
 
         Ok(Some(StateChange::AddedCompletion(self.name.clone())))
-    }
-
-    #[cfg(not(unix))]
-    pub async fn install(&self) -> miette::Result<Option<StateChange>> {
-        tracing::info!(
-            "Symlinks are only supported on unix-like platforms. Skipping completion installation for {}.",
-            self.name
-        );
-        Ok(None)
     }
 
     /// Remove the shell completion
@@ -248,14 +230,4 @@ pub(crate) async fn completions_sync_status(
     }
 
     Ok((completions_to_remove, completions_to_add))
-}
-
-#[cfg(not(unix))]
-pub(crate) async fn completions_sync_status(
-    exposed_mappings: IndexSet<Mapping>,
-    executable_names: Vec<String>,
-    prefix_root: &Path,
-    completions_dir: &CompletionsDir,
-) -> miette::Result<(Vec<Completion>, Vec<Completion>)> {
-    Ok((Vec::new(), Vec::new()))
 }

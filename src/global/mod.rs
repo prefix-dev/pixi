@@ -1,4 +1,5 @@
 pub(crate) mod common;
+#[cfg(unix)]
 pub(crate) mod completions;
 pub(crate) mod install;
 pub(crate) mod list;
