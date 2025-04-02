@@ -1,4 +1,5 @@
 "completions_channel_1.yaml" = "completions_channel_1"
+"deno_channel.yaml" = "deno_channel"
 "dummy_channel_1.yaml" = "dummy_channel_1"
 "dummy_channel_2.yaml" = "dummy_channel_2"
 "multiple_versions_channel_1_010.yaml" = "multiple_versions_channel_1"

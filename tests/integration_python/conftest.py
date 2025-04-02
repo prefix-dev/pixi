@@ -115,5 +115,10 @@ def post_link_script_channel(channels: Path) -> str:
     return channels.joinpath("post_link_script_channel").as_uri()
 
 
+@pytest.fixture
+def deno_channel(channels: Path) -> str:
+    return channels.joinpath("deno_channel").as_uri()
+
+
 def doc_pixi_workspaces() -> Path:
     return Path(__file__).parents[2].joinpath("docs", "source_files", "pixi_workspaces")

@@ -4,7 +4,7 @@
 ## About
 Adds an environment to the manifest file
 
---8<-- "docs/reference/cli/pixi/workspace/system-requirements/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/system-requirements/add_extender:description"
 
 ## Usage
 ```
@@ -26,4 +26,4 @@ pixi workspace system-requirements add [OPTIONS] <REQUIREMENT> <VERSION>
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The name of the feature to modify
 
---8<-- "docs/reference/cli/pixi/workspace/system-requirements/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/system-requirements/add_extender:example"

@@ -4,7 +4,7 @@
 ## About
 Alias another specific command
 
---8<-- "docs/reference/cli/pixi/task/alias_extender.md:description"
+--8<-- "docs/reference/cli/pixi/task/alias_extender:description"
 
 ## Usage
 ```
@@ -26,4 +26,4 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 - <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
 :  The description of the alias task
 
---8<-- "docs/reference/cli/pixi/task/alias_extender.md:example"
+--8<-- "docs/reference/cli/pixi/task/alias_extender:example"

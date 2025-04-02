@@ -4,7 +4,7 @@
 ## About
 Show a tree of workspace dependencies
 
---8<-- "docs/reference/cli/pixi/tree_extender.md:description"
+--8<-- "docs/reference/cli/pixi/tree_extender:description"
 
 ## Usage
 ```
@@ -43,4 +43,4 @@ Show a tree of workspace dependencies
 Dependency names highlighted in green are directly specified in the manifest. Yellow version numbers are conda packages, PyPI version numbers are blue.
 
 
---8<-- "docs/reference/cli/pixi/tree_extender.md:example"
+--8<-- "docs/reference/cli/pixi/tree_extender:example"

@@ -4,11 +4,11 @@
 ## About
 Remove the pixi minimum version requirement
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi/unset_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi/unset_extender:description"
 
 ## Usage
 ```
 pixi workspace requires-pixi unset
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi/unset_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi/unset_extender:example"

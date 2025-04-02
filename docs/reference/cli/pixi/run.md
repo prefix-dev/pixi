@@ -4,7 +4,7 @@
 ## About
 Runs task in the pixi environment
 
---8<-- "docs/reference/cli/pixi/run_extender.md:description"
+--8<-- "docs/reference/cli/pixi/run_extender:description"
 
 ## Usage
 ```
@@ -70,4 +70,4 @@ This command is used to run tasks in the pixi environment. It will activate the 
 `pixi run` will also update the lockfile and install the environment if it is required.
 
 
---8<-- "docs/reference/cli/pixi/run_extender.md:example"
+--8<-- "docs/reference/cli/pixi/run_extender:example"

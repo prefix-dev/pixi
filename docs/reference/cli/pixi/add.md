@@ -4,7 +4,7 @@
 ## About
 Adds dependencies to the workspace
 
---8<-- "docs/reference/cli/pixi/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/add_extender:description"
 
 ## Usage
 ```
@@ -132,4 +132,4 @@ the minor version by default:
 Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 
 
---8<-- "docs/reference/cli/pixi/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/add_extender:example"

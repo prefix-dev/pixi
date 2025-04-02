@@ -4,7 +4,7 @@
 ## About
 Adds an environment to the manifest file
 
---8<-- "docs/reference/cli/pixi/workspace/environment/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/environment/add_extender:description"
 
 ## Usage
 ```
@@ -29,4 +29,4 @@ pixi workspace environment add [OPTIONS] <NAME>
 :  Update the manifest even if the environment already exists
 <br>**default**: `false`
 
---8<-- "docs/reference/cli/pixi/workspace/environment/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/environment/add_extender:example"

@@ -4,7 +4,7 @@
 ## About
 Add exposed binaries from an environment to your global environment
 
---8<-- "docs/reference/cli/pixi/global/expose/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/expose/add_extender:description"
 
 ## Usage
 ```
@@ -43,4 +43,4 @@ Example:
 - `pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest`
 
 
---8<-- "docs/reference/cli/pixi/global/expose/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/expose/add_extender:example"

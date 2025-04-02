@@ -4,7 +4,7 @@
 ## About
 The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly
 
---8<-- "docs/reference/cli/pixi/update_extender.md:description"
+--8<-- "docs/reference/cli/pixi/update_extender:description"
 
 ## Usage
 ```
@@ -53,4 +53,4 @@ The `update` command checks if there are newer versions of the dependencies and 
 It will only update the lock file if the dependencies in the manifest file are still compatible with the new versions.
 
 
---8<-- "docs/reference/cli/pixi/update_extender.md:example"
+--8<-- "docs/reference/cli/pixi/update_extender:example"

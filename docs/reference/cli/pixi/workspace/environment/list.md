@@ -4,11 +4,11 @@
 ## About
 List the environments in the manifest file
 
---8<-- "docs/reference/cli/pixi/workspace/environment/list_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/environment/list_extender:description"
 
 ## Usage
 ```
 pixi workspace environment list
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/environment/list_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/environment/list_extender:example"

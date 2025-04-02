@@ -4,7 +4,7 @@
 ## About
 Add a command to the workspace
 
---8<-- "docs/reference/cli/pixi/task/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/task/add_extender:description"
 
 ## Usage
 ```
@@ -41,4 +41,4 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 :  The arguments to pass to the task
 <br>May be provided more than once.
 
---8<-- "docs/reference/cli/pixi/task/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/task/add_extender:example"

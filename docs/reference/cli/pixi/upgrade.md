@@ -4,7 +4,7 @@
 ## About
 Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file
 
---8<-- "docs/reference/cli/pixi/upgrade_extender.md:description"
+--8<-- "docs/reference/cli/pixi/upgrade_extender:description"
 
 ## Usage
 ```
@@ -63,4 +63,4 @@ Checks if there are newer versions of the dependencies and upgrades them in the 
 `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
 
 
---8<-- "docs/reference/cli/pixi/upgrade_extender.md:example"
+--8<-- "docs/reference/cli/pixi/upgrade_extender:example"
