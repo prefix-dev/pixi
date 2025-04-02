@@ -1,4 +1,4 @@
-[project]
+[workspace]
 # --8<-- [start:project_name]
 name = "project-name"
 # --8<-- [end:project_name]

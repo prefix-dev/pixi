@@ -1,5 +1,5 @@
 # --8<-- [start:minimal]
-[project]
+[workspace]
 name = "pytorch-from-pytorch-channel"
 # `main` is not free! It's a paid channel for organizations over 200 people.
 channels = ["main", "nvidia", "pytorch"]
