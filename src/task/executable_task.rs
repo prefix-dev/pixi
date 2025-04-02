@@ -190,8 +190,6 @@ impl<'p> ExecutableTask<'p> {
             }
         }
 
-        eprintln!("Task after replacing args: {}", task);
-
         // Check if there are any remaining {{ name }} patterns
         let remaining_pattern = regex::Regex::new(r"\{\{\s*[\w\-\.]+\s*\}\}").map_err(|e| {
             ShellParsingError::ArgumentReplacement {
