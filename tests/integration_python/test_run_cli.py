@@ -354,6 +354,27 @@ def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+def test_run_deno(pixi: Path, tmp_pixi_workspace: Path, deno_channel: str) -> None:
+    """Ensure that `pixi run deno` will just be forwarded instead of calling pixi"""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+    [project]
+    name = "test"
+    channels = ["{deno_channel}"]
+    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+
+    [dependencies]
+    deno = "*"
+    """
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "deno"],
+        stdout_contains="deno",
+        stdout_excludes="pixi",
+    )
+
+
 def test_run_dry_run(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
