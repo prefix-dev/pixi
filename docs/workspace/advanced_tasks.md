@@ -154,7 +154,7 @@ Arguments can be:
 Define arguments in your task using the `args` field:
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_arguments.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks"
 ```
 
 ### Using Task Arguments
@@ -185,7 +185,7 @@ pixi run deploy auth-service production
 You can pass arguments to tasks that are dependencies of other tasks:
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_arguments_dependent.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments_dependent.toml:project_tasks"
 ```
 
 When executing a dependent task, the arguments are passed to the dependency:
@@ -202,7 +202,7 @@ pixi run deploy
 When a dependent task doesn't specify all arguments, the default values are used for the missing ones:
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_arguments_partial.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments_partial.toml:project_tasks"
 ```
 
 ```shell

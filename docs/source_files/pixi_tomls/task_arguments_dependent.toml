@@ -2,6 +2,7 @@
 channels = ["conda-forge"]
 name = "task-arguments-dependent"
 
+# --8<-- [start:project_tasks]
 [tasks]
 # Base task with arguments
 install = { cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}", args = [
@@ -23,3 +24,5 @@ deploy = { cmd = "echo Deploying", depends-on = [
   { "task" = "install", "args" = ["/custom/path", "--verbose"] },
   # Other dependent tasks can be added here
 ] }
+
+# --8<-- [end:project_tasks]

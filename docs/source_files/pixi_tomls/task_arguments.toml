@@ -2,6 +2,7 @@
 channels = ["conda-forge"]
 name = "task-arguments"
 
+# --8<-- [start:project_tasks]
 [tasks]
 # Task with required arguments
 greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
@@ -17,3 +18,5 @@ deploy = { cmd = "echo Deploying {{ service }} to {{ environment }}", args = [
   "service",
   { "arg" = "environment", "default" = "staging" },
 ] }
+
+# --8<-- [end:project_tasks]
