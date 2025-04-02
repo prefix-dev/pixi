@@ -80,7 +80,7 @@ pixi task add fmt ruff
 pixi task add lint pylint
 ```
 
-```shell
+```
 pixi task alias style fmt lint
 ```
 
