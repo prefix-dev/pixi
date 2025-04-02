@@ -1,0 +1,19 @@
+[project]
+name = "task-arguments"
+channels = ["conda-forge"]
+
+[tasks]
+# Task with required arguments
+greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
+
+# Task with optional arguments (default values)
+build = { cmd = "echo Building {{ project }} in {{ mode }} mode", args = [
+    { "arg" = "project", "default" = "my-app" },
+    { "arg" = "mode", "default" = "development" }
+] }
+
+# Task with mixed required and optional arguments
+deploy = { cmd = "echo Deploying {{ service }} to {{ environment }}", args = [
+    "service",
+    { "arg" = "environment", "default" = "staging" }
+] }

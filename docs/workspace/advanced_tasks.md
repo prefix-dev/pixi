@@ -154,32 +154,7 @@ Arguments can be:
 Define arguments in your task using the `args` field:
 
 ```toml title="pixi.toml"
-[tasks]
-# Task with required arguments
-greet = {
-    cmd = "echo Hello, {{ name }}!", # name must be provided by the user
-    args = ["name"]
-}
-
-# Task with optional arguments (default values)
-build = {
-    cmd = "echo Building {{ project }} in {{ mode }} mode",
-    args = [
-        # If not provided, "my-app" will be used
-        { "arg": "project", "default": "my-app" },
-        # If not provided, "development" will be used
-        { "arg": "mode", "default": "development" }
-    ]
-}
-
-# Task with mixed required and optional arguments
-deploy = {
-    cmd = "echo Deploying {{ service }} to {{ environment }}",
-    args = [
-        "service",                                    # Required argument, no default
-        { "arg": "environment", "default": "staging" } # Optional with default value
-    ]
-}
+--8<-- "docs/source_files/pixi_tomls/task_arguments.toml"
 ```
 
 ### Using Task Arguments
@@ -205,99 +180,12 @@ pixi run deploy auth-service
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
-
-### Real-World Examples
-
-Here are some practical examples of how task arguments can be used:
-
-```toml title="pixi.toml"
-[tasks]
-# Run tests for a specific file or module
-test = {
-    cmd = "pytest {{ path }} {{ extra_args }}",
-    args = [
-        { "arg": "path", "default": "tests/" },      # Test path, defaults to all tests
-        { "arg": "extra_args", "default": "-v" }     # Extra pytest arguments
-    ]
-}
-
-# Format specific files or directories
-format = {
-    cmd = "black {{ path }}",
-    args = [
-        { "arg": "path", "default": "." }            # Path to format, defaults to entire project
-    ]
-}
-
-# Generate documentation with configurable output directory
-docs = {
-    cmd = "sphinx-build -b html docs {{ output }}",
-    args = [
-        { "arg": "output", "default": "docs/_build/html" } # Output directory
-    ]
-}
-
-# Database migration task with version control
-migrate = {
-    cmd = "alembic upgrade {{ target }}",
-    args = [
-        { "arg": "target", "default": "head" }       # Migration target, defaults to latest
-    ]
-}
-```
-
-Usage examples:
-
-```shell
-# Run a specific test file with coverage
-pixi run test tests/test_core.py "--cov=src"
-
-# Format only the src directory
-pixi run format src/
-
-# Generate docs to a custom location
-pixi run docs custom_docs_output
-
-# Run migrations to a specific version
-pixi run migrate +2  # Upgrade by 2 migrations
-```
-
 ### Passing Arguments to Dependent Tasks
 
 You can pass arguments to tasks that are dependencies of other tasks:
 
 ```toml title="pixi.toml"
-[tasks]
-# Base task with arguments
-install = {
-    cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}",
-    args = [
-        { "arg": "path", "default": "/default/path" }, # Path to manifest
-        { "arg": "flag", "default": "--normal" }       # Installation flag
-    ]
-}
-
-# Dependent task specifying arguments for the base task
-install-release = {
-    # Override defaults when calling the dependency
-    depends-on = [{
-        "task": "install",
-        "args": ["/path/to/manifest", "--debug"]
-    }]
-}
-
-# Task with multiple dependencies, passing different arguments
-deploy = {
-    cmd = "echo Deploying",
-    depends-on = [
-        # Override with custom path and verbosity
-        {
-            "task": "install",
-            "args": ["/custom/path", "--verbose"]
-        },
-        # Other dependent tasks can be added here
-    ]
-}
+--8<-- "docs/source_files/pixi_tomls/task_arguments_dependent.toml"
 ```
 
 When executing a dependent task, the arguments are passed to the dependency:
@@ -314,23 +202,7 @@ pixi run deploy
 When a dependent task doesn't specify all arguments, the default values are used for the missing ones:
 
 ```toml title="pixi.toml"
-[tasks]
-base-task = {
-    cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}",
-    args = [
-        { "arg": "arg1", "default": "default1" }, # First argument with default
-        { "arg": "arg2", "default": "default2" }  # Second argument with default
-    ]
-}
-
-# Only override the first argument
-partial-override = {
-    # Only the first argument is provided
-    depends-on = [{
-        "task": "base-task",
-        "args": ["override1"]
-    }]
-}
+--8<-- "docs/source_files/pixi_tomls/task_arguments_partial.toml"
 ```
 
 ```shell
