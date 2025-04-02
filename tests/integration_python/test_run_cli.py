@@ -833,3 +833,50 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
         ExitCode.FAILURE,
         stderr_contains="Failed to replace argument placeholders",
     )
+
+
+def test_task_args_multiple_inputs(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test task arguments with multiple inputs."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "task4": {
+            "cmd": "echo Task 4 executed with {{ input1 }} and {{ input2 }}",
+            "args": [
+                {"arg": "input1", "default": "default1"},
+                {"arg": "input2", "default": "default2"},
+            ],
+        },
+        "task2": {
+            "cmd": "echo Task 2 executed",
+            "depends-on": [
+                {"task": "task4", "args": ["task2-arg1", "task2-arg2"]},
+            ],
+        },
+        "task3": {
+            "cmd": "echo Task 3 executed",
+            "depends-on": [
+                {"task": "task4", "args": ["task3-arg1", "task3-arg2"]},
+            ],
+        },
+        "task1": {
+            "cmd": "echo Task 1 executed",
+            "depends-on": [
+                {"task": "task2"},
+                {"task": "task3"},
+            ],
+        },
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task1"],
+        stdout_contains=[
+            "Task 4 executed with task2-arg1 and task2-arg2",
+            "Task 4 executed with task3-arg1 and task3-arg2",
+            "Task 2 executed",
+            "Task 3 executed",
+            "Task 1 executed",
+        ],
+    )

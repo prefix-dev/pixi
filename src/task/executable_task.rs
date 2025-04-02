@@ -243,7 +243,6 @@ impl<'p> ExecutableTask<'p> {
         if let Some(full_script) = self.as_script() {
             tracing::debug!("Parsing shell script: {}", full_script);
 
-
             // Replace the arguments with the values
             let full_script =
                 self.replace_args(&full_script)
@@ -251,7 +250,6 @@ impl<'p> ExecutableTask<'p> {
                         script: full_script,
                         error: e,
                     })?;
-
 
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
