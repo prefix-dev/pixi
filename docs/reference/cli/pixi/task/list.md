@@ -4,7 +4,7 @@
 ## About
 List all tasks in the workspace
 
---8<-- "docs/reference/cli/pixi/task/list_extender.md:description"
+--8<-- "docs/reference/cli/pixi/task/list_extender:description"
 
 ## Usage
 ```
@@ -19,4 +19,4 @@ pixi task list [OPTIONS]
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  List as json instead of a tree If not specified, the default environment is used
 
---8<-- "docs/reference/cli/pixi/task/list_extender.md:example"
+--8<-- "docs/reference/cli/pixi/task/list_extender:example"

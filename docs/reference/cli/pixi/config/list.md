@@ -4,7 +4,7 @@
 ## About
 List configuration values
 
---8<-- "docs/reference/cli/pixi/config/list_extender.md:description"
+--8<-- "docs/reference/cli/pixi/config/list_extender:description"
 
 ## Usage
 ```
@@ -37,4 +37,4 @@ List configuration values
 Example: `pixi config list default-channels`
 
 
---8<-- "docs/reference/cli/pixi/config/list_extender.md:example"
+--8<-- "docs/reference/cli/pixi/config/list_extender:example"

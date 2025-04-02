@@ -4,7 +4,7 @@
 ## About
 Add a command to the workspace
 
---8<-- "docs/reference/cli/pixi/task/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/task/add_extender:description"
 
 ## Usage
 ```
@@ -38,4 +38,4 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
 :  Isolate the task from the shell environment, and only use the pixi environment to run the task
 
---8<-- "docs/reference/cli/pixi/task/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/task/add_extender:example"

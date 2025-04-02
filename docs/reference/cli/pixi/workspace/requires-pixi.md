@@ -4,7 +4,7 @@
 ## About
 Commands to manage the pixi minimum version requirement
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi_extender:description"
 
 ## Usage
 ```
@@ -24,4 +24,4 @@ pixi workspace requires-pixi [OPTIONS] <COMMAND>
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi_extender:example"

@@ -4,7 +4,7 @@
 ## About
 Updates environments in the global environment
 
---8<-- "docs/reference/cli/pixi/global/update_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/update_extender:description"
 
 ## Usage
 ```
@@ -29,4 +29,4 @@ pixi global update [OPTIONS] [ENVIRONMENTS]...
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
 
---8<-- "docs/reference/cli/pixi/global/update_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/update_extender:example"

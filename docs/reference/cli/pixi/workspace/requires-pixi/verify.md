@@ -4,11 +4,11 @@
 ## About
 Verify the pixi minimum version requirement
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi/verify_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi/verify_extender:description"
 
 ## Usage
 ```
 pixi workspace requires-pixi verify
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi/verify_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi/verify_extender:example"

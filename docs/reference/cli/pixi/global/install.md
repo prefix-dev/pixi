@@ -4,7 +4,7 @@
 ## About
 Installs the defined packages in a globally accessible location and exposes their command line applications.
 
---8<-- "docs/reference/cli/pixi/global/install_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/install_extender:description"
 
 ## Usage
 ```
@@ -60,4 +60,4 @@ Example:
 - `pixi global install --environment science --expose jupyter --expose ipython jupyter ipython polars`
 
 
---8<-- "docs/reference/cli/pixi/global/install_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/install_extender:example"

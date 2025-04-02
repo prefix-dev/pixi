@@ -4,7 +4,7 @@
 ## About
 Creates a new workspace
 
---8<-- "docs/reference/cli/pixi/init_extender.md:description"
+--8<-- "docs/reference/cli/pixi/init_extender:description"
 
 ## Usage
 ```
@@ -42,4 +42,4 @@ As pixi can both work with `pixi.toml` and `pyproject.toml` files, the user can 
 You can import an existing conda environment file with the `--import` flag.
 
 
---8<-- "docs/reference/cli/pixi/init_extender.md:example"
+--8<-- "docs/reference/cli/pixi/init_extender:example"

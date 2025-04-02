@@ -4,7 +4,7 @@
 ## About
 Adds dependencies to an environment
 
---8<-- "docs/reference/cli/pixi/global/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/add_extender:description"
 
 ## Usage
 ```
@@ -47,4 +47,4 @@ Example:
 - `pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest`
 
 
---8<-- "docs/reference/cli/pixi/global/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/add_extender:example"

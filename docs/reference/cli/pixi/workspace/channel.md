@@ -4,7 +4,7 @@
 ## About
 Commands to manage workspace channels
 
---8<-- "docs/reference/cli/pixi/workspace/channel_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/channel_extender:description"
 
 ## Usage
 ```
@@ -19,4 +19,4 @@ pixi workspace channel <COMMAND>
 | [`remove`](channel/remove.md) | Remove channel(s) from the manifest and updates the lockfile |
 
 
---8<-- "docs/reference/cli/pixi/workspace/channel_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/channel_extender:example"

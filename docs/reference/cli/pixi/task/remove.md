@@ -4,7 +4,7 @@
 ## About
 Remove a command from the workspace
 
---8<-- "docs/reference/cli/pixi/task/remove_extender.md:description"
+--8<-- "docs/reference/cli/pixi/task/remove_extender:description"
 
 ## Usage
 ```
@@ -22,4 +22,4 @@ pixi task remove [OPTIONS] [TASK_NAME]...
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the task should be removed
 
---8<-- "docs/reference/cli/pixi/task/remove_extender.md:example"
+--8<-- "docs/reference/cli/pixi/task/remove_extender:example"

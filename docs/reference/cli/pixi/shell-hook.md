@@ -4,7 +4,7 @@
 ## About
 Print the pixi environment activation script
 
---8<-- "docs/reference/cli/pixi/shell-hook_extender.md:description"
+--8<-- "docs/reference/cli/pixi/shell-hook_extender:description"
 
 ## Usage
 ```
@@ -65,4 +65,4 @@ Print the pixi environment activation script.
 You can source the script to activate the environment without needing pixi itself.
 
 
---8<-- "docs/reference/cli/pixi/shell-hook_extender.md:example"
+--8<-- "docs/reference/cli/pixi/shell-hook_extender:example"

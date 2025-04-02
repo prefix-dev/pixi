@@ -4,11 +4,11 @@
 ## About
 List the platforms in the workspace file
 
---8<-- "docs/reference/cli/pixi/workspace/platform/list_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/platform/list_extender:description"
 
 ## Usage
 ```
 pixi workspace platform list
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/platform/list_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/platform/list_extender:example"

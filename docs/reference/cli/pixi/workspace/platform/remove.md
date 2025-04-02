@@ -4,7 +4,7 @@
 ## About
 Remove platform(s) from the workspace file and updates the lockfile
 
---8<-- "docs/reference/cli/pixi/workspace/platform/remove_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/platform/remove_extender:description"
 
 ## Usage
 ```
@@ -23,4 +23,4 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The name of the feature to remove the platform from
 
---8<-- "docs/reference/cli/pixi/workspace/platform/remove_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/platform/remove_extender:example"

@@ -4,7 +4,7 @@
 ## About
 Remove authentication information for a given host
 
---8<-- "docs/reference/cli/pixi/auth/logout_extender.md:description"
+--8<-- "docs/reference/cli/pixi/auth/logout_extender:description"
 
 ## Usage
 ```
@@ -16,4 +16,4 @@ pixi auth logout <HOST>
 :  The host to remove authentication for
 <br>**required**: `true`
 
---8<-- "docs/reference/cli/pixi/auth/logout_extender.md:example"
+--8<-- "docs/reference/cli/pixi/auth/logout_extender:example"

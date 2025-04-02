@@ -4,7 +4,7 @@
 ## About
 Modify the workspace configuration file through the command line
 
---8<-- "docs/reference/cli/pixi/workspace_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace_extender:description"
 
 ## Usage
 ```
@@ -29,4 +29,4 @@ pixi workspace [OPTIONS] <COMMAND>
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/workspace_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace_extender:example"
