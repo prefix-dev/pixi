@@ -253,7 +253,6 @@ impl<'p> ExecutableTask<'p> {
                         error: e,
                     })?;
 
-            eprintln!("Full script: {}", full_script);
 
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
