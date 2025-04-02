@@ -901,3 +901,59 @@ def test_task_args_multiple_inputs(pixi: Path, tmp_pixi_workspace: Path) -> None
             "Task 1 executed",
         ],
     )
+
+def test_task_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test task environment."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["workspace"] = {
+        "name": "test",
+        "channels": ["conda-forge"],
+        "platforms": ["linux-64", "osx-64", "osx-arm64", "win-64"],
+    }
+
+    manifest_content["feature"] = {
+        "py311": {
+            "dependencies": {
+                "python": "3.11.*"
+            }
+        },
+        "py312": {
+            "dependencies": {
+                "python": "3.12.*"
+            }
+        }
+    }
+
+    manifest_content["environments"] = {
+        "py311": ["py311"],
+        "py312": ["py312"]
+    }
+
+    manifest_content["tasks"] = {
+        "task1": {
+            "cmd": "python --version",
+            "args": [
+                {"arg": "arg1", "default": "default1"},
+            ],
+        },
+        "task2": {
+            "cmd": "python --version",
+            "args": [
+                {"arg": "arg1", "default": "default1"},
+            ],
+            "depends-on": [
+                {"task": "task1", "environment": "py311"},
+            ],
+        },
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task1"],
+        stdout_contains="Task 1 executed",
+    )
+    
+    
