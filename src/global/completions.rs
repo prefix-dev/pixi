@@ -84,10 +84,6 @@ impl Completion {
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     /// Install the shell completion
     pub async fn install(&self) -> miette::Result<Option<StateChange>> {
         tracing::debug!("Requested to install completion {}.", self.source.display());

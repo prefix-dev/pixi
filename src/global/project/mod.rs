@@ -647,9 +647,12 @@ impl Project {
             );
         }
 
-        // Prune old completions
-        let completions_dir = super::completions::CompletionsDir::from_env().await?;
-        completions_dir.prune_old_completions()?;
+        #[cfg(unix)]
+        {
+            // Prune old completions
+            let completions_dir = super::completions::CompletionsDir::from_env().await?;
+            completions_dir.prune_old_completions()?;
+        }
 
         state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
 
@@ -879,32 +882,6 @@ impl Project {
                 env_name.fancy_display(),
                 exec_to_remove,
                 exec_to_add
-            );
-            return Ok(false);
-        }
-
-        tracing::debug!("Verify that the completions are in sync with the environment");
-        let execs_all = self
-            .executables_of_all_dependencies(env_name)
-            .await?
-            .into_iter()
-            .map(|exec| exec.name)
-            .collect();
-        let completions_dir = crate::global::completions::CompletionsDir::from_env().await?;
-        let (completions_to_remove, completions_to_add) =
-            crate::global::completions::completions_sync_status(
-                environment.exposed.clone(),
-                execs_all,
-                prefix.root(),
-                &completions_dir,
-            )
-            .await?;
-        if !completions_to_remove.is_empty() || !completions_to_add.is_empty() {
-            tracing::debug!(
-                "Environment {} completions are not in sync: to_remove: {}, to_add: {}",
-                env_name.fancy_display(),
-                completions_to_remove.iter().map(|c| c.name()).join(", "),
-                completions_to_add.iter().map(|c| c.name()).join(", ")
             );
             return Ok(false);
         }
@@ -1278,7 +1255,7 @@ impl Project {
     #[cfg(not(unix))]
     pub async fn sync_completions(
         &self,
-        env_name: &EnvironmentName,
+        _env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let state_changes = StateChanges::default();
         Ok(state_changes)

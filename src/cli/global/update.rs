@@ -86,8 +86,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // prune old environments and completions
             let state_changes = project_original.prune_old_environments().await?;
             state_changes.report();
-            let completions_dir = global::completions::CompletionsDir::from_env().await?;
-            completions_dir.prune_old_completions()?;
+            #[cfg(unix)]
+            {
+                let completions_dir = global::completions::CompletionsDir::from_env().await?;
+                completions_dir.prune_old_completions()?;
+            }
             project_original.environments().keys().cloned().collect()
         }
     };
