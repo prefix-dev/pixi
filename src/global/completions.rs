@@ -183,7 +183,6 @@ pub fn contained_completions(
 /// based on the provided `exposed_mappings` and `executable_names`. It compares the
 /// current state of the completion scripts in the `completions_dir` with the expected
 /// state derived from the `exposed_mappings`.
-#[cfg(unix)]
 pub(crate) async fn completions_sync_status(
     exposed_mappings: IndexSet<Mapping>,
     executable_names: Vec<String>,

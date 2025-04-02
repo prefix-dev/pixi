@@ -647,7 +647,7 @@ impl Project {
             );
         }
 
-        #[cfg(unix)]
+        #[cfg(unix)] // Completions are only supported on unix-like systems
         {
             // Prune old completions
             let completions_dir = super::completions::CompletionsDir::from_env().await?;
@@ -1207,7 +1207,7 @@ impl Project {
         Ok(state_changes)
     }
 
-    #[cfg(unix)]
+    #[cfg(unix)] // Completions are only supported on unix like systems
     pub async fn sync_completions(
         &self,
         env_name: &EnvironmentName,
