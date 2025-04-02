@@ -243,7 +243,6 @@ impl<'p> ExecutableTask<'p> {
         if let Some(full_script) = self.as_script() {
             tracing::debug!("Parsing shell script: {}", full_script);
 
-            eprintln!("Full script: {}", full_script);
 
             // Replace the arguments with the values
             let full_script =
