@@ -902,7 +902,10 @@ def test_task_args_multiple_inputs(pixi: Path, tmp_pixi_workspace: Path) -> None
         ],
     )
 
-def test_task_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
+
+def test_task_environment(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
     """Test task environment."""
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
 
@@ -910,50 +913,33 @@ def test_task_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     manifest_content["workspace"] = {
         "name": "test",
-        "channels": ["conda-forge"],
+        "channels": [multiple_versions_channel_1],
         "platforms": ["linux-64", "osx-64", "osx-arm64", "win-64"],
     }
 
     manifest_content["feature"] = {
-        "py311": {
-            "dependencies": {
-                "python": "3.11.*"
-            }
-        },
-        "py312": {
-            "dependencies": {
-                "python": "3.12.*"
-            }
-        }
+        "010": {"dependencies": {"package": "==0.1.0"}},
+        "020": {"dependencies": {"package": "==0.2.0"}},
     }
 
-    manifest_content["environments"] = {
-        "py311": ["py311"],
-        "py312": ["py312"]
-    }
+    manifest_content["environments"] = {"env_010": ["010"], "env_020": ["020"]}
 
     manifest_content["tasks"] = {
-        "task1": {
-            "cmd": "python --version",
-            "args": [
-                {"arg": "arg1", "default": "default1"},
-            ],
-        },
+        "task1": "package",
         "task2": {
-            "cmd": "python --version",
-            "args": [
-                {"arg": "arg1", "default": "default1"},
-            ],
             "depends-on": [
-                {"task": "task1", "environment": "py311"},
+                {"task": "task1", "environment": "env_010"},
             ],
         },
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "task1"],
-        stdout_contains="Task 1 executed",
+        [pixi, "run", "--manifest-path", manifest_path, "--environment", "env_020", "task1"],
+        stdout_contains="0.2.0",
     )
-    
-    
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task2"],
+        stdout_contains="0.1.0",
+    )
