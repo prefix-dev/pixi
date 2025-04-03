@@ -332,6 +332,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "mirrors" => new.mirrors = config.mirrors.clone(),
         "repodata-config" => new.repodata_config = config.repodata_config.clone(),
         "pypi-config" => new.pypi_config = config.pypi_config.clone(),
+        "proxy-config" => new.proxy_config = config.proxy_config.clone(),
         _ => {
             let keys = [
                 "default-channels",
@@ -340,6 +341,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
                 "mirrors",
                 "repodata-config",
                 "pypi-config",
+                "proxy-config",
             ];
             return Err(miette::miette!("key must be one of: {}", keys.join(", ")));
         }
