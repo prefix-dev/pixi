@@ -37,10 +37,9 @@ use pixi::{
     cli::{
         add, cli_config::DependencyConfig, init, install, remove, search, task, update, workspace,
     },
-    task::TaskName,
     DependencyType,
 };
-use pixi_manifest::{EnvironmentName, FeatureName, SpecType};
+use pixi_manifest::{task::Dependency, EnvironmentName, FeatureName, SpecType};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
@@ -324,7 +323,7 @@ impl TaskAddBuilder {
     }
 
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+    pub fn with_depends_on(mut self, depends: Vec<Dependency>) -> Self {
         self.args.depends_on = Some(depends);
         self
     }
@@ -360,7 +359,7 @@ pub struct TaskAliasBuilder {
 
 impl TaskAliasBuilder {
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+    pub fn with_depends_on(mut self, depends: Vec<Dependency>) -> Self {
         self.args.depends_on = depends;
         self
     }
