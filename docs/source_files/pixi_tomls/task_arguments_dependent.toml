@@ -3,26 +3,25 @@ channels = ["conda-forge"]
 name = "task-arguments-dependent"
 
 # --8<-- [start:project_tasks]
-[tasks]
 # Base task with arguments
-install = { cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}", args = [
+[tasks.install]
+args = [
   { "arg" = "path", "default" = "/default/path" }, # Path to manifest
   { "arg" = "flag", "default" = "--normal" },      # Installation flag
-] }
+]
+cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}"
 
 # Dependent task specifying arguments for the base task
-install-release = { depends-on = [
-  { "task" = "install", "args" = [
-    "/path/to/manifest",
-    "--debug",
-  ] },
-] }
+[tasks.install-release]
+depends-on = [{ "task" = "install", "args" = ["/path/to/manifest", "--debug"] }]
 
 # Task with multiple dependencies, passing different arguments
-deploy = { cmd = "echo Deploying", depends-on = [
+[tasks.deploy]
+cmd = "echo Deploying"
+depends-on = [
   # Override with custom path and verbosity
   { "task" = "install", "args" = ["/custom/path", "--verbose"] },
   # Other dependent tasks can be added here
-] }
+]
 
 # --8<-- [end:project_tasks]

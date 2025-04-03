@@ -3,20 +3,22 @@ channels = ["conda-forge"]
 name = "task-arguments"
 
 # --8<-- [start:project_tasks]
-[tasks]
 # Task with required arguments
-greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
+[tasks.greet]
+args = ["name"]
+cmd = "echo Hello, {{ name }}!"
 
 # Task with optional arguments (default values)
-build = { cmd = "echo Building {{ project }} in {{ mode }} mode", args = [
+[tasks.build]
+args = [
   { "arg" = "project", "default" = "my-app" },
   { "arg" = "mode", "default" = "development" },
-] }
+]
+cmd = "echo Building {{ project }} in {{ mode }} mode"
 
 # Task with mixed required and optional arguments
-deploy = { cmd = "echo Deploying {{ service }} to {{ environment }}", args = [
-  "service",
-  { "arg" = "environment", "default" = "staging" },
-] }
+[tasks.deploy]
+args = ["service", { "arg" = "environment", "default" = "staging" }]
+cmd = "echo Deploying {{ service }} to {{ environment }}"
 
 # --8<-- [end:project_tasks]
