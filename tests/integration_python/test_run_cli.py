@@ -918,24 +918,24 @@ def test_task_environment(
     }
 
     manifest_content["feature"] = {
-        "010": {"dependencies": {"package": "==0.1.0"}},
-        "020": {"dependencies": {"package": "==0.2.0"}},
+        "010": {"dependencies": {"package2": "==0.1.0"}},
+        "020": {"dependencies": {"package2": "==0.2.0"}},
     }
 
-    manifest_content["environments"] = {"env_010": ["010"], "env_020": ["020"]}
+    manifest_content["environments"] = {"env-010": ["010"], "env-020": ["020"]}
 
     manifest_content["tasks"] = {
-        "task1": "package",
+        "task1": "cat $(which package2)",
         "task2": {
             "depends-on": [
-                {"task": "task1", "environment": "env_010"},
+                {"task": "task1", "environment": "env-010"},
             ],
         },
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "--environment", "env_020", "task1"],
+        [pixi, "run", "--manifest-path", manifest_path, "--environment", "env-020", "task1"],
         stdout_contains="0.2.0",
     )
 

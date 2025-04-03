@@ -32,7 +32,7 @@ pub struct TaskId(usize);
 
 /// A dependency is a task name and a list of arguments.
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
-pub struct GraphDependency(TaskId, Option<Vec<String>>);
+pub struct GraphDependency(TaskId, Option<Vec<String>>, Option<String>);
 
 impl GraphDependency {
     pub fn task_id(&self) -> TaskId {
@@ -171,7 +171,8 @@ impl<'p> TaskGraph<'p> {
         };
 
         if let Some(name) = args.first() {
-            match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs) {
+            match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
+            {
                 Err(FindTaskError::MissingTask(_)) => {}
                 Err(FindTaskError::AmbiguousTask(err)) => {
                     return Err(TaskGraphError::AmbiguousTask(err))
@@ -276,7 +277,7 @@ impl<'p> TaskGraph<'p> {
         let mut task_name_with_args_to_node: HashMap<Dependency, TaskId> =
             HashMap::from_iter(root.name.clone().into_iter().map(|name| {
                 (
-                    Dependency::new(&name.to_string(), root.arguments_values.clone()),
+                    Dependency::new(&name.to_string(), root.arguments_values.clone(), None),
                     TaskId(0),
                 )
             }));
@@ -296,7 +297,11 @@ impl<'p> TaskGraph<'p> {
             for dependency in dependencies {
                 // Check if we visited this node before already.
                 if let Some(&task_id) = task_name_with_args_to_node.get(&dependency) {
-                    node_dependencies.push(GraphDependency(task_id, dependency.args.clone()));
+                    node_dependencies.push(GraphDependency(
+                        task_id,
+                        dependency.args.clone(),
+                        dependency.environment.clone(),
+                    ));
                     continue;
                 }
 
@@ -313,9 +318,14 @@ impl<'p> TaskGraph<'p> {
                     Cow::Owned(_) => unreachable!("only named tasks can have dependencies"),
                 };
 
+                let task_specific_environment = project
+                    .environment_from_name_or_env_var(dependency.environment.clone())
+                    .ok();
+
                 let (task_env, task_dependency) = match search_environments.find_task(
                     dependency.task_name.clone(),
                     FindTaskSource::DependsOn(node_name, task_ref),
+                    task_specific_environment,
                 ) {
                     Err(FindTaskError::MissingTask(err)) => {
                         return Err(TaskGraphError::MissingTask(err))
@@ -347,7 +357,11 @@ impl<'p> TaskGraph<'p> {
                 task_name_with_args_to_node.insert(dependency.clone(), task_id);
 
                 // Add the dependency to the node
-                node_dependencies.push(GraphDependency(task_id, dependency.args.clone()));
+                node_dependencies.push(GraphDependency(
+                    task_id,
+                    dependency.args.clone(),
+                    dependency.environment.clone(),
+                ));
             }
 
             nodes[next_node_to_visit].dependencies = node_dependencies;
