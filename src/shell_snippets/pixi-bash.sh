@@ -4,6 +4,11 @@ pixi() {
     local cmd="$PIXI_EXE $*"
 
     eval "$cmd"
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        return $exit_code
+    fi
 
     case "$first_arg" in
         add|a|remove|rm|install|i)
