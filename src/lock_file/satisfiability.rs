@@ -688,6 +688,12 @@ enum Dependency {
         Cow<'static, str>,
     ),
     Conda(MatchSpec, Cow<'static, str>),
+    CondaSource(
+        rattler_conda_types::PackageName,
+        MatchSpec,
+        SourceSpec,
+        Cow<'static, str>,
+    ),
     PyPi(uv_pypi_types::Requirement, Cow<'static, str>),
 }
 
@@ -1016,7 +1022,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
             Dependency::Input(name, spec, source) => match spec.into_source_or_binary() {
                 Either::Left(source_spec) => {
                     expected_conda_source_dependencies.insert(name.clone());
-                    find_matching_source_package(locked_pixi_records, name, source_spec, source)?
+                    find_matching_source_package(
+                        locked_pixi_records,
+                        name,
+                        source_spec,
+                        source,
+                        None,
+                    )?
                 }
                 Either::Right(binary_spec) => {
                     let spec = match binary_spec.try_into_nameless_match_spec(&channel_config) {
@@ -1056,6 +1068,16 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     Some(pkg) => pkg,
                     None => continue,
                 }
+            }
+            Dependency::CondaSource(name, spec, source_spec, source) => {
+                expected_conda_source_dependencies.insert(name.clone());
+                find_matching_source_package(
+                    locked_pixi_records,
+                    name,
+                    source_spec,
+                    source,
+                    Some(spec),
+                )?
             }
             Dependency::PyPi(requirement, source) => {
                 // Check if there is a pypi identifier that matches our requirement.
@@ -1142,17 +1164,35 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 for depends in &record.package_record().depends {
                     let spec = MatchSpec::from_str(depends.as_str(), Lenient)
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
-                    conda_queue.push(Dependency::Conda(
-                        spec,
-                        match record {
-                            PixiRecord::Binary(record) => Cow::Owned(record.file_name.to_string()),
-                            PixiRecord::Source(record) => Cow::Owned(format!(
-                                "{} @ {}",
-                                record.package_record.name.as_source(),
-                                &record.source
-                            )),
-                        },
-                    ));
+
+                    let origin = match record {
+                        PixiRecord::Binary(record) => Cow::Owned(record.file_name.to_string()),
+                        PixiRecord::Source(record) => Cow::Owned(format!(
+                            "{} @ {}",
+                            record.package_record.name.as_source(),
+                            &record.source
+                        )),
+                    };
+
+                    if let Some((source, package_name)) = record
+                        .as_source()
+                        .and_then(|record| Some((record, spec.name.as_ref()?)))
+                        .and_then(|(record, package_name)| {
+                            Some((
+                                record.sources.get(package_name.as_normalized())?,
+                                package_name,
+                            ))
+                        })
+                    {
+                        conda_queue.push(Dependency::CondaSource(
+                            package_name.clone(),
+                            spec,
+                            source.clone(),
+                            origin,
+                        ));
+                    } else {
+                        conda_queue.push(Dependency::Conda(spec, origin));
+                    }
                 }
             }
             FoundPackage::PyPi(idx, extras) => {
@@ -1426,6 +1466,7 @@ fn find_matching_source_package(
     name: rattler_conda_types::PackageName,
     source_spec: SourceSpec,
     source: Cow<str>,
+    match_spec: Option<MatchSpec>,
 ) -> Result<FoundPackage, Box<PlatformUnsat>> {
     // Find the package that matches the source spec.
     let Some((idx, package)) = locked_pixi_records
@@ -1451,6 +1492,15 @@ fn find_matching_source_package(
         .source
         .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
+
+    if let Some(match_spec) = match_spec {
+        if !match_spec.matches(package) {
+            return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
+                Box::new(match_spec),
+                source.into_owned(),
+            )));
+        }
+    }
 
     Ok(FoundPackage::Conda(idx))
 }

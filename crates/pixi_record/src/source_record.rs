@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use pixi_spec::SourceSpec;
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
 use rattler_lock::{CondaPackageData, CondaSourceData};
@@ -21,6 +24,10 @@ pub struct SourceRecord {
     /// If this is `None`, the input hash was not computed or is not relevant
     /// for this record. The record can always be considered up to date.
     pub input_hash: Option<InputHash>,
+
+    /// Specifies which packages are expected to be installed as source packages
+    /// and from which location.
+    pub sources: HashMap<String, SourceSpec>,
 }
 
 /// Defines the hash of the input files that were used to build the metadata of
@@ -45,6 +52,11 @@ impl From<SourceRecord> for CondaPackageData {
                 hash: i.hash,
                 globs: i.globs,
             }),
+            sources: value
+                .sources
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
         })
     }
 }
@@ -60,6 +72,11 @@ impl TryFrom<CondaSourceData> for SourceRecord {
                 hash: hash.hash,
                 globs: hash.globs,
             }),
+            sources: value
+                .sources
+                .into_iter()
+                .map(|(k, v)| (k, SourceSpec::from(v)))
+                .collect(),
         })
     }
 }

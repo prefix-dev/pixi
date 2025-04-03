@@ -21,7 +21,7 @@ use pixi_build_types::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
         conda_metadata::CondaMetadataParams,
     },
-    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
+    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
 };
 use pixi_config::get_cache_dir;
 use pixi_consts::consts::CACHED_GIT_DIR;
@@ -802,6 +802,31 @@ impl BuildContext {
     }
 }
 
+pub fn from_pixi_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::SourceSpec {
+    match source {
+        SourcePackageSpecV1::Url(url) => pixi_spec::SourceSpec::Url(pixi_spec::UrlSourceSpec {
+            url: url.url,
+            md5: url.md5,
+            sha256: url.sha256,
+        }),
+        SourcePackageSpecV1::Git(git) => pixi_spec::SourceSpec::Git(pixi_spec::GitSpec {
+            git: git.git,
+            rev: git.rev.map(|r| match r {
+                pixi_build_types::GitReferenceV1::Branch(b) => pixi_spec::GitReference::Branch(b),
+                pixi_build_types::GitReferenceV1::Tag(t) => pixi_spec::GitReference::Tag(t),
+                pixi_build_types::GitReferenceV1::Rev(rev) => pixi_spec::GitReference::Rev(rev),
+                pixi_build_types::GitReferenceV1::DefaultBranch => {
+                    pixi_spec::GitReference::DefaultBranch
+                }
+            }),
+            subdirectory: git.subdirectory,
+        }),
+        SourcePackageSpecV1::Path(path) => pixi_spec::SourceSpec::Path(pixi_spec::PathSourceSpec {
+            path: path.path.into(),
+        }),
+    }
+}
+
 fn source_metadata_to_records(
     source: &SourceCheckout,
     packages: Vec<CondaPackageMetadata>,
@@ -814,6 +839,11 @@ fn source_metadata_to_records(
             SourceRecord {
                 input_hash: input_hash.clone(),
                 source: source.pinned.clone(),
+                sources: p
+                    .sources
+                    .into_iter()
+                    .map(|(name, source)| (name, from_pixi_source_spec_v1(source)))
+                    .collect(),
                 package_record: PackageRecord {
                     // We cannot now these values from the metadata because no actual package
                     // was built yet.

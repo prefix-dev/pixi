@@ -456,6 +456,100 @@ impl From<VersionSpec> for BinarySpec {
     }
 }
 
+#[cfg(feature = "rattler_lock")]
+impl From<rattler_lock::source::SourceLocation> for SourceSpec {
+    fn from(value: rattler_lock::source::SourceLocation) -> Self {
+        match value {
+            rattler_lock::source::SourceLocation::Url(url) => Self::Url(url.into()),
+            rattler_lock::source::SourceLocation::Git(git) => Self::Git(git.into()),
+            rattler_lock::source::SourceLocation::Path(path) => Self::Path(path.into()),
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<SourceSpec> for rattler_lock::source::SourceLocation {
+    fn from(value: SourceSpec) -> Self {
+        match value {
+            SourceSpec::Url(url) => Self::Url(url.into()),
+            SourceSpec::Git(git) => Self::Git(git.into()),
+            SourceSpec::Path(path) => Self::Path(path.into()),
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
+    fn from(value: rattler_lock::source::UrlSourceLocation) -> Self {
+        Self {
+            url: value.url,
+            md5: value.md5,
+            sha256: value.sha256,
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<UrlSourceSpec> for rattler_lock::source::UrlSourceLocation {
+    fn from(value: UrlSourceSpec) -> Self {
+        Self {
+            url: value.url,
+            md5: value.md5,
+            sha256: value.sha256,
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<rattler_lock::source::GitSourceLocation> for GitSpec {
+    fn from(value: rattler_lock::source::GitSourceLocation) -> Self {
+        Self {
+            git: value.git,
+            rev: match value.rev {
+                Some(rattler_lock::source::GitReference::Branch(branch)) => {
+                    Some(GitReference::Branch(branch))
+                }
+                Some(rattler_lock::source::GitReference::Tag(tag)) => Some(GitReference::Tag(tag)),
+                Some(rattler_lock::source::GitReference::Rev(rev)) => Some(GitReference::Rev(rev)),
+                None => None,
+            },
+            subdirectory: value.subdirectory,
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<GitSpec> for rattler_lock::source::GitSourceLocation {
+    fn from(value: GitSpec) -> Self {
+        Self {
+            git: value.git,
+            rev: match value.rev {
+                Some(GitReference::Branch(branch)) => {
+                    Some(rattler_lock::source::GitReference::Branch(branch))
+                }
+                Some(GitReference::Tag(tag)) => Some(rattler_lock::source::GitReference::Tag(tag)),
+                Some(GitReference::Rev(rev)) => Some(rattler_lock::source::GitReference::Rev(rev)),
+                Some(GitReference::DefaultBranch) | None => None,
+            },
+            subdirectory: value.subdirectory,
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<rattler_lock::source::PathSourceLocation> for PathSourceSpec {
+    fn from(value: rattler_lock::source::PathSourceLocation) -> Self {
+        Self { path: value.path }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<PathSourceSpec> for rattler_lock::source::PathSourceLocation {
+    fn from(value: PathSourceSpec) -> Self {
+        Self { path: value.path }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use rattler_conda_types::ChannelConfig;
