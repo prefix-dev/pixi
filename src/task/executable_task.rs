@@ -173,7 +173,7 @@ impl<'p> ExecutableTask<'p> {
                     None => arg.default.as_deref().ok_or_else(|| {
                         ShellParsingError::ArgumentReplacement {
                             source: anyhow::Error::msg(format!(
-                                "no value provided for argument {}",
+                                "no value provided for argument '{}'",
                                 arg.name,
                             )),
                             task: task.to_string(),

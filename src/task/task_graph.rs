@@ -403,7 +403,7 @@ pub enum TaskGraphError {
     #[error("could not split task, assuming non valid task")]
     InvalidTask,
 
-    #[error("task {0} received more arguments than expected")]
+    #[error("task '{0}' received more arguments than expected")]
     TooManyArguments(String),
 }
 

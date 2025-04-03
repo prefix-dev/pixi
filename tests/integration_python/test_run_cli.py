@@ -573,7 +573,7 @@ def test_task_args_all_required(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "task_all_required", "val1"],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument arg2",
+        stderr_contains="no value provided for argument 'arg2'",
     )
 
 
@@ -609,7 +609,7 @@ def test_task_args_too_many(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "d",
         ],
         ExitCode.FAILURE,
-        stderr_contains="task task_with_defaults has more arguments than expected",
+        stderr_contains="task 'task_with_defaults' received more arguments than expected",
     )
 
 
@@ -760,7 +760,7 @@ def test_depends_on_with_complex_args(pixi: Path, tmp_pixi_workspace: Path) -> N
             "some-arg",
         ],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument required_arg",
+        stderr_contains="no value provided for argument 'required_arg'",
     )
 
 
@@ -810,14 +810,14 @@ def test_argument_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "file2.py",
         ],
         ExitCode.FAILURE,
-        stderr_contains="task test_single has more arguments than expected",
+        stderr_contains="task 'test_single' received more arguments than expected",
     )
 
     # This should fail - no arguments provided for a required arg
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "test_single"],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument python-file",
+        stderr_contains="no value provided for argument 'python-file'",
     )
 
 
