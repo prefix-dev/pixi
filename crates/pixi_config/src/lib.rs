@@ -11,13 +11,15 @@ use itertools::Itertools;
 use miette::{miette, Context, IntoDiagnostic};
 use pixi_consts::consts;
 use rattler_conda_types::{
+    package::ArchiveType,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
 };
 use rattler_networking::s3_middleware;
+use rattler_package_streaming::write::CompressionLevel;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
 use reqwest::{NoProxy, Proxy};
-use serde::{de::IntoDeserializer, Deserialize, Serialize};
+use serde::{de::Error, de::IntoDeserializer, Deserialize, Serialize};
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
@@ -698,6 +700,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "ProxyConfig::is_default")]
     pub proxy_config: ProxyConfig,
 
+    /// Build configuration for pixi and rattler-build
+    #[serde(default)]
+    #[serde(skip_serializing_if = "BuildConfig::is_default")]
+    pub build: BuildConfig,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -730,6 +737,7 @@ impl Default for Config {
             concurrency: ConcurrencyConfig::default(),
             run_post_link_scripts: None,
             proxy_config: ProxyConfig::default(),
+            build: BuildConfig::default(),
 
             // Deprecated fields
             change_ps1: None,
@@ -862,6 +870,129 @@ impl ProxyConfig {
             } else {
                 other.non_proxy_hosts.clone()
             },
+        }
+    }
+}
+
+/// Container for the package format and compression level
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct PackageFormatAndCompression {
+    /// The archive type that is selected
+    pub archive_type: ArchiveType,
+    /// The compression level that is selected
+    pub compression_level: CompressionLevel,
+}
+
+// deserializer for the package format and compression level
+impl<'de> Deserialize<'de> for PackageFormatAndCompression {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let s = s.as_str();
+        let mut split = s.split(':');
+        let package_format = split.next().ok_or(D::Error::custom("invalid"))?;
+
+        let compression = split.next().unwrap_or("default");
+
+        // remove all non-alphanumeric characters
+        let package_format = package_format
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect::<String>();
+
+        let archive_type = match package_format.to_lowercase().as_str() {
+            "tarbz2" => ArchiveType::TarBz2,
+            "conda" => ArchiveType::Conda,
+            _ => {
+                return Err(D::Error::custom(format!(
+                    "Unknown package format: {}",
+                    package_format
+                )))
+            }
+        };
+
+        let compression_level = match compression {
+            "max" | "highest" => CompressionLevel::Highest,
+            "default" | "normal" => CompressionLevel::Default,
+            "fast" | "lowest" | "min" => CompressionLevel::Lowest,
+            number if number.parse::<i32>().is_ok() => {
+                let number = number.parse::<i32>().unwrap_or_default();
+                match archive_type {
+                    ArchiveType::TarBz2 => {
+                        if !(1..=9).contains(&number) {
+                            return Err(D::Error::custom(
+                                "Compression level for .tar.bz2 must be between 1 and 9"
+                                    .to_string(),
+                            ));
+                        }
+                    }
+                    ArchiveType::Conda => {
+                        if !(-7..=22).contains(&number) {
+                            return Err(D::Error::custom(
+                                "Compression level for conda packages (zstd) must be between -7 and 22".to_string()
+                            ));
+                        }
+                    }
+                }
+                CompressionLevel::Numeric(number)
+            }
+            _ => {
+                return Err(D::Error::custom(format!(
+                    "Unknown compression level: {}",
+                    compression
+                )))
+            }
+        };
+
+        Ok(PackageFormatAndCompression {
+            archive_type,
+            compression_level,
+        })
+    }
+}
+
+impl Serialize for PackageFormatAndCompression {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let package_format = match self.archive_type {
+            ArchiveType::TarBz2 => "tarbz2",
+            ArchiveType::Conda => "conda",
+        };
+        let compression_level = match self.compression_level {
+            CompressionLevel::Default => "default",
+            CompressionLevel::Highest => "max",
+            CompressionLevel::Lowest => "min",
+            CompressionLevel::Numeric(level) => &level.to_string(),
+        };
+
+        serializer.serialize_str(format!("{}:{}", package_format, compression_level).as_str())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct BuildConfig {
+    /// package format and compression level
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub package_format: Option<PackageFormatAndCompression>,
+}
+
+impl BuildConfig {
+    pub fn is_default(&self) -> bool {
+        self.package_format.is_none()
+    }
+    pub fn merge(&self, other: Self) -> Self {
+        Self {
+            package_format: other
+                .package_format
+                .as_ref()
+                .or(self.package_format.as_ref())
+                .cloned(),
         }
     }
 }
@@ -1193,6 +1324,7 @@ impl Config {
             run_post_link_scripts: other.run_post_link_scripts.or(self.run_post_link_scripts),
 
             proxy_config: self.proxy_config.merge(other.proxy_config),
+            build: self.build.merge(other.build),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1926,6 +2058,7 @@ UNUSED = "unused"
             },
             run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
             proxy_config: ProxyConfig::default(),
+            build: BuildConfig::default(),
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
