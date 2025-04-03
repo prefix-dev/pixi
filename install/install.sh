@@ -30,9 +30,18 @@ fi
 
 
 BINARY="pixi-${ARCH}-${PLATFORM}"
-EXTENSION="tar.gz"
 if [ "$(uname -o)" = "Msys" ]; then
   EXTENSION="zip"
+  if ! hash unzip 2> /dev/null; then
+    echo "error: you do not have 'unzip' installed which is required for this script." >&2
+    exit 1
+  fi
+else
+  EXTENSION="tar.gz"
+  if ! hash tar 2> /dev/null; then
+    echo "error: you do not have 'tar' installed which is required for this script." >&2
+    exit 1
+  fi
 fi
 
 if [ "$VERSION" = "latest" ]; then
@@ -49,12 +58,7 @@ fi
 printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"
 
 if ! hash curl 2> /dev/null && ! hash wget 2> /dev/null; then
-  echo "error: you need either 'curl' or 'wget' installed for this script."
-  exit 1
-fi
-
-if ! hash tar 2> /dev/null; then
-  echo "error: you do not have 'tar' installed which is required for this script."
+  echo "error: you need either 'curl' or 'wget' installed for this script." >&2
   exit 1
 fi
 
@@ -79,35 +83,35 @@ if hash curl 2> /dev/null; then
   # Check that the curl version is not 8.8.0, which is broken for --write-out
   # https://github.com/curl/curl/issues/13845
   if [ "$(curl --version | head -n 1 | cut -d ' ' -f 2)" = "8.8.0" ]; then
-    echo "error: curl 8.8.0 is known to be broken, please use a different version"
+    echo "error: curl 8.8.0 is known to be broken, please use a different version" >&2
     if [ "$(uname -o)" = "Msys" ]; then
-      echo "A common way to get an updated version of curl is to upgrade Git for Windows:"
-      echo "      https://gitforwindows.org/"
+      echo "A common way to get an updated version of curl is to upgrade Git for Windows:" >&2
+      echo "      https://gitforwindows.org/" >&2
     fi
     exit 1
   fi
   HTTP_CODE="$(curl -SL $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")"
   if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -gt 299 ]; then
-    echo "error: '${DOWNLOAD_URL}' is not available"
+    echo "error: '${DOWNLOAD_URL}' is not available" >&2
     exit 1
   fi
 elif hash wget 2> /dev/null; then
   if ! wget $WGET_OPTIONS --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
-    echo "error: '${DOWNLOAD_URL}' is not available"
+    echo "error: '${DOWNLOAD_URL}' is not available" >&2
     exit 1
   fi
 fi
 
 # Check that file was correctly created (https://github.com/prefix-dev/pixi/issues/446)
 if [ ! -s "$TEMP_FILE" ]; then
-  echo "error: temporary file ${TEMP_FILE} not correctly created."
-  echo "       As a workaround, you can try set TMPDIR env variable to directory with write permissions."
+  echo "error: temporary file ${TEMP_FILE} not correctly created." >&2
+  echo "       As a workaround, you can try set TMPDIR env variable to directory with write permissions." >&2
   exit 1
 fi
 
 # Extract pixi from the downloaded file
 mkdir -p "$BIN_DIR"
-if [ "$(uname -o)" = "Msys" ]; then
+if [ "$EXTENSION" = "zip" ]; then
   unzip "$TEMP_FILE" -d "$BIN_DIR"
 else
   # Extract to a temporary directory first
@@ -148,7 +152,7 @@ update_shell() {
     fi
 }
 
-case "$(basename "$SHELL")" in
+case "$(basename "${SHELL-}")" in
     bash)
         # Default to bashrc as that is used in non login shells instead of the profile.
         LINE="export PATH=\"${BIN_DIR}:\$PATH\""
@@ -170,9 +174,14 @@ case "$(basename "$SHELL")" in
         update_shell ~/.tcshrc "$LINE"
         ;;
 
+    '')
+        echo "warn: Could not detect shell type." >&2
+        echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
+        ;;
+
     *)
-        echo "Could not update shell: $(basename "$SHELL")"
-        echo "Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command."
+        echo "warn: Could not update shell $(basename "$SHELL")" >&2
+        echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
         ;;
 esac
 
