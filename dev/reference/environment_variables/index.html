@@ -102,7 +102,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#environment-variables" class="md-skip">
+        <a href="#configurable-environment-variables" class="md-skip">
           Skip to content
         </a>
       
@@ -2034,8 +2034,18 @@
       <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
       
       
-        
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Environment Variables
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
       
       <a href="./" class="md-nav__link md-nav__link--active">
         
@@ -2047,6 +2057,41 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configurable-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configurable Environment Variables
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables-set-by-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Variables Set By Pixi
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -2235,8 +2280,32 @@
   
   
   
-    
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#configurable-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configurable Environment Variables
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables-set-by-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Environment Variables Set By Pixi
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -2260,7 +2329,9 @@
   
 
 
-<h1 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h1>
+  <h1>Environment Variables</h1>
+
+<h2 id="configurable-environment-variables">Configurable Environment Variables<a class="headerlink" href="#configurable-environment-variables" title="Permanent link">#</a></h2>
 <p>Pixi can also be configured via environment variables.</p>
 <table>
   <thead>
@@ -2289,6 +2360,26 @@
     </tr>
   </tbody>
 </table>
+
+<h2 id="environment-variables-set-by-pixi">Environment Variables Set By Pixi<a class="headerlink" href="#environment-variables-set-by-pixi" title="Permanent link">#</a></h2>
+<p>The following environment variables are set by Pixi, when using the <code>pixi run</code>, <code>pixi shell</code>, or <code>pixi shell-hook</code> command:</p>
+<ul>
+<li><code>PIXI_PROJECT_ROOT</code>: The root directory of the project.</li>
+<li><code>PIXI_PROJECT_NAME</code>: The name of the project.</li>
+<li><code>PIXI_PROJECT_MANIFEST</code>: The path to the manifest file (<code>pixi.toml</code>).</li>
+<li><code>PIXI_PROJECT_VERSION</code>: The version of the project.</li>
+<li><code>PIXI_PROMPT</code>: The prompt to use in the shell, also used by <code>pixi shell</code> itself.</li>
+<li><code>PIXI_ENVIRONMENT_NAME</code>: The name of the environment, defaults to <code>default</code>.</li>
+<li><code>PIXI_ENVIRONMENT_PLATFORMS</code>: Comma separated list of platforms supported by the project.</li>
+<li><code>CONDA_PREFIX</code>: The path to the environment. (Used by multiple tools that already understand conda environments)</li>
+<li><code>CONDA_DEFAULT_ENV</code>: The name of the environment. (Used by multiple tools that already understand conda environments)</li>
+<li><code>PATH</code>: We prepend the <code>bin</code> directory of the environment to the <code>PATH</code> variable, so you can use the tools installed in the environment directly.</li>
+<li><code>INIT_CWD</code>: ONLY IN <code>pixi run</code>: The directory where the command was run from.</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting <code>PIXI_PROJECT_ROOT</code> in the environment.</p>
+</div>
 
 
 
