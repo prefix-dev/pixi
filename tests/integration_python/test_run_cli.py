@@ -935,11 +935,159 @@ def test_task_environment(
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "--environment", "env-020", "task1"],
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "--environment",
+            "env-020",
+            "task1",
+        ],
         stdout_contains="0.2.0",
     )
 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "task2"],
         stdout_contains="0.1.0",
+    )
+
+
+def test_task_environment_precedence(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    """Test that environment specified in task dependency takes precedence over CLI --environment flag."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["workspace"] = {
+        "name": "test-env-precedence",
+        "channels": [multiple_versions_channel_1],
+        "platforms": ["linux-64", "osx-64", "osx-arm64", "win-64"],
+    }
+
+    manifest_content["feature"] = {
+        "v010": {"dependencies": {"package2": "==0.1.0"}},
+        "v020": {"dependencies": {"package2": "==0.2.0"}},
+        "v030": {"dependencies": {"package2": "==0.3.0"}},
+    }
+
+    manifest_content["environments"] = {
+        "env-010": ["v010"],
+        "env-020": ["v020"],
+        "env-030": ["v030"],
+    }
+
+    manifest_content["tasks"] = {
+        "check-version": "package2",
+        "check-with-env": {
+            "depends-on": [{"task": "check-version", "environment": "env-020"}],
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "check-with-env"],
+        stdout_contains="0.2.0",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "--environment",
+            "env-030",
+            "check-with-env",
+        ],
+        stdout_contains="0.2.0",
+        stdout_excludes="0.3.0",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "--environment",
+            "env-030",
+            "check-version",
+        ],
+        stdout_contains="0.3.0",
+    )
+
+
+def test_multiple_dependencies_with_environments(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    """Test that multiple dependencies can each specify different environments."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["workspace"] = {
+        "name": "test-multi-env-deps",
+        "channels": [multiple_versions_channel_1],
+        "platforms": ["linux-64", "osx-64", "osx-arm64", "win-64"],
+    }
+
+    manifest_content["feature"] = {
+        "v010": {"dependencies": {"package2": "==0.1.0"}},
+        "v020": {"dependencies": {"package2": "==0.2.0"}},
+        "v030": {"dependencies": {"package2": "==0.3.0"}},
+    }
+
+    manifest_content["environments"] = {
+        "env-010": ["v010"],
+        "env-020": ["v020"],
+        "env-030": ["v030"],
+    }
+
+    manifest_content["tasks"] = {
+        "check-v010": "package2",
+        "check-v020": "package2",
+        "check-v030": "package2",
+        "check-all": {
+            "depends-on": [
+                {"task": "check-v010", "environment": "env-010"},
+                {"task": "check-v020", "environment": "env-020"},
+                {"task": "check-v030", "environment": "env-030"},
+            ],
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "--environment",
+            "env-010",
+            "check-all",
+        ],
+        stdout_contains=["0.1.0", "0.2.0", "0.3.0"],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "--environment",
+            "env-030",
+            "check-all",
+        ],
+        stdout_contains=[
+            "0.1.0",
+            "0.2.0",
+            "0.3.0",
+        ],
     )
