@@ -1220,7 +1220,7 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [workspace]
         name = "test"
         channels = []
-        platforms = ["linux-64", "win-64", "osx-64"]
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
         [tasks]
         foo = "echo foo"
