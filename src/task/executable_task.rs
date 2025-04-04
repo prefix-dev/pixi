@@ -70,6 +70,9 @@ pub struct InvalidWorkingDirectory {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum TaskExecutionError {
+    #[error("the script exited with a non-zero exit code {0}")]
+    NonZeroExitCode(i32),
+
     #[error(transparent)]
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
 
