@@ -34,3 +34,8 @@ direnv: unloading
 $ which python
 python not found
 ```
+
+While `direnv` comes with [hooks for the common shells](https://direnv.net/docs/hook.html), 
+these hooks into the shell should not be relied on when using and IDE.
+The `direnv` package does not include hooks for integrated develop environments.
+That said there is typically, a plugin or extension available.
