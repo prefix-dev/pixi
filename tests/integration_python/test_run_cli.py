@@ -925,7 +925,7 @@ def test_task_environment(
     manifest_content["environments"] = {"env-010": ["010"], "env-020": ["020"]}
 
     manifest_content["tasks"] = {
-        "task1": "cat $(which package2)",
+        "task1": "package2",
         "task2": {
             "depends-on": [
                 {"task": "task1", "environment": "env-010"},

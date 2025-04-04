@@ -61,6 +61,14 @@ build = { cmd = "ninja -C .build", depends-on = ["configure"] }
 start = { cmd = ".build/bin/sdl_example", depends-on = ["build"] }
 ```
 
+You can also specify a specific environment to use for a dependent task:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
+```
+
+This allows you to run the same task in different environments as part of a single pipeline.
+
 ```shell
 pixi run start
 ```
