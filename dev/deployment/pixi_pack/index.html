@@ -934,6 +934,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#pypi-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      PyPi support
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache-downloaded-packages" class="md-nav__link">
     <span class="md-ellipsis">
       Cache Downloaded Packages
@@ -2446,6 +2455,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#pypi-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      PyPi support
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache-downloaded-packages" class="md-nav__link">
     <span class="md-ellipsis">
       Cache Downloaded Packages
@@ -2567,6 +2585,11 @@ This can be useful if you want to distribute the environment to users that don't
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>--manifest-pack<span class="w"> </span>pixi.toml
 </span></code></pre></div>
 <p>This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use <code>pixi.lock</code> from the workspace.</p>
+<h3 id="pypi-support">PyPi support<a class="headerlink" href="#pypi-support" title="Permanent link">#</a></h3>
+<p>You can also pack PyPi wheel packages into your environment.
+<code>pixi-pack</code> only supports wheel packages and not source distributions.
+If you happen to use source distributions, you can ignore them by using the <code>--ignore-pypi</code> flag.
+This will skip the bundling of all PyPi packages.</p>
 <h3 id="cache-downloaded-packages">Cache Downloaded Packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
 <p>You can cache downloaded packages to speed up subsequent pack operations by using the <code>--use-cache</code> flag:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
