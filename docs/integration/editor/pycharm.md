@@ -129,3 +129,9 @@ lint = { features = ["lint"], no-default-feature = true }
 
 Now you as a user can run `pixi shell`, which will start the default environment.
 In production, you then just run `pixi run -e prod COMMAND`, and the minimal prod environment is installed.
+
+## Activate the `pixi` project environment
+
+An alternative approach is to use [`direnv`](../third_party/direnv.md) via a 
+[Jetbrains `direnv` plugin](https://plugins.jetbrains.com/plugin/15285-direnv-integration)
+which can be used to activate `pixi`.
