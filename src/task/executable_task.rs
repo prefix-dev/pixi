@@ -15,6 +15,7 @@ use pixi_consts::consts;
 use pixi_manifest::{Task, TaskName};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
+use regex;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -28,6 +29,23 @@ use crate::{
     Workspace,
 };
 
+#[derive(Debug, Error, Diagnostic)]
+pub enum ShellParsingError {
+    #[error("Failed to parse shell script. Task: '{task}'")]
+    ParseError {
+        #[source]
+        source: anyhow::Error,
+        task: String,
+    },
+
+    #[error("Failed to replace argument placeholders. Task: '{task}'")]
+    ArgumentReplacement {
+        #[source]
+        source: anyhow::Error,
+        task: String,
+    },
+}
+
 /// Runs task in project.
 #[derive(Default, Debug)]
 pub struct RunOutput {
@@ -37,10 +55,11 @@ pub struct RunOutput {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("The task failed to parse. task: '{script}' error: '{error}'")]
+#[error("The task failed to parse")]
 pub struct FailedToParseShellScript {
     pub script: String,
-    pub error: String,
+    #[source]
+    pub error: ShellParsingError,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -91,12 +110,40 @@ impl<'p> ExecutableTask<'p> {
     /// Constructs a new executable task from a task graph node.
     pub fn from_task_graph(task_graph: &TaskGraph<'p>, task_id: TaskId) -> Self {
         let node = &task_graph[task_id];
+
+        let task = if let Some(argument_values) = node.arguments_values.clone() {
+            // Create a task with updated arguments
+            match &node.task {
+                Cow::Borrowed(task) => {
+                    Cow::Owned(task.with_updated_args(&argument_values).unwrap_or_else(|| {
+                        tracing::warn!(
+                            "Failed to update arguments for task {}",
+                            node.name.as_ref().unwrap_or(&"default".into())
+                        );
+                        (*task).clone()
+                    }))
+                }
+                Cow::Owned(task) => {
+                    Cow::Owned(task.with_updated_args(&argument_values).unwrap_or_else(|| {
+                        tracing::warn!(
+                            "Failed to update arguments for task {}",
+                            node.name.as_ref().unwrap_or(&"default".into())
+                        );
+                        task.clone()
+                    }))
+                }
+            }
+        } else {
+            // Clone the existing task
+            node.task.clone()
+        };
+
         Self {
             workspace: task_graph.project(),
             name: node.name.clone(),
-            task: node.task.clone(),
+            task,
             run_environment: node.run_environment.clone(),
-            additional_args: node.additional_args.clone(),
+            additional_args: node.additional_args.clone().unwrap_or_default(),
         }
     }
 
@@ -113,6 +160,52 @@ impl<'p> ExecutableTask<'p> {
     /// Returns the project in which this task is defined.
     pub(crate) fn project(&self) -> &'p Workspace {
         self.workspace
+    }
+    /// Replaces the arguments in the task with the values from the task args.
+    pub fn replace_args(&self, task: &str) -> Result<String, ShellParsingError> {
+        let mut task = task.to_string();
+        if let Some(args) = self.task().get_args() {
+            for (arg, value) in args {
+                // Match {{ arg_name }} with flexible whitespace
+                let pattern = format!(r"\{{\{{\s*{}\s*\}}\}}", regex::escape(&arg.name));
+                let replacement = match value {
+                    Some(val) => val,
+                    None => arg.default.as_deref().ok_or_else(|| {
+                        ShellParsingError::ArgumentReplacement {
+                            source: anyhow::Error::msg(format!(
+                                "no value provided for argument '{}'",
+                                arg.name,
+                            )),
+                            task: task.to_string(),
+                        }
+                    })?,
+                };
+                task = regex::Regex::new(&pattern)
+                    .map_err(|e| ShellParsingError::ArgumentReplacement {
+                        source: e.into(),
+                        task: task.to_string(),
+                    })?
+                    .replace_all(&task, replacement)
+                    .into_owned();
+            }
+        }
+
+        // Check if there are any remaining {{ name }} patterns
+        let remaining_pattern = regex::Regex::new(r"\{\{\s*[\w\-\.]+\s*\}\}").map_err(|e| {
+            ShellParsingError::ArgumentReplacement {
+                source: e.into(),
+                task: task.to_string(),
+            }
+        })?;
+
+        if remaining_pattern.is_match(&task) {
+            return Err(ShellParsingError::ArgumentReplacement {
+                source: anyhow::Error::msg("unresolved argument placeholders found"),
+                task: task.to_string(),
+            });
+        }
+
+        Ok(task)
     }
 
     /// Returns the task as script
@@ -148,11 +241,22 @@ impl<'p> ExecutableTask<'p> {
         if let Some(full_script) = self.as_script() {
             tracing::debug!("Parsing shell script: {}", full_script);
 
+            // Replace the arguments with the values
+            let full_script =
+                self.replace_args(&full_script)
+                    .map_err(|e| FailedToParseShellScript {
+                        script: full_script,
+                        error: e,
+                    })?;
+
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
                 .map_err(|e| FailedToParseShellScript {
-                    script: full_script,
-                    error: e.to_string(),
+                    script: full_script.clone(),
+                    error: ShellParsingError::ParseError {
+                        source: e,
+                        task: full_script,
+                    },
                 })
                 .map(Some)
         } else {
@@ -485,5 +589,42 @@ mod tests {
                 .to_string_lossy()
                 .to_string()
         );
+    }
+
+    #[test]
+    fn test_replace_args() {
+        let file_contents = r#"
+            [tasks]
+            simple = {cmd = "echo Simple task"}
+        "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("simple"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("simple".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            additional_args: vec![],
+        };
+
+        // Test a command with no placeholders works fine
+        let result = executable_task
+            .replace_args("echo No placeholders here")
+            .unwrap();
+        assert_eq!(result, "echo No placeholders here");
+
+        // Test that using an undefined argument errors
+        let result = executable_task.replace_args("echo {{ undefined }}");
+        assert!(result.is_err());
     }
 }

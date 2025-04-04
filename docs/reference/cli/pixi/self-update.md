@@ -4,7 +4,7 @@
 ## About
 Update pixi to the latest version or a specific version
 
---8<-- "docs/reference/cli/pixi/self-update_extender.md:description"
+--8<-- "docs/reference/cli/pixi/self-update_extender:description"
 
 ## Usage
 ```
@@ -15,4 +15,4 @@ pixi self-update
 - <a id="arg---version" href="#arg---version">`--version <VERSION>`</a>
 :  The desired version (to downgrade or upgrade to)
 
---8<-- "docs/reference/cli/pixi/self-update_extender.md:example"
+--8<-- "docs/reference/cli/pixi/self-update_extender:example"

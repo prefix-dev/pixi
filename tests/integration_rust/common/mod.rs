@@ -625,6 +625,7 @@ impl TasksControl<'_> {
                 env: Default::default(),
                 description: None,
                 clean_env: false,
+                args: None,
             },
         }
     }

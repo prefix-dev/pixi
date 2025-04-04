@@ -1,0 +1,20 @@
+recipe:
+  name: deno-channel
+  version: 1.0.0
+
+outputs:
+  - package:
+      name: deno
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "@echo off" > $PREFIX/bin/deno.bat
+            - echo "echo deno" >> $PREFIX/bin/deno.bat
+          else:
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/deno
+            - echo "echo deno" >> $PREFIX/bin/deno
+            - chmod +x $PREFIX/bin/deno

@@ -4,7 +4,7 @@
 ## About
 Removes dependencies from the workspace
 
---8<-- "docs/reference/cli/pixi/remove_extender.md:description"
+--8<-- "docs/reference/cli/pixi/remove_extender:description"
 
 ## Usage
 ```
@@ -80,4 +80,4 @@ If the workspace manifest is a `pyproject.toml`, removing a pypi dependency with
 - pixi `pypi-dependencies` tables of the default feature or, if a feature is specified, a named feature
 
 
---8<-- "docs/reference/cli/pixi/remove_extender.md:example"
+--8<-- "docs/reference/cli/pixi/remove_extender:example"

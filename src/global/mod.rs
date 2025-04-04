@@ -1,4 +1,5 @@
 pub(crate) mod common;
+#[cfg(unix)] // Completions are only supported on unix-like systems
 pub(crate) mod completions;
 pub(crate) mod install;
 pub(crate) mod list;

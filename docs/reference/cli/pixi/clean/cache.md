@@ -4,7 +4,7 @@
 ## About
 Clean the cache of your system which are touched by pixi
 
---8<-- "docs/reference/cli/pixi/clean/cache_extender.md:description"
+--8<-- "docs/reference/cli/pixi/clean/cache_extender:description"
 
 ## Usage
 ```
@@ -33,4 +33,4 @@ Clean the cache of your system which are touched by pixi.
 Specify the cache type to clean with the flags.
 
 
---8<-- "docs/reference/cli/pixi/clean/cache_extender.md:example"
+--8<-- "docs/reference/cli/pixi/clean/cache_extender:example"

@@ -71,7 +71,6 @@ impl CompletionsDir {
 #[derive(Debug, Clone)]
 pub struct Completion {
     name: String,
-    #[allow(dead_code)] // This member variable is not used on Windows
     source: PathBuf,
     destination: PathBuf,
 }
@@ -85,12 +84,7 @@ impl Completion {
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     /// Install the shell completion
-    #[cfg(unix)]
     pub async fn install(&self) -> miette::Result<Option<StateChange>> {
         tracing::debug!("Requested to install completion {}.", self.source.display());
 
@@ -105,15 +99,6 @@ impl Completion {
             .into_diagnostic()?;
 
         Ok(Some(StateChange::AddedCompletion(self.name.clone())))
-    }
-
-    #[cfg(not(unix))]
-    pub async fn install(&self) -> miette::Result<Option<StateChange>> {
-        tracing::info!(
-            "Symlinks are only supported on unix-like platforms. Skipping completion installation for {}.",
-            self.name
-        );
-        Ok(None)
     }
 
     /// Remove the shell completion

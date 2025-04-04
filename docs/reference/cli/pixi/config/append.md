@@ -4,7 +4,7 @@
 ## About
 Append a value to a list configuration key
 
---8<-- "docs/reference/cli/pixi/config/append_extender.md:description"
+--8<-- "docs/reference/cli/pixi/config/append_extender:description"
 
 ## Usage
 ```
@@ -37,4 +37,4 @@ Append a value to a list configuration key
 Example: `pixi config append default-channels bioconda`
 
 
---8<-- "docs/reference/cli/pixi/config/append_extender.md:example"
+--8<-- "docs/reference/cli/pixi/config/append_extender:example"

@@ -4,7 +4,7 @@
 ## About
 Upgrade all globally installed packages This command has been removed, please use `pixi global update` instead
 
---8<-- "docs/reference/cli/pixi/global/upgrade-all_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/upgrade-all_extender:description"
 
 ## Usage
 ```
@@ -32,4 +32,4 @@ pixi global upgrade-all [OPTIONS]
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
 
---8<-- "docs/reference/cli/pixi/global/upgrade-all_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/upgrade-all_extender:example"

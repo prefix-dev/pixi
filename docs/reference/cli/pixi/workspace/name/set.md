@@ -4,7 +4,7 @@
 ## About
 Set the workspace name
 
---8<-- "docs/reference/cli/pixi/workspace/name/set_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/name/set_extender:description"
 
 ## Usage
 ```
@@ -22,4 +22,4 @@ Set the workspace name.
 Example: `pixi workspace name set "my-workspace"`
 
 
---8<-- "docs/reference/cli/pixi/workspace/name/set_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/name/set_extender:example"

@@ -4,7 +4,7 @@
 ## About
 Edit the global manifest file
 
---8<-- "docs/reference/cli/pixi/global/edit_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/edit_extender:description"
 
 ## Usage
 ```
@@ -22,4 +22,4 @@ Edit the global manifest file
 Opens your editor to edit the global manifest file.
 
 
---8<-- "docs/reference/cli/pixi/global/edit_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/edit_extender:example"

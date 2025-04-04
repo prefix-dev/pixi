@@ -4,7 +4,7 @@
 ## About
 Install an environment, both updating the lockfile and installing the environment
 
---8<-- "docs/reference/cli/pixi/install_extender.md:description"
+--8<-- "docs/reference/cli/pixi/install_extender:description"
 
 ## Usage
 ```
@@ -55,4 +55,4 @@ Running `pixi install` is not required before running other commands like `pixi 
 You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
 
 
---8<-- "docs/reference/cli/pixi/install_extender.md:example"
+--8<-- "docs/reference/cli/pixi/install_extender:example"

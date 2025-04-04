@@ -4,7 +4,7 @@
 ## About
 Remove exposed binaries from the global environment
 
---8<-- "docs/reference/cli/pixi/global/expose/remove_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/expose/remove_extender:description"
 
 ## Usage
 ```
@@ -35,4 +35,4 @@ Remove exposed binaries from the global environment
 `pixi global expose remove python310 python3 --environment myenv` will remove the exposed names `python310` and `python3` from the environment `myenv`
 
 
---8<-- "docs/reference/cli/pixi/global/expose/remove_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/expose/remove_extender:example"

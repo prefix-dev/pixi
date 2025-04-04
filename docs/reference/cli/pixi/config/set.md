@@ -4,7 +4,7 @@
 ## About
 Set a configuration value
 
---8<-- "docs/reference/cli/pixi/config/set_extender.md:description"
+--8<-- "docs/reference/cli/pixi/config/set_extender:description"
 
 ## Usage
 ```
@@ -36,4 +36,4 @@ Set a configuration value
 Example: `pixi config set default-channels '["conda-forge", "bioconda"]'`
 
 
---8<-- "docs/reference/cli/pixi/config/set_extender.md:example"
+--8<-- "docs/reference/cli/pixi/config/set_extender:example"

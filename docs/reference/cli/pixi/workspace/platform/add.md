@@ -4,7 +4,7 @@
 ## About
 Adds a platform(s) to the workspace file and updates the lockfile
 
---8<-- "docs/reference/cli/pixi/workspace/platform/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/platform/add_extender:description"
 
 ## Usage
 ```
@@ -23,4 +23,4 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The name of the feature to add the platform to
 
---8<-- "docs/reference/cli/pixi/workspace/platform/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/platform/add_extender:example"
