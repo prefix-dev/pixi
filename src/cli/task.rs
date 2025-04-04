@@ -364,7 +364,7 @@ async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> 
                 .into_iter()
                 .map(|task_name| {
                     let task = env
-                        .task(&task_name, None)
+                        .task(&task_name, Some(env.best_platform()))
                         .expect("task should be available here");
                     (task_name, task)
                 })
