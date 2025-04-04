@@ -634,10 +634,15 @@ The activation table is used for specialized activation operations that need to 
 
 There are two types of activation operations a user can modify in the manifest:
 
-- `scripts`: A list of scripts that are run when the environment is activated.
+- `scripts`: A list of scripts that are run when the environment is activated. 
 - `env`: A mapping of environment variables that are set when the environment is activated.
 
 These activation operations will be run before the `pixi run` and `pixi shell` commands.
+
+!!! note
+    The script specified in the `scripts` section are not directly sourced in the `pixi shell`, but rather they are called,
+    and the environment variables they set are then set in the `pixi shell`, so any defined function or other non-environment variable
+    modification to the environment will be ignored. 
 
 !!! note
     The activation operations are run by the system shell interpreter as they run before an environment is available.
