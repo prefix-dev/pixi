@@ -3710,6 +3710,12 @@ This way when a source distribution depends on <code>gcc</code> for example, it'
 <p>These activation operations will be run before the <code>pixi run</code> and <code>pixi shell</code> commands.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
+<p>The script specified in the <code>scripts</code> section are not directly sourced in the <code>pixi shell</code>, but rather they are called,
+and the environment variables they set are then set in the <code>pixi shell</code>, so any defined function or other non-environment variable
+modification to the environment will be ignored.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
 <p>The activation operations are run by the system shell interpreter as they run before an environment is available.
 This means that it runs as <code>cmd.exe</code> on windows and <code>bash</code> on linux and osx (Unix).
 Only <code>.sh</code>, <code>.bash</code> and <code>.bat</code> files are supported.</p>
