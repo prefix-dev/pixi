@@ -336,6 +336,15 @@ impl WorkspaceDiscoverer {
                         source: contents.into_named(provenance.absolute_path().to_string_lossy()),
                     })));
                 }
+            } else if let ManifestSource::PixiToml(source) = &contents {
+                if !source.contains("[project]")
+                    && !matches!(search_path.clone(), SearchPath::Explicit(_))
+                {
+                    return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
+                        error: TomlError::NoProjectTable,
+                        source: contents.into_named(provenance.absolute_path().to_string_lossy()),
+                    })));
+                }
             }
 
             let source = contents.into_named(provenance.absolute_path().to_string_lossy());

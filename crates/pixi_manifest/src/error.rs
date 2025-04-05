@@ -98,6 +98,7 @@ pub enum TomlError {
     Error(toml_edit::TomlError),
     TomlError(toml_span::Error),
     NoPixiTable,
+    NoProjectTable,
     MissingField(Cow<'static, str>, Option<Range<usize>>),
     Generic(GenericError),
     #[error(transparent)]
@@ -154,6 +155,7 @@ impl Display for TomlError {
                 _ => write!(f, "{}", err),
             },
             TomlError::NoPixiTable => write!(f, "Missing table `[tool.pixi.project]`"),
+            TomlError::NoProjectTable => write!(f, "Missing table `[project]`"),
             TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
             TomlError::Generic(err) => write!(f, "{}", &err.message),
             TomlError::FeatureNotEnabled(err) => write!(f, "{err}"),
