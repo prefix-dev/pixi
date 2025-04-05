@@ -11,7 +11,7 @@ use thiserror::Error;
 use toml_span::{DeserError, Error};
 
 use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
-use crate::{KnownPreviewFeature, WorkspaceManifest};
+use crate::{KnownPreviewFeature, WorkspaceDiscoverer, WorkspaceManifest};
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
@@ -98,7 +98,7 @@ pub enum TomlError {
     Error(toml_edit::TomlError),
     TomlError(toml_span::Error),
     NoPixiTable,
-    NoProjectTable,
+    NoRequiredSections,
     MissingField(Cow<'static, str>, Option<Range<usize>>),
     Generic(GenericError),
     #[error(transparent)]
@@ -155,7 +155,15 @@ impl Display for TomlError {
                 _ => write!(f, "{}", err),
             },
             TomlError::NoPixiTable => write!(f, "Missing table `[tool.pixi.project]`"),
-            TomlError::NoProjectTable => write!(f, "Missing table `[project]`"),
+            TomlError::NoRequiredSections => {
+                write!(
+                    f,
+                    "Missing table. `Any of the following sections is expected:\n{}.",
+                    WorkspaceDiscoverer::REQUIRED_SECTIONS
+                        .map(|s| format!("* `{s}`"))
+                        .join("\n")
+                )
+            }
             TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
             TomlError::Generic(err) => write!(f, "{}", &err.message),
             TomlError::FeatureNotEnabled(err) => write!(f, "{err}"),
@@ -308,7 +316,7 @@ impl Diagnostic for TomlError {
             TomlError::NoPixiTable => {
                 Some(Box::new("Check your manifest for a [tool.pixi] table. See https://pixi.sh/latest/python/pyproject_toml for more information."))
             }
-            TomlError::NoProjectTable => {
+            TomlError::NoRequiredSections => {
                 Some(Box::new("Run `pixi init` to create a new project manifest"))
             }
             TomlError::TomlError(toml_span::Error { kind, .. }) => match kind {

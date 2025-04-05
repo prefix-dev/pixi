@@ -227,6 +227,9 @@ impl DiscoveryStart {
 }
 
 impl WorkspaceDiscoverer {
+    /// Required sections. At least one of them must be present.
+    pub const REQUIRED_SECTIONS: [&'static str; 2] = ["workspace", "package"];
+
     /// Constructs a new instance from the current path.
     pub fn new(start: DiscoveryStart) -> Self {
         Self {
@@ -337,11 +340,13 @@ impl WorkspaceDiscoverer {
                     })));
                 }
             } else if let ManifestSource::PixiToml(source) = &contents {
-                if !source.contains("[project]")
-                    && !matches!(search_path.clone(), SearchPath::Explicit(_))
+                // check if at least one of the required sections is present
+                if !Self::REQUIRED_SECTIONS
+                    .iter()
+                    .any(|section| source.contains(&format!("[{}]", section)))
                 {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
-                        error: TomlError::NoProjectTable,
+                        error: TomlError::NoRequiredSections,
                         source: contents.into_named(provenance.absolute_path().to_string_lossy()),
                     })));
                 }
