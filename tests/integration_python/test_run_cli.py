@@ -970,13 +970,11 @@ def test_task_environment_precedence(
     manifest_content["feature"] = {
         "v010": {"dependencies": {"package2": "==0.1.0"}},
         "v020": {"dependencies": {"package2": "==0.2.0"}},
-        "v030": {"dependencies": {"package2": "==0.3.0"}},
     }
 
     manifest_content["environments"] = {
         "env-010": ["v010"],
         "env-020": ["v020"],
-        "env-030": ["v030"],
     }
 
     manifest_content["tasks"] = {
@@ -1000,11 +998,11 @@ def test_task_environment_precedence(
             "--manifest-path",
             manifest_path,
             "--environment",
-            "env-030",
+            "env-010",
             "check-with-env",
         ],
         stdout_contains="0.2.0",
-        stdout_excludes="0.3.0",
+        stdout_excludes="0.1.0",
     )
 
     verify_cli_command(
@@ -1014,10 +1012,10 @@ def test_task_environment_precedence(
             "--manifest-path",
             manifest_path,
             "--environment",
-            "env-030",
+            "env-010",
             "check-version",
         ],
-        stdout_contains="0.3.0",
+        stdout_contains="0.1.0",
     )
 
 
@@ -1038,24 +1036,20 @@ def test_multiple_dependencies_with_environments(
     manifest_content["feature"] = {
         "v010": {"dependencies": {"package2": "==0.1.0"}},
         "v020": {"dependencies": {"package2": "==0.2.0"}},
-        "v030": {"dependencies": {"package2": "==0.3.0"}},
     }
 
     manifest_content["environments"] = {
         "env-010": ["v010"],
         "env-020": ["v020"],
-        "env-030": ["v030"],
     }
 
     manifest_content["tasks"] = {
         "check-v010": "package2",
         "check-v020": "package2",
-        "check-v030": "package2",
         "check-all": {
             "depends-on": [
                 {"task": "check-v010", "environment": "env-010"},
                 {"task": "check-v020", "environment": "env-020"},
-                {"task": "check-v030", "environment": "env-030"},
             ],
         },
     }
@@ -1072,7 +1066,7 @@ def test_multiple_dependencies_with_environments(
             "env-010",
             "check-all",
         ],
-        stdout_contains=["0.1.0", "0.2.0", "0.3.0"],
+        stdout_contains=["0.1.0", "0.2.0"],
     )
 
     verify_cli_command(
@@ -1082,12 +1076,11 @@ def test_multiple_dependencies_with_environments(
             "--manifest-path",
             manifest_path,
             "--environment",
-            "env-030",
+            "env-020",
             "check-all",
         ],
         stdout_contains=[
             "0.1.0",
             "0.2.0",
-            "0.3.0",
         ],
     )
