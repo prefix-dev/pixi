@@ -306,6 +306,9 @@ impl Diagnostic for TomlError {
     fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         match self {
             TomlError::NoPixiTable => {
+                Some(Box::new("Check your manifest for a [tool.pixi] table. See https://pixi.sh/latest/python/pyproject_toml for more information."))
+            }
+            TomlError::NoProjectTable => {
                 Some(Box::new("Run `pixi init` to create a new project manifest"))
             }
             TomlError::TomlError(toml_span::Error { kind, .. }) => match kind {
