@@ -43,20 +43,22 @@ impl From<String> for TaskName {
 pub struct Dependency {
     pub task_name: TaskName,
     pub args: Option<Vec<String>>,
+    pub environment: Option<String>,
 }
 
 impl Dependency {
-    pub fn new(s: &str, args: Option<Vec<String>>) -> Self {
+    pub fn new(s: &str, args: Option<Vec<String>>, environment: Option<String>) -> Self {
         Dependency {
             task_name: TaskName(s.to_string()),
             args,
+            environment,
         }
     }
 }
 
 impl From<&str> for Dependency {
     fn from(s: &str) -> Self {
-        Dependency::new(s, None)
+        Dependency::new(s, None, None)
     }
 }
 

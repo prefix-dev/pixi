@@ -322,6 +322,9 @@ class DependsOn(StrictBaseModel):
 
     task: TaskName
     args: list[NonEmptyStr] | None = Field(None, description="The arguments to pass to the task")
+    environment: EnvironmentName | None = Field(
+        None, description="The environment to use for the task"
+    )
 
 
 class TaskInlineTable(StrictBaseModel):

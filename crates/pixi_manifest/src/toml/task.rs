@@ -57,20 +57,21 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                             let span = item.span;
                             match item.take() {
                                 ValueInner::String(str) => Ok::<Dependency, DeserError>(
-                                    Dependency::new(str.as_ref(), None),
+                                    Dependency::new(str.as_ref(), None, None),
                                 ),
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
                                     let args = th.optional::<Vec<String>>("args");
-                                    Ok(Dependency::new(&name, args))
+                                    let environment = th.optional::<String>("environment");
+                                    Ok(Dependency::new(&name, args, environment))
                                 }
                                 inner => Err(expected("string or table", inner, span).into()),
                             }
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                     ValueInner::String(str) => {
-                        vec![Dependency::new(str.as_ref(), None)]
+                        vec![Dependency::new(str.as_ref(), None, None)]
                     }
                     inner => {
                         return Err::<Vec<Dependency>, DeserError>(
@@ -92,20 +93,21 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                             let span = item.span;
                             match item.take() {
                                 ValueInner::String(str) => Ok::<Dependency, DeserError>(
-                                    Dependency::new(str.as_ref(), None),
+                                    Dependency::new(str.as_ref(), None, None),
                                 ),
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
                                     let args = th.optional::<Vec<String>>("args");
-                                    Ok(Dependency::new(&name, args))
+                                    let environment = th.optional::<String>("environment");
+                                    Ok(Dependency::new(&name, args, environment))
                                 }
                                 inner => Err(expected("string or table", inner, span).into()),
                             }
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                     ValueInner::String(str) => {
-                        vec![Dependency::new(str.as_ref(), None)]
+                        vec![Dependency::new(str.as_ref(), None, None)]
                     }
                     inner => return Err(expected("string or array", inner, value.span).into()),
                 };
