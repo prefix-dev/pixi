@@ -331,7 +331,10 @@ impl WorkspaceDiscoverer {
                 if !source.contains("[tool.pixi")
                     && !matches!(search_path.clone(), SearchPath::Explicit(_))
                 {
-                    continue;
+                    return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
+                        error: TomlError::NoPixiTable,
+                        source: contents.into_named(provenance.absolute_path().to_string_lossy()),
+                    })));
                 }
             }
 
