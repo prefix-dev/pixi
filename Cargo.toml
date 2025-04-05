@@ -125,6 +125,7 @@ rattler_menuinst = { version = "0.2.5", default-features = false }
 rattler_networking = { version = "0.22.10", default-features = false, features = [
   "google-cloud-auth",
 ] }
+rattler_package_streaming = { version = "0.22.34", default-features = false }
 rattler_repodata_gateway = { version = "0.22.3", default-features = false }
 rattler_shell = { version = "0.22.24", default-features = false }
 rattler_solve = { version = "1.4.2", default-features = false }
