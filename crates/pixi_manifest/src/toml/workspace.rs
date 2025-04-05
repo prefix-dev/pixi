@@ -107,13 +107,21 @@ impl TomlWorkspace {
         } = self.preview.into_preview();
 
         let warnings = preview_warnings;
+        let missing_field_name_error = Error {
+            kind: ErrorKind::MissingField("name"),
+            span: self.span,
+            line_info: None,
+        };
 
         Ok(WithWarnings::from(Workspace {
-            name: self.name.or(external.name).ok_or(Error {
-                kind: ErrorKind::MissingField("name"),
-                span: self.span,
-                line_info: None,
-            })?,
+            name: self.name.or(external.name).unwrap_or(
+                root_directory
+                    .ok_or(missing_field_name_error.clone())?
+                    .file_name()
+                    .ok_or(missing_field_name_error)?
+                    .to_string_lossy()
+                    .to_string(),
+            ),
             version: self.version.or(external.version),
             description: self.description.or(external.description),
             authors: self.authors.or(external.authors),
