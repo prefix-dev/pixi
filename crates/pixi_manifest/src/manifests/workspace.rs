@@ -656,7 +656,7 @@ impl WorkspaceManifestMut<'_> {
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn set_name(&mut self, name: &str) -> miette::Result<()> {
-        self.workspace.workspace.name = name.to_string();
+        self.workspace.workspace.name = Some(name.to_string());
         self.document.set_name(name);
         Ok(())
     }

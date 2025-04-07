@@ -1293,7 +1293,7 @@ impl Repodata for Project {
 mod tests {
     use std::{collections::HashMap, io::Write};
 
-    use fake::{faker::filesystem::zh_tw::FilePath, Fake};
+    use fake::{faker::filesystem::en::FilePath, Fake};
     use itertools::Itertools;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,

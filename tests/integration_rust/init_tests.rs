@@ -16,9 +16,9 @@ async fn init_creates_project_manifest() {
     let workspace = pixi.workspace().unwrap();
 
     // Default configuration should be present in the file
-    assert!(!workspace.name().is_empty());
+    assert!(!workspace.display_name().is_empty());
     assert_eq!(
-        workspace.name(),
+        workspace.display_name(),
         &pixi.workspace_path().file_stem().unwrap().to_string_lossy(),
         "project name should match the directory name"
     );
