@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### ✨ Highlights
 
 This release brings in numerous improvements and bug fixes and one big feature: argument variables tasks!
-This introduces a new key `args`, if you don't specify the key the old behaviour which just appends extra args at the end still works.
 If you do add `args`, you will have more convenient way of specifying arguments, which works with pipes and even allows you to set defaults.
 
 Let's say you define this manifest:
@@ -26,6 +25,16 @@ Both of the invocations now work, since `type` is optional:
 pixi run install /path/to/manifest
 pixi run install /path/to/manifest --debug
 ```
+
+If you don't specify the `args` for you tasks everything which you append in the CLI will also be appended to the task.
+
+```toml
+[tasks.install]
+cmd = "cargo install"
+```
+
+Therefore, running `pixi run install --debug --path /path/to/manifest` will lead to `cargo install --debug --path /path/to/manifest` being run inside the environment.
+This was already the behaviour before this release, so existing tasks should still work as-is.
 
 Learn more in our documentation: https://pixi.sh/v0.45.0/workspace/advanced_tasks/#using-task-arguments
 
