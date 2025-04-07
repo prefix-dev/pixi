@@ -22,7 +22,12 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     eprintln!(
         "{}Updated workspace name to '{}'.",
         console::style(console::Emoji("✔ ", "")).green(),
-        workspace.workspace.value.workspace.name
+        workspace
+            .workspace
+            .value
+            .workspace
+            .name
+            .expect("workspace name must have been set")
     );
 
     Ok(())

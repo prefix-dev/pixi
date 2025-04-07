@@ -178,7 +178,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (Some(tmp), work_dir)
     };
 
-    let progress = ProgressReporter::new(workspace.name());
+    let progress = ProgressReporter::new(workspace.display_name());
 
     // Build platform virtual packages
     let build_platform_virtual_packages: Vec<GenericVirtualPackage> = workspace
