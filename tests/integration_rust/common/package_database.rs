@@ -63,7 +63,7 @@ impl PackageDatabase {
 
             let repodata = RepoData {
                 info: Some(ChannelInfo {
-                    subdir: platform.to_string(),
+                    subdir: Some(platform.to_string()),
                     base_url: None,
                 }),
                 packages: self
