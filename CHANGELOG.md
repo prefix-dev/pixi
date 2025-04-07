@@ -26,7 +26,7 @@ pixi run install /path/to/manifest
 pixi run install /path/to/manifest --debug
 ```
 
-If you don't specify the `args` for you tasks everything which you append in the CLI will also be appended to the task.
+If you don't specify `args` for your tasks everything which you append to the CLI will also be appended to the task.
 
 ```toml
 [tasks.install]
@@ -34,7 +34,7 @@ cmd = "cargo install"
 ```
 
 Therefore, running `pixi run install --debug --path /path/to/manifest` will lead to `cargo install --debug --path /path/to/manifest` being run inside the environment.
-This was already the behaviour before this release, so existing tasks should still work as-is.
+This was already the behavior before this release, so existing tasks should continue to work.
 
 Learn more in our documentation: https://pixi.sh/v0.45.0/workspace/advanced_tasks/#using-task-arguments
 
