@@ -47,26 +47,33 @@ pub struct Dependency {
     pub args: Option<Vec<String>>,
     pub environment: Option<EnvironmentName>,
 }
+
 impl Dependency {
     pub fn new(
         s: &str,
         args: Option<Vec<String>>,
         environment: Option<&str>,
     ) -> Result<Self, crate::environment::ParseEnvironmentNameError> {
-        let environment = environment
-            .map(|env| EnvironmentName::from_str(env))
-            .transpose()?;
+        let environment = environment.map(EnvironmentName::from_str).transpose()?;
         Ok(Dependency {
             task_name: TaskName(s.to_string()),
             args,
             environment,
         })
     }
+
+    pub fn new_without_env(s: &str, args: Option<Vec<String>>) -> Self {
+        Dependency {
+            task_name: TaskName(s.to_string()),
+            args,
+            environment: None,
+        }
+    }
 }
 
 impl From<&str> for Dependency {
     fn from(s: &str) -> Self {
-        Dependency::new(s, None, None).unwrap()
+        Dependency::new_without_env(s, None)
     }
 }
 

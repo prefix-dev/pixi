@@ -277,9 +277,7 @@ impl<'p> TaskGraph<'p> {
         let mut task_name_with_args_to_node: HashMap<Dependency, TaskId> =
             HashMap::from_iter(root.name.clone().into_iter().map(|name| {
                 (
-                    // using expect is safe because there is no environment name and fails can only happen if the environment name is invalid
-                    Dependency::new(&name.to_string(), root.arguments_values.clone(), None)
-                        .expect("invalid environment name"),
+                    Dependency::new_without_env(&name.to_string(), root.arguments_values.clone()),
                     TaskId(0),
                 )
             }));
