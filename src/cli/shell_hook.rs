@@ -109,7 +109,7 @@ async fn generate_activation_script(
     let hook = prompt::shell_hook(&shell).unwrap_or_default().to_owned();
 
     if project.config().change_ps1() {
-        let prompt_name = prompt::prompt_name(project.name(), environment.name());
+        let prompt_name = prompt::prompt_name(project.display_name(), environment.name());
         let shell_prompt = prompt::shell_prompt(&shell, prompt_name.as_str());
         Ok([script, hook, shell_prompt].join("\n"))
     } else {
