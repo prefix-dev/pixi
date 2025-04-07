@@ -154,13 +154,15 @@ impl Display for TomlError {
                 }
                 _ => write!(f, "{}", err),
             },
-            TomlError::NoPixiTable => write!(f, "Missing table `[tool.pixi.project]`"),
+            TomlError::NoPixiTable => {
+                write!(f, "Missing table `[tool.pixi.project] in pyproject.toml`")
+            }
             TomlError::NoRequiredSections => {
                 write!(
                     f,
-                    "Missing table. `Any of the following sections is expected:\n{}.",
+                    "Missing table in pixi.toml. Any of the following sections is expected:\n{}.",
                     WorkspaceDiscoverer::REQUIRED_SECTIONS
-                        .map(|s| format!("* `{s}`"))
+                        .map(|s| format!("* {s}"))
                         .join("\n")
                 )
             }

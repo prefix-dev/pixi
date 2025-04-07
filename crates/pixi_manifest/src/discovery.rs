@@ -228,7 +228,7 @@ impl DiscoveryStart {
 
 impl WorkspaceDiscoverer {
     /// Required sections. At least one of them must be present.
-    pub const REQUIRED_SECTIONS: [&'static str; 2] = ["workspace", "package"];
+    pub const REQUIRED_SECTIONS: [&'static str; 3] = ["workspace", "project", "package"];
 
     /// Constructs a new instance from the current path.
     pub fn new(start: DiscoveryStart) -> Self {
