@@ -37,5 +37,12 @@ python not found
 
 While `direnv` comes with [hooks for the common shells](https://direnv.net/docs/hook.html), 
 these hooks into the shell should not be relied on when using and IDE.
-The `direnv` package does not include hooks for integrated develop environments.
-That said there is typically, a plugin or extension available.
+Although `direnv` package does not include hooks for integrated develop environments,
+there is typically a plugin or extension available.
+
+Here you can see how to set up `direnv` for some of the more popular IDEs:
+- [VSCode](../editor/vscode.md): [mkhl.direnv plugin](https://marketplace.visualstudio.com/items?itemName=mkhl.direnv)
+- [Jetbrains](../editor/jetbrains.md): [Direnv Integration plugin](https://plugins.jetbrains.com/plugin/15285-direnv-integration)
+- [Zed](../editor/zed.md): [Native support](https://zed.dev/docs/configuring-zed#direnv-integration)
+- [Neovim](../editor/neovim.md): [Direnv plugin](https://github.com/direnv/direnv.vim/blob/master/README.md)
+
