@@ -45,7 +45,7 @@ pub struct Environment<'p> {
 impl Debug for Environment<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Environment")
-            .field("project", &self.workspace.name())
+            .field("project", &self.workspace.display_name())
             .field("environment", &self.environment.name)
             .finish()
     }

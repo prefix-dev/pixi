@@ -57,7 +57,7 @@ class MacOSConfig(PlatformConfig):
 
 class WindowsConfig(PlatformConfig):
     def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
-        return [data_home / "Desktop" / f"{name}.lnk", data_home / "Quick Launch" / f"{name}.lnk"]
+        return [data_home / "Desktop" / f"{name}.lnk"]
 
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
         for path in self._shortcut_paths(data_home, name):
