@@ -427,7 +427,7 @@ impl TomlManifest {
                 warnings: mut package_warnings,
             } = package.into_manifest(
                 ExternalPackageProperties {
-                    name: Some(workspace.name.clone()),
+                    name: workspace.name.clone(),
                     version: workspace.version.clone(),
                     description: workspace.description.clone(),
                     authors: workspace.authors.clone(),
@@ -606,19 +606,7 @@ mod test {
     }
 
     #[test]
-    fn test_workspace_name_required() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_workspace_name_from_workspace() {
+    fn test_workspace_name_from_package() {
         let workspace_manifest = WorkspaceManifest::from_toml_str(
             r#"
         [workspace]
@@ -636,7 +624,7 @@ mod test {
         )
         .unwrap();
 
-        assert_eq!(workspace_manifest.workspace.name, "foo");
+        assert_eq!(workspace_manifest.workspace.name.as_deref(), Some("foo"));
     }
 
     #[test]

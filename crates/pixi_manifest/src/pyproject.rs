@@ -392,8 +392,11 @@ impl PyProjectManifest {
 
         // For each group of optional dependency or dependency group, add pypi
         // dependencies, filtering out self-references in optional dependencies
-        let project_name =
-            pep508_rs::PackageName::new(workspace_manifest.workspace.name.clone()).ok();
+        let project_name = workspace_manifest
+            .workspace
+            .name
+            .clone()
+            .and_then(|name| pep508_rs::PackageName::new(name).ok());
         for (group, reqs) in pypi_dependency_groups {
             let feature_name = FeatureName::Named(group.to_string());
             let target = workspace_manifest

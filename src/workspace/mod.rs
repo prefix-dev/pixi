@@ -128,6 +128,11 @@ pub struct Workspace {
     /// Root folder of the workspace
     root: PathBuf,
 
+    /// The name of the workspace based on the location of the workspace.
+    /// This is used to determine the name of the workspace when no name is
+    /// specified.
+    manifest_location_name: Option<String>,
+
     /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
@@ -195,6 +200,9 @@ impl Workspace {
             .expect("manifest path should always have a parent")
             .to_owned();
 
+        // Determine the name of the workspace based on the location of the manifest.
+        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
+
         let s3_options = manifest.workspace.value.workspace.s3_options.clone();
         let s3_config = s3_options
             .unwrap_or_default()
@@ -214,6 +222,7 @@ impl Workspace {
         let config = Config::load(&root);
         Self {
             root,
+            manifest_location_name,
             client: Default::default(),
             workspace: manifest.workspace,
             package: manifest.package,
@@ -269,9 +278,21 @@ impl Workspace {
         WorkspaceMut::new(self)
     }
 
-    /// Returns the name of the workspace
+    /// Returns the name of the workspace.
+    ///
+    /// This is the name of the workspace as defined in the manifest, or if no
+    /// name is specified the name of the root directory of the workspace.
+    ///
+    /// If the name of the root directory could not be determined, "workspace"
+    /// is used as a fallback.
     pub fn name(&self) -> &str {
-        &self.workspace.value.workspace.name
+        self.workspace
+            .value
+            .workspace
+            .name
+            .as_deref()
+            .or(self.manifest_location_name.as_deref())
+            .unwrap_or("workspace")
     }
 
     /// Returns the root directory of the workspace
@@ -832,6 +853,57 @@ mod tests {
 
             assert_eq!(virtual_packages, expected_result);
         }
+    }
+
+    #[test]
+    fn test_workspace_name_when_specified() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.name(), "foo");
+    }
+
+    #[test]
+    fn test_workspace_name_when_unspecified() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir
+                .path()
+                .join("foobar")
+                .join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.name(), "foobar");
+    }
+
+    #[test]
+    fn test_workspace_name_when_undefined() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let workspace = Workspace::from_str(
+            &Path::new("/").join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.name(), "workspace");
     }
 
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
