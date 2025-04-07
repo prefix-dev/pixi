@@ -35,7 +35,8 @@ outputs:
           then:
             - echo "echo package2$PKG_VERSION on windows" > $PREFIX/bin/package2.bat
           else:
-            - echo "echo package2$PKG_VERSION on unix" > $PREFIX/bin/package2
+            - echo '#!/bin/sh' > $PREFIX/bin/package2
+            - echo "echo package2$PKG_VERSION on unix" >> $PREFIX/bin/package2
             - chmod +x $PREFIX/bin/package2
 
   - package:
