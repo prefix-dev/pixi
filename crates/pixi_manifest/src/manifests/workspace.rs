@@ -28,7 +28,7 @@ use crate::{
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
 /// describes the part related to the workspace only.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct WorkspaceManifest {
     /// Information about the project
     pub workspace: Workspace,

@@ -183,6 +183,24 @@ zstd = ">=1.5.6,<2"
 [feature.trampoline.tasks]
 build-trampoline = "python trampoline/build-trampoline.py"
 
+#
+# Feature to build recipes
+#
+[feature.recipes.dependencies]
+rattler-build = ">=0.39.0,<0.40"
+
+[feature.recipes.tasks.build-backends]
+cmd = "rattler-build build --recipe-dir empty --output-dir ."
+cwd = "tests/build-backends"
+description = "Build build-backends used for testing purposes"
+
+[environments.recipes]
+features = ["recipes"]
+
+#
+# Environment descriptions
+#
+
 [environments]
 default = { features = [
   "build",

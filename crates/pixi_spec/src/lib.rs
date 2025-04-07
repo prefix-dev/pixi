@@ -418,6 +418,11 @@ pub enum BinarySpec {
 }
 
 impl BinarySpec {
+    /// Constructs a new instance that matches anything.
+    pub const fn any() -> Self {
+        Self::Version(VersionSpec::Any)
+    }
+
     /// Convert this instance into a binary spec.
     ///
     /// A binary spec always refers to a binary package.
