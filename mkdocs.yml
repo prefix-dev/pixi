@@ -135,8 +135,12 @@ nav:
       - Editor:
           - JupyterLab: integration/editor/jupyterlab.md
           - PyCharm: integration/editor/pycharm.md
+          - Jetbrains: integration/editor/jetbrains.md
           - RStudio: integration/editor/r_studio.md
           - VSCode Devcontainer: integration/editor/devcontainer.md
+          - VSCode: integration/editor/vscode.md
+          - Zed: integration/editor/zed.md
+          - Neovim: integration/editor/neovim.md
       - Continuous Integration:
           - GitHub Actions: integration/ci/github_actions.md
           - Lockfile Updates: integration/ci/updates_github_actions.md
