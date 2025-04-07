@@ -61,18 +61,6 @@ build = { cmd = "ninja -C .build", depends-on = ["configure"] }
 start = { cmd = ".build/bin/sdl_example", depends-on = ["build"] }
 ```
 
-You can also specify a specific environment to use for a dependent task:
-
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
-```
-
-This allows you to run the same task in different environments as part of a single pipeline.
-
-```shell
-pixi run start
-```
-
 The tasks will be executed after each other:
 
 - First `configure` because it has no dependencies.
@@ -105,6 +93,25 @@ Now run both tools with one command.
 ```shell
 pixi run style
 ```
+
+### Environment specification for task dependencies
+
+You can specify a specific environment to use for a dependent task:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
+```
+
+This allows you to run tasks in different environments as part of a single pipeline.
+When you run the main task, Pixi ensures each dependent task uses its specified environment:
+
+```shell
+pixi run test-all
+```
+
+The environment specified for a task dependency takes precedence over the environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`, the first dependency will still run in the `py311` environment as specified in the TOML file.
+
+In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.
 
 ## Working directory
 
