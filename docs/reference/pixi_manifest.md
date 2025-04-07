@@ -36,14 +36,6 @@ The minimally required information in the `project` table is:
 --8<-- "docs/source_files/pixi_tomls/simple_pixi.toml:project"
 ```
 
-### `name`
-
-The name of the project.
-
-```toml
---8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
-```
-
 ### `channels`
 
 This is a list that defines the channels used to fetch the packages from.
@@ -81,6 +73,15 @@ The available platforms are listed here: [link](https://docs.rs/rattler_conda_ty
     To support both, include both in your platforms list.
     Fallback: If `osx-arm64` can't resolve, use `osx-64`.
     Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
+
+### `name` (optional)
+
+The name of the project.
+If the name is not specified, the name of the directory that contains the project is used.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
+```
 
 ### `version` (optional)
 
@@ -638,6 +639,11 @@ There are two types of activation operations a user can modify in the manifest:
 - `env`: A mapping of environment variables that are set when the environment is activated.
 
 These activation operations will be run before the `pixi run` and `pixi shell` commands.
+
+!!! note
+    The script specified in the `scripts` section are not directly sourced in the `pixi shell`, but rather they are called,
+    and the environment variables they set are then set in the `pixi shell`, so any defined function or other non-environment variable
+    modification to the environment will be ignored.
 
 !!! note
     The activation operations are run by the system shell interpreter as they run before an environment is available.
