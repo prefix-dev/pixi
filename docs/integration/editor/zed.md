@@ -1,4 +1,4 @@
-[Zed](https://zed.dev/) is a relatively new develop environment.
+[Zed](https://zed.dev/) is a relatively new development environment.
 
 To use `pixi` inside of Zed, follow these steps:
 
