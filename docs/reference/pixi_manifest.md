@@ -77,7 +77,7 @@ The available platforms are listed here: [link](https://docs.rs/rattler_conda_ty
 ### `name` (optional)
 
 The name of the project.
-If the name is not specified, the name of the directory that contains the workspace is used.
+If the name is not specified, the name of the directory that contains the project is used.
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
