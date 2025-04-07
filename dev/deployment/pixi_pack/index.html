@@ -2588,8 +2588,8 @@ This can be useful if you want to distribute the environment to users that don't
 <h3 id="pypi-support">PyPi support<a class="headerlink" href="#pypi-support" title="Permanent link">#</a></h3>
 <p>You can also pack PyPi wheel packages into your environment.
 <code>pixi-pack</code> only supports wheel packages and not source distributions.
-If you happen to use source distributions, you can ignore them by using the <code>--ignore-pypi</code> flag.
-This will skip the bundling of all PyPi packages.</p>
+If you happen to use source distributions, you can ignore them by using the <code>--ignore-pypi-non-wheel</code> flag.
+This will skip the bundling of PyPi packages that are source distributions.</p>
 <h3 id="cache-downloaded-packages">Cache Downloaded Packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
 <p>You can cache downloaded packages to speed up subsequent pack operations by using the <code>--use-cache</code> flag:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
