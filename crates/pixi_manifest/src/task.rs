@@ -11,6 +11,8 @@ use itertools::Itertools;
 use serde::Serialize;
 use toml_edit::{Array, Item, Table, Value};
 
+use crate::EnvironmentName;
+
 /// Represents a task name
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct TaskName(String);
@@ -43,7 +45,7 @@ impl From<String> for TaskName {
 pub struct Dependency {
     pub task_name: TaskName,
     pub args: Option<Vec<String>>,
-    pub environment: Option<String>,
+    pub environment: Option<EnvironmentName>,
 }
 
 impl Dependency {

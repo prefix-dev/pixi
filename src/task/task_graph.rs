@@ -319,14 +319,9 @@ impl<'p> TaskGraph<'p> {
                     Cow::Owned(_) => unreachable!("only named tasks can have dependencies"),
                 };
 
-                let task_specific_environment =
-                    if let Some(environment) = dependency.environment.clone() {
-                        project.environment(
-                            &EnvironmentName::from_str(&environment).expect("invalid environment"),
-                        )
-                    } else {
-                        None
-                    };
+                let task_specific_environment = dependency.environment.map(|environment| {
+                    project.environment(&EnvironmentName::from_str(&environment))
+                });
 
                 let (task_env, task_dependency) = match search_environments.find_task(
                     dependency.task_name.clone(),
