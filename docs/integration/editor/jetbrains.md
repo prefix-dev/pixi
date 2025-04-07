@@ -8,7 +8,7 @@ See [`direnv`](../third_party/direnv.md).
 * Install `direnv`.
 * Add an `.envrc` to the project.
 
-Use [`direnv`](../third_party/direnv.md) via a 
+Use [`direnv`](../third_party/direnv.md) via a
 * Install the [Jetbrains `direnv` plugin](https://plugins.jetbrains.com/plugin/15285-direnv-integration)
 which can be used to activate `pixi`.
 

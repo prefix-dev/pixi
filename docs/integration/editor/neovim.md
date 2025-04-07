@@ -9,4 +9,4 @@ See [`direnv`](../third_party/direnv.md).
 * Add an `.envrc` to the project.
 
 Use a [Neovim Direnv](https://github.com/direnv/direnv.vim).
-* Install the `direnv` plugin. 
+* Install the `direnv` plugin.
