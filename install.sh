@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.44.0
+# Version: v0.45.0
 
 __wrap__() {
 
