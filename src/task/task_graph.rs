@@ -4,7 +4,6 @@ use std::{
     env,
     fmt::{self, Display},
     ops::Index,
-    str::FromStr,
 };
 
 use itertools::Itertools;
@@ -33,7 +32,7 @@ pub struct TaskId(usize);
 
 /// A dependency is a task name and a list of arguments.
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
-pub struct GraphDependency(TaskId, Option<Vec<String>>, Option<String>);
+pub struct GraphDependency(TaskId, Option<Vec<String>>, Option<EnvironmentName>);
 
 impl GraphDependency {
     pub fn task_id(&self) -> TaskId {
@@ -278,7 +277,9 @@ impl<'p> TaskGraph<'p> {
         let mut task_name_with_args_to_node: HashMap<Dependency, TaskId> =
             HashMap::from_iter(root.name.clone().into_iter().map(|name| {
                 (
-                    Dependency::new(&name.to_string(), root.arguments_values.clone(), None),
+                    // using expect is safe because there is no environment name and fails can only happen if the environment name is invalid
+                    Dependency::new(&name.to_string(), root.arguments_values.clone(), None)
+                        .expect("invalid environment name"),
                     TaskId(0),
                 )
             }));
@@ -319,9 +320,10 @@ impl<'p> TaskGraph<'p> {
                     Cow::Owned(_) => unreachable!("only named tasks can have dependencies"),
                 };
 
-                let task_specific_environment = dependency.environment.map(|environment| {
-                    project.environment(&EnvironmentName::from_str(&environment))
-                });
+                let task_specific_environment = dependency
+                    .environment
+                    .clone()
+                    .and_then(|environment| project.environment(&environment));
 
                 let (task_env, task_dependency) = match search_environments.find_task(
                     dependency.task_name.clone(),
