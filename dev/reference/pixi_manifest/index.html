@@ -2101,15 +2101,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#name" class="md-nav__link">
-    <span class="md-ellipsis">
-      name
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#channels" class="md-nav__link">
     <span class="md-ellipsis">
       channels
@@ -2122,6 +2113,15 @@
   <a href="#platforms" class="md-nav__link">
     <span class="md-ellipsis">
       platforms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#name-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      name (optional)
     </span>
   </a>
   
@@ -2783,15 +2783,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#name" class="md-nav__link">
-    <span class="md-ellipsis">
-      name
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#channels" class="md-nav__link">
     <span class="md-ellipsis">
       channels
@@ -2804,6 +2795,15 @@
   <a href="#platforms" class="md-nav__link">
     <span class="md-ellipsis">
       platforms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#name-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      name (optional)
     </span>
   </a>
   
@@ -3256,25 +3256,21 @@ There are also some small extras that are available in the <code>pyproject.toml<
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;project-name&quot;</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<h3 id="name"><code>name</code><a class="headerlink" href="#name" title="Permanent link">#</a></h3>
-<p>The name of the project.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;project-name&quot;</span>
-</span></code></pre></div>
 <h3 id="channels"><code>channels</code><a class="headerlink" href="#channels" title="Permanent link">#</a></h3>
 <p>This is a list that defines the channels used to fetch the packages from.
 If you want to use channels hosted on <code>anaconda.org</code> you only need to use the name of the channel directly.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;robostack&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;bioconda&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;robostack&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;bioconda&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;nvidia&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>Channels situated on the file system are also supported with <strong>absolute</strong> file paths:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;file:///home/user/staged-recipes/build_artifacts&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;file:///home/user/staged-recipes/build_artifacts&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>To access private or public channels on <a href="https://prefix.dev/channels">prefix.dev</a> or <a href="https://github.com/mamba-org/quetz">Quetz</a> use the url including the hostname:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;https://repo.prefix.dev/channel-name&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;https://repo.prefix.dev/channel-name&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="platforms"><code>platforms</code><a class="headerlink" href="#platforms" title="Permanent link">#</a></h3>
 <p>Defines the list of platforms that the project supports.
 Pixi solves the dependencies for all these platforms and puts them in the lock file (<code>pixi.lock</code>).</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>The available platforms are listed here: <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html">link</a></p>
 <div class="admonition tip">
@@ -3284,6 +3280,11 @@ To support both, include both in your platforms list.
 Fallback: If <code>osx-arm64</code> can't resolve, use <code>osx-64</code>.
 Running <code>osx-64</code> on Apple Silicon uses <a href="https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment">Rosetta</a> for Intel binaries.</p>
 </div>
+<h3 id="name-optional"><code>name</code> (optional)<a class="headerlink" href="#name-optional" title="Permanent link">#</a></h3>
+<p>The name of the project.
+If the name is not specified, the name of the directory that contains the project is used.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;project-name&quot;</span>
+</span></code></pre></div>
 <h3 id="version-optional"><code>version</code> (optional)<a class="headerlink" href="#version-optional" title="Permanent link">#</a></h3>
 <p>The version of the project.
 This should be a valid version based on the conda Version Spec.
