@@ -606,6 +606,33 @@ mod test {
     }
 
     #[test]
+    fn test_missing_package_name() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+
+        [package]
+        # Since workspace doesnt define a name we expect an error here.
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
+        "#,
+        ), @r###"
+         × missing field 'name' in table
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │         [package]
+          ·         ──────────
+        8 │         # Since workspace doesnt define a name we expect an error here.
+        9 │
+          ╰────
+        "###);
+    }
+
+    #[test]
     fn test_workspace_name_from_package() {
         let workspace_manifest = WorkspaceManifest::from_toml_str(
             r#"

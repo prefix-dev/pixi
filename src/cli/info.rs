@@ -391,7 +391,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let project_info = workspace.clone().map(|p| WorkspaceInfo {
-        name: p.name().to_string(),
+        name: p.display_name().to_string(),
         manifest_path: p.workspace.provenance.path.clone(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,

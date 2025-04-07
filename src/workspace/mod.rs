@@ -278,14 +278,15 @@ impl Workspace {
         WorkspaceMut::new(self)
     }
 
-    /// Returns the name of the workspace.
+    /// Returns the display name of the workspace. This name should be used to
+    /// provide context to a user.
     ///
     /// This is the name of the workspace as defined in the manifest, or if no
     /// name is specified the name of the root directory of the workspace.
     ///
     /// If the name of the root directory could not be determined, "workspace"
     /// is used as a fallback.
-    pub fn name(&self) -> &str {
+    pub fn display_name(&self) -> &str {
         self.workspace
             .value
             .workspace
@@ -311,7 +312,7 @@ impl Workspace {
         if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
-                self.name(),
+                self.display_name(),
                 xxh3_64(self.root.to_string_lossy().as_bytes())
             )))
         } else {
@@ -869,7 +870,7 @@ mod tests {
             WORKSPACE_STR,
         )
         .unwrap();
-        assert_eq!(workspace.name(), "foo");
+        assert_eq!(workspace.display_name(), "foo");
     }
 
     #[test]
@@ -888,7 +889,7 @@ mod tests {
             WORKSPACE_STR,
         )
         .unwrap();
-        assert_eq!(workspace.name(), "foobar");
+        assert_eq!(workspace.display_name(), "foobar");
     }
 
     #[test]
@@ -903,7 +904,7 @@ mod tests {
             WORKSPACE_STR,
         )
         .unwrap();
-        assert_eq!(workspace.name(), "workspace");
+        assert_eq!(workspace.display_name(), "workspace");
     }
 
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
