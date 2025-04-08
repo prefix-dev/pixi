@@ -1,0 +1,23 @@
+[workspace]
+channels = ["conda-forge"]
+name = "tasks-short-circuit-advanced"
+
+# --8<-- [start:tasks]
+[tasks]
+format = "ruff format"
+lint = "ruff check"
+test = "pytest tests/"
+
+# Simple references to task names
+check = ["format", "lint", "test"]
+
+# Mix of simple names and complex configurations
+deploy = [
+  "test",
+  { task = "build", args = [
+    "production",
+  ] },
+  { task = "publish", environment = "release" },
+]
+
+# --8<-- [end:tasks]

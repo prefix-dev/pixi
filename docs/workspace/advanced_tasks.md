@@ -113,6 +113,22 @@ The environment specified for a task dependency takes precedence over the enviro
 
 In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.
 
+### Short circuit composition
+
+Pixi supports a shorthand syntax for defining tasks that only depend on other tasks. Instead of using the more verbose `depends-on` field, you can define a task directly as an array of dependencies:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/tasks_short_circuit_basic.toml:tasks"
+```
+
+This shorthand is particularly useful for creating task compositions or pipelines without having to use the more verbose syntax. You can also include simple task names or specify arguments and environments:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/tasks_short_circuit_advanced.toml:tasks"
+```
+
+This syntax makes it easier to compose tasks together without the extra verbosity when all you need is to define a sequence of dependencies.
+
 ## Working directory
 
 Pixi tasks support the definition of a working directory.
