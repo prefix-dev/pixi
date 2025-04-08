@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use pixi_toml::{TomlFromStr, TomlIndexMap};
 use toml_span::{
     de_helpers::{expected, TableHelper},
@@ -8,7 +10,7 @@ use toml_span::{
 use crate::{
     task::{Alias, CmdArgs, Dependency, Execute, TaskArg},
     warning::Deprecation,
-    Task, TaskName, WithWarnings,
+    EnvironmentName, Task, TaskName, WithWarnings,
 };
 
 impl<'de> toml_span::Deserialize<'de> for TaskArg {
@@ -56,21 +58,32 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                         .map(|mut item| {
                             let span = item.span;
                             match item.take() {
-                                ValueInner::String(str) => Ok::<Dependency, DeserError>(
-                                    Dependency::new(str.as_ref(), None),
-                                ),
+                                ValueInner::String(str) => Ok(Dependency::from(str.as_ref())),
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
                                     let args = th.optional::<Vec<String>>("args");
-                                    Ok(Dependency::new(&name, args))
+                                    let environment = th
+                                        .optional::<String>("environment")
+                                        .map(|env| EnvironmentName::from_str(&env))
+                                        .transpose()
+                                        .map_err(|e| {
+                                            DeserError::from(expected(
+                                                "valid environment name",
+                                                ValueInner::String(e.attempted_parse.into()),
+                                                span,
+                                            ))
+                                        })?;
+
+                                    // If the creating a new dependency fails, it means the environment name is invalid and exists hence we can safely unwrap the environment
+                                    Ok(Dependency::new(&name, args, environment))
                                 }
                                 inner => Err(expected("string or table", inner, span).into()),
                             }
                         })
-                        .collect::<Result<Vec<_>, _>>()?,
+                        .collect::<Result<Vec<Dependency>, DeserError>>()?,
                     ValueInner::String(str) => {
-                        vec![Dependency::new(str.as_ref(), None)]
+                        vec![Dependency::from(str.as_ref())]
                     }
                     inner => {
                         return Err::<Vec<Dependency>, DeserError>(
@@ -91,21 +104,33 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                         .map(|mut item| {
                             let span = item.span;
                             match item.take() {
-                                ValueInner::String(str) => Ok::<Dependency, DeserError>(
-                                    Dependency::new(str.as_ref(), None),
-                                ),
+                                ValueInner::String(str) => {
+                                    Ok::<Dependency, DeserError>(Dependency::from(str.as_ref()))
+                                }
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
                                     let args = th.optional::<Vec<String>>("args");
-                                    Ok(Dependency::new(&name, args))
+                                    let environment = th
+                                        .optional::<String>("environment")
+                                        .map(|env| EnvironmentName::from_str(&env))
+                                        .transpose()
+                                        .map_err(|e| {
+                                            DeserError::from(expected(
+                                                "valid environment name",
+                                                ValueInner::String(e.attempted_parse.into()),
+                                                span,
+                                            ))
+                                        })?;
+                                    // If the creating a new dependency fails, it means the environment name is invalid and exists hence we can safely unwrap the environment
+                                    Ok(Dependency::new(&name, args, environment))
                                 }
                                 inner => Err(expected("string or table", inner, span).into()),
                             }
                         })
                         .collect::<Result<Vec<_>, _>>()?,
                     ValueInner::String(str) => {
-                        vec![Dependency::new(str.as_ref(), None)]
+                        vec![Dependency::from(str.as_ref())]
                     }
                     inner => return Err(expected("string or array", inner, value.span).into()),
                 };

@@ -122,9 +122,10 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         &self,
         name: TaskName,
         source: FindTaskSource<'p>,
+        task_specific_environment: Option<Environment<'p>>,
     ) -> Result<TaskAndEnvironment<'p>, FindTaskError> {
         // If no explicit environment was specified
-        if self.explicit_environment.is_none() {
+        if self.explicit_environment.is_none() && task_specific_environment.is_none() {
             let default_env = self.project.default_environment();
             // If the default environment has the task
             if let Ok(default_env_task) = default_env.task(&name, self.platform) {
@@ -154,12 +155,21 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             }
         }
 
-        // If an explicit environment was specified, only look for tasks in that
-        // environment and the default environment.
-        let environments = if let Some(explicit_environment) = &self.explicit_environment {
-            vec![explicit_environment.clone()]
-        } else {
-            self.project.environments()
+        let environments = match (task_specific_environment, &self.explicit_environment) {
+            (Some(task_specific_environment), _) => {
+                // If a specific environment was specified in the dependency, only look for tasks in that
+                // environment.
+                vec![task_specific_environment]
+            }
+            (None, Some(explicit_environment)) => {
+                // If an explicit environment was specified, only look for tasks in that
+                // environment and the default environment.
+                Vec::from([explicit_environment.clone()])
+            }
+            _ => {
+                // If no specific environment was specified, look for tasks in all environments.
+                self.project.environments()
+            }
         };
 
         // Find all the task and environment combinations
@@ -225,7 +235,7 @@ mod tests {
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let env = project.default_environment();
         let search = SearchEnvironments::from_opt_env(&project, None, Some(env.best_platform()));
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(result.is_ok());
         assert!(result.unwrap().0.name().is_default());
     }
@@ -249,7 +259,7 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }
 
@@ -278,13 +288,13 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
 
         // With explicit environment
         let search =
             SearchEnvironments::from_opt_env(&project, Some(project.default_environment()), None);
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(result.unwrap().0.name().is_default());
     }
 
@@ -313,7 +323,7 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(result.unwrap().0.name().is_default());
 
         // With explicit environment
@@ -322,7 +332,7 @@ mod tests {
             Some(project.environment("prod").unwrap()),
             None,
         );
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs);
+        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(matches!(result, Err(FindTaskError::MissingTask(_))));
     }
 
@@ -345,7 +355,7 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("bla".into(), FindTaskSource::CmdArgs);
+        let result = search.find_task("bla".into(), FindTaskSource::CmdArgs, None);
         // Ambiguous task because it is the same name and code but it is defined in
         // different environments
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
