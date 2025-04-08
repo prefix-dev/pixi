@@ -1080,17 +1080,17 @@ mod tests {
         assert_debug_snapshot!(workspace
             .workspace
             .value
-            .tasks(Some(Platform::Osx64), &FeatureName::Default)
+            .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
             .unwrap());
         assert_debug_snapshot!(workspace
             .workspace
             .value
-            .tasks(Some(Platform::Win64), &FeatureName::Default)
+            .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
             .unwrap());
         assert_debug_snapshot!(workspace
             .workspace
             .value
-            .tasks(Some(Platform::Linux64), &FeatureName::Default)
+            .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
             .unwrap());
     }
 
