@@ -113,7 +113,7 @@ wax = "0.6.0"
 which = "7.0.2"
 
 # Rattler crates
-file_url = "0.2.3"
+file_url = "0.2.4"
 rattler = { version = "0.33.4", default-features = false }
 rattler_cache = { version = "0.3.16", default-features = false }
 rattler_conda_types = { version = "0.31.6", default-features = false, features = [
@@ -182,7 +182,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.44.0"
+version = "0.45.0"
 
 [features]
 default = ["online_tests", "rustls-tls"]
