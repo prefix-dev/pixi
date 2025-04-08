@@ -76,17 +76,34 @@ pixi task add fmt ruff
 pixi task add lint pylint
 ```
 
+TODO: move the snippet into a file
+```toml title="pixi.toml"
+fmt = "ruff"
+lint = "pylint"
+```
+
+
+### Shorthand Syntax
+
+Pixi supports a shorthand syntax for defining tasks that only depend on other tasks. Instead of using the more verbose `depends-on` field, you can define a task directly as an array of dependencies:
+
 ```
 pixi task alias style fmt lint
 ```
 
 Results in the following `pixi.toml`.
 
+TODO: move the snippet into a file
 ```toml title="pixi.toml"
 fmt = "ruff"
 lint = "pylint"
-style = { depends-on = ["fmt", "lint"] }
+style = [{ task = "fmt" }, { task = "lint" }]
 ```
+
+TODO: delete docs/source_files/pixi_tomls/tasks_short_circuit_basic.toml:tasks
+
+TODO: implement new behaviour of `pixi task alias`
+
 
 Now run both tools with one command.
 
@@ -112,14 +129,6 @@ pixi run test-all
 The environment specified for a task dependency takes precedence over the environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`, the first dependency will still run in the `py311` environment as specified in the TOML file.
 
 In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.
-
-### Shorthand Syntax
-
-Pixi supports a shorthand syntax for defining tasks that only depend on other tasks. Instead of using the more verbose `depends-on` field, you can define a task directly as an array of dependencies:
-
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/tasks_short_circuit_basic.toml:tasks"
-```
 
 ## Working directory
 
