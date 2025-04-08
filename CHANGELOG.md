@@ -5,6 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.45.0] - 2025-04-07
+#### ✨ Highlights
+
+This release brings in numerous improvements and bug fixes and one big feature: argument variables tasks!
+If you do add `args`, you will have more convenient way of specifying arguments, which works with pipes and even allows you to set defaults.
+
+Let's say you define this manifest:
+
+```toml
+[tasks.install]
+cmd = "cargo install {{ type }} --path {{ path }}"
+args = ["path", { arg = "type", default = "--release" }] # `path` is mandatory, `type` is optional with a default
+```
+
+Both of the invocations now work, since `type` is optional:
+
+```bash
+pixi run install /path/to/manifest
+pixi run install /path/to/manifest --debug
+```
+
+If you don't specify `args` for your tasks everything which you append to the CLI will also be appended to the task.
+
+```toml
+[tasks.install]
+cmd = "cargo install"
+```
+
+Therefore, running `pixi run install --debug --path /path/to/manifest` will lead to `cargo install --debug --path /path/to/manifest` being run inside the environment.
+This was already the behavior before this release, so existing tasks should continue to work.
+
+Learn more in our documentation: https://pixi.sh/v0.45.0/workspace/advanced_tasks/#using-task-arguments
+
+#### Changed
+
+- Argument variables in tasks by @prsabahrami in [#3433](https://github.com/prefix-dev/pixi/pull/3433)
+- Make workspace name optional by @baszalmstra in [#3526](https://github.com/prefix-dev/pixi/pull/3526)
+
+
+#### Documentation
+
+- Added task cwd default behaviour by @danpal96 in [#3470](https://github.com/prefix-dev/pixi/pull/3470)
+- Move direnv section to separate page by @pavelzw in [#3472](https://github.com/prefix-dev/pixi/pull/3472)
+- Exclude extender files from search by @Hofer-Julian in [#3473](https://github.com/prefix-dev/pixi/pull/3473)
+- Update getting_started.md to correctly reference py313 instead of py312 by @philipreese in [#3489](https://github.com/prefix-dev/pixi/pull/3489)
+- Move environment var section by @Hofer-Julian in [#3498](https://github.com/prefix-dev/pixi/pull/3498)
+- Rename remaining `pixi project` to `pixi workspace` by @Hofer-Julian in [#3486](https://github.com/prefix-dev/pixi/pull/3486)
+- Mention pypi support in pixi-pack by @pavelzw in [#3508](https://github.com/prefix-dev/pixi/pull/3508)
+- Document that activation scripts are not simply sourced by @traversaro in [#3506](https://github.com/prefix-dev/pixi/pull/3506)
+- Update pixi-pack docs for ignoring non-wheel pypi packages by @delsner in [#3523](https://github.com/prefix-dev/pixi/pull/3523)
+
+
+#### Fixed
+
+- `pixi run deno` by @Hofer-Julian in [#3484](https://github.com/prefix-dev/pixi/pull/3484)
+- 'pixi config list proxy-config' by @gzm55 in [#3497](https://github.com/prefix-dev/pixi/pull/3497)
+- Shell-hook, avoid running unexpected commands by @gzm55 in [#3493](https://github.com/prefix-dev/pixi/pull/3493)
+- `pixi global` stop checking for `quicklaunch` on Windows by @Hofer-Julian in [#3521](https://github.com/prefix-dev/pixi/pull/3521)
+
+
+#### Performance
+
+- Only call `pixi global` completion functions when necessary by @Hofer-Julian in [#3477](https://github.com/prefix-dev/pixi/pull/3477)
+
+#### Refactor
+
+- Change section header from [project] to [workspace] in the docs source files by @prsabahrami in [#3494](https://github.com/prefix-dev/pixi/pull/3494)
+
+
+#### New Contributors
+* @philipreese made their first contribution in [#3489](https://github.com/prefix-dev/pixi/pull/3489)
+* @danpal96 made their first contribution in [#3470](https://github.com/prefix-dev/pixi/pull/3470)
+
 ### [0.44.0] - 2025-03-31
 #### ✨ Highlights
 

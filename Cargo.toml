@@ -113,22 +113,22 @@ wax = "0.6.0"
 which = "7.0.2"
 
 # Rattler crates
-file_url = "0.2.3"
-rattler = { version = "0.33.3", default-features = false }
-rattler_cache = { version = "0.3.14", default-features = false }
-rattler_conda_types = { version = "0.31.4", default-features = false, features = [
+file_url = "0.2.4"
+rattler = { version = "0.33.4", default-features = false }
+rattler_cache = { version = "0.3.16", default-features = false }
+rattler_conda_types = { version = "0.31.6", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.0.8", default-features = false }
-rattler_lock = { version = "0.22.48", default-features = false }
-rattler_menuinst = { version = "0.2.5", default-features = false }
-rattler_networking = { version = "0.22.10", default-features = false, features = [
+rattler_digest = { version = "1.1.0", default-features = false }
+rattler_lock = { version = "0.22.49", default-features = false }
+rattler_menuinst = { version = "0.2.6", default-features = false }
+rattler_networking = { version = "0.22.11", default-features = false, features = [
   "google-cloud-auth",
 ] }
-rattler_repodata_gateway = { version = "0.22.3", default-features = false }
-rattler_shell = { version = "0.22.24", default-features = false }
-rattler_solve = { version = "1.4.2", default-features = false }
-rattler_virtual_packages = { version = "2.0.8", default-features = false }
+rattler_repodata_gateway = { version = "0.22.4", default-features = false }
+rattler_shell = { version = "0.22.25", default-features = false }
+rattler_solve = { version = "1.4.3", default-features = false }
+rattler_virtual_packages = { version = "2.0.9", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
@@ -182,7 +182,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.44.0"
+version = "0.45.0"
 
 [features]
 default = ["online_tests", "rustls-tls"]

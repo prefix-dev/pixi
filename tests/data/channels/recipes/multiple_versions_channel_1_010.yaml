@@ -16,12 +16,14 @@ outputs:
         # Expose two binaries, with and without version number
         - if: win
           then:
-            - echo "package$PKG_VERSION on windows" > $PREFIX/bin/package$PKG_VERSION.bat
-            - echo "package on windows" > $PREFIX/bin/package.bat
+            - echo "echo package$PKG_VERSION on windows" > $PREFIX/bin/package$PKG_VERSION.bat
+            - echo "echo package on windows" > $PREFIX/bin/package.bat
           else:
-            - echo "package$PKG_VERSION on unix" > "$PREFIX/bin/package$PKG_VERSION"
+            - echo '#!/bin/sh' > $PREFIX/bin/package$PKG_VERSION
+            - echo "echo package$PKG_VERSION on unix" >> $PREFIX/bin/package$PKG_VERSION
             - chmod +x $PREFIX/bin/package$PKG_VERSION
-            - echo "package on unix" > $PREFIX/bin/package
+            - echo '#!/bin/sh' > $PREFIX/bin/package
+            - echo "echo package on unix" >> $PREFIX/bin/package
             - chmod +x $PREFIX/bin/package
 
   - package:
@@ -33,9 +35,10 @@ outputs:
         - mkdir -p $PREFIX/bin
         - if: win
           then:
-            - echo "package2$PKG_VERSION on windows" > $PREFIX/bin/package2.bat
+            - echo "echo package2$PKG_VERSION on windows" > $PREFIX/bin/package2.bat
           else:
-            - echo "package2$PKG_VERSION on unix" > $PREFIX/bin/package2
+            - echo '#!/bin/sh' > $PREFIX/bin/package2
+            - echo "echo package2$PKG_VERSION on unix" >> $PREFIX/bin/package2
             - chmod +x $PREFIX/bin/package2
 
   - package:
@@ -49,9 +52,10 @@ outputs:
         - mkdir -p $PREFIX/bin
         - if: win
           then:
-            - echo "package3$PKG_VERSION on windows" > $PREFIX/bin/package3.bat
+            - echo "echo package3$PKG_VERSION on windows" > $PREFIX/bin/package3.bat
           else:
-            - echo "package3$PKG_VERSION on unix" > $PREFIX/bin/package3
+            - echo '#!/bin/sh' > $PREFIX/bin/package3
+            - echo "echo package3$PKG_VERSION on unix" >> $PREFIX/bin/package3
             - chmod +x $PREFIX/bin/package3
 
   - package:
@@ -67,7 +71,8 @@ outputs:
         - mkdir -p $PREFIX/bin
         - if: win
           then:
-            - echo "package4$PKG_VERSION on windows" > $PREFIX/bin/package4.bat
+            - echo "echo package4$PKG_VERSION on windows" > $PREFIX/bin/package4.bat
           else:
-            - echo "package4$PKG_VERSION on unix" > $PREFIX/bin/package4
+            - echo '#!/bin/sh' > $PREFIX/bin/package4
+            - echo "echo package4$PKG_VERSION on unix" >> $PREFIX/bin/package4
             - chmod +x $PREFIX/bin/package4
