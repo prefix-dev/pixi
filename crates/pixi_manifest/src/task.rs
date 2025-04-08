@@ -49,17 +49,12 @@ pub struct Dependency {
 }
 
 impl Dependency {
-    pub fn new(
-        s: &str,
-        args: Option<Vec<String>>,
-        environment: Option<&str>,
-    ) -> Result<Self, crate::environment::ParseEnvironmentNameError> {
-        let environment = environment.map(EnvironmentName::from_str).transpose()?;
-        Ok(Dependency {
+    pub fn new(s: &str, args: Option<Vec<String>>, environment: Option<EnvironmentName>) -> Self {
+        Dependency {
             task_name: TaskName(s.to_string()),
             args,
             environment,
-        })
+        }
     }
 
     pub fn new_without_env(s: &str, args: Option<Vec<String>>) -> Self {
