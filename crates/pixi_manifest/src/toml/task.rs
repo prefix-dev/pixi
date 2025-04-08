@@ -117,9 +117,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                             }
                         })
                         .collect::<Result<Vec<Dependency>, DeserError>>()?,
-                    ValueInner::String(str) => {
-                        vec![Dependency::from(str.as_ref())]
-                    }
+                    ValueInner::String(str) => Vec::from([Dependency::from(str.as_ref())]),
                     inner => {
                         return Err::<Vec<Dependency>, DeserError>(
                             expected("string or array", inner, value.span).into(),
@@ -164,9 +162,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                             }
                         })
                         .collect::<Result<Vec<_>, _>>()?,
-                    ValueInner::String(str) => {
-                        vec![Dependency::from(str.as_ref())]
-                    }
+                    ValueInner::String(str) => Vec::from([Dependency::from(str.as_ref())]),
                     inner => return Err(expected("string or array", inner, value.span).into()),
                 };
 
