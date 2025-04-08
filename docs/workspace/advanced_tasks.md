@@ -100,8 +100,6 @@ lint = "pylint"
 style = [{ task = "fmt" }, { task = "lint" }]
 ```
 
-TODO: delete docs/source_files/pixi_tomls/tasks_short_circuit_basic.toml:tasks
-
 TODO: implement new behaviour of `pixi task alias`
 
 
