@@ -65,7 +65,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                         item.span,
                                     ))
                                 })?;
-                                
+
                             deps.push(Dependency::new(&name, args, environment));
                         }
                         _ => return Err(expected("string or table", item.take(), item.span).into()),
