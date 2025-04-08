@@ -8,12 +8,9 @@ format = "ruff format"
 lint = "ruff check"
 test = "pytest tests/"
 
-# Simple references to task names
-check = ["format", "lint", "test"]
-
 # Mix of simple names and complex configurations
 deploy = [
-  "test",
+  { task = "test" },
   { task = "build", args = [
     "production",
   ] },
