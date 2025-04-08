@@ -47,9 +47,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 let mut deps = Vec::new();
                 for mut item in array {
                     match item.take() {
-                        ValueInner::String(str) => {
-                            deps.push(Dependency::from(str.as_ref()));
-                        }
                         ValueInner::Table(table) => {
                             let mut th = TableHelper::from((table, item.span));
                             let name = th.required::<String>("task")?;
@@ -68,7 +65,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
 
                             deps.push(Dependency::new(&name, args, environment));
                         }
-                        _ => return Err(expected("string or table", item.take(), item.span).into()),
+                        _ => return Err(expected("table", item.take(), item.span).into()),
                     }
                 }
                 return Ok(Task::Alias(Alias {
