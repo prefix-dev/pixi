@@ -164,7 +164,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             (None, Some(explicit_environment)) => {
                 // If an explicit environment was specified, only look for tasks in that
                 // environment and the default environment.
-                vec![explicit_environment.clone()]
+                Vec::from([explicit_environment.clone()])
             }
             _ => {
                 // If no specific environment was specified, look for tasks in all environments.

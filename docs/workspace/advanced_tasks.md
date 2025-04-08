@@ -96,7 +96,7 @@ pixi run style
 
 ### Environment specification for task dependencies
 
-You can specify a specific environment to use for a dependent task:
+You can specify the environment to use for a dependent task:
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"

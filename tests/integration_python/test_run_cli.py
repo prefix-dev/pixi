@@ -1016,6 +1016,7 @@ def test_task_environment_precedence(
             "check-version",
         ],
         stdout_contains="0.1.0",
+        stdout_excludes="0.2.0",
     )
 
 
