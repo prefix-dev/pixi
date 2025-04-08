@@ -1098,6 +1098,7 @@ def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None
         "task2": "echo task2",
         "task3": [{"task": "task1"}],
         "task4": [{"task": "task3"}, {"task": "task2"}],
+        "task5": {"depends-on": [{"task": "task3"}, {"task": "task2"}]},
     }
 
     manifest_path.write_text(tomli_w.dumps(manifest_content))
@@ -1111,3 +1112,13 @@ def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None
         [pixi, "run", "--manifest-path", manifest_path, "task3"],
         stdout_contains="task1",
     )
+
+    output1 = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task5"],
+    )
+
+    output2 = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task4"],
+    )
+
+    assert output1.stdout == output2.stdout and output1.stderr == output2.stderr
