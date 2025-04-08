@@ -1,5 +1,5 @@
-[target.x86_64-pc-windows-msvc]
-linker = "rust-lld"
+#[target.x86_64-pc-windows-msvc]
+#linker = "rust-lld"
 
 # Statically link the C runtime so the executable does not depend on the MSVC runtime DLLs.
 [target.'cfg(all(target_env = "msvc", target_os = "windows"))']
