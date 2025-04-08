@@ -76,10 +76,8 @@ pixi task add fmt ruff
 pixi task add lint pylint
 ```
 
-TODO: move the snippet into a file
 ```toml title="pixi.toml"
-fmt = "ruff"
-lint = "pylint"
+--8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:not-all"
 ```
 
 
@@ -93,15 +91,9 @@ pixi task alias style fmt lint
 
 Results in the following `pixi.toml`.
 
-TODO: move the snippet into a file
 ```toml title="pixi.toml"
-fmt = "ruff"
-lint = "pylint"
-style = [{ task = "fmt" }, { task = "lint" }]
+--8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:all"
 ```
-
-TODO: implement new behaviour of `pixi task alias`
-
 
 Now run both tools with one command.
 
