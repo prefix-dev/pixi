@@ -1,5 +1,7 @@
 mod cache;
 mod reporters;
+mod source_anchor;
+pub mod source_metadata_collector;
 
 use std::{
     collections::HashMap,
@@ -56,6 +58,8 @@ use crate::{
     Workspace,
 };
 
+pub use source_anchor::SourceAnchor;
+
 /// A list of globs that should be ignored when calculating any input hash.
 /// These are typically used for build artifacts that should not be included in
 /// the input hash.
@@ -75,6 +79,14 @@ pub struct BuildContext {
 
     /// The resolved Git references.
     git: GitResolver,
+}
+
+#[derive(Clone)]
+pub struct BuildEnvironment {
+    pub host_platform: Platform,
+    pub host_virtual_packages: Vec<GenericVirtualPackage>,
+    pub build_platform: Platform,
+    pub build_virtual_packages: Vec<GenericVirtualPackage>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -223,10 +235,7 @@ impl BuildContext {
         &self,
         source_spec: &SourceSpec,
         channels: &[ChannelUrl],
-        host_platform: Platform,
-        host_virtual_packages: Vec<GenericVirtualPackage>,
-        build_platform: Platform,
-        build_virtual_packages: Vec<GenericVirtualPackage>,
+        build_env: BuildEnvironment,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
@@ -236,10 +245,7 @@ impl BuildContext {
             .extract_records(
                 &source,
                 channels,
-                host_platform,
-                host_virtual_packages,
-                build_platform,
-                build_virtual_packages,
+                build_env,
                 metadata_reporter.clone(),
                 build_id,
             )
@@ -580,21 +586,18 @@ impl BuildContext {
 
     /// Extracts the metadata from a package whose source is located at the
     /// given path.
-    #[instrument(skip_all, fields(source = %source.pinned, platform = %host_platform))]
+    #[instrument(skip_all, fields(source = %source.pinned, platform = %build_env.host_platform))]
     #[allow(clippy::too_many_arguments)]
     async fn extract_records(
         &self,
         source: &SourceCheckout,
         channels: &[ChannelUrl],
-        host_platform: Platform,
-        host_virtual_packages: Vec<GenericVirtualPackage>,
-        build_platform: Platform,
-        build_virtual_packages: Vec<GenericVirtualPackage>,
+        build_env: BuildEnvironment,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
     ) -> Result<Vec<SourceRecord>, BuildError> {
         let channel_urls = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
-        let variant_configuration = self.resolve_variant(host_platform);
+        let variant_configuration = self.resolve_variant(build_env.host_platform);
 
         let (cached_metadata, cache_entry) = self
             .source_metadata_cache
@@ -602,10 +605,10 @@ impl BuildContext {
                 source,
                 &SourceMetadataInput {
                     channel_urls: channel_urls.clone(),
-                    build_platform,
-                    build_virtual_packages: build_virtual_packages.clone(),
-                    host_platform,
-                    host_virtual_packages: host_virtual_packages.clone(),
+                    build_platform: build_env.build_platform,
+                    build_virtual_packages: build_env.build_virtual_packages.clone(),
+                    host_platform: build_env.host_platform,
+                    host_virtual_packages: build_env.host_virtual_packages.clone(),
                     build_variants: variant_configuration.clone().into_iter().collect(),
                 },
             )
@@ -649,12 +652,12 @@ impl BuildContext {
             .conda_get_metadata(
                 &CondaMetadataParams {
                     build_platform: Some(PlatformAndVirtualPackages {
-                        platform: build_platform,
-                        virtual_packages: Some(build_virtual_packages),
+                        platform: build_env.build_platform,
+                        virtual_packages: Some(build_env.build_virtual_packages),
                     }),
                     host_platform: Some(PlatformAndVirtualPackages {
-                        platform: host_platform,
-                        virtual_packages: Some(host_virtual_packages),
+                        platform: build_env.host_platform,
+                        virtual_packages: Some(build_env.host_virtual_packages),
                     }),
                     channel_base_urls: Some(channel_urls),
                     channel_configuration: ChannelConfiguration {
@@ -663,7 +666,7 @@ impl BuildContext {
                     work_directory: self.work_dir.join(
                         WorkDirKey {
                             source: source.clone(),
-                            host_platform,
+                            host_platform: build_env.host_platform,
                             build_backend: protocol.backend_identifier().to_string(),
                         }
                         .key(),

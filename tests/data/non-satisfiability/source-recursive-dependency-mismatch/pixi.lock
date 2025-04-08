@@ -19,7 +19,7 @@ packages:
   # has a different version.
   sources:
     foobar:
-      path: "foobar"
+      path: "../foobar"
 - conda: foobar
   name: foobar
   version: 0.1.0

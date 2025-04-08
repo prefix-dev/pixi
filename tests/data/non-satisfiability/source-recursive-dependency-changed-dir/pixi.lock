@@ -19,7 +19,7 @@ packages:
   # does not come from the directory `not-foobar`.
   sources:
     foobar:
-      path: "not-foobar"
+      path: "../not-foobar"
 - conda: foobar
   name: foobar
   version: 0.1.0

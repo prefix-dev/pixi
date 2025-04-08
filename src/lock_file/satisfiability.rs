@@ -40,7 +40,10 @@ use uv_resolver::RequiresPython;
 use super::{
     package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
 };
-use crate::workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef};
+use crate::{
+    build::SourceAnchor,
+    workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef},
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -1165,13 +1168,19 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     let spec = MatchSpec::from_str(depends.as_str(), Lenient)
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
 
-                    let origin = match record {
-                        PixiRecord::Binary(record) => Cow::Owned(record.file_name.to_string()),
-                        PixiRecord::Source(record) => Cow::Owned(format!(
-                            "{} @ {}",
-                            record.package_record.name.as_source(),
-                            &record.source
-                        )),
+                    let (origin, anchor) = match record {
+                        PixiRecord::Binary(record) => (
+                            Cow::Owned(record.file_name.to_string()),
+                            SourceAnchor::Workspace,
+                        ),
+                        PixiRecord::Source(record) => (
+                            Cow::Owned(format!(
+                                "{} @ {}",
+                                record.package_record.name.as_source(),
+                                &record.source
+                            )),
+                            record.source.clone().into(),
+                        ),
                     };
 
                     if let Some((source, package_name)) = record
@@ -1184,10 +1193,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             ))
                         })
                     {
+                        let anchored_source = anchor.resolve(source.clone());
                         conda_queue.push(Dependency::CondaSource(
                             package_name.clone(),
                             spec,
-                            source.clone(),
+                            anchored_source,
                             origin,
                         ));
                     } else {
