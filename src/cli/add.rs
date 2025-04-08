@@ -114,7 +114,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Add the platform if it is not already present
     workspace
         .manifest()
-        .add_platforms(dependency_config.platforms.iter(), &FeatureName::Default)?;
+        .add_platforms(dependency_config.platforms.iter(), &FeatureName::DEFAULT)?;
 
     let (match_specs, source_specs, pypi_deps) = match dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
