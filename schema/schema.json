@@ -1557,6 +1557,21 @@
                   "$ref": "#/$defs/TaskInlineTable"
                 },
                 {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/DependsOn"
+                      },
+                      {
+                        "description": "A valid task name.",
+                        "type": "string",
+                        "pattern": "^[^\\s\\$]+$"
+                      }
+                    ]
+                  }
+                },
+                {
                   "type": "string",
                   "minLength": 1
                 }
