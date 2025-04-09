@@ -1235,3 +1235,20 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "task", "list", "--manifest-path", manifest], stderr_contains=["foo", "bar"]
     )
+
+
+def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        {EMPTY_BOILERPLATE_PROJECT}
+        """
+    manifest.write_text(toml)
+
+    verify_cli_command([pixi, "task", "alias", "dummy-a", "dummy-b", "dummy-c", "--manifest-path", manifest])
+
+    with open(manifest, "rb") as f:
+        manifest_content = tomllib.load(f)
+    
+    assert "alias" in manifest_content
+    assert "dummy-a" in manifest_content["alias"]
+    assert manifest_content["tasks"]["dummy-a"] == [{"task": "dummy-b"}]
