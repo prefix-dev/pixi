@@ -114,7 +114,7 @@ pre-commit-run = "pre-commit run --all-files"
 prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
-shell-format = "shfmt -w -i=4 -s -bn"
+shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "mypy"
