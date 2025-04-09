@@ -16,16 +16,14 @@ __wrap__() {
     ARCH="${PIXI_ARCH:-$(uname -m)}"
     IS_MSYS=false
 
-    case "${PLATFORM-}" in
-    Darwin) PLATFORM="apple-darwin" ;;
-    Linux) PLATFORM="unknown-linux-musl" ;;
-    *)
-        if [ "$(uname -o)" = "Msys" ]; then
-            IS_MSYS=true
-            PLATFORM="pc-windows-msvc"
-        fi
-        ;;
-    esac
+    if [ "${PLATFORM-}" = "Darwin" ]; then
+        PLATFORM="apple-darwin"
+    elif [ "${PLATFORM-}" = "Linux" ]; then
+        PLATFORM="unknown-linux-musl"
+    elif [ "$(uname -o)" = "Msys" ]; then
+        IS_MSYS=true
+        PLATFORM="pc-windows-msvc"
+    fi
 
     case "${ARCH-}" in
     arm64 | aarch64) ARCH="aarch64" ;;
