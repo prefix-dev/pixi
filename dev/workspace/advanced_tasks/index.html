@@ -2741,7 +2741,7 @@ In that package we have some tasks that depend on each other, so we can assure t
 <ul>
 <li>First <code>configure</code> because it has no dependencies.</li>
 <li>Then <code>build</code> as it only depends on <code>configure</code>.</li>
-<li>Then <code>start</code> as all it dependencies are run.</li>
+<li>Then <code>start</code> as all its dependencies are run.</li>
 </ul>
 <p>If one of the commands fails (exit with non-zero code.) it will stop and the next one will not be started.</p>
 <p>With this logic, you can also create aliases as you don't have to specify any command in a task.</p>
@@ -2983,7 +2983,7 @@ Making this feature not worthy of implementing as the amount of edge cases will 
 This is <a href="https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands"><code>deno_task_shell</code></a>.
 The task shell is a limited implementation of a bourne-shell interface.</p>
 <h3 id="built-in-commands">Built-in commands<a class="headerlink" href="#built-in-commands" title="Permanent link">#</a></h3>
-<p>Next to running actual executable like <code>./myprogram</code>, <code>cmake</code> or <code>python</code> the shell has some built-in commandos.</p>
+<p>Next to running actual executable like <code>./myprogram</code>, <code>cmake</code> or <code>python</code> the shell has some built-in commands.</p>
 <ul>
 <li><code>cp</code>: Copies files.</li>
 <li><code>mv</code>: Moves files.</li>
