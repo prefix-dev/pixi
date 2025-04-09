@@ -811,6 +811,27 @@ jobs:
           ~/.pixi/bin/pixi --version
         shell: alpine.sh {0}
 
+  test-install-sh-without-tar:
+    name: install.sh | linux without tar
+    needs:
+      - determine_changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup latest Alpine Linux
+        uses: jirutka/setup-alpine@cf5fddcea495dcc19c0f991c6f6fa6a7abf3d50a # v1
+      - name: "Install"
+        run: |
+          uname -a
+          cat /etc/alpine-release
+          test ! -e ~/.pixi/bin/pixi
+          mv $(which tar) $(which tar).bak
+          ! hash tar
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+        shell: alpine.sh --root {0}
+
   test-install-sh-msys2:
     name: install.sh | msys2
     needs:
@@ -833,7 +854,7 @@ jobs:
         shell: msys2 {0}
 
   test-install-sh-msys2-without-unzip:
-    name: install.sh | msys2 (no unzip)
+    name: install.sh | msys2 without unzip
     needs:
       - determine_changes
     runs-on: windows-latest
