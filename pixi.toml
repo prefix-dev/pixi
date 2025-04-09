@@ -87,6 +87,7 @@ tbump = ">=6.9.0,<6.10"
 
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
+go-shfmt = ">=3.11.0,<4"
 pre-commit = ">=4.1.0,<5"
 pre-commit-hooks = ">=5.0.0,<6"
 prettier = ">=3.5.2,<4"
@@ -102,6 +103,7 @@ cargo-clippy-pixi_docs = "cargo clippy --all-targets --workspace --manifest-path
 cargo-fmt = "cargo fmt --all"
 cargo-fmt-pixi_docs = "cargo fmt --all --manifest-path pixi_docs/Cargo.toml"
 check-openssl = "python tests/scripts/check-openssl.py"
+format-shell = "shfmt -w -i=4 -s -bn"
 lint = "pre-commit run --all-files --hook-stage=manual"
 lint-pixi_docs = { depends-on = [
   "cargo-fmt-pixi_docs",
