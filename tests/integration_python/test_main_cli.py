@@ -1243,11 +1243,22 @@ def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [workspace]
         name = "test"
         channels = []
-        platforms = ["linux-64", "win-64", "osx-64"]
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         """
     manifest.write_text(toml)
 
     verify_cli_command([pixi, "task", "alias", "dummy-a", "dummy-b", "dummy-c", "--manifest-path", manifest])
+    # Test platform-specific task alias
+    verify_cli_command([pixi, "task", "alias", "--platform", "linux-64", "linux-alias", "dummy-b", "dummy-c", "--manifest-path", manifest])
+    
+    with open(manifest, "rb") as f:
+        manifest_content = tomllib.load(f)
+    
+    assert "target" in manifest_content
+    assert "linux-64" in manifest_content["target"]
+    assert "tasks" in manifest_content["target"]["linux-64"]
+    assert "linux-alias" in manifest_content["target"]["linux-64"]["tasks"]
+    assert manifest_content["target"]["linux-64"]["tasks"]["linux-alias"] == [{"task": "dummy-b"}, {"task": "dummy-c"}]
 
     with open(manifest, "rb") as f:
         manifest_content = tomllib.load(f)
