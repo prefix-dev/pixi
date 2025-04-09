@@ -59,7 +59,7 @@ impl AddRemoveArgs {
     fn feature_name(&self) -> FeatureName {
         self.feature
             .clone()
-            .map_or(FeatureName::Default, FeatureName::Named)
+            .map_or_else(FeatureName::default, FeatureName::from)
     }
 
     fn report(self, operation: &str, channel_config: &ChannelConfig) -> miette::Result<()> {

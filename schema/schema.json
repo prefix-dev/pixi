@@ -469,6 +469,12 @@
             "minLength": 1
           }
         },
+        "environment": {
+          "title": "Environment",
+          "description": "The environment to use for the task",
+          "type": "string",
+          "pattern": "^[a-z\\d\\-]+$"
+        },
         "task": {
           "title": "Task",
           "description": "A valid task name.",
@@ -1549,6 +1555,12 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/TaskInlineTable"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
                 },
                 {
                   "type": "string",

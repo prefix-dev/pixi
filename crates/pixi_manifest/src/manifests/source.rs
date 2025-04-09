@@ -139,7 +139,7 @@ mod test {
     fn test_add_empty_system_requirement_environment(#[case] mut source: ManifestDocument) {
         let empty_requirements = SystemRequirements::default();
         source
-            .add_system_requirements(&empty_requirements, &FeatureName::Default)
+            .add_system_requirements(&empty_requirements, &FeatureName::DEFAULT)
             .unwrap();
 
         let manifests = Manifests::from_workspace_source(source.into_source_with_provenance())
@@ -164,7 +164,7 @@ mod test {
             ..SystemRequirements::default()
         };
         source
-            .add_system_requirements(&single_system_requirements, &FeatureName::Default)
+            .add_system_requirements(&single_system_requirements, &FeatureName::DEFAULT)
             .unwrap();
 
         let manifests = Manifests::from_workspace_source(source.into_source_with_provenance())
@@ -192,7 +192,7 @@ mod test {
             archspec: Some("x86_64".to_string()),
         };
         source
-            .add_system_requirements(&full_system_requirements, &FeatureName::Default)
+            .add_system_requirements(&full_system_requirements, &FeatureName::DEFAULT)
             .unwrap();
 
         let kind = source.kind();
@@ -233,7 +233,7 @@ mod test {
             ..SystemRequirements::default()
         };
         source
-            .add_system_requirements(&family_system_requirements, &FeatureName::Default)
+            .add_system_requirements(&family_system_requirements, &FeatureName::DEFAULT)
             .unwrap();
 
         let kind = source.kind();

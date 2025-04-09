@@ -91,6 +91,7 @@ tbump = ">=6.9.0,<6.10"
 
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
+go-shfmt = ">=3.11.0,<4"
 pre-commit = ">=4.1.0,<5"
 pre-commit-hooks = ">=5.0.0,<6"
 prettier = ">=3.5.2,<4"
@@ -117,6 +118,7 @@ pre-commit-run = "pre-commit run --all-files"
 prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
+shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "mypy"

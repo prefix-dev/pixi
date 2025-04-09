@@ -210,32 +210,20 @@ pub struct ConfigCliActivation {
 
     /// Do not source the autocompletion scripts from the environment.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    no_completion: Option<bool>,
+    no_completions: bool,
 }
 
 impl ConfigCliActivation {
     pub fn merge_config(self, config: Config) -> Config {
         let mut config = config;
         config.shell.force_activate = Some(self.force_activate);
-        if let Some(no_completion) = self.no_completion {
-            config.shell.source_completion_scripts = Some(!no_completion);
+        if self.no_completions {
+            config.shell.source_completion_scripts = Some(false);
         }
         config
     }
 }
 
-impl From<ConfigCliActivation> for Config {
-    fn from(cli: ConfigCliActivation) -> Self {
-        Self {
-            shell: ShellConfig {
-                force_activate: Some(cli.force_activate),
-                source_completion_scripts: None,
-                change_ps1: None,
-            },
-            ..Default::default()
-        }
-    }
-}
 #[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RepodataChannelConfig {

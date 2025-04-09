@@ -209,7 +209,7 @@ impl AddBuilder {
     }
 
     pub fn with_feature(mut self, feature: impl ToString) -> Self {
-        self.args.dependency_config.feature = FeatureName::Named(feature.to_string());
+        self.args.dependency_config.feature = FeatureName::from(feature.to_string());
         self
     }
 
