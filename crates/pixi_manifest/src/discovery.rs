@@ -335,7 +335,7 @@ impl WorkspaceDiscoverer {
                     && !matches!(search_path.clone(), SearchPath::Explicit(_))
                 {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
-                        error: TomlError::NoPixiTable,
+                        error: TomlError::NoPixiTable(ManifestKind::Pyproject, None),
                         source: contents.into_named(provenance.absolute_path().to_string_lossy()),
                     })));
                 }
@@ -346,7 +346,15 @@ impl WorkspaceDiscoverer {
                     .any(|section| source.contains(&format!("[{}]", section)))
                 {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
-                        error: TomlError::NoRequiredSections,
+                        error: TomlError::NoPixiTable(
+                            ManifestKind::Pixi,
+                            Some(format!(
+                                "Any of the following sections is required:\n{}",
+                                Self::REQUIRED_SECTIONS
+                                    .map(|s| format!("* {}", s))
+                                    .join("\n")
+                            )),
+                        ),
                         source: contents.into_named(provenance.absolute_path().to_string_lossy()),
                     })));
                 }

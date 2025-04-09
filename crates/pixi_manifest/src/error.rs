@@ -11,7 +11,7 @@ use thiserror::Error;
 use toml_span::{DeserError, Error};
 
 use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
-use crate::{KnownPreviewFeature, WorkspaceDiscoverer, WorkspaceManifest};
+use crate::{KnownPreviewFeature, ManifestKind, WorkspaceManifest};
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
@@ -97,8 +97,7 @@ impl GenericError {
 pub enum TomlError {
     Error(toml_edit::TomlError),
     TomlError(toml_span::Error),
-    NoPixiTable,
-    NoRequiredSections,
+    NoPixiTable(ManifestKind, Option<String>),
     MissingField(Cow<'static, str>, Option<Range<usize>>),
     Generic(GenericError),
     #[error(transparent)]
@@ -154,17 +153,16 @@ impl Display for TomlError {
                 }
                 _ => write!(f, "{}", err),
             },
-            TomlError::NoPixiTable => {
-                write!(f, "Missing table `[tool.pixi.project] in pyproject.toml`")
-            }
-            TomlError::NoRequiredSections => {
-                write!(
-                    f,
-                    "Missing table in pixi.toml. Any of the following sections is expected:\n{}.",
-                    WorkspaceDiscoverer::REQUIRED_SECTIONS
-                        .map(|s| format!("* {s}"))
-                        .join("\n")
-                )
+            TomlError::NoPixiTable(manifest_kind, detail) => {
+                let filename = match manifest_kind {
+                    ManifestKind::Pyproject => "pyproject.toml",
+                    ManifestKind::Pixi => "pixi.toml",
+                };
+                if let Some(detail) = detail {
+                    write!(f, "Missing table in manifest {filename}:\n{detail}")
+                } else {
+                    write!(f, "Missing table in manifest {filename}")
+                }
             }
             TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
             TomlError::Generic(err) => write!(f, "{}", &err.message),
@@ -281,7 +279,7 @@ impl Diagnostic for TomlError {
                 }
                 _ => Some(SourceSpan::new(span.start.into(), span.end - span.start)),
             },
-            TomlError::NoPixiTable => Some(SourceSpan::new(SourceOffset::from(0), 1)),
+            TomlError::NoPixiTable(_, _) => Some(SourceSpan::new(SourceOffset::from(0), 1)),
             TomlError::MissingField(_, span) => span.clone().map(SourceSpan::from),
             TomlError::FeatureNotEnabled(err) => return err.labels(),
             TomlError::InvalidNonPackageDependencies(err) => return err.labels(),
@@ -315,11 +313,11 @@ impl Diagnostic for TomlError {
 
     fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         match self {
-            TomlError::NoPixiTable => {
-                Some(Box::new("Check your manifest for a [tool.pixi] table. See https://pixi.sh/latest/python/pyproject_toml for more information."))
+            TomlError::NoPixiTable(ManifestKind::Pixi, _) => {
+                Some(Box::new("More information about pixi manifest files can be found at https://pixi.sh/latest/reference/pixi_manifest/"))
             }
-            TomlError::NoRequiredSections => {
-                Some(Box::new("Run `pixi init` to create a new project manifest"))
+            TomlError::NoPixiTable(ManifestKind::Pyproject, _) => {
+                Some(Box::new("Check your manifest for a [tool.pixi.*] table. See https://pixi.sh/latest/python/pyproject_toml for more information."))
             }
             TomlError::TomlError(toml_span::Error { kind, .. }) => match kind {
                 toml_span::ErrorKind::UnexpectedValue { expected, value } => {

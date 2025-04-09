@@ -26,7 +26,7 @@ use crate::{
         ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
         TomlManifest,
     },
-    FeatureName, Warning,
+    FeatureName, ManifestKind, Warning,
 };
 
 #[derive(Debug)]
@@ -58,12 +58,12 @@ impl PyProjectManifest {
         Self::from_toml_str(&source).into_diagnostic()
     }
 
-    /// Ensures the `pyproject.toml` contains a `[tool.pixi]` table
+    /// Ensures the `pyproject.toml` contains a `[tool.pixi]` tabl
     /// and project name is defined
     pub fn ensure_pixi(self) -> Result<Self, TomlError> {
         // Make sure the `[tool.pixi]` table exist
         if !self.has_pixi_table() {
-            return Err(TomlError::NoPixiTable);
+            return Err(TomlError::NoPixiTable(ManifestKind::Pyproject, None));
         }
 
         // Make sure a 'name' is defined
