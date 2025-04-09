@@ -80,7 +80,9 @@ test-specific-test = { cmd = "pytest -k {{ test_substring }}", args = [
 ] }
 # Update one test channel by passing on value of `mappings.toml`
 # e.g. "multiple_versions_channel_1"
-update-test-channel = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
+update-test-channel = { cmd = "python update-channels.py {{ channel }}", args = [
+  "channel",
+], cwd = "tests/data/channels" }
 
 
 [feature.dev.dependencies]
