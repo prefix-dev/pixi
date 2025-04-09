@@ -145,9 +145,9 @@ async fn generate_environment_json(
 /// Prints the activation script to the stdout.
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
-        .prompt_config
-        .merge_config(args.activation_config.into())
-        .merge_config(args.config.clone().into());
+        .activation_config
+        .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
+
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?

@@ -29,9 +29,8 @@ pixi shell-hook [OPTIONS]
 :  Max concurrent network requests, default is `50`
 - <a id="arg---force-activate" href="#arg---force-activate">`--force-activate`</a>
 :  Do not use the environment activation cache. (default: true except in experimental mode)
-- <a id="arg---no-completion" href="#arg---no-completion">`--no-completion <NO_COMPLETION>`</a>
+- <a id="arg---no-completions" href="#arg---no-completions">`--no-completions`</a>
 :  Do not source the autocompletion scripts from the environment
-<br>**options**: `true`, `false`
 - <a id="arg---change-ps1" href="#arg---change-ps1">`--change-ps1 <CHANGE_PS1>`</a>
 :  Do not change the PS1 variable when starting a prompt
 <br>**options**: `true`, `false`
