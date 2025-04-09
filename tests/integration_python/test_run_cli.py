@@ -1121,4 +1121,5 @@ def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None
         [pixi, "run", "--manifest-path", manifest_path, "task4"],
     )
 
-    assert output1.stdout == output2.stdout and output1.stderr == output2.stderr
+    assert output1.stdout == output2.stdout
+    assert output1.stderr == output2.stderr
