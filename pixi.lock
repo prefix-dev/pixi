@@ -1283,6 +1283,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/gfortran_impl_linux-64-13.3.0-h84c1745_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/gfortran_linux-64-13.3.0-hb919d3a_8.conda
       - conda: https://prefix.dev/conda-forge/linux-64/git-2.47.1-pl5321h59d505e_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/go-shfmt-3.11.0-ha770c72_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/gxx-13.3.0-h9576a4e_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/gxx_impl_linux-64-13.3.0-hae580e1_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/gxx_linux-64-13.3.0-h6834431_8.conda
@@ -1411,6 +1412,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/gfortran_impl_linux-aarch64-13.3.0-h9c0531c_2.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/gfortran_linux-aarch64-13.3.0-h2809cf8_8.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/git-2.47.1-pl5321h0e2bd52_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-aarch64/go-shfmt-3.11.0-h8af1aa0_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/gxx-13.3.0-h8a56e6e_2.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/gxx_impl_linux-aarch64-13.3.0-h7eae8fb_2.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/gxx_linux-aarch64-13.3.0-h2864abd_8.conda
@@ -1537,6 +1539,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-64/gfortran_osx-64-13.3.0-h3223c34_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/git-2.47.1-pl5321h0e333bc_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/gmp-6.3.0-hf036a51_2.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/go-shfmt-3.11.0-h694c41f_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/icu-75.1-h120a0e1_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/identify-2.6.9-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/importlib-metadata-8.6.1-pyha770c72_0.conda
@@ -1662,6 +1665,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/gfortran_osx-arm64-13.3.0-h3c33bd0_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/git-2.47.1-pl5321hd71a902_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/gmp-6.3.0-h7bae524_2.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/go-shfmt-3.11.0-hce30654_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/icu-75.1-hfee45f7_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/identify-2.6.9-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/importlib-metadata-8.6.1-pyha770c72_0.conda
@@ -1779,6 +1783,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/flang_win-64-19.1.7-h719f0c7_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/fortran-compiler-1.9.0-h95e3450_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/git-2.47.1-h57928b3_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/go-shfmt-3.11.0-h57928b3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/identify-2.6.9-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/importlib-metadata-8.6.1-pyha770c72_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/iniconfig-2.0.0-pyhd8ed1ab_1.conda
@@ -4452,6 +4457,43 @@ packages:
   license: GPL-2.0-or-later OR LGPL-3.0-or-later
   size: 365188
   timestamp: 1718981343258
+- conda: https://prefix.dev/conda-forge/linux-64/go-shfmt-3.11.0-ha770c72_0.conda
+  sha256: a679f37a726c02d7cc07459ea9997aea7258c6a8ffe1136a485aeb7a438f90b5
+  md5: a2899a96d513ad645edec76ad1a98d3e
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 1628535
+  timestamp: 1741285792051
+- conda: https://prefix.dev/conda-forge/linux-aarch64/go-shfmt-3.11.0-h8af1aa0_0.conda
+  sha256: c4041c9bd243fcece253ec08e418f475234f20670b86e262b4c898def6213dcd
+  md5: a15ee7d9d5e319d62363d2b4ab0778cb
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 1514610
+  timestamp: 1741286893924
+- conda: https://prefix.dev/conda-forge/osx-64/go-shfmt-3.11.0-h694c41f_0.conda
+  sha256: cdd2f5b2ca55d6b0620d5f05274860f8307b6ef662e8493610bda1d98665d5a5
+  md5: 46116af4daeefb1514ecbb945e3af474
+  constrains:
+  - __osx>=10.12
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 1549490
+  timestamp: 1741285964054
+- conda: https://prefix.dev/conda-forge/osx-arm64/go-shfmt-3.11.0-hce30654_0.conda
+  sha256: 5dfa1f52dd3582ff560526593c869d222d9c1cd1e72119f823c9c91da0eb54b1
+  md5: cc2e958bf16be58001fda278b021a706
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 1479654
+  timestamp: 1741286048874
+- conda: https://prefix.dev/conda-forge/win-64/go-shfmt-3.11.0-h57928b3_0.conda
+  sha256: 932261446b7d8ad0cb63dbbde7d939bf74d98e6ee93a154de54fa55492cbffda
+  md5: a426f8920359f6e72406ef093fd71981
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 1648856
+  timestamp: 1741286191543
 - conda: https://prefix.dev/conda-forge/linux-64/gxx-13.3.0-h9576a4e_2.conda
   sha256: fa9d0171c17e4c4203a4199fcc35571a25c1f16c0ad992080d4f0ced53bf5aa5
   md5: 07e8df00b7cd3084ad3ef598ce32a71c
