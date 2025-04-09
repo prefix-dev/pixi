@@ -1559,16 +1559,7 @@
                 {
                   "type": "array",
                   "items": {
-                    "anyOf": [
-                      {
-                        "$ref": "#/$defs/DependsOn"
-                      },
-                      {
-                        "description": "A valid task name.",
-                        "type": "string",
-                        "pattern": "^[^\\s\\$]+$"
-                      }
-                    ]
+                    "$ref": "#/$defs/DependsOn"
                   }
                 },
                 {
