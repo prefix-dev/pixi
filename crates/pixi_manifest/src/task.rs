@@ -8,6 +8,7 @@ use std::{
 
 use indexmap::IndexMap;
 use itertools::Itertools;
+use minijinja::Template;
 use serde::Serialize;
 use toml_edit::{Array, Item, Table, Value};
 
@@ -342,6 +343,11 @@ impl From<Custom> for Task {
     fn from(value: Custom) -> Self {
         Task::Custom(value)
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskString<'a> {
+    _inner: Template<'a, 'a>,
 }
 
 #[derive(Debug, Clone)]
