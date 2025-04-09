@@ -65,7 +65,7 @@ The tasks will be executed after each other:
 
 - First `configure` because it has no dependencies.
 - Then `build` as it only depends on `configure`.
-- Then `start` as all it dependencies are run.
+- Then `start` as all its dependencies are run.
 
 If one of the commands fails (exit with non-zero code.) it will stop and the next one will not be started.
 
@@ -324,7 +324,7 @@ The task shell is a limited implementation of a bourne-shell interface.
 
 ### Built-in commands
 
-Next to running actual executable like `./myprogram`, `cmake` or `python` the shell has some built-in commandos.
+Next to running actual executable like `./myprogram`, `cmake` or `python` the shell has some built-in commands.
 
 - `cp`: Copies files.
 - `mv`: Moves files.
