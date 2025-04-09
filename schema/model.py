@@ -460,7 +460,7 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
-    tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the target"
     )
     activation: Activation | None = Field(

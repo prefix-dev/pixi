@@ -76,19 +76,28 @@ pixi task add fmt ruff
 pixi task add lint pylint
 ```
 
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:not-all"
+```
+
+
+### Shorthand Syntax
+
+Pixi supports a shorthand syntax for defining tasks that only depend on other tasks. Instead of using the more verbose `depends-on` field, you can define a task directly as an array of dependencies.
+
+Executing:
+
 ```
 pixi task alias style fmt lint
 ```
 
-Results in the following `pixi.toml`.
+results in the following `pixi.toml`:
 
 ```toml title="pixi.toml"
-fmt = "ruff"
-lint = "pylint"
-style = { depends-on = ["fmt", "lint"] }
+--8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:all"
 ```
 
-Now run both tools with one command.
+Now you can run both tools with one command.
 
 ```shell
 pixi run style
