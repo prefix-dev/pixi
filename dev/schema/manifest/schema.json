@@ -1557,6 +1557,12 @@
                   "$ref": "#/$defs/TaskInlineTable"
                 },
                 {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
+                },
+                {
                   "type": "string",
                   "minLength": 1
                 }
