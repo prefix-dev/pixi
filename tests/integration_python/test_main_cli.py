@@ -1259,9 +1259,6 @@ def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert "tasks" in manifest_content["target"]["linux-64"]
     assert "linux-alias" in manifest_content["target"]["linux-64"]["tasks"]
     assert manifest_content["target"]["linux-64"]["tasks"]["linux-alias"] == [{"task": "dummy-b"}, {"task": "dummy-c"}]
-
-    with open(manifest, "rb") as f:
-        manifest_content = tomllib.load(f)
     
     assert "dummy-a" in manifest_content["tasks"]
     assert manifest_content["tasks"]["dummy-a"] == [{"task": "dummy-b"}, {"task": "dummy-c"}]
