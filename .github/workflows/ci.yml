@@ -833,7 +833,7 @@ jobs:
         shell: msys2 {0}
 
   test-install-sh-msys2-without-unzip:
-    name: install.sh | msys2
+    name: install.sh | msys2 (no unzip)
     needs:
       - determine_changes
     runs-on: windows-latest

@@ -123,10 +123,10 @@ elif [ "${EXTENSION-}" = ".tar.gz" ]; then
   chmod +x "$BIN_DIR/pixi"
   rm -rf "$TEMP_DIR"
 elif [ "${EXTENSION-}" = ".exe" ]; then
-  cp -f "$TEMP_FILE" "$BIN_DIR/"
+  cp -f "$TEMP_FILE" "$BIN_DIR/pixi.exe"
 else
   chmod +x "$TEMP_FILE"
-  cp -f "$TEMP_FILE" "$BIN_DIR/"
+  cp -f "$TEMP_FILE" "$BIN_DIR/pixi"
 fi
 
 echo "The 'pixi' binary is installed into '${BIN_DIR}'"
