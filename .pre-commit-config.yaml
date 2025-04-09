@@ -38,7 +38,7 @@ repos:
       # shfmt
       - id: shfmt
         name: Format shell scripts
-        entry: pixi run --environment=lint format-shell
+        entry: pixi run --environment=lint shell-format
         language: system
         types: [shell]
         stages: [pre-commit, manual]

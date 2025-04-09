@@ -103,7 +103,6 @@ cargo-clippy-pixi_docs = "cargo clippy --all-targets --workspace --manifest-path
 cargo-fmt = "cargo fmt --all"
 cargo-fmt-pixi_docs = "cargo fmt --all --manifest-path pixi_docs/Cargo.toml"
 check-openssl = "python tests/scripts/check-openssl.py"
-format-shell = "shfmt -w -i=4 -s -bn"
 lint = "pre-commit run --all-files --hook-stage=manual"
 lint-pixi_docs = { depends-on = [
   "cargo-fmt-pixi_docs",
@@ -115,6 +114,7 @@ pre-commit-run = "pre-commit run --all-files"
 prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
+shell-format = "shfmt -w -i=4 -s -bn"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "mypy"
