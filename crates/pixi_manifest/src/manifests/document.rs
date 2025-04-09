@@ -206,10 +206,7 @@ impl ManifestDocument {
         // should be refactored to determine the priority of the table to use
         // The spec is described here:
         // https://github.com/prefix-dev/pixi/issues/2807#issuecomment-2577826553
-        let table = match feature_name {
-            FeatureName::Default => Some(self.detect_table_name()),
-            FeatureName::Named(_) => None,
-        };
+        let table = feature_name.is_default().then(|| self.detect_table_name());
 
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
@@ -568,7 +565,7 @@ impl ManifestDocument {
 
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::Default))
+            .with_feature_name(Some(&FeatureName::DEFAULT))
             .with_table(Some("environments"));
 
         // Insert into the environment table
@@ -584,7 +581,7 @@ impl ManifestDocument {
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::Default))
+            .with_feature_name(Some(&FeatureName::DEFAULT))
             .with_table(Some("environments"));
 
         Ok(self

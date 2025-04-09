@@ -45,7 +45,7 @@ pub struct Environment<'p> {
 impl Debug for Environment<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Environment")
-            .field("project", &self.workspace.name())
+            .field("project", &self.workspace.display_name())
             .field("environment", &self.environment.name)
             .finish()
     }
@@ -339,7 +339,7 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
         let environment_features = self.environment.features.iter().map(|feature_name| {
             manifest
                 .features
-                .get(&FeatureName::Named(feature_name.clone()))
+                .get(&FeatureName::from(feature_name.clone()))
                 .expect("feature usage should have been validated upfront")
         });
 

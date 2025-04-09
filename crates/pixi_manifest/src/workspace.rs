@@ -11,10 +11,10 @@ use super::pypi::pypi_options::PypiOptions;
 use crate::{preview::Preview, PrioritizedChannel, S3Options, Targets};
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Workspace {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>,
 
     /// The version of the project
     pub version: Option<Version>,

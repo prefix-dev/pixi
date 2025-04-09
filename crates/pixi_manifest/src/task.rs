@@ -11,6 +11,8 @@ use itertools::Itertools;
 use serde::Serialize;
 use toml_edit::{Array, Item, Table, Value};
 
+use crate::EnvironmentName;
+
 /// Represents a task name
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct TaskName(String);
@@ -43,20 +45,30 @@ impl From<String> for TaskName {
 pub struct Dependency {
     pub task_name: TaskName,
     pub args: Option<Vec<String>>,
+    pub environment: Option<EnvironmentName>,
 }
 
 impl Dependency {
-    pub fn new(s: &str, args: Option<Vec<String>>) -> Self {
+    pub fn new(s: &str, args: Option<Vec<String>>, environment: Option<EnvironmentName>) -> Self {
         Dependency {
             task_name: TaskName(s.to_string()),
             args,
+            environment,
+        }
+    }
+
+    pub fn new_without_env(s: &str, args: Option<Vec<String>>) -> Self {
+        Dependency {
+            task_name: TaskName(s.to_string()),
+            args,
+            environment: None,
         }
     }
 }
 
 impl From<&str> for Dependency {
     fn from(s: &str) -> Self {
-        Dependency::new(s, None)
+        Dependency::new_without_env(s, None)
     }
 }
 

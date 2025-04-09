@@ -582,7 +582,13 @@ mod test {
                         &mut snapshot,
                         "Discovered workspace at: {}\n- Name: {}",
                         rel_path.display().to_string().replace("\\", "/"),
-                        &discovered.workspace.value.workspace.name
+                        &discovered
+                            .workspace
+                            .value
+                            .workspace
+                            .name
+                            .as_deref()
+                            .unwrap_or("??")
                     )
                     .unwrap();
 
@@ -637,7 +643,13 @@ mod test {
                     &mut snapshot,
                     "Discovered workspace at: {}\n- Name: {}",
                     rel_path.display().to_string().replace("\\", "/"),
-                    &discovered.workspace.value.workspace.name
+                    &discovered
+                        .workspace
+                        .value
+                        .workspace
+                        .name
+                        .as_deref()
+                        .unwrap_or("??")
                 )
                 .unwrap();
 

@@ -8,7 +8,7 @@ from typing import Generator
 
 from rattler import Platform
 
-PIXI_VERSION = "0.44.0"
+PIXI_VERSION = "0.45.0"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -16,7 +16,7 @@ ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", 
 CURRENT_PLATFORM = str(Platform.current())
 
 EMPTY_BOILERPLATE_PROJECT = f"""
-[project]
+[workspace]
 name = "test"
 channels = []
 platforms = ["{CURRENT_PLATFORM}"]

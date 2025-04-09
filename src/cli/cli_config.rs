@@ -321,7 +321,7 @@ impl DependencyConfig {
             )
         }
         // Print something if we've modified for features
-        if let FeatureName::Named(feature) = &self.feature {
+        if let Some(feature) = self.feature.non_default() {
             {
                 eprintln!(
                     "{operation} these only for feature: {}",
