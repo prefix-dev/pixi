@@ -58,7 +58,7 @@ impl PyProjectManifest {
         Self::from_toml_str(&source).into_diagnostic()
     }
 
-    /// Ensures the `pyproject.toml` contains a `[tool.pixi]` tabl
+    /// Ensures the `pyproject.toml` contains a `[tool.pixi]` table
     /// and project name is defined
     pub fn ensure_pixi(self) -> Result<Self, TomlError> {
         // Make sure the `[tool.pixi]` table exist
