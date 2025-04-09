@@ -134,7 +134,7 @@ __wrap__() {
 
     # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
     if [ -n "${PIXI_NO_PATH_UPDATE:-}" ]; then
-        echo "No path update because PIXI_NO_PATH_UPDATE has a value"
+        echo "No path update because PIXI_NO_PATH_UPDATE is set"
     else
         update_shell() {
             FILE="$1"
