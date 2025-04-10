@@ -22,8 +22,7 @@ pub struct PyPIInstalls {
 
 #[derive(Debug)]
 pub struct PyPIRemovals {
-    /// Extaneous packages that need to be removed
-    pub extraneous: Vec<InstalledDist>,
+    /// Extraneous packages that need to be removed
 }
 
 /// Represents the different reasons why a package needs to be reinstalled
