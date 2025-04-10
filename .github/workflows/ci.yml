@@ -48,7 +48,7 @@ jobs:
       # Flag that is raised when any code is changed
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
-      win_installer: ${{ steps.unix_installer_changed.outputs.win_installer_changed }}
+      win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -68,18 +68,18 @@ jobs:
               - "!**/*.md"
 
       - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
-        id: win_installer_changed
-        with:
-          files_yaml: |
-            code:
-              - "install/install.ps1"
-
-      - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
         id: unix_installer_changed
         with:
           files_yaml: |
             code:
               - "install/install.sh"
+
+      - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
+        id: win_installer_changed
+        with:
+          files_yaml: |
+            code:
+              - "install/install.ps1"
 
   pre-commit:
     runs-on: ubuntu-latest
