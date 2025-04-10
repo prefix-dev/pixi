@@ -28,7 +28,7 @@ param (
     [string] $PixiVersion = 'latest',
     [string] $PixiHome = "$Env:USERPROFILE\.pixi",
     [switch] $NoPathUpdate,
-    [string] $PixiRepourl = 'https://github.com/prefix-dev/pixi',
+    [string] $PixiRepourl = 'https://github.com/prefix-dev/pixi'
 )
 
 Set-StrictMode -Version Latest
