@@ -3,7 +3,6 @@ set -eu
 # Version: v0.45.0
 
 __wrap__() {
-
     VERSION="${PIXI_VERSION:-latest}"
     PIXI_HOME="${PIXI_HOME:-$HOME/.pixi}"
     case "$PIXI_HOME" in
@@ -11,7 +10,7 @@ __wrap__() {
     esac
     BIN_DIR="$PIXI_HOME/bin"
 
-    REPO="prefix-dev/pixi"
+    REPOURL="${PIXI_REPOURL:-https://github.com/prefix-dev/pixi}"
     PLATFORM="$(uname -s)"
     ARCH="${PIXI_ARCH:-$(uname -m)}"
 
@@ -43,14 +42,10 @@ __wrap__() {
     fi
 
     if [ "$VERSION" = "latest" ]; then
-        DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${BINARY}.${EXTENSION}"
+        DOWNLOAD_URL="${REPOURL%/}/releases/latest/download/${BINARY}.${EXTENSION}"
     else
         # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
-        case "$VERSION" in
-        v*) ;;
-        *) VERSION="v$VERSION" ;;
-        esac
-        DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.${EXTENSION}"
+        DOWNLOAD_URL="${REPOURL%/}/releases/download/v${VERSION#v}/${BINARY}.${EXTENSION}"
     fi
 
     printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"
@@ -181,5 +176,4 @@ __wrap__() {
         echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
         ;;
     esac
-
 } && __wrap__

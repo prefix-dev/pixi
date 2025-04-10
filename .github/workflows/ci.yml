@@ -48,6 +48,7 @@ jobs:
       # Flag that is raised when any code is changed
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
+      win_installer: ${{ steps.unix_installer_changed.outputs.win_installer_changed }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -65,6 +66,13 @@ jobs:
               - "!install/**"
               - "!assets/**"
               - "!**/*.md"
+
+      - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
+        id: win_installer_changed
+        with:
+          files_yaml: |
+            code:
+              - "install/install.ps1"
 
       - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
         id: unix_installer_changed
@@ -827,7 +835,33 @@ jobs:
       - name: "Install"
         run: |
           uname -a
-          test ! -e ~/.pixi/bin/pixi
+          test ! -e ~/.pixi/bin/pixi.exe
           sh < ./install/install.sh
+          ~/.pixi/bin/pixi.exe --version
           ~/.pixi/bin/pixi --version
+        shell: msys2 {0}
+
+  test-install-ps1:
+    name: install.ps1
+    needs:
+      - determine_changes
+    runs-on: windows-latest
+    if: ${{ needs.determine_changes.outputs.win_installer == 'true' }}
+    env:
+      PIXI_REPOURL: "https://github.com/prefix-dev/pixi/"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup ucrt64 msys2
+        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        with:
+          msystem: UCRT64
+      - name: "Before Install"
+        run: test ! -e $USERPROFILE/.pixi/bin/pixi.exe
+        shell: msys2 {0}
+
+      - name: "Install"
+        run: ${{ github.workspace }}/install/install.ps1
+
+      - name: "After Install"
+        run: $USERPROFILE/.pixi/bin/pixi.exe --version
         shell: msys2 {0}
