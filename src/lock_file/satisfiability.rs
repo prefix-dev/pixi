@@ -1672,7 +1672,7 @@ mod tests {
         Environment(String, #[source] EnvironmentUnsat),
 
         #[error(
-            "environment '{0}' does not satisfy the requirements of the project for platform '{1}"
+            "environment '{0}' does not satisfy the requirements of the project for platform '{1}'"
         )]
         PlatformUnsat(String, Platform, #[source] PlatformUnsat),
 
