@@ -196,6 +196,7 @@ class MatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
+    license: NonEmptyStr | None = Field(None, description="The license of the package")
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
