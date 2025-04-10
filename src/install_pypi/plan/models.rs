@@ -2,9 +2,8 @@ use uv_distribution_types::{CachedDist, Dist, InstalledDist};
 
 use super::InstallReason;
 
-/// Derived from uv [`uv_installer::Plan`]
 #[derive(Debug)]
-pub struct PyPIInstallPlan {
+pub struct PyPIInstalls {
     /// The distributions that are not already installed in the current
     /// environment, but are available in the local cache.
     pub local: Vec<(CachedDist, InstallReason)>,
@@ -19,9 +18,11 @@ pub struct PyPIInstallPlan {
     /// but will be re-installed (including upgraded) to satisfy the
     /// requirements.
     pub reinstalls: Vec<(InstalledDist, NeedReinstall)>,
+}
 
-    /// Any distributions that are already installed in the current environment,
-    /// and are _not_ necessary to satisfy the requirements.
+#[derive(Debug)]
+pub struct PyPIRemovals {
+    /// Extaneous packages that need to be removed
     pub extraneous: Vec<InstalledDist>,
 }
 
