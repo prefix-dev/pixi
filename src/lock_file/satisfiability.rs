@@ -40,14 +40,18 @@ use uv_resolver::RequiresPython;
 use super::{
     package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
 };
-use crate::workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef};
+use crate::{
+    lock_file::records_by_name::HasNameVersion,
+    workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef},
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
     #[error("the channels in the lock-file do not match the environments channels")]
     ChannelsMismatch,
 
-    #[error("platform(s) '{platforms}' present in the lock-file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", "))]
+    #[error("platform(s) '{platforms}' present in the lock-file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", ")
+    )]
     AdditionalPlatformsInLockFile(HashSet<Platform>),
 
     #[error(transparent)]
@@ -119,9 +123,9 @@ impl Display for SourceTreeHashMismatch {
             (None, None) => write!(f, "could not compute a source tree hash"),
             (Some(computed), None) => {
                 write!(f,
-                "the computed source tree hash is '{}', but the lock-file does not contain a hash",
-                computed
-            )
+                       "the computed source tree hash is '{}', but the lock-file does not contain a hash",
+                       computed
+                )
             }
             (Some(computed), Some(locked)) => write!(
                 f,
@@ -178,7 +182,8 @@ pub enum PlatformUnsat {
     #[error("corrupted lock-file entry for '{0}'")]
     CorruptedEntry(String, ParseLockFileError),
 
-    #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", "))]
+    #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", ")
+    )]
     TooManyPypiPackages(Vec<pep508_rs::PackageName>),
 
     #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
@@ -189,7 +194,8 @@ pub enum PlatformUnsat {
     )]
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
-    #[error("'{0}' requires python version {1} but the python interpreter in the lock-file has version {2}")]
+    #[error("'{0}' requires python version {1} but the python interpreter in the lock-file has version {2}"
+    )]
     PythonVersionMismatch(
         pep508_rs::PackageName,
         VersionSpecifiers,
@@ -214,7 +220,8 @@ pub enum PlatformUnsat {
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
 
-    #[error("the editable package '{0}' was expected to be a directory but is a url, which cannot be editable: '{1}'")]
+    #[error("the editable package '{0}' was expected to be a directory but is a url, which cannot be editable: '{1}'"
+    )]
     EditablePackageIsUrl(uv_normalize::PackageName, String),
 
     #[error("the editable package path '{0}', lock does not equal spec path '{1}' == '{2}'")]
@@ -298,6 +305,15 @@ pub enum PlatformUnsat {
 
     #[error("failed to convert between pep508 and uv types {0}")]
     UvTypesConversionError(#[from] ConversionError),
+
+    #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
+    CondaPackageShouldBePypi { name: String },
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum SolveGroupUnsat {
+    #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
+    CondaPackageShouldBePypi { name: String },
 }
 
 impl PlatformUnsat {
@@ -611,7 +627,7 @@ pub async fn verify_platform_satisfiability(
     platform: Platform,
     project_root: &Path,
     glob_hash_cache: GlobHashCache,
-) -> Result<(), Box<PlatformUnsat>> {
+) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
     let mut pypi_packages: Vec<PypiRecord> = Vec::new();
@@ -902,6 +918,21 @@ pub(crate) fn pypi_satifisfies_requirement(
     }
 }
 
+/// A struct that records some information about an environment that has been
+/// verified.
+///
+/// Some of this information from an individual environment is useful to have
+/// when considering solve groups.
+pub struct VerifiedIndividualEnvironment {
+    /// All packages in the environment that are expected to be conda packages
+    /// e.g. they are in the environment as a direct or transitive dependency of
+    /// another conda package.
+    pub expected_conda_packages: HashSet<rattler_conda_types::PackageName>,
+
+    /// All conda packages that satisfy a pypi requirement.
+    pub conda_packages_used_by_pypi: HashSet<rattler_conda_types::PackageName>,
+}
+
 pub(crate) async fn verify_package_platform_satisfiability(
     environment: &Environment<'_>,
     locked_pixi_records: &PixiRecordsByName,
@@ -909,7 +940,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     platform: Platform,
     project_root: &Path,
     input_hash_cache: GlobHashCache,
-) -> Result<(), Box<PlatformUnsat>> {
+) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     let channel_config = environment.workspace().channel_config();
 
     // Determine the dependencies requested by the environment
@@ -1010,50 +1041,67 @@ pub(crate) async fn verify_package_platform_satisfiability(
     let mut pypi_queue = pypi_requirements;
     let mut expected_editable_pypi_packages = HashSet::new();
     let mut expected_conda_source_dependencies = HashSet::new();
+    let mut expected_conda_packages = HashSet::new();
+    let mut conda_packages_used_by_pypi = HashSet::new();
     while let Some(package) = conda_queue.pop().or_else(|| pypi_queue.pop()) {
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
-            Dependency::Input(name, spec, source) => match spec.into_source_or_binary() {
-                Either::Left(source_spec) => {
-                    expected_conda_source_dependencies.insert(name.clone());
-                    find_matching_source_package(locked_pixi_records, name, source_spec, source)?
-                }
-                Either::Right(binary_spec) => {
-                    let spec = match binary_spec.try_into_nameless_match_spec(&channel_config) {
-                        Err(e) => {
-                            let parse_channel_err: ParseMatchSpecError = match e {
-                                SpecConversionError::NonAbsoluteRootDir(p) => {
-                                    ParseChannelError::NonAbsoluteRootDir(p).into()
-                                }
-                                SpecConversionError::NotUtf8RootDir(p) => {
-                                    ParseChannelError::NotUtf8RootDir(p).into()
-                                }
-                                SpecConversionError::InvalidPath(p) => {
-                                    ParseChannelError::InvalidPath(p).into()
-                                }
-                                SpecConversionError::InvalidChannel(p) => p.into(),
-                            };
-                            return Err(Box::new(PlatformUnsat::FailedToParseMatchSpec(
-                                name.as_source().to_string(),
-                                parse_channel_err,
-                            )));
-                        }
-                        Ok(spec) => spec,
-                    };
-                    match find_matching_package(
-                        locked_pixi_records,
-                        &virtual_packages,
-                        MatchSpec::from_nameless(spec, Some(name)),
-                        source,
-                    )? {
-                        Some(pkg) => pkg,
-                        None => continue,
+            Dependency::Input(name, spec, source) => {
+                let found_package = match spec.into_source_or_binary() {
+                    Either::Left(source_spec) => {
+                        expected_conda_source_dependencies.insert(name.clone());
+                        find_matching_source_package(
+                            locked_pixi_records,
+                            name,
+                            source_spec,
+                            source,
+                        )?
                     }
-                }
-            },
+                    Either::Right(binary_spec) => {
+                        let spec = match binary_spec.try_into_nameless_match_spec(&channel_config) {
+                            Err(e) => {
+                                let parse_channel_err: ParseMatchSpecError = match e {
+                                    SpecConversionError::NonAbsoluteRootDir(p) => {
+                                        ParseChannelError::NonAbsoluteRootDir(p).into()
+                                    }
+                                    SpecConversionError::NotUtf8RootDir(p) => {
+                                        ParseChannelError::NotUtf8RootDir(p).into()
+                                    }
+                                    SpecConversionError::InvalidPath(p) => {
+                                        ParseChannelError::InvalidPath(p).into()
+                                    }
+                                    SpecConversionError::InvalidChannel(p) => p.into(),
+                                };
+                                return Err(Box::new(PlatformUnsat::FailedToParseMatchSpec(
+                                    name.as_source().to_string(),
+                                    parse_channel_err,
+                                )));
+                            }
+                            Ok(spec) => spec,
+                        };
+                        match find_matching_package(
+                            locked_pixi_records,
+                            &virtual_packages,
+                            MatchSpec::from_nameless(spec, Some(name)),
+                            source,
+                        )? {
+                            Some(pkg) => pkg,
+                            None => continue,
+                        }
+                    }
+                };
+
+                expected_conda_packages
+                    .insert(locked_pixi_records.records[found_package.0].name().clone());
+                FoundPackage::Conda(found_package)
+            }
             Dependency::Conda(spec, source) => {
                 match find_matching_package(locked_pixi_records, &virtual_packages, spec, source)? {
-                    Some(pkg) => pkg,
+                    Some(pkg) => {
+                        expected_conda_packages
+                            .insert(locked_pixi_records.records[pkg.0].name().clone());
+                        FoundPackage::Conda(pkg)
+                    }
                     None => continue,
                 }
             }
@@ -1098,7 +1146,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                             source.into_owned(),
                         )));
                     }
-                    FoundPackage::Conda(*repodata_idx)
+                    let pkg_idx = CondaPackageIdx(*repodata_idx);
+                    conda_packages_used_by_pypi
+                        .insert(locked_pixi_records.records[pkg_idx.0].name().clone());
+                    FoundPackage::Conda(pkg_idx)
                 } else if let Some(idx) = locked_pypi_environment.index_by_name(
                     &to_normalize(&requirement.name)
                         .map_err(ConversionError::NameConversion)
@@ -1114,10 +1165,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         // editable and vice versa.
                         expected_editable_pypi_packages.insert(requirement.name.clone());
 
-                        FoundPackage::PyPi(idx, requirement.extras)
+                        FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras)
                     } else {
                         pypi_satifisfies_requirement(&requirement, &record.0, project_root)?;
-                        FoundPackage::PyPi(idx, requirement.extras)
+                        FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras)
                     }
                 } else {
                     // The record does not match the spec, the lock-file is inconsistent.
@@ -1138,7 +1189,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     continue;
                 }
 
-                let record = &locked_pixi_records.records[idx];
+                let record = &locked_pixi_records.records[idx.0];
                 for depends in &record.package_record().depends {
                     let spec = MatchSpec::from_str(depends.as_str(), Lenient)
                         .map_err(|e| PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e))?;
@@ -1156,7 +1207,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 }
             }
             FoundPackage::PyPi(idx, extras) => {
-                let record = &locked_pypi_environment.records[idx];
+                let record = &locked_pypi_environment.records[idx.0];
 
                 // If there is no marker environment there is no python version
                 let Some(marker_environment) = marker_environment.as_ref() else {
@@ -1257,7 +1308,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 .names()
                 .enumerate()
                 .filter_map(|(idx, name)| {
-                    if pypi_packages_visited.contains(&idx) {
+                    if pypi_packages_visited.contains(&PypiPackageIdx(idx)) {
                         None
                     } else {
                         Some(name.clone())
@@ -1344,20 +1395,33 @@ pub(crate) async fn verify_package_platform_satisfiability(
         }
     }
 
-    Ok(())
+    Ok(VerifiedIndividualEnvironment {
+        expected_conda_packages,
+        conda_packages_used_by_pypi,
+    })
 }
 
 enum FoundPackage {
-    Conda(usize),
-    PyPi(usize, Vec<uv_pep508::ExtraName>),
+    Conda(CondaPackageIdx),
+    PyPi(PypiPackageIdx, Vec<uv_pep508::ExtraName>),
 }
+
+/// An index into the list of conda packages.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[repr(transparent)]
+pub struct CondaPackageIdx(usize);
+
+/// An index into the list of pypi packages.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[repr(transparent)]
+pub struct PypiPackageIdx(usize);
 
 fn find_matching_package(
     locked_pixi_records: &PixiRecordsByName,
     virtual_packages: &HashMap<rattler_conda_types::PackageName, GenericVirtualPackage>,
     spec: MatchSpec,
     source: Cow<str>,
-) -> Result<Option<FoundPackage>, Box<PlatformUnsat>> {
+) -> Result<Option<CondaPackageIdx>, Box<PlatformUnsat>> {
     let found_package = match &spec.name {
         None => {
             // No name means we have to find any package that matches the spec.
@@ -1373,7 +1437,7 @@ fn find_matching_package(
                         source.into_owned(),
                     )));
                 }
-                Some(idx) => FoundPackage::Conda(idx),
+                Some(idx) => idx,
             }
         }
         Some(name) => {
@@ -1381,7 +1445,7 @@ fn find_matching_package(
                 .index_by_name(name)
                 .map(|idx| (idx, &locked_pixi_records.records[idx]))
             {
-                Some((idx, record)) if spec.matches(record) => FoundPackage::Conda(idx),
+                Some((idx, record)) if spec.matches(record) => idx,
                 Some(_) => {
                     // The record does not match the spec, the lock-file is
                     // inconsistent.
@@ -1418,7 +1482,7 @@ fn find_matching_package(
         }
     };
 
-    Ok(Some(found_package))
+    Ok(Some(CondaPackageIdx(found_package)))
 }
 
 fn find_matching_source_package(
@@ -1426,7 +1490,7 @@ fn find_matching_source_package(
     name: rattler_conda_types::PackageName,
     source_spec: SourceSpec,
     source: Cow<str>,
-) -> Result<FoundPackage, Box<PlatformUnsat>> {
+) -> Result<CondaPackageIdx, Box<PlatformUnsat>> {
     // Find the package that matches the source spec.
     let Some((idx, package)) = locked_pixi_records
         .index_by_name(&name)
@@ -1452,7 +1516,7 @@ fn find_matching_source_package(
         .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
-    Ok(FoundPackage::Conda(idx))
+    Ok(CondaPackageIdx(idx))
 }
 
 trait MatchesMatchspec {
@@ -1481,6 +1545,31 @@ impl MatchesMatchspec for GenericVirtualPackage {
 
         true
     }
+}
+
+pub fn verify_solve_group_satisfiability(
+    environments: impl IntoIterator<Item = VerifiedIndividualEnvironment>,
+) -> Result<(), SolveGroupUnsat> {
+    let mut expected_conda_packages = HashSet::new();
+    let mut conda_packages_used_by_pypi = HashSet::new();
+
+    // Group all conda requested packages and pypi requested packages
+    for env in environments {
+        expected_conda_packages.extend(env.expected_conda_packages.into_iter());
+        conda_packages_used_by_pypi.extend(env.conda_packages_used_by_pypi.into_iter());
+    }
+
+    // Check if all conda packages are also requested by another conda package.
+    if let Some(conda_package) = conda_packages_used_by_pypi
+        .into_iter()
+        .find(|pkg| !expected_conda_packages.contains(pkg))
+    {
+        return Err(SolveGroupUnsat::CondaPackageShouldBePypi {
+            name: conda_package.as_source().to_string(),
+        });
+    }
+
+    Ok(())
 }
 
 impl Display for EditablePackagesMismatch {
@@ -1586,12 +1675,20 @@ mod tests {
             "environment '{0}' does not satisfy the requirements of the project for platform '{1}"
         )]
         PlatformUnsat(String, Platform, #[source] PlatformUnsat),
+
+        #[error(
+            "solve group '{0}' does not satisfy the requirements of the project for platform '{1}'"
+        )]
+        SolveGroupUnsat(String, Platform, #[source] SolveGroupUnsat),
     }
 
     async fn verify_lockfile_satisfiability(
         project: &Workspace,
         lock_file: &LockFile,
     ) -> Result<(), LockfileUnsat> {
+        let mut individual_verified_envs = HashMap::new();
+
+        // Verify individual environment satisfiability
         for env in project.environments() {
             let locked_env = lock_file
                 .environment(env.name().as_str())
@@ -1600,7 +1697,7 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                verify_platform_satisfiability(
+                let verified_env = verify_platform_satisfiability(
                     &env,
                     locked_env,
                     platform,
@@ -1609,8 +1706,36 @@ mod tests {
                 )
                 .await
                 .map_err(|e| LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e))?;
+
+                individual_verified_envs.insert((env.name(), platform), verified_env);
             }
         }
+
+        // Verify the solve group requirements
+        for solve_group in project.solve_groups() {
+            for platform in solve_group.platforms() {
+                verify_solve_group_satisfiability(
+                    solve_group
+                        .environments()
+                        .filter_map(|env| individual_verified_envs.remove(&(env.name(), platform))),
+                )
+                .map_err(|e| {
+                    LockfileUnsat::SolveGroupUnsat(solve_group.name().to_string(), platform, e)
+                })?;
+            }
+        }
+
+        // Verify environments not part of a solve group
+        for ((env_name, platform), verified_env) in individual_verified_envs.into_iter() {
+            verify_solve_group_satisfiability([verified_env])
+                .map_err(|e| match e {
+                    SolveGroupUnsat::CondaPackageShouldBePypi { name } => {
+                        PlatformUnsat::CondaPackageShouldBePypi { name }
+                    }
+                })
+                .map_err(|e| LockfileUnsat::PlatformUnsat(env_name.to_string(), platform, e))?;
+        }
+
         Ok(())
     }
 
