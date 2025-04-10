@@ -476,9 +476,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-s3"
-version = "1.79.0"
+version = "1.82.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8f63ba8f5fca32061c7d62d866ef65470edde38d4c5f8a0ebb8ff40a0521e1c"
+checksum = "e6eab2900764411ab01c8e91a76fd11a63b4e12bc3da97d9e14a0ce1343d86d3"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -721,6 +721,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-smithy-observability"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "445d065e76bc1ef54963db400319f1dd3ebb3e0a74af20f7f7630625b0cc7cc0"
+dependencies = [
+ "aws-smithy-runtime-api",
+ "once_cell",
+]
+
+[[package]]
 name = "aws-smithy-query"
 version = "0.60.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -732,13 +742,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6328865e36c6fd970094ead6b05efd047d3a80ec5fc3be5e743910da9f2ebf8"
+checksum = "0152749e17ce4d1b47c7747bdfec09dac1ccafdcbc741ebf9daa2a373356730f"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http 0.62.0",
  "aws-smithy-http-client",
+ "aws-smithy-observability",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "bytes",
@@ -3869,9 +3880,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.21.1"
+version = "1.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d75b0bedcc4fe52caa0e03d9f1151a323e4aa5e2d78ba3580400cd3c9e2bc4bc"
+checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "openssl-probe"
@@ -4243,7 +4254,7 @@ dependencies = [
  "pypi_mapping",
  "pypi_modifiers",
  "rattler",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
  "rattler_menuinst",
@@ -4327,7 +4338,7 @@ dependencies = [
  "pixi_spec",
  "pixi_utils",
  "rattler",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
@@ -4352,7 +4363,7 @@ dependencies = [
  "pixi_build_types",
  "pixi_manifest",
  "pixi_spec",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
 ]
 
 [[package]]
@@ -4360,7 +4371,7 @@ name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
  "indexmap 2.9.0",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_digest",
  "serde",
  "serde_json",
@@ -4380,7 +4391,7 @@ dependencies = [
  "miette 7.5.0",
  "pixi_consts",
  "rattler",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_networking",
  "rattler_repodata_gateway",
  "reqwest",
@@ -4399,7 +4410,7 @@ version = "0.1.0"
 dependencies = [
  "console",
  "rattler_cache",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "url",
 ]
 
@@ -4407,7 +4418,7 @@ dependencies = [
 name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
 ]
 
 [[package]]
@@ -4418,7 +4429,7 @@ dependencies = [
  "fs-err",
  "itertools 0.14.0",
  "pixi",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
 ]
 
 [[package]]
@@ -4473,7 +4484,7 @@ dependencies = [
  "pixi_spec",
  "pixi_toml",
  "pyproject-toml",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_lock",
  "rattler_solve",
  "rattler_virtual_packages",
@@ -4515,7 +4526,7 @@ dependencies = [
  "miette 7.5.0",
  "pixi_git",
  "pixi_spec",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
  "serde",
@@ -4533,7 +4544,7 @@ dependencies = [
  "itertools 0.14.0",
  "pixi_git",
  "pixi_toml",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_digest",
  "serde",
  "serde-untagged",
@@ -4570,7 +4581,7 @@ dependencies = [
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_networking",
  "reqwest",
  "reqwest-middleware",
@@ -4818,7 +4829,7 @@ dependencies = [
  "pep508_rs",
  "pixi_config",
  "pixi_consts",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_digest",
  "reqwest",
  "reqwest-middleware",
@@ -4838,7 +4849,7 @@ dependencies = [
  "miette 7.5.0",
  "pixi_default_versions",
  "pixi_manifest",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_virtual_packages",
  "regex",
  "thiserror 2.0.12",
@@ -5031,9 +5042,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.33.4"
+version = "0.33.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38b4452e4b38244fa650ac773176483ffdd438396419ff651ff391f11cfd6f92"
+checksum = "b2e7bfacc5f5ff3517d984b5e2f2df3eea46e8309685cb7cdff39d62f7b2bee2"
 dependencies = [
  "anyhow",
  "clap",
@@ -5051,7 +5062,7 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.3",
  "rattler_cache",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_menuinst",
  "rattler_networking",
@@ -5075,9 +5086,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.3.16"
+version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3a51a8e6c6947265800178ad45575dc41a452ff2fdba7b75871decfdf2841c"
+checksum = "fd2ad44802bc15f7196f0898ff52729aab52338203ddbdff5212146f45aa2a67"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5089,7 +5100,7 @@ dependencies = [
  "fxhash",
  "itertools 0.14.0",
  "parking_lot 0.12.3",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
  "rattler_package_streaming",
@@ -5102,46 +5113,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tracing",
- "url",
-]
-
-[[package]]
-name = "rattler_conda_types"
-version = "0.31.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1707fa705c9bf60032a12ccd04647ef2ff38b171e383a1f47c035b3f2ee2d646"
-dependencies = [
- "chrono",
- "core-foundation 0.10.0",
- "dirs 6.0.0",
- "file_url",
- "fs-err",
- "fxhash",
- "glob",
- "hex",
- "indexmap 2.9.0",
- "itertools 0.14.0",
- "lazy-regex",
- "nom",
- "purl",
- "rattler_digest",
- "rattler_macros",
- "rattler_redaction",
- "rayon",
- "regex",
- "serde",
- "serde-untagged",
- "serde_json",
- "serde_repr",
- "serde_with",
- "serde_yaml",
- "simd-json",
- "smallvec",
- "strum",
- "tempfile",
- "thiserror 2.0.12",
- "tracing",
- "typed-path",
  "url",
 ]
 
@@ -5216,7 +5187,7 @@ dependencies = [
  "itertools 0.14.0",
  "pep440_rs",
  "pep508_rs",
- "rattler_conda_types 0.32.0",
+ "rattler_conda_types",
  "rattler_digest",
  "serde",
  "serde-value",
@@ -5240,9 +5211,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6369d7e9db87084701129a829cdb7d5db4c9969f5cac46e095e2e7ead4a5e5e3"
+checksum = "eb3eedb82b5366136093acb1bafc4839f3f122c64889a358cbe6e50fc8c573b0"
 dependencies = [
  "chrono",
  "configparser",
@@ -5252,7 +5223,7 @@ dependencies = [
  "once_cell",
  "plist",
  "quick-xml 0.37.2",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
  "rattler_shell",
  "regex",
  "serde",
@@ -5270,9 +5241,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.22.11"
+version = "0.22.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d27b2c0d358ccdc69c124a47b82d1f4c64770ba84fce4b0a71da8d96a3c5fe5"
+checksum = "cfe0171ee4c22e335ade0cb926e83cdf08a5dda5eaf26fc21fa9948beb65c764"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5301,16 +5272,16 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.35"
+version = "0.22.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0a91c0e740da9eb193edb4cca9f85f426ca924cc3e5115c9d779953c6505f5b"
+checksum = "11879ff84195638459a15f0bb4c0d167f58ecd497d2df00df46c6cf81c0f2bb7"
 dependencies = [
  "bzip2",
  "chrono",
  "fs-err",
  "futures-util",
  "num_cpus",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
  "rattler_redaction",
@@ -5330,6 +5301,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_pty"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e1ba454a7e23bfe50c09abdb3164e26f98b326a04c104389c41e300918b219f"
+dependencies = [
+ "libc",
+ "nix",
+ "signal-hook",
+]
+
+[[package]]
 name = "rattler_redaction"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5342,9 +5324,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.22.4"
+version = "0.22.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40b1cf84f4f2fee3d9598905e1811b10f944e7650ee73ba2e66a3e6b7d9007d2"
+checksum = "1e25d367f6ff1d83cf925ccacfcf7805f94030f96de6858992db37edb3c5a638"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5372,7 +5354,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "pin-project-lite",
  "rattler_cache",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
  "rattler_digest",
  "rattler_networking",
  "rattler_redaction",
@@ -5399,15 +5381,17 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.25"
+version = "0.22.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a608482d3a775190cc022690465bb28f877f806542ff38e5d39de2c4d764f95"
+checksum = "bdf546ea648c95cfeb27d8eedb6d592c8dec050d2dc9fb9af5be4ffe13759d7f"
 dependencies = [
+ "anyhow",
  "enum_dispatch",
  "fs-err",
  "indexmap 2.9.0",
  "itertools 0.14.0",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
+ "rattler_pty",
  "serde_json",
  "shlex",
  "sysinfo",
@@ -5418,15 +5402,15 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.4.3"
+version = "1.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d56b9a5ce33b79d7cc159d57f001bb3309ea2baf674b1ffae7ea4a9d8c7dbcc"
+checksum = "a30429aac0c50d5b9f7f97f3d08dbefa7561a52d5439d7f0d95921011daf3240"
 dependencies = [
  "chrono",
  "futures",
  "indexmap 2.9.0",
  "itertools 0.14.0",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
  "rattler_digest",
  "resolvo",
  "serde",
@@ -5438,16 +5422,16 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.0.9"
+version = "2.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "548a207f80c292f4ea1e6ad2d7477c9ff6181f11851d4c265f6a44883ba22264"
+checksum = "e6f8be154a9e0be3bfab3a68263ac568207eab9fb0e0820316374e805b340033"
 dependencies = [
  "archspec",
  "libloading",
  "nom",
  "once_cell",
  "plist",
- "rattler_conda_types 0.31.6",
+ "rattler_conda_types",
  "regex",
  "serde",
  "thiserror 2.0.12",
