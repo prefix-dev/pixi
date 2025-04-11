@@ -14,7 +14,7 @@ Enter the following into your `.envrc` file:
 
 ```shell title=".envrc"
 watch_file pixi.lock # (1)!
-eval "$(pixi shell-hook)" # (2)!
+eval "$(pixi shell-hook -s $(basename "$SHELL"))" # (2)!
 ```
 
 1. This ensures that every time your `pixi.lock` changes, `direnv` invokes the shell-hook again.
