@@ -43,6 +43,37 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
         let mut th = match value.take() {
             ValueInner::String(str) => return Ok(Task::Plain(str.into_owned()).into()),
             ValueInner::Table(table) => TableHelper::from((table, value.span)),
+            ValueInner::Array(array) => {
+                let mut deps = Vec::new();
+                for mut item in array {
+                    match item.take() {
+                        ValueInner::Table(table) => {
+                            let mut th = TableHelper::from((table, item.span));
+                            let name = th.required::<String>("task")?;
+                            let args = th.optional::<Vec<String>>("args");
+                            let environment = th
+                                .optional::<String>("environment")
+                                .map(|env| EnvironmentName::from_str(&env))
+                                .transpose()
+                                .map_err(|e| {
+                                    DeserError::from(expected(
+                                        "valid environment name",
+                                        ValueInner::String(e.attempted_parse.into()),
+                                        item.span,
+                                    ))
+                                })?;
+
+                            deps.push(Dependency::new(&name, args, environment));
+                        }
+                        _ => return Err(expected("table", item.take(), item.span).into()),
+                    }
+                }
+                return Ok(Task::Alias(Alias {
+                    depends_on: deps,
+                    description: None,
+                })
+                .into());
+            }
             inner => return Err(expected("string or table", inner, value.span).into()),
         };
 
@@ -58,7 +89,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                         .map(|mut item| {
                             let span = item.span;
                             match item.take() {
-                                ValueInner::String(str) => Ok(Dependency::from(str.as_ref())),
+                                ValueInner::String(str) => Ok::<Dependency, DeserError>(
+                                    Dependency::new(str.as_ref(), None, None),
+                                ),
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
@@ -75,16 +108,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                             ))
                                         })?;
 
-                                    // If the creating a new dependency fails, it means the environment name is invalid and exists hence we can safely unwrap the environment
                                     Ok(Dependency::new(&name, args, environment))
                                 }
                                 inner => Err(expected("string or table", inner, span).into()),
                             }
                         })
                         .collect::<Result<Vec<Dependency>, DeserError>>()?,
-                    ValueInner::String(str) => {
-                        vec![Dependency::from(str.as_ref())]
-                    }
+                    ValueInner::String(str) => Vec::from([Dependency::from(str.as_ref())]),
                     inner => {
                         return Err::<Vec<Dependency>, DeserError>(
                             expected("string or array", inner, value.span).into(),
@@ -129,9 +159,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                             }
                         })
                         .collect::<Result<Vec<_>, _>>()?,
-                    ValueInner::String(str) => {
-                        vec![Dependency::from(str.as_ref())]
-                    }
+                    ValueInner::String(str) => Vec::from([Dependency::from(str.as_ref())]),
                     inner => return Err(expected("string or array", inner, value.span).into()),
                 };
 

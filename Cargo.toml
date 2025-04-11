@@ -116,11 +116,11 @@ which = "7.0.2"
 file_url = "0.2.4"
 rattler = { version = "0.33.4", default-features = false }
 rattler_cache = { version = "0.3.16", default-features = false }
-rattler_conda_types = { version = "0.31.6", default-features = false, features = [
+rattler_conda_types = { version = "0.32.0", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.1.0", default-features = false }
-rattler_lock = { version = "0.22.49", default-features = false }
+rattler_lock = { version = "0.23.0", default-features = false }
 rattler_menuinst = { version = "0.2.6", default-features = false }
 rattler_networking = { version = "0.22.11", default-features = false, features = [
   "google-cloud-auth",
@@ -383,20 +383,6 @@ tokio = { workspace = true, features = ["rt"] }
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "b70cf707aa43f21b32f3a61b8a0889b15032d5c4" }
-
-# Use rattler crates from the local workspace
-file_url = { path = "../rattler/crates/file_url" }
-rattler = { path = "../rattler/crates/rattler" }
-rattler_cache = { path = "../rattler/crates/rattler_cache" }
-rattler_conda_types = { path = "../rattler/crates/rattler_conda_types" }
-rattler_digest = { path = "../rattler/crates/rattler_digest" }
-rattler_lock = { path = "../rattler/crates/rattler_lock" }
-rattler_menuinst = { path = "../rattler/crates/rattler_menuinst" }
-rattler_networking = { path = "../rattler/crates/rattler_networking" }
-rattler_repodata_gateway = { path = "../rattler/crates/rattler_repodata_gateway" }
-rattler_shell = { path = "../rattler/crates/rattler_shell" }
-rattler_solve = { path = "../rattler/crates/rattler_solve" }
-rattler_virtual_packages = { path = "../rattler/crates/rattler_virtual_packages" }
 
 # Config for 'dist'
 [workspace.metadata.dist]

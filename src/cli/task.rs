@@ -383,7 +383,7 @@ async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Res
         name.clone(),
         task.clone(),
         args.platform,
-        &FeatureName::Default,
+        &FeatureName::DEFAULT,
     )?;
     workspace.save().await.into_diagnostic()?;
     eprintln!(
@@ -399,7 +399,7 @@ async fn remove_tasks(mut workspace: WorkspaceMut, args: RemoveArgs) -> miette::
     let mut to_remove = Vec::new();
     let feature = args
         .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
+        .map_or_else(FeatureName::default, FeatureName::from);
     for name in args.names.iter() {
         if let Some(platform) = args.platform {
             if !workspace
@@ -463,7 +463,7 @@ async fn add_task(mut workspace: WorkspaceMut, args: AddArgs) -> miette::Result<
     let task: Task = args.clone().into();
     let feature = args
         .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
+        .map_or_else(FeatureName::default, FeatureName::from);
     workspace
         .manifest()
         .add_task(name.clone(), task.clone(), args.platform, &feature)?;

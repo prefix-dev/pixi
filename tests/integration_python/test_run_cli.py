@@ -1085,3 +1085,41 @@ def test_multiple_dependencies_with_environments(
             "0.2.0",
         ],
     )
+
+
+def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that short-circuiting composition works."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "task1": "echo task1",
+        "task2": "echo task2",
+        "task3": [{"task": "task1"}],
+        "task4": [{"task": "task3"}, {"task": "task2"}],
+        "task5": {"depends-on": [{"task": "task3"}, {"task": "task2"}]},
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task4"],
+        stdout_contains=["task1", "task2"],
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task3"],
+        stdout_contains="task1",
+    )
+
+    output1 = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task5"],
+    )
+
+    output2 = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task4"],
+    )
+
+    assert output1.stdout == output2.stdout
+    assert output1.stderr == output2.stderr
