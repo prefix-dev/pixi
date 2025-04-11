@@ -1,0 +1,25 @@
+[project]
+authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
+dependencies = []
+name = "foobar"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/foobar_whl"]
+[tool.hatch.build.targets.wheel.sources]
+"src/foobar_whl" = "foobar"
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.dependencies]
+uv = "==0.6.14"
+
+[tool.pixi.tasks]
+wheel = "uv build"
