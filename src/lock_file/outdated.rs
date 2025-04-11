@@ -179,7 +179,7 @@ async fn find_unsatisfiable_targets<'p>(
 
             match unsat {
                 EnvironmentUnsat::AdditionalPlatformsInLockFile(platforms) => {
-                    // If the there are additional platforms in the lock file, then we have to
+                    // If there are additional platforms in the lock file, then we have to
                     // remove them
                     for platform in platforms {
                         unsatisfiable_targets
