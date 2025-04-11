@@ -7,7 +7,10 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 # ROS2 Humble feature --------------------------------------
 [feature.humble]
-channels = ["https://prefix.dev/conda-forge", "robostack-humble"]
+channels = [
+  "https://prefix.dev/conda-forge",
+  "https://prefix.dev/robostack-humble",
+]
 
 [feature.humble.dependencies]
 ros-humble-desktop = "*"
@@ -21,7 +24,10 @@ viz = "python turtle_marker_viz_ROS2.py"
 
 # ROS2 Humble feature --------------------------------------
 [feature.noetic]
-channels = ["https://prefix.dev/conda-forge", "robostack-noetic"]
+channels = [
+  "https://prefix.dev/conda-forge",
+  "https://prefix.dev/robostack-noetic",
+]
 
 [feature.noetic.dependencies]
 ros-noetic-desktop = "*"
