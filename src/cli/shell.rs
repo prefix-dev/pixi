@@ -312,7 +312,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::info!("Starting shell: {:?}", interactive_shell);
 
     let prompt_hook = if workspace.config().change_ps1() {
-        let prompt_name = prompt::prompt_name(workspace.name(), environment.name());
+        let prompt_name = prompt::prompt_name(workspace.display_name(), environment.name());
         [
             prompt::shell_prompt(&interactive_shell, prompt_name.as_str()),
             prompt::shell_hook(&interactive_shell)

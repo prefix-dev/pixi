@@ -196,6 +196,7 @@ class MatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
+    license: NonEmptyStr | None = Field(None, description="The license of the package")
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -322,6 +323,9 @@ class DependsOn(StrictBaseModel):
 
     task: TaskName
     args: list[NonEmptyStr] | None = Field(None, description="The arguments to pass to the task")
+    environment: EnvironmentName | None = Field(
+        None, description="The environment to use for the task"
+    )
 
 
 class TaskInlineTable(StrictBaseModel):
@@ -457,7 +461,7 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
-    tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the target"
     )
     activation: Activation | None = Field(

@@ -11,6 +11,9 @@ build:
   number: 0
   script: |
     pip install . --no-deps -vv
+  python:
+    entry_points:
+      - pixi-build-package-dev-main = pixi_build_package_dev:main
 requirements:
   host:
     - pip

@@ -48,7 +48,10 @@ impl Workspace {
                 format!("{PROJECT_PREFIX}ROOT"),
                 self.root().to_string_lossy().into_owned(),
             ),
-            (format!("{PROJECT_PREFIX}NAME"), self.name().to_string()),
+            (
+                format!("{PROJECT_PREFIX}NAME"),
+                self.display_name().to_string(),
+            ),
             (
                 format!("{PROJECT_PREFIX}MANIFEST"),
                 self.workspace
@@ -89,9 +92,9 @@ impl Environment<'_> {
     pub(crate) fn get_metadata_env(&self) -> IndexMap<String, String> {
         let prompt = match self.name() {
             EnvironmentName::Named(name) => {
-                format!("{}:{}", self.workspace().name(), name)
+                format!("{}:{}", self.workspace().display_name(), name)
             }
-            EnvironmentName::Default => self.workspace().name().to_string(),
+            EnvironmentName::Default => self.workspace().display_name().to_string(),
         };
         let mut map = IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
@@ -364,8 +367,10 @@ pub(crate) fn get_static_environment_variables<'p>(
 
     // Add the conda default env variable so that the existing tools know about the env.
     let env_name = match environment.name() {
-        EnvironmentName::Named(name) => format!("{}:{}", environment.workspace().name(), name),
-        EnvironmentName::Default => environment.workspace().name().to_string(),
+        EnvironmentName::Named(name) => {
+            format!("{}:{}", environment.workspace().display_name(), name)
+        }
+        EnvironmentName::Default => environment.workspace().display_name().to_string(),
     };
     let mut shell_env = HashMap::new();
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);
@@ -517,7 +522,10 @@ mod tests {
         let project = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
         let env = project.get_metadata_env();
 
-        assert_eq!(env.get("PIXI_PROJECT_NAME").unwrap(), project.name());
+        assert_eq!(
+            env.get("PIXI_PROJECT_NAME").unwrap(),
+            project.display_name()
+        );
         assert_eq!(
             env.get("PIXI_PROJECT_ROOT").unwrap(),
             project.root().to_str().unwrap()
