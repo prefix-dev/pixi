@@ -8,7 +8,7 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["<PLATFORM>"]
 
 [dependencies]
-python = ">=3.13.3,<3.14"
+python = ">=3.13.2,<3.14"
 
 [pypi-dependencies]
 boltons = { git = "https://github.com/mahmoud/boltons.git" }
