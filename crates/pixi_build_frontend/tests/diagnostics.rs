@@ -1,11 +1,16 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
-use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest};
-use pixi_manifest::toml::ExternalWorkspaceProperties;
-use pixi_manifest::toml::{FromTomlStr, TomlManifest};
+use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest, ToolContext};
+use pixi_manifest::{
+    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
+    BuildBackend, KnownPreviewFeature, Package, PackageBuild, PackageManifest, Preview, Workspace,
+    WorkspaceManifest,
+};
+use pixi_spec::BinarySpec;
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::{
@@ -21,6 +26,25 @@ fn error_to_snapshot(diag: &impl Diagnostic) -> String {
         .render_report(&mut report_str, diag)
         .unwrap();
     report_str
+}
+
+fn test_data_dir() -> PathBuf {
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    root_dir.join("tests")
+}
+
+fn build_backends_dir() -> PathBuf {
+    test_data_dir().join("build-backends")
+}
+
+/// Returns the channel to use when using the build backends in the tests
+/// directory.
+fn build_backends_channel() -> NamedChannelOrUrl {
+    let backends_dir = build_backends_dir();
+    NamedChannelOrUrl::Path(backends_dir.display().to_string().into())
 }
 
 #[tokio::test]
@@ -118,6 +142,47 @@ async fn test_not_a_package() {
     let snapshot = error_to_snapshot(&err);
     let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
+}
+
+/// This test checks the diagnostic message that is emitted if a backend is used
+/// that does not contain the expected executable.
+#[tokio::test]
+async fn missing_backend_executable() {
+    // Construct an in memory manifest for a workspace and a package.
+    let workspace = WorkspaceManifest {
+        workspace: Workspace {
+            platforms: [Platform::current()].into(),
+            preview: Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+            ..Workspace::default()
+        },
+        ..WorkspaceManifest::default()
+    };
+
+    let package = PackageManifest {
+        package: Package::new("project".into(), "0.1.0".parse().unwrap()),
+        build: PackageBuild::new(
+            BuildBackend {
+                name: PackageName::new_unchecked("empty-backend"),
+                spec: BinarySpec::any(),
+            },
+            vec![build_backends_channel()],
+        ),
+        targets: Default::default(),
+    };
+
+    // Construct a protocol for the workspace and package.
+    let err = pixi_build_frontend::pixi_protocol::ProtocolBuilder::new(
+        PathBuf::from("."),
+        PathBuf::from(pixi_consts::consts::WORKSPACE_MANIFEST),
+        workspace,
+        package,
+    )
+    .finish(ToolContext::default().into(), 0)
+    .await
+    .unwrap_err();
+
+    // Check that the error message contains the expected text.
+    insta::assert_snapshot!(error_to_snapshot(&err));
 }
 
 #[tokio::test]
