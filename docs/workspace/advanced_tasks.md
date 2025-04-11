@@ -65,7 +65,7 @@ The tasks will be executed after each other:
 
 - First `configure` because it has no dependencies.
 - Then `build` as it only depends on `configure`.
-- Then `start` as all it dependencies are run.
+- Then `start` as all its dependencies are run.
 
 If one of the commands fails (exit with non-zero code.) it will stop and the next one will not be started.
 
@@ -76,19 +76,28 @@ pixi task add fmt ruff
 pixi task add lint pylint
 ```
 
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:not-all"
+```
+
+
+### Shorthand Syntax
+
+Pixi supports a shorthand syntax for defining tasks that only depend on other tasks. Instead of using the more verbose `depends-on` field, you can define a task directly as an array of dependencies.
+
+Executing:
+
 ```
 pixi task alias style fmt lint
 ```
 
-Results in the following `pixi.toml`.
+results in the following `pixi.toml`:
 
 ```toml title="pixi.toml"
-fmt = "ruff"
-lint = "pylint"
-style = { depends-on = ["fmt", "lint"] }
+--8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:all"
 ```
 
-Now run both tools with one command.
+Now you can run both tools with one command.
 
 ```shell
 pixi run style
@@ -315,7 +324,7 @@ The task shell is a limited implementation of a bourne-shell interface.
 
 ### Built-in commands
 
-Next to running actual executable like `./myprogram`, `cmake` or `python` the shell has some built-in commandos.
+Next to running actual executable like `./myprogram`, `cmake` or `python` the shell has some built-in commands.
 
 - `cp`: Copies files.
 - `mv`: Moves files.

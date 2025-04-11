@@ -495,27 +495,28 @@ impl From<Task> for Item {
                 Item::Value(Value::InlineTable(table))
             }
             Task::Alias(alias) => {
-                let mut table = Table::new().into_inline_table();
-                table.insert(
-                    "depends-on",
-                    Value::Array(Array::from_iter(alias.depends_on.into_iter().map(|dep| {
-                        match &dep.args {
-                            Some(args) if !args.is_empty() => {
-                                let mut table = Table::new().into_inline_table();
-                                table.insert("task", dep.task_name.to_string().into());
-                                table.insert(
-                                    "args",
-                                    Value::Array(Array::from_iter(
-                                        args.iter().map(|arg| Value::from(arg.clone())),
-                                    )),
-                                );
-                                Value::InlineTable(table)
-                            }
-                            _ => Value::from(dep.task_name.to_string()),
-                        }
-                    }))),
-                );
-                Item::Value(Value::InlineTable(table))
+                let mut array = Array::new();
+                for dep in alias.depends_on.iter() {
+                    let mut table = Table::new().into_inline_table();
+
+                    table.insert("task", dep.task_name.to_string().into());
+
+                    if let Some(args) = &dep.args {
+                        table.insert(
+                            "args",
+                            Value::Array(Array::from_iter(
+                                args.iter().map(|arg| Value::from(arg.clone())),
+                            )),
+                        );
+                    }
+
+                    if let Some(env) = &dep.environment {
+                        table.insert("environment", env.to_string().into());
+                    }
+
+                    array.push(Value::InlineTable(table));
+                }
+                Item::Value(Value::Array(array))
             }
             _ => Item::None,
         }
