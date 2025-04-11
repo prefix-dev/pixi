@@ -73,10 +73,10 @@ pub async fn add_command_types() {
     assert!(matches!(task2, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
     assert!(matches!(task2, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
 
-    assert_eq!(task.as_single_command().as_deref(), Some("echo hello"));
+    assert_eq!(task.as_single_command().unwrap().to_string(), "echo hello");
     assert_eq!(
-        task2.as_single_command().as_deref(),
-        Some("\"echo hello\" \"echo bonjour\"")
+        task2.as_single_command().unwrap().to_string(),
+        "\"echo hello\" \"echo bonjour\""
     );
 
     // Create an alias

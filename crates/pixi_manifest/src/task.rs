@@ -9,8 +9,9 @@ use std::{
 use crate::workspace::JINJA_ENV;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use serde::Serialize;
+use thiserror::Error;
 use toml_edit::{Array, Item, Table, Value};
 
 use crate::EnvironmentName;
@@ -111,26 +112,29 @@ impl Task {
     }
 
     /// If this task is a plain task, returns the task string
-    pub fn as_plain(&self) -> Result<String, miette::Error> {
+    pub fn as_plain(&self) -> Result<String, TaskStringError> {
         match self {
             Task::Plain(str) => str.render(None),
-            _ => Err(miette::miette!("Task is not a plain task")),
+            _ => Err(TaskStringError {
+                source: anyhow::anyhow!("Task is not a plain task"),
+                task: self.to_string(),
+            }),
         }
     }
 
     /// If this command is an execute command, returns the `Execute` task.
-    pub fn as_execute(&self) -> Result<&Execute, miette::Error> {
+    pub fn as_execute(&self) -> Result<&Execute, anyhow::Error> {
         match self {
             Task::Execute(execute) => Ok(execute),
-            _ => Err(miette::miette!("Task is not an execute task")),
+            _ => Err(anyhow::anyhow!("Task is not an execute task")),
         }
     }
 
     /// If this command is an alias, returns the `Alias` task.
-    pub fn as_alias(&self) -> Result<&Alias, miette::Error> {
+    pub fn as_alias(&self) -> Result<&Alias, anyhow::Error> {
         match self {
             Task::Alias(alias) => Ok(alias),
-            _ => Err(miette::miette!("Task is not an alias task")),
+            _ => Err(anyhow::anyhow!("Task is not an alias task")),
         }
     }
 
@@ -153,7 +157,7 @@ impl Task {
     }
 
     /// Returns the command to execute as a single string.
-    pub fn as_single_command(&self) -> Result<Cow<str>, miette::Error> {
+    pub fn as_single_command(&self) -> Result<Cow<str>, TaskStringError> {
         let args = self.get_args();
         match self {
             Task::Plain(str) => match str.render(args) {
@@ -162,7 +166,10 @@ impl Task {
             },
             Task::Custom(custom) => custom.cmd.as_single(args),
             Task::Execute(exe) => exe.cmd.as_single(args),
-            Task::Alias(_) => Err(miette::miette!("Alias tasks cannot be executed directly")),
+            Task::Alias(_) => Err(TaskStringError {
+                source: anyhow::anyhow!("Alias tasks cannot be executed directly"),
+                task: self.to_string(),
+            }),
         }
     }
 
@@ -350,6 +357,20 @@ impl From<Custom> for Task {
     }
 }
 
+/// Represents an error while rendering a task string
+#[derive(Debug, Error, Diagnostic)]
+pub struct TaskStringError {
+    #[source]
+    pub source: anyhow::Error,
+    pub task: String,
+}
+
+impl std::fmt::Display for TaskStringError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.task)
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TaskString {
     _inner: String,
@@ -375,7 +396,7 @@ impl TaskString {
     pub fn render(
         &self,
         argsmap: Option<&IndexMap<String, Option<String>>>,
-    ) -> Result<String, miette::Error> {
+    ) -> Result<String, TaskStringError> {
         if let Some(argsmap) = argsmap {
             // If any of the values are None, we should error
             if argsmap.values().any(|v| v.is_none()) {
@@ -383,17 +404,25 @@ impl TaskString {
                     .iter()
                     .find_map(|(k, v)| if v.is_none() { Some(k) } else { None })
                     .unwrap();
-                return Err(anyhow::anyhow!(
-                    "No value provided for argument '{}'",
-                    undefined_arg
-                ));
+                return Err(TaskStringError {
+                    source: anyhow::anyhow!("No value provided for argument '{}'", undefined_arg),
+                    task: self._inner.clone(),
+                });
             }
             return JINJA_ENV
                 .render_str(&self._inner, argsmap)
-                .into_diagnostic();
+                .map_err(|e| TaskStringError {
+                    source: e.into(),
+                    task: self._inner.clone(),
+                });
         }
 
-        JINJA_ENV.render_str(&self._inner, ()).into_diagnostic()
+        JINJA_ENV
+            .render_str(&self._inner, ())
+            .map_err(|e| TaskStringError {
+                source: e.into(),
+                task: self._inner.clone(),
+            })
     }
 }
 
@@ -420,7 +449,7 @@ impl CmdArgs {
     pub fn as_single(
         &self,
         argsmap: Option<&IndexMap<String, Option<String>>>,
-    ) -> Result<Cow<str>, miette::Error> {
+    ) -> Result<Cow<str>, TaskStringError> {
         match self {
             CmdArgs::Single(cmd) => Ok(Cow::Owned(cmd.render(argsmap)?)),
             CmdArgs::Multiple(args) => {
@@ -438,7 +467,7 @@ impl CmdArgs {
     pub fn into_single(
         self,
         argsmap: Option<&IndexMap<String, Option<String>>>,
-    ) -> Result<String, miette::Error> {
+    ) -> Result<String, TaskStringError> {
         match self {
             CmdArgs::Single(cmd) => cmd.render(argsmap),
             CmdArgs::Multiple(args) => {

@@ -9,12 +9,13 @@ use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{preview::Preview, PrioritizedChannel, S3Options, Targets};
-use minijinja::{Environment, UndefinedBehavior};
+use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
 
 pub static JINJA_ENV: Lazy<Environment<'static>> = Lazy::new(|| {
     let mut env = Environment::new();
     env.set_undefined_behavior(UndefinedBehavior::Strict);
+    env.set_auto_escape_callback(|_| AutoEscape::None);
     env
 });
 

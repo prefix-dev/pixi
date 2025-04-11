@@ -751,7 +751,7 @@ def test_depends_on_with_complex_args(pixi: Path, tmp_pixi_workspace: Path) -> N
             "some-arg",
         ],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument 'required_arg'",
+        stderr_contains="No value provided for argument 'required_arg'",
     )
 
 

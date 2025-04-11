@@ -12,7 +12,7 @@ use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{Task, TaskName};
+use pixi_manifest::{task::TaskStringError, Task, TaskName};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -45,6 +45,14 @@ pub enum ShellParsingError {
     },
 }
 
+impl ShellParsingError {
+    pub fn task(&self) -> &str {
+        match self {
+            ShellParsingError::ParseError { task, .. } => task,
+            ShellParsingError::ArgumentReplacement { task, .. } => task,
+        }
+    }
+}
 /// Runs task in project.
 #[derive(Default, Debug)]
 pub struct RunOutput {
@@ -88,6 +96,14 @@ pub enum CacheUpdateError {
     Serialization(#[from] serde_json::Error),
 }
 
+impl From<TaskStringError> for ShellParsingError {
+    fn from(value: TaskStringError) -> Self {
+        ShellParsingError::ArgumentReplacement {
+            source: value.source,
+            task: value.task,
+        }
+    }
+}
 pub enum CanSkip {
     Yes,
     No(Option<TaskHash>),
@@ -162,7 +178,7 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the task as script
-    fn as_script(&self) -> Result<String, miette::Error> {
+    fn as_script(&self) -> Result<String, ShellParsingError> {
         // Convert the task into an executable string
         let task = self.task.as_single_command()?;
 
@@ -192,11 +208,8 @@ impl<'p> ExecutableTask<'p> {
         &self,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
         let full_script = self.as_script().map_err(|e| FailedToParseShellScript {
-            script: "".to_string(),
-            error: ShellParsingError::ArgumentReplacement {
-                source: e,
-                task: "".to_string(),
-            },
+            script: e.task().to_string(),
+            error: e,
         })?;
         tracing::debug!("Parsing shell script: {}", full_script);
 
@@ -235,7 +248,7 @@ impl<'p> ExecutableTask<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub(crate) fn full_command(&self) -> Result<String, miette::Error> {
+    pub(crate) fn full_command(&self) -> Result<String, anyhow::Error> {
         let mut cmd = self.task.as_single_command()?.to_string();
 
         if !self.additional_args.is_empty() {
