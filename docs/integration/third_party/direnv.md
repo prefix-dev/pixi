@@ -1,16 +1,14 @@
 
-??? note "Installing direnv"
+`direnv` is a tool which automatically activates an environment as soon as you enter a directory with a `.envrc` file that you accepted at some point.
+This tutorial will demonstrate how to use `direnv` with Pixi`.
 
-    Of course you can use `pixi` to install `direnv` globally. We recommend to run
+First install `direnv` by running the following command:
 
-    ```bash
-    pixi global install direnv
-    ```
+```bash
+pixi global install direnv
+```
 
-    to install the latest version of `direnv` on your computer.
-
-You can use `pixi` in combination with `direnv` to automatically activate environments on entering the corresponding directory.
-Enter the following into your `.envrc` file:
+Then create a `.envrc` file in your Pixi workspace root with the following content:
 
 ```shell title=".envrc"
 watch_file pixi.lock # (1)!
@@ -18,7 +16,7 @@ eval "$(pixi shell-hook)" # (2)!
 ```
 
 1. This ensures that every time your `pixi.lock` changes, `direnv` invokes the shell-hook again.
-2. This installs if needed, and activates the environment. `direnv` ensures that the environment is deactivated when you leave the directory.
+2. This installs the environment if needed, and activates it. `direnv` ensures that the environment is deactivated when you leave the directory.
 
 ```shell
 $ cd my-project
@@ -37,11 +35,9 @@ python not found
 
 While `direnv` comes with [hooks for the common shells](https://direnv.net/docs/hook.html),
 these hooks into the shell should not be relied on when using and IDE.
-Although `direnv` package does not include hooks for integrated develop environments,
-there is typically a plugin or extension available.
 
-Here you can see how to set up `direnv` for some of the more popular IDEs:
-- [VSCode](../editor/vscode.md): [mkhl.direnv plugin](https://marketplace.visualstudio.com/items?itemName=mkhl.direnv)
-- [Jetbrains](../editor/jetbrains.md): [Direnv Integration plugin](https://plugins.jetbrains.com/plugin/15285-direnv-integration)
-- [Zed](../editor/zed.md): [Native support](https://zed.dev/docs/configuring-zed#direnv-integration)
-- [Neovim](../editor/neovim.md): [Direnv plugin](https://github.com/direnv/direnv.vim/blob/master/README.md)
+Here you can see how to set up `direnv` for your favorite editor:
+
+- [VSCode](../editor/vscode.md#direnv)
+- [Jetbrains](../editor/jetbrains.md#direnv)
+- [Zed](../editor/zed.md)

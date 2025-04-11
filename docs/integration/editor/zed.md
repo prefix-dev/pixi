@@ -1,11 +1,15 @@
-[Zed](https://zed.dev/) is a relatively new development environment.
+[Zed](https://zed.dev/) is a code editor that provides support for many languages out of the box.
+By installing extensions more languages can be supported.
 
-To use `pixi` inside of Zed, follow these steps:
 
-* Create a `pixi.toml` file.
+## Python
 
-See [`direnv`](../third_party/direnv.md).
-* Install `direnv`.
-* Add an `.envrc` to the project.
+Zed supports Pixi and Python out of the box.
+If Zed hasn't done so already, select a suitable Pixi environment in the environment selector and you are good to go!
 
-[Zed has native support for direnv](https://zed.dev/docs/configuring-zed#direnv-integration).
+![Zed Python Environment Selector](../../assets/zed-python-env-selector.png)
+
+## Direnv
+
+Zed supports Direnv out of the box.
+Set up Direnv with Pixi as described in our [Direnv page](../third_party/direnv.md) and Zed will activate the environment automatically.
