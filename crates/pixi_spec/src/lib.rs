@@ -114,6 +114,7 @@ impl PixiSpec {
             && spec.subdir.is_none()
             && spec.md5.is_none()
             && spec.sha256.is_none()
+            && spec.license.is_none()
         {
             Self::Version(spec.version.unwrap_or(VersionSpec::Any))
         } else {
@@ -129,6 +130,7 @@ impl PixiSpec {
                 subdir: spec.subdir,
                 md5: spec.md5,
                 sha256: spec.sha256,
+                license: spec.license,
             }))
         }
     }
@@ -418,6 +420,11 @@ pub enum BinarySpec {
 }
 
 impl BinarySpec {
+    /// Constructs a new instance that matches anything.
+    pub const fn any() -> Self {
+        Self::Version(VersionSpec::Any)
+    }
+
     /// Convert this instance into a binary spec.
     ///
     /// A binary spec always refers to a binary package.

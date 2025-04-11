@@ -116,11 +116,11 @@ which = "7.0.2"
 file_url = "0.2.4"
 rattler = { version = "0.33.4", default-features = false }
 rattler_cache = { version = "0.3.16", default-features = false }
-rattler_conda_types = { version = "0.31.6", default-features = false, features = [
+rattler_conda_types = { version = "0.32.0", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.1.0", default-features = false }
-rattler_lock = { version = "0.22.49", default-features = false }
+rattler_lock = { version = "0.23.0", default-features = false }
 rattler_menuinst = { version = "0.2.6", default-features = false }
 rattler_networking = { version = "0.22.11", default-features = false, features = [
   "google-cloud-auth",

@@ -73,10 +73,16 @@ test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --time
 # pass the file to run as an argument to the task
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
-test-specific-test = { cmd = "pytest", depends-on = ["build-release"] }
+test-specific-test = { cmd = "pytest -k {{ test_substring }}", args = [
+  "test_substring",
+], depends-on = [
+  "build-release",
+] }
 # Update one test channel by passing on value of `mappings.toml`
 # e.g. "multiple_versions_channel_1"
-update-test-channel = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
+update-test-channel = { cmd = "python update-channels.py {{ channel }}", args = [
+  "channel",
+], cwd = "tests/data/channels" }
 
 
 [feature.dev.dependencies]
@@ -87,6 +93,7 @@ tbump = ">=6.9.0,<6.10"
 
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
+go-shfmt = ">=3.11.0,<4"
 pre-commit = ">=4.1.0,<5"
 pre-commit-hooks = ">=5.0.0,<6"
 prettier = ">=3.5.2,<4"
@@ -113,6 +120,7 @@ pre-commit-run = "pre-commit run --all-files"
 prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
+shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "mypy"
@@ -183,6 +191,21 @@ zstd = ">=1.5.6,<2"
 [feature.trampoline.tasks]
 build-trampoline = "python trampoline/build-trampoline.py"
 
+#
+# Feature to build recipes
+#
+[feature.recipes.dependencies]
+rattler-build = ">=0.39.0,<0.40"
+
+[feature.recipes.tasks.build-backends]
+cmd = "rattler-build build --recipe-dir empty --output-dir ."
+cwd = "tests/build-backends"
+description = "Build build-backends used for testing purposes"
+
+#
+# Environment descriptions
+#
+
 [environments]
 default = { features = [
   "build",
@@ -199,6 +222,7 @@ lint = { features = [
   "build",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
+recipes = { features = ["recipes"], no-default-feature = true }
 schema = { features = [
   "schema",
   "pytest",

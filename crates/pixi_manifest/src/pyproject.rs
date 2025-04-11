@@ -322,8 +322,8 @@ impl PyProjectManifest {
             .iter()
             .map(|(name, _)| {
                 (
-                    FeatureName::Named(name.clone()),
-                    Feature::new(FeatureName::Named(name.clone())),
+                    FeatureName::from(name.clone()),
+                    Feature::new(FeatureName::from(name.clone())),
                 )
             })
             .collect();
@@ -398,7 +398,7 @@ impl PyProjectManifest {
             .clone()
             .and_then(|name| pep508_rs::PackageName::new(name).ok());
         for (group, reqs) in pypi_dependency_groups {
-            let feature_name = FeatureName::Named(group.to_string());
+            let feature_name = FeatureName::from(group.to_string());
             let target = workspace_manifest
                 .features
                 .entry(feature_name.clone())

@@ -47,6 +47,7 @@ jobs:
     outputs:
       # Flag that is raised when any code is changed
       code: ${{ steps.changed.outputs.code_any_changed }}
+      unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
@@ -64,6 +65,13 @@ jobs:
               - "!install/**"
               - "!assets/**"
               - "!**/*.md"
+
+      - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
+        id: unix_installer_changed
+        with:
+          files_yaml: |
+            code:
+              - "install/install.sh"
 
   pre-commit:
     runs-on: ubuntu-latest
@@ -256,7 +264,7 @@ jobs:
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@f80524ca6eeaa76759b57fb78ddce5d87a20c720 # v1
+      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
       - name: "Setup musl"
         run: |
           sudo apt-get install musl-tools
@@ -283,7 +291,7 @@ jobs:
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@f80524ca6eeaa76759b57fb78ddce5d87a20c720 # v1
+      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
@@ -305,7 +313,7 @@ jobs:
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@f80524ca6eeaa76759b57fb78ddce5d87a20c720 # v1
+      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
@@ -761,3 +769,65 @@ jobs:
       sha: ${{ github.sha }}
       arch: macos-aarch64
       runs-on: macos-14
+
+  #
+  # Test unix installer on some platforms
+  #
+
+  test-install-sh-nix:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    name: install.sh | ${{ matrix.os }}
+    needs:
+      - determine_changes
+    runs-on: ${{ matrix.os }}
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: "Install"
+        run: |
+          uname -a
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+
+  test-install-sh-alpine:
+    name: install.sh | alpine linux
+    needs:
+      - determine_changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup latest Alpine Linux
+        uses: jirutka/setup-alpine@cf5fddcea495dcc19c0f991c6f6fa6a7abf3d50a # v1
+      - name: "Install"
+        run: |
+          uname -a
+          cat /etc/alpine-release
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+        shell: alpine.sh {0}
+
+  test-install-sh-msys2:
+    name: install.sh | msys2
+    needs:
+      - determine_changes
+    runs-on: windows-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup ucrt64 msys2
+        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        with:
+          msystem: UCRT64
+          install: unzip
+      - name: "Install"
+        run: |
+          uname -a
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+        shell: msys2 {0}

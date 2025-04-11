@@ -10,7 +10,7 @@ use rattler_lock::{LockFile, LockedPackageRef};
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
     build::GlobHashCache,
-    lock_file::satisfiability::EnvironmentUnsat,
+    lock_file::satisfiability::{verify_solve_group_satisfiability, EnvironmentUnsat},
     workspace::{Environment, SolveGroup},
     Workspace,
 };
@@ -143,6 +143,7 @@ async fn find_unsatisfiable_targets<'p>(
     lock_file: &LockFile,
     glob_hash_cache: GlobHashCache,
 ) -> UnsatisfiableTargets<'p> {
+    let mut verified_environments = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
     for environment in project.environments() {
         let platforms = environment.platforms();
@@ -178,7 +179,8 @@ async fn find_unsatisfiable_targets<'p>(
 
             match unsat {
                 EnvironmentUnsat::AdditionalPlatformsInLockFile(platforms) => {
-                    // If the there are additional platforms in the lock file, then we have to remove them
+                    // If there are additional platforms in the lock file, then we have to
+                    // remove them
                     for platform in platforms {
                         unsatisfiable_targets
                             .outdated_conda
@@ -230,7 +232,9 @@ async fn find_unsatisfiable_targets<'p>(
             )
             .await
             {
-                Ok(_) => {}
+                Ok(verified_env) => {
+                    verified_environments.insert((environment.clone(), platform), verified_env);
+                }
                 Err(unsat) if unsat.is_pypi_only() => {
                     tracing::info!(
                         "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
@@ -258,6 +262,57 @@ async fn find_unsatisfiable_targets<'p>(
             }
         }
     }
+
+    // Verify grouped environments
+    for solve_group in project.solve_groups() {
+        'platform: for platform in solve_group.platforms() {
+            let mut envs = Vec::with_capacity(solve_group.environments().len());
+            for env in solve_group.environments() {
+                if let Some(verified_env) = verified_environments.remove(&(env, platform)) {
+                    envs.push(verified_env);
+                } else {
+                    // If the environment is not verified, the solve group will already be outdated.
+                    continue 'platform;
+                }
+            }
+
+            let Err(unsat) = verify_solve_group_satisfiability(envs) else {
+                continue;
+            };
+
+            tracing::info!(
+                "the dependencies of solve group '{0}' for platform {platform} are out of date because {unsat}",
+                solve_group.name(),
+            );
+
+            for env in solve_group.environments() {
+                unsatisfiable_targets
+                    .outdated_conda
+                    .entry(env.clone())
+                    .or_default()
+                    .insert(platform);
+            }
+        }
+    }
+
+    // Verify individual environments as if they are solve-groups
+    for ((individual_env, platform), verified_env) in verified_environments {
+        let Err(unsat) = verify_solve_group_satisfiability([verified_env]) else {
+            continue;
+        };
+
+        tracing::info!(
+                "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                individual_env.name().fancy_display(),
+            );
+
+        unsatisfiable_targets
+            .outdated_conda
+            .entry(individual_env.clone())
+            .or_default()
+            .insert(platform);
+    }
+
     unsatisfiable_targets
 }
 

@@ -83,7 +83,7 @@ impl PtySession {
     /// forward all input from stdin to the process and all output from the process to stdout.
     /// This will block until the process exits.
     pub fn interact(&mut self, wait_until: Option<&str>) -> io::Result<Option<i32>> {
-        let pattern_timeout = Duration::from_secs(1);
+        let pattern_timeout = Duration::from_secs(3);
         let pattern_start = Instant::now();
 
         // Make sure anything we have written so far has been flushed.
@@ -138,7 +138,7 @@ impl PtySession {
             // Check if we have waited long enough for the pattern
             if pattern_start.elapsed() > pattern_timeout && !write_stdout {
                 io::stdout().write_all(
-                    "WARNING: Did not detect successful shell initialization within 1 second.\n\r         Please check on https://pixi.sh/advanced/pixi_shell/#issues-with-pixi-shell for more tips.\n\r"
+                    "WARNING: Did not detect successful shell initialization within 1 second.\n\r         Please check on https://pixi.sh/latest/advanced/pixi_shell/#issues-with-pixi-shell for more tips.\n\r"
                         .as_bytes(),
                 )?;
                 io::stdout().write_all(&self.rolling_buffer)?;
