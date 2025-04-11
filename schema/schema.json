@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.44.0/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.45.0/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -10,7 +10,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.44.0/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.45.0/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -349,6 +349,12 @@
           "type": "string",
           "minLength": 1
         },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
+          "type": "string",
+          "minLength": 1
+        },
         "md5": {
           "title": "Md5",
           "description": "The md5 hash of the package",
@@ -468,6 +474,12 @@
             "type": "string",
             "minLength": 1
           }
+        },
+        "environment": {
+          "title": "Environment",
+          "description": "The environment to use for the task",
+          "type": "string",
+          "pattern": "^[a-z\\d\\-]+$"
         },
         "task": {
           "title": "Task",
@@ -790,6 +802,12 @@
         "git": {
           "title": "Git",
           "description": "The git URL to the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
           "type": "string",
           "minLength": 1
         },
@@ -1549,6 +1567,12 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/TaskInlineTable"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
                 },
                 {
                   "type": "string",

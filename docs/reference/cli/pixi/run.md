@@ -30,9 +30,8 @@ pixi run [OPTIONS] [TASK]...
 :  Max concurrent network requests, default is `50`
 - <a id="arg---force-activate" href="#arg---force-activate">`--force-activate`</a>
 :  Do not use the environment activation cache. (default: true except in experimental mode)
-- <a id="arg---no-completion" href="#arg---no-completion">`--no-completion <NO_COMPLETION>`</a>
+- <a id="arg---no-completions" href="#arg---no-completions">`--no-completions`</a>
 :  Do not source the autocompletion scripts from the environment
-<br>**options**: `true`, `false`
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>

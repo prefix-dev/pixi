@@ -137,7 +137,7 @@ mod tests {
         assert_eq!(
             "dependencies".to_string(),
             TableName::new()
-                .with_feature_name(Some(&FeatureName::Default))
+                .with_feature_name(Some(&FeatureName::DEFAULT))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
@@ -145,13 +145,13 @@ mod tests {
         assert_eq!(
             "target.linux-64.dependencies".to_string(),
             TableName::new()
-                .with_feature_name(Some(&FeatureName::Default))
+                .with_feature_name(Some(&FeatureName::DEFAULT))
                 .with_platform(Some(&Platform::Linux64))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
 
-        let feature_name = FeatureName::Named("test".to_string());
+        let feature_name = FeatureName::from("test");
         assert_eq!(
             "feature.test.dependencies".to_string(),
             TableName::new()

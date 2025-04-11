@@ -29,7 +29,7 @@ use pixi_build_types::{
 };
 use pixi_manifest::PackageManifest;
 use rattler_conda_types::ChannelConfig;
-use stderr::{stderr_null, stderr_stream};
+use stderr::stderr_stream;
 use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
@@ -39,6 +39,7 @@ use tokio::{
 
 use crate::{
     jsonrpc::{stdio_transport, RpcParams},
+    protocols::stderr::stderr_buffer,
     tool::Tool,
     CondaBuildReporter, CondaMetadataReporter,
 };
@@ -77,6 +78,8 @@ pub enum ProtocolError {
         "Ensure that the build backend implements the JSON-RPC protocol correctly."
     ))]
     JsonRpc(String, #[source] ClientError),
+    #[error("the build backend ({0}) exited prematurely.\nBuild backend output:\n\n{1}")]
+    PrematureExit(String, String),
     #[error("received invalid response from the build backend ({0}) when calling '{1}'")]
     ParseError(String, String, #[source] serde_json::Error),
     #[error(transparent)]
@@ -108,6 +111,7 @@ impl ProtocolError {
         err: ClientError,
         method: &str,
         root_dir: &Path,
+        backend_output: Option<String>,
     ) -> Self {
         match err {
             Error::Call(err) if err.code() > -32001 => {
@@ -116,6 +120,10 @@ impl ProtocolError {
             Error::Call(err) if err.code() == ErrorCode::MethodNotFound.code() => {
                 Self::MethodNotImplemented(backend_identifier, method.to_string())
             }
+            Error::RestartNeeded(_err) if backend_output.is_some() => Self::PrematureExit(
+                backend_identifier,
+                backend_output.expect("safe because checked above"),
+            ),
             Error::ParseError(err) => Self::ParseError(backend_identifier, method.to_string(), err),
             e => Self::JsonRpc(backend_identifier, e),
         }
@@ -276,6 +284,7 @@ impl JsonRPCBuildProtocol {
                     err,
                     procedures::negotiate_capabilities::METHOD_NAME,
                     manifest_path.parent().unwrap_or(&manifest_path),
+                    None,
                 )
             })?;
 
@@ -304,6 +313,7 @@ impl JsonRPCBuildProtocol {
                     err,
                     procedures::initialize::METHOD_NAME,
                     manifest_path.parent().unwrap_or(&manifest_path),
+                    None,
                 )
             })?;
 
@@ -329,7 +339,7 @@ impl JsonRPCBuildProtocol {
             // Cancellation signal
             let (cancel_tx, cancel_rx) = oneshot::channel();
             // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stderr_null(stderr.clone(), cancel_rx));
+            let handle = tokio::spawn(stderr_buffer(stderr.clone(), cancel_rx));
             (cancel_tx, handle)
         });
 
@@ -342,33 +352,37 @@ impl JsonRPCBuildProtocol {
                 procedures::conda_metadata::METHOD_NAME,
                 RpcParams::from(request),
             )
-            .await
-            .map_err(|err| {
-                ProtocolError::from_client_error(
-                    self.backend_identifier.clone(),
-                    err,
-                    procedures::conda_metadata::METHOD_NAME,
-                    self.manifest_path.parent().unwrap_or(&self.manifest_path),
-                )
-            });
+            .await;
 
         // Wait for the stderr sink to finish, by signaling it to stop
-        if let Some((cancel_tx, handle)) = stderr {
-            // Cancel the stderr forwarding
-            if cancel_tx.send(()).is_err() {
-                return Err(ProtocolError::StdErrPipeStopped);
-            }
-            handle.await.map_or_else(
+        let backend_output = if let Some((cancel_tx, handle)) = stderr {
+            // Cancel the stderr forwarding. Ignore any error because that means the
+            // tasks also finished.
+            let _err = cancel_tx.send(());
+            let lines = handle.await.map_or_else(
                 |e| match e.try_into_panic() {
                     Ok(panic) => std::panic::resume_unwind(panic),
                     Err(_) => Err(ProtocolError::StdErrPipeStopped),
                 },
                 |e| e.map_err(|_| ProtocolError::StdErrPipeStopped),
             )?;
-        }
+
+            Some(lines)
+        } else {
+            None
+        };
 
         reporter.on_metadata_end(operation);
-        result
+
+        result.map_err(|err| {
+            ProtocolError::from_client_error(
+                self.backend_identifier.clone(),
+                err,
+                procedures::conda_metadata::METHOD_NAME,
+                self.manifest_path.parent().unwrap_or(&self.manifest_path),
+                backend_output,
+            )
+        })
     }
 
     /// Build a specific conda package output
@@ -398,6 +412,7 @@ impl JsonRPCBuildProtocol {
                     err,
                     procedures::conda_build::METHOD_NAME,
                     self.manifest_path.parent().unwrap_or(&self.manifest_path),
+                    None,
                 )
             });
 
@@ -425,10 +440,9 @@ impl JsonRPCBuildProtocol {
                 }
             };
 
-            // Cancel the stderr forwarding
-            if cancel_tx.send(()).is_err() {
-                return Err(ProtocolError::StdErrPipeStopped);
-            }
+            // Cancel the stderr forwarding. Ignore any error because it means the task
+            // already ended.
+            let _err = cancel_tx.send(());
 
             // Wait for the stderr forwarding to finish, it should because we cancelled
             handle.await.map_or_else(

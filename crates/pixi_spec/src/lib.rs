@@ -114,6 +114,7 @@ impl PixiSpec {
             && spec.subdir.is_none()
             && spec.md5.is_none()
             && spec.sha256.is_none()
+            && spec.license.is_none()
         {
             Self::Version(spec.version.unwrap_or(VersionSpec::Any))
         } else {
@@ -129,6 +130,7 @@ impl PixiSpec {
                 subdir: spec.subdir,
                 md5: spec.md5,
                 sha256: spec.sha256,
+                license: spec.license,
             }))
         }
     }
