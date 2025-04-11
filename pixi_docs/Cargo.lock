@@ -4546,6 +4546,7 @@ dependencies = [
  "pixi_toml",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_lock",
  "serde",
  "serde-untagged",
  "serde_with",
