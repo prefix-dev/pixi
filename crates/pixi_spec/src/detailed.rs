@@ -39,6 +39,9 @@ pub struct DetailedSpec {
     /// The subdir of the channel
     pub subdir: Option<String>,
 
+    /// The license
+    pub license: Option<String>,
+
     /// The md5 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
@@ -68,6 +71,7 @@ impl DetailedSpec {
             namespace: None,
             md5: self.md5,
             sha256: self.sha256,
+            license: self.license,
             url: None,
             extras: Default::default(),
         })
