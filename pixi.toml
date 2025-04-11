@@ -194,9 +194,6 @@ cmd = "rattler-build build --recipe-dir empty --output-dir ."
 cwd = "tests/build-backends"
 description = "Build build-backends used for testing purposes"
 
-[environments.recipes]
-features = ["recipes"]
-
 #
 # Environment descriptions
 #
@@ -217,6 +214,7 @@ lint = { features = [
   "build",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
+recipes = { features = ["recipes"], no-default-feature = true }
 schema = { features = [
   "schema",
   "pytest",
