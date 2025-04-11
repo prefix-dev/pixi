@@ -15,7 +15,6 @@ use pixi_consts::consts;
 use pixi_manifest::{Task, TaskName};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
-use regex;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -161,55 +160,9 @@ impl<'p> ExecutableTask<'p> {
     pub(crate) fn project(&self) -> &'p Workspace {
         self.workspace
     }
-    /// Replaces the arguments in the task with the values from the task args.
-    pub fn replace_args(&self, task: &str) -> Result<String, ShellParsingError> {
-        let mut task = task.to_string();
-        if let Some(args) = self.task().get_args() {
-            for (arg, value) in args {
-                // Match {{ arg_name }} with flexible whitespace
-                let pattern = format!(r"\{{\{{\s*{}\s*\}}\}}", regex::escape(&arg.name));
-                let replacement = match value {
-                    Some(val) => val,
-                    None => arg.default.as_deref().ok_or_else(|| {
-                        ShellParsingError::ArgumentReplacement {
-                            source: anyhow::Error::msg(format!(
-                                "no value provided for argument '{}'",
-                                arg.name,
-                            )),
-                            task: task.to_string(),
-                        }
-                    })?,
-                };
-                task = regex::Regex::new(&pattern)
-                    .map_err(|e| ShellParsingError::ArgumentReplacement {
-                        source: e.into(),
-                        task: task.to_string(),
-                    })?
-                    .replace_all(&task, replacement)
-                    .into_owned();
-            }
-        }
-
-        // Check if there are any remaining {{ name }} patterns
-        let remaining_pattern = regex::Regex::new(r"\{\{\s*[\w\-\.]+\s*\}\}").map_err(|e| {
-            ShellParsingError::ArgumentReplacement {
-                source: e.into(),
-                task: task.to_string(),
-            }
-        })?;
-
-        if remaining_pattern.is_match(&task) {
-            return Err(ShellParsingError::ArgumentReplacement {
-                source: anyhow::Error::msg("unresolved argument placeholders found"),
-                task: task.to_string(),
-            });
-        }
-
-        Ok(task)
-    }
 
     /// Returns the task as script
-    fn as_script(&self) -> Option<String> {
+    fn as_script(&self) -> Result<String, miette::Error> {
         // Convert the task into an executable string
         let task = self.task.as_single_command()?;
 
@@ -229,7 +182,7 @@ impl<'p> ExecutableTask<'p> {
             format!("{export}\n{task} {cli_args}")
         };
 
-        Some(full_script)
+        Ok(full_script)
     }
 
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
@@ -238,30 +191,25 @@ impl<'p> ExecutableTask<'p> {
     pub(crate) fn as_deno_script(
         &self,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        if let Some(full_script) = self.as_script() {
-            tracing::debug!("Parsing shell script: {}", full_script);
+        let full_script = self.as_script().map_err(|e| FailedToParseShellScript {
+            script: "".to_string(),
+            error: ShellParsingError::ArgumentReplacement {
+                source: e,
+                task: "".to_string(),
+            },
+        })?;
+        tracing::debug!("Parsing shell script: {}", full_script);
 
-            // Replace the arguments with the values
-            let full_script =
-                self.replace_args(&full_script)
-                    .map_err(|e| FailedToParseShellScript {
-                        script: full_script,
-                        error: e,
-                    })?;
-
-            // Parse the shell command
-            deno_task_shell::parser::parse(full_script.trim())
-                .map_err(|e| FailedToParseShellScript {
-                    script: full_script.clone(),
-                    error: ShellParsingError::ParseError {
-                        source: e,
-                        task: full_script,
-                    },
-                })
-                .map(Some)
-        } else {
-            Ok(None)
-        }
+        // Parse the shell command
+        deno_task_shell::parser::parse(full_script.trim())
+            .map_err(|e| FailedToParseShellScript {
+                script: full_script.clone(),
+                error: ShellParsingError::ParseError {
+                    source: e,
+                    task: full_script,
+                },
+            })
+            .map(Some)
     }
 
     /// Returns the working directory for this task.
@@ -287,7 +235,7 @@ impl<'p> ExecutableTask<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub(crate) fn full_command(&self) -> Option<String> {
+    pub(crate) fn full_command(&self) -> Result<String, miette::Error> {
         let mut cmd = self.task.as_single_command()?.to_string();
 
         if !self.additional_args.is_empty() {
@@ -295,7 +243,7 @@ impl<'p> ExecutableTask<'p> {
             cmd.push_str(&self.additional_args.join(" "));
         }
 
-        Some(cmd)
+        Ok(cmd)
     }
 
     /// Returns an object that implements [`Display`] which outputs the command
@@ -413,22 +361,31 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
 
 impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let command = self.task.task.as_single_command();
-        write!(
-            f,
-            "{}",
-            consts::TASK_STYLE
-                .apply_to(command.as_deref().unwrap_or("<alias>"))
-                .bold()
-        )?;
-        if !self.task.additional_args.is_empty() {
-            write!(
-                f,
-                " {}",
-                consts::TASK_STYLE.apply_to(self.task.additional_args.iter().format(" "))
-            )?;
+        match self.task.task.as_single_command() {
+            Ok(command) => {
+                write!(
+                    f,
+                    "{}",
+                    consts::TASK_STYLE
+                        .apply_to(match std::convert::AsRef::<str>::as_ref(&command) {
+                            "" => "<alias>",
+                            cmd => cmd,
+                        })
+                        .bold()
+                )?;
+                if !self.task.additional_args.is_empty() {
+                    write!(
+                        f,
+                        " {}",
+                        consts::TASK_STYLE.apply_to(self.task.additional_args.iter().format(" "))
+                    )?;
+                }
+                Ok(())
+            }
+            Err(err) => {
+                write!(f, "{}", consts::TASK_ERROR_STYLE.apply_to(err).bold())
+            }
         }
-        Ok(())
     }
 }
 /// Helper function to create a pipe that we can get the output from.
@@ -589,42 +546,5 @@ mod tests {
                 .to_string_lossy()
                 .to_string()
         );
-    }
-
-    #[test]
-    fn test_replace_args() {
-        let file_contents = r#"
-            [tasks]
-            simple = {cmd = "echo Simple task"}
-        "#;
-
-        let workspace = Workspace::from_str(
-            Path::new("pixi.toml"),
-            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
-        )
-        .unwrap();
-
-        let task = workspace
-            .default_environment()
-            .task(&TaskName::from("simple"), None)
-            .unwrap();
-
-        let executable_task = ExecutableTask {
-            workspace: &workspace,
-            name: Some("simple".into()),
-            task: Cow::Borrowed(task),
-            run_environment: workspace.default_environment(),
-            additional_args: vec![],
-        };
-
-        // Test a command with no placeholders works fine
-        let result = executable_task
-            .replace_args("echo No placeholders here")
-            .unwrap();
-        assert_eq!(result, "echo No placeholders here");
-
-        // Test that using an undefined argument errors
-        let result = executable_task.replace_args("echo {{ undefined }}");
-        assert!(result.is_err());
     }
 }

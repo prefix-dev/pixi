@@ -402,15 +402,6 @@ def test_run_dry_run(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_run_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = f"""
-    {EMPTY_BOILERPLATE_PROJECT}
-    [tasks]
-    """
-    manifest.write_text(toml)
-
-
 def test_invalid_task_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
 
@@ -573,7 +564,7 @@ def test_task_args_all_required(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "task_all_required", "val1"],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument 'arg2'",
+        stderr_contains="No value provided for argument 'arg2'",
     )
 
 

@@ -41,7 +41,7 @@ pub type TomlTask = WithWarnings<Task>;
 impl<'de> toml_span::Deserialize<'de> for TomlTask {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         let mut th = match value.take() {
-            ValueInner::String(str) => return Ok(Task::Plain(str.into_owned()).into()),
+            ValueInner::String(str) => return Ok(Task::Plain(str.into_owned().into()).into()),
             ValueInner::Table(table) => TableHelper::from((table, value.span)),
             ValueInner::Array(array) => {
                 let mut deps = Vec::new();
@@ -208,7 +208,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 env,
                 description,
                 clean_env,
-                args: args.map(|args| args.into_iter().map(|arg| (arg, None)).collect()),
+                args: args.map(|args| {
+                    args.into_iter()
+                        .map(|arg| (arg.name, arg.default))
+                        .collect()
+                }),
             }))
         } else {
             let depends_on = depends_on(&mut th).unwrap_or_default();
@@ -228,13 +232,15 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
 impl<'de> toml_span::Deserialize<'de> for CmdArgs {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
-            ValueInner::String(str) => Ok(CmdArgs::Single(str.into_owned())),
+            ValueInner::String(str) => Ok(CmdArgs::Single(str.into_owned().into())),
             ValueInner::Array(arr) => {
                 let mut args = Vec::with_capacity(arr.len());
                 for mut item in arr {
                     args.push(item.take_string(None)?.into_owned());
                 }
-                Ok(CmdArgs::Multiple(args))
+                Ok(CmdArgs::Multiple(
+                    args.into_iter().map(|s| s.into()).collect(),
+                ))
             }
             inner => Err(expected("string or array", inner, value.span).into()),
         }

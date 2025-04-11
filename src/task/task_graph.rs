@@ -89,17 +89,24 @@ impl TaskNode<'_> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
-    pub(crate) fn full_command(&self) -> Option<String> {
-        let mut cmd = self.task.as_single_command()?.to_string();
+    pub(crate) fn full_command(&self) -> Result<String, miette::Error> {
+        let mut cmd = self.task.as_single_command()?;
 
         if let Some(additional_args) = &self.additional_args {
             if !additional_args.is_empty() {
                 // Pass each additional argument varbatim by wrapping it in single quotes
-                cmd.push_str(&format!(" {}", self.format_additional_args()));
+                let formatted_args = format!(" {}", self.format_additional_args());
+                cmd = match cmd {
+                    Cow::Borrowed(s) => Cow::Owned(format!("{}{}", s, formatted_args)),
+                    Cow::Owned(mut s) => {
+                        s.push_str(&formatted_args);
+                        Cow::Owned(s)
+                    }
+                };
             }
         }
 
-        Some(cmd)
+        Ok(cmd.into_owned())
     }
 
     /// Format the additional arguments passed to this command
@@ -241,11 +248,14 @@ impl<'p> TaskGraph<'p> {
         let (cmd, additional_args) = if verbatim {
             let mut args = args.into_iter();
             (
-                CmdArgs::Single(args.next().expect("must be at least one argument")),
+                CmdArgs::Single(args.next().expect("must be at least one argument").into()),
                 args.collect(),
             )
         } else {
-            (CmdArgs::Multiple(args), vec![])
+            (
+                CmdArgs::Multiple(args.into_iter().map(|arg| arg.into()).collect()),
+                vec![],
+            )
         };
 
         Self::from_root(
@@ -458,7 +468,7 @@ mod test {
             .topological_order()
             .into_iter()
             .map(|task| &graph[task])
-            .filter_map(|task| task.full_command())
+            .filter_map(|task| task.full_command().ok())
             .collect()
     }
 

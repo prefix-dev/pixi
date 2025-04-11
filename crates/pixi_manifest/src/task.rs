@@ -6,9 +6,10 @@ use std::{
     str::FromStr,
 };
 
+use crate::workspace::JINJA_ENV;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use minijinja::Template;
+use miette::IntoDiagnostic;
 use serde::Serialize;
 use toml_edit::{Array, Item, Table, Value};
 
@@ -93,7 +94,7 @@ impl FromStr for TaskName {
 /// Represents different types of scripts
 #[derive(Debug, Clone)]
 pub enum Task {
-    Plain(String),
+    Plain(TaskString),
     Execute(Box<Execute>),
     Alias(Alias),
     Custom(Custom),
@@ -110,26 +111,26 @@ impl Task {
     }
 
     /// If this task is a plain task, returns the task string
-    pub fn as_plain(&self) -> Option<&String> {
+    pub fn as_plain(&self) -> Result<String, miette::Error> {
         match self {
-            Task::Plain(str) => Some(str),
-            _ => None,
+            Task::Plain(str) => str.render(None),
+            _ => Err(miette::miette!("Task is not a plain task")),
         }
     }
 
     /// If this command is an execute command, returns the `Execute` task.
-    pub fn as_execute(&self) -> Option<&Execute> {
+    pub fn as_execute(&self) -> Result<&Execute, miette::Error> {
         match self {
-            Task::Execute(execute) => Some(execute),
-            _ => None,
+            Task::Execute(execute) => Ok(execute),
+            _ => Err(miette::miette!("Task is not an execute task")),
         }
     }
 
     /// If this command is an alias, returns the `Alias` task.
-    pub fn as_alias(&self) -> Option<&Alias> {
+    pub fn as_alias(&self) -> Result<&Alias, miette::Error> {
         match self {
-            Task::Alias(alias) => Some(alias),
-            _ => None,
+            Task::Alias(alias) => Ok(alias),
+            _ => Err(miette::miette!("Task is not an alias task")),
         }
     }
 
@@ -152,12 +153,16 @@ impl Task {
     }
 
     /// Returns the command to execute as a single string.
-    pub fn as_single_command(&self) -> Option<Cow<str>> {
+    pub fn as_single_command(&self) -> Result<Cow<str>, miette::Error> {
+        let args = self.get_args();
         match self {
-            Task::Plain(str) => Some(Cow::Borrowed(str)),
-            Task::Custom(custom) => Some(custom.cmd.as_single()),
-            Task::Execute(exe) => Some(exe.cmd.as_single()),
-            Task::Alias(_) => None,
+            Task::Plain(str) => match str.render(args) {
+                Ok(rendered) => Ok(Cow::Owned(rendered)),
+                Err(e) => Err(e),
+            },
+            Task::Custom(custom) => custom.cmd.as_single(args),
+            Task::Execute(exe) => exe.cmd.as_single(args),
+            Task::Alias(_) => Err(miette::miette!("Alias tasks cannot be executed directly")),
         }
     }
 
@@ -225,7 +230,7 @@ impl Task {
     }
 
     /// Returns the arguments of the task.
-    pub fn get_args(&self) -> Option<&IndexMap<TaskArg, Option<String>>> {
+    pub fn get_args(&self) -> Option<&IndexMap<String, Option<String>>> {
         match self {
             Task::Execute(exe) => exe.args.as_ref(),
             _ => None,
@@ -297,7 +302,7 @@ pub struct Execute {
     pub clean_env: bool,
 
     /// The arguments to pass to the task
-    pub args: Option<IndexMap<TaskArg, Option<String>>>,
+    pub args: Option<IndexMap<String, Option<String>>>,
 }
 
 impl From<Execute> for Task {
@@ -345,43 +350,109 @@ impl From<Custom> for Task {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct TaskString<'a> {
-    _inner: Template<'a, 'a>,
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TaskString {
+    _inner: String,
+}
+
+impl From<&str> for TaskString {
+    fn from(value: &str) -> Self {
+        TaskString {
+            _inner: value.to_string(),
+        }
+    }
+}
+
+impl From<String> for TaskString {
+    fn from(value: String) -> Self {
+        TaskString { _inner: value }
+    }
+}
+
+impl TaskString {
+    // TODO: enable feature for serialize
+    // TODO: check if the Minijinja Value can be used.
+    pub fn render(
+        &self,
+        argsmap: Option<&IndexMap<String, Option<String>>>,
+    ) -> Result<String, miette::Error> {
+        if let Some(argsmap) = argsmap {
+            // If any of the values are None, we should error
+            if argsmap.values().any(|v| v.is_none()) {
+                let undefined_arg = argsmap
+                    .iter()
+                    .find_map(|(k, v)| if v.is_none() { Some(k) } else { None })
+                    .unwrap();
+                return Err(anyhow::anyhow!(
+                    "No value provided for argument '{}'",
+                    undefined_arg
+                ));
+            }
+            return JINJA_ENV
+                .render_str(&self._inner, argsmap)
+                .into_diagnostic();
+        }
+
+        JINJA_ENV.render_str(&self._inner, ()).into_diagnostic()
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum CmdArgs {
-    Single(String),
-    Multiple(Vec<String>),
+    Single(TaskString),
+    Multiple(Vec<TaskString>),
 }
 
-impl From<Vec<String>> for CmdArgs {
-    fn from(value: Vec<String>) -> Self {
+impl From<Vec<TaskString>> for CmdArgs {
+    fn from(value: Vec<TaskString>) -> Self {
         CmdArgs::Multiple(value)
     }
 }
 
-impl From<String> for CmdArgs {
-    fn from(value: String) -> Self {
+impl From<TaskString> for CmdArgs {
+    fn from(value: TaskString) -> Self {
         CmdArgs::Single(value)
     }
 }
 
 impl CmdArgs {
     /// Returns a single string representation of the command arguments.
-    pub fn as_single(&self) -> Cow<str> {
+    pub fn as_single(
+        &self,
+        argsmap: Option<&IndexMap<String, Option<String>>>,
+    ) -> Result<Cow<str>, miette::Error> {
         match self {
-            CmdArgs::Single(cmd) => Cow::Borrowed(cmd),
-            CmdArgs::Multiple(args) => Cow::Owned(args.iter().map(|arg| quote(arg)).join(" ")),
+            CmdArgs::Single(cmd) => Ok(Cow::Owned(cmd.render(argsmap)?)),
+            CmdArgs::Multiple(args) => {
+                let mut rendered_args = Vec::new();
+                for arg in args {
+                    let rendered = arg.render(argsmap)?;
+                    rendered_args.push(quote(&rendered).to_string());
+                }
+                Ok(Cow::Owned(rendered_args.join(" ")))
+            }
         }
     }
 
     /// Returns a single string representation of the command arguments.
-    pub fn into_single(self) -> String {
+    pub fn into_single(
+        self,
+        argsmap: Option<&IndexMap<String, Option<String>>>,
+    ) -> Result<String, miette::Error> {
         match self {
-            CmdArgs::Single(cmd) => cmd,
-            CmdArgs::Multiple(args) => args.iter().map(|arg| quote(arg)).join(" "),
+            CmdArgs::Single(cmd) => cmd.render(argsmap),
+            CmdArgs::Multiple(args) => {
+                let rendered_args = args
+                    .iter()
+                    .map(|arg| {
+                        Ok(match arg.render(argsmap) {
+                            Ok(rendered) => quote(&rendered).to_string(),
+                            Err(e) => return Err(e),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(rendered_args.join(" "))
+            }
         }
     }
 }
@@ -399,11 +470,19 @@ impl Display for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Task::Plain(cmd) => {
-                write!(f, "{}", cmd)?;
+                write!(f, "{}", cmd.render(None).unwrap())?;
             }
-            Task::Execute(cmd) => match &cmd.cmd {
-                CmdArgs::Single(cmd) => write!(f, "{}", cmd)?,
-                CmdArgs::Multiple(mult) => write!(f, "{}", mult.join(" "))?,
+            Task::Execute(execute) => match &execute.cmd {
+                CmdArgs::Single(cmd) => {
+                    write!(f, "{}", cmd.render(execute.args.as_ref()).unwrap())?
+                }
+                CmdArgs::Multiple(mult) => write!(
+                    f,
+                    "{}",
+                    mult.iter()
+                        .map(|arg| arg.render(execute.args.as_ref()).unwrap())
+                        .join(" ")
+                )?,
             },
             _ => {}
         };
@@ -457,15 +536,22 @@ pub fn quote(in_str: &str) -> Cow<str> {
 impl From<Task> for Item {
     fn from(value: Task) -> Self {
         match value {
-            Task::Plain(str) => Item::Value(str.into()),
+            Task::Plain(str) => Item::Value(str.render(None).unwrap().into()),
             Task::Execute(process) => {
                 let mut table = Table::new().into_inline_table();
                 match process.cmd {
                     CmdArgs::Single(cmd_str) => {
-                        table.insert("cmd", cmd_str.into());
+                        table.insert("cmd", cmd_str.render(process.args.as_ref()).unwrap().into());
                     }
                     CmdArgs::Multiple(cmd_strs) => {
-                        table.insert("cmd", Value::Array(Array::from_iter(cmd_strs)));
+                        table.insert(
+                            "cmd",
+                            Value::Array(Array::from_iter(
+                                cmd_strs
+                                    .iter()
+                                    .map(|arg| arg.render(process.args.as_ref()).unwrap()),
+                            )),
+                        );
                     }
                 }
                 if !process.depends_on.is_empty() {
