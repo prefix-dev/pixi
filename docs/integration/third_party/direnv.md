@@ -38,6 +38,6 @@ these hooks into the shell should not be relied on when using and IDE.
 
 Here you can see how to set up `direnv` for your favorite editor:
 
-- [VSCode](../editor/vscode.md#direnv)
+- [VSCode](../editor/vscode.md#direnv-extension)
 - [Jetbrains](../editor/jetbrains.md#direnv)
 - [Zed](../editor/zed.md)
