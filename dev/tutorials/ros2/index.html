@@ -1892,6 +1892,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#where-can-i-find-more-documentation-on-the-robostack-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where can I find more documentation on the robostack-* channels?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#community-examples" class="md-nav__link">
     <span class="md-ellipsis">
       Community examples
@@ -2555,6 +2564,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#where-can-i-find-more-documentation-on-the-robostack-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      Where can I find more documentation on the robostack-* channels?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#community-examples" class="md-nav__link">
     <span class="md-ellipsis">
       Community examples
@@ -2604,7 +2622,7 @@ The tutorial is written to be executed from top to bottom, missing steps might r
 <li>On Windows, it's advised to enable Developer mode. Go to Settings -&gt; Update &amp; Security -&gt; For developers -&gt; Developer mode.</li>
 </ul>
 <h2 id="create-a-pixi-workspace">Create a Pixi workspace<a class="headerlink" href="#create-a-pixi-workspace" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_ros2_project<span class="w"> </span>-c<span class="w"> </span>robostack-staging<span class="w"> </span>-c<span class="w"> </span>conda-forge
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_ros2_project<span class="w"> </span>-c<span class="w"> </span>robostack-humble<span class="w"> </span>-c<span class="w"> </span>conda-forge
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_ros2_project
 </span></code></pre></div>
 <p>It should have created a directory structure like this:</p>
@@ -2619,7 +2637,7 @@ The tutorial is written to be executed from top to bottom, missing steps might r
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Add a short description here&quot;</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;User Name &lt;user.name@email.url&gt;&quot;</span><span class="p">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;robostack-staging&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;robostack-humble&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Your project can support multiple platforms, the current platform will be automatically added.</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
@@ -2755,6 +2773,8 @@ Let's inspire the community together!</p>
 <h3 id="what-happens-with-rosdep">What happens with <code>rosdep</code>?<a class="headerlink" href="#what-happens-with-rosdep" title="Permanent link">#</a></h3>
 <p>Currently, we don't support <code>rosdep</code> in a Pixi environment, so you'll have to add the packages using <code>pixi add</code>.
 <code>rosdep</code> will call <code>conda install</code> which isn't supported in a Pixi environment.</p>
+<h3 id="where-can-i-find-more-documentation-on-the-robostack-channels">Where can I find more documentation on the <code>robostack-*</code> channels?<a class="headerlink" href="#where-can-i-find-more-documentation-on-the-robostack-channels" title="Permanent link">#</a></h3>
+<p>You can find more documentation on RoboStack channels in the <a href="https://robostack.github.io/">RoboStack documentation</a>.</p>
 <h3 id="community-examples">Community examples<a class="headerlink" href="#community-examples" title="Permanent link">#</a></h3>
 <p>ROS 2 Humble on macOS,<a href="https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655">Simulating differential drive using Gazebo</a>.</p>
 
