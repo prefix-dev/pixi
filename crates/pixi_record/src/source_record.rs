@@ -2,6 +2,7 @@ use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
 use rattler_lock::{CondaPackageData, CondaSourceData};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::{ParseLockFileError, PinnedSourceSpec};
 
@@ -45,6 +46,7 @@ impl From<SourceRecord> for CondaPackageData {
                 hash: i.hash,
                 globs: i.globs,
             }),
+            sources: BTreeMap::default(),
         })
     }
 }

@@ -349,6 +349,12 @@
           "type": "string",
           "minLength": 1
         },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
+          "type": "string",
+          "minLength": 1
+        },
         "md5": {
           "title": "Md5",
           "description": "The md5 hash of the package",
@@ -796,6 +802,12 @@
         "git": {
           "title": "Git",
           "description": "The git URL to the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
           "type": "string",
           "minLength": 1
         },

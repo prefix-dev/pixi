@@ -4,13 +4,16 @@ package:
 
 source:
   path: .
-  use_gitignore: true
 
 build:
   noarch: python
   number: 0
   script: |
     pip install . --no-deps -vv
+  python:
+    entry_points:
+      - pixi-build-package-main = pixi_build_package:main
+
 requirements:
   host:
     - pip

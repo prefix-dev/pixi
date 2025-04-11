@@ -392,7 +392,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
                 eprintln!(
-                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace3]' section.",
+                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.",
                     console::style(console::Emoji("🤔 ", "")).blue(),
                 );
                 return Ok(());

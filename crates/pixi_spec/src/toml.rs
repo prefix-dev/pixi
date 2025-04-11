@@ -69,6 +69,9 @@ pub struct TomlSpec {
     /// The subdir of the channel
     pub subdir: Option<String>,
 
+    /// The license
+    pub license: Option<String>,
+
     /// The md5 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
@@ -281,7 +284,8 @@ impl TomlSpec {
                     || self.channel.is_some()
                     || self.subdir.is_some()
                     || self.md5.is_some()
-                    || self.sha256.is_some();
+                    || self.sha256.is_some()
+                    || self.license.is_some();
                 if !is_detailed {
                     return Err(SpecError::MissingDetailedIdentifier);
                 }
@@ -295,6 +299,7 @@ impl TomlSpec {
                     subdir: self.subdir,
                     md5: self.md5,
                     sha256: self.sha256,
+                    license: self.license,
                 }))
             }
             (_, _, _) => return Err(SpecError::MultipleIdentifiers),
@@ -339,7 +344,8 @@ impl TomlSpec {
                     || self.channel.is_some()
                     || self.subdir.is_some()
                     || self.md5.is_some()
-                    || self.sha256.is_some();
+                    || self.sha256.is_some()
+                    || self.license.is_some();
                 if !is_detailed {
                     return Err(SpecError::MissingDetailedIdentifier);
                 }
@@ -353,6 +359,7 @@ impl TomlSpec {
                     subdir: self.subdir,
                     md5: self.md5,
                     sha256: self.sha256,
+                    license: self.license,
                 }))
             }
             (_, _, _) => return Err(SpecError::MultipleIdentifiers),
@@ -415,6 +422,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
         let file_name = th.optional("file-name");
         let channel = th.optional("channel").map(TomlFromStr::into_inner);
         let subdir = th.optional("subdir");
+        let license = th.optional("license");
         let md5 = th
             .optional::<TomlDigest<rattler_digest::Md5>>("md5")
             .map(TomlDigest::into_inner);
@@ -440,6 +448,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
             subdir,
             md5,
             sha256,
+            license,
         })
     }
 }
