@@ -1316,7 +1316,7 @@ impl<'p> UpdateContext<'p> {
             );
         }
 
-        // Iteratate over all outdated environments and their platforms and extract the
+        // Iterate over all outdated environments and their platforms and extract the
         // corresponding records from them.
         for (environment, platform) in all_outdated_envs.iter().flat_map(|(env, platforms)| {
             iter::once(env.clone()).cartesian_product(platforms.iter().cloned())
