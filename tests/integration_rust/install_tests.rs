@@ -238,7 +238,7 @@ async fn install_locked_with_config() {
 
     // Verify that the folders are present in the target directory using a task.
     pixi.tasks()
-        .add("which_python".into(), None, FeatureName::Default)
+        .add("which_python".into(), None, FeatureName::default())
         .with_commands([which_command])
         .execute()
         .await

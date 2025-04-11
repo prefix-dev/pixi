@@ -912,7 +912,7 @@ platforms = ["{platform}"]
     .unwrap();
 
     // Add python
-    pixi.add("python").await.unwrap();
+    pixi.add("python>=3.13.2,<3.14").await.unwrap();
 
     // Add a package
     pixi.add("boltons")
