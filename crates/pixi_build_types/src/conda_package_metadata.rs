@@ -1,9 +1,13 @@
+use std::collections::HashMap;
+
 use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::SourcePackageSpecV1;
+
 #[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaPackageMetadata {
     /// The name of the package.
@@ -37,4 +41,9 @@ pub struct CondaPackageMetadata {
 
     /// The noarch type of the package
     pub noarch: NoArchType,
+
+    /// Describes any packages that should be built from a particular
+    /// source.
+    #[serde(default)]
+    pub sources: HashMap<String, SourcePackageSpecV1>,
 }

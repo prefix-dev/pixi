@@ -11,7 +11,7 @@ use std::{
 
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
-use futures::{stream::FuturesUnordered, FutureExt, StreamExt, TryStreamExt};
+use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -20,7 +20,7 @@ use pixi_build_frontend::ToolContext;
 use pixi_consts::consts;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PinnedSourceSpec, PixiRecord};
+use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
     to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
     ConversionError,
@@ -28,7 +28,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, PackageName, ParseStrictness, Platform};
+use rattler_conda_types::{Arch, MatchSpec, PackageName, Platform};
 use rattler_lock::{
     LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
 };
@@ -44,7 +44,10 @@ use super::{
 };
 use crate::{
     activation::CurrentEnvVarBehavior,
-    build::{BuildContext, BuildError, GlobHashCache, SourceCheckoutReporter},
+    build::{
+        source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
+        BuildContext, BuildEnvironment, GlobHashCache, SourceCheckoutReporter,
+    },
     environment::{
         self, read_environment_file, write_environment_file, CondaPrefixUpdated,
         CondaPrefixUpdaterBuilder, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
@@ -1713,6 +1716,20 @@ async fn spawn_solve_conda_environment_task(
                     },
                 );
 
+            // Create matchspec definitions for the source dependencies. This ensures that
+            // during the solve they are also included.
+            let source_match_specs = source_specs
+                .iter()
+                .map(|(name, _)| MatchSpec {
+                    name: Some(name.clone()),
+                    ..MatchSpec::default()
+                })
+                .collect::<Vec<_>>();
+            let packages_from_source = source_specs
+                .iter()
+                .map(|(name, _source)| name.clone())
+                .collect::<HashSet<_>>();
+
             // Collect metadata from all source packages
             let channel_urls = channels
                 .iter()
@@ -1720,116 +1737,34 @@ async fn spawn_solve_conda_environment_task(
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
-            let mut metadata_progress = None;
-            let mut source_progress = None;
-            let mut source_match_specs = Vec::new();
-            let source_futures = FuturesUnordered::new();
-            for (build_id, (name, source_spec)) in source_specs.iter().enumerate() {
+            // Process source dependencies
+            let collected_source_metadata = if source_specs.is_empty() {
+                CollectedSourceMetadata::default()
+            } else {
                 // Create a metadata reporter if it doesn't exist yet.
-                let metadata_reporter = metadata_progress
-                    .get_or_insert_with(|| {
-                        Arc::new(CondaMetadataProgress::new(
-                            &pb.pb,
-                            source_specs.len() as u64,
-                        ))
-                    })
-                    .clone();
-                let source_reporter = source_progress
-                    .get_or_insert_with(|| {
-                        Arc::new(SourceCheckoutReporter::new(
-                            root_pb.clone(),
-                            global_multi_progress(),
-                        ))
-                    })
-                    .clone();
-
-                let build_context = &build_context;
-                let channel_urls = &channel_urls;
-                let virtual_packages = virtual_packages.clone();
-                let extract_source_metadata = async move {
-                    // A helper struct to pass along the diagnostics from the BuildError.
-                    #[derive(Debug, Error, Diagnostic)]
-                    enum ExtractSourceMetadataError {
-                        #[error("failed to extract metadata for package '{name}'")]
-                        BuildError {
-                            name: String,
-                            #[source]
-                            #[diagnostic_source]
-                            error: BuildError,
-                        },
-                        #[error("the package '{name}' is not provided by the project located at '{}'", &.pinned_source)]
-                        PackageMetadataNotFound {
-                            name: String,
-                            pinned_source: Box<PinnedSourceSpec>,
-                            #[help]
-                            help: String,
-                        }
-                    }
-
-                    match build_context
-                        .extract_source_metadata(
-                            source_spec,
-                            channel_urls,
-                            platform,
-                            virtual_packages.clone(),
-                            platform,
-                            virtual_packages,
-                            metadata_reporter,
-                            Some(source_reporter),
-                            build_id,
-                        )
-                        .await
-                    {
-                        Ok(source_metadata) => {
-                            // Make sure that a package with the name defined in spec is available from the backend.
-                            if !source_metadata.records.iter().any(|record| &record.package_record.name == name) {
-                                Err(ExtractSourceMetadataError::PackageMetadataNotFound {
-                                    name: name.as_source().to_string(),
-                                    pinned_source: Box::new(source_metadata.source.pinned),
-                                    help: source_metadata
-                                        .records
-                                        .into_iter()
-                                        .map(|record| (strsim::jaro(record.package_record.name.as_normalized(), name.as_normalized()), record))
-                                        .max_by(|(score_a, _), (score_b, _)| score_a.partial_cmp(score_b).unwrap_or(std::cmp::Ordering::Equal))
-                                        .map(|(_, record)| record)
-                                        .map_or_else(|| String::from("No packages are provided by the build-backend"), |record| format!("The build backend does provide other packages, did you mean '{}'?", record.package_record.name.as_normalized())),
-                                })
-                            } else {
-                                Ok(source_metadata)
-                            }
-                        },
-                        Err(error) => {
-                            Err(ExtractSourceMetadataError::BuildError {
-                                name: name.as_source().to_string(),
-                                error,
-                            })
-                        }
-                    }
-                };
-
-                source_futures.push(extract_source_metadata);
-
-                // Add a dependency to the source package itself.
-                // TODO: We also need to make sure that only the source package is used when
-                //  passing these packages to the gateway.
-                source_match_specs.push(MatchSpec {
-                    name: Some(name.clone()),
-                    ..MatchSpec::default()
-                })
-            }
-            let source_repodata: Vec<_> = source_futures.try_collect().await?;
-
-            // Extract transitive requirements from the requirements of the source packages
-            let mut query_match_specs = match_specs.clone();
-            for source_repodata in source_repodata
-                .iter()
-                .flat_map(|r| r.records.iter())
-                .flat_map(|r| &r.package_record.depends)
-            {
-                if let Ok(spec) = MatchSpec::from_str(source_repodata, ParseStrictness::Lenient) {
-                    query_match_specs.push(spec);
-                }
-            }
+                let metadata_reporter = Arc::new(CondaMetadataProgress::new(
+                    &pb.pb,
+                    source_specs.len() as u64,
+                ));
+                let source_reporter = Arc::new(SourceCheckoutReporter::new(
+                    root_pb.clone(),
+                    global_multi_progress(),
+                ));
+                SourceMetadataCollector::new(
+                    build_context.clone(),
+                    channel_urls.clone(),
+                    BuildEnvironment {
+                        build_platform: platform,
+                        build_virtual_packages: virtual_packages.clone(),
+                        host_platform: platform,
+                        host_virtual_packages: virtual_packages.clone(),
+                    },
+                    metadata_reporter,
+                    Some(source_reporter),
+                )
+                .collect(source_specs)
+                .await?
+            };
 
             // Extract the repo data records needed to solve the environment.
             let fetch_repodata_start = Instant::now();
@@ -1841,7 +1776,11 @@ async fn spawn_solve_conda_environment_task(
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?,
                     [platform, Platform::NoArch],
-                    query_match_specs,
+                    match_specs.iter().cloned().chain(
+                        collected_source_metadata
+                            .transitive_dependencies
+                            .into_iter(),
+                    ),
                 )
                 .recursive(true)
                 .with_reporter(GatewayProgressReporter::new(pb.clone()))
@@ -1862,17 +1801,12 @@ async fn spawn_solve_conda_environment_task(
 
             // Update the locked records by filtering out any source records. These will be
             // locked again every time.
-            let source_package_records: HashSet<rattler_conda_types::PackageName> = source_repodata
-                .iter()
-                .flat_map(|record| record.records.iter())
-                .map(|record| record.package_record.name.clone())
-                .collect();
             let locked_records = existing_repodata_records
                 .records
                 .iter()
                 .filter_map(|record| {
                     let record = record.as_binary()?;
-                    if source_package_records.contains(record.name()) {
+                    if packages_from_source.contains(record.name()) {
                         None
                     } else {
                         Some(record.clone())
@@ -1885,7 +1819,7 @@ async fn spawn_solve_conda_environment_task(
                 virtual_packages,
                 locked_records,
                 available_packages,
-                source_repodata,
+                collected_source_metadata.source_repodata,
                 channel_priority,
             )
             .await

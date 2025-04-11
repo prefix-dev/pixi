@@ -20,7 +20,7 @@ use std::path::PathBuf;
 
 use indexmap::IndexMap;
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
-use rattler_digest::{serde::SerializableHash, Md5, Sha256};
+use rattler_digest::{serde::SerializableHash, Md5, Md5Hash, Sha256, Sha256Hash};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
@@ -175,6 +175,7 @@ pub enum SourcePackageSpecV1 {
     Path(PathSpecV1),
 }
 
+#[serde_as]
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UrlSpecV1 {
@@ -182,10 +183,12 @@ pub struct UrlSpecV1 {
     pub url: Url,
 
     /// The md5 hash of the package
-    pub md5: Option<SerializableHash<Md5>>,
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
+    pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the package
-    pub sha256: Option<SerializableHash<Sha256>>,
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
+    pub sha256: Option<Sha256Hash>,
 }
 
 impl std::fmt::Debug for UrlSpecV1 {
@@ -194,10 +197,10 @@ impl std::fmt::Debug for UrlSpecV1 {
 
         debug_struct.field("url", &self.url);
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5.0));
+            debug_struct.field("md5", &format!("{:x}", md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256.0));
+            debug_struct.field("sha256", &format!("{:x}", sha256));
         }
         debug_struct.finish()
     }

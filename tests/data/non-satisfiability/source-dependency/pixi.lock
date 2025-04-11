@@ -16,6 +16,8 @@ packages:
   depends:
   - python
   input:
+    # This should cause the lock-file to be invalid because the hash is
+    # not the same as the expected one.
     hash: b67010bf5bc5608db89c0399e726852b07a7ef4fb26b3aa18171f1d0f6a19c89
     globs:
     - pixi.toml
