@@ -1,0 +1,10 @@
+[workspace]
+channels = ["conda-forge"]
+platforms = ["win-64"]
+version = "0.1.0"
+
+[dependencies]
+python = ">=3.13.2,<3.14"
+
+[pypi-dependencies]
+boltons = "*"
