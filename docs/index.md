@@ -99,7 +99,7 @@ pixi run python hello.py
 You can also put this run command in a **task**.
 
 ```bash
-pixi task add hello python hello.py
+pixi task add start python hello.py
 ```
 
 ```toml title="pixi.toml" hl_lines="6-7"
