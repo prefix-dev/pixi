@@ -5,6 +5,9 @@ use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
+use itertools::Itertools;
+use rattler_conda_types::{RepoData, PackageName};
+use strsim::jaro;
 
 use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
@@ -118,8 +121,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (match_specs, source_specs, pypi_deps) = match dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
-            // if user passed some git configuration
-            // we will use it to create pixi source specs
             let passed_specs: IndexMap<PackageName, (MatchSpec, SpecType)> = dependency_config
                 .specs()?
                 .into_iter()
@@ -167,8 +168,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             (match_specs, source_specs, pypi_deps)
         }
     };
+
     // TODO: add dry_run logic to add
     let dry_run = false;
+
+    // Fetch repodata for suggestions
+    let platform = dependency_config
+        .platforms
+        .first()
+        .copied()
+        .unwrap_or_else(|| Platform::current());
+
+    let repodata = workspace
+        .project()
+        .authenticated_client()
+        .get_repodata(&workspace.project().channels(), &platform)
+        .await
+        .into_diagnostic()?;
 
     let update_deps = match Box::pin(workspace.update_dependencies(
         match_specs,
@@ -188,6 +204,46 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             workspace.save().await.into_diagnostic()?;
             update_deps
         }
+        Err(e) if e.to_string().contains("No candidates were found") => {
+            let requested_name = match_specs
+                .keys()
+                .next()
+                .map(|name| name.as_normalized().to_string())
+                .or_else(|| pypi_deps.keys().next().map(|name| name.as_normalized().to_string()))
+                .unwrap_or("unknown".to_string());
+
+            let package_names: Vec<String> = repodata
+                .iter()
+                .flat_map(|repo| {
+                    repo.package_records
+                        .iter()
+                        .map(|r| r.package_record.name.as_normalized().to_string())
+                })
+                .unique()
+                .collect();
+
+            let suggestions: Vec<String> = package_names
+                .iter()
+                .filter_map(|name| {
+                    let distance = jaro(&requested_name, name);
+                    (distance > 0.6).then_some((name.clone(), distance))
+                })
+                .sorted_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal))
+                .take(3)
+                .map(|(name, _)| name)
+                .collect();
+
+            eprintln!("× No candidates were found for '{}' on '{}'.", requested_name, platform);
+            if !suggestions.is_empty() {
+                eprintln!("\nDid you mean one of these?");
+                for name in suggestions {
+                    eprintln!("  - {}", name);
+                }
+            }
+            eprintln!("\nTip: Run `pixi search {}` to explore available packages.", requested_name);
+
+            std::process::exit(1);
+        }
         Err(e) => {
             workspace.revert().await.into_diagnostic()?;
             return Err(e);
@@ -195,7 +251,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     if let Some(update_deps) = update_deps {
-        // Notify the user we succeeded
         dependency_config.display_success("Added", update_deps.implicit_constraints);
     }
 
