@@ -2,10 +2,5 @@
 source: crates/pixi_manifest/src/discovery.rs
 expression: snapshot
 ---
-  × Missing table in manifest pyproject.toml
-   ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/nested-pyproject-workspace/nested-non-pixi-pyproject/pyproject.toml:1:1]
- 1 │ [project]
-   · ─
- 2 │ name = "nested-non-pixi-pyproject"
-   ╰────
-  help: Check your manifest for a [tool.pixi.*] table. See https://pixi.sh/latest/python/pyproject_toml for more information.
+Discovered workspace at: nested-pyproject-workspace/pyproject.toml
+- Name: nested-pyproject-workspace

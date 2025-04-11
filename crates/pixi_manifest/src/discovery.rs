@@ -332,7 +332,7 @@ impl WorkspaceDiscoverer {
             // Cheap check to see if the manifest contains a pixi section.
             if let ManifestSource::PyProjectToml(source) = &contents {
                 if !source.contains("[tool.pixi")
-                    && !matches!(search_path.clone(), SearchPath::Explicit(_))
+                    && matches!(search_path.clone(), SearchPath::Explicit(_))
                 {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
                         error: TomlError::NoPixiTable(ManifestKind::Pyproject, None),
@@ -626,6 +626,8 @@ mod test {
     #[case::pixi("pixi.toml")]
     #[case::empty("empty")]
     #[case::package_specific("package_a/pixi.toml")]
+    #[case::missing_table_pixi_manifest("missing-tables/pixi.toml")]
+    #[case::missing_table_pyproject_manifest("missing-tables/pyproject.toml")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
