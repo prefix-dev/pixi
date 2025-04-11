@@ -11,10 +11,10 @@
         <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/integration/third_party/direnv/">
       
       
-        <link rel="prev" href="../../ci/updates_github_actions/">
+        <link rel="prev" href="../pixi_diff/">
       
       
-        <link rel="next" href="../pixi_diff/">
+        <link rel="next" href="../starship/">
       
       
       <link rel="icon" href="../../../assets/pixi.png">
@@ -1293,12 +1293,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../editor/jupyterlab/" class="md-nav__link">
+      <a href="../../editor/vscode/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    JupyterLab
+    VSCode
     
   </span>
   
@@ -1316,12 +1316,35 @@
   
   
     <li class="md-nav__item">
-      <a href="../../editor/pycharm/" class="md-nav__link">
+      <a href="../../editor/jetbrains/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    PyCharm
+    Jetbrains
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../editor/zed/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Zed
     
   </span>
   
@@ -1362,12 +1385,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../editor/devcontainer/" class="md-nav__link">
+      <a href="../../editor/jupyterlab/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    VSCode Devcontainer
+    JupyterLab
     
   </span>
   
@@ -1526,6 +1549,29 @@
                 
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../pixi_diff/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Pixi Diff
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
     
   
   
@@ -1548,29 +1594,6 @@
 
       </a>
       
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../pixi_diff/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Pixi Diff
-    
-  </span>
-  
-
-      </a>
     </li>
   
 
@@ -2343,21 +2366,18 @@
 
   <h1>Direnv</h1>
 
-<details class="note">
-<summary>Installing direnv</summary>
-<p>Of course you can use <code>pixi</code> to install <code>direnv</code> globally. We recommend to run</p>
+<p><code>direnv</code> is a tool which automatically activates an environment as soon as you enter a directory with a <code>.envrc</code> file that you accepted at some point.
+This tutorial will demonstrate how to use <code>direnv</code> with Pixi`.</p>
+<p>First install <code>direnv</code> by running the following command:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>direnv
 </span></code></pre></div>
-<p>to install the latest version of <code>direnv</code> on your computer.</p>
-</details>
-<p>You can use <code>pixi</code> in combination with <code>direnv</code> to automatically activate environments on entering the corresponding directory.
-Enter the following into your <code>.envrc</code> file:</p>
+<p>Then create a <code>.envrc</code> file in your Pixi workspace root with the following content:</p>
 <div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>watch_file<span class="w"> </span>pixi.lock<span class="w"> </span><span class="c1"># (1)!</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
 </span></code></pre></div>
 <ol>
 <li>This ensures that every time your <code>pixi.lock</code> changes, <code>direnv</code> invokes the shell-hook again.</li>
-<li>This installs if needed, and activates the environment. <code>direnv</code> ensures that the environment is deactivated when you leave the directory.</li>
+<li>This installs the environment if needed, and activates it. <code>direnv</code> ensures that the environment is deactivated when you leave the directory.</li>
 </ol>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>my-project
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>direnv:<span class="w"> </span>error<span class="w"> </span>/my-project/.envrc<span class="w"> </span>is<span class="w"> </span>blocked.<span class="w"> </span>Run<span class="w"> </span><span class="sb">`</span>direnv<span class="w"> </span>allow<span class="sb">`</span><span class="w"> </span>to<span class="w"> </span>approve<span class="w"> </span>its<span class="w"> </span>content
@@ -2372,6 +2392,14 @@ Enter the following into your <code>.envrc</code> file:</p>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>$<span class="w"> </span>which<span class="w"> </span>python
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>python<span class="w"> </span>not<span class="w"> </span>found
 </span></code></pre></div>
+<p>While <code>direnv</code> comes with <a href="https://direnv.net/docs/hook.html">hooks for the common shells</a>,
+these hooks into the shell should not be relied on when using and IDE.</p>
+<p>Here you can see how to set up <code>direnv</code> for your favorite editor:</p>
+<ul>
+<li><a href="../../editor/vscode/#direnv-extension">VSCode</a></li>
+<li><a href="../../editor/jetbrains/#direnv">Jetbrains</a></li>
+<li><a href="../../editor/zed/">Zed</a></li>
+</ul>
 
 
 
@@ -2443,9 +2471,9 @@ Enter the following into your <code>.envrc</code> file:</p>
           
             
             <a
-              href="../../ci/updates_github_actions/"
+              href="../pixi_diff/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Lockfile Updates"
+              aria-label="Previous: Pixi Diff"
             >
               <div class="md-footer__button md-icon">
                 
@@ -2456,7 +2484,7 @@ Enter the following into your <code>.envrc</code> file:</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Lockfile Updates
+                  Pixi Diff
                 </div>
               </div>
             </a>
@@ -2466,16 +2494,16 @@ Enter the following into your <code>.envrc</code> file:</p>
           
             
             <a
-              href="../pixi_diff/"
+              href="../starship/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Pixi Diff"
+              aria-label="Next: Starship"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Pixi Diff
+                  Starship
                 </div>
               </div>
               <div class="md-footer__button md-icon">
