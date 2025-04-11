@@ -2,6 +2,6 @@
 source: src/lock_file/satisfiability.rs
 expression: s
 ---
-environment 'default' does not satisfy the requirements of the project for platform 'win-64
+environment 'default' does not satisfy the requirements of the project for platform 'win-64'
     Diagnostic severity: error
     Caused by: the requirement 'foobar ==0.2.0 baz' could not be satisfied (required by 'child-package @ child-package')
