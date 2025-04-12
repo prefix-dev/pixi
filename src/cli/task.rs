@@ -564,7 +564,10 @@ pub struct TaskInfo {
 impl From<&Task> for TaskInfo {
     fn from(task: &Task) -> Self {
         TaskInfo {
-            cmd: task.as_single_command().map(|cmd| cmd.to_string()).ok(),
+            cmd: task
+                .as_single_command()
+                .ok()
+                .and_then(|cmd| cmd.map(|c| c.to_string())),
             description: task.description().map(|desc| desc.to_string()),
             depends_on: task.depends_on().to_vec(),
             cwd: task.working_directory().map(PathBuf::from),

@@ -157,19 +157,16 @@ impl Task {
     }
 
     /// Returns the command to execute as a single string.
-    pub fn as_single_command(&self) -> Result<Cow<str>, TaskStringError> {
+    pub fn as_single_command(&self) -> Result<Option<Cow<str>>, TaskStringError> {
         let args = self.get_args();
         match self {
             Task::Plain(str) => match str.render(args) {
-                Ok(rendered) => Ok(Cow::Owned(rendered)),
+                Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
                 Err(e) => Err(e),
             },
             Task::Custom(custom) => custom.cmd.as_single(args),
             Task::Execute(exe) => exe.cmd.as_single(args),
-            Task::Alias(_) => Err(TaskStringError {
-                source: anyhow::anyhow!("Alias tasks cannot be executed directly"),
-                task: self.to_string(),
-            }),
+            Task::Alias(_) => Ok(None),
         }
     }
 
@@ -449,16 +446,16 @@ impl CmdArgs {
     pub fn as_single(
         &self,
         argsmap: Option<&IndexMap<String, Option<String>>>,
-    ) -> Result<Cow<str>, TaskStringError> {
+    ) -> Result<Option<Cow<str>>, TaskStringError> {
         match self {
-            CmdArgs::Single(cmd) => Ok(Cow::Owned(cmd.render(argsmap)?)),
+            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(argsmap)?))),
             CmdArgs::Multiple(args) => {
                 let mut rendered_args = Vec::new();
                 for arg in args {
                     let rendered = arg.render(argsmap)?;
                     rendered_args.push(quote(&rendered).to_string());
                 }
-                Ok(Cow::Owned(rendered_args.join(" ")))
+                Ok(Some(Cow::Owned(rendered_args.join(" "))))
             }
         }
     }
@@ -467,9 +464,9 @@ impl CmdArgs {
     pub fn into_single(
         self,
         argsmap: Option<&IndexMap<String, Option<String>>>,
-    ) -> Result<String, TaskStringError> {
+    ) -> Result<Option<String>, TaskStringError> {
         match self {
-            CmdArgs::Single(cmd) => cmd.render(argsmap),
+            CmdArgs::Single(cmd) => cmd.render(argsmap).map(Some),
             CmdArgs::Multiple(args) => {
                 let rendered_args = args
                     .iter()
@@ -480,7 +477,7 @@ impl CmdArgs {
                         })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
-                Ok(rendered_args.join(" "))
+                Ok(Some(rendered_args.join(" ")))
             }
         }
     }

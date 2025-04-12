@@ -118,7 +118,7 @@ impl TaskHash {
         }
 
         Ok(Some(Self {
-            command: task.full_command().ok(),
+            command: task.full_command().ok().flatten(),
             outputs: output_hashes,
             inputs: input_hashes,
             // Skipping environment variables used for caching the task

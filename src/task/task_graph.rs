@@ -70,7 +70,7 @@ impl fmt::Display for TaskNode<'_> {
             "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends-on: `{}`",
             self.name.clone().unwrap_or("CUSTOM COMMAND".into()),
             self.run_environment.name(),
-            self.task.as_single_command().unwrap_or(Cow::Owned("".to_string())),
+            self.task.as_single_command().map_or(String::from(""), |r| r.map_or(String::from(""), |c| c.to_string())),
             self.format_additional_args(),
             self.dependencies
                 .iter()
@@ -89,7 +89,7 @@ impl TaskNode<'_> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
-    pub(crate) fn full_command(&self) -> Result<String, anyhow::Error> {
+    pub(crate) fn full_command(&self) -> Result<Option<String>, anyhow::Error> {
         let mut cmd = self.task.as_single_command()?;
 
         if let Some(additional_args) = &self.additional_args {
@@ -97,16 +97,17 @@ impl TaskNode<'_> {
                 // Pass each additional argument varbatim by wrapping it in single quotes
                 let formatted_args = format!(" {}", self.format_additional_args());
                 cmd = match cmd {
-                    Cow::Borrowed(s) => Cow::Owned(format!("{}{}", s, formatted_args)),
-                    Cow::Owned(mut s) => {
+                    Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{}{}", s, formatted_args))),
+                    Some(Cow::Owned(mut s)) => {
                         s.push_str(&formatted_args);
-                        Cow::Owned(s)
+                        Some(Cow::Owned(s))
                     }
+                    None => None,
                 };
             }
         }
 
-        Ok(cmd.into_owned())
+        Ok(cmd.map(|c| c.into_owned()))
     }
 
     /// Format the additional arguments passed to this command
@@ -468,7 +469,7 @@ mod test {
             .topological_order()
             .into_iter()
             .map(|task| &graph[task])
-            .filter_map(|task| task.full_command().ok())
+            .filter_map(|task| task.full_command().ok().flatten())
             .collect()
     }
 

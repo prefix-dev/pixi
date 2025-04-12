@@ -178,27 +178,30 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the task as script
-    fn as_script(&self) -> Result<String, ShellParsingError> {
+    fn as_script(&self) -> Result<Option<String>, ShellParsingError> {
         // Convert the task into an executable string
         let task = self.task.as_single_command()?;
+        if let Some(task) = task {
+            // Get the export specific environment variables
+            let export = get_export_specific_task_env(self.task.as_ref());
 
-        // Get the export specific environment variables
-        let export = get_export_specific_task_env(self.task.as_ref());
+            // Append the command line arguments verbatim
+            let cli_args = self
+                .additional_args
+                .iter()
+                .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)));
 
-        // Append the command line arguments verbatim
-        let cli_args = self
-            .additional_args
-            .iter()
-            .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)));
+            // Skip the export if it's empty, to avoid newlines
+            let full_script = if export.is_empty() {
+                format!("{} {}", task, cli_args)
+            } else {
+                format!("{}\n{} {}", export, task, cli_args)
+            };
 
-        // Skip the export if it's empty, to avoid newlines
-        let full_script = if export.is_empty() {
-            format!("{task} {cli_args}")
+            Ok(Some(full_script))
         } else {
-            format!("{export}\n{task} {cli_args}")
-        };
-
-        Ok(full_script)
+            Ok(None)
+        }
     }
 
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
@@ -211,18 +214,23 @@ impl<'p> ExecutableTask<'p> {
             script: e.task().to_string(),
             error: e,
         })?;
-        tracing::debug!("Parsing shell script: {}", full_script);
 
-        // Parse the shell command
-        deno_task_shell::parser::parse(full_script.trim())
-            .map_err(|e| FailedToParseShellScript {
-                script: full_script.clone(),
-                error: ShellParsingError::ParseError {
-                    source: e,
-                    task: full_script,
-                },
-            })
-            .map(Some)
+        if let Some(full_script) = full_script {
+            tracing::debug!("Parsing shell script: {}", full_script);
+
+            // Parse the shell command
+            deno_task_shell::parser::parse(full_script.trim())
+                .map_err(|e| FailedToParseShellScript {
+                    script: full_script.to_string(),
+                    error: ShellParsingError::ParseError {
+                        source: e,
+                        task: full_script.to_string(),
+                    },
+                })
+                .map(Some)
+        } else {
+            Ok(None)
+        }
     }
 
     /// Returns the working directory for this task.
@@ -248,15 +256,18 @@ impl<'p> ExecutableTask<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub(crate) fn full_command(&self) -> Result<String, anyhow::Error> {
-        let mut cmd = self.task.as_single_command()?.to_string();
+    pub(crate) fn full_command(&self) -> Result<Option<String>, anyhow::Error> {
+        let original_cmd = self.task.as_single_command()?.map(|c| c.into_owned());
 
-        if !self.additional_args.is_empty() {
-            cmd.push(' ');
-            cmd.push_str(&self.additional_args.join(" "));
+        if let Some(mut cmd) = original_cmd {
+            if !self.additional_args.is_empty() {
+                cmd.push(' ');
+                cmd.push_str(&self.additional_args.join(" "));
+            }
+            Ok(Some(cmd))
+        } else {
+            Ok(None)
         }
-
-        Ok(cmd)
     }
 
     /// Returns an object that implements [`Display`] which outputs the command
@@ -380,10 +391,7 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                     f,
                     "{}",
                     consts::TASK_STYLE
-                        .apply_to(match std::convert::AsRef::<str>::as_ref(&command) {
-                            "" => "<alias>",
-                            cmd => cmd,
-                        })
+                        .apply_to(command.as_deref().unwrap_or("<alias>"))
                         .bold()
                 )?;
                 if !self.task.additional_args.is_empty() {
@@ -532,7 +540,7 @@ mod tests {
             additional_args: vec![],
         };
 
-        let script = executable_task.as_script().unwrap();
+        let script = executable_task.as_script().unwrap().unwrap();
         assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
     }
 
