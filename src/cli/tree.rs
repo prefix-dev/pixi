@@ -19,7 +19,7 @@ use crate::{
     WorkspaceLocator,
 };
 
-use super::cli_config::LockFileUpdateConfig;
+use super::cli_config::{LockFileUpdateConfig, SolverConfig};
 
 /// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]
@@ -54,6 +54,9 @@ pub struct Args {
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
+
     /// Invert tree and show what depends on given package in the regex argument
     #[arg(short, long, requires = "regex")]
     pub invert: bool,
@@ -87,6 +90,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             no_install: args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            exclude_newer: args.solver_config.exclude_newer,
         })
         .await
         .wrap_err("Failed to update lock file")?;

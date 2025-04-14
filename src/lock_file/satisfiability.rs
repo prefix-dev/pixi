@@ -7,6 +7,7 @@ use std::{
     str::FromStr,
 };
 
+use chrono::{DateTime, Utc};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
@@ -309,6 +310,9 @@ pub enum PlatformUnsat {
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
+
+    #[error("'{0}' is too new, compared to the exclude-newer date ({1})")]
+    PackageTooNew(String, DateTime<Utc>),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -628,6 +632,7 @@ pub async fn verify_platform_satisfiability(
     platform: Platform,
     project_root: &Path,
     glob_hash_cache: GlobHashCache,
+    exclude_newer: Option<DateTime<Utc>>,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
@@ -645,6 +650,23 @@ pub async fn verify_platform_satisfiability(
             }
             LockedPackageRef::Pypi(pypi, env) => {
                 pypi_packages.push((pypi.clone(), env.clone()));
+            }
+        }
+    }
+
+    // Check if any of the packages are created after the expected exclude-newer
+    // date.
+    if let Some(exclude_newer) = exclude_newer {
+        for package in pixi_records.iter() {
+            if package
+                .as_binary()
+                .and_then(|pkg| pkg.package_record.timestamp)
+                .is_some_and(|pkg| pkg >= exclude_newer)
+            {
+                return Err(Box::new(PlatformUnsat::PackageTooNew(
+                    package.name().as_source().to_owned(),
+                    exclude_newer,
+                )));
             }
         }
     }

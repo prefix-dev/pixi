@@ -1,4 +1,4 @@
-use crate::cli::cli_config::WorkspaceConfig;
+use crate::cli::cli_config::{SolverConfig, WorkspaceConfig};
 use crate::environment::get_update_lock_file_and_prefix;
 use crate::lock_file::{ReinstallPackages, UpdateMode};
 use crate::{UpdateLockFileOptions, WorkspaceLocator};
@@ -30,6 +30,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageConfig,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 
     /// The environment to install.
     #[arg(long, short)]
@@ -84,6 +87,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 lock_file_usage: args.lock_file_usage.into(),
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                exclude_newer: args.solver_config.exclude_newer,
             },
             reinstall_packages.clone(),
         )

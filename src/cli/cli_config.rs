@@ -4,6 +4,7 @@ use crate::lock_file::UpdateMode;
 use crate::workspace::DiscoveryStart;
 use crate::DependencyType;
 use crate::Workspace;
+use chrono::{DateTime, Utc};
 use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
@@ -110,6 +111,18 @@ pub struct LockFileUpdateConfig {
     /// Lock file usage from the CLI
     #[clap(flatten)]
     pub lock_file_usage: super::LockFileUsageConfig,
+}
+
+#[derive(Parser, Debug, Default, Clone)]
+#[clap(next_help_heading = consts::CLAP_SOLVER_OPTIONS)]
+pub struct SolverConfig {
+    /// Exclude any packages that have been created after the given date.
+    #[clap(
+        long = "exclude-newer",
+        env = "PIXI_EXCLUDE_NEWER",
+        value_name = "DATE"
+    )]
+    pub exclude_newer: Option<DateTime<Utc>>,
 }
 
 impl LockFileUpdateConfig {

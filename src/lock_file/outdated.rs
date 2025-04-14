@@ -1,11 +1,11 @@
-use std::collections::{HashMap, HashSet};
-
+use chrono::{DateTime, Utc};
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
+use std::collections::{HashMap, HashSet};
 
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
@@ -65,13 +65,14 @@ impl<'p> OutdatedEnvironments<'p> {
         workspace: &'p Workspace,
         lock_file: &LockFile,
         glob_hash_cache: GlobHashCache,
+        exclude_newer: Option<DateTime<Utc>>,
     ) -> Self {
         // Find all targets that are not satisfied by the lock-file
         let UnsatisfiableTargets {
             mut outdated_conda,
             mut outdated_pypi,
             disregard_locked_content,
-        } = find_unsatisfiable_targets(workspace, lock_file, glob_hash_cache).await;
+        } = find_unsatisfiable_targets(workspace, lock_file, glob_hash_cache, exclude_newer).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -142,6 +143,7 @@ async fn find_unsatisfiable_targets<'p>(
     project: &'p Workspace,
     lock_file: &LockFile,
     glob_hash_cache: GlobHashCache,
+    exclude_newer: Option<DateTime<Utc>>,
 ) -> UnsatisfiableTargets<'p> {
     let mut verified_environments = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
@@ -229,6 +231,7 @@ async fn find_unsatisfiable_targets<'p>(
                 platform,
                 project.root(),
                 glob_hash_cache.clone(),
+                exclude_newer,
             )
             .await
             {

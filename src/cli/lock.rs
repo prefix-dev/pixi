@@ -1,6 +1,7 @@
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 
+use crate::cli::cli_config::SolverConfig;
 use crate::{
     cli::cli_config::WorkspaceConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
@@ -15,6 +16,9 @@ use crate::{
 pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 
     /// Output the changes in JSON format.
     #[clap(long)]
@@ -33,6 +37,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             lock_file_usage: LockFileUsage::Update,
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            exclude_newer: args.solver_config.exclude_newer,
         })
         .await?;
 

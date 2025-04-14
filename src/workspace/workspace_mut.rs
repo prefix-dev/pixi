@@ -1,10 +1,3 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
-};
-
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
@@ -19,8 +12,15 @@ use pixi_manifest::{
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::LockFile;
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+};
 use toml_edit::DocumentMut;
 
+use crate::cli::cli_config::SolverConfig;
 use crate::{
     cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
     diff::LockFileDiff,
@@ -234,6 +234,7 @@ impl WorkspaceMut {
         source_specs: SourceSpecs,
         prefix_update_config: &PrefixUpdateConfig,
         lock_file_update_config: &LockFileUpdateConfig,
+        solver_config: &SolverConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
@@ -358,6 +359,7 @@ impl WorkspaceMut {
             io_concurrency_limit,
         } = UpdateContext::builder(self.workspace())
             .with_lock_file(unlocked_lock_file)
+            .with_opt_exclude_newer(solver_config.exclude_newer)
             .with_no_install(
                 (prefix_update_config.no_install && lock_file_update_config.no_lockfile_update)
                     || dry_run,

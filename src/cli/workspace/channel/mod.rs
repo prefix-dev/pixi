@@ -2,7 +2,9 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
+use crate::cli::cli_config::{
+    LockFileUpdateConfig, PrefixUpdateConfig, SolverConfig, WorkspaceConfig,
+};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
@@ -39,6 +41,9 @@ pub struct AddRemoveArgs {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 
     #[clap(flatten)]
     pub config: ConfigCli,

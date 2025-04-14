@@ -25,7 +25,7 @@ use pixi_pty::unix::PtySession;
 #[cfg(target_family = "unix")]
 use crate::prefix::Prefix;
 
-use super::cli_config::LockFileUpdateConfig;
+use super::cli_config::{LockFileUpdateConfig, SolverConfig};
 
 /// Start a shell in a pixi environment, run `exit` to leave the shell.
 #[derive(Parser, Debug)]
@@ -38,6 +38,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    solver_config: SolverConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -286,6 +289,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             no_install: args.prefix_update_config.no_install
                 && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            exclude_newer: args.solver_config.exclude_newer,
         },
         ReinstallPackages::default(),
     )

@@ -12,6 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
 use dialoguer::theme::ColorfulTheme;
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
@@ -19,6 +20,8 @@ use pixi_git::credentials::store_credentials_from_url;
 use pixi_manifest::{FeaturesExt, PyPiRequirement};
 use pixi_progress::await_in_progress;
 use pixi_spec::{GitSpec, PixiSpec};
+pub use pypi_prefix::update_prefix_pypi;
+pub use python_status::PythonStatus;
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use serde::{Deserialize, Serialize};
@@ -31,10 +34,6 @@ use crate::{
     workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef},
     Workspace,
 };
-
-pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
-pub use pypi_prefix::update_prefix_pypi;
-pub use python_status::PythonStatus;
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -414,9 +413,8 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     // Ensure that the lock-file is up-to-date
     let mut lock_file = project
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: update_lock_file_options.lock_file_usage,
             no_install,
-            max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
+            ..update_lock_file_options
         })
         .await?;
 

@@ -21,7 +21,7 @@ use crate::{
     UpdateLockFileOptions, Workspace, WorkspaceLocator,
 };
 
-use super::cli_config::LockFileUpdateConfig;
+use super::cli_config::{LockFileUpdateConfig, SolverConfig};
 
 /// Print the pixi environment activation script.
 ///
@@ -42,6 +42,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    solver_config: SolverConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -163,6 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             no_install: args.prefix_update_config.no_install
                 && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            exclude_newer: args.solver_config.exclude_newer,
         },
         ReinstallPackages::default(),
     )

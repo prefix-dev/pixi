@@ -1,5 +1,3 @@
-use std::{path::Path, str::FromStr, sync::LazyLock};
-
 use clap::{Parser, ValueHint};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
@@ -14,9 +12,10 @@ use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platfor
 use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
+use std::{path::Path, str::FromStr, sync::LazyLock};
 use uv_configuration::RAYON_INITIALIZE;
 
-use super::cli_config::ChannelsConfig;
+use super::cli_config::{ChannelsConfig, SolverConfig};
 use crate::{
     environment::list::{print_package_table, PackageToOutput},
     prefix::Prefix,
@@ -56,6 +55,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 }
 
 /// CLI entry point for `pixi exec`
@@ -194,6 +196,7 @@ pub async fn create_exec_prefix(
         Solver.solve(SolverTask {
             specs: specs_clone,
             virtual_packages,
+            exclude_newer: args.solver_config.exclude_newer,
             ..SolverTask::from_iter(&repodata)
         })
     })

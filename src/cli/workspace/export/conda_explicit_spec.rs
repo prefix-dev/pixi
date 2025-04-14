@@ -3,6 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::cli::cli_config::SolverConfig;
 use crate::{
     cli::cli_config::{LockFileUpdateConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
@@ -44,6 +45,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -173,6 +177,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             no_install: args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            exclude_newer: args.solver_config.exclude_newer,
         })
         .await?
         .lock_file;

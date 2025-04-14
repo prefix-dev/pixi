@@ -10,6 +10,7 @@ use std::{
 };
 
 use barrier_cell::BarrierCell;
+use chrono::{DateTime, Utc};
 use fancy_display::FancyDisplay;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use indexmap::{IndexMap, IndexSet};
@@ -28,7 +29,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{Arch, MatchSpec, PackageName, Platform, RepoDataRecord};
 use rattler_lock::{
     LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
 };
@@ -114,6 +115,7 @@ impl Workspace {
             self,
             &lock_file,
             glob_hash_cache.clone(),
+            options.exclude_newer,
         )
         .await;
         if outdated.is_empty() {
@@ -146,6 +148,7 @@ impl Workspace {
             .with_outdated_environments(outdated)
             .with_lock_file(lock_file)
             .with_glob_hash_cache(glob_hash_cache)
+            .with_opt_exclude_newer(options.exclude_newer)
             .finish()
             .await?
             .update()
@@ -211,6 +214,9 @@ pub struct UpdateLockFileOptions {
     /// value is None a heuristic is used based on the number of cores
     /// available from the system.
     pub max_concurrent_solves: usize,
+
+    /// Exclude any packages that are created after the given date.
+    pub exclude_newer: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -671,6 +677,9 @@ pub struct UpdateContext<'p> {
 
     /// Whether it is allowed to instantiate any prefix.
     no_install: bool,
+
+    /// Whether to exclude any packages that are created after a certain date.
+    exclude_newer: Option<DateTime<Utc>>,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -849,6 +858,9 @@ pub struct UpdateContextBuilder<'p> {
 
     /// A cache for computing input hashes
     glob_hash_cache: Option<GlobHashCache>,
+
+    /// Whether to exclude any packages that are created after a certain date.
+    exclude_newer: Option<DateTime<Utc>>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -902,6 +914,14 @@ impl<'p> UpdateContextBuilder<'p> {
         }
     }
 
+    /// Whether to include any packages that were created after a certain date.
+    pub fn with_opt_exclude_newer(self, exclude_newer: Option<DateTime<Utc>>) -> Self {
+        Self {
+            exclude_newer,
+            ..self
+        }
+    }
+
     /// Construct the context.
     pub(crate) async fn finish(self) -> miette::Result<UpdateContext<'p>> {
         let project = self.project;
@@ -920,6 +940,7 @@ impl<'p> UpdateContextBuilder<'p> {
                     project,
                     &lock_file,
                     glob_hash_cache.clone(),
+                    self.exclude_newer,
                 )
                 .await
             }
@@ -1118,6 +1139,7 @@ impl<'p> UpdateContextBuilder<'p> {
             glob_hash_cache,
 
             no_install: self.no_install,
+            exclude_newer: self.exclude_newer,
         })
     }
 }
@@ -1135,6 +1157,7 @@ impl<'p> UpdateContext<'p> {
             io_concurrency_limit: None,
             glob_hash_cache: None,
             mapping_client: None,
+            exclude_newer: None,
         }
     }
 
@@ -1210,6 +1233,7 @@ impl<'p> UpdateContext<'p> {
                     self.conda_solve_semaphore.clone(),
                     channel_priority,
                     self.build_context.clone(),
+                    self.exclude_newer,
                 )
                 .boxed_local();
 
@@ -1647,6 +1671,7 @@ async fn spawn_solve_conda_environment_task(
     concurrency_semaphore: Arc<Semaphore>,
     channel_priority: ChannelPriority,
     build_context: BuildContext,
+    exclude_newer: Option<DateTime<Utc>>,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -1801,7 +1826,7 @@ async fn spawn_solve_conda_environment_task(
 
             // Update the locked records by filtering out any source records. These will be
             // locked again every time.
-            let locked_records = existing_repodata_records
+            let mut locked_records = existing_repodata_records
                 .records
                 .iter()
                 .filter_map(|record| {
@@ -1814,6 +1839,11 @@ async fn spawn_solve_conda_environment_task(
                 })
                 .collect();
 
+            // Filter out any locked records that are newer than the exclude_newer date.
+            if let Some(exclude_newer) = &exclude_newer {
+                filter_locked_based_on_exclude_newer(&mut locked_records, exclude_newer);
+            }
+
             let mut records = lock_file::resolve_conda(
                 all_specs,
                 virtual_packages,
@@ -1821,6 +1851,7 @@ async fn spawn_solve_conda_environment_task(
                 available_packages,
                 collected_source_metadata.source_repodata,
                 channel_priority,
+                exclude_newer,
             )
             .await
             .with_context(|| {
@@ -1870,6 +1901,47 @@ async fn spawn_solve_conda_environment_task(
         Ok(panic) => std::panic::resume_unwind(panic),
         Err(_err) => Err(miette::miette!("the operation was cancelled")),
     })
+}
+
+/// Takes a vec of locked records and filters out any records that are newer
+/// than the specified `exclude_newer` date.
+///
+/// This function processes the locked records in place to avoid allocating a
+/// new vec. It uses a two-pointer technique to swap the items that need to be
+/// removed to the back of the vec.
+fn filter_locked_based_on_exclude_newer(
+    locked_records: &mut Vec<RepoDataRecord>,
+    exclude_newer: &DateTime<Utc>,
+) {
+    let len = locked_records.len();
+    let mut index = 0;
+    let mut truncated_items = 0;
+    while index < (len - truncated_items) {
+        match &locked_records[index].package_record.timestamp {
+            Some(created_at) if created_at > exclude_newer => {
+                // Swap the item to the back of the vec
+                locked_records.swap(index, len - truncated_items - 1);
+                truncated_items += 1;
+            }
+            _ => {}
+        }
+        index += 1;
+    }
+
+    // Log the number of items were truncated
+    if truncated_items > 0 {
+        tracing::info!(
+            "removed locked records for {} because they are newer than the exclude-newer date ({})",
+            locked_records[len - truncated_items..]
+                .iter()
+                .map(|record| record.name().as_source())
+                .format(", "),
+            exclude_newer
+        )
+    }
+
+    // Finally drop the truncated items from the vec
+    locked_records.truncate(len - truncated_items);
 }
 
 /// Distill the repodata that is applicable for the given `environment` from the

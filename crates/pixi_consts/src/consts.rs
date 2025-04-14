@@ -87,6 +87,7 @@ pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";
 pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
 pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
+pub const CLAP_SOLVER_OPTIONS: &str = "Solver Options";
 
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());

@@ -1,5 +1,6 @@
 use std::{cmp::Ordering, collections::HashSet};
 
+use crate::cli::cli_config::SolverConfig;
 use crate::{
     cli::cli_config::WorkspaceConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
@@ -29,6 +30,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
@@ -161,6 +165,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Update the packages in the lock-file.
     let updated_lock_file = UpdateContext::builder(&workspace)
+        .with_opt_exclude_newer(args.solver_config.exclude_newer)
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
         .finish()

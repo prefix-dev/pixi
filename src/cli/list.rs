@@ -9,7 +9,7 @@ use itertools::Itertools;
 use miette::{miette, IntoDiagnostic};
 use uv_configuration::ConfigSettings;
 
-use crate::cli::cli_config::WorkspaceConfig;
+use crate::cli::cli_config::{SolverConfig, WorkspaceConfig};
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
 use crate::WorkspaceLocator;
 use fancy_display::FancyDisplay;
@@ -69,6 +69,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 
     /// Only list packages that are explicitly defined in the workspace.
     #[arg(short = 'x', long)]
@@ -183,6 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            exclude_newer: args.solver_config.exclude_newer,
         })
         .await?;
 

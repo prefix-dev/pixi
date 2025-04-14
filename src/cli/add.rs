@@ -7,6 +7,7 @@ use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
+use crate::cli::cli_config::SolverConfig;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
@@ -87,6 +88,9 @@ pub struct Args {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
+    pub solver_config: SolverConfig,
+
+    #[clap(flatten)]
     pub config: ConfigCli,
 
     /// Whether the pypi requirement should be editable
@@ -95,10 +99,17 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, lock_file_update_config, workspace_config) = (
+    let (
+        dependency_config,
+        prefix_update_config,
+        lock_file_update_config,
+        solver_config,
+        workspace_config,
+    ) = (
         args.dependency_config,
         args.prefix_update_config,
         args.lock_file_update_config,
+        args.solver_config,
         args.workspace_config,
     );
 
@@ -176,6 +187,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         source_specs,
         &prefix_update_config,
         &lock_file_update_config,
+        &solver_config,
         &dependency_config.feature,
         &dependency_config.platforms,
         args.editable,

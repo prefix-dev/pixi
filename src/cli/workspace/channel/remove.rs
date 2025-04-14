@@ -28,6 +28,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
             no_install: args.prefix_update_config.no_install
                 && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+            exclude_newer: args.solver_config.exclude_newer,
         },
         ReinstallPackages::default(),
     )

@@ -1,4 +1,5 @@
 use ahash::HashMap;
+use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::ChannelPriority;
@@ -23,6 +24,7 @@ pub async fn resolve_conda(
     available_repodata: Vec<RepoData>,
     available_source_packages: Vec<SourceMetadata>,
     channel_priority: ChannelPriority,
+    exclude_newer: Option<DateTime<Utc>>,
 ) -> miette::Result<LockedCondaPackages> {
     tokio::task::spawn_blocking(move || {
         // Combine the repodata from the source packages and from registry channels.
@@ -62,6 +64,7 @@ pub async fn resolve_conda(
             locked_packages,
             virtual_packages,
             channel_priority: channel_priority.into(),
+            exclude_newer,
             ..rattler_solve::SolverTask::from_iter(solvable_records)
         };
 

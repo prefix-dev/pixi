@@ -1,4 +1,5 @@
 use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
+use crate::cli::cli_config::SolverConfig;
 use crate::{
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
@@ -34,6 +35,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 
     #[clap(flatten)]
     pub config: ConfigCli,
@@ -123,6 +127,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 lock_file_usage: lock_file_update_config.lock_file_usage(),
                 no_install: prefix_update_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                exclude_newer: args.solver_config.exclude_newer,
             },
             ReinstallPackages::default(),
         )

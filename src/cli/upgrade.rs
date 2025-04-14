@@ -11,7 +11,7 @@ use pixi_manifest::{FeatureName, PyPiRequirement, SpecType};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
 
-use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
+use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, SolverConfig};
 use crate::{
     cli::cli_config::WorkspaceConfig,
     diff::LockFileJsonDiff,
@@ -32,6 +32,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub solver_config: SolverConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -93,6 +96,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             IndexMap::default(),
             &args.prefix_update_config,
             &args.lock_file_update_config,
+            &args.solver_config,
             &args.specs.feature,
             &[],
             false,
