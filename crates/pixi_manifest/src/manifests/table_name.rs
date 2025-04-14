@@ -74,12 +74,17 @@ impl TableName<'_> {
             .is_some_and(|feature_name| !feature_name.is_default())
         {
             parts.push("feature");
-            parts.push(
-                self.feature_name
-                    .as_ref()
-                    .expect("we already verified")
-                    .as_str(),
-            );
+            let feature_str = self
+                .feature_name
+                .as_ref()
+                .expect("we already verified")
+                .as_str();
+
+            if feature_str.contains('.') {
+                parts.push(format!("\"{}\"", feature_str).leak());
+            } else {
+                parts.push(feature_str);
+            }
         }
         if let Some(platform) = self.platform {
             parts.push("target");
@@ -165,6 +170,16 @@ mod tests {
             TableName::new()
                 .with_feature_name(Some(&feature_name))
                 .with_platform(Some(&Platform::Linux64))
+                .with_table(Some("dependencies"))
+                .to_string()
+        );
+
+        // Test feature name with dot
+        let feature_name = FeatureName::from("test.test");
+        assert_eq!(
+            "feature.\"test.test\".dependencies".to_string(),
+            TableName::new()
+                .with_feature_name(Some(&feature_name))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
