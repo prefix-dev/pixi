@@ -2610,8 +2610,7 @@ This ensures that CUDA is recognized and appropriately locked into the lock file
 <ol>
 <li>Can <code>system-requirements</code> enforce a specific CUDA runtime version?
     - No. The <code>system-requirements</code> field is used to specify the maximum supported CUDA version based on the host’s NVIDIA driver API.
-Adding this field ensures that packages depending on <code>__cuda &gt;= {version}</code> are resolved correctly.
-2.</li>
+Adding this field ensures that packages depending on <code>__cuda &gt;= {version}</code> are resolved correctly.</li>
 </ol>
 <h3 id="setting-system-requirements-environment-specific">Setting System Requirements environment specific<a class="headerlink" href="#setting-system-requirements-environment-specific" title="Permanent link">#</a></h3>
 <p>This can be set per <code>feature</code> in the <code>the manifest</code> file.</p>
