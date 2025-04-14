@@ -31,6 +31,13 @@ pixi shell [OPTIONS]
 - <a id="arg---no-completions" href="#arg---no-completions">`--no-completions`</a>
 :  Do not source the autocompletion scripts from the environment
 
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to activate in the shell
+
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
@@ -44,8 +51,6 @@ pixi shell [OPTIONS]
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to activate in the shell
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

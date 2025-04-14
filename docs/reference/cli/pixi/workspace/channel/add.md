@@ -36,6 +36,13 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
 
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
+:  The name of the feature to modify
+
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
@@ -49,8 +56,6 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
-:  The name of the feature to modify
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

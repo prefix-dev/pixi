@@ -52,6 +52,11 @@ pixi remove [OPTIONS] <SPEC>...
 - <a id="arg---subdir" href="#arg---subdir">`--subdir (-s) <SUBDIR>`</a>
 :  The subdirectory of the git repository to use
 
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file

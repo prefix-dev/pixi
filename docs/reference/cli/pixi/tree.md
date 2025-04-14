@@ -21,6 +21,13 @@ pixi tree [OPTIONS] [REGEX]
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
 
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+- <a id="arg---invert" href="#arg---invert">`--invert (-i)`</a>
+:  Invert tree and show what depends on given package in the regex argument
+
 ## Update Options
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
 :  Don't update lockfile, implies the no-install as well
@@ -30,8 +37,6 @@ pixi tree [OPTIONS] [REGEX]
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---invert" href="#arg---invert">`--invert (-i)`</a>
-:  Invert tree and show what depends on given package in the regex argument
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

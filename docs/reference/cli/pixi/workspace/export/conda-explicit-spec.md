@@ -43,6 +43,11 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
 
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+
 ## Update Options
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
 :  Don't update lockfile, implies the no-install as well

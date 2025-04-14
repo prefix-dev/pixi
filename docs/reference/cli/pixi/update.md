@@ -16,20 +16,6 @@ pixi update [OPTIONS] [PACKAGES]...
 :  The packages to update, space separated. If no packages are provided, all packages will be updated
 <br>May be provided more than once.
 
-## Options
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't install the (solve) environments needed for pypi-dependencies solving
-- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Don't actually write the lockfile or update any environment
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENTS>`</a>
-:  The environments to update. If none is specified, all environments are updated
-<br>May be provided more than once.
-- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORMS>`</a>
-:  The platforms to update. If none is specified, all platforms are updated
-<br>May be provided more than once.
-- <a id="arg---json" href="#arg---json">`--json`</a>
-:  Output the changes in JSON format
-
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
@@ -42,6 +28,23 @@ pixi update [OPTIONS] [PACKAGES]...
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
+
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
+:  Don't install the (solve) environments needed for pypi-dependencies solving
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Don't actually write the lockfile or update any environment
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENTS>`</a>
+:  The environments to update. If none is specified, all environments are updated
+<br>May be provided more than once.
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORMS>`</a>
+:  The platforms to update. If none is specified, all platforms are updated
+<br>May be provided more than once.
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Output the changes in JSON format
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

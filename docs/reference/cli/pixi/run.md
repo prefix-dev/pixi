@@ -33,6 +33,21 @@ pixi run [OPTIONS] [TASK]...
 - <a id="arg---no-completions" href="#arg---no-completions">`--no-completions`</a>
 :  Do not source the autocompletion scripts from the environment
 
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to run the task in
+- <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
+:  Use a clean environment to run the task
+- <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
+:  Don't run the dependencies of the task ('depends-on' field in the task definition)
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Run the task in dry-run mode (only print the command that would run)
+- <a id="arg---help" href="#arg---help">`--help`</a>
+:
+
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
@@ -46,16 +61,6 @@ pixi run [OPTIONS] [TASK]...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to run the task in
-- <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
-:  Use a clean environment to run the task
-- <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
-:  Don't run the dependencies of the task ('depends-on' field in the task definition)
-- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Run the task in dry-run mode (only print the command that would run)
-- <a id="arg---help" href="#arg---help">`--help`</a>
-:
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

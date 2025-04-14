@@ -1778,6 +1778,7 @@ mod tests {
                     platform,
                     project.root(),
                     Default::default(),
+                    None, // exclude-newer
                 )
                 .await
                 .map_err(|e| LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e))?;

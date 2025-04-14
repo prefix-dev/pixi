@@ -11,7 +11,10 @@ Solve environment and update the lock file without installing the environments
 pixi lock [OPTIONS]
 ```
 
-## Options
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
 

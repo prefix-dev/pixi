@@ -17,7 +17,10 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 <br>May be provided more than once.
 <br>**required**: `true`
 
-## Options
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't update the environment, only remove the platform(s) from the lock-file
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>

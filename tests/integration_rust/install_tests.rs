@@ -1084,7 +1084,7 @@ async fn install_s3() {
 }
 
 #[tokio::test]
-async fn test_exclude_newer_cli() {
+async fn test_exclude_newer_conda_cli() {
     let mut package_database = PackageDatabase::default();
 
     // Add three variants of foo with 10 years between them

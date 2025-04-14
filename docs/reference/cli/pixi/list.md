@@ -29,6 +29,13 @@ pixi list [OPTIONS] [REGEX]
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
 
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+- <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
+:  Only list packages that are explicitly defined in the workspace
+
 ## Update Options
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
 :  Don't update lockfile, implies the no-install as well
@@ -38,8 +45,6 @@ pixi list [OPTIONS] [REGEX]
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
-:  Only list packages that are explicitly defined in the workspace
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

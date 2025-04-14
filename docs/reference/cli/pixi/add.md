@@ -52,6 +52,13 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---subdir" href="#arg---subdir">`--subdir (-s) <SUBDIR>`</a>
 :  The subdirectory of the git repository to use
 
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date
+<br>**env**: `PIXI_EXCLUDE_NEWER`
+- <a id="arg---editable" href="#arg---editable">`--editable`</a>
+:  Whether the pypi requirement should be editable
+
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
@@ -65,8 +72,6 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---editable" href="#arg---editable">`--editable`</a>
-:  Whether the pypi requirement should be editable
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
