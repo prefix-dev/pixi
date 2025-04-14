@@ -11,5 +11,5 @@ version = "0.1.0"
 python = "3.13.*"
 
 [pypi-dependencies]
-foobar = { path = "./foobar_whl/dist/foobar-0.1.0-py3-none-any.whl" }
-minimal = { path = "./minimal-0.1.0-py2.py3-none-any.whl" }
+foobar = { path = "../foobar_whl/dist/foobar-0.1.0-py3-none-any.whl" }
+minimal = { path = "../minimal-0.1.0-py2.py3-none-any.whl" }
