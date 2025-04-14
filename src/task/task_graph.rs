@@ -67,11 +67,21 @@ impl fmt::Display for TaskNode<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends-on: `{}`",
-            self.name.clone().unwrap_or("CUSTOM COMMAND".into()),
-            self.run_environment.name(),
-            self.task.as_single_command().map_or(String::from(""), |r| r.map_or(String::from(""), |c| c.to_string())),
-            self.format_additional_args(),
+            "task: {}",
+            self.name.clone().unwrap_or("CUSTOM COMMAND".into())
+        )?;
+        write!(f, ", environment: {}", self.run_environment.name())?;
+        if let Ok(Some(command)) = self.task.as_single_command() {
+            write!(f, "command: `{command}`,",)?;
+        }
+        write!(
+            f,
+            ", additional arguments: `{}`",
+            self.format_additional_args()
+        )?;
+        write!(
+            f,
+            ", depends-on: `{}`",
             self.dependencies
                 .iter()
                 .map(|id| format!("{:?}", id.task_id()))
