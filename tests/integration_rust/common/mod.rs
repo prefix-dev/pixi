@@ -10,9 +10,17 @@ use std::{
     str::FromStr,
 };
 
+use self::builders::{HasDependencyConfig, RemoveBuilder};
+use crate::common::builders::{
+    AddBuilder, InitBuilder, InstallBuilder, LockBuilder, ProjectChannelAddBuilder,
+    ProjectChannelRemoveBuilder, ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder,
+    UpdateBuilder,
+};
 use builders::SearchBuilder;
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
+use pixi::cli::cli_config::SolverConfig;
+use pixi::cli::lock;
 use pixi::{
     cli::{
         add,
@@ -37,12 +45,6 @@ use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
 use tempfile::TempDir;
 use thiserror::Error;
-
-use self::builders::{HasDependencyConfig, RemoveBuilder};
-use crate::common::builders::{
-    AddBuilder, InitBuilder, InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
-    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
-};
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
 [repodata-config."https://prefix.dev"]
@@ -338,6 +340,20 @@ impl PixiControl {
         self.add_multiple(vec![spec])
     }
 
+    /// Returns an [`LockBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn lock(&self) -> LockBuilder {
+        LockBuilder {
+            args: lock::Args {
+                workspace_config: WorkspaceConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                solver_config: SolverConfig::default(),
+                json: false,
+            },
+        }
+    }
+
     /// Add dependencies to the project. Returns an [`AddBuilder`].
     /// To execute the command and await the result, call `.await` on the return value.
     pub fn add_multiple(&self, specs: Vec<&str>) -> AddBuilder {
@@ -356,6 +372,7 @@ impl PixiControl {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
+                solver_config: SolverConfig::default(),
                 config: Default::default(),
                 editable: false,
             },
@@ -394,6 +411,7 @@ impl PixiControl {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
+                solver_config: SolverConfig::default(),
                 config: Default::default(),
             },
         }
@@ -415,6 +433,7 @@ impl PixiControl {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
+                solver_config: SolverConfig::default(),
                 config: Default::default(),
                 feature: None,
                 priority: None,
@@ -440,6 +459,7 @@ impl PixiControl {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
+                solver_config: SolverConfig::default(),
                 config: Default::default(),
                 feature: None,
                 priority: None,
@@ -552,6 +572,7 @@ impl PixiControl {
                     frozen: false,
                     locked: false,
                 },
+                solver_config: SolverConfig::default(),
                 config: Default::default(),
                 all: false,
             },
@@ -567,6 +588,7 @@ impl PixiControl {
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
+                solver_config: SolverConfig::default(),
                 no_install: true,
                 dry_run: false,
                 specs: Default::default(),

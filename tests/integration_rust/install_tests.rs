@@ -1082,3 +1082,82 @@ async fn install_s3() {
         .join("my-webserver-0.1.0-pyh4616a5c_0.json")
         .exists());
 }
+
+#[tokio::test]
+async fn test_exclude_newer_cli() {
+    let mut package_database = PackageDatabase::default();
+
+    // Add three variants of foo with 10 years between them
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:0Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "3")
+            .with_timestamp("2030-12-02T07:00:0Z".parse().unwrap())
+            .finish(),
+    );
+
+    // Write the repodata to disk
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    // Create a new project using our package database.
+    pixi.init()
+        .with_local_channel(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Add a dependency on any version of `foo`, with an exclude date between version 2 and 3. So 2 will be selected.
+    pixi.add("foo *")
+        .with_exclude_newer("2025-12-02T07:00:0Z".parse().unwrap())
+        .await
+        .unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+
+    // Now re-lock but with an exclude-newer date between 1 and 2. So 1 will be selected.
+    pixi.lock()
+        .with_exclude_newer("2015-12-02T07:00:0Z".parse().unwrap())
+        .await
+        .unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==1"
+    ));
+
+    // Relocking without a date should still use the old version because its still a valid solution.
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==1"
+    ));
+
+    // However, updating the dependencies should re-evaluate the dependencies and select the latest version.
+    pixi.update().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==3"
+    ));
+}

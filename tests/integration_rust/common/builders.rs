@@ -23,16 +23,10 @@
 //! }
 //! ```
 
-use pixi::cli::cli_config::{GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
-use std::{
-    future::{Future, IntoFuture},
-    io,
-    path::{Path, PathBuf},
-    pin::Pin,
-    str::FromStr,
-};
-
+use chrono::{DateTime, Utc};
 use futures::FutureExt;
+use pixi::cli::cli_config::{GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
+use pixi::cli::lock;
 use pixi::{
     cli::{
         add, cli_config::DependencyConfig, init, install, remove, search, task, update, workspace,
@@ -41,6 +35,13 @@ use pixi::{
 };
 use pixi_manifest::{task::Dependency, EnvironmentName, FeatureName, SpecType};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
+use std::{
+    future::{Future, IntoFuture},
+    io,
+    path::{Path, PathBuf},
+    pin::Pin,
+    str::FromStr,
+};
 use url::Url;
 
 /// Strings from an iterator
@@ -237,6 +238,11 @@ impl AddBuilder {
         self.args.lock_file_update_config.no_lockfile_update = no_lockfile_update;
         self
     }
+
+    pub fn with_exclude_newer(mut self, exclude_newer: DateTime<Utc>) -> Self {
+        self.args.solver_config.exclude_newer = Some(exclude_newer);
+        self
+    }
 }
 
 impl HasDependencyConfig for AddBuilder {
@@ -263,6 +269,28 @@ impl IntoFuture for AddBuilder {
 
     fn into_future(self) -> Self::IntoFuture {
         add::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`lock::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
+pub struct LockBuilder {
+    pub args: lock::Args,
+}
+
+impl LockBuilder {
+    pub fn with_exclude_newer(mut self, exclude_newer: DateTime<Utc>) -> Self {
+        self.args.solver_config.exclude_newer = Some(exclude_newer);
+        self
+    }
+}
+
+impl IntoFuture for LockBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        lock::execute(self.args).boxed_local()
     }
 }
 
@@ -544,6 +572,11 @@ impl UpdateBuilder {
             .platforms
             .get_or_insert_with(Vec::new)
             .push(platform);
+        self
+    }
+
+    pub fn with_exclude_newer(mut self, exclude_newer: DateTime<Utc>) -> Self {
+        self.args.solver_config.exclude_newer = Some(exclude_newer);
         self
     }
 

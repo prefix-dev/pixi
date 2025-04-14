@@ -4,6 +4,7 @@
 // There are a bunch of functions that remain unused in tests but might be useful in the future.
 #![allow(dead_code)]
 
+use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
@@ -142,6 +143,7 @@ pub struct PackageBuilder {
     depends: Vec<String>,
     subdir: Option<Platform>,
     archive_type: ArchiveType,
+    timestamp: Option<DateTime<Utc>>,
 }
 
 impl Package {
@@ -155,6 +157,7 @@ impl Package {
             depends: vec![],
             subdir: None,
             archive_type: ArchiveType::Conda,
+            timestamp: None,
         }
     }
 
@@ -201,6 +204,11 @@ impl PackageBuilder {
         self
     }
 
+    pub fn with_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
     /// Finish construction of the package
     pub fn finish(self) -> Package {
         let subdir = self.subdir.unwrap_or(Platform::NoArch);
@@ -234,7 +242,7 @@ impl PackageBuilder {
                 sha256: Some(sha256),
                 size: None,
                 subdir: subdir.to_string(),
-                timestamp: None,
+                timestamp: self.timestamp,
                 track_features: vec![],
                 version: self.version,
                 purls: None,
