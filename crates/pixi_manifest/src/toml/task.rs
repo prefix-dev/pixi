@@ -184,7 +184,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
             let args = th.optional::<Vec<TaskArg>>("args");
 
             let mut have_default = false;
-            for arg in args.as_ref().unwrap_or(&vec![]) {
+            for arg in args.iter().flat_map(|a| a.iter()) {
                 if arg.default.is_some() {
                     have_default = true;
                 }
