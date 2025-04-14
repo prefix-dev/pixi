@@ -118,7 +118,17 @@ pub struct ExecutableTask<'p> {
     pub name: Option<TaskName>,
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
-    pub additional_args: Vec<String>,
+    pub args: Args,
+}
+
+enum Args {
+    FreeFormArgs(Vec<String>),
+    TypedArgs(Vec<TypedArgs>),
+}
+
+struct TypedArg {
+    name: String,
+    value: String,
 }
 
 impl<'p> ExecutableTask<'p> {
@@ -130,6 +140,7 @@ impl<'p> ExecutableTask<'p> {
             // Create a task with updated arguments
             match &node.task {
                 Cow::Borrowed(task) => {
+                    // TODO: remove `with_updated_args`
                     Cow::Owned(task.with_updated_args(&argument_values).unwrap_or_else(|| {
                         tracing::warn!(
                             "Failed to update arguments for task {}",
@@ -139,6 +150,7 @@ impl<'p> ExecutableTask<'p> {
                     }))
                 }
                 Cow::Owned(task) => {
+                    // TODO: remove `with_updated_args`
                     Cow::Owned(task.with_updated_args(&argument_values).unwrap_or_else(|| {
                         tracing::warn!(
                             "Failed to update arguments for task {}",

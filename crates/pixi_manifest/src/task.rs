@@ -306,7 +306,7 @@ pub struct Execute {
     pub clean_env: bool,
 
     /// The arguments to pass to the task
-    pub args: Option<IndexMap<String, Option<String>>>,
+    pub args: Option<Vec<TaskArg>>,
 }
 
 impl From<Execute> for Task {
