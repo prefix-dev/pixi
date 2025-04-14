@@ -5,7 +5,7 @@ use std::{
     iter,
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
 
@@ -36,6 +36,7 @@ use rattler_repodata_gateway::{Gateway, RepoData};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
+use uv_configuration::RAYON_INITIALIZE;
 use uv_normalize::ExtraName;
 
 use super::{
@@ -1766,6 +1767,7 @@ async fn spawn_solve_conda_environment_task(
                 .await?
             };
 
+            LazyLock::force(&RAYON_INITIALIZE);
             // Extract the repo data records needed to solve the environment.
             let fetch_repodata_start = Instant::now();
             let available_packages = repodata_gateway
