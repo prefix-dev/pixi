@@ -21,6 +21,11 @@
       "matchManagers": ["pixi"]
     },
     {
+      "groupName": "Pixi-Lock",
+      "matchManagers": ["pixi"],
+      "matchUpdateTypes": ["lockFileMaintenance"]
+    },
+    {
       "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
       "matchPackageNames": "rust",
       "matchManagers": ["pixi"],
@@ -29,6 +34,11 @@
     {
       "groupName": "Cargo",
       "matchManagers": ["cargo"]
+    },
+    {
+      "groupName": "Cargo-Lock",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["lockFileMaintenance"]
     },
     {
       "description": "We want a separate PR for rattler crates",
