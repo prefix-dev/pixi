@@ -367,7 +367,7 @@ impl TaskString {
                 .iter()
                 .map(|arg| (arg.name.clone(), arg.value.clone()))
                 .collect();
-                
+
             return JINJA_ENV
                 .render_str(&self.0, &context)
                 .map_err(|e| anyhow::anyhow!("{}", e));
