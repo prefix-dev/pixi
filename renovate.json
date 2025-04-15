@@ -1,6 +1,26 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
+  "extends": ["config:recommended"],
+  "schedule": ["on tuesday"],
+  "enabledManagers": ["github-actions", "pixi", "cargo"],
+  "packageRules": [
+    {
+      "groupName": "GitHub Actions",
+      "matchManagers": ["github-actions"]
+    },
+    {
+      "description": "Rust >=1.85 is needed to update the cargo-machete action",
+      "matchPackageNames": "bnjbvr/cargo-machete",
+      "matchManagers": ["github-actions"],
+      "allowedVersions": "<=0.8"
+    },
+    {
+      "groupName": "Pixi",
+      "matchManagers": ["pixi"]
+    },
+    {
+      "groupName": "Cargo",
+      "matchManagers": ["cargo"]
+    }
   ]
 }
