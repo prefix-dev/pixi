@@ -12,7 +12,7 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use std::collections::HashMap;
 use uv_distribution_types::{InstalledDist, Name};
 
-use crate::{install_pypi, lock_file::UvResolutionContext, prefix::Prefix};
+use crate::{install_pypi::PyPIPrefixUpdater, lock_file::UvResolutionContext, prefix::Prefix};
 
 use super::PythonStatus;
 
@@ -135,12 +135,11 @@ pub async fn update_prefix_pypi(
             "updating pypi packages in '{}'",
             environment_name.fancy_display()
         ),
-        |_| {
-            install_pypi::update_python_distributions(
+        |_| async {
+            PyPIPrefixUpdater::setup(
                 lock_file_dir,
                 prefix,
                 pixi_records,
-                pypi_records,
                 &python_info.path,
                 system_requirements,
                 uv_context,
@@ -150,6 +149,9 @@ pub async fn update_prefix_pypi(
                 non_isolated_packages,
                 no_build,
             )
+            .await?
+            .update(pypi_records)
+            .await
         },
     )
     .await
