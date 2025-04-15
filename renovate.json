@@ -3,7 +3,7 @@
   "extends": ["config:recommended", ":maintainLockFilesMonthly"],
   "schedule": ["on tuesday"],
   "enabledManagers": ["github-actions", "pixi", "cargo"],
-  "commitMessagePrefix": "chore(ci)",
+  "commitMessagePrefix": "chore(ci):",
   "packageRules": [
     {
       "groupName": "GitHub Actions",
