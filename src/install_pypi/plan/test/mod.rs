@@ -5,7 +5,6 @@ use assert_matches::assert_matches;
 use harness::fake_wheel;
 use std::path::PathBuf;
 use std::str::FromStr;
-use typed_path::Path;
 use url::Url;
 
 mod harness;
