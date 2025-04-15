@@ -17,13 +17,15 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 <br>May be provided more than once.
 <br>**required**: `true`
 
-## Solver Options
-- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
-:  Exclude any packages that have been created after the given date
-<br>**env**: `PIXI_EXCLUDE_NEWER`
+## Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't update the environment, only add changed packages to the lock-file
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The name of the feature to add the platform to
+
+## Solver Options
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
+:  Exclude any packages that have been created after the given date, e.g. 2009-10-02T03:07:43Z or 2009-10-02T0:00
+<br>**env**: `PIXI_EXCLUDE_NEWER`
 
 --8<-- "docs/reference/cli/pixi/workspace/platform/add_extender:example"

@@ -16,6 +16,18 @@ pixi run [OPTIONS] [TASK]...
 :  The pixi task or a task shell command you want to run in the workspace's environment, which can be an executable in the environment's PATH
 <br>May be provided more than once.
 
+## Options
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to run the task in
+- <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
+:  Use a clean environment to run the task
+- <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
+:  Don't run the dependencies of the task ('depends-on' field in the task definition)
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Run the task in dry-run mode (only print the command that would run)
+- <a id="arg---help" href="#arg---help">`--help`</a>
+:
+
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
@@ -35,18 +47,8 @@ pixi run [OPTIONS] [TASK]...
 
 ## Solver Options
 - <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
-:  Exclude any packages that have been created after the given date
+:  Exclude any packages that have been created after the given date, e.g. 2009-10-02T03:07:43Z or 2009-10-02T0:00
 <br>**env**: `PIXI_EXCLUDE_NEWER`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to run the task in
-- <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
-:  Use a clean environment to run the task
-- <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
-:  Don't run the dependencies of the task ('depends-on' field in the task definition)
-- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Run the task in dry-run mode (only print the command that would run)
-- <a id="arg---help" href="#arg---help">`--help`</a>
-:
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>

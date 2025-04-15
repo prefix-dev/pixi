@@ -28,13 +28,13 @@ pixi list [OPTIONS] [REGEX]
 <br>**options**: `size`, `name`, `kind`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
+- <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
+:  Only list packages that are explicitly defined in the workspace
 
 ## Solver Options
 - <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
-:  Exclude any packages that have been created after the given date
+:  Exclude any packages that have been created after the given date, e.g. 2009-10-02T03:07:43Z or 2009-10-02T0:00
 <br>**env**: `PIXI_EXCLUDE_NEWER`
-- <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
-:  Only list packages that are explicitly defined in the workspace
 
 ## Update Options
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>

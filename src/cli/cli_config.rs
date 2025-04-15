@@ -100,10 +100,9 @@ impl ChannelsConfig {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct LockFileUpdateConfig {
     /// Don't update lockfile, implies the no-install as well.
-    #[clap(long)]
+    #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
     /// Lock file usage from the CLI
@@ -112,17 +111,18 @@ pub struct LockFileUpdateConfig {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_SOLVER_OPTIONS)]
 pub struct SolverConfig {
-    /// Exclude any packages that have been created after the given date.
+    /// Exclude any packages that have been created after the given date, e.g.
+    /// 2009-10-02T03:07:43Z or 2009-10-02T0:00.
     ///
     /// The date may be specified as an RFC 3339 timestamp (e.g.,
     /// 2009-10-02T03:07:43Z) or a local date in the same format (e.g.,
-    /// 2009-10-02) in your system's timezone.
+    /// 2009-10-02) in your systems timezone.
     #[clap(
         long = "exclude-newer",
         env = "PIXI_EXCLUDE_NEWER",
-        value_name = "DATE"
+        value_name = "DATE",
+        help_heading = consts::CLAP_SOLVER_OPTIONS
     )]
     pub exclude_newer: Option<ExcludeNewer>,
 }
@@ -141,14 +141,13 @@ impl LockFileUpdateConfig {
 
 /// Configuration for how to update the prefix
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct PrefixUpdateConfig {
     /// Don't modify the environment, only modify the lock-file.
-    #[arg(long)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 
     /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub revalidate: bool,
 }
 

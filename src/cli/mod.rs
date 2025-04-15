@@ -179,16 +179,15 @@ pub enum Command {
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageConfig {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
+    #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
+    #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub locked: bool,
 }
 

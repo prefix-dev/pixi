@@ -26,6 +26,8 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the dependency should be modified
 <br>**default**: `default`
+- <a id="arg---editable" href="#arg---editable">`--editable`</a>
+:  Whether the pypi requirement should be editable
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -54,10 +56,8 @@ pixi add [OPTIONS] <SPEC>...
 
 ## Solver Options
 - <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
-:  Exclude any packages that have been created after the given date
+:  Exclude any packages that have been created after the given date, e.g. 2009-10-02T03:07:43Z or 2009-10-02T0:00
 <br>**env**: `PIXI_EXCLUDE_NEWER`
-- <a id="arg---editable" href="#arg---editable">`--editable`</a>
-:  Whether the pypi requirement should be editable
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>

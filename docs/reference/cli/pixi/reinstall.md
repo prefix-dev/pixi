@@ -16,6 +16,13 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 :  Specifies the package that should be reinstalled. If no package is given, the whole environment will be reinstalled
 <br>May be provided more than once.
 
+## Options
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to install
+<br>May be provided more than once.
+- <a id="arg---all" href="#arg---all">`--all (-a)`</a>
+:  Install all environments
+
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
@@ -31,13 +38,8 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 ## Solver Options
 - <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
-:  Exclude any packages that have been created after the given date
+:  Exclude any packages that have been created after the given date, e.g. 2009-10-02T03:07:43Z or 2009-10-02T0:00
 <br>**env**: `PIXI_EXCLUDE_NEWER`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to install
-<br>May be provided more than once.
-- <a id="arg---all" href="#arg---all">`--all (-a)`</a>
-:  Install all environments
 
 ## Update Options
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>

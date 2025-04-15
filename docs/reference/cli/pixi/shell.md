@@ -11,6 +11,10 @@ Start a shell in a pixi environment, run `exit` to leave the shell
 pixi shell [OPTIONS]
 ```
 
+## Options
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to activate in the shell
+
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
@@ -33,10 +37,8 @@ pixi shell [OPTIONS]
 
 ## Solver Options
 - <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
-:  Exclude any packages that have been created after the given date
+:  Exclude any packages that have been created after the given date, e.g. 2009-10-02T03:07:43Z or 2009-10-02T0:00
 <br>**env**: `PIXI_EXCLUDE_NEWER`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to activate in the shell
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>

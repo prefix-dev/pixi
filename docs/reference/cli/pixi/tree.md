@@ -20,13 +20,13 @@ pixi tree [OPTIONS] [REGEX]
 :  The platform to list packages for. Defaults to the current platform
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
+- <a id="arg---invert" href="#arg---invert">`--invert (-i)`</a>
+:  Invert tree and show what depends on given package in the regex argument
 
 ## Solver Options
 - <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
-:  Exclude any packages that have been created after the given date
+:  Exclude any packages that have been created after the given date, e.g. 2009-10-02T03:07:43Z or 2009-10-02T0:00
 <br>**env**: `PIXI_EXCLUDE_NEWER`
-- <a id="arg---invert" href="#arg---invert">`--invert (-i)`</a>
-:  Invert tree and show what depends on given package in the regex argument
 
 ## Update Options
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>

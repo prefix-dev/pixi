@@ -22,6 +22,8 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 :  Specify the channel priority
 - <a id="arg---prepend" href="#arg---prepend">`--prepend`</a>
 :  Add the channel(s) to the beginning of the channels list, making them the highest priority
+- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
+:  The name of the feature to modify
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -38,10 +40,8 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 
 ## Solver Options
 - <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <DATE>`</a>
-:  Exclude any packages that have been created after the given date
+:  Exclude any packages that have been created after the given date, e.g. 2009-10-02T03:07:43Z or 2009-10-02T0:00
 <br>**env**: `PIXI_EXCLUDE_NEWER`
-- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
-:  The name of the feature to modify
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
