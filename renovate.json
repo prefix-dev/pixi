@@ -22,6 +22,11 @@
     {
       "groupName": "Cargo",
       "matchManagers": ["cargo"]
+    },
+    {
+      "matchPackageNames": "rattler*",
+      "matchManagers": ["cargo"],
+      "enabled": false
     }
   ]
 }
