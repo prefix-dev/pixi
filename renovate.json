@@ -13,7 +13,7 @@
       "description": "Rust >=1.85 is needed to update the cargo-machete action",
       "matchPackageNames": "bnjbvr/cargo-machete",
       "matchManagers": ["github-actions"],
-      "allowedVersions": "<=0.8"
+      "enabled": false
     },
     {
       "groupName": "Pixi",
