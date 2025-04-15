@@ -1,3 +1,4 @@
+# Run `pixi build` to regenerate the conda file if needed
 [project]
 authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
 dependencies = []

@@ -8,8 +8,8 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-foobar = { path = "../foobar/foobar-0.1.0-pyhbf21a9e_0.conda" }
+foobar = { path = "./foobar/foobar-0.1.0-pyhbf21a9e_0.conda" }
 python = "3.13.*"
 
 [pypi-dependencies]
-minimal = { path = "../minimal-0.1.0-py2.py3-none-any.whl" }
+minimal = { path = "./minimal-0.1.0-py2.py3-none-any.whl" }

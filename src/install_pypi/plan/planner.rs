@@ -119,6 +119,7 @@ impl InstallPlanner {
             let installer = dist
                 .installer()
                 .map_or(String::new(), |f| f.unwrap_or_default());
+            tracing::error!("{}:{}", dist.name(), installer);
 
             match pkg {
                 // Apparently we need this packages
@@ -129,6 +130,7 @@ impl InstallPlanner {
                 }
                 // Uninstall unneeded packages
                 None => {
+                    tracing::error!("Pushing: {}", dist.name());
                     extraneous.push(dist.clone());
                 }
             }
