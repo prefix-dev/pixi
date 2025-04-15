@@ -363,8 +363,13 @@ impl TaskString {
     pub fn render(&self, args: Option<&ArgValues>) -> Result<String, anyhow::Error> {
         // If any of the values are None, we should error
         if let Some(ArgValues::TypedArgs(args)) = args {
+            let context: indexmap::IndexMap<String, String> = args
+                .iter()
+                .map(|arg| (arg.name.clone(), arg.value.clone()))
+                .collect();
+                
             return JINJA_ENV
-                .render_str(&self.0, args)
+                .render_str(&self.0, &context)
                 .map_err(|e| anyhow::anyhow!("{}", e));
         }
 

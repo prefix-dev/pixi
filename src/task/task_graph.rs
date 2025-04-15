@@ -369,12 +369,11 @@ impl<'p> TaskGraph<'p> {
                     name: Some(dependency.task_name.clone()),
                     task: Cow::Borrowed(task_dependency),
                     run_environment: task_env,
-                    args: Self::merge_args(
+                    args: Some(Self::merge_args(
                         &dependency.task_name,
                         &task_dependency.get_args(),
                         &dependency.args.as_ref(),
-                    )
-                    .ok(),
+                    )?),
                     dependencies: Vec::new(),
                 });
 
@@ -402,13 +401,13 @@ impl<'p> TaskGraph<'p> {
         arg_values: &Option<&Vec<String>>,
     ) -> Result<ArgValues, TaskGraphError> {
         let task_arguments = match task_arguments {
-            Some(args) => args,
-            None => return Ok(ArgValues::FreeFormArgs(Vec::new())),
+            Some(args) => *args,
+            None => &vec![],
         };
 
         let arg_values = match arg_values {
-            Some(values) => values,
-            None => return Ok(ArgValues::FreeFormArgs(Vec::new())),
+            Some(values) => *values,
+            None => &vec![],
         };
 
         let mut typed_args = Vec::with_capacity(task_arguments.len());
