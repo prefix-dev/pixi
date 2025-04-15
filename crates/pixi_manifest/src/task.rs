@@ -154,7 +154,7 @@ impl Task {
     /// Returns the command to execute as a single string.
     pub fn as_single_command(
         &self,
-        args_values: Option<&Args>,
+        args_values: Option<&ArgValues>,
     ) -> Result<Option<Cow<str>>, anyhow::Error> {
         match self {
             Task::Plain(str) => match str.render(args_values) {
@@ -281,7 +281,7 @@ impl From<Execute> for Task {
     }
 }
 
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize)]
 pub struct TaskArg {
     /// The name of the argument
     pub name: String,
@@ -336,24 +336,33 @@ impl From<String> for TaskString {
 }
 
 /// Represents the arguments to pass to a task
-#[derive(Debug, Clone)]
-pub enum Args {
+#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
+pub enum ArgValues {
     FreeFormArgs(Vec<String>),
     TypedArgs(Vec<TypedArg>),
 }
 
-#[derive(Debug, Clone, Serialize)]
+impl ArgValues {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ArgValues::FreeFormArgs(args) => args.is_empty(),
+            ArgValues::TypedArgs(args) => args.is_empty(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub struct TypedArg {
-    name: String,
-    value: String,
+    pub name: String,
+    pub value: String,
 }
 
 impl TaskString {
     // TODO: enable feature for serialize
     // TODO: check if the Minijinja Value can be used.
-    pub fn render(&self, args: Option<&Args>) -> Result<String, anyhow::Error> {
+    pub fn render(&self, args: Option<&ArgValues>) -> Result<String, anyhow::Error> {
         // If any of the values are None, we should error
-        if let Some(Args::TypedArgs(args)) = args {
+        if let Some(ArgValues::TypedArgs(args)) = args {
             return JINJA_ENV
                 .render_str(&self.0, args)
                 .map_err(|e| anyhow::anyhow!("{}", e));
@@ -387,7 +396,10 @@ impl From<TaskString> for CmdArgs {
 
 impl CmdArgs {
     /// Returns a single string representation of the command arguments.
-    pub fn as_single(&self, args_values: Option<&Args>) -> Result<Option<Cow<str>>, anyhow::Error> {
+    pub fn as_single(
+        &self,
+        args_values: Option<&ArgValues>,
+    ) -> Result<Option<Cow<str>>, anyhow::Error> {
         match self {
             CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(args_values)?))),
             CmdArgs::Multiple(args) => {
@@ -402,7 +414,10 @@ impl CmdArgs {
     }
 
     /// Returns a single string representation of the command arguments.
-    pub fn into_single(self, args_values: Option<&Args>) -> Result<Option<String>, anyhow::Error> {
+    pub fn into_single(
+        self,
+        args_values: Option<&ArgValues>,
+    ) -> Result<Option<String>, anyhow::Error> {
         match self {
             CmdArgs::Single(cmd) => cmd.render(args_values).map(Some),
             CmdArgs::Multiple(args) => {

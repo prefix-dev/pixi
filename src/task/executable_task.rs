@@ -12,7 +12,7 @@ use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{task::Args, Task, TaskName};
+use pixi_manifest::{task::ArgValues, Task, TaskName};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -110,7 +110,7 @@ pub struct ExecutableTask<'p> {
     pub name: Option<TaskName>,
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
-    pub args: Args,
+    pub args: ArgValues,
 }
 
 impl<'p> ExecutableTask<'p> {
@@ -123,7 +123,10 @@ impl<'p> ExecutableTask<'p> {
             name: node.name.clone(),
             task: node.task.clone(),
             run_environment: node.run_environment.clone(),
-            args: node.args.clone(),
+            args: node
+                .args
+                .clone()
+                .unwrap_or(ArgValues::FreeFormArgs([].into())),
         }
     }
 
@@ -145,16 +148,25 @@ impl<'p> ExecutableTask<'p> {
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, ShellParsingError> {
         // Convert the task into an executable string
-        let task = self.task.as_single_command(Some(&self.args))?;
+        let task = self.task.as_single_command(Some(&self.args)).map_err(|e| {
+            ShellParsingError::ParseError {
+                source: e,
+                task: self.task.to_string(),
+            }
+        })?;
         if let Some(task) = task {
             // Get the export specific environment variables
             let export = get_export_specific_task_env(self.task.as_ref());
 
             // Append the command line arguments verbatim
-            let cli_args = self
-                .additional_args
-                .iter()
-                .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)));
+            let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
+                additional_args
+                    .iter()
+                    .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)))
+                    .to_string()
+            } else {
+                String::new()
+            };
 
             // Skip the export if it's empty, to avoid newlines
             let full_script = if export.is_empty() {
@@ -228,9 +240,11 @@ impl<'p> ExecutableTask<'p> {
             .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
-            if !self.additional_args.is_empty() {
-                cmd.push(' ');
-                cmd.push_str(&self.additional_args.join(" "));
+            if let ArgValues::FreeFormArgs(additional_args) = &self.args {
+                if !additional_args.is_empty() {
+                    cmd.push(' ');
+                    cmd.push_str(&additional_args.join(" "));
+                }
             }
             Ok(Some(cmd))
         } else {
@@ -362,12 +376,14 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                         .apply_to(command.as_deref().unwrap_or("<alias>"))
                         .bold()
                 )?;
-                if !self.task.additional_args.is_empty() {
-                    write!(
-                        f,
-                        " {}",
-                        consts::TASK_STYLE.apply_to(self.task.additional_args.iter().format(" "))
-                    )?;
+                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args {
+                    if !additional_args.is_empty() {
+                        write!(
+                            f,
+                            " {}",
+                            consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
+                        )?;
+                    }
                 }
                 Ok(())
             }
@@ -505,7 +521,7 @@ mod tests {
             name: Some("test".into()),
             task: Cow::Borrowed(task),
             run_environment: workspace.default_environment(),
-            args: vec![],
+            args: ArgValues::FreeFormArgs([].into()),
         };
 
         let script = executable_task.as_script().unwrap().unwrap();

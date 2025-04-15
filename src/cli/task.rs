@@ -384,7 +384,6 @@ async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Res
         task.clone(),
         args.platform,
         &FeatureName::DEFAULT,
-        None,
     )?;
     workspace.save().await.into_diagnostic()?;
     eprintln!(
@@ -562,7 +561,7 @@ impl From<&Task> for TaskInfo {
     fn from(task: &Task) -> Self {
         TaskInfo {
             cmd: task
-                .as_single_command()
+                .as_single_command(None)
                 .ok()
                 .and_then(|cmd| cmd.map(|c| c.to_string())),
             description: task.description().map(|desc| desc.to_string()),

@@ -16,7 +16,6 @@ use crate::{
     manifests::document::ManifestDocument,
     pypi::PyPiPackageName,
     solve_group::SolveGroups,
-    task::Args,
     to_options,
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
     utils::WithSourceCode,
@@ -210,7 +209,6 @@ impl WorkspaceManifestMut<'_> {
         task: Task,
         platform: Option<Platform>,
         feature_name: &FeatureName,
-        args: Option<&Args>,
     ) -> miette::Result<()> {
         // Check if the task already exists
         if let Ok(tasks) = self.workspace.tasks(platform, feature_name) {
@@ -2454,7 +2452,6 @@ test = "test initial"
                 Task::Plain("echo default".into()),
                 None,
                 &FeatureName::DEFAULT,
-                None,
             )
             .unwrap();
         manifest
@@ -2463,7 +2460,6 @@ test = "test initial"
                 Task::Plain("echo target_linux".into()),
                 Some(Platform::Linux64),
                 &FeatureName::DEFAULT,
-                None,
             )
             .unwrap();
         manifest
@@ -2472,7 +2468,6 @@ test = "test initial"
                 Task::Plain("echo feature_test".into()),
                 None,
                 &FeatureName::from("test"),
-                None,
             )
             .unwrap();
         manifest
@@ -2481,7 +2476,6 @@ test = "test initial"
                 Task::Plain("echo feature_test_target_linux".into()),
                 Some(Platform::Linux64),
                 &FeatureName::from("test"),
-                None,
             )
             .unwrap();
         assert_snapshot!(manifest.document.to_string());
