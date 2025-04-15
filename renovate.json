@@ -5,6 +5,9 @@
   "enabledManagers": ["github-actions", "pixi", "cargo"],
   "commitMessagePrefix": "chore(ci):",
   "ignorePaths": ["examples/**", "docs/**", "tests/**"],
+  "constraints": {
+    "pixi": ">=0.40"
+  },
   "packageRules": [
     {
       "groupName": "GitHub Actions",
