@@ -48,7 +48,7 @@ mod test {
         // Specifying just a date is equivalent to specifying the date at midnight of the next day.
         assert_eq!(
             ExcludeNewer::from_str("2006-12-02").unwrap(),
-            ExcludeNewer::from_str("2006-12-03T00:00:00Z").unwrap(),);
+            ExcludeNewer::from_str("2006-12-03T00:00:00Z").unwrap(),
+        );
     }
-
 }
