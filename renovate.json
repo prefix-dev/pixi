@@ -20,6 +20,12 @@
       "matchManagers": ["pixi"]
     },
     {
+      "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
+      "matchPackageNames": "rust",
+      "matchManagers": ["pixi"],
+      "enabled": false
+    },
+    {
       "groupName": "Cargo",
       "matchManagers": ["cargo"]
     },
