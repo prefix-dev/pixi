@@ -34,6 +34,12 @@
       "matchPackageNames": "/(rattler|file_url)/",
       "matchManagers": ["cargo"],
       "separateMajorMinor": false
+    },
+    {
+      "description": "Rust >=1.85 is needed to update deno_task_shell",
+      "matchPackageNames": "deno_task_shell",
+      "matchManagers": ["cargo"],
+      "enabled": false
     }
   ]
 }
