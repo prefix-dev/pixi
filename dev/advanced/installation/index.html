@@ -2699,8 +2699,8 @@ This allows you to invoke <code>pixi</code> from anywhere.</p>
 <div class="tabbed-block">
 <div class="language-powershell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">ByPass</span> <span class="n">-c</span> <span class="s2">&quot;irm -useb https://pixi.sh/install.ps1 | iex&quot;</span>
 </span></code></pre></div>
-<p>The above invocation will automatically download the latest version of <code>pixi</code>, extract it, and move the <code>pixi</code> binary to <code>LocalAppData/pixi/bin</code>.
-The command will also add <code>LocalAppData/pixi/bin</code> to your <code>PATH</code> environment variable, allowing you to invoke <code>pixi</code> from anywhere.</p>
+<p>The above invocation will automatically download the latest version of <code>pixi</code>, extract it, and move the <code>pixi</code> binary to <code>%UserProfile%\.pixi\bin</code>.
+The command will also add <code>%UserProfile%\.pixi\bin</code> to your <code>PATH</code> environment variable, allowing you to invoke <code>pixi</code> from anywhere.</p>
 </div>
 </div>
 </div>
