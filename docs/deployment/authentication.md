@@ -151,7 +151,7 @@ To install keyring you can use `pixi global install`:
     ```
 === "Azure DevOps Artifacts"
     ```shell
-    pixi global install keyring --with keyring.artifacts
+    pixi global install keyring --with keyrings.artifacts
     ```
 === "AWS CodeArtifact"
     ```shell
@@ -193,7 +193,7 @@ For other registries, you will need to adapt these instructions to add the right
         ```
 
 === "Azure DevOps Artifacts"
-    After following the [`keyring.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your Pixi manifest:
+    After following the [`keyrings.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your Pixi manifest:
 
     ```toml
     [pypi-options]
