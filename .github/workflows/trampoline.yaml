@@ -59,7 +59,7 @@ jobs:
           fetch-depth: 0 # Fetch full history so we have branch information
 
       - name: Set up Rust
-        uses: taiki-e/setup-cross-toolchain-action@0d2c6fcce937ba2ba77abf40e06449b74d60fa04 # v1
+        uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89 # v1
         with:
           target: ${{ matrix.target }}
 
