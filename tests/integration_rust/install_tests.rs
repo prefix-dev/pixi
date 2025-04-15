@@ -1095,12 +1095,12 @@ async fn test_exclude_newer_conda_cli() {
     );
     package_database.add_package(
         Package::build("foo", "2")
-            .with_timestamp("2020-12-02T07:00:0Z".parse().unwrap())
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "3")
-            .with_timestamp("2030-12-02T07:00:0Z".parse().unwrap())
+            .with_timestamp("2030-12-02T07:00:00Z".parse().unwrap())
             .finish(),
     );
 
@@ -1121,7 +1121,7 @@ async fn test_exclude_newer_conda_cli() {
 
     // Add a dependency on any version of `foo`, with an exclude date between version 2 and 3. So 2 will be selected.
     pixi.add("foo *")
-        .with_exclude_newer("2025-12-02T07:00:0Z".parse().unwrap())
+        .with_exclude_newer("2025-12-02T07:00:00Z".parse().unwrap())
         .await
         .unwrap();
     let lock = pixi.lock_file().await.unwrap();

@@ -38,3 +38,17 @@ impl std::fmt::Display for ExcludeNewer {
         self.0.fmt(f)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_from_str() {
+        // Specifying just a date is equivalent to specifying the date at midnight of the next day.
+        assert_eq!(
+            ExcludeNewer::from_str("2006-12-02").unwrap(),
+            ExcludeNewer::from_str("2006-12-03T00:00:00Z").unwrap(),);
+    }
+
+}
