@@ -10,7 +10,6 @@ use std::{
 };
 
 use barrier_cell::BarrierCell;
-use chrono::{DateTime, Utc};
 use fancy_display::FancyDisplay;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use indexmap::{IndexMap, IndexSet};
@@ -43,6 +42,7 @@ use super::{
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit, CondaPrefixUpdater,
     PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
 };
+use crate::lock_file::exclude_newer::ExcludeNewer;
 use crate::{
     activation::CurrentEnvVarBehavior,
     build::{
@@ -216,7 +216,7 @@ pub struct UpdateLockFileOptions {
     pub max_concurrent_solves: usize,
 
     /// Exclude any packages that are created after the given date.
-    pub exclude_newer: Option<DateTime<Utc>>,
+    pub exclude_newer: Option<ExcludeNewer>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -679,7 +679,7 @@ pub struct UpdateContext<'p> {
     no_install: bool,
 
     /// Whether to exclude any packages that are created after a certain date.
-    exclude_newer: Option<DateTime<Utc>>,
+    exclude_newer: Option<ExcludeNewer>,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -860,7 +860,7 @@ pub struct UpdateContextBuilder<'p> {
     glob_hash_cache: Option<GlobHashCache>,
 
     /// Whether to exclude any packages that are created after a certain date.
-    exclude_newer: Option<DateTime<Utc>>,
+    exclude_newer: Option<ExcludeNewer>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -915,7 +915,7 @@ impl<'p> UpdateContextBuilder<'p> {
     }
 
     /// Whether to include any packages that were created after a certain date.
-    pub fn with_opt_exclude_newer(self, exclude_newer: Option<DateTime<Utc>>) -> Self {
+    pub fn with_opt_exclude_newer(self, exclude_newer: Option<ExcludeNewer>) -> Self {
         Self {
             exclude_newer,
             ..self
@@ -1671,7 +1671,7 @@ async fn spawn_solve_conda_environment_task(
     concurrency_semaphore: Arc<Semaphore>,
     channel_priority: ChannelPriority,
     build_context: BuildContext,
-    exclude_newer: Option<DateTime<Utc>>,
+    exclude_newer: Option<ExcludeNewer>,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -1911,14 +1911,14 @@ async fn spawn_solve_conda_environment_task(
 /// removed to the back of the vec.
 fn filter_locked_based_on_exclude_newer(
     locked_records: &mut Vec<RepoDataRecord>,
-    exclude_newer: &DateTime<Utc>,
+    exclude_newer: &ExcludeNewer,
 ) {
     let len = locked_records.len();
     let mut index = 0;
     let mut truncated_items = 0;
     while index < (len - truncated_items) {
         match &locked_records[index].package_record.timestamp {
-            Some(created_at) if created_at > exclude_newer => {
+            Some(created_at) if created_at > &exclude_newer.0 => {
                 // Swap the item to the back of the vec
                 locked_records.swap(index, len - truncated_items - 1);
                 truncated_items += 1;

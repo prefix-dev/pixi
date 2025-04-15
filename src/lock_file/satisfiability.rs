@@ -39,7 +39,8 @@ use uv_pypi_types::{
 use uv_resolver::RequiresPython;
 
 use super::{
-    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
+    package_identifier::ConversionError, ExcludeNewer, PixiRecordsByName, PypiRecord,
+    PypiRecordsByName,
 };
 use crate::{
     build::SourceAnchor,
@@ -632,7 +633,7 @@ pub async fn verify_platform_satisfiability(
     platform: Platform,
     project_root: &Path,
     glob_hash_cache: GlobHashCache,
-    exclude_newer: Option<DateTime<Utc>>,
+    exclude_newer: Option<ExcludeNewer>,
 ) -> Result<VerifiedIndividualEnvironment, Box<PlatformUnsat>> {
     // Convert the lock file into a list of conda and pypi packages
     let mut pixi_records: Vec<PixiRecord> = Vec::new();
@@ -661,11 +662,11 @@ pub async fn verify_platform_satisfiability(
             if package
                 .as_binary()
                 .and_then(|pkg| pkg.package_record.timestamp)
-                .is_some_and(|pkg| pkg >= exclude_newer)
+                .is_some_and(|pkg| pkg >= exclude_newer.0)
             {
                 return Err(Box::new(PlatformUnsat::PackageTooNew(
                     package.name().as_source().to_owned(),
-                    exclude_newer,
+                    exclude_newer.0,
                 )));
             }
         }

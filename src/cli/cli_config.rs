@@ -1,10 +1,9 @@
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
-use crate::lock_file::UpdateMode;
+use crate::lock_file::{ExcludeNewer, UpdateMode};
 use crate::workspace::DiscoveryStart;
 use crate::DependencyType;
 use crate::Workspace;
-use chrono::{DateTime, Utc};
 use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
@@ -13,6 +12,7 @@ use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use pixi_config::Config;
 use pixi_consts::consts;
+use pixi_git::GIT_URL_QUERY_REV_TYPE;
 use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
@@ -22,8 +22,6 @@ use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use url::Url;
-
-use pixi_git::GIT_URL_QUERY_REV_TYPE;
 
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
@@ -117,12 +115,16 @@ pub struct LockFileUpdateConfig {
 #[clap(next_help_heading = consts::CLAP_SOLVER_OPTIONS)]
 pub struct SolverConfig {
     /// Exclude any packages that have been created after the given date.
+    ///
+    /// The date may be specified as an RFC 3339 timestamp (e.g.,
+    /// 2009-10-02T03:07:43Z) or a local date in the same format (e.g.,
+    /// 2009-10-02) in your system's timezone.
     #[clap(
         long = "exclude-newer",
         env = "PIXI_EXCLUDE_NEWER",
         value_name = "DATE"
     )]
-    pub exclude_newer: Option<DateTime<Utc>>,
+    pub exclude_newer: Option<ExcludeNewer>,
 }
 
 impl LockFileUpdateConfig {

@@ -23,10 +23,10 @@
 //! }
 //! ```
 
-use chrono::{DateTime, Utc};
 use futures::FutureExt;
 use pixi::cli::cli_config::{GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
 use pixi::cli::lock;
+use pixi::lock_file::ExcludeNewer;
 use pixi::{
     cli::{
         add, cli_config::DependencyConfig, init, install, remove, search, task, update, workspace,
@@ -239,7 +239,7 @@ impl AddBuilder {
         self
     }
 
-    pub fn with_exclude_newer(mut self, exclude_newer: DateTime<Utc>) -> Self {
+    pub fn with_exclude_newer(mut self, exclude_newer: ExcludeNewer) -> Self {
         self.args.solver_config.exclude_newer = Some(exclude_newer);
         self
     }
@@ -279,7 +279,7 @@ pub struct LockBuilder {
 }
 
 impl LockBuilder {
-    pub fn with_exclude_newer(mut self, exclude_newer: DateTime<Utc>) -> Self {
+    pub fn with_exclude_newer(mut self, exclude_newer: ExcludeNewer) -> Self {
         self.args.solver_config.exclude_newer = Some(exclude_newer);
         self
     }
@@ -575,7 +575,7 @@ impl UpdateBuilder {
         self
     }
 
-    pub fn with_exclude_newer(mut self, exclude_newer: DateTime<Utc>) -> Self {
+    pub fn with_exclude_newer(mut self, exclude_newer: ExcludeNewer) -> Self {
         self.args.solver_config.exclude_newer = Some(exclude_newer);
         self
     }

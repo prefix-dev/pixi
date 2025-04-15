@@ -1133,7 +1133,7 @@ async fn test_exclude_newer_conda_cli() {
 
     // Now re-lock but with an exclude-newer date between 1 and 2. So 1 will be selected.
     pixi.lock()
-        .with_exclude_newer("2015-12-02T07:00:0Z".parse().unwrap())
+        .with_exclude_newer("2015-12-02".parse().unwrap())
         .await
         .unwrap();
     let lock = pixi.lock_file().await.unwrap();

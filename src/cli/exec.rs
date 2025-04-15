@@ -196,7 +196,10 @@ pub async fn create_exec_prefix(
         Solver.solve(SolverTask {
             specs: specs_clone,
             virtual_packages,
-            exclude_newer: args.solver_config.exclude_newer,
+            exclude_newer: args
+                .solver_config
+                .exclude_newer
+                .map(|exclude_newer| exclude_newer.0),
             ..SolverTask::from_iter(&repodata)
         })
     })

@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_consts::consts;
@@ -7,7 +6,7 @@ use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
 use std::collections::{HashMap, HashSet};
 
-use super::{verify_environment_satisfiability, verify_platform_satisfiability};
+use super::{verify_environment_satisfiability, verify_platform_satisfiability, ExcludeNewer};
 use crate::{
     build::GlobHashCache,
     lock_file::satisfiability::{verify_solve_group_satisfiability, EnvironmentUnsat},
@@ -65,7 +64,7 @@ impl<'p> OutdatedEnvironments<'p> {
         workspace: &'p Workspace,
         lock_file: &LockFile,
         glob_hash_cache: GlobHashCache,
-        exclude_newer: Option<DateTime<Utc>>,
+        exclude_newer: Option<ExcludeNewer>,
     ) -> Self {
         // Find all targets that are not satisfied by the lock-file
         let UnsatisfiableTargets {
@@ -143,7 +142,7 @@ async fn find_unsatisfiable_targets<'p>(
     project: &'p Workspace,
     lock_file: &LockFile,
     glob_hash_cache: GlobHashCache,
-    exclude_newer: Option<DateTime<Utc>>,
+    exclude_newer: Option<ExcludeNewer>,
 ) -> UnsatisfiableTargets<'p> {
     let mut verified_environments = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
