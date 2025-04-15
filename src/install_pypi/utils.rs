@@ -87,7 +87,6 @@ fn uv_old_up_to_date_with(source: &Path, target: &InstalledDist) -> Result<bool,
         // target is not up-to-date.
         return Ok(false);
     };
-    dbg!(target.install_path());
     let created_at = Timestamp::from_path(target.install_path().join("METADATA"))?;
     Ok(modified_at <= created_at)
 }
