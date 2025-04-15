@@ -216,11 +216,7 @@ impl From<AddArgs> for Task {
                 env,
                 description,
                 clean_env,
-                args: args.map(|args| {
-                    args.into_iter()
-                        .map(|arg| (arg.name, arg.default))
-                        .collect()
-                }),
+                args,
             }))
         }
     }
@@ -388,6 +384,7 @@ async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Res
         task.clone(),
         args.platform,
         &FeatureName::DEFAULT,
+        None,
     )?;
     workspace.save().await.into_diagnostic()?;
     eprintln!(

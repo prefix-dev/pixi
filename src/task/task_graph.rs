@@ -9,7 +9,7 @@ use std::{
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_manifest::{
-    task::{CmdArgs, Custom, Dependency},
+    task::{Args, CmdArgs, Custom, Dependency},
     EnvironmentName, Task, TaskName,
 };
 use thiserror::Error;
@@ -54,10 +54,7 @@ pub struct TaskNode<'p> {
 
     /// Additional arguments to pass to the command. These arguments are passed
     /// verbatim, e.g. they will not be interpreted by deno.
-    pub additional_args: Option<Vec<String>>,
-
-    /// The arguments to pass to the dependencies.
-    pub arguments_values: Option<Vec<String>>,
+    pub args: Option<Args>,
 
     /// The id's of the task that this task depends on.
     pub dependencies: Vec<GraphDependency>,
@@ -71,7 +68,7 @@ impl fmt::Display for TaskNode<'_> {
             self.name.clone().unwrap_or("CUSTOM COMMAND".into())
         )?;
         write!(f, ", environment: {}", self.run_environment.name())?;
-        if let Ok(Some(command)) = self.task.as_single_command() {
+        if let Ok(Some(command)) = self.task.as_single_command(self.args.as_ref()) {
             write!(f, "command: `{command}`,",)?;
         }
         write!(
@@ -100,9 +97,9 @@ impl TaskNode<'_> {
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
     pub(crate) fn full_command(&self) -> Result<Option<String>, anyhow::Error> {
-        let mut cmd = self.task.as_single_command()?;
+        let mut cmd = self.task.as_single_command(self.args.as_ref())?;
 
-        if let Some(additional_args) = &self.additional_args {
+        if let Some(Args::FreeFormArgs(additional_args)) = &self.args {
             if !additional_args.is_empty() {
                 // Pass each additional argument varbatim by wrapping it in single quotes
                 let formatted_args = format!(" {}", self.format_additional_args());
@@ -205,17 +202,15 @@ impl<'p> TaskGraph<'p> {
 
                     let task_name = args.remove(0);
 
-                    let (additional_args, arguments_values) = if let Some(argument_map) =
-                        task.get_args()
-                    {
+                    let args = if let Some(task_arguments) = task.get_args() {
                         // Check if we don't have more arguments than the task expects
-                        if args.len() > argument_map.len() {
+                        if args.len() > task_arguments.len() {
                             return Err(TaskGraphError::TooManyArguments(task_name.to_string()));
                         }
 
-                        (None, Some(args))
+                        Some(Self::merge_args(&task_name, &task_arguments, &args)?)
                     } else {
-                        (Some(args), None)
+                        Some(Args::FreeFormArgs(args))
                     };
 
                     if skip_deps {
@@ -225,8 +220,7 @@ impl<'p> TaskGraph<'p> {
                                 name: Some(task_name.into()),
                                 task: Cow::Borrowed(task),
                                 run_environment: run_env,
-                                additional_args,
-                                arguments_values,
+                                args,
                                 dependencies: vec![],
                             }],
                         });
@@ -239,8 +233,7 @@ impl<'p> TaskGraph<'p> {
                             name: Some(task_name.into()),
                             task: Cow::Borrowed(task),
                             run_environment: run_env,
-                            additional_args,
-                            arguments_values,
+                            args,
                             dependencies: vec![],
                         },
                     );
@@ -282,8 +275,7 @@ impl<'p> TaskGraph<'p> {
                     .into(),
                 ),
                 run_environment,
-                additional_args: Some(additional_args),
-                arguments_values: None,
+                args: Some(Args::FreeFormArgs(additional_args)),
                 dependencies: vec![],
             },
         )
@@ -370,8 +362,11 @@ impl<'p> TaskGraph<'p> {
                     name: Some(dependency.task_name.clone()),
                     task: Cow::Borrowed(task_dependency),
                     run_environment: task_env,
-                    additional_args: Some(Vec::new()),
-                    arguments_values: dependency.args.clone(),
+                    args: self.merge_args(
+                        &dependency.task_name,
+                        &task_dependency.get_args(),
+                        &dependency.args,
+                    ),
                     dependencies: Vec::new(),
                 });
 
@@ -391,6 +386,34 @@ impl<'p> TaskGraph<'p> {
         }
 
         Ok(Self { project, nodes })
+    }
+
+    pub fn merge_args(
+        task_name: &str,
+        task_arguments: &[TaskArg],
+        arg_values: &[String],
+    ) -> Result<Args, TaskGraphError> {
+        let mut typed_args = Vec::with_capacity(task_arguments.len());
+
+        for (i, arg) in task_arguments.iter().enumerate() {
+            let value = if i < arg_values.len() {
+                arg_values[i].clone()
+            } else if let Some(default) = &arg.default {
+                default.clone()
+            } else {
+                return Err(TaskGraphError::MissingArgument(
+                    arg.name.clone(),
+                    task_name.to_string(),
+                ));
+            };
+
+            typed_args.push(TypedArg {
+                name: arg.name.clone(),
+                value,
+            });
+        }
+
+        Ok(Args::TypedArgs(typed_args))
     }
 
     /// Returns the topological order of the tasks in the graph.
@@ -441,6 +464,9 @@ pub enum TaskGraphError {
 
     #[error("task '{0}' received more arguments than expected")]
     TooManyArguments(String),
+
+    #[error("no value provided for argument '{0}' for task '{1}'")]
+    MissingArgument(String, String),
 }
 
 #[cfg(test)]

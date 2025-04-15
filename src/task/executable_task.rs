@@ -12,7 +12,7 @@ use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{task::TaskStringError, Task, TaskName};
+use pixi_manifest::{task::Args, Task, TaskName};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -96,14 +96,6 @@ pub enum CacheUpdateError {
     Serialization(#[from] serde_json::Error),
 }
 
-impl From<TaskStringError> for ShellParsingError {
-    fn from(value: TaskStringError) -> Self {
-        ShellParsingError::ArgumentReplacement {
-            source: value.source,
-            task: value.task,
-        }
-    }
-}
 pub enum CanSkip {
     Yes,
     No(Option<TaskHash>),
@@ -121,56 +113,17 @@ pub struct ExecutableTask<'p> {
     pub args: Args,
 }
 
-enum Args {
-    FreeFormArgs(Vec<String>),
-    TypedArgs(Vec<TypedArgs>),
-}
-
-struct TypedArg {
-    name: String,
-    value: String,
-}
-
 impl<'p> ExecutableTask<'p> {
     /// Constructs a new executable task from a task graph node.
     pub fn from_task_graph(task_graph: &TaskGraph<'p>, task_id: TaskId) -> Self {
         let node = &task_graph[task_id];
 
-        let task = if let Some(argument_values) = node.arguments_values.clone() {
-            // Create a task with updated arguments
-            match &node.task {
-                Cow::Borrowed(task) => {
-                    // TODO: remove `with_updated_args`
-                    Cow::Owned(task.with_updated_args(&argument_values).unwrap_or_else(|| {
-                        tracing::warn!(
-                            "Failed to update arguments for task {}",
-                            node.name.as_ref().unwrap_or(&"default".into())
-                        );
-                        (*task).clone()
-                    }))
-                }
-                Cow::Owned(task) => {
-                    // TODO: remove `with_updated_args`
-                    Cow::Owned(task.with_updated_args(&argument_values).unwrap_or_else(|| {
-                        tracing::warn!(
-                            "Failed to update arguments for task {}",
-                            node.name.as_ref().unwrap_or(&"default".into())
-                        );
-                        task.clone()
-                    }))
-                }
-            }
-        } else {
-            // Clone the existing task
-            node.task.clone()
-        };
-
         Self {
             workspace: task_graph.project(),
             name: node.name.clone(),
-            task,
+            task: node.task.clone(),
             run_environment: node.run_environment.clone(),
-            additional_args: node.additional_args.clone().unwrap_or_default(),
+            args: node.args.clone(),
         }
     }
 
@@ -192,7 +145,7 @@ impl<'p> ExecutableTask<'p> {
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, ShellParsingError> {
         // Convert the task into an executable string
-        let task = self.task.as_single_command()?;
+        let task = self.task.as_single_command(Some(&self.args))?;
         if let Some(task) = task {
             // Get the export specific environment variables
             let export = get_export_specific_task_env(self.task.as_ref());
@@ -269,7 +222,10 @@ impl<'p> ExecutableTask<'p> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     pub(crate) fn full_command(&self) -> Result<Option<String>, anyhow::Error> {
-        let original_cmd = self.task.as_single_command()?.map(|c| c.into_owned());
+        let original_cmd = self
+            .task
+            .as_single_command(Some(&self.args))?
+            .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
             if !self.additional_args.is_empty() {
@@ -397,7 +353,7 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
 
 impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.task.task.as_single_command() {
+        match self.task.task.as_single_command(Some(&self.task.args)) {
             Ok(command) => {
                 write!(
                     f,
@@ -549,7 +505,7 @@ mod tests {
             name: Some("test".into()),
             task: Cow::Borrowed(task),
             run_environment: workspace.default_environment(),
-            additional_args: vec![],
+            args: vec![],
         };
 
         let script = executable_task.as_script().unwrap().unwrap();

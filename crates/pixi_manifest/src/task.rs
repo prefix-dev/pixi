@@ -9,9 +9,7 @@ use std::{
 use crate::workspace::JINJA_ENV;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::Diagnostic;
 use serde::Serialize;
-use thiserror::Error;
 use toml_edit::{Array, Item, Table, Value};
 
 use crate::EnvironmentName;
@@ -112,13 +110,10 @@ impl Task {
     }
 
     /// If this task is a plain task, returns the task string
-    pub fn as_plain(&self) -> Result<String, TaskStringError> {
+    pub fn as_plain(&self) -> Result<String, anyhow::Error> {
         match self {
             Task::Plain(str) => str.render(None),
-            _ => Err(TaskStringError {
-                source: anyhow::anyhow!("Task is not a plain task"),
-                task: self.to_string(),
-            }),
+            _ => Err(anyhow::anyhow!("Task is not a plain task")),
         }
     }
 
@@ -157,15 +152,17 @@ impl Task {
     }
 
     /// Returns the command to execute as a single string.
-    pub fn as_single_command(&self) -> Result<Option<Cow<str>>, TaskStringError> {
-        let args = self.get_args();
+    pub fn as_single_command(
+        &self,
+        args_values: Option<&Args>,
+    ) -> Result<Option<Cow<str>>, anyhow::Error> {
         match self {
-            Task::Plain(str) => match str.render(args) {
+            Task::Plain(str) => match str.render(args_values) {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
                 Err(e) => Err(e),
             },
-            Task::Custom(custom) => custom.cmd.as_single(args),
-            Task::Execute(exe) => exe.cmd.as_single(args),
+            Task::Custom(custom) => custom.cmd.as_single(args_values),
+            Task::Execute(exe) => exe.cmd.as_single(args_values),
             Task::Alias(_) => Ok(None),
         }
     }
@@ -234,40 +231,9 @@ impl Task {
     }
 
     /// Returns the arguments of the task.
-    pub fn get_args(&self) -> Option<&IndexMap<String, Option<String>>> {
+    pub fn get_args(&self) -> Option<&Vec<TaskArg>> {
         match self {
             Task::Execute(exe) => exe.args.as_ref(),
-            _ => None,
-        }
-    }
-
-    /// Creates a new task with updated arguments from the provided values.
-    /// Returns None if the task doesn't support arguments.
-    pub fn with_updated_args(&self, arg_values: &[String]) -> Option<Self> {
-        match self {
-            Task::Execute(exe) => {
-                if arg_values.len() > exe.args.as_ref().map_or(0, |args| args.len()) {
-                    tracing::warn!("Task has more arguments than provided values");
-                    return None;
-                }
-
-                if let Some(args_map) = &exe.args {
-                    let mut new_args = args_map.clone();
-                    for ((arg_name, _), value) in args_map.iter().zip(arg_values.iter()) {
-                        if let Some(arg_value) = new_args.get_mut(arg_name) {
-                            *arg_value = Some(value.clone());
-                        }
-                    }
-
-                    // Create a new Execute with the updated args
-                    let mut new_exe = (**exe).clone();
-                    new_exe.args = Some(new_args);
-
-                    Some(Task::Execute(Box::new(new_exe)))
-                } else {
-                    None
-                }
-            }
             _ => None,
         }
     }
@@ -354,72 +320,50 @@ impl From<Custom> for Task {
     }
 }
 
-/// Represents an error while rendering a task string
-#[derive(Debug, Error, Diagnostic)]
-pub struct TaskStringError {
-    #[source]
-    pub source: anyhow::Error,
-    pub task: String,
-}
-
-impl std::fmt::Display for TaskStringError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.task)
-    }
-}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TaskString {
-    _inner: String,
-}
+pub struct TaskString(String);
 
 impl From<&str> for TaskString {
     fn from(value: &str) -> Self {
-        TaskString {
-            _inner: value.to_string(),
-        }
+        TaskString(value.to_string())
     }
 }
 
 impl From<String> for TaskString {
     fn from(value: String) -> Self {
-        TaskString { _inner: value }
+        TaskString(value)
     }
+}
+
+/// Represents the arguments to pass to a task
+#[derive(Debug, Clone)]
+pub enum Args {
+    FreeFormArgs(Vec<String>),
+    TypedArgs(Vec<TypedArg>),
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct TypedArg {
+    name: String,
+    value: String,
 }
 
 impl TaskString {
     // TODO: enable feature for serialize
     // TODO: check if the Minijinja Value can be used.
-    pub fn render(
-        &self,
-        argsmap: Option<&IndexMap<String, Option<String>>>,
-    ) -> Result<String, TaskStringError> {
-        if let Some(argsmap) = argsmap {
-            // If any of the values are None, we should error
-            if argsmap.values().any(|v| v.is_none()) {
-                let undefined_arg = argsmap
-                    .iter()
-                    .find_map(|(k, v)| if v.is_none() { Some(k) } else { None })
-                    .unwrap();
-                return Err(TaskStringError {
-                    source: anyhow::anyhow!("No value provided for argument '{}'", undefined_arg),
-                    task: self._inner.clone(),
-                });
-            }
+    pub fn render(&self, args: Option<&Args>) -> Result<String, anyhow::Error> {
+        // If any of the values are None, we should error
+        if let Some(Args::TypedArgs(args)) = args {
             return JINJA_ENV
-                .render_str(&self._inner, argsmap)
-                .map_err(|e| TaskStringError {
-                    source: e.into(),
-                    task: self._inner.clone(),
-                });
+                .render_str(&self.0, args)
+                .map_err(|e| anyhow::anyhow!("{}", e));
         }
 
-        JINJA_ENV
-            .render_str(&self._inner, ())
-            .map_err(|e| TaskStringError {
-                source: e.into(),
-                task: self._inner.clone(),
-            })
+        Ok(self.0.clone())
+    }
+
+    pub fn source(&self) -> &str {
+        &self.0
     }
 }
 
@@ -443,16 +387,13 @@ impl From<TaskString> for CmdArgs {
 
 impl CmdArgs {
     /// Returns a single string representation of the command arguments.
-    pub fn as_single(
-        &self,
-        argsmap: Option<&IndexMap<String, Option<String>>>,
-    ) -> Result<Option<Cow<str>>, TaskStringError> {
+    pub fn as_single(&self, args_values: Option<&Args>) -> Result<Option<Cow<str>>, anyhow::Error> {
         match self {
-            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(argsmap)?))),
+            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(args_values)?))),
             CmdArgs::Multiple(args) => {
                 let mut rendered_args = Vec::new();
                 for arg in args {
-                    let rendered = arg.render(argsmap)?;
+                    let rendered = arg.render(args_values)?;
                     rendered_args.push(quote(&rendered).to_string());
                 }
                 Ok(Some(Cow::Owned(rendered_args.join(" "))))
@@ -461,17 +402,14 @@ impl CmdArgs {
     }
 
     /// Returns a single string representation of the command arguments.
-    pub fn into_single(
-        self,
-        argsmap: Option<&IndexMap<String, Option<String>>>,
-    ) -> Result<Option<String>, TaskStringError> {
+    pub fn into_single(self, args_values: Option<&Args>) -> Result<Option<String>, anyhow::Error> {
         match self {
-            CmdArgs::Single(cmd) => cmd.render(argsmap).map(Some),
+            CmdArgs::Single(cmd) => cmd.render(args_values).map(Some),
             CmdArgs::Multiple(args) => {
                 let rendered_args = args
                     .iter()
                     .map(|arg| {
-                        Ok(match arg.render(argsmap) {
+                        Ok(match arg.render(args_values) {
                             Ok(rendered) => quote(&rendered).to_string(),
                             Err(e) => return Err(e),
                         })
@@ -496,19 +434,13 @@ impl Display for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Task::Plain(cmd) => {
-                write!(f, "{}", cmd.render(None).unwrap())?;
+                write!(f, "{}", cmd.source())?;
             }
             Task::Execute(execute) => match &execute.cmd {
-                CmdArgs::Single(cmd) => {
-                    write!(f, "{}", cmd.render(execute.args.as_ref()).unwrap())?
+                CmdArgs::Single(cmd) => write!(f, "{}", cmd.source())?,
+                CmdArgs::Multiple(mult) => {
+                    write!(f, "{}", mult.iter().map(|arg| arg.source()).join(" "))?
                 }
-                CmdArgs::Multiple(mult) => write!(
-                    f,
-                    "{}",
-                    mult.iter()
-                        .map(|arg| arg.render(execute.args.as_ref()).unwrap())
-                        .join(" ")
-                )?,
             },
             _ => {}
         };
@@ -562,29 +494,25 @@ pub fn quote(in_str: &str) -> Cow<str> {
 impl From<Task> for Item {
     fn from(value: Task) -> Self {
         match value {
-            Task::Plain(str) => Item::Value(str.render(None).unwrap().into()),
+            Task::Plain(str) => Item::Value(str.source().into()),
             Task::Execute(process) => {
                 let mut table = Table::new().into_inline_table();
-                match process.cmd {
+                match &process.cmd {
                     CmdArgs::Single(cmd_str) => {
-                        table.insert("cmd", cmd_str.render(process.args.as_ref()).unwrap().into());
+                        table.insert("cmd", cmd_str.source().into());
                     }
                     CmdArgs::Multiple(cmd_strs) => {
                         table.insert(
                             "cmd",
-                            Value::Array(Array::from_iter(
-                                cmd_strs
-                                    .iter()
-                                    .map(|arg| arg.render(process.args.as_ref()).unwrap()),
-                            )),
+                            Value::Array(Array::from_iter(cmd_strs.iter().map(|arg| arg.source()))),
                         );
                     }
                 }
                 if !process.depends_on.is_empty() {
                     table.insert(
                         "depends-on",
-                        Value::Array(Array::from_iter(process.depends_on.into_iter().map(
-                            |dep| match &dep.args {
+                        Value::Array(Array::from_iter(process.depends_on.iter().map(|dep| {
+                            match &dep.args {
                                 Some(args) if !args.is_empty() => {
                                     let mut table = Table::new().into_inline_table();
                                     table.insert("task", dep.task_name.to_string().into());
@@ -597,17 +525,17 @@ impl From<Task> for Item {
                                     Value::InlineTable(table)
                                 }
                                 _ => Value::from(dep.task_name.to_string()),
-                            },
-                        ))),
+                            }
+                        }))),
                     );
                 }
-                if let Some(cwd) = process.cwd {
+                if let Some(cwd) = &process.cwd {
                     table.insert("cwd", cwd.to_string_lossy().to_string().into());
                 }
-                if let Some(env) = process.env {
+                if let Some(env) = &process.env {
                     table.insert("env", Value::InlineTable(env.into_iter().collect()));
                 }
-                if let Some(description) = process.description {
+                if let Some(description) = &process.description {
                     table.insert("description", description.into());
                 }
                 Item::Value(Value::InlineTable(table))

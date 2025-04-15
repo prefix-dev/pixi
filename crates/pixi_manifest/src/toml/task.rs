@@ -208,11 +208,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 env,
                 description,
                 clean_env,
-                args: args.map(|args| {
-                    args.into_iter()
-                        .map(|arg| (arg.name, arg.default))
-                        .collect()
-                }),
+                args,
             }))
         } else {
             let depends_on = depends_on(&mut th).unwrap_or_default();

@@ -16,6 +16,7 @@ use crate::{
     manifests::document::ManifestDocument,
     pypi::PyPiPackageName,
     solve_group::SolveGroups,
+    task::Args,
     to_options,
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
     utils::WithSourceCode,
@@ -209,6 +210,7 @@ impl WorkspaceManifestMut<'_> {
         task: Task,
         platform: Option<Platform>,
         feature_name: &FeatureName,
+        args: Option<&Args>,
     ) -> miette::Result<()> {
         // Check if the task already exists
         if let Ok(tasks) = self.workspace.tasks(platform, feature_name) {
@@ -1219,7 +1221,7 @@ start = "python -m flask run --port=5050"
                         "{}/{} = {:?}",
                         &selector_name,
                         name.as_str(),
-                        task.as_single_command()
+                        task.as_single_command(None)
                             .ok()
                             .flatten()
                             .map(|c| c.to_string())
@@ -2402,7 +2404,7 @@ platforms = ["linux-64", "win-64"]
                 .tasks
                 .get(&"warmup".into())
                 .unwrap()
-                .as_single_command()
+                .as_single_command(None)
                 .unwrap()
                 .unwrap(),
             "python warmup.py"
@@ -2452,6 +2454,7 @@ test = "test initial"
                 Task::Plain("echo default".into()),
                 None,
                 &FeatureName::DEFAULT,
+                None,
             )
             .unwrap();
         manifest
@@ -2460,6 +2463,7 @@ test = "test initial"
                 Task::Plain("echo target_linux".into()),
                 Some(Platform::Linux64),
                 &FeatureName::DEFAULT,
+                None,
             )
             .unwrap();
         manifest
@@ -2468,6 +2472,7 @@ test = "test initial"
                 Task::Plain("echo feature_test".into()),
                 None,
                 &FeatureName::from("test"),
+                None,
             )
             .unwrap();
         manifest
@@ -2476,6 +2481,7 @@ test = "test initial"
                 Task::Plain("echo feature_test_target_linux".into()),
                 Some(Platform::Linux64),
                 &FeatureName::from("test"),
+                None,
             )
             .unwrap();
         assert_snapshot!(manifest.document.to_string());
