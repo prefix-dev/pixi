@@ -3,6 +3,7 @@
   "extends": ["config:recommended"],
   "schedule": ["on tuesday"],
   "enabledManagers": ["github-actions", "pixi", "cargo"],
+  "commitMessagePrefix": "chore(ci)",
   "packageRules": [
     {
       "groupName": "GitHub Actions",
