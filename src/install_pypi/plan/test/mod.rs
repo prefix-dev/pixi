@@ -2,7 +2,10 @@ use self::harness::{InstalledDistOptions, MockedSitePackages, NoCache, RequiredP
 use crate::install_pypi::plan::test::harness::AllCached;
 use crate::install_pypi::NeedReinstall;
 use assert_matches::assert_matches;
+use harness::fake_wheel;
+use std::path::PathBuf;
 use std::str::FromStr;
+use typed_path::Path;
 use url::Url;
 
 mod harness;
@@ -613,4 +616,37 @@ fn test_uv_refresh() {
     );
     assert!(installs.local.is_empty());
     assert_eq!(installs.remote.len(), 1);
+}
+
+/// Test when we have locked the dependency as a path that we do not re-install when all
+/// data is the same.
+/// this was a bug that occurred that when having a dependency like
+/// ```
+/// [pypi-dependencies]
+/// foobar = { path = "./foobar-0.1.0-py3-none-any.whl" }
+/// ```
+/// we would keep reinstalling foobar
+#[test]
+fn test_archive_is_path() {
+    let (tmp, _file, wheel_path) = fake_wheel("foobar");
+    // This needs to be absolute otherwise we cannot parse it into a file url
+    let site_packages = MockedSitePackages::new().add_archive(
+        "foobar",
+        "0.1.0",
+        Url::from_file_path(&wheel_path).unwrap(),
+        InstalledDistOptions::default(),
+    );
+    // Create relative path
+
+    // Requires following package
+    let required =
+        RequiredPackages::new().add_local_wheel("foobar", "0.1.0", PathBuf::from("./foobar.whl"));
+    let plan = harness::install_planner_with_lock_dir(tmp.path().to_path_buf());
+    let installs = plan
+        .plan_install(&site_packages, AllCached, &required.to_borrowed())
+        .expect("should install");
+    // Should not install package
+    assert!(installs.reinstalls.is_empty());
+    assert!(installs.local.is_empty());
+    assert!(installs.remote.is_empty());
 }
