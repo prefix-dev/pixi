@@ -10,7 +10,7 @@ start = "python hello.py"
 cowpy = "1.1.*"
 
 [feature.py312.dependencies]
-python = "3.12.*"
+python = "3.13.*"
 
 [feature.py313.dependencies]
 python = "3.13.*"
