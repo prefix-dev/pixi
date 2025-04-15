@@ -1,0 +1,45 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":maintainLockFilesMonthly"],
+  "schedule": ["on tuesday"],
+  "enabledManagers": ["github-actions", "pixi", "cargo"],
+  "commitMessagePrefix": "chore(ci)",
+  "packageRules": [
+    {
+      "groupName": "GitHub Actions",
+      "matchManagers": ["github-actions"]
+    },
+    {
+      "description": "Rust >=1.85 is needed to update the cargo-machete action",
+      "matchPackageNames": "bnjbvr/cargo-machete",
+      "matchManagers": ["github-actions"],
+      "enabled": false
+    },
+    {
+      "groupName": "Pixi",
+      "matchManagers": ["pixi"]
+    },
+    {
+      "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
+      "matchPackageNames": "rust",
+      "matchManagers": ["pixi"],
+      "enabled": false
+    },
+    {
+      "groupName": "Cargo",
+      "matchManagers": ["cargo"]
+    },
+    {
+      "description": "We want a separate PR for rattler crates",
+      "matchPackageNames": "/(rattler|file_url)/",
+      "matchManagers": ["cargo"],
+      "separateMajorMinor": false
+    },
+    {
+      "description": "Rust >=1.85 is needed to update deno_task_shell",
+      "matchPackageNames": "deno_task_shell",
+      "matchManagers": ["cargo"],
+      "enabled": false
+    }
+  ]
+}
