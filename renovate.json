@@ -4,6 +4,7 @@
   "schedule": ["on tuesday"],
   "enabledManagers": ["github-actions", "pixi", "cargo"],
   "commitMessagePrefix": "chore(ci):",
+  "ignorePaths": ["examples/**", "docs/**", "tests/**"],
   "packageRules": [
     {
       "groupName": "GitHub Actions",
