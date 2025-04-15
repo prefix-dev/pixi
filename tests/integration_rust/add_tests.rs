@@ -895,6 +895,7 @@ preview = ['pixi-build']"#,
 
 /// Test adding a git dependency using ssh url
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_pypi_git() {
     let pixi = PixiControl::from_manifest(
         format!(
