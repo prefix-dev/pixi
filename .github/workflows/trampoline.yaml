@@ -36,6 +36,10 @@ jobs:
             target: powerpc64le-unknown-linux-gnu
             os: ubuntu-latest
 
+          - name: "Linux-riscv64"
+            target: riscv64gc-unknown-linux-gnu
+            os: ubuntu-latest
+
           - name: "macOS-x86"
             target: x86_64-apple-darwin
             os: macos-13
