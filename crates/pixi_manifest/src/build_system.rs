@@ -25,6 +25,18 @@ pub struct PackageBuild {
     pub configuration: Option<serde_value::Value>,
 }
 
+impl PackageBuild {
+    /// Constructs a new instance from just a backend and channels.
+    pub fn new(backend: BuildBackend, channels: Vec<NamedChannelOrUrl>) -> Self {
+        Self {
+            backend,
+            channels: Some(channels),
+            additional_dependencies: IndexMap::default(),
+            configuration: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BuildBackend {
     /// The name of the build backend to install

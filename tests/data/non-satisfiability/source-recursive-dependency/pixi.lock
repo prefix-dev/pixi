@@ -1,0 +1,28 @@
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      win-64:
+      - conda: https://conda.anaconda.org/conda-forge/win-64/foobar-0.1.0-baz.conda
+      - conda: child-package
+packages:
+- conda: child-package
+  name: child-package
+  version: 0.1.0
+  build: pyhbf21a9e_0
+  subdir: noarch
+  depends:
+  - foobar 0.1.0 baz
+  # This should cause the lock-file to be invalid because `foobar` should be a source package,
+  # but it is installed in the environment as a binary package.
+  sources:
+    foobar:
+      path: "foobar"
+- conda: https://conda.anaconda.org/conda-forge/win-64/foobar-0.1.0-baz.conda
+  sha256: 90553586879bf328f2f9efb8d8faa958ecba822faf379f0a20c3461467b9b955
+  md5: defd5d375853a2caff36a19d2d81a28e
+  license: Python-2.0
+  size: 16140836
+  timestamp: 1696321871976
