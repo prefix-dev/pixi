@@ -13,39 +13,35 @@ __wrap__() {
     REPOURL="${PIXI_REPOURL:-https://github.com/prefix-dev/pixi}"
     PLATFORM="$(uname -s)"
     ARCH="${PIXI_ARCH:-$(uname -m)}"
+    IS_MSYS=false
 
-    if [ "$PLATFORM" = "Darwin" ]; then
+    if [ "${PLATFORM-}" = "Darwin" ]; then
         PLATFORM="apple-darwin"
-    elif [ "$PLATFORM" = "Linux" ]; then
+    elif [ "${PLATFORM-}" = "Linux" ]; then
         PLATFORM="unknown-linux-musl"
     elif [ "$(uname -o)" = "Msys" ]; then
+        IS_MSYS=true
         PLATFORM="pc-windows-msvc"
     fi
 
-    if [ "$ARCH" = "arm64" ] || [ "$ARCH" = "aarch64" ]; then
-        ARCH="aarch64"
-    fi
+    case "${ARCH-}" in
+    arm64 | aarch64) ARCH="aarch64" ;;
+    esac
 
     BINARY="pixi-${ARCH}-${PLATFORM}"
-    if [ "$(uname -o)" = "Msys" ]; then
-        EXTENSION="zip"
-        if ! hash unzip 2>/dev/null; then
-            echo "error: you do not have 'unzip' installed which is required for this script." >&2
-            exit 1
-        fi
+    if $IS_MSYS; then
+        EXTENSION=".zip"
+        hash unzip 2>/dev/null || EXTENSION=".exe"
     else
-        EXTENSION="tar.gz"
-        if ! hash tar 2>/dev/null; then
-            echo "error: you do not have 'tar' installed which is required for this script." >&2
-            exit 1
-        fi
+        EXTENSION=".tar.gz"
+        hash tar 2>/dev/null || EXTENSION=''
     fi
 
     if [ "$VERSION" = "latest" ]; then
-        DOWNLOAD_URL="${REPOURL%/}/releases/latest/download/${BINARY}.${EXTENSION}"
+        DOWNLOAD_URL="${REPOURL%/}/releases/latest/download/${BINARY}${EXTENSION-}"
     else
         # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
-        DOWNLOAD_URL="${REPOURL%/}/releases/download/v${VERSION#v}/${BINARY}.${EXTENSION}"
+        DOWNLOAD_URL="${REPOURL%/}/releases/download/v${VERSION#v}/${BINARY}${EXTENSION-}"
     fi
 
     printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"
@@ -77,7 +73,7 @@ __wrap__() {
         # https://github.com/curl/curl/issues/13845
         if [ "$(curl --version | head -n 1 | cut -d ' ' -f 2)" = "8.8.0" ]; then
             echo "error: curl 8.8.0 is known to be broken, please use a different version" >&2
-            if [ "$(uname -o)" = "Msys" ]; then
+            if $IS_MSYS; then
                 echo "A common way to get an updated version of curl is to upgrade Git for Windows:" >&2
                 echo "      https://gitforwindows.org/" >&2
             fi
@@ -104,9 +100,9 @@ __wrap__() {
 
     # Extract pixi from the downloaded file
     mkdir -p "$BIN_DIR"
-    if [ "$EXTENSION" = "zip" ]; then
+    if [ "${EXTENSION-}" = ".zip" ]; then
         unzip "$TEMP_FILE" -d "$BIN_DIR"
-    else
+    elif [ "${EXTENSION-}" = ".tar.gz" ]; then
         # Extract to a temporary directory first
         TEMP_DIR=$(mktemp -d)
         tar -xzf "$TEMP_FILE" -C "$TEMP_DIR"
@@ -120,60 +116,67 @@ __wrap__() {
 
         chmod +x "$BIN_DIR/pixi"
         rm -rf "$TEMP_DIR"
+    elif [ "${EXTENSION-}" = ".exe" ]; then
+        cp -f "$TEMP_FILE" "$BIN_DIR/pixi.exe"
+    else
+        chmod +x "$TEMP_FILE"
+        cp -f "$TEMP_FILE" "$BIN_DIR/pixi"
     fi
 
     echo "The 'pixi' binary is installed into '${BIN_DIR}'"
 
-    update_shell() {
-        FILE="$1"
-        LINE="$2"
+    # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
+    if [ -n "${PIXI_NO_PATH_UPDATE:-}" ]; then
+        echo "No path update because PIXI_NO_PATH_UPDATE is set"
+    else
+        update_shell() {
+            FILE="$1"
+            LINE="$2"
 
-        # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
-        [ -n "${PIXI_NO_PATH_UPDATE:-}" ] && echo "No path update because PIXI_NO_PATH_UPDATE has a value" && return
+            # Create the file if it doesn't exist
+            if [ ! -f "$FILE" ]; then
+                touch "$FILE"
+            fi
 
-        # Create the file if it doesn't exist
-        if [ ! -f "$FILE" ]; then
-            touch "$FILE"
-        fi
+            # Append the line if not already present
+            if ! grep -Fxq "$LINE" "$FILE"; then
+                echo "Updating '${FILE}'"
+                echo "$LINE" >>"$FILE"
+                echo "Please restart or source your shell."
+            fi
+        }
 
-        # Append the line if not already present
-        if ! grep -Fxq "$LINE" "$FILE"; then
-            echo "Updating '${FILE}'"
-            echo "$LINE" >>"$FILE"
-            echo "Please restart or source your shell."
-        fi
-    }
+        case "$(basename "${SHELL-}")" in
+        bash)
+            # Default to bashrc as that is used in non login shells instead of the profile.
+            LINE="export PATH=\"${BIN_DIR}:\$PATH\""
+            update_shell ~/.bashrc "$LINE"
+            ;;
 
-    case "$(basename "${SHELL-}")" in
-    bash)
-        # Default to bashrc as that is used in non login shells instead of the profile.
-        LINE="export PATH=\"${BIN_DIR}:\$PATH\""
-        update_shell ~/.bashrc "$LINE"
-        ;;
+        fish)
+            LINE="fish_add_path ${BIN_DIR}"
+            update_shell ~/.config/fish/config.fish "$LINE"
+            ;;
 
-    fish)
-        LINE="fish_add_path ${BIN_DIR}"
-        update_shell ~/.config/fish/config.fish "$LINE"
-        ;;
+        zsh)
+            LINE="export PATH=\"${BIN_DIR}:\$PATH\""
+            update_shell ~/.zshrc "$LINE"
+            ;;
 
-    zsh)
-        LINE="export PATH=\"${BIN_DIR}:\$PATH\""
-        update_shell ~/.zshrc "$LINE"
-        ;;
+        tcsh)
+            LINE="set path = ( ${BIN_DIR} \$path )"
+            update_shell ~/.tcshrc "$LINE"
+            ;;
 
-    tcsh)
-        LINE="set path = ( ${BIN_DIR} \$path )"
-        update_shell ~/.tcshrc "$LINE"
-        ;;
+        '')
+            echo "warn: Could not detect shell type." >&2
+            echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
+            ;;
 
-    '')
-        echo "warn: Could not detect shell type." >&2
-        echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
-        ;;
-
-    *)
-        echo "warn: Could not update shell $(basename "$SHELL")" >&2
-        echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
-        ;;
-    esac
+        *)
+            echo "warn: Could not update shell $(basename "$SHELL")" >&2
+            echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
+            ;;
+        esac
+    fi
 } && __wrap__

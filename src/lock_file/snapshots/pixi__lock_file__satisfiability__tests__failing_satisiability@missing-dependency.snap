@@ -2,6 +2,6 @@
 source: src/lock_file/satisfiability.rs
 expression: s
 ---
-environment 'default' does not satisfy the requirements of the project for platform 'win-64
+environment 'default' does not satisfy the requirements of the project for platform 'win-64'
     Diagnostic severity: error
     Caused by: the requirement 'vc14_runtime >=14.29.30139' could not be satisfied (required by 'pixi-0.15.2-h7ea99a0_0.conda')

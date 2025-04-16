@@ -49,10 +49,23 @@ mod error;
 pub(super) mod stderr;
 
 #[derive(Debug, Error, Diagnostic)]
-pub enum InitializeError {
-    #[error("failed to setup communication with the build backend, an unexpected io error occurred while communicating with the pixi build backend")]
-    #[diagnostic(help("Ensure that the project manifest contains a valid [build] section."))]
+pub enum BuildBackendSetupError {
+    #[error("an unexpected io error occurred while communicating with the pixi build backend")]
     Io(#[from] std::io::Error),
+
+    #[error("the build backend executable '{0}' appears to be missing")]
+    MissingExecutable(String),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum InitializeError {
+    #[error("failed to setup communication with the build-backend")]
+    #[diagnostic(help("This is often caused by a broken build-backend. Try upgrading or downgrading the build backend."))]
+    Setup(
+        #[diagnostic_source]
+        #[from]
+        BuildBackendSetupError,
+    ),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Protocol(#[from] ProtocolError),
@@ -185,11 +198,22 @@ impl JsonRPCBuildProtocol {
         tool: Tool,
     ) -> Result<Self, InitializeError> {
         // Spawn the tool and capture stdin/stdout.
-        let mut process = tokio::process::Command::from(tool.command())
+        let command = tool.command();
+        let program_name = command.get_program().to_string_lossy().into_owned();
+        let mut process = match tokio::process::Command::from(command)
             .stdout(std::process::Stdio::piped())
             .stdin(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .spawn()?;
+            .spawn()
+        {
+            Ok(process) => process,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Err(BuildBackendSetupError::MissingExecutable(program_name).into());
+            }
+            Err(err) => {
+                return Err(BuildBackendSetupError::Io(err).into());
+            }
+        };
 
         let backend_identifier = tool.executable().clone();
 
@@ -270,6 +294,7 @@ impl JsonRPCBuildProtocol {
             .transpose()
             .map_err(ProtocolError::from)?
             .map(Into::into);
+
         // Invoke the initialize method on the backend to establish the connection.
         let _result: InitializeResult = client
             .request(

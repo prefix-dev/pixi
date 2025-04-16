@@ -895,6 +895,7 @@ preview = ['pixi-build']"#,
 
 /// Test adding a git dependency using ssh url
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_pypi_git() {
     let pixi = PixiControl::from_manifest(
         format!(
@@ -912,7 +913,7 @@ platforms = ["{platform}"]
     .unwrap();
 
     // Add python
-    pixi.add("python").await.unwrap();
+    pixi.add("python>=3.13.2,<3.14").await.unwrap();
 
     // Add a package
     pixi.add("boltons")
