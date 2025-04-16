@@ -6,8 +6,8 @@ expression: "workspace.workspace.value.tasks(Some(Platform::Win64),\n&FeatureNam
     TaskName(
         "test",
     ): Plain(
-        TaskString {
-            _inner: "test win",
-        },
+        TaskString(
+            "test win",
+        ),
     ),
 }
