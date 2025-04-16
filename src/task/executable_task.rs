@@ -11,7 +11,7 @@ use deno_task_shell::{
 };
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
-use miette::{Context, Diagnostic};
+use miette::{Context, Diagnostic, SourceSpan};
 use pixi_consts::consts;
 use pixi_manifest::{task::ArgValues, Task, TaskName};
 use pixi_progress::await_in_progress;
@@ -31,18 +31,19 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum ShellParsingError {
-    #[error("Failed to parse shell script. Task: '{task}'")]
+    #[error("failed to parse shell script. Task: '{task}'")]
     ParseError {
         #[source]
         source: anyhow::Error,
         task: String,
     },
 
-    #[error("Failed to replace argument placeholders. Task: '{task}'")]
+    #[error("failed to replace argument placeholders")]
     ArgumentReplacement {
-        #[source]
-        source: anyhow::Error,
-        task: String,
+        #[source_code]
+        src: String,
+        #[label = "this part can't be replaced"]
+        err_span: SourceSpan,
     },
 }
 
