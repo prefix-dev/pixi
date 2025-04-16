@@ -513,7 +513,10 @@ fn verify_pypi_no_build(
     // Small helper function to get the dist extension from a url
     fn pypi_dist_extension_from_url(url: &Url) -> Result<DistExtension, ExtensionError> {
         // Take the file name from the url
-        let path = url.path_segments().and_then(|s| s.last()).unwrap_or("");
+        let path = url
+            .path_segments()
+            .and_then(|mut s| s.next_back())
+            .unwrap_or_default();
         // Convert the path to a dist extension
         DistExtension::from_path(Path::new(path))
     }
