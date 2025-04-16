@@ -290,7 +290,7 @@ impl FromStr for ArgName {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s.contains('-') {
             Err(format!(
-                "{s} is not a valid argument name since it contains the character '-'"
+                "'{s}' is not a valid argument name since it contains the character '-'"
             ))
         } else {
             Ok(ArgName(s.to_string()))
@@ -399,7 +399,7 @@ impl TaskString {
 
             return JINJA_ENV
                 .render_str(&self.0, &context)
-                .map_err(|e| anyhow::anyhow!("{}", e));
+                .map_err(|e| e.into());
         }
 
         Ok(self.0.clone())
