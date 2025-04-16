@@ -3223,7 +3223,7 @@
 
   <h1>Pixi Manifest</h1>
 
-<p>The <code>pixi.toml</code> is the project manifest, also known as the Pixi project configuration file.</p>
+<p>The <code>pixi.toml</code> is the workspace manifest, also known as the Pixi workspace configuration file.</p>
 <p>A <code>toml</code> file is structured in different tables.
 This document will explain the usage of the different tables.
 For more technical documentation check Pixi on <a href="https://docs.rs/pixi/latest/pixi/workspace/manifest/struct.ProjectManifest.html">docs.rs</a>.</p>
@@ -3294,7 +3294,7 @@ If you want to use channels hosted on <code>anaconda.org</code> you only need to
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;https://repo.prefix.dev/channel-name&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="platforms"><code>platforms</code><a class="headerlink" href="#platforms" title="Permanent link">#</a></h3>
-<p>Defines the list of platforms that the project supports.
+<p>Defines the list of platforms that the workspace supports.
 Pixi solves the dependencies for all these platforms and puts them in the lock file (<code>pixi.lock</code>).</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;win-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
 </span></code></pre></div>
@@ -3307,22 +3307,22 @@ Fallback: If <code>osx-arm64</code> can't resolve, use <code>osx-64</code>.
 Running <code>osx-64</code> on Apple Silicon uses <a href="https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment">Rosetta</a> for Intel binaries.</p>
 </div>
 <h3 id="name-optional"><code>name</code> (optional)<a class="headerlink" href="#name-optional" title="Permanent link">#</a></h3>
-<p>The name of the project.
-If the name is not specified, the name of the directory that contains the project is used.</p>
+<p>The name of the workspace.
+If the name is not specified, the name of the directory that contains the workspace is used.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;project-name&quot;</span>
 </span></code></pre></div>
 <h3 id="version-optional"><code>version</code> (optional)<a class="headerlink" href="#version-optional" title="Permanent link">#</a></h3>
-<p>The version of the project.
+<p>The version of the workspace.
 This should be a valid version based on the conda Version Spec.
 See the <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html">version documentation</a>, for an explanation of what is allowed in a Version Spec.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.2.3&quot;</span>
 </span></code></pre></div>
 <h3 id="authors-optional"><code>authors</code> (optional)<a class="headerlink" href="#authors-optional" title="Permanent link">#</a></h3>
-<p>This is a list of authors of the project.</p>
+<p>This is a list of authors of the workspace.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;John Doe &lt;j.doe@prefix.dev&gt;&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Marie Curie &lt;mss1867@gmail.com&gt;&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="description-optional"><code>description</code> (optional)<a class="headerlink" href="#description-optional" title="Permanent link">#</a></h3>
-<p>This should contain a short description of the project.</p>
+<p>This should contain a short description of the workspace.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;A simple description&quot;</span>
 </span></code></pre></div>
 <h3 id="license-optional"><code>license</code> (optional)<a class="headerlink" href="#license-optional" title="Permanent link">#</a></h3>
@@ -3338,15 +3338,15 @@ See the <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">readme</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;README.md&quot;</span>
 </span></code></pre></div>
 <h3 id="homepage-optional"><code>homepage</code> (optional)<a class="headerlink" href="#homepage-optional" title="Permanent link">#</a></h3>
-<p>URL of the project homepage.</p>
+<p>URL of the workspace homepage.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">homepage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pixi.sh&quot;</span>
 </span></code></pre></div>
 <h3 id="repository-optional"><code>repository</code> (optional)<a class="headerlink" href="#repository-optional" title="Permanent link">#</a></h3>
-<p>URL of the project source repository.</p>
+<p>URL of the workspace source repository.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">repository</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/prefix-dev/pixi&quot;</span>
 </span></code></pre></div>
 <h3 id="documentation-optional"><code>documentation</code> (optional)<a class="headerlink" href="#documentation-optional" title="Permanent link">#</a></h3>
-<p>URL of the project documentation.</p>
+<p>URL of the workspace documentation.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">documentation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pixi.sh&quot;</span>
 </span></code></pre></div>
 <h3 id="conda-pypi-map-optional"><code>conda-pypi-map</code> (optional)<a class="headerlink" href="#conda-pypi-map-optional" title="Permanent link">#</a></h3>
@@ -3396,9 +3396,9 @@ If necessary, specify a channel directly for a dependency.
 </span></code></pre></div></p>
 </div>
 <h3 id="requires-pixi-optional"><code>requires-pixi</code> (optional)<a class="headerlink" href="#requires-pixi-optional" title="Permanent link">#</a></h3>
-<p>The required version spec for <code>pixi</code> itself to resolve and build the project. If unset (<strong>Default</strong>),
+<p>The required version spec for <code>pixi</code> itself to resolve and build the workspace. If unset (<strong>Default</strong>),
 any version is ok. If set, it must be a string to a valid conda version spec, and the version of
-a running <code>pixi</code> must match the required spec before resolving or building the project, or exit with
+a running <code>pixi</code> must match the required spec before resolving or building the workspace, or exit with
 an error when not match.</p>
 <p>For example, with the following manifest, <code>pixi shell</code> will fail on <code>pixi 0.39.0</code>, but success after
 upgrading to <code>pixi 0.40.0</code>:</p>
@@ -3411,13 +3411,13 @@ upgrading to <code>pixi 0.40.0</code>:</p>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>This option should be used to improve the reproducibility of building the project. A complicated
+<p>This option should be used to improve the reproducibility of building the workspace. A complicated
 requirement spec may be an obstacle to setup the building environment.</p>
 </div>
 <h2 id="the-tasks-table">The <code>tasks</code> table<a class="headerlink" href="#the-tasks-table" title="Permanent link">#</a></h2>
-<p>Tasks are a way to automate certain custom commands in your project.
+<p>Tasks are a way to automate certain custom commands in your workspace.
 For example, a <code>lint</code> or <code>format</code> step.
-Tasks in a Pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
+Tasks in a Pixi workspace are essentially cross-platform shell commands, with a unified syntax across platforms.
 For more in-depth information, check the <a href="../../workspace/advanced_tasks/">Advanced tasks documentation</a>.
 Pixi's tasks are run in a Pixi environment using <code>pixi run</code> and are executed using the <a href="../../workspace/advanced_tasks/#our-task-runner-deno_task_shell"><code>deno_task_shell</code></a>.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[tasks]</span>
@@ -3447,7 +3447,7 @@ For example, if you want to hide <code>depending</code>, you can rename it to <c
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[system-requirements]</span>
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">libc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2.28&quot;</span>
 </span></code></pre></div>
-or make the project depend on a specific version of <code>cuda</code>:
+or make the workspace depend on a specific version of <code>cuda</code>:
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">[system-requirements]</span>
 </span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span>
 </span></code></pre></div></p>
@@ -3479,7 +3479,7 @@ These options can be specified either at the root level, which will add it to th
 <p>Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
 The order is determined by the order in the toml file. Where the <code>extra-index-urls</code> are preferred over the <code>index-url</code>. Read more about this on the <a href="https://docs.astral.sh/uv/pip/compatibility/#packages-that-exist-on-multiple-indexes">uv docs</a></p>
 </div>
-<p>Often you might want to use an alternative or extra index for your project. This can be done by adding the <code>pypi-options</code> table to your <code>pixi.toml</code> file, the following options are available:</p>
+<p>Often you might want to use an alternative or extra index for your workspace. This can be done by adding the <code>pypi-options</code> table to your <code>pixi.toml</code> file, the following options are available:</p>
 <ul>
 <li><code>index-url</code>: replaces the main index url. If this is not set the default index used is <code>https://pypi.org/simple</code>.
    <strong>Only one</strong> <code>index-url</code> can be defined per environment.</li>
@@ -3551,7 +3551,7 @@ So, to expand: if <code>no-build = true</code> is set for <em>any</em> feature i
 <summary>Details regarding the dependencies</summary>
 <p>For more detail regarding the dependency types, make sure to check the <a href="../../build/dependency_types/">Run, Host, Build</a> dependency documentation.</p>
 </details>
-<p>This section defines what dependencies you would like to use for your project.</p>
+<p>This section defines what dependencies you would like to use for your workspace.</p>
 <p>There are multiple dependencies tables.
 The default is <code>[dependencies]</code>, which are dependencies that are shared across platforms.</p>
 <p>Dependencies are defined using a <a href="https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html">VersionSpec</a>.
@@ -3595,10 +3595,10 @@ Even if the dependency defines a channel that channel should be added to the <co
 Typical examples of host dependencies are:</p>
 <ul>
 <li>Base interpreters: a Python package would list <code>python</code> here and an R package would list <code>mro-base</code> or <code>r-base</code>.</li>
-<li>Libraries your project links against during compilation like <code>openssl</code>, <code>rapidjson</code>, or <code>xtensor</code>.</li>
+<li>Libraries your workspace links against during compilation like <code>openssl</code>, <code>rapidjson</code>, or <code>xtensor</code>.</li>
 </ul>
 <h3 id="build-dependencies"><code>build-dependencies</code><a class="headerlink" href="#build-dependencies" title="Permanent link">#</a></h3>
-<p>This table contains dependencies that are needed to build the project.
+<p>This table contains dependencies that are needed to build the workspace.
 Different from <code>dependencies</code> and <code>host-dependencies</code> these packages are installed for the architecture of the <em>build</em> machine.
 This enables cross-compiling from one machine architecture to another.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-32-1"><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="k">[build-dependencies]</span>
@@ -3656,7 +3656,7 @@ See the example below to see how this is used in practice:</p>
 </span><span id="__span-33-24"><a id="__codelineno-33-24" name="__codelineno-33-24" href="#__codelineno-33-24"></a><span class="c1"># With https, specific tag and some subdirectory</span>
 </span><span id="__span-33-25"><a id="__codelineno-33-25" name="__codelineno-33-25" href="#__codelineno-33-25"></a><span class="n">boltons</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/mahmoud/boltons.git&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">tag</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;25.0.0&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">subdirectory</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;some-subdir&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-33-26"><a id="__codelineno-33-26" name="__codelineno-33-26" href="#__codelineno-33-26"></a>
-</span><span id="__span-33-27"><a id="__codelineno-33-27" name="__codelineno-33-27" href="#__codelineno-33-27"></a><span class="c1"># You can also directly add a source dependency from a path, tip keep this relative to the root of the project.</span>
+</span><span id="__span-33-27"><a id="__codelineno-33-27" name="__codelineno-33-27" href="#__codelineno-33-27"></a><span class="c1"># You can also directly add a source dependency from a path, tip keep this relative to the root of the workspace.</span>
 </span><span id="__span-33-28"><a id="__codelineno-33-28" name="__codelineno-33-28" href="#__codelineno-33-28"></a><span class="n">minimal-project</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;./minimal-project&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">editable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
 </span><span id="__span-33-29"><a id="__codelineno-33-29" name="__codelineno-33-29" href="#__codelineno-33-29"></a>
 </span><span id="__span-33-30"><a id="__codelineno-33-30" name="__codelineno-33-30" href="#__codelineno-33-30"></a><span class="c1"># You can also use a direct url, to either a `.tar.gz` or `.zip`, or a `.whl` file</span>
@@ -3705,7 +3705,7 @@ This support both https:// and ssh:// urls.</p>
 </span></code></pre></div>
 <h5 id="path"><code>path</code><a class="headerlink" href="#path" title="Permanent link">#</a></h5>
 <p>A local path to install from. e.g. <code>path = "./path/to/package"</code>
-We would advise to keep your path projects in the project, and to use a relative path.</p>
+We would advise to keep your path projects in the workspace, and to use a relative path.</p>
 <p>Set <code>editable</code> to <code>true</code> to install in editable mode, this is highly recommended as it is hard to reinstall if you're not using editable mode. e.g. <code>editable = true</code></p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="n">minimal-project</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;./minimal-project&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">editable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
 </span></code></pre></div>
@@ -3909,8 +3909,8 @@ As shown in the example above, in the simplest of cases, it is possible to defin
 <h2 id="global-configuration">Global configuration<a class="headerlink" href="#global-configuration" title="Permanent link">#</a></h2>
 <p>The global configuration options are documented in the <a href="../pixi_configuration/">global configuration</a> section.</p>
 <h2 id="preview-features">Preview features<a class="headerlink" href="#preview-features" title="Permanent link">#</a></h2>
-<p>Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the <code>preview</code> field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value <code>true</code> to enable all preview features.</p>
-<p>An example of a preview feature in the project manifest:</p>
+<p>Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the <code>preview</code> field in the workspace manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value <code>true</code> to enable all preview features.</p>
+<p>An example of a preview feature in the manifest:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
 </span></code></pre></div>
