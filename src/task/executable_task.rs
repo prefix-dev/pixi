@@ -11,9 +11,9 @@ use deno_task_shell::{
 };
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
-use miette::{Context, Diagnostic, SourceSpan};
+use miette::{Context, Diagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{task::ArgValues, Task, TaskName};
+use pixi_manifest::{task::ArgValues, task::TaskStringError, Task, TaskName};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -29,32 +29,6 @@ use crate::{
     Workspace,
 };
 
-#[derive(Debug, Error, Diagnostic)]
-pub enum ShellParsingError {
-    #[error("failed to parse shell script. Task: '{task}'")]
-    ParseError {
-        #[source]
-        source: anyhow::Error,
-        task: String,
-    },
-
-    #[error("failed to replace argument placeholders")]
-    ArgumentReplacement {
-        #[source_code]
-        src: String,
-        #[label = "this part can't be replaced"]
-        err_span: SourceSpan,
-    },
-}
-
-impl ShellParsingError {
-    pub fn task(&self) -> &str {
-        match self {
-            ShellParsingError::ParseError { task, .. } => task,
-            ShellParsingError::ArgumentReplacement { task, .. } => task,
-        }
-    }
-}
 /// Runs task in project.
 #[derive(Default, Debug)]
 pub struct RunOutput {
@@ -65,10 +39,17 @@ pub struct RunOutput {
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("The task failed to parse")]
-pub struct FailedToParseShellScript {
-    pub script: String,
-    #[source]
-    pub error: ShellParsingError,
+pub enum FailedToParseShellScript {
+    #[error("failed to parse shell script. Task: '{task}'")]
+    ParseError {
+        #[source]
+        source: anyhow::Error,
+        task: String,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ArgumentReplacement(#[from] TaskStringError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -145,14 +126,12 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the task as script
-    fn as_script(&self) -> Result<Option<String>, ShellParsingError> {
+    fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
-        let task = self.task.as_single_command(Some(&self.args)).map_err(|e| {
-            ShellParsingError::ArgumentReplacement {
-                source: e,
-                task: self.task.to_string(),
-            }
-        })?;
+        let task = self
+            .task
+            .as_single_command(Some(&self.args))
+            .map_err(|e| FailedToParseShellScript::ArgumentReplacement(e))?;
         if let Some(task) = task {
             // Get the export specific environment variables
             let export = get_export_specific_task_env(self.task.as_ref());
@@ -186,22 +165,16 @@ impl<'p> ExecutableTask<'p> {
     pub(crate) fn as_deno_script(
         &self,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        let full_script = self.as_script().map_err(|e| FailedToParseShellScript {
-            script: e.task().to_string(),
-            error: e,
-        })?;
+        let full_script = self.as_script()?;
 
         if let Some(full_script) = full_script {
             tracing::debug!("Parsing shell script: {}", full_script);
 
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
-                .map_err(|e| FailedToParseShellScript {
-                    script: full_script.to_string(),
-                    error: ShellParsingError::ParseError {
-                        source: e,
-                        task: full_script.to_string(),
-                    },
+                .map_err(|e| FailedToParseShellScript::ParseError {
+                    source: e,
+                    task: full_script.to_string(),
                 })
                 .map(Some)
         } else {
@@ -387,7 +360,11 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                 Ok(())
             }
             Err(err) => {
-                write!(f, "{}", consts::TASK_ERROR_STYLE.apply_to(err).bold())
+                write!(
+                    f,
+                    "{}",
+                    consts::TASK_ERROR_STYLE.apply_to(err.get_source()).bold()
+                )
             }
         }
     }

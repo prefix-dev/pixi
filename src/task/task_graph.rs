@@ -96,7 +96,7 @@ impl TaskNode<'_> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
-    pub(crate) fn full_command(&self) -> Result<Option<String>, anyhow::Error> {
+    pub(crate) fn full_command(&self) -> miette::Result<Option<String>> {
         let mut cmd = self.task.as_single_command(self.args.as_ref())?;
 
         if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {

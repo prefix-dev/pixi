@@ -9,7 +9,9 @@ use std::{
 use crate::workspace::JINJA_ENV;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use miette::{Diagnostic, SourceSpan};
 use serde::Serialize;
+use thiserror::Error;
 use toml_edit::{Array, Item, Table, Value};
 
 use crate::EnvironmentName;
@@ -110,10 +112,13 @@ impl Task {
     }
 
     /// If this task is a plain task, returns the task string
-    pub fn as_plain(&self) -> Result<String, anyhow::Error> {
+    pub fn as_plain(&self) -> Result<String, TaskStringError> {
         match self {
             Task::Plain(str) => str.render(None),
-            _ => Err(anyhow::anyhow!("Task is not a plain task")),
+            _ => Err(TaskStringError {
+                src: "".to_string(),
+                err_span: SourceSpan::new(0.into(), 0),
+            }),
         }
     }
 
@@ -155,7 +160,7 @@ impl Task {
     pub fn as_single_command(
         &self,
         args_values: Option<&ArgValues>,
-    ) -> Result<Option<Cow<str>>, anyhow::Error> {
+    ) -> Result<Option<Cow<str>>, TaskStringError> {
         match self {
             Task::Plain(str) => match str.render(args_values) {
                 Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
@@ -380,6 +385,21 @@ impl Default for ArgValues {
     }
 }
 
+#[derive(Debug, Diagnostic, Error, Clone)]
+#[error("failed to replace argument placeholders")]
+pub struct TaskStringError {
+    #[source_code]
+    src: String,
+    #[label = "this part can't be replaced"]
+    err_span: SourceSpan,
+}
+
+impl TaskStringError {
+    pub fn get_source(&self) -> &str {
+        &self.src
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub struct TypedArg {
     pub name: String,
@@ -389,20 +409,22 @@ pub struct TypedArg {
 impl TaskString {
     // TODO: enable feature for serialize
     // TODO: check if the Minijinja Value can be used.
-    pub fn render(&self, args: Option<&ArgValues>) -> Result<String, anyhow::Error> {
+    pub fn render(&self, args: Option<&ArgValues>) -> Result<String, TaskStringError> {
         // If any of the values are None, we should error
-        if let Some(ArgValues::TypedArgs(args)) = args {
-            let context: indexmap::IndexMap<String, String> = args
-                .iter()
+        let context = if let Some(ArgValues::TypedArgs(args)) = args {
+            args.iter()
                 .map(|arg| (arg.name.clone(), arg.value.clone()))
-                .collect();
+                .collect()
+        } else {
+            indexmap::IndexMap::<String, String>::new()
+        };
 
-            return JINJA_ENV
-                .render_str(&self.0, &context)
-                .map_err(|e| e.into());
-        }
-
-        Ok(self.0.clone())
+        JINJA_ENV
+            .render_str(&self.0, minijinja::Value::from_serialize(context))
+            .map_err(|e| TaskStringError {
+                src: self.0.clone(),
+                err_span: e.range().unwrap_or_default().into(),
+            })
     }
 
     pub fn source(&self) -> &str {
@@ -433,7 +455,7 @@ impl CmdArgs {
     pub fn as_single(
         &self,
         args_values: Option<&ArgValues>,
-    ) -> Result<Option<Cow<str>>, anyhow::Error> {
+    ) -> Result<Option<Cow<str>>, TaskStringError> {
         match self {
             CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(args_values)?))),
             CmdArgs::Multiple(args) => {
@@ -451,7 +473,7 @@ impl CmdArgs {
     pub fn into_single(
         self,
         args_values: Option<&ArgValues>,
-    ) -> Result<Option<String>, anyhow::Error> {
+    ) -> Result<Option<String>, TaskStringError> {
         match self {
             CmdArgs::Single(cmd) => cmd.render(args_values).map(Some),
             CmdArgs::Multiple(args) => {

@@ -338,6 +338,7 @@ enum TaskExecutionError {
     NonZeroExitCode(i32),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FailedToParseShellScript(#[from] FailedToParseShellScript),
 
     #[error(transparent)]
