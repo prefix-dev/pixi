@@ -17,16 +17,32 @@ impl<'de> toml_span::Deserialize<'de> for TaskArg {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = match value.take() {
             ValueInner::String(str) => {
+                if str.contains('-') {
+                    return Err(expected(
+                        "string without hyphens",
+                        ValueInner::String(str),
+                        value.span,
+                    )
+                    .into());
+                }
                 return Ok(TaskArg {
                     name: str.into_owned(),
                     default: None,
-                })
+                });
             }
             ValueInner::Table(table) => TableHelper::from((table, value.span)),
             inner => return Err(expected("string or table", inner, value.span).into()),
         };
 
         let name = th.required::<String>("arg")?;
+        if name.contains('-') {
+            return Err(expected(
+                "string without hyphens",
+                ValueInner::String(name.into()),
+                value.span,
+            )
+            .into());
+        }
         let default = th.optional::<String>("default");
 
         th.finalize(None)?;
