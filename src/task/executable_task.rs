@@ -131,7 +131,7 @@ impl<'p> ExecutableTask<'p> {
         let task = self
             .task
             .as_single_command(Some(&self.args))
-            .map_err(|e| FailedToParseShellScript::ArgumentReplacement(e))?;
+            .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
             // Get the export specific environment variables
             let export = get_export_specific_task_env(self.task.as_ref());
