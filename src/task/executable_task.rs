@@ -147,7 +147,7 @@ impl<'p> ExecutableTask<'p> {
     fn as_script(&self) -> Result<Option<String>, ShellParsingError> {
         // Convert the task into an executable string
         let task = self.task.as_single_command(Some(&self.args)).map_err(|e| {
-            ShellParsingError::ParseError {
+            ShellParsingError::ArgumentReplacement {
                 source: e,
                 task: self.task.to_string(),
             }
