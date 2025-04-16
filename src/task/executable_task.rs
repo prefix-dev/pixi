@@ -123,10 +123,7 @@ impl<'p> ExecutableTask<'p> {
             name: node.name.clone(),
             task: node.task.clone(),
             run_environment: node.run_environment.clone(),
-            args: node
-                .args
-                .clone()
-                .unwrap_or(ArgValues::FreeFormArgs([].into())),
+            args: node.args.clone().unwrap_or_default(),
         }
     }
 
@@ -521,7 +518,7 @@ mod tests {
             name: Some("test".into()),
             task: Cow::Borrowed(task),
             run_environment: workspace.default_environment(),
-            args: ArgValues::FreeFormArgs([].into()),
+            args: ArgValues::default(),
         };
 
         let script = executable_task.as_script().unwrap().unwrap();

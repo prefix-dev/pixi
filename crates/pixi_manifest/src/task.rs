@@ -351,6 +351,12 @@ impl ArgValues {
     }
 }
 
+impl Default for ArgValues {
+    fn default() -> Self {
+        Self::FreeFormArgs(Vec::new())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub struct TypedArg {
     pub name: String,

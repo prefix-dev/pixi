@@ -210,8 +210,8 @@ impl<'p> TaskGraph<'p> {
 
                         Some(Self::merge_args(
                             &TaskName::from(task_name.clone()),
-                            &Some(task_arguments),
-                            &Some(&args),
+                            Some(task_arguments),
+                            Some(&args),
                         )?)
                     } else {
                         Some(ArgValues::FreeFormArgs(args.clone()))
@@ -371,8 +371,8 @@ impl<'p> TaskGraph<'p> {
                     run_environment: task_env,
                     args: Some(Self::merge_args(
                         &dependency.task_name,
-                        &task_dependency.get_args(),
-                        &dependency.args.as_ref(),
+                        task_dependency.get_args(),
+                        dependency.args.as_ref(),
                     )?),
                     dependencies: Vec::new(),
                 });
@@ -397,17 +397,17 @@ impl<'p> TaskGraph<'p> {
 
     fn merge_args(
         task_name: &TaskName,
-        task_arguments: &Option<&Vec<TaskArg>>,
-        arg_values: &Option<&Vec<String>>,
+        task_arguments: Option<&Vec<TaskArg>>,
+        arg_values: Option<&Vec<String>>,
     ) -> Result<ArgValues, TaskGraphError> {
         let task_arguments = match task_arguments {
-            Some(args) => *args,
-            None => &vec![],
+            Some(args) => args,
+            None => &Vec::new(),
         };
 
         let arg_values = match arg_values {
-            Some(values) => *values,
-            None => &vec![],
+            Some(values) => values,
+            None => &Vec::new(),
         };
 
         let mut typed_args = Vec::with_capacity(task_arguments.len());
