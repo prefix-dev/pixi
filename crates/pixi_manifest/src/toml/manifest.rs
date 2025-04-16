@@ -176,7 +176,7 @@ impl TomlManifest {
 
         // Construct a default feature
         let default_feature = Feature {
-            name: FeatureName::Default,
+            name: FeatureName::default(),
 
             // The default feature does not overwrite the platforms or channels from the project
             // metadata.
@@ -204,13 +204,20 @@ impl TomlManifest {
         // Construct the features including the default feature
         let mut feature_name_to_span = IndexMap::new();
         let features: IndexMap<FeatureName, Feature> =
-            IndexMap::from_iter([(FeatureName::Default, default_feature)]);
+            IndexMap::from_iter([(FeatureName::default(), default_feature)]);
         let named_features = self
             .feature
             .map(PixiSpanned::into_inner)
             .unwrap_or_default()
             .into_iter()
             .map(|(name, feature)| {
+                if name.value.is_default() {
+                    return Err(TomlError::from(
+                        GenericError::new("The feature 'default' is reserved and cannot be redefined")
+                            .with_opt_span(name.span)
+                            .with_help("All tables at the root of the document are implicitly added to the 'default' feature, use those instead."),
+                    ));
+                }
                 let WithWarnings {
                     value: feature,
                     warnings: mut feature_warnings,
@@ -312,7 +319,7 @@ impl TomlManifest {
             if !no_default_feature {
                 used_features.push(
                     features
-                        .get(&FeatureName::Default)
+                        .get(&FeatureName::DEFAULT)
                         .expect("default feature must exist"),
                 );
             };
@@ -427,7 +434,7 @@ impl TomlManifest {
                 warnings: mut package_warnings,
             } = package.into_manifest(
                 ExternalPackageProperties {
-                    name: Some(workspace.name.clone()),
+                    name: workspace.name.clone(),
                     version: workspace.version.clone(),
                     description: workspace.description.clone(),
                     authors: workspace.authors.clone(),
@@ -547,6 +554,25 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
     }
 }
 
+/// Defines some of the properties that might be defined in other parts of the
+/// manifest but we do require to be set in the workspace section.
+///
+/// This can be used to inject these properties.
+#[derive(Debug, Clone, Default)]
+pub struct ExternalWorkspaceProperties {
+    pub name: Option<String>,
+    pub version: Option<Version>,
+    pub description: Option<String>,
+    pub authors: Option<Vec<String>>,
+    pub license: Option<String>,
+    pub license_file: Option<PathBuf>,
+    pub readme: Option<PathBuf>,
+    pub homepage: Option<Url>,
+    pub repository: Option<Url>,
+    pub documentation: Option<Url>,
+    pub features: IndexMap<FeatureName, Feature>,
+}
+
 #[cfg(test)]
 mod test {
     use insta::assert_snapshot;
@@ -606,19 +632,34 @@ mod test {
     }
 
     #[test]
-    fn test_workspace_name_required() {
+    fn test_missing_package_name() {
         assert_snapshot!(expect_parse_failure(
             r#"
         [workspace]
         channels = []
         platforms = []
         preview = ["pixi-build"]
+
+        [package]
+        # Since workspace doesnt define a name we expect an error here.
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
         "#,
-        ));
+        ), @r###"
+         × missing field 'name' in table
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │         [package]
+          ·         ──────────
+        8 │         # Since workspace doesnt define a name we expect an error here.
+        9 │
+          ╰────
+        "###);
     }
 
     #[test]
-    fn test_workspace_name_from_workspace() {
+    fn test_workspace_name_from_package() {
         let workspace_manifest = WorkspaceManifest::from_toml_str(
             r#"
         [workspace]
@@ -636,7 +677,7 @@ mod test {
         )
         .unwrap();
 
-        assert_eq!(workspace_manifest.workspace.name, "foo");
+        assert_eq!(workspace_manifest.workspace.name.as_deref(), Some("foo"));
     }
 
     #[test]
@@ -887,23 +928,18 @@ mod test {
         "#,
         ));
     }
-}
 
-/// Defines some of the properties that might be defined in other parts of the
-/// manifest but we do require to be set in the workspace section.
-///
-/// This can be used to inject these properties.
-#[derive(Debug, Clone, Default)]
-pub struct ExternalWorkspaceProperties {
-    pub name: Option<String>,
-    pub version: Option<Version>,
-    pub description: Option<String>,
-    pub authors: Option<Vec<String>>,
-    pub license: Option<String>,
-    pub license_file: Option<PathBuf>,
-    pub readme: Option<PathBuf>,
-    pub homepage: Option<Url>,
-    pub repository: Option<Url>,
-    pub documentation: Option<Url>,
-    pub features: IndexMap<FeatureName, Feature>,
+    #[test]
+    fn test_redefine_default_feature() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.default.dependencies]
+        "#,
+        ));
+    }
 }

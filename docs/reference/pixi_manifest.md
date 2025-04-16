@@ -28,20 +28,12 @@ The manifest can be found at the following locations.
     If multiple locations exist, the manifest with the highest priority will be used.
 
 
-## The `project` table
+## The `workspace` table
 
-The minimally required information in the `project` table is:
+The minimally required information in the `workspace` table is:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi.toml:project"
-```
-
-### `name`
-
-The name of the project.
-
-```toml
---8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
 ```
 
 ### `channels`
@@ -81,6 +73,15 @@ The available platforms are listed here: [link](https://docs.rs/rattler_conda_ty
     To support both, include both in your platforms list.
     Fallback: If `osx-arm64` can't resolve, use `osx-64`.
     Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
+
+### `name` (optional)
+
+The name of the project.
+If the name is not specified, the name of the directory that contains the project is used.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
+```
 
 ### `version` (optional)
 
@@ -438,8 +439,8 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 ### `dependencies`
 
 Add any conda package dependency that you want to install into the environment.
-Don't forget to add the channel to the project table should you use anything different than `conda-forge`.
-Even if the dependency defines a channel that channel should be added to the `project.channels` list.
+Don't forget to add the channel to the `workspace` table should you use anything different than `conda-forge`.
+Even if the dependency defines a channel that channel should be added to the `workspace.channels` list.
 
 ```toml
 [dependencies]
@@ -640,6 +641,11 @@ There are two types of activation operations a user can modify in the manifest:
 These activation operations will be run before the `pixi run` and `pixi shell` commands.
 
 !!! note
+    The script specified in the `scripts` section are not directly sourced in the `pixi shell`, but rather they are called,
+    and the environment variables they set are then set in the `pixi shell`, so any defined function or other non-environment variable
+    modification to the environment will be ignored.
+
+!!! note
     The activation operations are run by the system shell interpreter as they run before an environment is available.
     This means that it runs as `cmd.exe` on windows and `bash` on linux and osx (Unix).
     Only `.sh`, `.bash` and `.bat` files are supported.
@@ -747,8 +753,8 @@ The `feature` table allows you to define the following fields per feature.
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at project level.
-- `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at project level.
+- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at workspace level.
+- `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at workspace level.
 - `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
 - `target`: Same as the [target](#the-target-table).
 - `tasks`: Same as the [tasks](#the-tasks-table).
@@ -835,7 +841,7 @@ When an environment comprises several features (including the default feature):
 - The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
 - The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
-- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
+- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace `platforms` to all platforms it can support across its environments.
 
 ## Global configuration
 

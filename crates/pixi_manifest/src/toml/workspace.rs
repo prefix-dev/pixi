@@ -3,21 +3,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::toml::manifest::ExternalWorkspaceProperties;
-use crate::{
-    error::GenericError,
-    pypi::pypi_options::PypiOptions,
-    toml::{platform::TomlPlatform, preview::TomlPreview},
-    utils::PixiSpanned,
-    workspace::ChannelPriority,
-    PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
-};
 use indexmap::{IndexMap, IndexSet};
 use pixi_spec::TomlVersionSpecStr;
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
-use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
+use toml_span::{de_helpers::TableHelper, DeserError, Span, Spanned, Value};
 use url::Url;
+
+use crate::{
+    error::GenericError,
+    pypi::pypi_options::PypiOptions,
+    toml::{manifest::ExternalWorkspaceProperties, platform::TomlPlatform, preview::TomlPreview},
+    utils::PixiSpanned,
+    workspace::ChannelPriority,
+    PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
+};
 
 #[derive(Debug, Clone)]
 pub struct TomlWorkspaceTarget {
@@ -109,11 +109,7 @@ impl TomlWorkspace {
         let warnings = preview_warnings;
 
         Ok(WithWarnings::from(Workspace {
-            name: self.name.or(external.name).ok_or(Error {
-                kind: ErrorKind::MissingField("name"),
-                span: self.span,
-                line_info: None,
-            })?,
+            name: self.name.or(external.name),
             version: self.version.or(external.version),
             description: self.description.or(external.description),
             authors: self.authors.or(external.authors),
@@ -246,9 +242,8 @@ mod test {
 
     use insta::assert_snapshot;
 
-    use crate::toml::manifest::ExternalWorkspaceProperties;
     use crate::{
-        toml::{FromTomlStr, TomlWorkspace},
+        toml::{manifest::ExternalWorkspaceProperties, FromTomlStr, TomlWorkspace},
         utils::test_utils::{expect_parse_failure, format_parse_error},
     };
 

@@ -612,7 +612,6 @@ impl TasksControl<'_> {
         platform: Option<Platform>,
         feature_name: FeatureName,
     ) -> TaskAddBuilder {
-        let feature = feature_name.name().map(|s| s.to_string());
         TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
@@ -620,11 +619,12 @@ impl TasksControl<'_> {
                 commands: vec![],
                 depends_on: None,
                 platform,
-                feature,
+                feature: feature_name.non_default().map(str::to_owned),
                 cwd: None,
                 env: Default::default(),
                 description: None,
                 clean_env: false,
+                args: None,
             },
         }
     }

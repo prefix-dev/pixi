@@ -33,6 +33,7 @@ TomlPackageBuild {
                 file_name: None,
                 channel: None,
                 subdir: None,
+                license: None,
                 md5: None,
                 sha256: None,
             },

@@ -85,12 +85,12 @@ And we can run this command to try it with Python 3.13:
 
 
 ```bash
-pixi run --environment=py312 start
+pixi run --environment=py313 start
 ```
 
 ```
  _________________________
-< Hello from Python 3.12! >
+< Hello from Python 3.13! >
  -------------------------
      \   ^__^
       \  (oo)\_______

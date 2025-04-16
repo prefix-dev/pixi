@@ -101,6 +101,13 @@ pixi-pack pack --inject local-package-1.0.0-hbefa133_0.conda --manifest-pack pix
 
 This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use `pixi.lock` from the workspace.
 
+### PyPi support
+
+You can also pack PyPi wheel packages into your environment.
+`pixi-pack` only supports wheel packages and not source distributions.
+If you happen to use source distributions, you can ignore them by using the `--ignore-pypi-non-wheel` flag.
+This will skip the bundling of PyPi packages that are source distributions.
+
 ### Cache Downloaded Packages
 
 You can cache downloaded packages to speed up subsequent pack operations by using the `--use-cache` flag:

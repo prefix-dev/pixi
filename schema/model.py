@@ -196,6 +196,7 @@ class MatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
+    license: NonEmptyStr | None = Field(None, description="The license of the package")
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -310,6 +311,23 @@ Dependencies = dict[CondaPackageName, MatchSpec] | None
 TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
 
 
+class TaskArgs(StrictBaseModel):
+    """The arguments of a task."""
+
+    arg: NonEmptyStr
+    default: NonEmptyStr | None = Field(None, description="The default value of the argument")
+
+
+class DependsOn(StrictBaseModel):
+    """The dependencies of a task."""
+
+    task: TaskName
+    args: list[NonEmptyStr] | None = Field(None, description="The arguments to pass to the task")
+    environment: EnvironmentName | None = Field(
+        None, description="The environment to use for the task"
+    )
+
+
 class TaskInlineTable(StrictBaseModel):
     """A precise definition of a task."""
 
@@ -324,7 +342,7 @@ class TaskInlineTable(StrictBaseModel):
         alias="depends_on",
         description="The tasks that this task depends on. Environment variables will **not** be expanded. Deprecated in favor of `depends-on` from v0.21.0 onward.",
     )
-    depends_on: list[TaskName] | TaskName | None = Field(
+    depends_on: list[DependsOn | TaskName] | DependsOn | TaskName | None = Field(
         None,
         description="The tasks that this task depends on. Environment variables will **not** be expanded.",
     )
@@ -349,6 +367,11 @@ class TaskInlineTable(StrictBaseModel):
     clean_env: bool | None = Field(
         None,
         description="Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
+    )
+    args: list[TaskArgs | NonEmptyStr] | None = Field(
+        None,
+        description="The arguments to pass to the task",
+        examples=["arg1", "arg2"],
     )
 
 
@@ -438,7 +461,7 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
-    tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the target"
     )
     activation: Activation | None = Field(

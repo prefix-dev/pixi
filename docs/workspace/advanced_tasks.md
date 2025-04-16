@@ -1,4 +1,3 @@
-
 When building a package, you often have to do more than just run the code.
 Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a workspace.
 With Pixi tasks, this should become much easier to do.
@@ -62,15 +61,11 @@ build = { cmd = "ninja -C .build", depends-on = ["configure"] }
 start = { cmd = ".build/bin/sdl_example", depends-on = ["build"] }
 ```
 
-```shell
-pixi run start
-```
-
 The tasks will be executed after each other:
 
 - First `configure` because it has no dependencies.
 - Then `build` as it only depends on `configure`.
-- Then `start` as all it dependencies are run.
+- Then `start` as all its dependencies are run.
 
 If one of the commands fails (exit with non-zero code.) it will stop and the next one will not be started.
 
@@ -81,23 +76,51 @@ pixi task add fmt ruff
 pixi task add lint pylint
 ```
 
-```shell
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:not-all"
+```
+
+
+### Shorthand Syntax
+
+Pixi supports a shorthand syntax for defining tasks that only depend on other tasks. Instead of using the more verbose `depends-on` field, you can define a task directly as an array of dependencies.
+
+Executing:
+
+```
 pixi task alias style fmt lint
 ```
 
-Results in the following `pixi.toml`.
+results in the following `pixi.toml`:
 
 ```toml title="pixi.toml"
-fmt = "ruff"
-lint = "pylint"
-style = { depends-on = ["fmt", "lint"] }
+--8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:all"
 ```
 
-Now run both tools with one command.
+Now you can run both tools with one command.
 
 ```shell
 pixi run style
 ```
+
+### Environment specification for task dependencies
+
+You can specify the environment to use for a dependent task:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
+```
+
+This allows you to run tasks in different environments as part of a single pipeline.
+When you run the main task, Pixi ensures each dependent task uses its specified environment:
+
+```shell
+pixi run test-all
+```
+
+The environment specified for a task dependency takes precedence over the environment specified via the CLI `--environment` flag. This means even if you run `pixi run test-all --environment py312`, the first dependency will still run in the `py311` environment as specified in the TOML file.
+
+In the example above, the `test-all` task runs the `test` task in both Python 3.11 and 3.12 environments, allowing you to verify compatibility across different Python versions with a single command.
 
 ## Working directory
 
@@ -127,6 +150,88 @@ This will add the following line to [manifest file](../reference/pixi_manifest.m
 ```toml title="pixi.toml"
 [tasks]
 bar = { cmd = "python bar.py", cwd = "scripts" }
+```
+
+## Task Arguments
+
+Tasks can accept arguments that can be referenced in the command. This provides more flexibility and reusability for your tasks.
+
+### Why Use Task Arguments?
+
+Task arguments make your tasks more versatile and maintainable:
+
+- **Reusability**: Create generic tasks that can work with different inputs rather than duplicating tasks for each specific case
+- **Flexibility**: Change behavior at runtime without modifying your pixi.toml file
+- **Clarity**: Make your task intentions clear by explicitly defining what values can be customized
+- **Validation**: Define required arguments to ensure tasks are called correctly
+- **Default values**: Set sensible defaults while allowing overrides when needed
+
+For example, instead of creating separate build tasks for development and production modes, you can create a single parameterized task that handles both cases.
+
+Arguments can be:
+
+- **Required**: must be provided when running the task
+- **Optional**: can have default values that are used when not explicitly provided
+
+### Defining Task Arguments
+
+Define arguments in your task using the `args` field:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks"
+```
+
+### Using Task Arguments
+
+When running a task, provide arguments in the order they are defined:
+
+```shell
+# Required argument
+pixi run greet John
+✨ Pixi task (greet in default): echo Hello, John!
+
+# Default values are used when omitted
+pixi run build
+✨ Pixi task (build in default): echo Building my-app in development mode
+
+# Override default values
+pixi run build my-project production
+✨ Pixi task (build in default): echo Building my-project in production mode
+
+# Mixed argument types
+pixi run deploy auth-service
+✨ Pixi task (deploy in default): echo Deploying auth-service to staging
+pixi run deploy auth-service production
+✨ Pixi task (deploy in default): echo Deploying auth-service to production
+```
+### Passing Arguments to Dependent Tasks
+
+You can pass arguments to tasks that are dependencies of other tasks:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments_dependent.toml:project_tasks"
+```
+
+When executing a dependent task, the arguments are passed to the dependency:
+
+```shell
+pixi run install-release
+✨ Pixi task (install in default): echo Installing with manifest /path/to/manifest and flag --debug
+
+pixi run deploy
+✨ Pixi task (install in default): echo Installing with manifest /custom/path and flag --verbose
+✨ Pixi task (deploy in default): echo Deploying
+```
+
+When a dependent task doesn't specify all arguments, the default values are used for the missing ones:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments_partial.toml:project_tasks"
+```
+
+```shell
+pixi run partial-override
+✨ Pixi task (base-task in default): echo Base task with override1 and default2
 ```
 
 ## Caching
@@ -219,7 +324,7 @@ The task shell is a limited implementation of a bourne-shell interface.
 
 ### Built-in commands
 
-Next to running actual executable like `./myprogram`, `cmake` or `python` the shell has some built-in commandos.
+Next to running actual executable like `./myprogram`, `cmake` or `python` the shell has some built-in commands.
 
 - `cp`: Copies files.
 - `mv`: Moves files.
@@ -246,7 +351,7 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
   - Set env variable using: `export ENV_VAR=value`
   - Use env variable using: `$ENV_VAR`
   - unset env variable using `unset ENV_VAR`
-- **Shell variables:** Shell variables are similar to environment variables, but won’t be exported to spawned commands.
+- **Shell variables:** Shell variables are similar to environment variables, but won't be exported to spawned commands.
   - Set them: `VAR=value`
   - use them: `VAR=value && echo $VAR`
 - **Pipelines:** Use the stdout output of a command into the stdin a following command

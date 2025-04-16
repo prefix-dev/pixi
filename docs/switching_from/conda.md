@@ -76,7 +76,7 @@ This will create a new workspace with the dependencies from the `environment.yml
 ??? tip "Exporting your environment"
     If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/workspace/export.md) file to share them.
     ```shell
-    pixi project export conda-environment
+    pixi workspace export conda-environment
     ```
     Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export.md).
 

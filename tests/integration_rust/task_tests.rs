@@ -16,7 +16,7 @@ pub async fn add_remove_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test".into(), None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::default())
         .with_commands(["echo hello"])
         .execute()
         .await
@@ -50,13 +50,13 @@ pub async fn add_command_types() {
 
     // Add a command with dependencies
     pixi.tasks()
-        .add("test".into(), None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::default())
         .with_commands(["echo hello"])
         .execute()
         .await
         .unwrap();
     pixi.tasks()
-        .add("test2".into(), None, FeatureName::Default)
+        .add("test2".into(), None, FeatureName::default())
         .with_commands(["echo hello", "echo bonjour"])
         .with_depends_on(vec!["test".into()])
         .execute()
@@ -86,7 +86,9 @@ pub async fn add_command_types() {
     let project = pixi.workspace().unwrap();
     let tasks = project.default_environment().tasks(None).unwrap();
     let task = tasks.get(&<TaskName>::from("testing")).unwrap();
-    assert!(matches!(task, Task::Alias(a) if a.depends_on.first().unwrap().as_str() == "test"));
+    assert!(
+        matches!(task, Task::Alias(a) if a.depends_on.first().unwrap().task_name.as_str() == "test")
+    );
 }
 
 #[tokio::test]
@@ -95,21 +97,21 @@ async fn test_alias() {
     pixi.init().without_channels().await.unwrap();
 
     pixi.tasks()
-        .add("hello".into(), None, FeatureName::Default)
+        .add("hello".into(), None, FeatureName::default())
         .with_commands(["echo hello"])
         .execute()
         .await
         .unwrap();
 
     pixi.tasks()
-        .add("world".into(), None, FeatureName::Default)
+        .add("world".into(), None, FeatureName::default())
         .with_commands(["echo world"])
         .execute()
         .await
         .unwrap();
 
     pixi.tasks()
-        .add("helloworld".into(), None, FeatureName::Default)
+        .add("helloworld".into(), None, FeatureName::default())
         .with_depends_on(vec!["hello".into(), "world".into()])
         .execute()
         .await
@@ -139,7 +141,7 @@ pub async fn add_remove_target_specific_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test".into(), Some(Platform::Win64), FeatureName::Default)
+        .add("test".into(), Some(Platform::Win64), FeatureName::default())
         .with_commands(["echo only_on_windows"])
         .execute()
         .await
@@ -156,7 +158,7 @@ pub async fn add_remove_target_specific_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test".into(), None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::default())
         .with_commands(["echo hello"])
         .execute()
         .await
@@ -187,7 +189,7 @@ async fn test_cwd() {
     fs_err::create_dir(pixi.workspace_path().join("test")).unwrap();
 
     pixi.tasks()
-        .add("pwd-test".into(), None, FeatureName::Default)
+        .add("pwd-test".into(), None, FeatureName::default())
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("test"))
         .execute()
@@ -210,7 +212,7 @@ async fn test_cwd() {
 
     // Test that an unknown cwd gives an error
     pixi.tasks()
-        .add("unknown-cwd".into(), None, FeatureName::Default)
+        .add("unknown-cwd".into(), None, FeatureName::default())
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("tests"))
         .execute()
@@ -235,7 +237,7 @@ async fn test_task_with_env() {
     pixi.init().without_channels().await.unwrap();
 
     pixi.tasks()
-        .add("env-test".into(), None, FeatureName::Default)
+        .add("env-test".into(), None, FeatureName::default())
         .with_commands(["echo From a $HELLO_WORLD"])
         .with_env(vec![(
             String::from("HELLO_WORLD"),
@@ -267,7 +269,7 @@ async fn test_clean_env() {
 
     std::env::set_var("HELLO", "world from env");
     pixi.tasks()
-        .add("env-test".into(), None, FeatureName::Default)
+        .add("env-test".into(), None, FeatureName::default())
         .with_commands(["echo Hello is: $HELLO"])
         .execute()
         .await

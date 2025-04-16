@@ -1,8 +1,9 @@
+
+## Pycharm
+
 <!-- Keep in sync with https://github.com/pavelzw/pixi-pycharm/blob/main/README.md -->
 
 You can use PyCharm with Pixi environments by using the `conda` shim provided by the [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm) package.
-
-## How to use
 
 To get started, add `pixi-pycharm` to your Pixi workspace.
 
@@ -85,13 +86,13 @@ It also might come up that you have multiple environments with the same name.
 
 It is recommended to rename the environments to something unique.
 
-## Debugging
+### Debugging
 
 Logs are written to `~/.cache/pixi-pycharm.log`.
 You can use them to debug problems.
 Please attach the logs when [filing a bug report](https://github.com/pavelzw/pixi-pycharm/issues/new?template=bug-report.md).
 
-## Install as an optional dependency
+### Install as an optional dependency
 
 In some cases, you might only want to install `pixi-pycharm` on your local dev-machines but not in production.
 To achieve this, we can use [multiple environments](../../workspace/multi_environment.md).
@@ -129,3 +130,9 @@ lint = { features = ["lint"], no-default-feature = true }
 
 Now you as a user can run `pixi shell`, which will start the default environment.
 In production, you then just run `pixi run -e prod COMMAND`, and the minimal prod environment is installed.
+
+## Direnv
+
+In order to use Direnv with [Jetbrains](https://www.jetbrains.com/ides/) products you first have to install the [Direnv plugin](https://plugins.jetbrains.com/plugin/15285-direnv-integration).
+Then follow the instructions in our [Direnv doc page](../third_party/direnv.md).
+Now your Jetbrains IDE will be run within the selected Pixi environment.

@@ -227,6 +227,9 @@ impl DiscoveryStart {
 }
 
 impl WorkspaceDiscoverer {
+    /// Required sections. At least one of them must be present.
+    pub const REQUIRED_SECTIONS: [&'static str; 3] = ["workspace", "project", "package"];
+
     /// Constructs a new instance from the current path.
     pub fn new(start: DiscoveryStart) -> Self {
         Self {
@@ -329,9 +332,31 @@ impl WorkspaceDiscoverer {
             // Cheap check to see if the manifest contains a pixi section.
             if let ManifestSource::PyProjectToml(source) = &contents {
                 if !source.contains("[tool.pixi")
-                    && !matches!(search_path.clone(), SearchPath::Explicit(_))
+                    && matches!(search_path.clone(), SearchPath::Explicit(_))
                 {
-                    continue;
+                    return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
+                        error: TomlError::NoPixiTable(ManifestKind::Pyproject, None),
+                        source: contents.into_named(provenance.absolute_path().to_string_lossy()),
+                    })));
+                }
+            } else if let ManifestSource::PixiToml(source) = &contents {
+                // check if at least one of the required sections is present
+                if !Self::REQUIRED_SECTIONS
+                    .iter()
+                    .any(|section| source.contains(&format!("[{}]", section)))
+                {
+                    return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
+                        error: TomlError::NoPixiTable(
+                            ManifestKind::Pixi,
+                            Some(format!(
+                                "Any of the following sections is required:\n{}",
+                                Self::REQUIRED_SECTIONS
+                                    .map(|s| format!("* {}", s))
+                                    .join("\n")
+                            )),
+                        ),
+                        source: contents.into_named(provenance.absolute_path().to_string_lossy()),
+                    })));
                 }
             }
 
@@ -565,7 +590,13 @@ mod test {
                         &mut snapshot,
                         "Discovered workspace at: {}\n- Name: {}",
                         rel_path.display().to_string().replace("\\", "/"),
-                        &discovered.workspace.value.workspace.name
+                        &discovered
+                            .workspace
+                            .value
+                            .workspace
+                            .name
+                            .as_deref()
+                            .unwrap_or("??")
                     )
                     .unwrap();
 
@@ -595,6 +626,8 @@ mod test {
     #[case::pixi("pixi.toml")]
     #[case::empty("empty")]
     #[case::package_specific("package_a/pixi.toml")]
+    #[case::missing_table_pixi_manifest("missing-tables/pixi.toml")]
+    #[case::missing_table_pyproject_manifest("missing-tables/pyproject.toml")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
@@ -620,7 +653,13 @@ mod test {
                     &mut snapshot,
                     "Discovered workspace at: {}\n- Name: {}",
                     rel_path.display().to_string().replace("\\", "/"),
-                    &discovered.workspace.value.workspace.name
+                    &discovered
+                        .workspace
+                        .value
+                        .workspace
+                        .name
+                        .as_deref()
+                        .unwrap_or("??")
                 )
                 .unwrap();
 
