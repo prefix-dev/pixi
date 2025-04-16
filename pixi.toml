@@ -133,7 +133,7 @@ compilers = ">=1.9.0,<2"
 git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
-rust = "==1.84.0"
+rust = ">=1.86.0,<1.87"
 rust-src = ">=1.84.0,<2"
 
 [feature.build.target.linux-64.dependencies]
