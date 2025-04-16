@@ -432,7 +432,7 @@ def test_invalid_task_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "arg3",
         ],
         ExitCode.FAILURE,
-        stderr_contains="expected default value required after previous arguments with defaults",
+        stderr_contains="default value required after previous arguments with defaults",
     )
 
 
