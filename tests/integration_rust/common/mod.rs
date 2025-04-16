@@ -5,6 +5,7 @@ pub mod client;
 pub mod package_database;
 
 use std::{
+    ffi::OsString,
     path::{Path, PathBuf},
     process::Output,
     str::FromStr,
@@ -527,7 +528,12 @@ impl PixiControl {
                 Some(task_env) => task_env,
             };
 
-            let output = task.execute_with_pipes(task_env, None).await?;
+            let task_env = task_env
+                .iter()
+                .map(|(k, v)| (OsString::from(k), OsString::from(v)))
+                .collect();
+
+            let output = task.execute_with_pipes(&task_env, None).await?;
             result.stdout.push_str(&output.stdout);
             result.stderr.push_str(&output.stderr);
             result.exit_code = output.exit_code;

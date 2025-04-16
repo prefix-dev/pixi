@@ -1587,18 +1587,55 @@ dependencies = [
 ]
 
 [[package]]
-name = "deno_task_shell"
-version = "0.21.0"
+name = "deno_error"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00246b9c9ec38a48e4143ca60e578291836cda6ab8eeab668e628cafe6ac7a9c"
+checksum = "19fae9fe305307b5ef3ee4e8244c79cffcca421ab0ce8634dea0c6b1342f220f"
+dependencies = [
+ "deno_error_macro",
+ "libc",
+ "url",
+]
+
+[[package]]
+name = "deno_error_macro"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5abb2556e91848b66f562451fcbcdee2a3b7c88281828908dcf7cca355f5d997"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "deno_path_util"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c238a664a0a6f1ce0ff2b73c6854811526d00f442a12f878cb8555b23fe13aa3"
+dependencies = [
+ "deno_error",
+ "percent-encoding",
+ "sys_traits",
+ "thiserror 2.0.12",
+ "url",
+]
+
+[[package]]
+name = "deno_task_shell"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "126e6062adfcc544f0937d610d23dc4dc70c4d2aab8636b31a93bcb26177115d"
 dependencies = [
  "anyhow",
+ "deno_path_util",
  "futures",
  "glob",
  "monch",
  "nix",
  "os_pipe",
  "path-dedot",
+ "sys_traits",
  "thiserror 2.0.12",
  "tokio",
  "windows-sys 0.59.0",
@@ -6739,6 +6776,12 @@ dependencies = [
  "cc",
  "libc",
 ]
+
+[[package]]
+name = "sys_traits"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3374191d43a934854e99a46cd47f8124369e690353e0f8db42769218d083690"
 
 [[package]]
 name = "sysctl"

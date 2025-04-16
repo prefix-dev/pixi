@@ -4,11 +4,17 @@
   "schedule": ["on tuesday"],
   "enabledManagers": ["github-actions", "pixi", "cargo"],
   "commitMessagePrefix": "chore(ci):",
-  "ignorePaths": ["examples/**", "docs/**", "tests/**"],
+  "ignorePaths": ["**/examples/**", "**/docs/**", "**/tests/**"],
   "packageRules": [
     {
       "groupName": "GitHub Actions",
       "matchManagers": ["github-actions"]
+    },
+    {
+      "description": "We run multiple macOS runner versions on purpose since 13 runs on x86_64",
+      "matchPackageNames": "macos",
+      "matchManagers": ["github-actions"],
+      "enabled": false
     },
     {
       "description": "Rust >=1.85 is needed to update the cargo-machete action",

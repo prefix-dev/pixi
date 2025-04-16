@@ -1,6 +1,7 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     convert::identity,
+    ffi::OsString,
     string::String,
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -271,10 +272,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         ctrlc_should_exit_process.store(false, Ordering::Relaxed);
 
+        let task_env = task_env
+            .iter()
+            .map(|(k, v)| (OsString::from(k), OsString::from(v)))
+            .collect();
+
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we exit this parent process with
         // the same code.
-        match execute_task(&executable_task, task_env).await {
+        match execute_task(&executable_task, &task_env).await {
             Ok(_) => {
                 task_idx += 1;
             }
@@ -346,7 +352,7 @@ enum TaskExecutionError {
 /// This function is called from [`execute`].
 async fn execute_task(
     task: &ExecutableTask<'_>,
-    command_env: &HashMap<String, String>,
+    command_env: &HashMap<OsString, OsString>,
 ) -> Result<(), TaskExecutionError> {
     let Some(script) = task.as_deno_script()? else {
         return Ok(());
@@ -356,7 +362,7 @@ async fn execute_task(
     let status_code = deno_task_shell::execute(
         script,
         command_env.clone(),
-        &cwd,
+        cwd,
         Default::default(),
         Default::default(),
     )

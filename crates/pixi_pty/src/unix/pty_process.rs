@@ -134,11 +134,7 @@ impl PtyProcess {
     /// This means: If you ran `exit()` before or `status()` this method will
     /// return `None`
     pub fn status(&self) -> Option<wait::WaitStatus> {
-        if let Ok(status) = wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)) {
-            Some(status)
-        } else {
-            None
-        }
+        wait::waitpid(self.child_pid, Some(wait::WaitPidFlag::WNOHANG)).ok()
     }
 
     /// Regularly exit the process, this method is blocking until the process is dead
