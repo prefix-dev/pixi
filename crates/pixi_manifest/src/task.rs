@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    collections::HashMap,
     convert::Infallible,
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
@@ -407,20 +408,19 @@ pub struct TypedArg {
 }
 
 impl TaskString {
-    // TODO: enable feature for serialize
-    // TODO: check if the Minijinja Value can be used.
     pub fn render(&self, args: Option<&ArgValues>) -> Result<String, TaskStringError> {
-        // If any of the values are None, we should error
         let context = if let Some(ArgValues::TypedArgs(args)) = args {
-            args.iter()
-                .map(|arg| (arg.name.clone(), arg.value.clone()))
-                .collect()
+            let args_map: HashMap<&str, &str> = args
+                .iter()
+                .map(|arg| (arg.name.as_str(), arg.value.as_str()))
+                .collect();
+            minijinja::Value::from_serialize(&args_map)
         } else {
-            indexmap::IndexMap::<String, String>::new()
+            minijinja::Value::from_serialize(Vec::<TypedArg>::new())
         };
 
         JINJA_ENV
-            .render_str(&self.0, minijinja::Value::from_serialize(context))
+            .render_str(&self.0, context)
             .map_err(|e| TaskStringError {
                 src: self.0.clone(),
                 err_span: e.range().unwrap_or_default().into(),
