@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
+    ffi::OsString,
     fmt::{Display, Formatter},
     path::PathBuf,
 };
@@ -307,7 +308,7 @@ impl<'p> ExecutableTask<'p> {
     /// Executes the task and capture its output.
     pub async fn execute_with_pipes(
         &self,
-        command_env: &HashMap<String, String>,
+        command_env: &HashMap<OsString, OsString>,
         input: Option<&[u8]>,
     ) -> Result<RunOutput, TaskExecutionError> {
         let Some(script) = self.as_deno_script()? else {
@@ -329,7 +330,7 @@ impl<'p> ExecutableTask<'p> {
         let (stderr, stderr_handle) = get_output_writer_and_handle();
         let state = ShellState::new(
             command_env.clone(),
-            &cwd,
+            cwd,
             Default::default(),
             Default::default(),
         );
