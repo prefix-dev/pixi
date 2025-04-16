@@ -2117,13 +2117,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-project-table" class="md-nav__link">
+  <a href="#the-workspace-table" class="md-nav__link">
     <span class="md-ellipsis">
-      The project table
+      The workspace table
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="The project table">
+    <nav class="md-nav" aria-label="The workspace table">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2799,13 +2799,13 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#the-project-table" class="md-nav__link">
+  <a href="#the-workspace-table" class="md-nav__link">
     <span class="md-ellipsis">
-      The project table
+      The workspace table
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="The project table">
+    <nav class="md-nav" aria-label="The workspace table">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -3275,8 +3275,8 @@ There are also some small extras that are available in the <code>pyproject.toml<
 <p class="admonition-title">Note</p>
 <p>If multiple locations exist, the manifest with the highest priority will be used.</p>
 </div>
-<h2 id="the-project-table">The <code>project</code> table<a class="headerlink" href="#the-project-table" title="Permanent link">#</a></h2>
-<p>The minimally required information in the <code>project</code> table is:</p>
+<h2 id="the-workspace-table">The <code>workspace</code> table<a class="headerlink" href="#the-workspace-table" title="Permanent link">#</a></h2>
+<p>The minimally required information in the <code>workspace</code> table is:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;project-name&quot;</span>
@@ -3581,8 +3581,8 @@ Running <code>add</code> for an existing dependency will replace it with the new
 </div>
 <h3 id="dependencies"><code>dependencies</code><a class="headerlink" href="#dependencies" title="Permanent link">#</a></h3>
 <p>Add any conda package dependency that you want to install into the environment.
-Don't forget to add the channel to the project table should you use anything different than <code>conda-forge</code>.
-Even if the dependency defines a channel that channel should be added to the <code>project.channels</code> list.</p>
+Don't forget to add the channel to the <code>workspace</code> table should you use anything different than <code>conda-forge</code>.
+Even if the dependency defines a channel that channel should be added to the <code>workspace.channels</code> list.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">[dependencies]</span>
 </span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;3.9,&lt;=3.11&quot;</span>
 </span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="n">rust</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==1.72&quot;</span>
@@ -3830,8 +3830,8 @@ The <code>[environments]</code> table allows you to define different environment
 <li><code>pypi-options</code>: Same as the <a href="#the-pypi-options-table">pypi-options</a>.</li>
 <li><code>system-requirements</code>: Same as the <a href="#the-system-requirements-table">system-requirements</a>.</li>
 <li><code>activation</code>: Same as the <a href="#the-activation-table">activation</a>.</li>
-<li><code>platforms</code>: Same as the <a href="#platforms">platforms</a>. Unless overridden, the <code>platforms</code> of the feature will be those defined at project level.</li>
-<li><code>channels</code>: Same as the <a href="#channels">channels</a>. Unless overridden, the <code>channels</code> of the feature will be those defined at project level.</li>
+<li><code>platforms</code>: Same as the <a href="#platforms">platforms</a>. Unless overridden, the <code>platforms</code> of the feature will be those defined at workspace level.</li>
+<li><code>channels</code>: Same as the <a href="#channels">channels</a>. Unless overridden, the <code>channels</code> of the feature will be those defined at workspace level.</li>
 <li><code>channel-priority</code>: Same as the <a href="#channel-priority-optional">channel-priority</a>.</li>
 <li><code>target</code>: Same as the <a href="#the-target-table">target</a>.</li>
 <li><code>tasks</code>: Same as the <a href="#the-tasks-table">tasks</a>.</li>
@@ -3904,7 +3904,7 @@ As shown in the example above, in the simplest of cases, it is possible to defin
 <li>The <code>dependencies</code> and <code>pypi-dependencies</code> of the environment are the union of the <code>dependencies</code> and <code>pypi-dependencies</code> of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.</li>
 <li>The <code>system-requirements</code> of the environment is the union of the <code>system-requirements</code> of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.</li>
 <li>The <code>channels</code> of the environment is the union of the <code>channels</code> of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.</li>
-<li>The <code>platforms</code> of the environment is the intersection of the <code>platforms</code> of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the <code>platforms</code> defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project <code>platforms</code> to all platforms it can support across its environments.</li>
+<li>The <code>platforms</code> of the environment is the intersection of the <code>platforms</code> of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the <code>platforms</code> defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace <code>platforms</code> to all platforms it can support across its environments.</li>
 </ul>
 <h2 id="global-configuration">Global configuration<a class="headerlink" href="#global-configuration" title="Permanent link">#</a></h2>
 <p>The global configuration options are documented in the <a href="../pixi_configuration/">global configuration</a> section.</p>
