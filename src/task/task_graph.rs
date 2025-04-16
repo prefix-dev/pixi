@@ -419,13 +419,13 @@ impl<'p> TaskGraph<'p> {
                 default.clone()
             } else {
                 return Err(TaskGraphError::MissingArgument(
-                    arg.name.clone(),
+                    arg.name.as_str().to_owned(),
                     task_name.to_string(),
                 ));
             };
 
             typed_args.push(TypedArg {
-                name: arg.name.clone(),
+                name: arg.name.as_str().to_owned(),
                 value,
             });
         }

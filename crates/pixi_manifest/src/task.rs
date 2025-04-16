@@ -282,20 +282,43 @@ impl From<Execute> for Task {
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize)]
+pub struct ArgName(String);
+
+impl FromStr for ArgName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.contains('-') {
+            Err(format!(
+                "{s} is not a valid argument name since it contains the character '-'"
+            ))
+        } else {
+            Ok(ArgName(s.to_string()))
+        }
+    }
+}
+
+impl ArgName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize)]
 pub struct TaskArg {
     /// The name of the argument
-    pub name: String,
+    pub name: ArgName,
 
     /// The default value of the argument
     pub default: Option<String>,
 }
 
 impl std::str::FromStr for TaskArg {
-    type Err = miette::Error;
+    type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(TaskArg {
-            name: s.to_string(),
+            name: ArgName::from_str(s)?,
             default: None,
         })
     }
