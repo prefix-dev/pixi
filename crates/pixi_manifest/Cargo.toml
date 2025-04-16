@@ -48,7 +48,7 @@ rattler_solve = { workspace = true, optional = true }
 anyhow = "1.0.97"
 console = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
-minijinja.workspace = true
+minijinja = { workspace = true, features = ["builtins"] }
 once_cell.workspace = true
 
 [dev-dependencies]
