@@ -915,8 +915,12 @@ pub(crate) fn pypi_satifisfies_requirement(
                     Utf8TypedPathBuf::from(install_path.to_string_lossy().to_string());
                 let project_root =
                     Utf8TypedPathBuf::from(project_root.to_string_lossy().to_string());
-                let locked_path = project_root.join(locked_path.to_path()).normalize();
-                // sometimes the path is relative, so we need to join it with the project root
+                // Join relative paths with the project root
+                let locked_path = if locked_path.is_absolute() {
+                    locked_path.clone()
+                } else {
+                    project_root.join(locked_path.to_path()).normalize()
+                };
                 if locked_path.to_path() != install_path {
                     return Err(PlatformUnsat::LockedPyPIPathMismatch {
                         name: spec.name.clone().to_string(),
