@@ -192,6 +192,12 @@
               "$ref": "#/$defs/TaskInlineTable"
             },
             {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DependsOn"
+              }
+            },
+            {
               "type": "string",
               "minLength": 1
             }
@@ -727,6 +733,12 @@
               "anyOf": [
                 {
                   "$ref": "#/$defs/TaskInlineTable"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
                 },
                 {
                   "type": "string",
@@ -1839,7 +1851,7 @@
       "description": "The project's metadata information.",
       "type": "object",
       "required": [
-        "platforms"
+        "channels"
       ],
       "additionalProperties": false,
       "properties": {

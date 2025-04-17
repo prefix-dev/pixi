@@ -16,6 +16,18 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 :  The packages to upgrade
 <br>May be provided more than once.
 
+## Options
+- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
+:  The feature to update
+<br>**default**: `default`
+- <a id="arg---exclude" href="#arg---exclude">`--exclude <EXCLUDE>`</a>
+:  The packages which should be excluded
+<br>May be provided more than once.
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Output the changes in JSON format
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Only show the changes that would be made, without actually updating the manifest, lock file, or environment
+
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
@@ -42,16 +54,6 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
-:  The feature to update
-<br>**default**: `default`
-- <a id="arg---exclude" href="#arg---exclude">`--exclude <EXCLUDE>`</a>
-:  The packages which should be excluded
-<br>May be provided more than once.
-- <a id="arg---json" href="#arg---json">`--json`</a>
-:  Output the changes in JSON format
-- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Only show the changes that would be made, without actually updating the manifest, lock file, or environment
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

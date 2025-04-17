@@ -4676,6 +4676,8 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.5.0",
+ "minijinja",
+ "once_cell",
  "pathdiff",
  "pep440_rs",
  "pep508_rs",

@@ -10,6 +10,15 @@ use url::Url;
 use super::pypi::pypi_options::PypiOptions;
 use crate::exclude_newer::ExcludeNewer;
 use crate::{preview::Preview, PrioritizedChannel, S3Options, Targets};
+use minijinja::{AutoEscape, Environment, UndefinedBehavior};
+use once_cell::sync::Lazy;
+
+pub static JINJA_ENV: Lazy<Environment<'static>> = Lazy::new(|| {
+    let mut env = Environment::new();
+    env.set_undefined_behavior(UndefinedBehavior::Strict);
+    env.set_auto_escape_callback(|_| AutoEscape::None);
+    env
+});
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
 #[derive(Debug, Default, Clone)]

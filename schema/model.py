@@ -123,7 +123,6 @@ class Workspace(StrictBaseModel):
         None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
     )
     channels: list[Channel] = Field(
-        None,
         description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
     )
     channel_priority: ChannelPriority | None = Field(
@@ -138,7 +137,9 @@ class Workspace(StrictBaseModel):
         examples=["2023-11-03", "2023-11-03T03:33:12Z"],
         description="Exclude any package newer than this date",
     )
-    platforms: list[Platform] = Field(description="The platforms that the project supports")
+    platforms: list[Platform] | None = Field(
+        None, description="The platforms that the project supports"
+    )
     license: NonEmptyStr | None = Field(
         None,
         description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
@@ -504,7 +505,7 @@ class Feature(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
-    tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks provided by this feature"
     )
     activation: Activation | None = Field(
@@ -709,7 +710,7 @@ class BaseManifest(StrictBaseModel):
         None, description="The PyPI dependencies"
     )
     pypi_options: PyPIOptions | None = Field(None, description="Options related to PyPI indexes")
-    tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
     )
     system_requirements: SystemRequirements | None = Field(
