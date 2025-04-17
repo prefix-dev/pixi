@@ -1,0 +1,16 @@
+[project]
+authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
+dependencies = []
+name = "uv-sources"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+local-library = { path = "./local-library", editable = true }
+
+[tool.uv.workspace]
+members = ["local-library2"]
