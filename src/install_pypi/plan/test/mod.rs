@@ -639,7 +639,7 @@ fn test_archive_is_path() {
 
     // Requires following package
     let required =
-        RequiredPackages::new().add_local_wheel("foobar", "0.1.0", PathBuf::from("./foobar.whl"));
+        RequiredPackages::new().add_local_wheel("foobar", "0.1.0", PathBuf::from("./some-dir/../foobar.whl"));
     let plan = harness::install_planner_with_lock_dir(tmp.path().to_path_buf());
     let installs = plan
         .plan_install(&site_packages, AllCached, &required.to_borrowed())
