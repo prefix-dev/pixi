@@ -379,7 +379,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
         r#"
     [project]
     name = "test-channel-change"
-    channels = ["conda-forge"]
+    channels = ["https://prefix.dev/conda-forge"]
     platforms = ["linux-64"]
     conda-pypi-map = {{ 'conda-forge' = "{}" }}
     "#,
@@ -469,7 +469,7 @@ async fn test_custom_mapping_channel_with_suffix() {
         r#"
      [project]
      name = "test-channel-change"
-     channels = ["conda-forge"]
+     channels = ["https://prefix.dev/conda-forge"]
      platforms = ["linux-64"]
      conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge/" = "{}" }}
      "#,
@@ -524,7 +524,7 @@ async fn test_repo_data_record_channel_with_suffix() {
         r#"
      [project]
      name = "test-channel-change"
-     channels = ["conda-forge"]
+     channels = ["https://prefix.dev/conda-forge"]
      platforms = ["linux-64"]
      conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge" = "{}" }}
      "#,
@@ -709,7 +709,7 @@ async fn test_disabled_mapping() {
         r#"
     [project]
     name = "test-channel-change"
-    channels = ["conda-forge"]
+    channels = ["https://prefix.dev/conda-forge"]
     platforms = ["linux-64"]
     conda-pypi-map = { }
     "#,

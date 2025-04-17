@@ -643,7 +643,7 @@ setup(
         r#"
     [project]
     name = "no-build-isolation"
-    channels = ["conda-forge"]
+    channels = ["https://prefix.dev/conda-forge"]
     platforms = ["{platform}"]
 
     [pypi-options]
@@ -688,23 +688,18 @@ async fn test_setuptools_override_failure() {
     let manifest = format!(
         r#"
         [project]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
         name = "pixi-source-problem"
         platforms = ["{platform}"]
+        exclude-newer = "2024-08-29"
 
         [dependencies]
         pip = ">=24.0,<25"
         python = "<3.13"
-        # we need to pin them because xalas start to fail with newer versions
-        ninja = "*"
-        cmake = "<4"
-
-        [pypi-options]
-        no-build-isolation = ["xatlas"]
 
         # The transitive dependencies of viser were causing issues
         [pypi-dependencies]
-        viser = "==0.2.23"
+        viser = "==0.2.7"
         "#,
         platform = Platform::current()
     );
@@ -891,7 +886,7 @@ async fn test_multiple_prefix_update() {
             r#"
     [project]
     name = "test-channel-change"
-    channels = ["conda-forge"]
+    channels = ["https://prefix.dev/conda-forge"]
     platforms = ["{platform}"]
     "#,
             platform = current_platform
@@ -1048,7 +1043,7 @@ async fn install_s3() {
         r#"
     [project]
     name = "s3-test"
-    channels = ["s3://rattler-s3-testing/channel", "conda-forge"]
+    channels = ["s3://rattler-s3-testing/channel", "https://prefix.dev/conda-forge"]
     platforms = ["{platform}"]
 
     [project.s3-options.rattler-s3-testing]
