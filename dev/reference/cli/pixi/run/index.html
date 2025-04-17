@@ -2367,6 +2367,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#config-options" class="md-nav__link">
     <span class="md-ellipsis">
       Config Options
@@ -2461,6 +2470,35 @@
 </dl>
 </li>
 </ul>
+<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
+<dd>The environment to run the task in</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---clean-env" href="#arg---clean-env"><code>--clean-env</code></a></dt>
+<dd>Use a clean environment to run the task</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---skip-deps" href="#arg---skip-deps"><code>--skip-deps</code></a></dt>
+<dd>Don't run the dependencies of the task ('depends-on' field in the task definition)</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---dry-run" href="#arg---dry-run"><code>--dry-run (-n)</code></a></dt>
+<dd>Run the task in dry-run mode (only print the command that would run)</dd>
+</dl>
+</li>
+<li><a id="arg---help" href="#arg---help"><code>--help</code></a>
+:</li>
+</ul>
 <h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
 <ul>
 <li>
@@ -2541,32 +2579,6 @@
 <br><strong>env</strong>: <code>PIXI_LOCKED</code></dd>
 </dl>
 </li>
-<li>
-<dl>
-<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
-<dd>The environment to run the task in</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---clean-env" href="#arg---clean-env"><code>--clean-env</code></a></dt>
-<dd>Use a clean environment to run the task</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---skip-deps" href="#arg---skip-deps"><code>--skip-deps</code></a></dt>
-<dd>Don't run the dependencies of the task ('depends-on' field in the task definition)</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---dry-run" href="#arg---dry-run"><code>--dry-run (-n)</code></a></dt>
-<dd>Run the task in dry-run mode (only print the command that would run)</dd>
-</dl>
-</li>
-<li><a id="arg---help" href="#arg---help"><code>--help</code></a>
-:</li>
 </ul>
 <h2 id="global-options">Global Options<a class="headerlink" href="#global-options" title="Permanent link">#</a></h2>
 <ul>
