@@ -205,7 +205,7 @@ impl<'p> ExecutableTask<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub(crate) fn full_command(&self) -> Result<Option<String>, anyhow::Error> {
+    pub(crate) fn full_command(&self) -> Result<Option<String>, TaskStringError> {
         let original_cmd = self
             .task
             .as_single_command(Some(&self.args))?
