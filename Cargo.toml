@@ -52,6 +52,7 @@ indicatif = "0.17.11"
 insta = "1.42.1"
 is_executable = "1.0.4"
 itertools = "0.14.0"
+jiff = "0.2.8"
 jsonrpsee = "=0.24.2"
 libc = { version = "0.2.170", default-features = false }
 memchr = "2.7.4"

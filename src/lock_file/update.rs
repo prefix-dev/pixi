@@ -2096,6 +2096,8 @@ async fn spawn_solve_pypi_task<'p>(
         ));
     }
 
+    let exclude_newer = grouped_environment.exclude_newer();
+
     // Get the system requirements for this environment
     let system_requirements = grouped_environment.system_requirements();
 
@@ -2145,6 +2147,7 @@ async fn spawn_solve_pypi_task<'p>(
             project_variables,
             environment,
             disallow_install_conda_prefix,
+            exclude_newer,
         )
         .await
         .with_context(|| {
