@@ -846,10 +846,26 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
+    # Non existing arguments should fail
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
         ExitCode.FAILURE,
         stderr_contains="this part can't be replaced",
+    )
+
+    manifest_content["tasks"] = {
+        "mixed_args": {
+            "cmd": "echo Python file: {{ python_file }} with {{ non_existing_argument | upper }}",
+            "args": ["python_file"],
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # If the non existing argument is passed to a filter, minijinja doesn't error
+    # Even though we don't like this behaviour we want to make sure that it stays that way
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
+        ExitCode.SUCCESS,
     )
 
 
