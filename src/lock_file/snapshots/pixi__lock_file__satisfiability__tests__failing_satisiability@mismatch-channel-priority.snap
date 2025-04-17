@@ -4,4 +4,4 @@ expression: s
 ---
 environment 'default' does not satisfy the requirements of the project
     Diagnostic severity: error
-    Caused by: the lock-file was solved with a different channel priority ("strict") than the one selected ("disabled")
+    Caused by: the lock-file was solved with a different channel priority (strict) than the one selected (disabled)
