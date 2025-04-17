@@ -3,7 +3,6 @@ set -eu
 # Version: v0.45.0
 
 __wrap__() {
-
     VERSION="${PIXI_VERSION:-latest}"
     PIXI_HOME="${PIXI_HOME:-$HOME/.pixi}"
     case "$PIXI_HOME" in
@@ -56,7 +55,10 @@ __wrap__() {
     if hash curl 2>/dev/null; then
         # Check that the curl version is not 8.8.0, which is broken for --write-out
         # https://github.com/curl/curl/issues/13845
-        if [ "$(curl --version | head -n 1 | cut -d ' ' -f 2)" = "8.8.0" ]; then
+        if [ "$(curl --version | (
+            IFS=' ' read -r _ v _
+            printf %s "${v-}"
+        ))" = "8.8.0" ]; then
             HAVE_CURL_8_8_0=true
         else
             HAVE_CURL=true
