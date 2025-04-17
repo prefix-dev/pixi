@@ -103,3 +103,37 @@ def test_pytorch_documentation_examples(
             [pixi, "install", "--manifest-path", manifest],
             env={"CONDA_OVERRIDE_CUDA": "12.0"},
         )
+
+
+def test_doc_pixi_workspaces_minijinja_task_args(
+    doc_pixi_workspaces: Path, pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+) -> None:
+    workspace_dir = doc_pixi_workspaces.joinpath("minijinja", "task_args")
+
+    # Remove existing .pixi folders
+    shutil.rmtree(workspace_dir.joinpath(".pixi"), ignore_errors=True)
+
+    # Copy to workspace
+    shutil.copytree(workspace_dir, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    # Get manifest
+    manifest = get_manifest(tmp_pixi_workspace)
+
+    # Install the environment
+    tasks = (
+        verify_cli_command(
+            [pixi, "task", "list", "--machine-readable", "--manifest-path", manifest],
+        )
+        .stdout.strip()
+        .split(" ")
+    )
+
+    results = {}
+    for task in tasks:
+        output = verify_cli_command(
+            [pixi, "run", "--manifest-path", manifest, task, "hoi Ruben"],
+        ).stdout
+
+        results[task] = output
+
+    assert results == snapshot

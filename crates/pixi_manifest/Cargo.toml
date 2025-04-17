@@ -44,9 +44,11 @@ rattler_virtual_packages = { workspace = true }
 rattler_lock = { workspace = true, optional = true }
 rattler_solve = { workspace = true, optional = true }
 
-# TODO: Remove these dependencies
+
 console = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
+minijinja = { workspace = true, features = ["builtins"] }
+once_cell.workspace = true
 
 [dev-dependencies]
 assert_matches = { workspace = true }

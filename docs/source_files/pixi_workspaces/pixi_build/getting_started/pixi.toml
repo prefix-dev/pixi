@@ -11,7 +11,7 @@ platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 # In `package` you specify properties specific to the package
 # --8<-- [start:package]
 [package]
-name = "rich_example"
+name = "python_rich"
 version = "0.1.0"
 # --8<-- [end:package]
 
@@ -27,7 +27,7 @@ channels = [
 # --8<-- [end:build-system]
 
 
-# The Python package `rich_example` uses `hatchling` as Python build backend
+# The Python package `python_rich` uses `hatchling` as Python build backend
 # --8<-- [start:host-dependencies]
 [package.host-dependencies]
 hatchling = "*"
@@ -37,14 +37,14 @@ hatchling = "*"
 # We add our package as dependency to the workspace
 [dependencies]
 # We can get source dependencies from a path on our file system
-rich_example_by_folder = { path = "./recipe_by_folder" }
+python_rich_by_folder = { path = "./recipe_by_folder" }
 # as well as from a git repository
 boost-check = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "boost-check" }
 
 # If the directory contains a `pixi.toml`, `pixi-build` will be used to build the package
-rich_example = { path = "./rich_example" }
+python_rich = { path = "./python_rich" }
 # if the directory contains a `recipe.yaml`, `rattler-build` will be used.
-rich_example_by_file = { path = "./recipe_by_file/recipe.yaml" }
+python_rich_by_file = { path = "./recipe_by_file/recipe.yaml" }
 # --8<-- [end:dependencies]
 
 # --8<-- [start:run-dependencies]

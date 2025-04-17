@@ -31,6 +31,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "dependencies": {
@@ -47,6 +50,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "environments": {
@@ -76,6 +82,9 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Feature"
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "host-dependencies": {
@@ -92,6 +101,9 @@
             "$ref": "#/$defs/MatchspecTable"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       },
       "examples": [
         {
@@ -136,6 +148,9 @@
             "$ref": "#/$defs/PyPIUrlRequirement"
           }
         ]
+      },
+      "propertyNames": {
+        "minLength": 1
       }
     },
     "pypi-options": {
@@ -152,6 +167,9 @@
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Target"
+      },
+      "propertyNames": {
+        "minLength": 1
       },
       "examples": [
         {
@@ -174,17 +192,27 @@
               "$ref": "#/$defs/TaskInlineTable"
             },
             {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/DependsOn"
+              }
+            },
+            {
               "type": "string",
               "minLength": 1
             }
           ]
         }
+      },
+      "propertyNames": {
+        "description": "A valid task name."
       }
     },
     "tool": {
       "title": "Tool",
       "description": "Third-party tool configurations, ignored by pixi",
-      "type": "object"
+      "type": "object",
+      "additionalProperties": true
     },
     "workspace": {
       "$ref": "#/$defs/Workspace",
@@ -221,6 +249,9 @@
           "type": "object",
           "additionalProperties": {
             "type": "string",
+            "minLength": 1
+          },
+          "propertyNames": {
             "minLength": 1
           },
           "examples": [
@@ -269,6 +300,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "backend": {
@@ -299,7 +333,8 @@
         "configuration": {
           "title": "Configuration",
           "description": "The configuration of the build backend",
-          "type": "object"
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
@@ -542,6 +577,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "channel-priority": {
@@ -587,6 +625,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "host-dependencies": {
@@ -603,6 +644,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -647,6 +691,9 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "pypi-options": {
@@ -663,6 +710,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -685,11 +735,20 @@
                   "$ref": "#/$defs/TaskInlineTable"
                 },
                 {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
+                },
+                {
                   "type": "string",
                   "minLength": 1
                 }
               ]
             }
+          },
+          "propertyNames": {
+            "description": "A valid task name."
           }
         }
       }
@@ -906,6 +965,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "description": {
@@ -942,6 +1004,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -994,6 +1059,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "target": {
@@ -1002,6 +1070,9 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -1198,12 +1269,15 @@
           "description": "The strategy to use when resolving packages from multiple indexes",
           "anyOf": [
             {
+              "type": "string",
               "const": "first-index"
             },
             {
+              "type": "string",
               "const": "unsafe-first-match"
             },
             {
+              "type": "string",
               "const": "unsafe-best-match"
             }
           ],
@@ -1424,7 +1498,7 @@
           "anyOf": [
             {
               "type": "number",
-              "exclusiveMinimum": 0.0
+              "exclusiveMinimum": 0
             },
             {
               "type": "string",
@@ -1438,7 +1512,7 @@
           "anyOf": [
             {
               "type": "number",
-              "exclusiveMinimum": 0.0
+              "exclusiveMinimum": 0
             },
             {
               "type": "string",
@@ -1488,6 +1562,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "dependencies": {
@@ -1504,6 +1581,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "host-dependencies": {
@@ -1520,6 +1600,9 @@
                 "$ref": "#/$defs/MatchspecTable"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           },
           "examples": [
             {
@@ -1556,6 +1639,9 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "tasks": {
@@ -1580,6 +1666,9 @@
                 }
               ]
             }
+          },
+          "propertyNames": {
+            "description": "A valid task name."
           }
         }
       }
@@ -1725,6 +1814,9 @@
             "type": "string",
             "minLength": 1
           },
+          "propertyNames": {
+            "minLength": 1
+          },
           "examples": [
             {
               "key": "value"
@@ -1759,7 +1851,7 @@
       "description": "The project's metadata information.",
       "type": "object",
       "required": [
-        "platforms"
+        "channels"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1784,6 +1876,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "propertyNames": {
+            "minLength": 1
           }
         },
         "channel-priority": {
@@ -1889,6 +1984,7 @@
                 "anyOf": [
                   {
                     "description": "Enables building of source records",
+                    "type": "string",
                     "const": "pixi-build"
                   },
                   {

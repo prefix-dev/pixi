@@ -1,9 +1,9 @@
 package:
-  name: rich_example_by_folder
+  name: python_rich_by_folder
   version: 0.1.0
 
 source:
-  path: ../rich_example
+  path: ../python_rich
   use_gitignore: false # note: defaults to true
 
 build:

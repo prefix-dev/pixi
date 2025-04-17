@@ -1,7 +1,7 @@
 from dataclasses import dataclass, fields
 from rich.console import Console
 from rich.table import Table
-import python_bindings
+import cpp_math
 
 
 @dataclass
@@ -26,7 +26,7 @@ def main() -> None:
         table.add_column(column.name)
 
     for person in people:
-        updated_age = python_bindings.add(person.age, 1)
+        updated_age = cpp_math.add(person.age, 1)
         table.add_row(person.name, str(updated_age), person.city)
 
     console.print(table)

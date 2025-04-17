@@ -54,7 +54,7 @@ In this example, we are using `pixi-build-python` backend in order to build a Py
 ```
 
 
-We need to add our package `rich_example` as source dependency to the workspace.
+We need to add our package `python_rich` as source dependency to the workspace.
 
 !!! hint
     Pixi dependencies fall into two main categories: `binary` and `source` dependencies.
@@ -75,7 +75,7 @@ Source dependencies are defined in one of two ways:
 ```
 
 
-`rich_example` uses `hatchling` as Python build backend, so this needs to be mentioned in `host-dependencies`.
+`python_rich` uses `hatchling` as Python build backend, so this needs to be mentioned in `host-dependencies`.
 
 Python PEP517 backends like `hatchling` know how to build a Python package.
 So `hatchling` creates a Python package, and `pixi-build-python` turns the Python package into a conda package.

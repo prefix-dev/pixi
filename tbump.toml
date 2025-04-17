@@ -35,7 +35,7 @@ src = "docs/integration/ci/github_actions.md"
 
 [[file]]
 search = "ARG PIXI_VERSION=v{current_version}"
-src = "docs/integration/editor/devcontainer.md"
+src = "docs/integration/editor/vscode.md"
 
 [[file]]
 search = "/pixi.sh/v{current_version}/"

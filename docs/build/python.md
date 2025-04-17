@@ -19,11 +19,11 @@ In this tutorial we will focus on point 1.
 ## Let's Get Started
 
 First, we create a simple Python package with a `pyproject.toml` and a single Python file.
-The package will be called `rich_example`, so we will create the following structure:
+The package will be called `python_rich`, so we will create the following structure:
 
 ```shell
 ├── src # (1)!
-│   └── rich_example
+│   └── python_rich
 │       └── __init__.py
 └── pyproject.toml
 ```
@@ -34,8 +34,8 @@ The package will be called `rich_example`, so we will create the following struc
 The Python package has a single function `main`.
 Calling that, will print a table containing the name, age and city of three people.
 
-```py title="src/rich_example/__init__.py"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/python/src/rich_example/__init__.py"
+```py title="src/python_rich/__init__.py"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/python/src/python_rich/__init__.py"
 ```
 
 
@@ -46,7 +46,7 @@ The metadata of the Python package is defined in `pyproject.toml`.
 ```
 
 1. We use the `rich` package to print the table in the terminal.
-2. By specifying a script, the executable `rich-example-main` will be available in the environment. When being called it will in return call the `main` function of the `rich_example` module.
+2. By specifying a script, the executable `rich-example-main` will be available in the environment. When being called it will in return call the `main` function of the `python_rich` module.
 3. One can choose multiple backends to build a Python package, we choose `hatchling` which works well without additional configuration.
 
 
@@ -74,7 +74,7 @@ We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.to
 
 ```shell
 ├── src
-│   └── rich_example
+│   └── python_rich
 │       └── __init__.py
 ├── .gitignore
 ├── pixi.toml

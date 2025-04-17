@@ -187,6 +187,7 @@ fn get_arch_tags(platform: Platform) -> Result<uv_platform_tags::Arch, PyPITagEr
         Some(Arch::ArmV7l) => Ok(uv_platform_tags::Arch::Armv7L),
         Some(Arch::Ppc64le) => Ok(uv_platform_tags::Arch::Powerpc64Le),
         Some(Arch::Ppc64) => Ok(uv_platform_tags::Arch::Powerpc64),
+        Some(Arch::Riscv64) => Ok(uv_platform_tags::Arch::Riscv64),
         Some(Arch::S390X) => Ok(uv_platform_tags::Arch::S390X),
         Some(unsupported_arch) => Err(PyPITagError::FailedToDetermineArchTags(unsupported_arch)),
     }

@@ -1,8 +1,8 @@
 [project]
-dependencies = ["rich", "python_bindings"]            # (1)!
-name = "rich_example"
+dependencies = ["rich", "cpp_math"]                  # (1)!
+name = "python_rich"
 requires-python = ">= 3.11"
-scripts = { rich-example-main = "rich_example:main" } # (2)!
+scripts = { rich-example-main = "python_rich:main" } # (2)!
 version = "0.1.0"
 
 [build-system] # (3)!

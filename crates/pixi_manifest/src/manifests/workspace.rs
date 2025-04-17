@@ -1214,13 +1214,16 @@ start = "python -m flask run --port=5050"
             .flat_map(|(target, selector)| {
                 let selector_name =
                     selector.map_or_else(|| String::from("default"), ToString::to_string);
-                target.tasks.iter().filter_map(move |(name, task)| {
-                    Some(format!(
-                        "{}/{} = {}",
+                target.tasks.iter().map(move |(name, task)| {
+                    format!(
+                        "{}/{} = {:?}",
                         &selector_name,
                         name.as_str(),
-                        task.as_single_command()?
-                    ))
+                        task.as_single_command(None)
+                            .ok()
+                            .flatten()
+                            .map(|c| c.to_string())
+                    )
                 })
             })
             .join("\n"));
@@ -2399,7 +2402,8 @@ platforms = ["linux-64", "win-64"]
                 .tasks
                 .get(&"warmup".into())
                 .unwrap()
-                .as_single_command()
+                .as_single_command(None)
+                .unwrap()
                 .unwrap(),
             "python warmup.py"
         );
@@ -2445,7 +2449,7 @@ test = "test initial"
         manifest
             .add_task(
                 "default".into(),
-                Task::Plain("echo default".to_string()),
+                Task::Plain("echo default".into()),
                 None,
                 &FeatureName::DEFAULT,
             )
@@ -2453,7 +2457,7 @@ test = "test initial"
         manifest
             .add_task(
                 "target_linux".into(),
-                Task::Plain("echo target_linux".to_string()),
+                Task::Plain("echo target_linux".into()),
                 Some(Platform::Linux64),
                 &FeatureName::DEFAULT,
             )
@@ -2461,7 +2465,7 @@ test = "test initial"
         manifest
             .add_task(
                 "feature_test".into(),
-                Task::Plain("echo feature_test".to_string()),
+                Task::Plain("echo feature_test".into()),
                 None,
                 &FeatureName::from("test"),
             )
@@ -2469,7 +2473,7 @@ test = "test initial"
         manifest
             .add_task(
                 "feature_test_target_linux".into(),
-                Task::Plain("echo feature_test_target_linux".to_string()),
+                Task::Plain("echo feature_test_target_linux".into()),
                 Some(Platform::Linux64),
                 &FeatureName::from("test"),
             )

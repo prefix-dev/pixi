@@ -53,7 +53,7 @@ Now that we've defined a `pixi` task which allows us to check that our package c
 
 ```toml
 [tasks]
-start = "python -c 'import python_bindings as b; print(b.add(1, 2))'"
+start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
 ```
 
 Executing the tasks works as expected

@@ -4,11 +4,11 @@ use pixi_toml::{TomlFromStr, TomlIndexMap};
 use toml_span::{
     de_helpers::{expected, TableHelper},
     value::ValueInner,
-    DeserError, Value,
+    DeserError, ErrorKind, Value,
 };
 
 use crate::{
-    task::{Alias, CmdArgs, Dependency, Execute, TaskArg},
+    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg},
     warning::Deprecation,
     EnvironmentName, Task, TaskName, WithWarnings,
 };
@@ -17,16 +17,23 @@ impl<'de> toml_span::Deserialize<'de> for TaskArg {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = match value.take() {
             ValueInner::String(str) => {
+                let name = ArgName::from_str(&str).map_err(|e| {
+                    DeserError::from(toml_span::Error {
+                        kind: ErrorKind::Custom(e.to_string().into()),
+                        span: value.span,
+                        line_info: None,
+                    })
+                })?;
                 return Ok(TaskArg {
-                    name: str.into_owned(),
+                    name,
                     default: None,
-                })
+                });
             }
             ValueInner::Table(table) => TableHelper::from((table, value.span)),
             inner => return Err(expected("string or table", inner, value.span).into()),
         };
 
-        let name = th.required::<String>("arg")?;
+        let name = th.required::<TomlFromStr<ArgName>>("arg")?.into_inner();
         let default = th.optional::<String>("default");
 
         th.finalize(None)?;
@@ -41,7 +48,7 @@ pub type TomlTask = WithWarnings<Task>;
 impl<'de> toml_span::Deserialize<'de> for TomlTask {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         let mut th = match value.take() {
-            ValueInner::String(str) => return Ok(Task::Plain(str.into_owned()).into()),
+            ValueInner::String(str) => return Ok(Task::Plain(str.into_owned().into()).into()),
             ValueInner::Table(table) => TableHelper::from((table, value.span)),
             ValueInner::Array(array) => {
                 let mut deps = Vec::new();
@@ -52,16 +59,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                             let name = th.required::<String>("task")?;
                             let args = th.optional::<Vec<String>>("args");
                             let environment = th
-                                .optional::<String>("environment")
-                                .map(|env| EnvironmentName::from_str(&env))
-                                .transpose()
-                                .map_err(|e| {
-                                    DeserError::from(expected(
-                                        "valid environment name",
-                                        ValueInner::String(e.attempted_parse.into()),
-                                        item.span,
-                                    ))
-                                })?;
+                                .optional::<TomlFromStr<EnvironmentName>>("environment")
+                                .map(TomlFromStr::into_inner);
 
                             deps.push(Dependency::new(&name, args, environment));
                         }
@@ -97,16 +96,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                     let name = th.required::<String>("task")?;
                                     let args = th.optional::<Vec<String>>("args");
                                     let environment = th
-                                        .optional::<String>("environment")
-                                        .map(|env| EnvironmentName::from_str(&env))
-                                        .transpose()
-                                        .map_err(|e| {
-                                            DeserError::from(expected(
-                                                "valid environment name",
-                                                ValueInner::String(e.attempted_parse.into()),
-                                                span,
-                                            ))
-                                        })?;
+                                        .optional::<TomlFromStr<EnvironmentName>>("environment")
+                                        .map(TomlFromStr::into_inner);
 
                                     Ok(Dependency::new(&name, args, environment))
                                 }
@@ -142,16 +133,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                     let name = th.required::<String>("task")?;
                                     let args = th.optional::<Vec<String>>("args");
                                     let environment = th
-                                        .optional::<String>("environment")
-                                        .map(|env| EnvironmentName::from_str(&env))
-                                        .transpose()
-                                        .map_err(|e| {
-                                            DeserError::from(expected(
-                                                "valid environment name",
-                                                ValueInner::String(e.attempted_parse.into()),
-                                                span,
-                                            ))
-                                        })?;
+                                        .optional::<TomlFromStr<EnvironmentName>>("environment")
+                                        .map(TomlFromStr::into_inner);
                                     // If the creating a new dependency fails, it means the environment name is invalid and exists hence we can safely unwrap the environment
                                     Ok(Dependency::new(&name, args, environment))
                                 }
@@ -184,17 +167,18 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
             let args = th.optional::<Vec<TaskArg>>("args");
 
             let mut have_default = false;
-            for arg in args.as_ref().unwrap_or(&vec![]) {
+            for arg in args.iter().flat_map(|a| a.iter()) {
                 if arg.default.is_some() {
                     have_default = true;
                 }
                 if have_default && arg.default.is_none() {
-                    return Err(expected(
-                        "default value required after previous arguments with defaults",
-                        ValueInner::Table(Default::default()),
-                        value.span,
-                    )
-                    .into());
+                    return Err(DeserError::from(toml_span::Error {
+                        kind: ErrorKind::Custom(
+                            "default value required after previous arguments with defaults".into(),
+                        ),
+                        span: value.span,
+                        line_info: None,
+                    }));
                 }
             }
             th.finalize(None)?;
@@ -208,7 +192,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 env,
                 description,
                 clean_env,
-                args: args.map(|args| args.into_iter().map(|arg| (arg, None)).collect()),
+                args,
             }))
         } else {
             let depends_on = depends_on(&mut th).unwrap_or_default();
@@ -228,13 +212,15 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
 impl<'de> toml_span::Deserialize<'de> for CmdArgs {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
-            ValueInner::String(str) => Ok(CmdArgs::Single(str.into_owned())),
+            ValueInner::String(str) => Ok(CmdArgs::Single(str.into_owned().into())),
             ValueInner::Array(arr) => {
                 let mut args = Vec::with_capacity(arr.len());
                 for mut item in arr {
                     args.push(item.take_string(None)?.into_owned());
                 }
-                Ok(CmdArgs::Multiple(args))
+                Ok(CmdArgs::Multiple(
+                    args.into_iter().map(|s| s.into()).collect(),
+                ))
             }
             inner => Err(expected("string or array", inner, value.span).into()),
         }

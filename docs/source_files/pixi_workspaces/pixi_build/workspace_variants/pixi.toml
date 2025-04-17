@@ -8,8 +8,8 @@ preview = ["pixi-build"]
 
 # --8<-- [start:dependencies]
 [dependencies]
-python_bindings = { path = "packages/python_bindings" }
-rich_example = { path = "." }
+cpp_math = { path = "packages/cpp_math" }
+python_rich = { path = "." }
 # --8<-- [end:dependencies]
 
 # --8<-- [start:environments]
@@ -35,7 +35,7 @@ python = ["3.11.*", "3.12.*"]
 start = "rich-example-main"
 
 [package]
-name = "rich_example"
+name = "python_rich"
 version = "0.1.0"
 
 [package.build]

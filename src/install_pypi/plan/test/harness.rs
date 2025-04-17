@@ -356,12 +356,7 @@ impl PyPIPackageDataBuilder {
         }
     }
 
-    fn directory<S: AsRef<str>>(
-        name: S,
-        version: S,
-        path: PathBuf,
-        editable: bool,
-    ) -> PypiPackageData {
+    fn path<S: AsRef<str>>(name: S, version: S, path: PathBuf, editable: bool) -> PypiPackageData {
         PypiPackageData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
             version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
@@ -456,7 +451,15 @@ impl RequiredPackages {
     ) -> Self {
         let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("should be correct");
-        let data = PyPIPackageDataBuilder::directory(name, version, path, editable);
+        let data = PyPIPackageDataBuilder::path(name, version, path, editable);
+        self.required.insert(package_name, data);
+        self
+    }
+
+    pub fn add_local_wheel<S: AsRef<str>>(mut self, name: S, version: S, path: PathBuf) -> Self {
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
+        let data = PyPIPackageDataBuilder::path(name, version, path, false);
         self.required.insert(package_name, data);
         self
     }
@@ -489,6 +492,10 @@ pub fn install_planner() -> InstallPlanner {
     InstallPlanner::new(uv_cache::Cache::temp().unwrap(), PathBuf::new())
 }
 
+pub fn install_planner_with_lock_dir(lock_dir: PathBuf) -> InstallPlanner {
+    InstallPlanner::new(uv_cache::Cache::temp().unwrap(), lock_dir)
+}
+
 /// Create a fake pyproject.toml file in a temp dir
 /// return the temp dir
 pub fn fake_pyproject_toml(
@@ -513,4 +520,11 @@ pub fn fake_pyproject_toml(
         pyproject_toml.sync_all().unwrap();
     }
     (temp_dir, pyproject_toml)
+}
+
+pub fn fake_wheel(name: &str) -> (TempDir, std::fs::File, PathBuf) {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let wheel_path = temp_dir.path().join(format!("{}.whl", name));
+    let wheel = std::fs::File::create(wheel_path.clone()).unwrap();
+    (temp_dir, wheel, wheel_path)
 }

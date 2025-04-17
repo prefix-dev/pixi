@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20...3.27)
-project(python_bindings)
+project(cpp_math)
 
 find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED) # (1)!
 
@@ -16,7 +16,7 @@ execute_process(
 
 find_package(nanobind CONFIG REQUIRED) # (4)!
 
-nanobind_add_module(${PROJECT_NAME} src/bindings.cpp) # (5)!
+nanobind_add_module(${PROJECT_NAME} src/math.cpp) # (5)!
 
 install( # (6)!
     TARGETS ${PROJECT_NAME}
