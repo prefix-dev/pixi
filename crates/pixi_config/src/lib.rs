@@ -879,70 +879,11 @@ impl<'de> Deserialize<'de> for PackageFormatAndCompression {
     {
         let s = String::deserialize(deserializer)?;
         let s = s.as_str();
-        let mut split = s.split(':');
-        let package_format = split.next().ok_or(D::Error::custom("invalid"))?;
-
-        let compression = split.next().unwrap_or("default");
-
-        // remove all non-alphanumeric characters
-        let package_format = package_format
-            .chars()
-            .filter(|c| c.is_alphanumeric())
-            .collect::<String>();
-
-        let archive_type = match package_format.to_lowercase().as_str() {
-            "tarbz2" => ArchiveType::TarBz2,
-            "conda" => ArchiveType::Conda,
-            _ => {
-                return Err(D::Error::custom(format!(
-                    "Unknown package format: {}",
-                    package_format
-                )))
-            }
-        };
-
-        let compression_level = match compression {
-            "max" | "highest" => CompressionLevel::Highest,
-            "default" | "normal" => CompressionLevel::Default,
-            "fast" | "lowest" | "min" => CompressionLevel::Lowest,
-            number if number.parse::<i32>().is_ok() => {
-                let number = number.parse::<i32>().unwrap_or_default();
-                match archive_type {
-                    ArchiveType::TarBz2 => {
-                        if !(1..=9).contains(&number) {
-                            return Err(D::Error::custom(
-                                "Compression level for .tar.bz2 must be between 1 and 9"
-                                    .to_string(),
-                            ));
-                        }
-                    }
-                    ArchiveType::Conda => {
-                        if !(-7..=22).contains(&number) {
-                            return Err(D::Error::custom(
-                                "Compression level for conda packages (zstd) must be between -7 and 22".to_string()
-                            ));
-                        }
-                    }
-                }
-                CompressionLevel::Numeric(number)
-            }
-            _ => {
-                return Err(D::Error::custom(format!(
-                    "Unknown compression level: {}",
-                    compression
-                )))
-            }
-        };
-
-        Ok(PackageFormatAndCompression {
-            archive_type,
-            compression_level,
-        })
+        PackageFormatAndCompression::from_str(s).map_err(D::Error::custom)
     }
 }
 
 impl FromStr for PackageFormatAndCompression {
-    // todo: fromstr needed when we have deserialize?
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
