@@ -397,7 +397,7 @@ impl TaskString {
                 .collect();
             minijinja::Value::from_serialize(&args_map)
         } else {
-            minijinja::Value::from_serialize(Vec::<TypedArg>::new())
+            minijinja::Value::default()
         };
 
         JINJA_ENV
