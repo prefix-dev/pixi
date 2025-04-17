@@ -345,6 +345,12 @@ impl From<String> for TaskString {
     }
 }
 
+impl TaskString {
+    pub fn new(value: String) -> Self {
+        TaskString(value)
+    }
+}
+
 /// Represents the arguments to pass to a task
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub enum ArgValues {
