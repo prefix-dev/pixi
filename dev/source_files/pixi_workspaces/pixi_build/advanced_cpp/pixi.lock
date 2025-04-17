@@ -178,7 +178,7 @@ packages:
   - libcxx >=20
   - python_abi 3.12.* *_cp312
   input:
-    hash: 5cfb500b2316121d59326b735afb183e4103b04476f627ed4e9b75f44a58dc69
+    hash: 90bddf03ff6ec40d2b3cbad41ab0fdb44dedf3c9fa9c381349300a85a893a838
     globs:
     - pixi.toml
 - conda: .
@@ -190,7 +190,7 @@ packages:
   - libcxx >=20
   - python_abi 3.12.* *_cp312
   input:
-    hash: 5cfb500b2316121d59326b735afb183e4103b04476f627ed4e9b75f44a58dc69
+    hash: 90bddf03ff6ec40d2b3cbad41ab0fdb44dedf3c9fa9c381349300a85a893a838
     globs:
     - pixi.toml
 - conda: .
@@ -203,7 +203,7 @@ packages:
   - vc14_runtime >=14.16.27033
   - python_abi 3.12.* *_cp312
   input:
-    hash: 5cfb500b2316121d59326b735afb183e4103b04476f627ed4e9b75f44a58dc69
+    hash: 90bddf03ff6ec40d2b3cbad41ab0fdb44dedf3c9fa9c381349300a85a893a838
     globs:
     - pixi.toml
 - conda: .
@@ -216,7 +216,7 @@ packages:
   - libgcc >=14
   - python_abi 3.12.* *_cp312
   input:
-    hash: 5cfb500b2316121d59326b735afb183e4103b04476f627ed4e9b75f44a58dc69
+    hash: 90bddf03ff6ec40d2b3cbad41ab0fdb44dedf3c9fa9c381349300a85a893a838
     globs:
     - pixi.toml
 - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_4.conda

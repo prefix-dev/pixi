@@ -728,7 +728,7 @@ packages:
   - rich 13.9.*
   - python
   input:
-    hash: c48470b00b757b198357638af58b46cfa1f139639ae163f506cb7f87102f0cd2
+    hash: f5284556554f3f5a89df111aa68d8024af67c3d7fa557214a8dded7121639ca7
     globs:
     - pixi.toml
 - conda: ./recipe_by_file/recipe.yaml
