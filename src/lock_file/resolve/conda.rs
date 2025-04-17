@@ -16,6 +16,7 @@ use crate::{
 /// Solves the conda package environment for the given input. This function is
 /// async because it spawns a background task for the solver. Since solving is a
 /// CPU intensive task we do not want to block the main task.
+#[allow(clippy::too_many_arguments)]
 pub async fn resolve_conda(
     specs: Vec<MatchSpec>,
     virtual_packages: Vec<GenericVirtualPackage>,

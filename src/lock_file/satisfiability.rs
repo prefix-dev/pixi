@@ -71,8 +71,8 @@ pub enum EnvironmentUnsat {
 
     #[error(
         "the lock-file was solved with a different strategy ({locked_strategy}) than the one selected ({expected_strategy})",
-        locked_strategy = serde_json::to_string_pretty(&.locked_strategy).unwrap(),
-        expected_strategy = serde_json::to_string_pretty(&.expected_strategy).unwrap(),
+        locked_strategy = fmt_solve_strategy(*.locked_strategy),
+        expected_strategy = fmt_solve_strategy(*.expected_strategy),
     )]
     SolveStrategyMismatch {
         locked_strategy: rattler_solve::SolveStrategy,
@@ -81,8 +81,8 @@ pub enum EnvironmentUnsat {
 
     #[error(
         "the lock-file was solved with a different channel priority ({locked_priority}) than the one selected ({expected_priority})",
-        locked_priority = serde_json::to_string_pretty(&.locked_priority).unwrap(),
-        expected_priority = serde_json::to_string_pretty(&.expected_priority).unwrap(),
+        locked_priority = fmt_channel_priority(*.locked_priority),
+        expected_priority = fmt_channel_priority(*.expected_priority),
     )]
     ChannelPriorityMismatch {
         locked_priority: rattler_solve::ChannelPriority,
@@ -91,6 +91,21 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
+}
+
+fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
+    match priority {
+        rattler_solve::ChannelPriority::Strict => "strict",
+        rattler_solve::ChannelPriority::Disabled => "disabled",
+    }
+}
+
+fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
+    match strategy {
+        rattler_solve::SolveStrategy::Highest => "highest",
+        rattler_solve::SolveStrategy::LowestVersion => "lowest-version",
+        rattler_solve::SolveStrategy::LowestVersionDirect => "lowest-version-direct",
+    }
 }
 
 #[derive(Debug, Error)]

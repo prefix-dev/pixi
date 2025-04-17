@@ -1,33 +1,3 @@
-use crate::common::{
-    builders::{
-        string_from_iter, HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig,
-    },
-    package_database::{Package, PackageDatabase},
-};
-use crate::common::{LockFileExt, PixiControl};
-use fs_err::tokio as tokio_fs;
-use pixi::lock_file::{ReinstallPackages, UpdateMode};
-use pixi::{
-    build::BuildContext,
-    cli::{
-        run::{self, Args},
-        LockFileUsageConfig,
-    },
-    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
-};
-use pixi::{cli::cli_config::LockFileUpdateConfig, environment::LockFileUsage};
-use pixi::{
-    cli::cli_config::WorkspaceConfig,
-    workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
-};
-use pixi::{UpdateLockFileOptions, Workspace};
-use pixi_build_frontend::ToolContext;
-use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
-use pixi_consts::consts;
-use pixi_manifest::{FeatureName, FeaturesExt};
-use pixi_record::PixiRecord;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
 use std::{
     fs::File,
     io::Write,
@@ -35,10 +5,39 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+
+use fs_err::tokio as tokio_fs;
+use pixi::{
+    build::BuildContext,
+    cli::{
+        cli_config::{LockFileUpdateConfig, WorkspaceConfig},
+        run::{self, Args},
+        LockFileUsageConfig,
+    },
+    environment::LockFileUsage,
+    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit, ReinstallPackages, UpdateMode},
+    workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
+    UpdateLockFileOptions, Workspace,
+};
+use pixi_build_frontend::ToolContext;
+use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
+use pixi_consts::consts;
+use pixi_manifest::{FeatureName, FeaturesExt};
+use pixi_record::PixiRecord;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
 use tempfile::{tempdir, TempDir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_python::PythonEnvironment;
+
+use crate::common::{
+    builders::{
+        string_from_iter, HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig,
+    },
+    package_database::{Package, PackageDatabase},
+    LockFileExt, PixiControl,
+};
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
@@ -820,12 +819,13 @@ async fn pypi_prefix_is_not_created_when_whl() {
     assert!(!default_env_prefix.exists());
 }
 
-/// This test checks that the override of a conda package is correctly done per platform.
-/// There have been issues in the past that the wrong repodata was used for the override.
-/// What this test does is recreate this situation by adding a conda package that is only
-/// available on linux and then adding a PyPI dependency on the same package for both linux
-/// and osxarm64.
-/// This should result in the PyPI package being overridden on linux and not on osxarm64.
+/// This test checks that the override of a conda package is correctly done per
+/// platform. There have been issues in the past that the wrong repodata was
+/// used for the override. What this test does is recreate this situation by
+/// adding a conda package that is only available on linux and then adding a
+/// PyPI dependency on the same package for both linux and osxarm64.
+/// This should result in the PyPI package being overridden on linux and not on
+/// osxarm64.
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
@@ -1000,7 +1000,8 @@ async fn test_multiple_prefix_update() {
 
         let first_modified_date = first_modified.get_or_insert(prefix_metadata.modified().unwrap());
 
-        // verify that the prefix was updated only once, meaning that we instantiated prefix only once
+        // verify that the prefix was updated only once, meaning that we instantiated
+        // prefix only once
         assert_eq!(*first_modified_date, prefix_metadata.modified().unwrap());
     }
 }
@@ -1081,4 +1082,74 @@ async fn install_s3() {
         .join("conda-meta")
         .join("my-webserver-0.1.0-pyh4616a5c_0.json")
         .exists());
+}
+
+#[tokio::test]
+async fn test_exclude_newer() {
+    let mut package_database = PackageDatabase::default();
+
+    // Create a channel with two packages with different timestamps
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    // Create a project that includes the package `foo` with a version specifier
+    // without an exclude-newer.
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-channel-change"
+    channels = ["{channel_a}"]
+    platforms = ["{platform}"]
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel_a = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    // Create the lock-file
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+
+    // Update the manifest with the exclude-never field
+    pixi.update_manifest(&format!(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["{channel_a}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel_a = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    // Relock and check that an older version of the package is selected
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==1"
+    ));
 }
