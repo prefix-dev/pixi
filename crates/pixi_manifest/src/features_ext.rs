@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use chrono::{DateTime, Utc};
 use indexmap::IndexSet;
 use miette::Diagnostic;
 use rattler_conda_types::{
@@ -80,6 +81,19 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             }
         }
         Ok(channel_priority)
+    }
+
+    /// Returns whether packages should be excluded newer than a certain date.
+    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
+        self.workspace_manifest()
+            .workspace
+            .exclude_newer
+            .map(Into::into)
+    }
+
+    /// Returns the strategy for solving packages.
+    fn solve_strategy(&self) -> rattler_solve::SolveStrategy {
+        rattler_solve::SolveStrategy::default()
     }
 
     /// Returns the platforms that this collection is compatible with.

@@ -47,6 +47,7 @@ pub fn filter_lock_file<
 
         // Copy the channels
         builder.set_channels(environment_name, environment.channels().to_vec());
+        builder.set_options(environment_name, environment.solve_options().clone());
 
         // Copy the indexes
         let indexes = environment.pypi_indexes().cloned().unwrap_or_else(|| {

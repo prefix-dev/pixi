@@ -425,3 +425,17 @@ pub fn to_uv_trusted_host(
 ) -> Result<uv_configuration::TrustedHost, crate::ConversionError> {
     Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
 }
+
+/// Converts a date to a `uv_resolver::ExcludeNewer`
+pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_resolver::ExcludeNewer {
+    let seconds_since_epoch = exclude_newer.timestamp();
+    let nanoseconds = exclude_newer.timestamp_subsec_nanos();
+    let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
+        if seconds_since_epoch < 0 {
+            jiff::Timestamp::MIN
+        } else {
+            jiff::Timestamp::MAX
+        },
+    );
+    uv_resolver::ExcludeNewer::from(timestamp)
+}

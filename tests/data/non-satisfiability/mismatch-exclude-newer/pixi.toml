@@ -1,0 +1,9 @@
+[workspace]
+channels = ["conda-forge"]
+exclude-newer = "2025-11-03"
+name = "source-dependency"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[dependencies]
+foo = { version = "0.1.0" }

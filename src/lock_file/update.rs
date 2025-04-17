@@ -1561,6 +1561,18 @@ impl<'p> UpdateContext<'p> {
                 .into_diagnostic()?;
 
             builder.set_channels(&environment_name, channels);
+            builder.set_options(
+                &environment_name,
+                rattler_lock::SolveOptions {
+                    strategy: grouped_env.solve_strategy(),
+                    channel_priority: grouped_env
+                        .channel_priority()
+                        .unwrap_or_default()
+                        .unwrap_or_default()
+                        .into(),
+                    exclude_newer: grouped_env.exclude_newer(),
+                },
+            );
 
             let mut has_pypi_records = false;
             for platform in environment.platforms() {
@@ -1670,6 +1682,10 @@ async fn spawn_solve_conda_environment_task(
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
+
+    // Get solve options
+    let exclude_newer = group.exclude_newer();
+    let solve_strategy = group.solve_strategy();
 
     // Get the environment name
     let group_name = group.name();
@@ -1842,6 +1858,8 @@ async fn spawn_solve_conda_environment_task(
                 available_packages,
                 collected_source_metadata.source_repodata,
                 channel_priority,
+                exclude_newer,
+                solve_strategy,
             )
             .await
             .with_context(|| {
@@ -2097,6 +2115,8 @@ async fn spawn_solve_pypi_task<'p>(
         ));
     }
 
+    let exclude_newer = grouped_environment.exclude_newer();
+
     // Get the system requirements for this environment
     let system_requirements = grouped_environment.system_requirements();
 
@@ -2146,6 +2166,7 @@ async fn spawn_solve_pypi_task<'p>(
             project_variables,
             environment,
             disallow_install_conda_prefix,
+            exclude_newer,
         )
         .await
         .with_context(|| {

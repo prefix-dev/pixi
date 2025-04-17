@@ -9,6 +9,7 @@ use std::{
     sync::Arc,
 };
 
+use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -19,8 +20,8 @@ use pixi_manifest::{
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec, no_build_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy, to_normalize, to_requirements,
-    to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
+    pypi_options_to_index_locations, to_exclude_newer, to_index_strategy, to_normalize,
+    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -175,6 +176,7 @@ pub async fn resolve_pypi(
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment_name: Environment<'_>,
     disallow_install_conda_prefix: bool,
+    exclude_newer: Option<DateTime<Utc>>,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -323,6 +325,7 @@ pub async fn resolve_pypi(
     let options = Options {
         index_strategy,
         build_options: build_options.clone(),
+        exclude_newer: exclude_newer.map(to_exclude_newer),
         ..Options::default()
     };
 
