@@ -250,7 +250,7 @@ Basic syntax for using an argument in your command:
 You can also use filters to transform argument values:
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_minijinja_filter.toml:tasks"
+--8<-- "docs/source_files/pixi_workspaces/minijinja/task_args/pixi.toml:tasks"
 ```
 
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).

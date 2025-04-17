@@ -10,7 +10,7 @@
   
     ''',
     'task3': '''
-      h, o, i, , R, u, b, e, n, !
+      hoi Ruben!
   
     ''',
     'task4': '''
@@ -18,8 +18,8 @@
   
     ''',
     'task5': '''
-      hello hoi
-      hello Ruben
+      hoi
+      Ruben
   
     ''',
   })

@@ -5,23 +5,20 @@ name = "workspace-name"
 platforms = ["linux-64"]
 # --8<-- [start:tasks]
 [tasks]
-# Simple use of a filter
+# The arg `text`, converted to uppercase, will be printed.
 task1 = { cmd = "echo {{ text | upper }}", args = ["text"] }
-# Use of a filter with a condition and a default value
-task2 = { cmd = "echo {{ text | lower if 'hoi' in (text | lower) }}", args = [
+# If arg `text` contains 'hoi', it will be converted to lowercase. The result will be printed.
+task2 = { cmd = "echo {{ text | lower if 'hoi' in text }}", args = [
   { arg = "text", default = "" },
 ] }
-# Use of a expression with a filter
-task3 = { cmd = "echo {{ (a + b) | join(\", \") }}", args = [
-  "a",
-  { arg = "b", default = "!" },
-] }
-# Use of the conditional syntax
+# With `a` and `b` being strings, they will be appended and then printed.
+task3 = { cmd = "echo {{ a + b }}", args = ["a", { arg = "b", default = "!" }] }
+# If the string "win" is in arg `platform`, "windows" will be printed, otherwise "unix".
 task4 = { cmd = """echo {% if "win" in platform  %}windows{% else %}unix{% endif %}""", args = [
   "platform",
 ] }
-# Use of a loop
-task5 = { cmd = "{% for name in names | split %} echo hello {{ name }};{% endfor %}", args = [
+# `names` will be split by whitespace and then every name will be printed separately
+task5 = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", args = [
   "names",
 ] }
 # --8<-- [end:tasks]
