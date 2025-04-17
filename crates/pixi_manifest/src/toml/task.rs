@@ -8,10 +8,16 @@ use toml_span::{
 };
 
 use crate::{
-    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg},
+    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg, TaskString},
     warning::Deprecation,
     EnvironmentName, Task, TaskName, WithWarnings,
 };
+
+impl<'de> toml_span::Deserialize<'de> for TaskString {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        Ok(TaskString::new(value.take_string(None)?.into_owned()))
+    }
+}
 
 impl<'de> toml_span::Deserialize<'de> for TaskArg {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -241,9 +247,9 @@ mod test {
     #[test]
     fn test_depends_on_deprecation() {
         let input = r#"
-        cmd = "test"
-        depends_on = ["a", "b"]
-        "#;
+cmd = "test"
+depends_on = ["a", "b"]
+"#;
 
         let mut parsed = TomlTask::from_toml_str(input).unwrap();
         assert_eq!(parsed.warnings.len(), 1);

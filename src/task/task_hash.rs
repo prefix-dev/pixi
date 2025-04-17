@@ -1,6 +1,7 @@
 use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
 use crate::workspace;
 use miette::Diagnostic;
+use pixi_manifest::task::TaskStringError;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -158,8 +159,25 @@ pub struct InputHashes {
 impl InputHashes {
     /// Compute the input hashes from a task.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
-        let Ok(Some(ref inputs)) = task.task().as_execute().map(|e| e.inputs.clone()) else {
-            return Ok(None);
+        let inputs: Vec<String> = match task.task().as_execute() {
+            Ok(execute) => {
+                if let Some(inputs) = execute.inputs.clone() {
+                    let mut rendered_inputs = Vec::new();
+                    for input in inputs.iter() {
+                        match input.render(Some(task.args())) {
+                            Ok(rendered) => rendered_inputs.push(rendered),
+                            Err(err) => return Err(InputHashesError::TaskStringError(err)),
+                        }
+                    }
+                    if rendered_inputs.is_empty() {
+                        return Ok(None);
+                    }
+                    rendered_inputs
+                } else {
+                    return Ok(None);
+                }
+            }
+            Err(_) => return Ok(None),
         };
 
         let files = FileHashes::from_files(task.project().root(), inputs.iter()).await?;
@@ -192,8 +210,25 @@ impl OutputHashes {
         task: &ExecutableTask<'_>,
         warn: bool,
     ) -> Result<Option<Self>, InputHashesError> {
-        let Ok(Some(ref outputs)) = task.task().as_execute().map(|e| e.outputs.clone()) else {
-            return Ok(None);
+        let outputs: Vec<String> = match task.task().as_execute() {
+            Ok(execute) => {
+                if let Some(outputs) = execute.outputs.clone() {
+                    let mut rendered_outputs = Vec::new();
+                    for output in outputs.iter() {
+                        match output.render(Some(task.args())) {
+                            Ok(rendered) => rendered_outputs.push(rendered),
+                            Err(err) => return Err(InputHashesError::TaskStringError(err)),
+                        }
+                    }
+                    if rendered_outputs.is_empty() {
+                        return Ok(None);
+                    }
+                    rendered_outputs
+                } else {
+                    return Ok(None);
+                }
+            }
+            Err(_) => return Ok(None),
         };
 
         let files = FileHashes::from_files(task.project().root(), outputs.iter()).await?;
@@ -223,4 +258,8 @@ pub enum InputHashesError {
 
     #[error(transparent)]
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TaskStringError(#[from] TaskStringError),
 }
