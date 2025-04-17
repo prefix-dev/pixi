@@ -101,10 +101,9 @@ impl ChannelsConfig {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct LockFileUpdateConfig {
     /// Don't update lockfile, implies the no-install as well.
-    #[clap(long)]
+    #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
     /// Lock file usage from the CLI
@@ -126,14 +125,13 @@ impl LockFileUpdateConfig {
 
 /// Configuration for how to update the prefix
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct PrefixUpdateConfig {
     /// Don't modify the environment, only modify the lock-file.
-    #[arg(long)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 
     /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub revalidate: bool,
 }
 
