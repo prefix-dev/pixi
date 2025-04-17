@@ -849,7 +849,7 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
         ExitCode.FAILURE,
-        stderr_contains="Failed to replace argument placeholders",
+        stderr_contains="this part can't be replaced",
     )
 
 
