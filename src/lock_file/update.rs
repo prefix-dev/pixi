@@ -1168,7 +1168,11 @@ impl<'p> UpdateContext<'p> {
             // Turn the platforms into an IndexSet, so we have a little control over the
             // order in which we solve the platforms. We want to solve the current
             // platform first, so we can start instantiating prefixes if we have to.
-            let mut ordered_platforms = platforms.iter().copied().collect::<IndexSet<_>>();
+            let mut ordered_platforms = environment
+                .platforms()
+                .intersection(platforms)
+                .copied()
+                .collect::<IndexSet<_>>();
             if let Some(current_platform_index) =
                 ordered_platforms.get_index_of(&environment.best_platform())
             {
@@ -1232,11 +1236,18 @@ impl<'p> UpdateContext<'p> {
 
         // Spawn tasks to update the pypi packages.
         let mut uv_context = None;
-        for (environment, platform) in self
-            .outdated_envs
-            .pypi
-            .iter()
-            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env, *p)))
+        for (environment, platform) in
+            self.outdated_envs
+                .pypi
+                .iter()
+                .flat_map(|(env, outdated_platforms)| {
+                    let platforms_to_update = env
+                        .platforms()
+                        .intersection(outdated_platforms)
+                        .cloned()
+                        .collect_vec();
+                    iter::once(env).cartesian_product(platforms_to_update)
+                })
         {
             let group = GroupedEnvironment::from(environment.clone());
 
@@ -1322,9 +1333,17 @@ impl<'p> UpdateContext<'p> {
 
         // Iterate over all outdated environments and their platforms and extract the
         // corresponding records from them.
-        for (environment, platform) in all_outdated_envs.iter().flat_map(|(env, platforms)| {
-            iter::once(env.clone()).cartesian_product(platforms.iter().cloned())
-        }) {
+        for (environment, platform) in
+            all_outdated_envs
+                .iter()
+                .flat_map(|(env, outdated_platforms)| {
+                    let platforms_to_update = outdated_platforms
+                        .intersection(&env.platforms())
+                        .cloned()
+                        .collect_vec();
+                    iter::once(env.clone()).cartesian_product(platforms_to_update)
+                })
+        {
             let grouped_environment = GroupedEnvironment::from(environment.clone());
 
             // Get futures that will resolve when the conda and pypi records become
