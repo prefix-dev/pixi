@@ -80,19 +80,41 @@ impl TableName<'_> {
                 .expect("we already verified")
                 .as_str();
 
+            // For feature names with dots, create the path differently
             if feature_str.contains('.') {
-                parts.push(format!("\"{}\"", feature_str).leak());
-            } else {
-                parts.push(feature_str);
+                let mut result = parts.join(".");
+
+                result.push('.');
+                result.push('"');
+                result.push_str(feature_str);
+                result.push('"');
+
+                // Add remaining parts if any
+                if let Some(platform) = self.platform {
+                    result.push_str(".target.");
+                    result.push_str(platform.as_str());
+                }
+
+                if let Some(table) = self.table {
+                    result.push('.');
+                    result.push_str(table);
+                }
+
+                return result;
             }
+
+            parts.push(feature_str);
         }
+
         if let Some(platform) = self.platform {
             parts.push("target");
             parts.push(platform.as_str());
         }
+
         if let Some(table) = self.table {
             parts.push(table);
         }
+
         parts.join(".")
     }
 }
