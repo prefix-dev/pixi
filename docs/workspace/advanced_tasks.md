@@ -181,6 +181,9 @@ Define arguments in your task using the `args` field:
 --8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks"
 ```
 
+!!! note "Argument naming restrictions"
+    Argument names cannot contain dashes (`-`). Use underscores (`_`) or camelCase instead.
+
 ### Using Task Arguments
 
 When running a task, provide arguments in the order they are defined:
@@ -233,6 +236,30 @@ When a dependent task doesn't specify all arguments, the default values are used
 pixi run partial-override
 ✨ Pixi task (base-task in default): echo Base task with override1 and default2
 ```
+
+### MiniJinja Templating for Task Arguments
+
+Task commands support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+
+Basic syntax for using an argument in your command:
+
+```toml
+[tasks]
+greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
+```
+
+You can also use filters to transform argument values:
+
+```toml
+[tasks]
+# Convert argument to uppercase
+upper = { cmd = "echo {{ text | upper }}", args = ["text"] }
+
+# Join a list with commas
+files = { cmd = "tar -czf archive.tar.gz {{ files | join(',') }}", args = ["files"] }
+```
+
+For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
 ## Caching
 
