@@ -288,9 +288,7 @@ pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
-pixi_manifest = { workspace = true, features = [
-  "rattler_lock",
-] }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
