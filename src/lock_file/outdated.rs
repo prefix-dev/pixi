@@ -189,8 +189,12 @@ async fn find_unsatisfiable_targets<'p>(
                             .insert(platform);
                     }
                 }
-                EnvironmentUnsat::ChannelsMismatch | EnvironmentUnsat::InvalidChannel(_) => {
-                    // If the channels mismatched we cannot trust any of the locked content.
+                EnvironmentUnsat::ChannelsMismatch
+                | EnvironmentUnsat::InvalidChannel(_)
+                | EnvironmentUnsat::ChannelPriorityMismatch { .. }
+                | EnvironmentUnsat::SolveStrategyMismatch { .. }
+                | EnvironmentUnsat::ExcludeNewerMismatch(..) => {
+                    // We cannot trust any of the locked content.
                     unsatisfiable_targets
                         .disregard_locked_content
                         .conda

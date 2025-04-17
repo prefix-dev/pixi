@@ -33,6 +33,9 @@ UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
     str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
 ]
+ExcludeNewer = Annotated[
+    str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$")
+]
 
 
 def hyphenize(field: str):
@@ -129,6 +132,11 @@ class Workspace(StrictBaseModel):
         description="The type of channel priority that is used in the solve."
         "- 'strict': only take the package from the channel it exist in first."
         "- 'disabled': group all dependencies together as if there is no channel difference.",
+    )
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        examples=["2023-11-03", "2023-11-03T03:33:12Z"],
+        description="Exclude any package newer than this date",
     )
     platforms: list[Platform] = Field(description="The platforms that the project supports")
     license: NonEmptyStr | None = Field(

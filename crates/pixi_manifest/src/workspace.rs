@@ -8,6 +8,7 @@ use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
+use crate::exclude_newer::ExcludeNewer;
 use crate::{preview::Preview, PrioritizedChannel, S3Options, Targets};
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
@@ -69,6 +70,9 @@ pub struct Workspace {
 
     /// Version requirement for pixi itself
     pub requires_pixi: Option<VersionSpec>,
+
+    /// Exclude package candidates that are newer than this date.
+    pub exclude_newer: Option<ExcludeNewer>,
 }
 
 #[derive(

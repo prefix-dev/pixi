@@ -68,6 +68,61 @@ pub enum EnvironmentUnsat {
         "the lock-file contains non-binary package: '{0}', but the pypi-option `no-build` is set"
     )]
     NoBuildWithNonBinaryPackages(String),
+
+    #[error(
+        "the lock-file was solved with a different strategy ({locked_strategy}) than the one selected ({expected_strategy})",
+        locked_strategy = serde_json::to_string_pretty(&.locked_strategy).unwrap(),
+        expected_strategy = serde_json::to_string_pretty(&.expected_strategy).unwrap(),
+    )]
+    SolveStrategyMismatch {
+        locked_strategy: rattler_solve::SolveStrategy,
+        expected_strategy: rattler_solve::SolveStrategy,
+    },
+
+    #[error(
+        "the lock-file was solved with a different channel priority ({locked_priority}) than the one selected ({expected_priority})",
+        locked_priority = serde_json::to_string_pretty(&.locked_priority).unwrap(),
+        expected_priority = serde_json::to_string_pretty(&.expected_priority).unwrap(),
+    )]
+    ChannelPriorityMismatch {
+        locked_priority: rattler_solve::ChannelPriority,
+        expected_priority: rattler_solve::ChannelPriority,
+    },
+
+    #[error(transparent)]
+    ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
+}
+
+#[derive(Debug, Error)]
+pub struct ExcludeNewerMismatch {
+    locked_exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+    expected_exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl Display for ExcludeNewerMismatch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match (self.locked_exclude_newer, self.expected_exclude_newer) {
+            (Some(locked), None) => {
+                write!(
+                    f,
+                    "the lock-file was solved with exclude-newer set to {locked}, but the environment does not have this option set"
+                )
+            }
+            (None, Some(expected)) => {
+                write!(
+                    f,
+                    "the lock-file was solved without exclude-newer, but the environment has this option set to {expected}"
+                )
+            }
+            (Some(locked), Some(expected)) if locked != expected => {
+                write!(
+                    f,
+                    "the lock-file was solved with exclude-newer set to {locked}, but the environment has this option set to {expected}"
+                )
+            }
+            _ => unreachable!("if we get here the values are the same"),
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -479,6 +534,37 @@ pub fn verify_environment_satisfiability(
         if let Some(no_build) = group_pypi_options.no_build.as_ref() {
             verify_pypi_no_build(no_build, locked_environment)?;
         }
+    }
+
+    // Verify solver options
+    if locked_environment.solve_options().strategy != environment.solve_strategy() {
+        return Err(EnvironmentUnsat::SolveStrategyMismatch {
+            locked_strategy: locked_environment.solve_options().strategy,
+            expected_strategy: environment.solve_strategy(),
+        });
+    }
+
+    let expected_channel_priority = environment
+        .channel_priority()
+        .unwrap_or_default()
+        .unwrap_or_default()
+        .into();
+    if locked_environment.solve_options().channel_priority != expected_channel_priority {
+        return Err(EnvironmentUnsat::ChannelPriorityMismatch {
+            locked_priority: locked_environment.solve_options().channel_priority,
+            expected_priority: expected_channel_priority,
+        });
+    }
+
+    let locked_exclude_newer = locked_environment.solve_options().exclude_newer;
+    let expected_exclude_newer = environment.exclude_newer();
+    if locked_exclude_newer != expected_exclude_newer {
+        return Err(EnvironmentUnsat::ExcludeNewerMismatch(
+            ExcludeNewerMismatch {
+                locked_exclude_newer,
+                expected_exclude_newer,
+            },
+        ));
     }
 
     Ok(())

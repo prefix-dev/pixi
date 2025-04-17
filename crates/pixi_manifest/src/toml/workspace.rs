@@ -10,6 +10,7 @@ use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
 use toml_span::{de_helpers::TableHelper, DeserError, Span, Spanned, Value};
 use url::Url;
 
+use crate::exclude_newer::ExcludeNewer;
 use crate::{
     error::GenericError,
     pypi::pypi_options::PypiOptions,
@@ -50,6 +51,7 @@ pub struct TomlWorkspace {
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
     pub requires_pixi: Option<VersionSpec>,
+    pub exclude_newer: Option<ExcludeNewer>,
 
     pub span: Span,
 }
@@ -138,6 +140,7 @@ impl TomlWorkspace {
                     .collect(),
             ),
             requires_pixi: self.requires_pixi,
+            exclude_newer: self.exclude_newer,
         })
         .with_warnings(warnings))
     }
@@ -193,6 +196,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let requires_pixi = th
             .optional::<TomlVersionSpecStr>("requires-pixi")
             .map(TomlVersionSpecStr::into_inner);
+        let exclude_newer = th
+            .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
+            .map(TomlWith::into_inner);
 
         th.finalize(None)?;
 
@@ -217,6 +223,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             target: target.unwrap_or_default(),
             build_variants,
             requires_pixi,
+            exclude_newer,
             span: value.span,
         })
     }
@@ -298,6 +305,28 @@ mod test {
         3 │         platforms = []
         4 │         readme = "README.md"
           ·                   ─────────
+        5 │
+          ╰────
+        "###);
+    }
+
+    #[test]
+    fn test_invalid_exclude_newer() {
+        let input = r#"
+        channels = []
+        platforms = []
+        exclude-newer = "date"
+        "#;
+        let path = Path::new("");
+        let parse_error = TomlWorkspace::from_toml_str(input)
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error), @r###"
+         × `date` is neither a valid date (input contains invalid characters) nor a valid datetime (input contains invalid characters)
+          ╭─[pixi.toml:4:26]
+        3 │         platforms = []
+        4 │         exclude-newer = "date"
+          ·                          ────
         5 │
           ╰────
         "###);

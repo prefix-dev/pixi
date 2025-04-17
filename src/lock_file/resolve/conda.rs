@@ -5,7 +5,7 @@ use pixi_manifest::ChannelPriority;
 use pixi_record::{PixiRecord, SourceRecord};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_solve::{resolvo, SolveStrategy, SolverImpl};
 use url::Url;
 
 use crate::{
@@ -23,6 +23,8 @@ pub async fn resolve_conda(
     available_repodata: Vec<RepoData>,
     available_source_packages: Vec<SourceMetadata>,
     channel_priority: ChannelPriority,
+    exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+    solve_strategy: SolveStrategy,
 ) -> miette::Result<LockedCondaPackages> {
     tokio::task::spawn_blocking(move || {
         // Combine the repodata from the source packages and from registry channels.
@@ -62,6 +64,8 @@ pub async fn resolve_conda(
             locked_packages,
             virtual_packages,
             channel_priority: channel_priority.into(),
+            exclude_newer,
+            strategy: solve_strategy,
             ..rattler_solve::SolverTask::from_iter(solvable_records)
         };
 

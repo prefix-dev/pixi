@@ -120,7 +120,7 @@ rattler_conda_types = { version = "0.32.0", default-features = false, features =
   "rayon",
 ] }
 rattler_digest = { version = "1.1.0", default-features = false }
-rattler_lock = { version = "0.23.0", default-features = false }
+rattler_lock = { version = "0.23.2", default-features = false }
 rattler_menuinst = { version = "0.2.6", default-features = false }
 rattler_networking = { version = "0.22.11", default-features = false, features = [
   "google-cloud-auth",
