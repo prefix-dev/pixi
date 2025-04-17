@@ -1153,3 +1153,34 @@ async fn test_exclude_newer() {
         "foo ==1"
     ));
 }
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_exclude_newer_pypi() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-channel-change"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["{platform}"]
+    exclude-newer = "2020-12-02"
+
+    [dependencies]
+    python = "*"
+
+    [pypi-dependencies]
+    boltons = "*"
+    "#,
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    // Create the lock-file
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "boltons ==20.2.1".parse().unwrap()
+    ));
+}
