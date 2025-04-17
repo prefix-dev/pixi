@@ -243,20 +243,14 @@ Task commands support MiniJinja templating syntax for accessing and formatting a
 
 Basic syntax for using an argument in your command:
 
-```toml
-[tasks]
-greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_minijinja_simple.toml:tasks"
 ```
 
 You can also use filters to transform argument values:
 
-```toml
-[tasks]
-# Convert argument to uppercase
-upper = { cmd = "echo {{ text | upper }}", args = ["text"] }
-
-# Join a list with commas
-files = { cmd = "tar -czf archive.tar.gz {{ files | join(',') }}", args = ["files"] }
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_minijinja_filter.toml:tasks"
 ```
 
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
