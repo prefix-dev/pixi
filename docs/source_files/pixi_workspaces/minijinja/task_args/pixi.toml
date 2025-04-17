@@ -2,7 +2,7 @@
 [workspace]
 channels = ["conda-forge"]
 name = "workspace-name"
-platforms = ["linux-64"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 # --8<-- [start:tasks]
 [tasks]
 # The arg `text`, converted to uppercase, will be printed.
