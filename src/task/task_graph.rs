@@ -202,7 +202,7 @@ impl<'p> TaskGraph<'p> {
 
                     let task_name = args.remove(0);
 
-                    let arg_values = if let Some(task_arguments) = task.get_args() {
+                    let arg_values = if let Some(task_arguments) = task.args() {
                         // Check if we don't have more arguments than the task expects
                         if args.len() > task_arguments.len() {
                             return Err(TaskGraphError::TooManyArguments(task_name.to_string()));
@@ -210,7 +210,7 @@ impl<'p> TaskGraph<'p> {
 
                         Some(Self::merge_args(
                             &TaskName::from(task_name.clone()),
-                            Some(task_arguments),
+                            Some(&task_arguments.to_vec()),
                             Some(&args),
                         )?)
                     } else {
@@ -371,7 +371,7 @@ impl<'p> TaskGraph<'p> {
                     run_environment: task_env,
                     args: Some(Self::merge_args(
                         &dependency.task_name,
-                        task_dependency.get_args(),
+                        task_dependency.args().map(|args| args.to_vec()).as_ref(),
                         dependency.args.as_ref(),
                     )?),
                     dependencies: Vec::new(),
