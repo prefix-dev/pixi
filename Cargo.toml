@@ -290,7 +290,6 @@ pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
 pixi_manifest = { workspace = true, features = [
   "rattler_lock",
-  "rattler_solve",
 ] }
 pixi_progress = { workspace = true }
 pixi_record = { workspace = true }

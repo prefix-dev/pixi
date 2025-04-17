@@ -101,7 +101,6 @@ impl<'de> toml_span::Deserialize<'de> for ChannelPriority {
     }
 }
 
-#[cfg(feature = "rattler_solve")]
 impl From<ChannelPriority> for rattler_solve::ChannelPriority {
     fn from(value: ChannelPriority) -> Self {
         match value {
@@ -111,7 +110,6 @@ impl From<ChannelPriority> for rattler_solve::ChannelPriority {
     }
 }
 
-#[cfg(feature = "rattler_solve")]
 impl From<rattler_solve::ChannelPriority> for ChannelPriority {
     fn from(value: rattler_solve::ChannelPriority) -> Self {
         match value {

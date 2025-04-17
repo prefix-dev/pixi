@@ -13,7 +13,7 @@ version = "0.1.0"
 [dependencies]
 chrono = { workspace = true }
 dunce = { workspace = true }
-jiff = { workspace = true}
+jiff = { workspace = true }
 miette = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
@@ -34,5 +34,5 @@ uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true, features = ["non-pep508-extensions"] }
 uv-pypi-types = { workspace = true }
 uv-python = { workspace = true }
-uv-types = { workspace = true }
 uv-resolver = { workspace = true }
+uv-types = { workspace = true }
