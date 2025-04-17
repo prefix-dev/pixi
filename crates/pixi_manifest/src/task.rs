@@ -112,30 +112,11 @@ impl Task {
         }
     }
 
-    /// If this task is a plain task, returns the task string
-    pub fn as_plain(&self) -> Result<String, TaskStringError> {
-        match self {
-            Task::Plain(str) => str.render(None),
-            _ => Err(TaskStringError {
-                src: "".to_string(),
-                err_span: SourceSpan::new(0.into(), 0),
-            }),
-        }
-    }
-
     /// If this command is an execute command, returns the `Execute` task.
-    pub fn as_execute(&self) -> Result<&Execute, anyhow::Error> {
+    pub fn as_execute(&self) -> Result<&Execute, miette::Report> {
         match self {
             Task::Execute(execute) => Ok(execute),
-            _ => Err(anyhow::anyhow!("Task is not an execute task")),
-        }
-    }
-
-    /// If this command is an alias, returns the `Alias` task.
-    pub fn as_alias(&self) -> Result<&Alias, anyhow::Error> {
-        match self {
-            Task::Alias(alias) => Ok(alias),
-            _ => Err(anyhow::anyhow!("Task is not an alias task")),
+            _ => Err(miette::miette!("Task is not an execute task")),
         }
     }
 
