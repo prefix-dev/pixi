@@ -29,6 +29,7 @@ use rattler_lock::{
     UrlOrPath,
 };
 use thiserror::Error;
+use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_git_types::GitReference;
@@ -297,11 +298,13 @@ pub enum PlatformUnsat {
     #[error("'{0}' expected a path but the lock file has a url")]
     LockedPyPIRequiresPath(String),
 
-    #[error("'{name}' expected this path {expected_path} but found {found_path}")]
+    #[error(
+        "'{name}' absolute required path is {install_path} but currently locked at {locked_path}"
+    )]
     LockedPyPIPathMismatch {
         name: String,
-        expected_path: PathBuf,
-        found_path: PathBuf,
+        install_path: String,
+        locked_path: String,
     },
 
     #[error("failed to convert between pep508 and uv types {0}")]
@@ -911,13 +914,21 @@ pub(crate) fn pypi_satifisfies_requirement(
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
             if let UrlOrPath::Path(locked_path) = &locked_data.location {
-                let locked_path = Path::new(locked_path.as_str());
-                // sometimes the path is relative, so we need to join it with the project root
-                if &project_root.join(locked_path) != install_path {
+                let install_path =
+                    Utf8TypedPathBuf::from(install_path.to_string_lossy().to_string());
+                let project_root =
+                    Utf8TypedPathBuf::from(project_root.to_string_lossy().to_string());
+                // Join relative paths with the project root
+                let locked_path = if locked_path.is_absolute() {
+                    locked_path.clone()
+                } else {
+                    project_root.join(locked_path.to_path()).normalize()
+                };
+                if locked_path.to_path() != install_path {
                     return Err(PlatformUnsat::LockedPyPIPathMismatch {
                         name: spec.name.clone().to_string(),
-                        expected_path: install_path.clone(),
-                        found_path: project_root.join(locked_path),
+                        install_path: install_path.to_string(),
+                        locked_path: locked_path.to_string(),
                     }
                     .into());
                 }
