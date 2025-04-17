@@ -1120,3 +1120,31 @@ def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None
 
     assert output1.stdout == output2.stdout
     assert output1.stderr == output2.stderr
+
+
+def test_task_minijinja_title_filter(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that minijinja title filter works as expected in task strings."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "title-filter": {"cmd": "echo {{ name|title }}", "args": [{"arg": "name"}]},
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"hello world"'],
+        stdout_contains="Hello World",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"hElLo wOrLd"'],
+        stdout_contains="Hello World",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"HELLO WORLD"'],
+        stdout_contains="Hello World",
+    )
