@@ -2472,35 +2472,35 @@ Please keep that in mind when you use it for your projects.</p>
 </div>
 <h2 id="why-is-this-useful">Why is This Useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
 <p>When we depend on a Pixi package, the dependency versions of the package itself are already set.
-For example, in the <a href="../cpp/">C++ tutorial</a> the <code>python_bindings</code> package we built depended on Python 3.12.
-Pixi would report a version conflict, if we'd add use both Python 3.11 and <code>python_bindings</code> to our workspace.
+For example, in the <a href="../cpp/">C++ tutorial</a> the <code>cpp_math</code> package we built depended on Python 3.12.
+Pixi would report a version conflict, if we'd add use both Python 3.11 and <code>cpp_math</code> to our workspace.
 By using variants, we can add a set of allowed versions for a specific dependency.
 Pixi will then resolve the package with all the different variants.</p>
 <h2 id="lets-get-started">Let's Get Started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
 <p>In this tutorial we will continue with the result of the <a href="../workspace/">workspace tutorial</a> so we can test it against multiple Python versions.
-As a reminder, we ended up with a top-level <code>pixi.toml</code> containing the workspace and the Python package <code>rich_example</code>.
-Our workspace then depended on <code>rich_example</code> and <code>python_bindings</code>.</p>
+As a reminder, we ended up with a top-level <code>pixi.toml</code> containing the workspace and the Python package <code>python_rich</code>.
+Our workspace then depended on <code>python_rich</code> and <code>cpp_math</code>.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[dependencies]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">python_bindings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;packages/python_bindings&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">rich_example</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">cpp_math</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;packages/cpp_math&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">python_rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>The file tree looks like this:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>.
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>packages
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│<span class="w">   </span>└──<span class="w"> </span>python_bindings
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│<span class="w">   </span>└──<span class="w"> </span>cpp_math
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>│<span class="w">       </span>├──<span class="w"> </span>CMakeLists.txt
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>│<span class="w">       </span>├──<span class="w"> </span>pixi.toml
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>│<span class="w">       </span>└──<span class="w"> </span>src
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>│<span class="w">           </span>└──<span class="w"> </span>bindings.cpp
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>│<span class="w">           </span>└──<span class="w"> </span>math.cpp
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>├──<span class="w"> </span>pixi.lock
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>├──<span class="w"> </span>pixi.toml
 </span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>├──<span class="w"> </span>pyproject.toml
 </span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>└──<span class="w"> </span>src
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>└──<span class="w"> </span>rich_example
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>└──<span class="w"> </span>python_rich
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">        </span>└──<span class="w"> </span>__init__.py
 </span></code></pre></div>
-<p>In order to allow multiple Python versions we first have to change the Python version requirement of <code>python_bindings</code> from <code>3.12.*</code> to <code>*</code>.</p>
-<div class="language-toml highlight"><span class="filename">packages/python_bindings/pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.host-dependencies]</span>
+<p>In order to allow multiple Python versions we first have to change the Python version requirement of <code>cpp_math</code> from <code>3.12.*</code> to <code>*</code>.</p>
+<div class="language-toml highlight"><span class="filename">packages/cpp_math/pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.host-dependencies]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.20, &lt;3.27&quot;</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">nanobind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.4.0, &lt;2.5.0&quot;</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="hll"><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">                 </span><span class="c1"># (1)!</span>
@@ -2527,26 +2527,26 @@ In our case this allows us to test our setup against both Python 3.11 and 3.12.<
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">py312</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;py312&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>By running <code>pixi list</code> we can see the Python version used in each environment.
-You can also see that the <code>Build</code> string of <code>python_bindings</code> differ between <code>py311</code> and <code>py312</code>.
+You can also see that the <code>Build</code> string of <code>cpp_math</code> differ between <code>py311</code> and <code>py312</code>.
 That means that a different package has been built for each variant.
-Since <code>rich_example</code> only contains Python source code, a single build can be used for multiple Python versions.
+Since <code>python_rich</code> only contains Python source code, a single build can be used for multiple Python versions.
 The package is <code>noarch</code>.
 Therefore, the build string is the same.</p>
 <div class="language-pwsh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">$</span> <span class="n">pixi</span> <span class="n">list</span> <span class="p">-</span><span class="n">-environment</span> <span class="n">py311</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">Package</span>            <span class="n">Version</span>     <span class="n">Build</span>               <span class="n">Size</span>       <span class="n">Kind</span>   <span class="n">Source</span>
 </span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">python</span>             <span class="n">3</span><span class="p">.</span><span class="n">11</span><span class="p">.</span><span class="n">11</span>     <span class="n">h9e4cc4f_1_cpython</span>  <span class="n">29</span><span class="p">.</span><span class="n">2</span> <span class="n">MiB</span>   <span class="n">conda</span>  <span class="n">python</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">python_bindings</span>    <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">py311h43a39b2_0</span>                <span class="n">conda</span>  <span class="n">python_bindings</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">rich_example</span>       <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">pyhbf21a9e_0</span>                   <span class="n">conda</span>  <span class="n">rich_example</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">cpp_math</span>    <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">py311h43a39b2_0</span>                <span class="n">conda</span>  <span class="n">cpp_math</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">python_rich</span>       <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">pyhbf21a9e_0</span>                   <span class="n">conda</span>  <span class="n">python_rich</span>
 </span></code></pre></div>
 <div class="language-pwsh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">$</span> <span class="n">pixi</span> <span class="n">list</span> <span class="p">-</span><span class="n">-environment</span> <span class="n">py312</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">Package</span>            <span class="n">Version</span>     <span class="n">Build</span>               <span class="n">Size</span>       <span class="n">Kind</span>   <span class="n">Source</span>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">python</span>             <span class="n">3</span><span class="p">.</span><span class="n">12</span><span class="p">.</span><span class="n">8</span>      <span class="n">h9e4cc4f_1_cpython</span>  <span class="n">30</span><span class="p">.</span><span class="n">1</span> <span class="n">MiB</span>   <span class="n">conda</span>  <span class="n">python</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">python_bindings</span>    <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">py312h2078e5b_0</span>                <span class="n">conda</span>  <span class="n">python_bindings</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">rich_example</span>       <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">pyhbf21a9e_0</span>                   <span class="n">conda</span>  <span class="n">rich_example</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">cpp_math</span>    <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">py312h2078e5b_0</span>                <span class="n">conda</span>  <span class="n">cpp_math</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">python_rich</span>       <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">pyhbf21a9e_0</span>                   <span class="n">conda</span>  <span class="n">python_rich</span>
 </span></code></pre></div>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
 <p>In this tutorial, we showed how to use variants to build multiple versions of a single package.
-We built <code>python_bindings</code> for Python 3.12 and 3.13, which allows us to test whether it works properly on both Python versions.
+We built <code>cpp_math</code> for Python 3.12 and 3.13, which allows us to test whether it works properly on both Python versions.
 Variants are not limited to a single dependency, you could for example try to test multiple versions of <code>nanobind</code>.</p>
 <p>Thanks for reading! Happy Coding 🚀</p>
 <p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>

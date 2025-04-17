@@ -680,7 +680,7 @@ packages:
   size: 185646
   timestamp: 1733342347277
 - conda: .
-  name: rich_example
+  name: python_rich
   version: 0.1.0
   build: pyh4616a5c_0
   subdir: noarch

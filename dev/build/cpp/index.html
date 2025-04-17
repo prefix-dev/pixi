@@ -744,9 +744,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-srcbindingscpp-file" class="md-nav__link">
+  <a href="#the-srcmathcpp-file" class="md-nav__link">
     <span class="md-ellipsis">
-      The src/bindings.cpp file
+      The src/math.cpp file
     </span>
   </a>
   
@@ -2490,9 +2490,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-srcbindingscpp-file" class="md-nav__link">
+  <a href="#the-srcmathcpp-file" class="md-nav__link">
     <span class="md-ellipsis">
-      The src/bindings.cpp file
+      The src/math.cpp file
     </span>
   </a>
   
@@ -2559,23 +2559,23 @@ Please keep that in mind when you use it for your workspaces.</p>
 </div>
 <h2 id="creating-a-new-workspace">Creating a New Workspace<a class="headerlink" href="#creating-a-new-workspace" title="Permanent link">#</a></h2>
 <p>To get started, create a new workspace with pixi:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>python_bindings
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>cpp_math
 </span></code></pre></div>
 <p>This should give you the basic <code>pixi.toml</code> to get started.</p>
 <p>We'll now create the following source directory structure:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>python_bindings/
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cpp_math/
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>CMakeLists.txt
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>pixi.toml
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>├──<span class="w"> </span>.gitignore
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>└──<span class="w"> </span>src
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>└──<span class="w"> </span>bindings.cpp
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">    </span>└──<span class="w"> </span>math.cpp
 </span></code></pre></div></p>
 <h2 id="creating-the-workspace-files">Creating the workspace files<a class="headerlink" href="#creating-the-workspace-files" title="Permanent link">#</a></h2>
 <p>Next up we'll create the:</p>
 <ul>
 <li><code>pixi.toml</code> file that will be used to configure pixi.</li>
 <li><code>CMakeLists.txt</code> file that will be used to build the bindings.</li>
-<li><code>src/bindings.cpp</code> file that will contain the bindings.</li>
+<li><code>src/math.cpp</code> file that will contain the bindings.</li>
 </ul>
 <h3 id="the-pixitoml-file">The <code>pixi.toml</code> file<a class="headerlink" href="#the-pixitoml-file" title="Permanent link">#</a></h3>
 <p>Use the following <code>pixi.toml</code> file, you can hover over the annotations to see why each step was added.</p>
@@ -2588,14 +2588,14 @@ Please keep that in mind when you use it for your workspaces.</p>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># (1)!</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">[dependencies]</span><span class="w"> </span><span class="c1"># (2)!</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">python_bindings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="n">cpp_math</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span>
 </span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
 </span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="k">[tasks]</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python -c &#39;import python_bindings as b; print(b.add(1, 2))&#39;&quot;</span><span class="w"> </span><span class="c1"># (3)!</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python -c &#39;import cpp_math as b; print(b.add(1, 2))&#39;&quot;</span><span class="w"> </span><span class="c1"># (3)!</span>
 </span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
 </span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">[package]</span><span class="w"> </span><span class="c1"># (4)!</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python_bindings&quot;</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cpp_math&quot;</span>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
 </span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="k">[package.build]</span>
@@ -2623,7 +2623,7 @@ Please keep that in mind when you use it for your workspaces.</p>
 <h3 id="the-cmakeliststxt-file">The <code>CMakeLists.txt</code> file<a class="headerlink" href="#the-cmakeliststxt-file" title="Permanent link">#</a></h3>
 <p>Next lets add the <code>CMakeList.txt</code> file:
 <div class="language-CMake highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span><span class="w"> </span><span class="s">3.20...3.27</span><span class="p">)</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">project</span><span class="p">(</span><span class="s">python_bindings</span><span class="p">)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="nb">project</span><span class="p">(</span><span class="s">cpp_math</span><span class="p">)</span>
 </span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nb">find_package</span><span class="p">(</span><span class="s">Python</span><span class="w"> </span><span class="s">3.8</span><span class="w"> </span><span class="s">COMPONENTS</span><span class="w"> </span><span class="s">Interpreter</span><span class="w"> </span><span class="s">Development.Module</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span><span class="w"> </span><span class="c"># (1)!</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
@@ -2640,7 +2640,7 @@ Please keep that in mind when you use it for your workspaces.</p>
 </span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
 </span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="nb">find_package</span><span class="p">(</span><span class="s">nanobind</span><span class="w"> </span><span class="s">CONFIG</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span><span class="w"> </span><span class="c"># (4)!</span>
 </span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="nb">nanobind_add_module</span><span class="p">(</span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span><span class="w"> </span><span class="s">src/bindings.cpp</span><span class="p">)</span><span class="w"> </span><span class="c"># (5)!</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="nb">nanobind_add_module</span><span class="p">(</span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span><span class="w"> </span><span class="s">src/math.cpp</span><span class="p">)</span><span class="w"> </span><span class="c"># (5)!</span>
 </span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>
 </span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a><span class="nb">install</span><span class="p">(</span><span class="w"> </span><span class="c"># (6)!</span>
 </span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a><span class="w">    </span><span class="s">TARGETS</span><span class="w"> </span><span class="o">${</span><span class="nv">PROJECT_NAME</span><span class="o">}</span>
@@ -2658,13 +2658,13 @@ Please keep that in mind when you use it for your workspaces.</p>
 <li>Use our bindings file as the source file.</li>
 <li>Install the bindings into the designated prefix.</li>
 </ol>
-<h3 id="the-srcbindingscpp-file">The <code>src/bindings.cpp</code> file<a class="headerlink" href="#the-srcbindingscpp-file" title="Permanent link">#</a></h3>
-<p>Next lets add the <code>src/bindings.cpp</code> file, this one is quite simple:</p>
+<h3 id="the-srcmathcpp-file">The <code>src/math.cpp</code> file<a class="headerlink" href="#the-srcmathcpp-file" title="Permanent link">#</a></h3>
+<p>Next lets add the <code>src/math.cpp</code> file, this one is quite simple:</p>
 <div class="language-cpp highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;nanobind/nanobind.h&gt;</span>
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kt">int</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="c1">// (1)!</span>
 </span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">NB_MODULE</span><span class="p">(</span><span class="n">python_bindings</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">NB_MODULE</span><span class="p">(</span><span class="n">cpp_math</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">{</span>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">    </span><span class="n">m</span><span class="p">.</span><span class="n">def</span><span class="p">(</span><span class="s">&quot;add&quot;</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">add</span><span class="p">);</span><span class="w"> </span><span class="c1">// (2)!</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="p">}</span>
