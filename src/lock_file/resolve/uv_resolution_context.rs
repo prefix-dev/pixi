@@ -71,7 +71,7 @@ impl UvResolutionContext {
             hash_strategy: HashStrategy::None,
             keyring_provider,
             concurrency: Concurrency::default(),
-            source_strategy: SourceStrategy::Disabled,
+            source_strategy: SourceStrategy::Enabled,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
