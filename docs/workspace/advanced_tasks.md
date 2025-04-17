@@ -182,7 +182,7 @@ Define arguments in your task using the `args` field:
 ```
 
 !!! note "Argument naming restrictions"
-    Argument names cannot contain dashes (`-`). Use underscores (`_`) or camelCase instead.
+    Argument names cannot contain dashes (`-`) due to them being seen as a minus sign in MiniJinja. Use underscores (`_`) or camelCase instead.
 
 ### Using Task Arguments
 
