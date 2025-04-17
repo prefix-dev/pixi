@@ -342,3 +342,53 @@ def test_build_git_source_deps(
         stdout_contains="John Doe Jr.",
         cwd=minimal_workspace,
     )
+
+
+def test_installation_pypi_conda_mismatch(
+    pixi: Path, tmp_pixi_workspace: Path, test_data: Path, pixi_tomls: Path
+) -> None:
+    """
+    This tests the following situation, if you have conda and pypi package with the same name, different version, but the same import path.
+    e.g foobar is the name and the conda package contains files `a.py` and `b.py`, while the pypi package contains just `a.py`.
+    If you install a lock file with the conda package, then install a lock file with the pypi version, and then subsequently install the conda version again.
+    The files should be `a.py` and `b.py`.
+    """
+    installation_order = test_data / "installation-order"
+    pixi_wheel_only = pixi_tomls / "installation-pypi.toml"
+    pixi_mix = pixi_tomls / "installation-conda-pypi.toml"
+    dest_toml = tmp_pixi_workspace / "pixi.toml"
+
+    # Copy wheel and conda files
+    shutil.copyfile(
+        installation_order / "foobar" / "foobar-0.1.0-pyhbf21a9e_0.conda",
+        tmp_pixi_workspace / "foobar-0.1.0-pyhbf21a9e_0.conda",
+    )
+    shutil.copyfile(
+        installation_order / "minimal-0.1.0-py2.py3-none-any.whl",
+        tmp_pixi_workspace / "minimal-0.1.0-py2.py3-none-any.whl",
+    )
+    shutil.copyfile(
+        installation_order / "foobar_whl" / "dist" / "foobar-0.1.1-py3-none-any.whl",
+        tmp_pixi_workspace / "foobar-0.1.1-py3-none-any.whl",
+    )
+
+    # First conda
+    shutil.copyfile(pixi_mix, dest_toml)
+    verify_cli_command([pixi, "install", "-v"], cwd=tmp_pixi_workspace)
+
+    # Then pypi
+    shutil.copyfile(pixi_wheel_only, dest_toml)
+    verify_cli_command([pixi, "install", "-v"], cwd=tmp_pixi_workspace)
+
+    # Then conda again
+    shutil.copyfile(pixi_mix, dest_toml)
+    verify_cli_command([pixi, "install", "-vv"], cwd=tmp_pixi_workspace)
+
+    site_packages = (
+        tmp_pixi_workspace / ".pixi" / "envs" / "default" / "lib" / "python3.13" / "site-packages"
+    )
+    assert (site_packages / "foobar").exists(), "foobar package does not exist"
+    # Recall that the conda package contains files `a.py` and `b.py`
+    assert (site_packages / "foobar" / "a.py").exists(), "a.py does not exist"
+    # Previously, this file was erroneously removed
+    assert (site_packages / "foobar" / "b.py").exists(), "b.py does not exist"
