@@ -125,6 +125,10 @@ impl<'p> ExecutableTask<'p> {
         self.workspace
     }
 
+    pub(crate) fn args(&self) -> &ArgValues {
+        &self.args
+    }
+
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
