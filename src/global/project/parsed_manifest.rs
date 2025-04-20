@@ -448,8 +448,8 @@ pub struct ParseExposedKeyError(String);
 
 #[cfg(test)]
 mod tests {
-    use insta::assert_snapshot;
     use super::*;
+    use insta::assert_snapshot;
 
     #[test]
     fn test_invalid_key() {
