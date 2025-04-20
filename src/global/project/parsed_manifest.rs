@@ -361,7 +361,7 @@ impl FancyDisplay for ExposedName {
 }
 
 /// Error that occurs when trying to use a reserved name as an exposed binary name.
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic, PartialEq)]
 pub(crate) enum ExposedNameError {
     /// Error when attempting to use the package manager's name as an exposed binary name
     #[error("The name '{0}' is reserved and cannot be used as an exposed name")]
@@ -449,8 +449,7 @@ pub struct ParseExposedKeyError(String);
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-
-    use super::ParsedManifest;
+    use super::*;
 
     #[test]
     fn test_invalid_key() {
