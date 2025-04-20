@@ -360,25 +360,63 @@ impl FancyDisplay for ExposedName {
     }
 }
 
-#[derive(Error, Diagnostic, Debug, PartialEq)]
+/// Error that occurs when trying to use a reserved name as an exposed binary name.
+#[derive(Error, Debug, Clone)]
 pub(crate) enum ExposedNameError {
-    #[error(
-        "'{0}' is not allowed as exposed name in the map",
-        pixi_utils::executable_name()
+    /// Error when attempting to use the package manager's name as an exposed binary name
+    #[error("The name '{0}' is reserved and cannot be used as an exposed name")]
+    #[diagnostic(
+        help("The name 'pixi' is reserved for the package manager itself. Please choose a different name for your exposed binary."),
+        code("pixi::exposed_name::reserved_name")
     )]
-    PixiBinParseError,
+    PixiBinParseError(String),
+
+    /// Error when the name contains invalid characters or formatting
+    #[error("The name '{0}' contains invalid characters or formatting")]
+    #[diagnostic(
+        help("Exposed binary names should only contain alphanumeric characters, hyphens, and underscores. They cannot start with a hyphen or underscore."),
+        code("pixi::exposed_name::invalid_format")
+    )]
+    InvalidFormatError(String),
 }
 
 impl FromStr for ExposedName {
     type Err = ExposedNameError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
+        // Check for reserved name
         if value == pixi_utils::executable_name() {
-            Err(ExposedNameError::PixiBinParseError)
-        } else {
-            Ok(ExposedName(value.to_string()))
+            return Err(ExposedNameError::PixiBinParseError(value.to_string()));
         }
+
+        // Validate name format
+        if !is_valid_exposed_name(value) {
+            return Err(ExposedNameError::InvalidFormatError(value.to_string()));
+        }
+
+        Ok(ExposedName(value.to_string()))
     }
+}
+
+/// Validates if a name is suitable for use as an exposed binary name.
+/// 
+/// Rules:
+/// - Must not be empty
+/// - Must start with an alphanumeric character
+/// - Can only contain alphanumeric characters, hyphens, and underscores
+/// - Cannot be longer than 255 characters
+fn is_valid_exposed_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 255 {
+        return false;
+    }
+
+    // Check if the first character is alphanumeric
+    if !name.chars().next().map_or(false, |c| c.is_alphanumeric()) {
+        return false;
+    }
+
+    // Check if all characters are valid
+    name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 impl<'de> toml_span::Deserialize<'de> for ExposedName {
@@ -393,13 +431,19 @@ impl AsRef<str> for ExposedName {
     }
 }
 
-/// Represents an error that occurs when parsing an binary exposed name.
+/// Error that occurs when parsing an exposed name that is reserved.
 ///
-/// This error is returned when a string fails to be parsed as an environment
-/// name.
+/// This error is returned when a string fails to be parsed as an exposed name
+/// because it matches a reserved name (like 'pixi'). The error includes
+/// diagnostic information to help users understand why the name is reserved
+/// and what they should do instead.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("pixi is not allowed as exposed name in the map")]
-pub struct ParseExposedKeyError {}
+#[error("The name '{0}' is reserved and cannot be used as an exposed name")]
+#[diagnostic(
+    help("The name 'pixi' is reserved for the package manager itself. Please choose a different name for your exposed binary."),
+    code("pixi::exposed_name::reserved_name")
+)]
+pub struct ParseExposedKeyError(String);
 
 #[cfg(test)]
 mod tests {
@@ -448,12 +492,6 @@ mod tests {
             let re = Regex::new(r"\x1B\[[0-?]*[ -/]*[@-~]").unwrap();
             re.replace_all(input, "").to_string()
         }
-        // Because this error is using `fancy_display`, we need to remove the ANSI
-        // escape sequences before comparing the error message. In CI an
-        // interactive tty is not available so the result will be different when
-        // running it locally, it seems :shrug:
-        //
-        // Might be better for the error implement `Diagnostic`
         assert!(manifest.is_err());
         let err = format!("{}", manifest.unwrap_err());
         assert_snapshot!(remove_ansi_escape_sequences(&err));
@@ -493,40 +531,78 @@ mod tests {
 
         assert!(manifest.is_err());
         // Replace back the executable name with "pixi" to satisfy the snapshot
-        assert_snapshot!(manifest
-            .unwrap_err()
-            .to_string()
-            .replace(pixi_utils::executable_name(), "pixi"));
+        let error_message = manifest.unwrap_err().to_string();
+        let error_message = error_message.replace(pixi_utils::executable_name(), "pixi");
+        assert_snapshot!(error_message);
     }
 
     #[test]
-    fn test_tool_deserialization() {
+    fn test_reserved_name_error_message() {
         let contents = r#"
-        # The name of the environment is `python`
-        [envs.python]
+        [envs.test]
         channels = ["conda-forge"]
-        # optional, defaults to your current OS
-        platform = "osx-64"
-        # It will expose python, python3 and python3.11, but not pip
-        [envs.python.dependencies]
-        python = "3.11.*"
-        pip = "*"
-
-        [envs.python.exposed]
-        python = "python"
-        python3 = "python3"
-        "python3.11" = "python3.11"
-
-        # The name of the environment is `python3-10`
-        [envs.python3-10]
-        channels = ["https://prefix.dev/conda-forge"]
-        # It will expose python3.10
-        [envs.python3-10.dependencies]
-        python = "3.10.*"
-
-        [envs.python3-10.exposed]
-        "python3.10" = "python"
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        pixi = "python"
         "#;
-        let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+
+        // Replace the pixi-bin-name with the actual executable name that can be variable at runtime in tests
+        let contents = contents.replace("pixi", pixi_utils::executable_name());
+        let manifest = ParsedManifest::from_toml_str(contents.as_str());
+
+        assert!(manifest.is_err());
+        let error_message = manifest.unwrap_err().to_string();
+        let error_message = error_message.replace(pixi_utils::executable_name(), "pixi");
+        assert_snapshot!(error_message);
+    }
+
+    #[test]
+    fn test_invalid_name_format() {
+        let test_cases = vec![
+            "",                     // Empty string
+            "-invalid",            // Starts with hyphen
+            "_invalid",            // Starts with underscore
+            "invalid@name",        // Contains invalid character
+            "invalid name",        // Contains space
+            &"a".repeat(256),      // Too long
+        ];
+
+        for name in test_cases {
+            let result = ExposedName::from_str(name);
+            assert!(result.is_err(), "Expected error for name: {}", name);
+            match result.unwrap_err() {
+                ExposedNameError::InvalidFormatError(_) => (),
+                _ => panic!("Expected InvalidFormatError for name: {}", name),
+            }
+        }
+    }
+
+    #[test]
+    fn test_valid_name_format() {
+        let test_cases = vec![
+            "valid-name",
+            "valid_name",
+            "validName",
+            "valid-name_123",
+            "a",                    // Single character
+            &"a".repeat(255),       // Maximum length
+        ];
+
+        for name in test_cases {
+            let result = ExposedName::from_str(name);
+            assert!(result.is_ok(), "Expected success for name: {}", name);
+        }
+    }
+
+    #[test]
+    fn test_case_sensitivity() {
+        let name = "PIXI";
+        let result = ExposedName::from_str(name);
+        assert!(result.is_err(), "Expected error for uppercase name: {}", name);
+        match result.unwrap_err() {
+            ExposedNameError::PixiBinParseError(_) => (),
+            _ => panic!("Expected PixiBinParseError for name: {}", name),
+        }
     }
 }
