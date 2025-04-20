@@ -670,6 +670,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.42.34438-hfd919c2_26.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.42.34438-h7142326_26.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2019_win-64-19.29.30139-h7dcff83_26.conda
+      - conda: https://prefix.dev/conda-forge/win-64/vs2022_win-64-19.43.34604-h070f0e0_26.conda
       - conda: https://prefix.dev/conda-forge/win-64/vswhere-3.1.7-h57928b3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/win_inet_pton-1.1.0-pyh7428d3b_8.conda
       - conda: https://prefix.dev/conda-forge/win-64/xz-5.8.1-h208afaa_0.conda
@@ -1852,6 +1853,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/virtualenv-20.30.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.42.34438-h7142326_26.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2019_win-64-19.29.30139-h7dcff83_26.conda
+      - conda: https://prefix.dev/conda-forge/win-64/vs2022_win-64-19.43.34604-h070f0e0_26.conda
       - conda: https://prefix.dev/conda-forge/win-64/vswhere-3.1.7-h57928b3_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/xz-5.8.1-h208afaa_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/xz-tools-5.8.1-h2466b09_0.conda
@@ -10074,6 +10076,19 @@ packages:
   license_family: BSD
   size: 20609
   timestamp: 1743195166620
+- conda: https://prefix.dev/conda-forge/win-64/vs2022_win-64-19.43.34604-h070f0e0_26.conda
+  sha256: 948f088b0e26cae24bc0bb87b8667ecfb6e085fe9288ad226cecfa2b382d5ffb
+  md5: 62047e8a5537b741fbf2731d0ff7f7d9
+  depends:
+  - vswhere
+  constrains:
+  - vs_win-64 2022.13
+  track_features:
+  - vc14
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 20640
+  timestamp: 1743195096501
 - conda: https://prefix.dev/conda-forge/win-64/vswhere-3.1.7-h57928b3_0.conda
   sha256: 8caeda9c0898cb8ee2cf4f45640dbbbdf772ddc01345cfb0f7b352c58b4d8025
   md5: ba83df93b48acfc528f5464c9a882baa
