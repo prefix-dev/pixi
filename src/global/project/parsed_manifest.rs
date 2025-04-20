@@ -399,7 +399,7 @@ impl FromStr for ExposedName {
 }
 
 /// Validates if a name is suitable for use as an exposed binary name.
-/// 
+///
 /// Rules:
 /// - Must not be empty
 /// - Must start with an alphanumeric character
@@ -416,7 +416,8 @@ fn is_valid_exposed_name(name: &str) -> bool {
     }
 
     // Check if all characters are valid
-    name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    name.chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
 }
 
 impl<'de> toml_span::Deserialize<'de> for ExposedName {
@@ -560,12 +561,12 @@ mod tests {
     #[test]
     fn test_invalid_name_format() {
         let test_cases = vec![
-            "",                     // Empty string
-            "-invalid",            // Starts with hyphen
-            "_invalid",            // Starts with underscore
-            "invalid@name",        // Contains invalid character
-            "invalid name",        // Contains space
-            &"a".repeat(256),      // Too long
+            "",               // Empty string
+            "-invalid",       // Starts with hyphen
+            "_invalid",       // Starts with underscore
+            "invalid@name",   // Contains invalid character
+            "invalid name",   // Contains space
+            &"a".repeat(256), // Too long
         ];
 
         for name in test_cases {
@@ -585,8 +586,8 @@ mod tests {
             "valid_name",
             "validName",
             "valid-name_123",
-            "a",                    // Single character
-            &"a".repeat(255),       // Maximum length
+            "a",              // Single character
+            &"a".repeat(255), // Maximum length
         ];
 
         for name in test_cases {
@@ -599,7 +600,11 @@ mod tests {
     fn test_case_sensitivity() {
         let name = "PIXI";
         let result = ExposedName::from_str(name);
-        assert!(result.is_err(), "Expected error for uppercase name: {}", name);
+        assert!(
+            result.is_err(),
+            "Expected error for uppercase name: {}",
+            name
+        );
         match result.unwrap_err() {
             ExposedNameError::PixiBinParseError(_) => (),
             _ => panic!("Expected PixiBinParseError for name: {}", name),
