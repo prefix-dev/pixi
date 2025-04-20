@@ -433,7 +433,8 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), None)
             .unwrap()
-            .as_single_command()
+            .as_single_command(None)
+            .unwrap()
             .unwrap();
 
         assert_eq!(task, "echo default");
@@ -442,7 +443,8 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), Some(Platform::Linux64))
             .unwrap()
-            .as_single_command()
+            .as_single_command(None)
+            .unwrap()
             .unwrap();
 
         assert_eq!(task_osx, "echo linux");

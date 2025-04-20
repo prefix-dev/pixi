@@ -132,7 +132,7 @@ pub fn convert_to_dist(
             let filename_raw = url
                 .path_segments()
                 .expect("url should have path segments")
-                .last()
+                .next_back()
                 .expect("url should have at least one path segment");
 
             // Decode the filename to avoid issues with the HTTP coding like `%2B` to `+`

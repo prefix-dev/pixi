@@ -29,11 +29,7 @@ fn to_pixi_spec_v1(
             let source = match source {
                 pixi_spec::SourceSpec::Url(url_source_spec) => {
                     let pixi_spec::UrlSourceSpec { url, md5, sha256 } = url_source_spec;
-                    pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 {
-                        url,
-                        md5: md5.map(Into::into),
-                        sha256: sha256.map(Into::into),
-                    })
+                    pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 { url, md5, sha256 })
                 }
                 pixi_spec::SourceSpec::Git(git_spec) => {
                     let pixi_spec::GitSpec {
