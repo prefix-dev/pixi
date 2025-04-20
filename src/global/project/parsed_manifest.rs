@@ -561,12 +561,12 @@ mod tests {
     fn test_invalid_name_format() {
         let long_string = "a".repeat(256);
         let test_cases = vec![
-            "",               // Empty string
-            "-invalid",       // Starts with hyphen
-            "_invalid",       // Starts with underscore
-            "invalid@name",   // Contains invalid character
-            "invalid name",   // Contains space
-            &long_string,     // Too long
+            "",             // Empty string
+            "-invalid",     // Starts with hyphen
+            "_invalid",     // Starts with underscore
+            "invalid@name", // Contains invalid character
+            "invalid name", // Contains space
+            &long_string,   // Too long
         ];
 
         for name in test_cases {
@@ -587,7 +587,7 @@ mod tests {
             "valid_name",
             "validName",
             "valid-name_123",
-            "a",              // Single character
+            "a",                // Single character
             &max_length_string, // Maximum length
         ];
 
