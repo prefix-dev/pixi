@@ -144,6 +144,7 @@ mold = ">=2.33.0,<3.0"
 
 [feature.build.target.win-64.dependencies]
 vs2022_win-64 = ">=19.43.34604"
+vs2017_win-64 = ">=19.16.27033"
 
 [feature.build.activation]
 env.CARGO_TARGET_DIR = "target/pixi"
