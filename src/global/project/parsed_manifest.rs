@@ -411,7 +411,7 @@ fn is_valid_exposed_name(name: &str) -> bool {
     }
 
     // Check if the first character is alphanumeric
-    if !name.chars().next().map_or(false, |c| c.is_alphanumeric()) {
+    if !name.chars().next().is_some_and(|c| c.is_alphanumeric()) {
         return false;
     }
 
