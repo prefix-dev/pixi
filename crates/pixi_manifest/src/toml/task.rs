@@ -247,9 +247,9 @@ mod test {
     #[test]
     fn test_depends_on_deprecation() {
         let input = r#"
-cmd = "test"
-depends_on = ["a", "b"]
-"#;
+        cmd = "test"
+        depends_on = ["a", "b"]
+        "#;
 
         let mut parsed = TomlTask::from_toml_str(input).unwrap();
         assert_eq!(parsed.warnings.len(), 1);
