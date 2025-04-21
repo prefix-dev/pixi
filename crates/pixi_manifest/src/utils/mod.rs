@@ -1,5 +1,6 @@
 pub mod package_map;
 mod spanned;
+pub mod toml_utils;
 
 #[cfg(test)]
 pub(crate) mod test_utils;
