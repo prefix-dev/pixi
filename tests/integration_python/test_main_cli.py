@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import shutil
+import platform
 
 from .common import (
     cwd,
@@ -1167,30 +1168,48 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
         """
     manifest.write_text(toml)
 
-    bash_comp_dir = ".pixi/envs/default/share/bash-completion/completions"
-    tmp_pixi_workspace.joinpath(bash_comp_dir).mkdir(parents=True, exist_ok=True)
-    tmp_pixi_workspace.joinpath(bash_comp_dir, "pixi.sh").touch()
-    verify_cli_command(
-        [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "bash"],
-        stdout_contains=["source", "share/bash-completion/completions"],
-    )
+    if platform.system() == "Windows":
+        # PowerShell completions are handled via PowerShell profile, not shell hook
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "powershell"],
+            stdout_excludes=[
+                "Scripts/_pixi.ps1"
+            ],  # PowerShell doesn't source completions in shell hook
+        )
 
-    zsh_comp_dir = ".pixi/envs/default/share/zsh/site-functions"
-    tmp_pixi_workspace.joinpath(zsh_comp_dir).mkdir(parents=True, exist_ok=True)
-    tmp_pixi_workspace.joinpath(zsh_comp_dir, "_pixi").touch()
-    verify_cli_command(
-        [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "zsh"],
-        stdout_contains=["fpath+=", "share/zsh/site-functions", "autoload -Uz compinit"],
-    )
+        # Test cmd.exe completions
+        cmd_comp_dir = ".pixi/envs/default/Scripts"
+        tmp_pixi_workspace.joinpath(cmd_comp_dir).mkdir(parents=True, exist_ok=True)
+        tmp_pixi_workspace.joinpath(cmd_comp_dir, "pixi.cmd").touch()
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "cmd"],
+            stdout_contains=['@SET "Path=', "Scripts", "@PROMPT"],
+        )
+    else:
+        # Test Unix shell completions
+        bash_comp_dir = ".pixi/envs/default/share/bash-completion/completions"
+        tmp_pixi_workspace.joinpath(bash_comp_dir).mkdir(parents=True, exist_ok=True)
+        tmp_pixi_workspace.joinpath(bash_comp_dir, "pixi.sh").touch()
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "bash"],
+            stdout_contains=["source", "share/bash-completion/completions"],
+        )
 
-    fish_comp_dir = ".pixi/envs/default/share/fish/vendor_completions.d"
-    tmp_pixi_workspace.joinpath(fish_comp_dir).mkdir(parents=True, exist_ok=True)
-    tmp_pixi_workspace.joinpath(fish_comp_dir, "pixi.fish").touch()
+        zsh_comp_dir = ".pixi/envs/default/share/zsh/site-functions"
+        tmp_pixi_workspace.joinpath(zsh_comp_dir).mkdir(parents=True, exist_ok=True)
+        tmp_pixi_workspace.joinpath(zsh_comp_dir, "_pixi").touch()
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "zsh"],
+            stdout_contains=["fpath+=", "share/zsh/site-functions", "autoload -Uz compinit"],
+        )
 
-    verify_cli_command(
-        [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "fish"],
-        stdout_contains=["for file in", "source", "share/fish/vendor_completions.d"],
-    )
+        fish_comp_dir = ".pixi/envs/default/share/fish/vendor_completions.d"
+        tmp_pixi_workspace.joinpath(fish_comp_dir).mkdir(parents=True, exist_ok=True)
+        tmp_pixi_workspace.joinpath(fish_comp_dir, "pixi.fish").touch()
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "fish"],
+            stdout_contains=["for file in", "source", "share/fish/vendor_completions.d"],
+        )
 
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:

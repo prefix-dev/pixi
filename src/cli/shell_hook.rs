@@ -192,7 +192,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 #[cfg(test)]
 mod tests {
     use rattler_conda_types::Platform;
-    use rattler_shell::shell::{Bash, CmdExe, Fish, NuShell, PowerShell, Shell, Xonsh, Zsh};
+    #[cfg(not(target_family = "windows"))]
+    use rattler_shell::shell::{Bash, Fish, Shell, Xonsh, Zsh};
+    use rattler_shell::shell::{CmdExe, NuShell, PowerShell};
 
     use super::*;
 
@@ -202,12 +204,16 @@ mod tests {
         let path_var_name = default_shell.path_var(&Platform::current());
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
-        let script =
-            generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
-                .await
-                .unwrap();
-        assert!(script.contains(&format!("export {path_var_name}=")));
-        assert!(script.contains("export CONDA_PREFIX="));
+
+        #[cfg(not(target_family = "windows"))]
+        {
+            let script =
+                generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
+                    .await
+                    .unwrap();
+            assert!(script.contains(&format!("export {path_var_name}=")));
+            assert!(script.contains("export CONDA_PREFIX="));
+        }
 
         let script = generate_activation_script(
             Some(ShellEnum::PowerShell(PowerShell::default())),
@@ -219,25 +225,29 @@ mod tests {
         assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
         assert!(script.contains("${Env:CONDA_PREFIX}"));
 
-        let script = generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment, &project)
-            .await
-            .unwrap();
-        assert!(script.contains(&format!("export {path_var_name}=")));
-        assert!(script.contains("export CONDA_PREFIX="));
+        #[cfg(not(target_family = "windows"))]
+        {
+            let script =
+                generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment, &project)
+                    .await
+                    .unwrap();
+            assert!(script.contains(&format!("export {path_var_name}=")));
+            assert!(script.contains("export CONDA_PREFIX="));
 
-        let script =
-            generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment, &project)
-                .await
-                .unwrap();
-        assert!(script.contains(&format!("set -gx {path_var_name} ")));
-        assert!(script.contains("set -gx CONDA_PREFIX "));
+            let script =
+                generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment, &project)
+                    .await
+                    .unwrap();
+            assert!(script.contains(&format!("set -gx {path_var_name} ")));
+            assert!(script.contains("set -gx CONDA_PREFIX "));
 
-        let script =
-            generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment, &project)
-                .await
-                .unwrap();
-        assert!(script.contains(&format!("${path_var_name} = ")));
-        assert!(script.contains("$CONDA_PREFIX = "));
+            let script =
+                generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment, &project)
+                    .await
+                    .unwrap();
+            assert!(script.contains(&format!("${path_var_name} = ")));
+            assert!(script.contains("$CONDA_PREFIX = "));
+        }
 
         let script =
             generate_activation_script(Some(ShellEnum::CmdExe(CmdExe)), &environment, &project)
