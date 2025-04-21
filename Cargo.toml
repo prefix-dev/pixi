@@ -64,7 +64,7 @@ pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
 pep508_rs = "0.9.2"
 percent-encoding = "2.3.1"
-pyproject-toml = "0.13.4"
+pyproject-toml = { git = "https://github.com/olivier-lacroix/pyproject-toml-rs", rev = "c9506f308db221180679c924bd4f201c3a0a58e0" }
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
 reqwest-middleware = "0.4"

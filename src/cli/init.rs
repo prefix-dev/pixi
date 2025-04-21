@@ -402,7 +402,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 Some(name) => (name, false),
                 None => (default_name.as_str(), true),
             };
-            let environments = pyproject.environments_from_extras().into_diagnostic()?;
+            let environments = pyproject
+                .environments_from_dependency_groups()
+                .into_diagnostic()?;
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,

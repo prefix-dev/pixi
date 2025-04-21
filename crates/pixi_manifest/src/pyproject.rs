@@ -9,7 +9,7 @@ use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
 use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact};
+use pyproject_toml::{self, has_recursion::RecursionResolutionError, Contact};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use thiserror::Error;
 use toml_span::Spanned;
@@ -22,7 +22,7 @@ use crate::{
     error::{DependencyError, GenericError},
     manifests::PackageManifest,
     toml::{
-        pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
+        pyproject::{TomlContact, TomlDependencyGroups, TomlOptionalDependencies, TomlProject},
         ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
         TomlManifest,
     },
@@ -97,11 +97,6 @@ impl PyProjectManifest {
         None
     }
 
-    /// Returns the project name as PEP508 name
-    fn package_name(&self) -> Option<pep508_rs::PackageName> {
-        pep508_rs::PackageName::new(self.name()?.to_string()).ok()
-    }
-
     fn tool(&self) -> Option<&Tool> {
         self.tool.as_ref()
     }
@@ -124,19 +119,19 @@ impl PyProjectManifest {
 
     /// Returns optional dependencies from the `[project.optional-dependencies]`
     /// table
-    fn optional_dependencies(&self) -> Option<IndexMap<String, Vec<Requirement>>> {
+    fn optional_dependencies(
+        &self,
+        project_name: Option<&str>,
+    ) -> Option<Result<IndexMap<String, Vec<Requirement>>, RecursionResolutionError>> {
         let project = self.project.project.as_ref()?;
         let optional_dependencies = project.optional_dependencies.as_ref()?;
-        Some(
-            optional_dependencies
-                .iter()
-                .map(|(k, v)| (k.clone(), v.iter().cloned().map(Spanned::take).collect()))
-                .collect(),
-        )
+        Some(optional_dependencies.value.0.resolve(project_name))
     }
 
     /// Returns dependency groups from the `[dependency-groups]` table
-    fn dependency_groups(&self) -> Option<Result<IndexMap<String, Vec<Requirement>>, Pep735Error>> {
+    fn dependency_groups(
+        &self,
+    ) -> Option<Result<IndexMap<String, Vec<Requirement>>, RecursionResolutionError>> {
         let dg = self.project.dependency_groups.as_ref()?;
         Some(dg.value.0.resolve())
     }
@@ -145,37 +140,25 @@ impl PyProjectManifest {
     /// dependencies and/or dependency groups:
     ///  - one environment is created per group with the same name
     ///  - each environment includes the feature of the same name
-    ///  - it will also include other features inferred from any self references
-    ///    to other groups of optional dependencies (but won't for dependency
-    ///    groups, as recursion between groups is resolved upstream)
-    pub fn environments_from_extras(&self) -> Result<HashMap<String, Vec<String>>, Pep735Error> {
+    pub fn environments_from_dependency_groups(
+        &self,
+    ) -> Result<HashMap<String, Vec<String>>, RecursionResolutionError> {
         let mut environments = HashMap::new();
-        if let Some(extras) = self.optional_dependencies() {
-            let pname = self.package_name();
-            for (extra, reqs) in extras {
-                let mut features = vec![extra.to_string()];
-                // Add any references to other groups of extra dependencies
-                for req in reqs.iter() {
-                    if pname.as_ref() == Some(&req.name) {
-                        for extra in &req.extras {
-                            features.push(extra.to_string())
-                        }
-                    }
-                }
-                // Environments can only contain number, strings and dashes
-                environments.insert(extra.replace('_', "-").clone(), features);
-            }
-        }
 
-        if let Some(groups) = self.dependency_groups().transpose()? {
-            for group in groups.into_keys() {
-                let normalised = group.replace('_', "-");
-                // Nothing to do if a group of optional dependencies has the same name as the
-                // dependency group
-                if !environments.contains_key(&normalised) {
-                    environments.insert(normalised.clone(), vec![normalised]);
-                }
-            }
+        let groups = self
+            // no need to pass project name to resolve recursions properly here,
+            // as only group names are used downstream
+            .optional_dependencies(None)
+            .transpose()?
+            .unwrap_or_default()
+            .into_iter()
+            .chain(self.dependency_groups().transpose()?.unwrap_or_default());
+
+        for (group, _) in groups {
+            let normalised = group.replace('_', "-");
+            environments
+                .entry(normalised.clone())
+                .or_insert_with(|| vec![group]);
         }
 
         Ok(environments)
@@ -187,7 +170,7 @@ pub enum PyProjectToManifestError {
     #[error("Unsupported pep508 requirement: '{0}'")]
     DependencyError(Requirement, #[source] DependencyError),
     #[error(transparent)]
-    DependencyGroupError(#[from] Pep735Error),
+    DependencyGroupError(#[from] RecursionResolutionError),
     #[error(transparent)]
     TomlError(#[from] TomlError),
 }
@@ -200,7 +183,7 @@ pub struct PyProjectFields {
     pub authors: Option<Vec<Spanned<TomlContact>>>,
     pub requires_python: Option<Spanned<VersionSpecifiers>>,
     pub dependencies: Option<Vec<Spanned<Requirement>>>,
-    pub optional_dependencies: Option<IndexMap<String, Vec<Spanned<Requirement>>>>,
+    pub optional_dependencies: Option<Spanned<TomlOptionalDependencies>>,
 }
 
 impl From<TomlProject> for PyProjectFields {
@@ -309,8 +292,12 @@ impl PyProjectManifest {
         let poetry = poetry.unwrap_or_default();
 
         // Define an iterator over both optional dependencies and dependency groups
-        let pypi_dependency_groups =
-            Self::extract_dependency_groups(dependency_groups, project.optional_dependencies)?;
+        let project_name = project.name.map(Spanned::take);
+        let pypi_dependency_groups = Self::extract_dependency_groups(
+            dependency_groups,
+            project.optional_dependencies,
+            project_name.as_deref(),
+        )?;
 
         // Convert the TOML document into a pixi manifest.
         // TODO:  would be nice to add license, license-file, readme, homepage,
@@ -329,7 +316,7 @@ impl PyProjectManifest {
             .collect();
         let (mut workspace_manifest, package_manifest, warnings) = pixi.into_workspace_manifest(
             ExternalWorkspaceProperties {
-                name: project.name.map(Spanned::take),
+                name: project_name,
                 version: project
                     .version
                     .and_then(|v| v.take().to_string().parse().ok())
@@ -391,12 +378,7 @@ impl PyProjectManifest {
         }
 
         // For each group of optional dependency or dependency group, add pypi
-        // dependencies, filtering out self-references in optional dependencies
-        let project_name = workspace_manifest
-            .workspace
-            .name
-            .clone()
-            .and_then(|name| pep508_rs::PackageName::new(name).ok());
+        // dependencies
         for (group, reqs) in pypi_dependency_groups {
             let feature_name = FeatureName::from(group.to_string());
             let target = workspace_manifest
@@ -406,16 +388,13 @@ impl PyProjectManifest {
                 .targets
                 .default_mut();
             for requirement in reqs.iter() {
-                // filter out any self references in groups of extra dependencies
-                if project_name.as_ref() != Some(&requirement.name) {
-                    target
-                        .try_add_pep508_dependency(
-                            requirement,
-                            None,
-                            DependencyOverwriteBehavior::Error,
-                        )
-                        .map_err(|err| GenericError::new(format!("{}", err)))?;
-                }
+                target
+                    .try_add_pep508_dependency(
+                        requirement,
+                        None,
+                        DependencyOverwriteBehavior::Error,
+                    )
+                    .map_err(|err| GenericError::new(format!("{}", err)))?;
             }
         }
 
@@ -424,31 +403,28 @@ impl PyProjectManifest {
 
     fn extract_dependency_groups(
         dependency_groups: Option<Spanned<TomlDependencyGroups>>,
-        optional_dependencies: Option<IndexMap<String, Vec<Spanned<Requirement>>>>,
+        optional_dependencies: Option<Spanned<TomlOptionalDependencies>>,
+        project_name: Option<&str>,
     ) -> Result<Vec<(String, Vec<Requirement>)>, TomlError> {
-        Ok(optional_dependencies
-            .map(|deps| {
-                deps.into_iter()
-                    .map(|(group, reqs)| {
-                        (
-                            group,
-                            reqs.into_iter().map(Spanned::take).collect::<Vec<_>>(),
-                        )
-                    })
-                    .collect()
-            })
-            .into_iter()
-            .chain(
-                dependency_groups
-                    .map(|Spanned { span, value }| {
-                        value.0.resolve().map_err(|err| {
-                            GenericError::new(format!("{}", err)).with_span(span.into())
-                        })
-                    })
-                    .transpose()?,
-            )
-            .flat_map(|map| map.into_iter())
-            .collect::<Vec<_>>())
+        let mut result = Vec::new();
+
+        if let Some(Spanned { span, value }) = optional_dependencies {
+            let resolved = value
+                .0
+                .resolve(project_name)
+                .map_err(|err| GenericError::new(err.to_string()).with_span(span.into()))?;
+            result.extend(resolved);
+        }
+
+        if let Some(Spanned { span, value }) = dependency_groups {
+            let resolved = value
+                .0
+                .resolve()
+                .map_err(|err| GenericError::new(err.to_string()).with_span(span.into()))?;
+            result.extend(resolved);
+        }
+
+        Ok(result)
     }
 }
 

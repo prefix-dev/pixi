@@ -8,7 +8,8 @@ use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use pixi_toml::{DeserializeAs, Same, TomlFromStr, TomlIndexMap, TomlWith};
 use pyproject_toml::{
-    BuildSystem, Contact, DependencyGroupSpecifier, DependencyGroups, License, Project, ReadMe,
+    BuildSystem, Contact, DependencyGroupSpecifier, DependencyGroups, License,
+    OptionalDependencies, Project, ReadMe,
 };
 use toml_span::{
     de_helpers::{expected, TableHelper},
@@ -154,7 +155,7 @@ pub struct TomlProject {
     /// Project dependencies
     pub dependencies: Option<Vec<Spanned<Requirement>>>,
     /// Optional dependencies
-    pub optional_dependencies: Option<IndexMap<String, Vec<Spanned<Requirement>>>>,
+    pub optional_dependencies: Option<Spanned<TomlOptionalDependencies>>,
     /// Specifies which fields listed by PEP 621 were intentionally unspecified
     /// so another tool can/will provide such metadata dynamically.
     pub dynamic: Option<Vec<Spanned<String>>>,
@@ -213,12 +214,10 @@ impl TomlProject {
             dependencies: self
                 .dependencies
                 .map(|dependencies| dependencies.into_iter().map(Spanned::take).collect()),
-            optional_dependencies: self.optional_dependencies.map(|optional_dependencies| {
-                optional_dependencies
-                    .into_iter()
-                    .map(|(k, v)| (k, v.into_iter().map(Spanned::take).collect()))
-                    .collect()
-            }),
+            optional_dependencies: self
+                .optional_dependencies
+                .map(Spanned::take)
+                .map(TomlOptionalDependencies::into_inner),
             dynamic: self
                 .dynamic
                 .map(|dynamic| dynamic.into_iter().map(Spanned::take).collect()),
@@ -262,11 +261,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlProject {
         let dependencies = th
             .optional::<TomlWith<_, Vec<Spanned<TomlFromStr<_>>>>>("dependencies")
             .map(TomlWith::into_inner);
-        let optional_dependencies = th
-            .optional::<TomlWith<_, TomlIndexMap<_, Vec<Spanned<TomlFromStr<_>>>>>>(
-                "optional-dependencies",
-            )
-            .map(TomlWith::into_inner);
+        let optional_dependencies = th.optional("optional-dependencies");
         let dynamic = th.optional("dynamic");
 
         th.finalize(None)?;
@@ -425,6 +420,32 @@ impl<'de> toml_span::Deserialize<'de> for TomlContact {
 impl<'de> DeserializeAs<'de, Contact> for TomlContact {
     fn deserialize_as(value: &mut Value<'de>) -> Result<Contact, DeserError> {
         TomlContact::deserialize(value).map(TomlContact::into_inner)
+    }
+}
+
+/// A wrapper around [`OptionalDependencies`] that implements
+/// [`toml_span::Deserialize`] and [`pixi_toml::DeserializeAs`].
+#[derive(Debug)]
+pub struct TomlOptionalDependencies(pub OptionalDependencies);
+
+impl TomlOptionalDependencies {
+    pub fn into_inner(self) -> OptionalDependencies {
+        self.0
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlOptionalDependencies {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        Ok(Self(OptionalDependencies(
+            TomlWith::<_, TomlIndexMap<String, Vec<TomlFromStr<Requirement>>>>::deserialize(value)?
+                .into_inner(),
+        )))
+    }
+}
+
+impl<'de> DeserializeAs<'de, OptionalDependencies> for TomlOptionalDependencies {
+    fn deserialize_as(value: &mut Value<'de>) -> Result<OptionalDependencies, DeserError> {
+        Self::deserialize(value).map(Self::into_inner)
     }
 }
 
