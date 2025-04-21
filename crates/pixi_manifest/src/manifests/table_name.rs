@@ -65,33 +65,29 @@ impl TableName<'_> {
     fn to_toml_table_name(&self) -> String {
         let mut parts = Vec::new();
 
+        let escaped_feature;
+
         if self.prefix.is_some() {
-            parts.push(self.prefix.unwrap().to_string());
+            parts.push(self.prefix.unwrap());
         }
 
-        if self
-            .feature_name
-            .as_ref()
-            .is_some_and(|feature_name| !feature_name.is_default())
-        {
-            parts.push("feature".to_string());
-            let feature_str = self
-                .feature_name
-                .as_ref()
-                .expect("we already verified")
-                .as_str();
+        if let Some(feature_name) = self.feature_name.as_ref() {
+            if !feature_name.is_default() {
+                parts.push("feature");
+                let feature_str = feature_name.as_str();
 
-            // Use the utility function to escape the feature name if needed
-            parts.push(escape_toml_key(feature_str));
+                escaped_feature = escape_toml_key(feature_str);
+                parts.push(&escaped_feature);
+            }
         }
 
         if let Some(platform) = self.platform {
-            parts.push("target".to_string());
-            parts.push(platform.as_str().to_string());
+            parts.push("target");
+            parts.push(platform.as_str());
         }
 
         if let Some(table) = self.table {
-            parts.push(table.to_string());
+            parts.push(table);
         }
 
         parts.join(".")
