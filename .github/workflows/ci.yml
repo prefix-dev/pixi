@@ -365,11 +365,6 @@ jobs:
     name: "build binary | windows aarch64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      # - name: Create Dev Drive
-      #   run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      - name: Copy Git Repo to Dev Drive
-        run: |
-          Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
       - name: "Install Rust toolchain"
         run: rustup target add aarch64-pc-windows-msvc
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
