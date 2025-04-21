@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from .common import exec_extension
+
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
@@ -15,7 +17,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 @pytest.fixture
 def pixi(request: pytest.FixtureRequest) -> Path:
     pixi_build = request.config.getoption("--pixi-build")
-    return Path(__file__).parent.joinpath(f"../../target/pixi/{pixi_build}/pixi")
+    pixi_path = Path(__file__).parent.joinpath(f"../../target/pixi/{pixi_build}/pixi")
+    return Path(exec_extension(str(pixi_path)))
 
 
 @pytest.fixture
