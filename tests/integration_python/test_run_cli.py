@@ -1164,3 +1164,93 @@ def test_task_minijinja_title_filter(pixi: Path, tmp_pixi_workspace: Path) -> No
         [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"HELLO WORLD"'],
         stdout_contains="Hello World",
     )
+
+
+def test_template_in_inputs_outputs(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that template variables work in inputs and outputs fields."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    input_dir = tmp_pixi_workspace.joinpath("inputs")
+    output_dir = tmp_pixi_workspace.joinpath("outputs")
+    input_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
+
+    for name in ["file1", "file2"]:
+        input_file = input_dir.joinpath(f"{name}.txt")
+        input_file.write_text(f"Content for {name}")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "process-file": {
+            "cmd": "echo {{ filename }} && echo Processing $(cat inputs/{{ filename }}.txt) > outputs/{{ filename }}.out",
+            "args": [{"arg": "filename"}],
+            "inputs": ["inputs/{{ filename }}.txt"],
+            "outputs": ["outputs/{{ filename }}.out"],
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "process-file", "file1"],
+        stderr_contains="file1",
+    )
+
+    output_file = output_dir.joinpath("file1.out")
+    assert output_file.exists(), "Output file should have been created"
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "process-file", "file1"],
+        stderr_contains="cache hit",
+    )
+
+    input_file = input_dir.joinpath("file1.txt")
+    input_file.write_text("Modified content for file1")
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "process-file", "file1"],
+        stderr_contains="file1",
+        stderr_excludes="cache hit",
+    )
+
+
+def test_template_in_inputs_changes_on_rerun(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that template variables in inputs change on rerun."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "template-in-inputs": {
+            "cmd": "echo Processing $(cat inputs/{{ filename }}.txt)",
+            "args": [{"arg": "filename"}],
+            "inputs": ["inputs/{{ filename }}.txt"],
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    input_dir = tmp_pixi_workspace.joinpath("inputs")
+    input_dir.mkdir(exist_ok=True)
+
+    input_file = input_dir.joinpath("file1.txt")
+    input_file.write_text("Content for file1")
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "template-in-inputs", "file1"],
+        stderr_contains="file1",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "template-in-inputs", "file1"],
+        stderr_contains="cache hit",
+    )
+
+    input_file = input_dir.joinpath("file1.txt")
+    input_file.write_text("Modified content for file1")
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "template-in-inputs", "file1"],
+        stderr_contains="file1",
+    )
