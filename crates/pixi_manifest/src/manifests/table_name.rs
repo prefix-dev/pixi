@@ -2,6 +2,7 @@ use std::fmt::{self, Display, Formatter};
 
 use rattler_conda_types::Platform;
 
+use crate::utils::toml_utils::escape_toml_key;
 use crate::FeatureName;
 
 /// Struct that is used to access a table in `pixi.toml` or `pyproject.toml`.
@@ -65,7 +66,7 @@ impl TableName<'_> {
         let mut parts = Vec::new();
 
         if self.prefix.is_some() {
-            parts.push(self.prefix.unwrap());
+            parts.push(self.prefix.unwrap().to_string());
         }
 
         if self
@@ -73,46 +74,24 @@ impl TableName<'_> {
             .as_ref()
             .is_some_and(|feature_name| !feature_name.is_default())
         {
-            parts.push("feature");
+            parts.push("feature".to_string());
             let feature_str = self
                 .feature_name
                 .as_ref()
                 .expect("we already verified")
                 .as_str();
 
-            // For feature names with dots, create the path differently
-            if feature_str.contains('.') {
-                let mut result = parts.join(".");
-
-                result.push('.');
-                result.push('"');
-                result.push_str(feature_str);
-                result.push('"');
-
-                // Add remaining parts if any
-                if let Some(platform) = self.platform {
-                    result.push_str(".target.");
-                    result.push_str(platform.as_str());
-                }
-
-                if let Some(table) = self.table {
-                    result.push('.');
-                    result.push_str(table);
-                }
-
-                return result;
-            }
-
-            parts.push(feature_str);
+            // Use the utility function to escape the feature name if needed
+            parts.push(escape_toml_key(feature_str));
         }
 
         if let Some(platform) = self.platform {
-            parts.push("target");
-            parts.push(platform.as_str());
+            parts.push("target".to_string());
+            parts.push(platform.as_str().to_string());
         }
 
         if let Some(table) = self.table {
-            parts.push(table);
+            parts.push(table.to_string());
         }
 
         parts.join(".")
