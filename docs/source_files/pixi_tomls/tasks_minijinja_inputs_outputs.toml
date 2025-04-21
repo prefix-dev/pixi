@@ -1,0 +1,31 @@
+[workspace]
+channels = ["conda-forge"]
+name = "tasks-minijinja-inputs-outputs"
+
+# --8<-- [start:tasks]
+[tasks]
+# This task will only run if the `main.py` file has changed.
+run = { cmd = "python main.py", inputs = ["main.py"] }
+
+# This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.
+download_data = { cmd = "curl -o data.csv https://example.com/data.csv", outputs = [
+  "data.csv",
+] }
+
+# This task will only run if the `src` directory has changed and will remember the result of the `make` command.
+build = { cmd = "make", inputs = [
+  "src/*.cpp",
+  "include/*.hpp",
+], outputs = [
+  "build/app.exe",
+] }
+
+# Process a specific file based on the provided argument
+process-file = { cmd = "python process.py inputs/{{ filename }}.txt --output outputs/{{ filename }}.processed", args = [
+  { "arg" = "filename" },
+], inputs = [
+  "inputs/{{ filename }}.txt",
+], outputs = [
+  "outputs/{{ filename }}.processed",
+] }
+# --8<-- [end:tasks]
