@@ -425,12 +425,12 @@ aarch64-apple-darwin = "macos-latest"
 x86_64-apple-darwin = "macos-latest"
 
 # Windows targets
-aarch64-pc-windows-msvc = "windows-latest"
-x86_64-pc-windows-msvc = "windows-latest"
+aarch64-pc-windows-msvc = "windows_x64_2025_large"
+x86_64-pc-windows-msvc = "windows_x64_2025_large"
 
 # Linux targets
-aarch64-unknown-linux-musl = "ubuntu-latest"
-x86_64-unknown-linux-musl = "ubuntu-latest"
+aarch64-unknown-linux-musl = "8core_ubuntu_latest_runner"
+x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 
 [workspace.metadata.dist.dependencies.apt]
 gcc-aarch64-linux-gnu = { version = '*', targets = [
