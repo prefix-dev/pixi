@@ -196,7 +196,7 @@ build-trampoline = "python trampoline/build-trampoline.py"
 # Feature to build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.39.0,<0.40"
+rattler-build = ">=0.40,<0.41"
 
 [feature.recipes.tasks.build-backends]
 cmd = "rattler-build build --recipe-dir empty --output-dir ."

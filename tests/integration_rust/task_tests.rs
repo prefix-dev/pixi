@@ -5,7 +5,7 @@ use pixi::{
     task::TaskName,
 };
 use pixi_manifest::{
-    task::{CmdArgs, TaskString},
+    task::{CmdArgs, TemplateString},
     FeatureName, Task,
 };
 use rattler_conda_types::Platform;
@@ -28,7 +28,7 @@ pub async fn add_remove_task() {
     let project = pixi.workspace().unwrap();
     let tasks = project.default_environment().tasks(None).unwrap();
     let task = tasks.get(&<TaskName>::from("test")).unwrap();
-    assert!(matches!(task, Task::Plain(s) if *s == TaskString::from("echo hello")));
+    assert!(matches!(task, Task::Plain(s) if *s == TemplateString::from("echo hello")));
 
     // Remove the task
     pixi.tasks()
@@ -160,7 +160,7 @@ pub async fn add_remove_target_specific_task() {
         .unwrap()
         .get(&<TaskName>::from("test"))
         .unwrap();
-    assert!(matches!(task, Task::Plain(s) if *s == TaskString::from("echo only_on_windows")));
+    assert!(matches!(task, Task::Plain(s) if *s == TemplateString::from("echo only_on_windows")));
 
     // Simple task
     pixi.tasks()

@@ -550,6 +550,7 @@ pub struct TaskInfo {
     cmd: Option<String>,
     description: Option<String>,
     depends_on: Vec<Dependency>,
+    args: Option<Vec<TaskArg>>,
     cwd: Option<PathBuf>,
     env: Option<IndexMap<String, String>>,
     clean_env: bool,
@@ -561,20 +562,27 @@ impl From<&Task> for TaskInfo {
     fn from(task: &Task) -> Self {
         TaskInfo {
             cmd: task
-                .as_single_command(None)
+                .as_single_command_no_render()
                 .ok()
                 .and_then(|cmd| cmd.map(|c| c.to_string())),
             description: task.description().map(|desc| desc.to_string()),
             depends_on: task.depends_on().to_vec(),
+            args: task.args().map(|args| args.to_vec()),
             cwd: task.working_directory().map(PathBuf::from),
             env: task.env().cloned(),
             clean_env: task.clean_env(),
-            inputs: task
-                .inputs()
-                .map(|inputs| inputs.iter().map(String::from).collect()),
-            outputs: task
-                .outputs()
-                .map(|outputs| outputs.iter().map(String::from).collect()),
+            inputs: task.inputs().map(|inputs| {
+                inputs
+                    .iter()
+                    .map(|input| input.source().to_string())
+                    .collect()
+            }),
+            outputs: task.outputs().map(|outputs| {
+                outputs
+                    .iter()
+                    .map(|output| output.source().to_string())
+                    .collect()
+            }),
         }
     }
 }
