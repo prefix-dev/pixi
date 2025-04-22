@@ -249,6 +249,7 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
+pathdiff = { workspace = true }
 priority-queue = ">=2.1.2,<2.2.1" # need by uv, avoid update edition to 2024
 rstest = { workspace = true }
 uv-build-frontend = { workspace = true }
