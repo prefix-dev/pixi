@@ -1,7 +1,7 @@
 use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
 use crate::workspace;
 use miette::Diagnostic;
-use pixi_manifest::task::TaskStringError;
+use pixi_manifest::task::TemplateStringError;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -261,5 +261,5 @@ pub enum InputHashesError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    TaskStringError(#[from] TaskStringError),
+    TaskStringError(#[from] TemplateStringError),
 }

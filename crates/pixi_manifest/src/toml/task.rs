@@ -8,14 +8,14 @@ use toml_span::{
 };
 
 use crate::{
-    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg, TaskString},
+    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg, TemplateString},
     warning::Deprecation,
     EnvironmentName, Task, TaskName, WithWarnings,
 };
 
-impl<'de> toml_span::Deserialize<'de> for TaskString {
+impl<'de> toml_span::Deserialize<'de> for TemplateString {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        Ok(TaskString::new(value.take_string(None)?.into_owned()))
+        Ok(TemplateString::new(value.take_string(None)?.into_owned()))
     }
 }
 
