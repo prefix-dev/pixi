@@ -50,7 +50,7 @@ test-all = [
 - Integrate minijinja for tasks' command's rendering by @prsabahrami in [#3579](https://github.com/prefix-dev/pixi/pull/3579)
 - Support for riscv64 linux by @Hofer-Julian in [#3606](https://github.com/prefix-dev/pixi/pull/3606)
 - Task Environment Selection by @prsabahrami in [#3501](https://github.com/prefix-dev/pixi/pull/3501)
-- Shortened task composition with `depends-on` key by @@prsabahrami in [#3450](https://github.com/prefix-dev/pixi/pull/3540)
+- Shortened task composition with `depends-on` key by @prsabahrami in [#3450](https://github.com/prefix-dev/pixi/pull/3540)
 
 
 #### Changed
