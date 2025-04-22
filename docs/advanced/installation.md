@@ -71,7 +71,9 @@ winget install prefix-dev.pixi
 
 Pixi is a single executable and can be run without any external dependencies.
 That means you can manually download the suitable archive for your architecture and operating system from our [GitHub releases](https://github.com/prefix-dev/pixi/releases), unpack it and then use it as is.
-If you want `pixi` itself or the executables installed via `pixi global` to be available in your `PATH`, you have to take care of that yourself.
+If you want `pixi` itself or the executables installed via `pixi global` to be available in your `PATH`, you have to add them manually.
+The executables are located in [PIXI_HOME](../reference/environment_variables.md)/bin.
+
 
 ### Install From Source
 
