@@ -1,11 +1,13 @@
 ---
 source: src/workspace/mod.rs
-expression: "workspace.workspace.value.tasks(Some(Platform::Win64),\n&FeatureName::Default).unwrap()"
+expression: "workspace.workspace.value.tasks(Some(Platform::Win64),\n&FeatureName::DEFAULT).unwrap()"
 ---
 {
     TaskName(
         "test",
     ): Plain(
-        "test win",
+        TemplateString(
+            "test win",
+        ),
     ),
 }

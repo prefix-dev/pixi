@@ -181,6 +181,9 @@ Define arguments in your task using the `args` field:
 --8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks"
 ```
 
+!!! note "Argument naming restrictions"
+    Argument names cannot contain dashes (`-`) due to them being seen as a minus sign in MiniJinja. Use underscores (`_`) or camelCase instead.
+
 ### Using Task Arguments
 
 When running a task, provide arguments in the order they are defined:
@@ -234,6 +237,24 @@ pixi run partial-override
 ✨ Pixi task (base-task in default): echo Base task with override1 and default2
 ```
 
+### MiniJinja Templating for Task Arguments
+
+Task commands support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+
+Basic syntax for using an argument in your command:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_minijinja_simple.toml:tasks"
+```
+
+You can also use filters to transform argument values:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_workspaces/minijinja/task_args/pixi.toml:tasks"
+```
+
+For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
+
 ## Caching
 
 When you specify `inputs` and/or `outputs` to a task, Pixi will reuse the result of the task.
@@ -248,18 +269,23 @@ For the cache, Pixi checks that the following are true:
 
 If all of these conditions are met, Pixi will not run the task again and instead use the existing result.
 
-Inputs and outputs can be specified as globs, which will be expanded to all matching files.
+Inputs and outputs can be specified as globs, which will be expanded to all matching files. You can also use MiniJinja templates in your `inputs` and `outputs` fields to parameterize the paths, making tasks more reusable:
 
 ```toml title="pixi.toml"
-[tasks]
-# This task will only run if the `main.py` file has changed.
-run = { cmd = "python main.py", inputs = ["main.py"] }
+--8<-- "docs/source_files/pixi_tomls/tasks_minijinja_inputs_outputs.toml:tasks"
+```
 
-# This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.
-download_data = { cmd = "curl -o data.csv https://example.com/data.csv", outputs = ["data.csv"] }
+When using template variables in inputs/outputs, Pixi expands the templates using the provided arguments or environment variables, and uses the resolved paths for caching decisions. This allows you to create generic tasks that can handle different files without duplicating task configurations:
 
-# This task will only run if the `src` directory has changed and will remember the result of the `make` command.
-build = { cmd = "make", inputs = ["src/*.cpp", "include/*.hpp"], outputs = ["build/app.exe"] }
+```shell
+# First run processes the file and caches the result
+pixi run process-file data1
+
+# Second run with the same argument uses the cached result
+pixi run process-file data1  # [cache hit]
+
+# Run with a different argument processes a different file
+pixi run process-file data2
 ```
 
 Note: if you want to debug the globs you can use the `--verbose` flag to see which files are selected.

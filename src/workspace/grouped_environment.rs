@@ -7,7 +7,7 @@ use pixi_manifest::{
     EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements,
     WorkspaceManifest,
 };
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 
 use crate::{
     prefix::Prefix,
@@ -114,6 +114,11 @@ impl<'p> GroupedEnvironment<'p> {
             .into_iter()
             .map(GenericVirtualPackage::from)
             .collect()
+    }
+
+    /// Returns the channel configuration for this grouped environment
+    pub fn channel_config(&self) -> ChannelConfig {
+        self.workspace().channel_config()
     }
 }
 

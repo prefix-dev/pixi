@@ -192,9 +192,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 eprintln!();
             }
 
-            let display_command = executable_task
-                .replace_args(&executable_task.display_command().to_string())
-                .unwrap_or_else(|_| executable_task.display_command().to_string());
+            let display_command = executable_task.display_command().to_string();
 
             eprintln!(
                 "{}{}{}{}{}{}{}",
@@ -340,6 +338,7 @@ enum TaskExecutionError {
     NonZeroExitCode(i32),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FailedToParseShellScript(#[from] FailedToParseShellScript),
 
     #[error(transparent)]

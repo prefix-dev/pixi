@@ -1,5 +1,5 @@
 package:
-  name: python_bindings
+  name: cpp_math
   version: 0.1.0
 
 source:
