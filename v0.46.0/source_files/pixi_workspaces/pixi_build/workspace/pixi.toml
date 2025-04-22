@@ -1,0 +1,30 @@
+# --8<-- [start:workspace]
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+cpp_math = { path = "packages/cpp_math" }
+python_rich = { path = "." }
+# --8<-- [end:workspace]
+
+
+[tasks]
+start = "rich-example-main"
+
+[package]
+name = "python_rich"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "0.1.*" }
+
+[package.host-dependencies]
+hatchling = "==1.26.3"
+
+[package.run-dependencies]
+rich = "13.9.*"
