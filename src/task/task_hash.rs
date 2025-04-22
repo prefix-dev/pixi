@@ -159,28 +159,24 @@ pub struct InputHashes {
 impl InputHashes {
     /// Compute the input hashes from a task.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
-        let inputs: Vec<String> = match task.task().as_execute() {
-            Ok(execute) => {
-                if let Some(inputs) = execute.inputs.clone() {
-                    let mut rendered_inputs = Vec::new();
-                    for input in inputs.iter() {
-                        match input.render(Some(task.args())) {
-                            Ok(rendered) => rendered_inputs.push(rendered),
-                            Err(err) => return Err(InputHashesError::TaskStringError(err)),
-                        }
-                    }
-                    if rendered_inputs.is_empty() {
-                        return Ok(None);
-                    }
-                    rendered_inputs
-                } else {
-                    return Ok(None);
-                }
-            }
-            Err(_) => return Ok(None),
+        let Ok(execute) = task.task().as_execute() else {
+            return Ok(None);
         };
 
-        let files = FileHashes::from_files(task.project().root(), inputs.iter()).await?;
+        let Some(inputs) = &execute.inputs else {
+            return Ok(None);
+        };
+
+        if inputs.is_empty() {
+            return Ok(None);
+        }
+
+        let rendered_inputs: Vec<String> = inputs
+            .iter()
+            .map(|i| i.render(Some(task.args())))
+            .collect::<Result<_, _>>()?;
+
+        let files = FileHashes::from_files(task.project().root(), &rendered_inputs).await?;
 
         // check if any files were matched
         if files.files.is_empty() {
@@ -190,7 +186,10 @@ impl InputHashes {
             );
             tracing::warn!(
                 "Input globs: {:?}",
-                inputs.iter().map(|g| g.as_str()).collect::<Vec<_>>()
+                rendered_inputs
+                    .iter()
+                    .map(|g| g.as_str())
+                    .collect::<Vec<_>>()
             );
         }
 
@@ -217,7 +216,7 @@ impl OutputHashes {
                     for output in outputs.iter() {
                         match output.render(Some(task.args())) {
                             Ok(rendered) => rendered_outputs.push(rendered),
-                            Err(err) => return Err(InputHashesError::TaskStringError(err)),
+                            Err(err) => return Err(InputHashesError::TemplateStringError(err)),
                         }
                     }
                     if rendered_outputs.is_empty() {
@@ -261,5 +260,5 @@ pub enum InputHashesError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    TaskStringError(#[from] TemplateStringError),
+    TemplateStringError(#[from] TemplateStringError),
 }
