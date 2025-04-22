@@ -1,5 +1,6 @@
 use pixi_manifest::{pypi::VersionOrStar, PyPiRequirement};
 use pixi_spec::{GitReference, GitSpec};
+use rattler_lock::UrlOrPath;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -10,9 +11,11 @@ use uv_distribution_filename::DistExtension;
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
-use uv_pypi_types::RequirementSource;
+use uv_pypi_types::{
+    ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
+};
 
-use crate::into_uv_git_reference;
+use crate::{into_uv_git_reference, to_uv_marker_tree, to_uv_version_specifiers, ConversionError};
 
 /// Create a url that uv can use to install a version
 fn create_uv_url(
@@ -215,6 +218,76 @@ pub fn as_uv_req(
         source,
         origin: None,
     })
+}
+
+/// Convert a [`pep508_rs::Requirement`] into a [`uv_pypi_types::Requirement`]
+pub fn pep508_requirement_to_uv_requirement(
+    requirement: pep508_rs::Requirement,
+) -> Result<uv_pypi_types::Requirement, ConversionError> {
+    let parsed_url = if let Some(version_or_url) = requirement.version_or_url {
+        match version_or_url {
+            pep508_rs::VersionOrUrl::VersionSpecifier(version) => Some(
+                uv_pep508::VersionOrUrl::VersionSpecifier(to_uv_version_specifiers(&version)?),
+            ),
+            pep508_rs::VersionOrUrl::Url(verbatim_url) => {
+                let url_or_path =
+                    UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
+
+                // it is actually a path
+                let url = match url_or_path {
+                    UrlOrPath::Path(path) => {
+                        let ext = DistExtension::from_path(Path::new(path.as_str()))
+                            .map_err(|e| {
+                                ParsedUrlError::MissingExtensionPath(
+                                    PathBuf::from_str(path.as_str()).expect("not a path"),
+                                    e,
+                                )
+                            })
+                            .expect("cannot get extension");
+                        let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
+                            path.as_str().into(),
+                            ext,
+                            verbatim_url.to_url(),
+                        ));
+
+                        VerbatimParsedUrl {
+                            parsed_url,
+                            verbatim: uv_pep508::VerbatimUrl::from_url(verbatim_url.raw().clone())
+                                .with_given(
+                                    verbatim_url.given().expect("should have given string"),
+                                ),
+                        }
+                        // Can only be an archive
+                    }
+                    UrlOrPath::Url(u) => VerbatimParsedUrl {
+                        parsed_url: ParsedUrl::try_from(u.clone()).expect("cannot convert to url"),
+                        verbatim: uv_pep508::VerbatimUrl::from_url(u),
+                    },
+                };
+
+                Some(uv_pep508::VersionOrUrl::Url(url))
+            }
+        }
+    } else {
+        None
+    };
+
+    let marker = to_uv_marker_tree(&requirement.marker)?;
+    let converted = uv_pep508::Requirement {
+        name: uv_pep508::PackageName::from_str(requirement.name.as_ref())
+            .expect("cannot normalize name"),
+        extras: requirement
+            .extras
+            .iter()
+            .map(|e| uv_pep508::ExtraName::from_str(e.as_ref()).expect("cannot convert extra name"))
+            .collect(),
+        marker,
+        version_or_url: parsed_url,
+        // Don't think this needs to be set
+        origin: None,
+    };
+
+    Ok(converted.into())
 }
 
 #[cfg(test)]

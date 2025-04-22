@@ -182,7 +182,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.45.0"
+version = "0.46.0"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -418,6 +418,19 @@ pr-run-mode = "skip"
 allow-dirty = ["msi", "ci"]
 # Whether to sign macOS executables
 macos-sign = true
+
+[workspace.metadata.dist.github-custom-runners]
+# macOS targets
+aarch64-apple-darwin = "macos-latest"
+x86_64-apple-darwin = "macos-latest"
+
+# Windows targets
+aarch64-pc-windows-msvc = "windows_x64_2025_large"
+x86_64-pc-windows-msvc = "windows_x64_2025_large"
+
+# Linux targets
+aarch64-unknown-linux-musl = "8core_ubuntu_latest_runner"
+x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 
 [workspace.metadata.dist.dependencies.apt]
 gcc-aarch64-linux-gnu = { version = '*', targets = [

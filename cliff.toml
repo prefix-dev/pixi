@@ -36,7 +36,7 @@ body = """
     {% for commit in commits %}
         {%- if commit.remote.pr_labels is not containing("skip-release-notes") -%}
             - {{ commit.message | upper_first | trim }}\
-                {% if commit.remote.username %} by @{{ commit.remote.username }}{%- endif -%}
+                {% if commit.remote.username %} by @{{ commit.remote.username }} {% endif %}
                 {%- if commit.remote.pr_number -%} in [#{{ commit.remote.pr_number }}]\
                     (https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/pull/{{ commit.remote.pr_number }})
                 {%- endif -%}
