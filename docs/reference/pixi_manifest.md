@@ -355,6 +355,13 @@ no-build-isolation = ["detectron2"]
 detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
 ```
 
+It is also possible to remove all packages from build isolation by setting the `no-build-isolation` to `true`.
+
+```toml
+[pypi-options]
+no-build-isolation = true
+```
+
 !!! tip "Conda dependencies define the build environment"
     To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
 
