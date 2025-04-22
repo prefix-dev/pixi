@@ -154,6 +154,14 @@ impl Task {
         }
     }
 
+    pub fn as_single_command_no_render(&self) -> Result<Option<Cow<str>>, TaskStringError> {
+        match self {
+            Task::Plain(str) => Ok(Some(Cow::Owned(str.source().to_string()))),
+            Task::Custom(custom) => custom.cmd.as_single_no_render(),
+            Task::Execute(exe) => exe.cmd.as_single_no_render(),
+            Task::Alias(_) => Ok(None),
+        }
+    }
     /// Returns the environment variables for the task to run in.
     pub fn env(&self) -> Option<&IndexMap<String, String>> {
         match self {
@@ -218,9 +226,9 @@ impl Task {
     }
 
     /// Returns the arguments of the task.
-    pub fn get_args(&self) -> Option<&Vec<TaskArg>> {
+    pub fn args(&self) -> Option<&[TaskArg]> {
         match self {
-            Task::Execute(exe) => exe.args.as_ref(),
+            Task::Execute(exe) => exe.args.as_deref(),
             _ => None,
         }
     }
@@ -469,6 +477,15 @@ impl CmdArgs {
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Some(rendered_args.join(" ")))
             }
+        }
+    }
+
+    pub fn as_single_no_render(&self) -> Result<Option<Cow<str>>, TaskStringError> {
+        match self {
+            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.source().to_string()))),
+            CmdArgs::Multiple(args) => Ok(Some(Cow::Owned(
+                args.iter().map(|arg| arg.source().to_string()).join(" "),
+            ))),
         }
     }
 }
