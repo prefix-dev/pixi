@@ -4375,7 +4375,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.45.0"
+version = "0.46.0"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4417,6 +4417,7 @@ dependencies = [
  "nix",
  "once_cell",
  "parking_lot 0.12.3",
+ "pathdiff",
  "pep440_rs",
  "pep508_rs",
  "percent-encoding",
@@ -4675,6 +4676,8 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.5.0",
+ "minijinja",
+ "once_cell",
  "pathdiff",
  "pep440_rs",
  "pep508_rs",

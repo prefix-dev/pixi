@@ -12,7 +12,7 @@ use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
     HasWorkspaceManifest, SystemRequirements, Task, TaskName, WorkspaceManifest,
 };
-use rattler_conda_types::{Arch, Platform};
+use rattler_conda_types::{Arch, ChannelConfig, Platform};
 
 use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
@@ -318,6 +318,11 @@ impl<'p> Environment<'p> {
 
         Ok(())
     }
+
+    /// Returns the channel configuration for this grouped environment
+    pub fn channel_config(&self) -> ChannelConfig {
+        self.workspace().channel_config()
+    }
 }
 
 impl<'p> HasWorkspaceRef<'p> for Environment<'p> {
@@ -433,7 +438,8 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), None)
             .unwrap()
-            .as_single_command()
+            .as_single_command(None)
+            .unwrap()
             .unwrap();
 
         assert_eq!(task, "echo default");
@@ -442,7 +448,8 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), Some(Platform::Linux64))
             .unwrap()
-            .as_single_command()
+            .as_single_command(None)
+            .unwrap()
             .unwrap();
 
         assert_eq!(task_osx, "echo linux");

@@ -402,15 +402,6 @@ def test_run_dry_run(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_run_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = f"""
-    {EMPTY_BOILERPLATE_PROJECT}
-    [tasks]
-    """
-    manifest.write_text(toml)
-
-
 def test_invalid_task_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
 
@@ -441,7 +432,7 @@ def test_invalid_task_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "arg3",
         ],
         ExitCode.FAILURE,
-        stderr_contains="expected default value required after previous arguments with defaults",
+        stderr_contains="default value required after previous arguments with defaults",
     )
 
 
@@ -786,8 +777,8 @@ def test_argument_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Task with defined args should validate them
     manifest_content["tasks"] = {
         "test_single": {
-            "cmd": "echo Python file: {{ python-file }}",
-            "args": ["python-file"],  # This argument is mandatory
+            "cmd": "echo Python file: {{ python_file }}",
+            "args": ["python_file"],  # This argument is mandatory
         }
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))
@@ -817,7 +808,28 @@ def test_argument_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "test_single"],
         ExitCode.FAILURE,
-        stderr_contains="no value provided for argument 'python-file'",
+        stderr_contains="no value provided for argument 'python_file'",
+    )
+
+
+def test_argument_with_dash_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    # Simple task with no args defined should just forward arguments
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "test_single": {
+            "cmd": "echo Python file: {{ python-file }}",
+            "args": ["python-file"],  # This argument is mandatory
+        }
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # This should work - exactly one argument provided as required
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest_path],
+        ExitCode.FAILURE,
+        stderr_contains="'python-file' is not a valid argument name since it contains the character '-'",
     )
 
 
@@ -826,33 +838,34 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
 
-    # Command with undefined argument
     manifest_content["tasks"] = {
-        "undefined_arg": {
-            "cmd": "echo Python file: {{ python-file }}",
-            # No args defined, but using {{ python-file }} in command
+        "mixed_args": {
+            "cmd": "echo Python file: {{ python_file }} with {{ non_existing_argument }}",
+            "args": ["python_file"],
         }
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
+    # Non existing arguments should fail
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "undefined_arg"],
+        [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
         ExitCode.FAILURE,
-        stderr_contains="Failed to replace argument placeholders",
+        stderr_contains="this part can't be replaced",
     )
 
     manifest_content["tasks"] = {
         "mixed_args": {
-            "cmd": "echo Python file: {{ python-file }} with {{ non-existing-argument }}",
-            "args": ["python-file"],
+            "cmd": "echo Python file: {{ python_file }} with {{ non_existing_argument | upper }}",
+            "args": ["python_file"],
         }
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
+    # If the non existing argument is passed to a filter, minijinja doesn't error
+    # Even though we don't like this behaviour we want to make sure that it stays that way
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
-        ExitCode.FAILURE,
-        stderr_contains="Failed to replace argument placeholders",
+        ExitCode.SUCCESS,
     )
 
 
@@ -1123,3 +1136,31 @@ def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None
 
     assert output1.stdout == output2.stdout
     assert output1.stderr == output2.stderr
+
+
+def test_task_minijinja_title_filter(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that minijinja title filter works as expected in task strings."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "title-filter": {"cmd": "echo {{ name|title }}", "args": [{"arg": "name"}]},
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"hello world"'],
+        stdout_contains="Hello World",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"hElLo wOrLd"'],
+        stdout_contains="Hello World",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"HELLO WORLD"'],
+        stdout_contains="Hello World",
+    )

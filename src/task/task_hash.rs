@@ -118,7 +118,7 @@ impl TaskHash {
         }
 
         Ok(Some(Self {
-            command: task.full_command(),
+            command: task.full_command().ok().flatten(),
             outputs: output_hashes,
             inputs: input_hashes,
             // Skipping environment variables used for caching the task
@@ -158,7 +158,7 @@ pub struct InputHashes {
 impl InputHashes {
     /// Compute the input hashes from a task.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
-        let Some(ref inputs) = task.task().as_execute().and_then(|e| e.inputs.clone()) else {
+        let Ok(Some(ref inputs)) = task.task().as_execute().map(|e| e.inputs.clone()) else {
             return Ok(None);
         };
 
@@ -192,7 +192,7 @@ impl OutputHashes {
         task: &ExecutableTask<'_>,
         warn: bool,
     ) -> Result<Option<Self>, InputHashesError> {
-        let Some(ref outputs) = task.task().as_execute().and_then(|e| e.outputs.clone()) else {
+        let Ok(Some(ref outputs)) = task.task().as_execute().map(|e| e.outputs.clone()) else {
             return Ok(None);
         };
 
