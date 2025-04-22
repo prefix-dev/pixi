@@ -192,9 +192,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 #[cfg(test)]
 mod tests {
     use rattler_conda_types::Platform;
+    #[cfg(target_family = "windows")]
+    use rattler_shell::shell::CmdExe;
     #[cfg(not(target_family = "windows"))]
     use rattler_shell::shell::{Bash, Fish, Shell, Xonsh, Zsh};
-    use rattler_shell::shell::{CmdExe, NuShell, PowerShell};
+    use rattler_shell::shell::{NuShell, PowerShell};
 
     use super::*;
 
