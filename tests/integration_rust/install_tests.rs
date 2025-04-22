@@ -675,8 +675,7 @@ setup(
         .default_environment()
         .pypi_options()
         .no_build_isolation
-        .unwrap()
-        .contains(&"my-pkg".to_string());
+        .contains(&"my-pkg".parse().unwrap());
 
     assert!(has_pkg, "my-pkg is not in no-build-isolation list");
     pixi.install().await.expect("cannot install project");
