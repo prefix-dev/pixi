@@ -154,7 +154,7 @@ impl Task {
         }
     }
 
-    pub fn as_single_command_no_render(&self) -> Result<Option<Cow<str>>, TaskStringError> {
+    pub fn as_single_command_no_render(&self) -> Result<Option<Cow<str>>, TemplateStringError> {
         match self {
             Task::Plain(str) => Ok(Some(Cow::Owned(str.source().to_string()))),
             Task::Custom(custom) => custom.cmd.as_single_no_render(),
@@ -485,7 +485,7 @@ impl CmdArgs {
         }
     }
 
-    pub fn as_single_no_render(&self) -> Result<Option<Cow<str>>, TaskStringError> {
+    pub fn as_single_no_render(&self) -> Result<Option<Cow<str>>, TemplateStringError> {
         match self {
             CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.source().to_string()))),
             CmdArgs::Multiple(args) => Ok(Some(Cow::Owned(
