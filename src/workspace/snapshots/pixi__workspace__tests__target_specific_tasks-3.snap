@@ -6,7 +6,7 @@ expression: "workspace.workspace.value.tasks(Some(Platform::Linux64),\n&FeatureN
     TaskName(
         "test",
     ): Plain(
-        TaskString(
+        TemplateString(
             "test linux",
         ),
     ),

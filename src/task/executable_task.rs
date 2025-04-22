@@ -13,7 +13,7 @@ use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{task::ArgValues, task::TaskStringError, Task, TaskName};
+use pixi_manifest::{task::ArgValues, task::TemplateStringError, Task, TaskName};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -49,7 +49,7 @@ pub enum FailedToParseShellScript {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ArgumentReplacement(#[from] TaskStringError),
+    ArgumentReplacement(#[from] TemplateStringError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -123,6 +123,10 @@ impl<'p> ExecutableTask<'p> {
     /// Returns the project in which this task is defined.
     pub(crate) fn project(&self) -> &'p Workspace {
         self.workspace
+    }
+
+    pub(crate) fn args(&self) -> &ArgValues {
+        &self.args
     }
 
     /// Returns the task as script
@@ -205,7 +209,7 @@ impl<'p> ExecutableTask<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub(crate) fn full_command(&self) -> Result<Option<String>, TaskStringError> {
+    pub(crate) fn full_command(&self) -> Result<Option<String>, TemplateStringError> {
         let original_cmd = self
             .task
             .as_single_command(Some(&self.args))?
