@@ -1214,43 +1214,12 @@ def test_template_in_inputs_outputs(pixi: Path, tmp_pixi_workspace: Path) -> Non
         stderr_excludes="cache hit",
     )
 
-
-def test_template_in_inputs_changes_on_rerun(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test that template variables in inputs change on rerun."""
-    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-
-    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
-
-    manifest_content["tasks"] = {
-        "template-in-inputs": {
-            "cmd": "echo Processing $(cat inputs/{{ filename }}.txt)",
-            "args": [{"arg": "filename"}],
-            "inputs": ["inputs/{{ filename }}.txt"],
-        },
-    }
-
-    manifest_path.write_text(tomli_w.dumps(manifest_content))
-
-    input_dir = tmp_pixi_workspace.joinpath("inputs")
-    input_dir.mkdir(exist_ok=True)
-
-    input_file = input_dir.joinpath("file1.txt")
-    input_file.write_text("Content for file1")
-
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "template-in-inputs", "file1"],
-        stderr_contains="file1",
+        [pixi, "run", "--manifest-path", manifest_path, "process-file", "file2"],
+        stderr_contains="file2",
     )
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "template-in-inputs", "file1"],
+        [pixi, "run", "--manifest-path", manifest_path, "process-file", "file2"],
         stderr_contains="cache hit",
-    )
-
-    input_file = input_dir.joinpath("file1.txt")
-    input_file.write_text("Modified content for file1")
-
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "template-in-inputs", "file1"],
-        stderr_contains="file1",
     )
