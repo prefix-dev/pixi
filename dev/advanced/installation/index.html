@@ -1989,6 +1989,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#download-from-github-releases" class="md-nav__link">
+    <span class="md-ellipsis">
+      Download From GitHub Releases
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#install-from-source" class="md-nav__link">
     <span class="md-ellipsis">
       Install From Source
@@ -2566,6 +2575,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#download-from-github-releases" class="md-nav__link">
+    <span class="md-ellipsis">
+      Download From GitHub Releases
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#install-from-source" class="md-nav__link">
     <span class="md-ellipsis">
       Install From Source
@@ -2728,10 +2746,15 @@ you must use the built-in update mechanism. e.g. <code>brew upgrade pixi</code>.
 </span></code></pre></div>
 <h3 id="windows-installer">Windows Installer<a class="headerlink" href="#windows-installer" title="Permanent link">#</a></h3>
 <p>We provide an <code>msi</code> installer on <a href="https://github.com/prefix-dev/pixi/releases/latest">our GitHub releases page</a>.
-The installer will download Pixi and add it to the path.</p>
+The installer will download Pixi and add it to the <code>PATH</code>.</p>
 <h3 id="winget">Winget<a class="headerlink" href="#winget" title="Permanent link">#</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>winget install prefix-dev.pixi
 </span></code></pre></div>
+<h3 id="download-from-github-releases">Download From GitHub Releases<a class="headerlink" href="#download-from-github-releases" title="Permanent link">#</a></h3>
+<p>Pixi is a single executable and can be run without any external dependencies.
+That means you can manually download the suitable archive for your architecture and operating system from our <a href="https://github.com/prefix-dev/pixi/releases">GitHub releases</a>, unpack it and then use it as is.
+If you want <code>pixi</code> itself or the executables installed via <code>pixi global</code> to be available in your <code>PATH</code>, you have to add them manually.
+The executables are located in <a href="../../reference/environment_variables/">PIXI_HOME</a>/bin.</p>
 <h3 id="install-from-source">Install From Source<a class="headerlink" href="#install-from-source" title="Permanent link">#</a></h3>
 <p>pixi is 100% written in Rust, and therefore it can be installed, built and tested with cargo.
 To start using Pixi from a source build run:</p>
