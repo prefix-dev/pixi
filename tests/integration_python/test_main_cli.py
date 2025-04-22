@@ -1168,16 +1168,16 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
         """
     manifest.write_text(toml)
 
-    if platform.system() == "Windows":
-        # PowerShell completions are handled via PowerShell profile, not shell hook
-        verify_cli_command(
-            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "powershell"],
-            stdout_excludes=[
-                "Scripts/_pixi.ps1"
-            ],  # PowerShell doesn't source completions in shell hook
-        )
+    # PowerShell completions are handled via PowerShell profile, not shell hook
+    verify_cli_command(
+        [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "powershell"],
+        stdout_excludes=[
+            "Scripts/_pixi.ps1"
+        ],  # PowerShell doesn't source completions in shell hook
+    )
 
-        # Test cmd.exe completions
+    if platform.system() == "Windows":
+        # Test cmd.exe completions (Windows-only)
         cmd_comp_dir = ".pixi/envs/default/Scripts"
         tmp_pixi_workspace.joinpath(cmd_comp_dir).mkdir(parents=True, exist_ok=True)
         tmp_pixi_workspace.joinpath(cmd_comp_dir, "pixi.cmd").touch()

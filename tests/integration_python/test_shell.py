@@ -17,17 +17,19 @@ def test_shell_hook_completions(
         ExitCode.SUCCESS,
     )
 
-    if platform.system() == "Windows":
-        # PowerShell completions are handled via PowerShell profile, not shell hook
-        verify_cli_command(
-            [pixi, "shell-hook", "--manifest-path", tmp_pixi_workspace, "--shell", "powershell"],
-            ExitCode.SUCCESS,
-            stdout_excludes=[
-                "Scripts/_pixi.ps1"
-            ],  # PowerShell doesn't source completions in shell hook
-        )
+    # Test PowerShell completions (available on all platforms)
+    # PowerShell completions are handled via PowerShell profile, not shell hook
+    verify_cli_command(
+        [pixi, "shell-hook", "--manifest-path", tmp_pixi_workspace, "--shell", "powershell"],
+        ExitCode.SUCCESS,
+        stdout_excludes=[
+            "Scripts/_pixi.ps1"
+        ],  # PowerShell doesn't source completions in shell hook
+    )
 
-        # Test cmd.exe completions
+    # Windows-specific shells
+    if platform.system() == "Windows":
+        # Test cmd.exe completions (Windows-only)
         cmd_comp_dir = ".pixi/envs/default/Scripts"
         tmp_pixi_workspace.joinpath(cmd_comp_dir).mkdir(parents=True, exist_ok=True)
         tmp_pixi_workspace.joinpath(cmd_comp_dir, "pixi.cmd").touch()

@@ -198,23 +198,42 @@ mod tests {
 
     use super::*;
 
+    #[cfg(not(target_family = "windows"))]
     #[tokio::test]
-    async fn test_shell_hook() {
+    async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Platform::current());
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 
-        #[cfg(not(target_family = "windows"))]
-        {
-            let script =
-                generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
-                    .await
-                    .unwrap();
-            assert!(script.contains(&format!("export {path_var_name}=")));
-            assert!(script.contains("export CONDA_PREFIX="));
-        }
+        let script =
+            generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
+                .await
+                .unwrap();
+        assert!(script.contains(&format!("export {path_var_name}=")));
+        assert!(script.contains("export CONDA_PREFIX="));
 
+        let script = generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment, &project)
+            .await
+            .unwrap();
+        assert!(script.contains(&format!("export {path_var_name}=")));
+        assert!(script.contains("export CONDA_PREFIX="));
+
+        let script =
+            generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment, &project)
+                .await
+                .unwrap();
+        assert!(script.contains(&format!("set -gx {path_var_name} ")));
+        assert!(script.contains("set -gx CONDA_PREFIX "));
+
+        let script =
+            generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment, &project)
+                .await
+                .unwrap();
+        assert!(script.contains(&format!("${path_var_name} = ")));
+        assert!(script.contains("$CONDA_PREFIX = "));
+
+        // Powershell is universal so we go with that on UNIX too
         let script = generate_activation_script(
             Some(ShellEnum::PowerShell(PowerShell::default())),
             &environment,
@@ -225,29 +244,31 @@ mod tests {
         assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
         assert!(script.contains("${Env:CONDA_PREFIX}"));
 
-        #[cfg(not(target_family = "windows"))]
-        {
-            let script =
-                generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment, &project)
-                    .await
-                    .unwrap();
-            assert!(script.contains(&format!("export {path_var_name}=")));
-            assert!(script.contains("export CONDA_PREFIX="));
+        let script =
+            generate_activation_script(Some(ShellEnum::NuShell(NuShell)), &environment, &project)
+                .await
+                .unwrap();
+        assert!(script.contains(&format!("$env.{path_var_name} = ")));
+        assert!(script.contains("$env.CONDA_PREFIX = "));
+    }
 
-            let script =
-                generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment, &project)
-                    .await
-                    .unwrap();
-            assert!(script.contains(&format!("set -gx {path_var_name} ")));
-            assert!(script.contains("set -gx CONDA_PREFIX "));
+    #[cfg(target_family = "windows")]
+    #[tokio::test]
+    async fn test_shell_hook_windows() {
+        let default_shell = rattler_shell::shell::ShellEnum::default();
+        let path_var_name = default_shell.path_var(&Platform::current());
+        let project = WorkspaceLocator::default().locate().unwrap();
+        let environment = project.default_environment();
 
-            let script =
-                generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment, &project)
-                    .await
-                    .unwrap();
-            assert!(script.contains(&format!("${path_var_name} = ")));
-            assert!(script.contains("$CONDA_PREFIX = "));
-        }
+        let script = generate_activation_script(
+            Some(ShellEnum::PowerShell(PowerShell::default())),
+            &environment,
+            &project,
+        )
+        .await
+        .unwrap();
+        assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
+        assert!(script.contains("${Env:CONDA_PREFIX}"));
 
         let script =
             generate_activation_script(Some(ShellEnum::CmdExe(CmdExe)), &environment, &project)
