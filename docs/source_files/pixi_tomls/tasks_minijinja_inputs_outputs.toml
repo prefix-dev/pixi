@@ -22,7 +22,7 @@ build = { cmd = "make", inputs = [
 
 # Process a specific file based on the provided argument
 process-file = { cmd = "python process.py inputs/{{ filename }}.txt --output outputs/{{ filename }}.processed", args = [
-  { "arg" = "filename" },
+  "filename",
 ], inputs = [
   "inputs/{{ filename }}.txt",
 ], outputs = [
