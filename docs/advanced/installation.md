@@ -59,13 +59,19 @@ brew install pixi
 ### Windows Installer
 
 We provide an `msi` installer on [our GitHub releases page](https://github.com/prefix-dev/pixi/releases/latest).
-The installer will download Pixi and add it to the path.
+The installer will download Pixi and add it to the `PATH`.
 
 ### Winget
 
 ```
 winget install prefix-dev.pixi
 ```
+
+### Download From GitHub Releases
+
+Pixi is a single executable and can be run without any external dependencies.
+That means you can manually download the suitable archive for your architecture and operating system from our [GitHub releases](https://github.com/prefix-dev/pixi/releases), unpack it and then use it as is.
+If you want `pixi` itself or the executables installed via `pixi global` to be available in your `PATH`, you have to take care of that yourself.
 
 ### Install From Source
 
