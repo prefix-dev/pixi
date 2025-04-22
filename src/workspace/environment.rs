@@ -12,7 +12,7 @@ use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
     HasWorkspaceManifest, SystemRequirements, Task, TaskName, WorkspaceManifest,
 };
-use rattler_conda_types::{Arch, Platform};
+use rattler_conda_types::{Arch, ChannelConfig, Platform};
 
 use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
@@ -317,6 +317,11 @@ impl<'p> Environment<'p> {
         }
 
         Ok(())
+    }
+
+    /// Returns the channel configuration for this grouped environment
+    pub fn channel_config(&self) -> ChannelConfig {
+        self.workspace().channel_config()
     }
 }
 

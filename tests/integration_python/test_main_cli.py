@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import shutil
 import platform
+from syrupy.assertion import SnapshotAssertion
 
 from .common import (
     cwd,
@@ -1299,3 +1300,27 @@ def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     assert "dummy-a" in manifest_content["tasks"]
     assert manifest_content["tasks"]["dummy-a"] == [{"task": "dummy-b"}, {"task": "dummy-c"}]
+
+
+def test_pixi_task_list_json(
+    pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        test-task = { cmd = "echo 'Hello {{name | title}}'", args = [{arg = "name", default = "World"}] }
+        """
+    manifest.write_text(toml)
+
+    result = verify_cli_command(
+        [pixi, "task", "list", "--json", "--manifest-path", manifest], ExitCode.SUCCESS
+    )
+
+    task_data = json.loads(result.stdout)
+
+    assert task_data == snapshot
