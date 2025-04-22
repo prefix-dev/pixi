@@ -6,12 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### [0.46.0] - 2025-04-22
-#### ✨ Highlights
-Breaking change for the new `args` feature we introduced in the last release.
-As the `args` names in the `tasks` are now not allowed to have dashes(`-`), because of the introduction of `Minijinja` for rendering the tasks and possibly reading them as a minus.
+#### ⚠️ Breaking Change
 
+`arg` names in `tasks` can no longer contain dashes (`-`).
+This restriction is due to the integration of `Minijinja` for rendering tasks, where dashes could be misinterpreted as a subtraction operator.
+
+#### ✨ Highlights
 This release comes with another set of features for the `tasks`!
--  The command of a task is now able to use `minijinja` for rendering the command. Including the `args` as variables in the template.
+-  The command of a task is now able to use `minijinja` for rendering the command.
 ```toml
  [tasks]
 # The arg `text`, converted to uppercase, will be printed.
@@ -27,10 +29,17 @@ task4 = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", 
   "names",
 ] }
 ```
+- Shortened composition of tasks with `depends-on` key.
+```toml
+[tasks]
+test-all = [{ task = "test", args = ["all"] }]
+# Equivalent to: test-all = { depends-on = [{task = "test", args = ["all"] }]}
+```
 -  The `depends-on` key can now include the environment that the task should run in.
 ```toml
-[tasks.test-all]
-depends-on = [
+[tasks]
+# Using the shortened composition of tasks
+test-all = [
   { task = "test", environment = "py311" },
   { task = "test", environment = "py312" },
 ]
@@ -41,6 +50,7 @@ depends-on = [
 - Integrate minijinja for tasks' command's rendering by @prsabahrami in [#3579](https://github.com/prefix-dev/pixi/pull/3579)
 - Support for riscv64 linux by @Hofer-Julian in [#3606](https://github.com/prefix-dev/pixi/pull/3606)
 - Task Environment Selection by @prsabahrami in [#3501](https://github.com/prefix-dev/pixi/pull/3501)
+- Shortened task composition with `depends-on` key by @@prsabahrami in [#3450](https://github.com/prefix-dev/pixi/pull/3540)
 
 
 #### Changed
