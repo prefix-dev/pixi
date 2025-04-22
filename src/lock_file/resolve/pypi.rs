@@ -109,8 +109,8 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
 enum ProcessPathUrlError {
     #[error("expected given path for {0} but none found")]
     NoGivenPath(String),
-    #[error("given path is an invalid file path")]
-    InvalidFilePath(String),
+    #[error("cannot make {} relative to {}", .0, .1)]
+    CannotMakeRelative(String, String),
 }
 
 /// Given a pyproject.toml and either case:
@@ -124,21 +124,48 @@ enum ProcessPathUrlError {
 ///   2) We get our processed path as a given, which can be relative, as our
 ///      lock may store relative url's.
 ///
-/// For case 1) we can just use the original path, as it can never be relative.
-/// And should be the same For case 2) we need to use the given as it may be
-/// relative
-///
-/// I think this has to do with the order of UV processing the requirements
-fn process_uv_path_url(path_url: &uv_pep508::VerbatimUrl) -> Result<PathBuf, ProcessPathUrlError> {
+/// We try to create a relative path from the install path to the lock file path.
+/// And we try to keep the path absolute if so specified, by the users.
+/// So that's assuming it was `given` in that sense.
+fn process_uv_path_url(
+    path_url: &uv_pep508::VerbatimUrl,
+    install_path: &Path,
+    project_root: &Path,
+) -> Result<PathBuf, ProcessPathUrlError> {
     let given = path_url
         .given()
         .ok_or_else(|| ProcessPathUrlError::NoGivenPath(path_url.to_string()))?;
-    if given.starts_with("file://") {
-        path_url
-            .to_file_path()
-            .map_err(|_| ProcessPathUrlError::InvalidFilePath(path_url.to_string()))
+    let keep_abs = if given.starts_with("file://") {
+        // Processed by UV this is a file url
+        // don't keep it absolute as the origin is 1) and relative paths are impossible
+        // we are assuming the intention was to keep it relative
+        false
     } else {
-        Ok(PathBuf::from(given))
+        let path = PathBuf::from(given);
+        // Determine if the path was given as an absolute path
+        path.is_absolute()
+    };
+
+    if !keep_abs {
+        // Find the path relative to the project root
+        let path = pathdiff::diff_paths(install_path, project_root).ok_or_else(|| {
+            ProcessPathUrlError::CannotMakeRelative(
+                install_path.to_string_lossy().to_string(),
+                project_root.to_string_lossy().to_string(),
+            )
+        })?;
+        // We used to lock with ./ before changes where made so let's add it back
+        // if we are not moving down in the directory structure
+        let path = if !path.starts_with("..") {
+            PathBuf::from(".").join(&path)
+        } else {
+            path
+        };
+
+        Ok(path)
+    } else {
+        // Keep the path absolute if it is provided so by the user
+        Ok(PathBuf::from(install_path))
     }
 }
 
@@ -706,10 +733,14 @@ async fn lock_pypi_packages(
                         }
                         BuiltDist::Path(dist) => (
                             UrlOrPath::Path(Utf8TypedPathBuf::from(
-                                process_uv_path_url(&dist.url)
-                                    .into_diagnostic()?
-                                    .to_string_lossy()
-                                    .to_string(),
+                                process_uv_path_url(
+                                    &dist.url,
+                                    &dist.install_path,
+                                    abs_project_root,
+                                )
+                                .into_diagnostic()?
+                                .to_string_lossy()
+                                .to_string(),
                             )),
                             None,
                         ),
@@ -802,13 +833,18 @@ async fn lock_pypi_packages(
                             };
 
                             // process the path or url that we get back from uv
-                            let given_path = process_uv_path_url(&path.url).into_diagnostic()?;
+                            let install_path = process_uv_path_url(
+                                &path.url,
+                                &path.install_path,
+                                abs_project_root,
+                            )
+                            .into_diagnostic()?;
 
                             // Create the url for the lock file. This is based on the passed in URL
                             // instead of from the source path to copy the path that was passed in from
                             // the requirement.
                             let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
-                                given_path.to_string_lossy().to_string(),
+                                install_path.to_string_lossy().to_string(),
                             ));
                             (url_or_path, hash, false)
                         }
@@ -826,13 +862,15 @@ async fn lock_pypi_packages(
                             };
 
                             // process the path or url that we get back from uv
-                            let given_path = process_uv_path_url(&dir.url).into_diagnostic()?;
+                            let install_path =
+                                process_uv_path_url(&dir.url, &dir.install_path, abs_project_root)
+                                    .into_diagnostic()?;
 
                             // Create the url for the lock file. This is based on the passed in URL
                             // instead of from the source path to copy the path that was passed in from
                             // the requirement.
                             let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
-                                given_path.to_string_lossy().to_string(),
+                                install_path.to_string_lossy().to_string(),
                             ));
                             (url_or_path, hash, dir.editable)
                         }
@@ -862,4 +900,59 @@ async fn lock_pypi_packages(
     }
 
     Ok(locked_packages)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    // In this case we want to make the path relative to the project_root or lock file path
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn process_uv_path_relative_path() {
+        let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
+            .unwrap()
+            .with_given("./b/c");
+        let path =
+            process_uv_path_url(&url, &PathBuf::from("/a/b/c"), &PathBuf::from("/a")).unwrap();
+        assert_eq!(path, PathBuf::from("./b/c"));
+    }
+
+    // In this case we want to make the path relative to the project_root or lock file path
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn process_uv_path_project_root_subdir() {
+        let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
+            .unwrap()
+            .with_given("./b/c");
+        let path =
+            process_uv_path_url(&url, &PathBuf::from("/a/c/z"), &PathBuf::from("/a/b/f")).unwrap();
+        assert_eq!(path, PathBuf::from("../../c/z"));
+    }
+
+    // In this case we want to keep the absolute path
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn process_uv_path_absolute_path() {
+        let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
+            .unwrap()
+            .with_given("/a/b/c");
+        let path =
+            process_uv_path_url(&url, &PathBuf::from("/a/b/c"), &PathBuf::from("/a")).unwrap();
+        assert_eq!(path, PathBuf::from("/a/b/c"));
+    }
+
+    // In this case we want to keep the absolute path
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn process_uv_path_absolute_path() {
+        let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
+            .unwrap()
+            .with_given("C:\\a\\b\\c");
+        let path =
+            process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
+                .unwrap();
+        assert_eq!(path, PathBuf::from("C:\\a\\b\\c"));
+    }
 }
