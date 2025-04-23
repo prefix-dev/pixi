@@ -343,4 +343,4 @@ community. [Join our discord server today!][chat-url]
 
 ## Built using Pixi
 
-To see what's being built with `pixi` check out the [Community](/docs/misc/Community.md) page.
+To see what's being built with `pixi` check out the [Community](https://pixi.sh/latest/misc/Community/) page.
