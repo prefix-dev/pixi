@@ -1,8 +1,8 @@
 pub mod add;
 pub mod list;
 
-use crate::cli::cli_config::WorkspaceConfig;
 use crate::WorkspaceLocator;
+use crate::cli::cli_config::WorkspaceConfig;
 use clap::{Parser, ValueEnum};
 
 /// Enum for valid system requirement names.

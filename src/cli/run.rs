@@ -1,11 +1,11 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     convert::identity,
     ffi::OsString,
     string::String,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 
@@ -20,15 +20,15 @@ use thiserror::Error;
 use tracing::Level;
 
 use crate::{
+    Workspace, WorkspaceLocator,
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
     lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
-        get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
-        InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+        AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+        SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
     },
-    workspace::{errors::UnsupportedPlatformError, Environment},
-    Workspace, WorkspaceLocator,
+    workspace::{Environment, errors::UnsupportedPlatformError},
 };
 
 use super::cli_config::LockFileUpdateConfig;

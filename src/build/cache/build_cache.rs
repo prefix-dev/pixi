@@ -5,11 +5,11 @@ use std::{
 };
 
 use crate::{
-    build::{cache::source_checkout_cache_key, SourceCheckout},
-    utils::{move_file, MoveError},
+    build::{SourceCheckout, cache::source_checkout_cache_key},
+    utils::{MoveError, move_file},
 };
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use rattler_conda_types::{GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

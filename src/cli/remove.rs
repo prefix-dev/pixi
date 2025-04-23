@@ -1,9 +1,9 @@
 use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
+    DependencyType, UpdateLockFileOptions, WorkspaceLocator,
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
     lock_file::{ReinstallPackages, UpdateMode},
-    DependencyType, UpdateLockFileOptions, WorkspaceLocator,
 };
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};

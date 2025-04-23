@@ -7,13 +7,13 @@ use std::{
 };
 
 use deno_task_shell::{
-    execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
+    ShellPipeWriter, ShellState, execute_with_pipes, parser::SequentialList, pipe,
 };
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{task::ArgValues, task::TemplateStringError, Task, TaskName};
+use pixi_manifest::{Task, TaskName, task::ArgValues, task::TemplateStringError};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -21,12 +21,12 @@ use tokio::task::JoinHandle;
 
 use super::task_hash::{InputHashesError, TaskCache, TaskHash};
 use crate::{
+    Workspace,
     activation::CurrentEnvVarBehavior,
     lock_file::LockFileDerivedData,
     task::task_graph::{TaskGraph, TaskId},
     workspace::get_activated_environment_variables,
     workspace::{Environment, HasWorkspaceRef},
-    Workspace,
 };
 
 /// Runs task in project.

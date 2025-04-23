@@ -8,7 +8,7 @@ members = ["crates/*"]
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
-edition = "2021"
+edition = "2024"
 homepage = "https://github.com/prefix-dev/pixi"
 license = "BSD-3-Clause"
 readme = "README.md"

@@ -10,7 +10,7 @@ use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{broadcast, Semaphore};
+use tokio::sync::{Semaphore, broadcast};
 
 use crate::{CacheMetrics, DerivePurls, MappingError, PurlSource};
 

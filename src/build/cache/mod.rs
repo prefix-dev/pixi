@@ -6,7 +6,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_cache::{BuildCache, BuildCacheError, BuildInput, CachedBuild, SourceInfo};
 pub use source_metadata_cache::{
     CachedCondaMetadata, SourceMetadataCache, SourceMetadataError, SourceMetadataInput,

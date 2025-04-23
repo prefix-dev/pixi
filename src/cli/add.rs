@@ -8,10 +8,10 @@ use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
+    WorkspaceLocator,
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
     workspace::DependencyType,
-    WorkspaceLocator,
 };
 
 /// Adds dependencies to the workspace

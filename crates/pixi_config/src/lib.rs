@@ -8,16 +8,16 @@ use std::{
 
 use clap::{ArgAction, Parser};
 use itertools::Itertools;
-use miette::{miette, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic, miette};
 use pixi_consts::consts;
 use rattler_conda_types::{
-    version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
+    version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
 use reqwest::{NoProxy, Proxy};
-use serde::{de::IntoDeserializer, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
@@ -910,7 +910,8 @@ impl Config {
         fn create_deprecation_warning(old: &str, new: &str, source_path: Option<&Path>) {
             let msg = format!(
                 "Please replace '{}' with '{}', the field is deprecated and will be removed in a future release.",
-                console::style(old).red(), console::style(new).green()
+                console::style(old).red(),
+                console::style(new).green()
             );
             match source_path {
                 Some(path) => {
@@ -950,7 +951,7 @@ impl Config {
                 if e.kind() == std::io::ErrorKind::NotFound
                     || e.kind() == std::io::ErrorKind::NotADirectory =>
             {
-                return Err(ConfigError::FileNotFound(path.to_path_buf()))
+                return Err(ConfigError::FileNotFound(path.to_path_buf()));
             }
             Err(e) => return Err(ConfigError::ReadError(e)),
         };
@@ -983,7 +984,9 @@ impl Config {
         // check proxy config
         if config.proxy_config.https.is_none() && config.proxy_config.http.is_none() {
             if !config.proxy_config.non_proxy_hosts.is_empty() {
-                tracing::warn!("proxy-config.non-proxy-hosts is not empty but will be ignored, as no https or http config is set.")
+                tracing::warn!(
+                    "proxy-config.non-proxy-hosts is not empty but will be ignored, as no https or http config is set."
+                )
             }
         } else if *USE_PROXY_FROM_ENV {
             let config_no_proxy = Some(config.proxy_config.non_proxy_hosts.iter().join(","))
@@ -1343,10 +1346,14 @@ impl Config {
                     .into_diagnostic()?
             }
             "change-ps1" => {
-                return Err(miette::miette!("The `change-ps1` field is deprecated. Please use the `shell.change-ps1` field instead."));
+                return Err(miette::miette!(
+                    "The `change-ps1` field is deprecated. Please use the `shell.change-ps1` field instead."
+                ));
             }
             "force-activate" => {
-                return Err(miette::miette!("The `force-activate` field is deprecated. Please use the `shell.force-activate` field instead."));
+                return Err(miette::miette!(
+                    "The `force-activate` field is deprecated. Please use the `shell.force-activate` field instead."
+                ));
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -1841,11 +1848,13 @@ UNUSED = "unused"
         "#;
         let result = Config::from_toml(toml, None);
         assert!(result.is_err());
-        assert!(result
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("missing field `force-path-style`"));
+        assert!(
+            result
+                .err()
+                .unwrap()
+                .to_string()
+                .contains("missing field `force-path-style`")
+        );
     }
 
     #[test]
@@ -1997,10 +2006,12 @@ UNUSED = "unused"
         assert_eq!(config.max_concurrent_solves(), 5);
         assert!(config.s3_options.contains_key("bucket1"));
         assert!(config.s3_options.contains_key("bucket2"));
-        assert!(config.s3_options["bucket2"]
-            .endpoint_url
-            .to_string()
-            .contains("my-new-s3-host"));
+        assert!(
+            config.s3_options["bucket2"]
+                .endpoint_url
+                .to_string()
+                .contains("my-new-s3-host")
+        );
 
         let d = Path::new(&env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -2201,10 +2212,12 @@ UNUSED = "unused"
 
         config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
         let s3_options = config.s3_options.get("my-bucket").unwrap();
-        assert!(s3_options
-            .endpoint_url
-            .to_string()
-            .contains("http://localhost:9000"));
+        assert!(
+            s3_options
+                .endpoint_url
+                .to_string()
+                .contains("http://localhost:9000")
+        );
         assert!(s3_options.force_path_style);
         assert_eq!(s3_options.region, "auto");
 

@@ -11,8 +11,8 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::{
-    task::{quote, Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName},
     EnvironmentName, FeatureName,
+    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
 };
 use rattler_conda_types::Platform;
 use serde::Serialize;
@@ -20,9 +20,9 @@ use serde_with::serde_as;
 
 use crate::workspace::virtual_packages::verify_current_platform_can_run_environment;
 use crate::{
+    Workspace, WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     workspace::{Environment, WorkspaceMut},
-    Workspace, WorkspaceLocator,
 };
 
 #[derive(Parser, Debug)]

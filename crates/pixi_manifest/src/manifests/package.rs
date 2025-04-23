@@ -1,5 +1,5 @@
 use crate::target::PackageTarget;
-use crate::{package::Package, PackageBuild, Targets};
+use crate::{PackageBuild, Targets, package::Package};
 
 /// Holds the parsed content of the package part of a pixi manifest. This
 /// describes the part related to the package only.

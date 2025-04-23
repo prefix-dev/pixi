@@ -202,7 +202,9 @@ mod tests {
 
     #[test]
     fn test_invalid_format() {
-        let input = format!("pixi-build-python{EQUALS}/some/path/to/custom-build{SEPARATOR}invalid{EQUALS}tool{EQUALS}extra");
+        let input = format!(
+            "pixi-build-python{EQUALS}/some/path/to/custom-build{SEPARATOR}invalid{EQUALS}tool{EQUALS}extra"
+        );
         let parsed = OverriddenBackends::from_str(input.as_str());
         assert!(parsed.is_err());
     }

@@ -4,13 +4,13 @@ use itertools::Either;
 use pixi_spec::TomlSpec;
 use pixi_toml::{TomlFromStr, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
-use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
+    PackageBuild, TomlError,
     build_system::BuildBackend,
     error::GenericError,
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    PackageBuild, TomlError,
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 #[derive(Debug)]
