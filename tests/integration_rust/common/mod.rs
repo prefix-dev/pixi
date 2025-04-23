@@ -32,7 +32,7 @@ use pixi::{
     },
 };
 use pixi_consts::consts;
-use pixi_manifest::{task::TaskArg, EnvironmentName, FeatureName};
+use pixi_manifest::{EnvironmentName, FeatureName, task::TaskArg};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};

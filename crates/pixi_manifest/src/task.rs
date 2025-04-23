@@ -48,12 +48,16 @@ impl From<String> for TaskName {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Dependency {
     pub task_name: TaskName,
-    pub args: Option<Vec<String>>,
+    pub args: Option<Vec<TemplateString>>,
     pub environment: Option<EnvironmentName>,
 }
 
 impl Dependency {
-    pub fn new(s: &str, args: Option<Vec<String>>, environment: Option<EnvironmentName>) -> Self {
+    pub fn new(
+        s: &str,
+        args: Option<Vec<TemplateString>>,
+        environment: Option<EnvironmentName>,
+    ) -> Self {
         Dependency {
             task_name: TaskName(s.to_string()),
             args,
@@ -61,11 +65,26 @@ impl Dependency {
         }
     }
 
-    pub fn new_without_env(s: &str, args: Option<Vec<String>>) -> Self {
+    pub fn new_without_env(s: &str, args: Option<Vec<TemplateString>>) -> Self {
         Dependency {
             task_name: TaskName(s.to_string()),
             args,
             environment: None,
+        }
+    }
+    pub fn render_args(
+        &self,
+        args: Option<&ArgValues>,
+    ) -> Result<Option<Vec<String>>, TemplateStringError> {
+        match &self.args {
+            Some(task_args) => {
+                let mut result = Vec::new();
+                for arg in task_args {
+                    result.push(arg.render(args)?);
+                }
+                Ok(Some(result))
+            }
+            None => Ok(None),
         }
     }
 }
@@ -90,6 +109,26 @@ impl FromStr for TaskName {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(TaskName(s.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct TypedDependency {
+    pub task_name: TaskName,
+    pub args: Option<Vec<String>>,
+    pub environment: Option<EnvironmentName>,
+}
+
+impl TypedDependency {
+    pub fn from_dependency(
+        dependency: &Dependency,
+        args: Option<&ArgValues>,
+    ) -> Result<Self, TemplateStringError> {
+        Ok(TypedDependency {
+            task_name: dependency.task_name.clone(),
+            args: dependency.render_args(args)?,
+            environment: dependency.environment.clone(),
+        })
     }
 }
 
@@ -229,6 +268,7 @@ impl Task {
     pub fn args(&self) -> Option<&[TaskArg]> {
         match self {
             Task::Execute(exe) => exe.args.as_deref(),
+            Task::Alias(alias) => alias.args.as_deref(),
             _ => None,
         }
     }
@@ -345,7 +385,7 @@ pub struct TypedArg {
 }
 
 /// A string that contains placeholders to be rendered using the `minijinja` templating engine.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Hash)]
 pub struct TemplateString(String);
 
 impl From<&str> for TemplateString {
@@ -596,7 +636,8 @@ impl From<Task> for Item {
                                     table.insert(
                                         "args",
                                         Value::Array(Array::from_iter(
-                                            args.iter().map(|arg| Value::from(arg.clone())),
+                                            args.iter()
+                                                .map(|arg| Value::from(arg.source().to_string())),
                                         )),
                                     );
                                     Value::InlineTable(table)
@@ -628,7 +669,7 @@ impl From<Task> for Item {
                         table.insert(
                             "args",
                             Value::Array(Array::from_iter(
-                                args.iter().map(|arg| Value::from(arg.clone())),
+                                args.iter().map(|arg| Value::from(arg.source().to_string())),
                             )),
                         );
                     }

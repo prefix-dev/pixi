@@ -63,7 +63,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                         ValueInner::Table(table) => {
                             let mut th = TableHelper::from((table, item.span));
                             let name = th.required::<String>("task")?;
-                            let args = th.optional::<Vec<String>>("args");
+                            let args = th.optional::<Vec<TemplateString>>("args");
                             let environment = th
                                 .optional::<TomlFromStr<EnvironmentName>>("environment")
                                 .map(TomlFromStr::into_inner);
@@ -101,7 +101,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
-                                    let args = th.optional::<Vec<String>>("args");
+                                    let args = th.optional::<Vec<TemplateString>>("args");
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
@@ -138,7 +138,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
-                                    let args = th.optional::<Vec<String>>("args");
+                                    let args = th.optional::<Vec<TemplateString>>("args");
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
