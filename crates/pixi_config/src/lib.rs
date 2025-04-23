@@ -14,7 +14,6 @@ use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
     package::ArchiveType,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
-    version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_networking::s3_middleware;
 use rattler_package_streaming::write::CompressionLevel;
