@@ -2,9 +2,9 @@ use std::{ops::Range, str::FromStr};
 
 use itertools::Itertools;
 use miette::LabeledSpan;
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::expected, value::ValueInner};
 
-use crate::{error::GenericError, KnownPreviewFeature, Preview, WithWarnings};
+use crate::{KnownPreviewFeature, Preview, WithWarnings, error::GenericError};
 
 #[derive(Debug, Clone, PartialEq)]
 /// The preview features of the project
@@ -137,7 +137,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        toml::{preview::KnownOrUnknownPreviewFeature::Unknown, FromTomlStr},
+        toml::{FromTomlStr, preview::KnownOrUnknownPreviewFeature::Unknown},
         utils::test_utils::format_parse_error,
     };
 

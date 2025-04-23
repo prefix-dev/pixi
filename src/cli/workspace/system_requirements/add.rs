@@ -1,5 +1,5 @@
-use crate::cli::workspace::system_requirements::SystemRequirementEnum;
 use crate::Workspace;
+use crate::cli::workspace::system_requirements::SystemRequirementEnum;
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_manifest::{FeatureName, LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};

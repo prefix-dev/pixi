@@ -1,22 +1,22 @@
 use std::borrow::Cow;
 use std::io;
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 
 use clap::Parser;
 use console::Color;
 use human_bytes::human_bytes;
 use itertools::Itertools;
-use miette::{miette, IntoDiagnostic};
+use miette::{IntoDiagnostic, miette};
 use uv_configuration::ConfigSettings;
 
+use crate::WorkspaceLocator;
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::WorkspaceLocator;
 use fancy_display::FancyDisplay;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
-    pypi_options_to_index_locations, to_uv_normalize, to_uv_version, ConversionError,
+    ConversionError, pypi_options_to_index_locations, to_uv_normalize, to_uv_version,
 };
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;

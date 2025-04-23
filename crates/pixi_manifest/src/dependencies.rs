@@ -5,7 +5,7 @@ use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName};
 
-use crate::{pypi::PyPiPackageName, PyPiRequirement};
+use crate::{PyPiRequirement, pypi::PyPiPackageName};
 
 pub type PyPiDependencies = Dependencies<PyPiPackageName, PyPiRequirement>;
 pub type CondaDependencies = Dependencies<PackageName, PixiSpec>;

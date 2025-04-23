@@ -4,9 +4,9 @@ use rattler_conda_types::Platform;
 use thiserror::Error;
 
 use crate::{
-    task::error::{AmbiguousTaskError, MissingTaskError},
-    workspace::{virtual_packages::verify_current_platform_can_run_environment, Environment},
     Workspace,
+    task::error::{AmbiguousTaskError, MissingTaskError},
+    workspace::{Environment, virtual_packages::verify_current_platform_can_run_environment},
 };
 
 /// Defines where the task was defined when looking for a task.

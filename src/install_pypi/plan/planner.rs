@@ -11,14 +11,14 @@ use std::collections::HashSet;
 use uv_cache::Cache;
 use uv_distribution_types::{CachedDist, Dist, Name};
 
-use crate::install_pypi::conversions::{convert_to_dist, ConvertToUvDistError};
+use crate::install_pypi::conversions::{ConvertToUvDistError, convert_to_dist};
 
 use super::{
+    InstallReason, NeedReinstall, PyPIInstalls,
     models::ValidateCurrentInstall,
     providers::{CachedDistProvider, InstalledDistProvider},
     reasons::OperationToReason,
     validation::need_reinstall,
-    InstallReason, NeedReinstall, PyPIInstalls,
 };
 
 /// Struct that handles the planning of the installation

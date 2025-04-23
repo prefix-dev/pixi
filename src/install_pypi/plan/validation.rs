@@ -10,7 +10,7 @@ use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
 use crate::install_pypi::utils::{check_url_freshness, strip_direct_scheme};
 
-use super::{models::ValidateCurrentInstall, NeedReinstall};
+use super::{NeedReinstall, models::ValidateCurrentInstall};
 use pixi_uv_conversions::ConversionError;
 
 #[derive(thiserror::Error, Debug)]
@@ -172,7 +172,7 @@ pub(crate) fn need_reinstall(
                                         NeedReinstall::UnableToParseFileUrl {
                                             url: path.to_string(),
                                         },
-                                    ))
+                                    ));
                                 }
                             }
                         }

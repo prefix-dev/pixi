@@ -5,7 +5,7 @@ use pixi_manifest::ChannelPriority;
 use pixi_record::{PixiRecord, SourceRecord};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
-use rattler_solve::{resolvo, SolverImpl};
+use rattler_solve::{SolverImpl, resolvo};
 use url::Url;
 
 use crate::{

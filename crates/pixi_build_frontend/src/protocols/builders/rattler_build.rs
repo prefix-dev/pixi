@@ -9,10 +9,10 @@ use thiserror::Error;
 
 use super::pixi::ProtocolBuildError as PixiProtocolBuildError;
 use crate::{
+    ToolContext,
     backend_override::BackendOverride,
     protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
-    ToolContext,
 };
 
 const DEFAULT_BUILD_TOOL: &str = "pixi-build-rattler-build";
@@ -26,7 +26,8 @@ pub enum FinishError {
     #[diagnostic(transparent)]
     Init(#[from] InitializeError),
 
-    #[error("failed to setup a build backend, the project manifest at {0} does not contain a [build] section"
+    #[error(
+        "failed to setup a build backend, the project manifest at {0} does not contain a [build] section"
     )]
     NoBuildSection(PathBuf),
 }

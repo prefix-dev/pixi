@@ -13,10 +13,10 @@ use rattler_conda_types::{MatchSpec, StringMatcher};
 
 use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
 use crate::{
+    WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     diff::LockFileJsonDiff,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
-    WorkspaceLocator,
 };
 
 /// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.

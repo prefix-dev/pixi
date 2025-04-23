@@ -5,16 +5,16 @@ pub use pixi_toml::TomlFromStr;
 use pixi_toml::{Same, TomlIndexMap, TomlWith};
 use rattler_conda_types::Version;
 use thiserror::Error;
-use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
+use toml_span::{DeserError, Error, ErrorKind, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
 use crate::toml::manifest::ExternalWorkspaceProperties;
 use crate::{
+    PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
     error::GenericError,
     package::Package,
-    toml::{package_target::TomlPackageTarget, TomlPackageBuild},
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
+    toml::{TomlPackageBuild, package_target::TomlPackageTarget},
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 /// The TOML representation of the `[package]` section in a pixi manifest.

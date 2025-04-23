@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    io::{stderr, Write},
+    io::{Write, stderr},
 };
 
 use ahash::HashMap;

@@ -18,8 +18,8 @@ use reqwest_middleware::ClientWithMiddleware;
 use url::Url;
 
 use crate::{
-    sha::{GitOid, GitSha},
     GitError,
+    sha::{GitOid, GitSha},
 };
 
 /// A file indicates that if present, `git reset` has been done and a repo
