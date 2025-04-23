@@ -19,6 +19,11 @@ pub struct Args {
     /// Output the changes in JSON format.
     #[clap(long)]
     pub json: bool,
+
+    /// Check if any changes have been made to the lock file.
+    /// If yes, exit with a non-zero code.
+    #[clap(long)]
+    pub check: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -54,6 +59,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         diff.print()
             .into_diagnostic()
             .context("failed to print lock-file diff")?;
+    }
+
+    // Return with a non-zero exit code if `--check` has been passed and the lock file has been updated
+    if args.check && !diff.is_empty() {
+        std::process::exit(1);
     }
 
     Ok(())
