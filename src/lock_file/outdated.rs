@@ -9,10 +9,10 @@ use rattler_lock::{LockFile, LockedPackageRef};
 
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
-    build::GlobHashCache,
-    lock_file::satisfiability::{verify_solve_group_satisfiability, EnvironmentUnsat},
-    workspace::{Environment, SolveGroup},
     Workspace,
+    build::GlobHashCache,
+    lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
+    workspace::{Environment, SolveGroup},
 };
 
 /// A struct that contains information about specific outdated environments.
@@ -302,9 +302,9 @@ async fn find_unsatisfiable_targets<'p>(
         };
 
         tracing::info!(
-                "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                individual_env.name().fancy_display(),
-            );
+            "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+            individual_env.name().fancy_display(),
+        );
 
         unsatisfiable_targets
             .outdated_conda
@@ -453,9 +453,11 @@ fn find_inconsistent_solve_groups<'p>(
 
         // If there is a mismatch there is a mismatch for the entire group
         if conda_package_mismatch {
-            tracing::info!("the locked conda packages in solve group {} are not consistent for all environments for platform {}",
-                        consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name()),
-                        consts::PLATFORM_STYLE.apply_to(platform));
+            tracing::info!(
+                "the locked conda packages in solve group {} are not consistent for all environments for platform {}",
+                consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name()),
+                consts::PLATFORM_STYLE.apply_to(platform)
+            );
             conda_solve_groups_out_of_date
                 .entry(solve_group.clone())
                 .or_default()
@@ -463,9 +465,11 @@ fn find_inconsistent_solve_groups<'p>(
         }
 
         if pypi_package_mismatch && !conda_package_mismatch {
-            tracing::info!("the locked pypi packages in solve group {} are not consistent for all environments for platform {}",
-                        consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name()),
-                        consts::PLATFORM_STYLE.apply_to(platform));
+            tracing::info!(
+                "the locked pypi packages in solve group {} are not consistent for all environments for platform {}",
+                consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name()),
+                consts::PLATFORM_STYLE.apply_to(platform)
+            );
             pypi_solve_groups_out_of_date
                 .entry(solve_group.clone())
                 .or_default()

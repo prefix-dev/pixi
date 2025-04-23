@@ -16,8 +16,8 @@ use pixi_uv_conversions::{
     no_build_to_build_options,
 };
 use pypi_modifiers::{
-    pypi_tags::{get_pypi_tags, is_python_record},
     Tags,
+    pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_conda_types::Platform;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
@@ -505,7 +505,9 @@ impl<'a> PyPIPrefixUpdater<'a> {
                 .map(|name| name.to_string())
                 .join(", ");
             // BREAK(0.20.1): change this into a warning in a future release
-            tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: {packages}")
+            tracing::info!(
+                "These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: {packages}"
+            )
         }
 
         let options = UvReporterOptions::new()

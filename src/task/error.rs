@@ -30,10 +30,15 @@ impl Diagnostic for AmbiguousTaskError {
     fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         Some(Box::new(format!(
             "These environments provide the task '{task_name}': {}\n\nSpecify the '--environment' flag to run the task in a specific environment, e.g:.\n\n\t{} run --environment {} {task_name}",
-            self.environments.iter().map(|env| env.as_str()).format(", "),
+            self.environments
+                .iter()
+                .map(|env| env.as_str())
+                .format(", "),
             env!("CARGO_PKG_NAME"),
-            self.environments.first().expect("there should be at least two environment"),
-            task_name=&self.task_name
+            self.environments
+                .first()
+                .expect("there should be at least two environment"),
+            task_name = &self.task_name
         )))
     }
 }

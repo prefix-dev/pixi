@@ -118,7 +118,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } else {
             remove_folder_with_progress(explicit_env.dir(), true).await?;
             remove_file(explicit_env.activation_cache_file_path(), false).await?;
-            tracing::info!("Skipping removal of task cache and solve group environments for explicit environment '{}'", explicit_env.name().fancy_display());
+            tracing::info!(
+                "Skipping removal of task cache and solve group environments for explicit environment '{}'",
+                explicit_env.name().fancy_display()
+            );
         }
     } else {
         // Remove all pixi related work from the workspace.

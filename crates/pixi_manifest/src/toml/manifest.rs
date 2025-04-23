@@ -9,26 +9,26 @@ use miette::LabeledSpan;
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Platform, Version};
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, Spanned, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 use url::Url;
 
 use crate::{
-    environment::EnvironmentIdx,
-    error::{FeatureNotEnabled, GenericError},
-    manifests::PackageManifest,
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    toml::{
-        create_unsupported_selector_warning, environment::TomlEnvironmentList, task::TomlTask,
-        ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
-        TomlWorkspace,
-    },
-    utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
     KnownPreviewFeature, PyPiRequirement, SolveGroups, SystemRequirements, TargetSelector, Targets,
     Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    environment::EnvironmentIdx,
+    error::{FeatureNotEnabled, GenericError},
+    manifests::PackageManifest,
+    pypi::{PyPiPackageName, pypi_options::PypiOptions},
+    toml::{
+        ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
+        TomlWorkspace, create_unsupported_selector_warning, environment::TomlEnvironmentList,
+        task::TomlTask,
+    },
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the

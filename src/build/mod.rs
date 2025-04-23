@@ -13,22 +13,22 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::Utc;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, JsonRPCBuildProtocol, SetupRequest, ToolContext};
 use pixi_build_types::{
+    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
         conda_metadata::CondaMetadataParams,
     },
-    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
 };
 use pixi_config::get_cache_dir;
 use pixi_consts::consts::CACHED_GIT_DIR;
 use pixi_git::{
-    git::GitReference, resolver::GitResolver, source::Fetch, GitError, GitUrl, Reporter,
+    GitError, GitUrl, Reporter, git::GitReference, resolver::GitResolver, source::Fetch,
 };
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobHashKey, GlobModificationTime, GlobModificationTimeError};
@@ -51,11 +51,11 @@ use uv_configuration::RAYON_INITIALIZE;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
+    Workspace,
     build::cache::{
         BuildCache, BuildInput, CachedBuild, CachedCondaMetadata, SourceInfo, SourceMetadataCache,
         SourceMetadataInput,
     },
-    Workspace,
 };
 
 pub use source_anchor::SourceAnchor;

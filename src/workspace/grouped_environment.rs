@@ -10,11 +10,11 @@ use pixi_manifest::{
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 
 use crate::{
+    Workspace,
     prefix::Prefix,
     workspace::{
-        virtual_packages::get_minimal_virtual_packages, Environment, HasWorkspaceRef, SolveGroup,
+        Environment, HasWorkspaceRef, SolveGroup, virtual_packages::get_minimal_virtual_packages,
     },
-    Workspace,
 };
 
 /// Either a solve group or an individual environment without a solve group.

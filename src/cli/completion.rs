@@ -1,6 +1,6 @@
 use crate::cli::Args as CommandArgs;
 use clap::{CommandFactory, Parser, ValueEnum};
-use clap_complete::{shells, Generator};
+use clap_complete::{Generator, shells};
 use clap_complete_nushell::Nushell;
 use miette::IntoDiagnostic;
 use regex::Regex;
@@ -140,7 +140,10 @@ $2::task"#;
 fn replace_fish_completion(script: &str) -> Cow<str> {
     // Adds tab completion to the pixi run command.
     let bin_name = pixi_utils::executable_name();
-    let addition = format!("complete -c {} -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' ({} task list --machine-readable  2> /dev/null))\"", bin_name, bin_name);
+    let addition = format!(
+        "complete -c {} -n \"__fish_seen_subcommand_from run\" -f -a \"(string split ' ' ({} task list --machine-readable  2> /dev/null))\"",
+        bin_name, bin_name
+    );
     let new_script = format!("{}{}\n", script, addition);
     let pattern = r#"-n "__fish_seen_subcommand_from run""#;
     let replacement = r#"-n "__fish_seen_subcommand_from run; or __fish_seen_subcommand_from r""#;

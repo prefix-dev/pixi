@@ -5,12 +5,13 @@ use pixi_consts::consts;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use thiserror::Error;
-use toml_edit::{value, Array, DocumentMut, Item, Table, Value};
+use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
+    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PyPiRequirement,
+    PypiDependencyLocation, SpecType, SystemRequirements, Task, TomlError,
     manifests::table_name::TableName, pypi::PyPiPackageName, toml::TomlDocument,
-    utils::WithSourceCode, FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance,
-    PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements, Task, TomlError,
+    utils::WithSourceCode,
 };
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
@@ -124,7 +125,7 @@ impl ManifestDocument {
                     ),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 

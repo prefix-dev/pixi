@@ -1,6 +1,6 @@
 use self::harness::{InstalledDistOptions, MockedSitePackages, NoCache, RequiredPackages};
-use crate::install_pypi::plan::test::harness::AllCached;
 use crate::install_pypi::NeedReinstall;
+use crate::install_pypi::plan::test::harness::AllCached;
 use assert_matches::assert_matches;
 use harness::fake_wheel;
 use std::path::PathBuf;

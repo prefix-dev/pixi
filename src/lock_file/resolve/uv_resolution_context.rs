@@ -10,7 +10,7 @@ use crate::Workspace;
 use pixi_config::{self, get_cache_dir};
 use pixi_consts::consts;
 use pixi_utils::reqwest::uv_middlewares;
-use pixi_uv_conversions::{to_uv_trusted_host, ConversionError};
+use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]

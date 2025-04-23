@@ -71,8 +71,10 @@ pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
             .map(|s| NamedChannelOrUrl::from_str(s).expect("unable to parse default channel"))
             .collect(),
         None => {
-            vec![NamedChannelOrUrl::from_str("conda-forge")
-                .expect("unable to parse default channel")]
+            vec![
+                NamedChannelOrUrl::from_str("conda-forge")
+                    .expect("unable to parse default channel"),
+            ]
         }
     });
 
