@@ -20,7 +20,8 @@ pub struct Args {
     #[clap(long)]
     pub json: bool,
 
-    /// Check if any changes have been made to the lock file and exit with a non-zero code if so.
+    /// Check if any changes have been made to the lock file.
+    /// If yes, exit with a non-zero code.
     #[clap(long)]
     pub check: bool,
 }
@@ -42,7 +43,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Determine the diff between the old and new lock-file.
     let diff = LockFileDiff::from_lock_files(&original_lock_file, &new_lock_file.lock_file);
-    let mut exit_code = 0;
+
     // Format as json?
     if args.json {
         let diff = LockFileDiff::from_lock_files(&original_lock_file, &new_lock_file.lock_file);
@@ -58,10 +59,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         diff.print()
             .into_diagnostic()
             .context("failed to print lock-file diff")?;
-        exit_code = 1;
     }
-    if args.check {
-        std::process::exit(exit_code);
+
+    // Return with a non-zero exit code if `--check` has been passed and the lock file has been updated
+    if args.check && !diff.is_empty() {
+        std::process::exit(1);
     }
 
     Ok(())
