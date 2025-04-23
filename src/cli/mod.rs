@@ -125,6 +125,7 @@ impl Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
+    #[clap(visible_alias = "new")]
     Init(init::Args),
 
     // Installation commands
@@ -135,8 +136,11 @@ pub enum Command {
     #[clap(visible_alias = "i")]
     Install(install::Args),
     Reinstall(reinstall::Args),
+    #[clap(visible_alias = "u")]
     Update(update::Args),
+    #[clap(visible_alias = "up")]
     Upgrade(upgrade::Args),
+    #[clap(visible_alias = "l")]
     Lock(lock::Args),
 
     #[clap(visible_alias = "r")]
@@ -150,6 +154,7 @@ pub enum Command {
     // Workspace Manifest modification commands
     #[clap(alias = "project")]
     Workspace(workspace::Args),
+    #[clap(visible_alias = "tsk")]
     Task(task::Args),
 
     // Environment inspection
@@ -162,13 +167,17 @@ pub enum Command {
     #[clap(visible_alias = "g")]
     Global(global::Args),
     Auth(rattler::cli::auth::Args),
+    #[clap(visible_alias = "cfg")]
     Config(config::Args),
+    #[clap(visible_alias = "inf")]
     Info(info::Args),
     Upload(upload::Args),
+    #[clap(visible_alias = "find")]
     Search(search::Args),
     #[cfg_attr(not(feature = "self_update"), clap(hide = true))]
     #[cfg_attr(feature = "self_update", clap(hide = false))]
     SelfUpdate(self_update::Args),
+    #[clap(visible_alias = "c")]
     Clean(clean::Args),
     Completion(completion::Args),
 

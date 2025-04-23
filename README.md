@@ -267,6 +267,39 @@ Options:
   -h, --help           Print help
   -V, --version        Print version
 
+## Command Aliases
+
+For convenience, many commands have shorter aliases:
+
+| Command   | Alias | Description                    |
+|-----------|-------|--------------------------------|
+| init      | new   | Creates a new project          |
+| add       | a     | Adds a dependency              |
+| remove    | rm    | Removes a dependency           |
+| install   | i     | Installs dependencies          |
+| update    | u     | Updates dependencies           |
+| upgrade   | up    | Upgrades dependencies          |
+| lock      | l     | Manages lock file              |
+| run       | r     | Runs a command                 |
+| exec      | x     | Executes a command             |
+| shell     | s     | Activates the environment      |
+| workspace | project| Manages workspace              |
+| task      | tsk   | Manages tasks                  |
+| list      | ls    | Lists packages                 |
+| tree      | t     | Shows dependency tree          |
+| global    | g     | Manages global configuration   |
+| config    | cfg   | Manages configuration          |
+| info      | inf   | Shows information              |
+| search    | find  | Searches for packages          |
+| clean     | c     | Cleans up temporary files      |
+
+You can use either the full command name or its alias. For example:
+```bash
+pixi add python    # or
+pixi a python
+
+pixi run test      # or
+pixi r test
 ```
 
 ## Creating a Pixi project
