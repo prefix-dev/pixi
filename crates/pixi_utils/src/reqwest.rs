@@ -3,11 +3,11 @@ use std::{any::Any, path::PathBuf, sync::Arc, time::Duration};
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use rattler_networking::{
+    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
+    OciMiddleware, S3Middleware,
     authentication_storage::{self, AuthenticationStorageError},
     mirror_middleware::Mirror,
     retry_policies::ExponentialBackoff,
-    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
-    OciMiddleware, S3Middleware,
 };
 
 use reqwest::Client;
@@ -113,7 +113,9 @@ pub fn build_reqwest_clients(
     };
 
     if config.tls_no_verify() {
-        tracing::warn!("TLS verification is disabled. This is insecure and should only be used for testing or internal networks.");
+        tracing::warn!(
+            "TLS verification is disabled. This is insecure and should only be used for testing or internal networks."
+        );
     }
 
     let timeout = 5 * 60;

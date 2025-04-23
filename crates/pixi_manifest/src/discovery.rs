@@ -14,12 +14,12 @@ use toml_span::Deserialize;
 
 use crate::toml::ExternalWorkspaceProperties;
 use crate::{
+    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
+    ProvenanceError, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
     pyproject::PyProjectManifest,
     toml::{ExternalPackageProperties, TomlManifest},
     utils::WithSourceCode,
     warning::WarningWithSource,
-    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
-    ProvenanceError, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
 };
 
 /// A helper struct to discover the workspace manifest in a directory tree from
@@ -101,7 +101,7 @@ impl Manifests {
                     error: TomlError::from(e),
                     source: build_source_code(),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -129,7 +129,7 @@ impl Manifests {
                     error: toml_error,
                     source: build_source_code(),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -370,7 +370,7 @@ impl WorkspaceDiscoverer {
                         error: TomlError::from(e),
                         source,
                     })
-                    .into())
+                    .into());
                 }
             };
 
@@ -392,7 +392,7 @@ impl WorkspaceDiscoverer {
                                 error: TomlError::from(err),
                                 source,
                             })
-                            .into())
+                            .into());
                         }
                     };
 
@@ -432,7 +432,7 @@ impl WorkspaceDiscoverer {
                                 error: TomlError::from(err),
                                 source,
                             })
-                            .into())
+                            .into());
                         }
                     };
 

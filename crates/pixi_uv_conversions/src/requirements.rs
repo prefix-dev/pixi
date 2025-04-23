@@ -1,4 +1,4 @@
-use pixi_manifest::{pypi::VersionOrStar, PyPiRequirement};
+use pixi_manifest::{PyPiRequirement, pypi::VersionOrStar};
 use pixi_spec::{GitReference, GitSpec};
 use rattler_lock::UrlOrPath;
 use std::{
@@ -15,7 +15,7 @@ use uv_pypi_types::{
     ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
 };
 
-use crate::{into_uv_git_reference, to_uv_marker_tree, to_uv_version_specifiers, ConversionError};
+use crate::{ConversionError, into_uv_git_reference, to_uv_marker_tree, to_uv_version_specifiers};
 
 /// Create a url that uv can use to install a version
 fn create_uv_url(

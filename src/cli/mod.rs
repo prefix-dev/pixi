@@ -1,5 +1,5 @@
-use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::Parser;
+use clap::builder::styling::{AnsiColor, Color, Style};
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
@@ -7,8 +7,8 @@ use pixi_progress::global_multi_progress;
 use pixi_utils::indicatif::IndicatifWriter;
 use std::{env, io::IsTerminal};
 use tracing_subscriber::{
-    filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
-    EnvFilter,
+    EnvFilter, filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt,
 };
 
 pub mod add;

@@ -2,11 +2,11 @@ use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 
 use crate::{
+    WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
     environment::LockFileUsage,
     lock_file::UpdateLockFileOptions,
-    WorkspaceLocator,
 };
 
 /// Solve environment and update the lock file without installing the environments.

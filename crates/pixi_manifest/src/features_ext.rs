@@ -7,9 +7,9 @@ use rattler_conda_types::{
 };
 
 use crate::{
+    CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
     has_features_iter::HasFeaturesIter, has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions, workspace::ChannelPriority, CondaDependencies,
-    PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+    pypi::pypi_options::PypiOptions, workspace::ChannelPriority,
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities

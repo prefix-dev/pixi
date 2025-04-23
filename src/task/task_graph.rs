@@ -9,19 +9,19 @@ use std::{
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_manifest::{
-    task::{ArgValues, CmdArgs, Custom, Dependency, TaskArg, TypedArg},
     EnvironmentName, Task, TaskName,
+    task::{ArgValues, CmdArgs, Custom, Dependency, TaskArg, TypedArg},
 };
 use thiserror::Error;
 
 use crate::{
+    Workspace,
     task::{
+        TaskDisambiguation,
         error::{AmbiguousTaskError, MissingTaskError},
         task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
-        TaskDisambiguation,
     },
     workspace::Environment,
-    Workspace,
 };
 
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
@@ -190,7 +190,7 @@ impl<'p> TaskGraph<'p> {
             {
                 Err(FindTaskError::MissingTask(_)) => {}
                 Err(FindTaskError::AmbiguousTask(err)) => {
-                    return Err(TaskGraphError::AmbiguousTask(err))
+                    return Err(TaskGraphError::AmbiguousTask(err));
                 }
                 Ok((task_env, task)) => {
                     // If an explicit environment was specified and the task is from the default
@@ -349,10 +349,10 @@ impl<'p> TaskGraph<'p> {
                     task_specific_environment,
                 ) {
                     Err(FindTaskError::MissingTask(err)) => {
-                        return Err(TaskGraphError::MissingTask(err))
+                        return Err(TaskGraphError::MissingTask(err));
                     }
                     Err(FindTaskError::AmbiguousTask(err)) => {
-                        return Err(TaskGraphError::AmbiguousTask(err))
+                        return Err(TaskGraphError::AmbiguousTask(err));
                     }
                     Ok(result) => result,
                 };
@@ -494,8 +494,8 @@ mod test {
     use rattler_conda_types::Platform;
 
     use crate::{
-        task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
         Workspace,
+        task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
     };
 
     fn commands_in_order(

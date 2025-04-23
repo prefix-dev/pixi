@@ -3,18 +3,19 @@ use std::collections::HashMap;
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::Platform;
-use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper};
 
 use crate::{
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    toml::{
-        create_unsupported_selector_warning, platform::TomlPlatform, preview::TomlPreview,
-        task::TomlTask, PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
-    },
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    workspace::ChannelPriority,
     Activation, Feature, FeatureName, PyPiRequirement, SystemRequirements, TargetSelector, Targets,
     Task, TaskName, TomlError, Warning, WithWarnings,
+    pypi::{PyPiPackageName, pypi_options::PypiOptions},
+    toml::{
+        PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
+        create_unsupported_selector_warning, platform::TomlPlatform, preview::TomlPreview,
+        task::TomlTask,
+    },
+    utils::{PixiSpanned, package_map::UniquePackageMap},
+    workspace::ChannelPriority,
 };
 
 #[derive(Debug)]

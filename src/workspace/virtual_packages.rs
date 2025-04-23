@@ -1,7 +1,7 @@
 use crate::lock_file::virtual_packages::{
-    validate_system_meets_environment_requirements, MachineValidationError,
+    MachineValidationError, validate_system_meets_environment_requirements,
 };
-use crate::workspace::{errors::UnsupportedPlatformError, Environment};
+use crate::workspace::{Environment, errors::UnsupportedPlatformError};
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_default_versions::{

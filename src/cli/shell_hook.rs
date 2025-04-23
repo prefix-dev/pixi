@@ -12,13 +12,13 @@ use serde::Serialize;
 use serde_json;
 
 use crate::{
-    activation::{get_activator, CurrentEnvVarBehavior},
+    UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    activation::{CurrentEnvVarBehavior, get_activator},
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
     lock_file::ReinstallPackages,
     prompt,
-    workspace::{get_activated_environment_variables, Environment, HasWorkspaceRef},
-    UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    workspace::{Environment, HasWorkspaceRef, get_activated_environment_variables},
 };
 
 use super::cli_config::LockFileUpdateConfig;
