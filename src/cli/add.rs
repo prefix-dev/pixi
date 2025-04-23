@@ -58,6 +58,8 @@ use crate::{
 ///   array
 /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the
 ///   `dependency-groups.aws` array
+/// - `pixi add --pypi --editable 'boto3 @ file://path/to/boto3'` will add
+///   the local editable `boto3` to the `project.dependencies` array
 ///
 /// Note that if `--platform` or `--editable` are specified, the pypi dependency
 /// will be added to the `tool.pixi.pypi-dependencies` table instead as native

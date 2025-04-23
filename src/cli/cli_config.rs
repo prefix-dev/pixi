@@ -462,4 +462,15 @@ mod tests {
         );
         assert_eq!(result, "mypackage @ git+https://github.com/user/repo");
     }
+
+    #[test]
+    fn test_build_vcs_requirement_with_local_dir() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("file:///home/user/GitHub/mypackage").unwrap(),
+            None,
+            None,
+        );
+        assert_eq!(result, "mypackage @ git+file:///home/user/GitHub/mypackage");
+    }
 }
