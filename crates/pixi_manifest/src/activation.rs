@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use pixi_toml::TomlIndexMap;
 

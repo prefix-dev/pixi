@@ -2,15 +2,15 @@ use std::str::FromStr;
 
 use pixi_toml::{TomlFromStr, TomlIndexMap};
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, ErrorKind, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 
 use crate::{
+    EnvironmentName, Task, TaskName, WithWarnings,
     task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg, TemplateString},
     warning::Deprecation,
-    EnvironmentName, Task, TaskName, WithWarnings,
 };
 
 impl<'de> toml_span::Deserialize<'de> for TemplateString {

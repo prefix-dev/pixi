@@ -13,10 +13,10 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
+    LockFileExt, PixiControl,
     builders::{HasDependencyConfig, HasPrefixUpdateConfig},
     client::OfflineMiddleware,
     package_database::{Package, PackageDatabase},
-    LockFileExt, PixiControl,
 };
 
 #[tokio::test]
@@ -189,12 +189,14 @@ async fn test_purl_are_missing_for_non_conda_forge() {
 
     // Because foo-bar-car is not from conda-forge channel
     // We verify that purls are missing for non-conda-forge packages
-    assert!(repo_data_record
-        .package_record
-        .purls
-        .as_ref()
-        .and_then(BTreeSet::first)
-        .is_none());
+    assert!(
+        repo_data_record
+            .package_record
+            .purls
+            .as_ref()
+            .and_then(BTreeSet::first)
+            .is_none()
+    );
 }
 
 #[tokio::test]

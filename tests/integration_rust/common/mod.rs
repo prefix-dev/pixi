@@ -15,21 +15,21 @@ use builders::SearchBuilder;
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
+    UpdateLockFileOptions, Workspace,
     cli::{
-        add,
+        LockFileUsageConfig, add,
         cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
         remove, run, search,
         task::{self, AddArgs, AliasArgs},
-        update, workspace, LockFileUsageConfig,
+        update, workspace,
     },
     lock_file::{ReinstallPackages, UpdateMode},
     task::{
-        get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-        TaskGraphError, TaskName,
+        ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
+        TaskGraphError, TaskName, get_task_env,
     },
-    UpdateLockFileOptions, Workspace,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};

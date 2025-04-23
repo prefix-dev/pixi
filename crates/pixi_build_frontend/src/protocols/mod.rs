@@ -10,14 +10,15 @@ use futures::TryFutureExt;
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::{
-        client::{ClientT, Error, TransportReceiverT, TransportSenderT},
         ClientError,
+        client::{ClientT, Error, TransportReceiverT, TransportSenderT},
     },
     types::ErrorCode,
 };
 use miette::Diagnostic;
 use pixi_build_type_conversions::to_project_model_v1;
 use pixi_build_types::{
+    BackendCapabilities, FrontendCapabilities,
     procedures::{
         self,
         conda_build::{CondaBuildParams, CondaBuildResult},
@@ -25,7 +26,6 @@ use pixi_build_types::{
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
-    BackendCapabilities, FrontendCapabilities,
 };
 use pixi_manifest::PackageManifest;
 use rattler_conda_types::ChannelConfig;
@@ -34,14 +34,14 @@ use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::ChildStderr,
-    sync::{oneshot, Mutex},
+    sync::{Mutex, oneshot},
 };
 
 use crate::{
-    jsonrpc::{stdio_transport, RpcParams},
+    CondaBuildReporter, CondaMetadataReporter,
+    jsonrpc::{RpcParams, stdio_transport},
     protocols::stderr::stderr_buffer,
     tool::Tool,
-    CondaBuildReporter, CondaMetadataReporter,
 };
 
 pub mod builders;
@@ -60,7 +60,9 @@ pub enum BuildBackendSetupError {
 #[derive(Debug, Error, Diagnostic)]
 pub enum InitializeError {
     #[error("failed to setup communication with the build-backend")]
-    #[diagnostic(help("This is often caused by a broken build-backend. Try upgrading or downgrading the build backend."))]
+    #[diagnostic(help(
+        "This is often caused by a broken build-backend. Try upgrading or downgrading the build backend."
+    ))]
     Setup(
         #[diagnostic_source]
         #[from]

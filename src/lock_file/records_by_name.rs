@@ -4,8 +4,8 @@ use pixi_record::PixiRecord;
 use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
 pub(crate) type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;

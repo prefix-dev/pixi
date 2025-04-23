@@ -6,14 +6,14 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, PrefixRecord, Version};
 use serde::Serialize;
 
-use miette::{miette, IntoDiagnostic};
+use miette::{IntoDiagnostic, miette};
 
 use crate::{
-    environment::list::{print_package_table, PackageToOutput},
+    environment::list::{PackageToOutput, print_package_table},
     global::common::find_package_records,
 };
 
-use super::{project::ParsedEnvironment, EnvChanges, EnvState, EnvironmentName, Mapping, Project};
+use super::{EnvChanges, EnvState, EnvironmentName, Mapping, Project, project::ParsedEnvironment};
 
 /// Sorting strategy for the package table
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
@@ -216,11 +216,11 @@ pub async fn list_all_global_environments(
                 EnvState::Installed => {
                     format!("({})", console::style("installed".to_string()).green())
                 }
-                EnvState::NotChanged(ref reason) => {
+                EnvState::NotChanged(reason) => {
                     format!("({})", reason.fancy_display())
                 }
             })
-            .unwrap_or("".to_string());
+            .unwrap_or_default();
 
         if !env
             .dependencies

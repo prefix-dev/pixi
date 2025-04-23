@@ -1,5 +1,5 @@
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_types::CondaPackageMetadata;
 use pixi_record::InputHash;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
@@ -15,7 +15,7 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use url::Url;
 
-use crate::build::{cache::source_checkout_cache_key, SourceCheckout};
+use crate::build::{SourceCheckout, cache::source_checkout_cache_key};
 
 /// A cache for caching the metadata of a source checkout.
 ///

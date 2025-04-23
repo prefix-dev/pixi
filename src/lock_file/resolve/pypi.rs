@@ -14,19 +14,19 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_manifest::{
-    pypi::pypi_options::PypiOptions, EnvironmentName, PyPiRequirement, SystemRequirements,
+    EnvironmentName, PyPiRequirement, SystemRequirements, pypi::pypi_options::PypiOptions,
 };
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec, no_build_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy, to_normalize, to_requirements,
-    to_uv_normalize, to_uv_version, to_version_specifiers, ConversionError,
+    ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
+    no_build_to_build_options, pypi_options_to_index_locations, to_index_strategy, to_normalize,
+    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
     pypi_tags::{get_pypi_tags, is_python_record},
 };
-use rattler_digest::{parse_digest_from_hex, Md5, Sha256};
+use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
@@ -50,6 +50,8 @@ use uv_types::EmptyInstalledPackages;
 use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
+        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
+        PypiRecord, UvResolutionContext,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
@@ -57,8 +59,6 @@ use crate::{
             },
             resolver_provider::CondaResolverProvider,
         },
-        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord, UvResolutionContext,
     },
     uv_reporter::{UvReporter, UvReporterOptions},
     workspace::{Environment, EnvironmentVars},

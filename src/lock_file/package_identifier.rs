@@ -1,5 +1,5 @@
 use pixi_uv_conversions::{
-    to_normalize, to_uv_normalize, to_uv_version, ConversionError as PixiConversionError,
+    ConversionError as PixiConversionError, to_normalize, to_uv_normalize, to_uv_version,
 };
 use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};

@@ -6,7 +6,7 @@ use std::{
 
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
-use rattler_conda_types::{version_spec::ParseVersionSpecError, InvalidPackageNameError};
+use rattler_conda_types::{InvalidPackageNameError, version_spec::ParseVersionSpecError};
 use thiserror::Error;
 use toml_span::{DeserError, Error};
 
@@ -313,12 +313,12 @@ impl Diagnostic for TomlError {
 
     fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         match self {
-            TomlError::NoPixiTable(ManifestKind::Pixi, _) => {
-                Some(Box::new("More information about pixi manifest files can be found at https://pixi.sh/latest/reference/pixi_manifest/"))
-            }
-            TomlError::NoPixiTable(ManifestKind::Pyproject, _) => {
-                Some(Box::new("Check your manifest for a [tool.pixi.*] table. See https://pixi.sh/latest/python/pyproject_toml for more information."))
-            }
+            TomlError::NoPixiTable(ManifestKind::Pixi, _) => Some(Box::new(
+                "More information about pixi manifest files can be found at https://pixi.sh/latest/reference/pixi_manifest/",
+            )),
+            TomlError::NoPixiTable(ManifestKind::Pyproject, _) => Some(Box::new(
+                "Check your manifest for a [tool.pixi.*] table. See https://pixi.sh/latest/python/pyproject_toml for more information.",
+            )),
             TomlError::TomlError(toml_span::Error { kind, .. }) => match kind {
                 toml_span::ErrorKind::UnexpectedValue { expected, value } => {
                     if let Some(value) = value {
