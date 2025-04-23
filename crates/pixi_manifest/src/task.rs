@@ -502,6 +502,9 @@ pub struct Alias {
 
     /// A description of the task.
     pub description: Option<String>,
+
+    /// A list of arguments to pass to the task.
+    pub args: Option<Vec<TaskArg>>,
 }
 
 impl Display for Task {

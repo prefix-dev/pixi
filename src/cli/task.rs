@@ -133,6 +133,10 @@ pub struct AliasArgs {
     /// The description of the alias task
     #[arg(long)]
     pub description: Option<String>,
+
+    /// The arguments to pass to the task
+    #[arg(long, num_args = 1..)]
+    pub args: Option<Vec<TaskArg>>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -186,6 +190,7 @@ impl From<AddArgs> for Task {
             Self::Alias(Alias {
                 depends_on,
                 description,
+                args: value.args,
             })
         } else if depends_on.is_empty()
             && value.cwd.is_none()
@@ -227,6 +232,7 @@ impl From<AliasArgs> for Task {
         Self::Alias(Alias {
             depends_on: value.depends_on,
             description: value.description,
+            args: value.args,
         })
     }
 }
