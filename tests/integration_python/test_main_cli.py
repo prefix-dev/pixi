@@ -1004,9 +1004,17 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     dot_pixi = tmp_pixi_workspace / ".pixi"
     shutil.rmtree(dot_pixi)
 
-    # Run pixi lock to recreate the lock file
+    # Run pixi lock to recreate the lock file amd validate the return code with --check is 1
     verify_cli_command(
-        [pixi, "lock", "--manifest-path", manifest_path], stderr_contains=["+", "dummy-a"]
+        [pixi, "lock", "--manifest-path", manifest_path, "--check"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains=["+", "dummy-a"],
+    )
+
+    # Run pixi lock again to validate that the return code with --check is 0
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest_path, "--check"],
+        expected_exit_code=ExitCode.SUCCESS,
     )
 
     # Read the recreated lock file content
