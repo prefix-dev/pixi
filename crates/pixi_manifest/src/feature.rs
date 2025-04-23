@@ -13,12 +13,12 @@ use std::{
 };
 
 use crate::{
+    PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
     channel::PrioritizedChannel,
     consts,
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
+    pypi::{PyPiPackageName, pypi_options::PypiOptions},
     target::Targets,
     workspace::ChannelPriority,
-    PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
 };
 
 /// The name of a feature. This is either a string or default for the default

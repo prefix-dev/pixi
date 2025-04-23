@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use miette::Diagnostic;
 use pixi_record::PinnedSourceSpec;
 use pixi_spec::SourceSpec;
@@ -8,8 +8,8 @@ use rattler_conda_types::{ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
 
 use crate::build::{
-    reporters::SourceReporter, source_anchor::SourceAnchor, BuildContext, BuildEnvironment,
-    BuildError, BuildMetadataReporter, SourceMetadata,
+    BuildContext, BuildEnvironment, BuildError, BuildMetadataReporter, SourceMetadata,
+    reporters::SourceReporter, source_anchor::SourceAnchor,
 };
 
 /// An object that is responsible for recursively collecting metadata of source

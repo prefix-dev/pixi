@@ -3,12 +3,12 @@ use std::str::FromStr;
 use pixi_toml::TomlFromStr;
 use rattler_conda_types::Version;
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, Error, ErrorKind, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 
-use crate::{system_requirements::LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements};
+use crate::{LibCSystemRequirement, SystemRequirements, system_requirements::LibCFamilyAndVersion};
 
 impl<'de> toml_span::Deserialize<'de> for SystemRequirements {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {

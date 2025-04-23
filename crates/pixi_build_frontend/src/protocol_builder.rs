@@ -7,11 +7,12 @@ use std::{
 use rattler_conda_types::ChannelConfig;
 
 use crate::{
+    BuildFrontendError, ToolContext,
     backend_override::BackendOverride,
     pixi_protocol,
     protocol::{DiscoveryError, FinishError},
     protocols::JsonRPCBuildProtocol,
-    rattler_build_protocol, BuildFrontendError, ToolContext,
+    rattler_build_protocol,
 };
 
 /// Configuration to enable or disable certain protocols discovery.

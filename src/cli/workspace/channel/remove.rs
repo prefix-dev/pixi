@@ -1,7 +1,7 @@
 use crate::lock_file::{ReinstallPackages, UpdateMode};
 use crate::{
-    environment::{get_update_lock_file_and_prefix, LockFileUsage},
     UpdateLockFileOptions, WorkspaceLocator,
+    environment::{LockFileUsage, get_update_lock_file_and_prefix},
 };
 use miette::IntoDiagnostic;
 

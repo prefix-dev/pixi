@@ -5,7 +5,7 @@ use std::sync::Arc;
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
-    to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
+    ConversionError, to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers,
 };
 use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
 use url::Url;

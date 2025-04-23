@@ -14,15 +14,14 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
 use toml_edit::ser::to_string;
 
 use crate::{
-    global,
+    WorkspaceLocator, global,
     global::{BinDir, EnvRoot},
     task::TaskName,
-    WorkspaceLocator,
 };
 use fancy_display::FancyDisplay;
 

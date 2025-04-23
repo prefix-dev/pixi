@@ -15,8 +15,8 @@ use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
 use crate::{
-    cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions, workspace::Environment,
-    WorkspaceLocator,
+    WorkspaceLocator, cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions,
+    workspace::Environment,
 };
 
 use super::cli_config::LockFileUpdateConfig;
@@ -276,7 +276,9 @@ fn print_dependency_tree(
                 ));
             }
 
-            tracing::info!("No top-level dependencies matched the regular expression, showing matching transitive dependencies");
+            tracing::info!(
+                "No top-level dependencies matched the regular expression, showing matching transitive dependencies"
+            );
 
             return print_transitive_dependency_tree(handle, dep_map, direct_deps, filtered_keys);
         }

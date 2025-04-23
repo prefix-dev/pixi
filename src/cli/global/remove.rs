@@ -36,7 +36,10 @@ impl HasSpecs for Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let Some(env_name) = &args.environment else {
-        miette::bail!("`--environment` is required. Try `pixi global uninstall {}` if you want to delete whole environments", args.packages.join(" "));
+        miette::bail!(
+            "`--environment` is required. Try `pixi global uninstall {}` if you want to delete whole environments",
+            args.packages.join(" ")
+        );
     };
     let config = Config::with_cli_config(&args.config);
     let project_original = Project::discover_or_create()
@@ -44,7 +47,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     if project_original.environment(env_name).is_none() {
-        miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", env_name);
+        miette::bail!(
+            "Environment {} doesn't exist. You can create a new environment with `pixi global install`.",
+            env_name
+        );
     }
 
     async fn apply_changes(

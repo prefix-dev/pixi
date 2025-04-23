@@ -8,7 +8,7 @@ use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{preview::Preview, PrioritizedChannel, S3Options, Targets};
+use crate::{PrioritizedChannel, S3Options, Targets, preview::Preview};
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
 

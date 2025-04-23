@@ -91,7 +91,7 @@ compinit
 
 ```fish title="~/.config/fish/config.fish"
 # fish
-for file in ~/.pixi/completions/fish
+for file in ~/.pixi/completions/fish/*
     source $file
 end
 ```

@@ -9,7 +9,7 @@ use std::{
 };
 
 use itertools::Itertools;
-use rattler_digest::{digest::Digest, Sha256, Sha256Hash};
+use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use thiserror::Error;
 
 use crate::glob_set::{self, GlobSet};

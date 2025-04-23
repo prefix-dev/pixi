@@ -251,7 +251,7 @@ impl FancyDisplay for EnvState {
     fn fancy_display(&self) -> StyledObject<&str> {
         match self {
             EnvState::Installed => console::style(self.as_str()).green(),
-            EnvState::NotChanged(ref reason) => reason.fancy_display(),
+            EnvState::NotChanged(reason) => reason.fancy_display(),
         }
     }
 }
@@ -770,7 +770,8 @@ impl StateChanges {
                 .map(|version| format!("={version}"))
                 .unwrap_or_default();
 
-            eprintln!(                "{check_mark}{message} package {changes}{version_string} in environment {env_fancy}."
+            eprintln!(
+                "{check_mark}{message} package {changes}{version_string} in environment {env_fancy}."
             );
         } else if top_level_changes.len() > 1 {
             eprintln!(
@@ -1092,9 +1093,11 @@ mod tests {
         let records = find_package_records(&dummy_conda_meta_path).await.unwrap();
 
         // Verify that the package record was found
-        assert!(records
-            .iter()
-            .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python"));
+        assert!(
+            records
+                .iter()
+                .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python")
+        );
     }
 
     #[test]

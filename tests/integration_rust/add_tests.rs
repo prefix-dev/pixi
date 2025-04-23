@@ -1,19 +1,19 @@
 use std::str::FromStr;
 
-use pixi::{cli::cli_config::GitRev, DependencyType, Workspace};
+use pixi::{DependencyType, Workspace, cli::cli_config::GitRev};
 use pixi_consts::consts;
 use pixi_manifest::{
-    pypi::{PyPiPackageName, VersionOrStar},
     FeaturesExt, PyPiRequirement, SpecType,
+    pypi::{PyPiPackageName, VersionOrStar},
 };
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
+    LockFileExt, PixiControl,
     builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig},
     package_database::{Package, PackageDatabase},
-    LockFileExt, PixiControl,
 };
 
 /// Test add functionality for different types of packages.
@@ -693,14 +693,15 @@ preview = ['pixi-build']
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .workspace
-        .provenance
-        .read()
-        .unwrap()
-        .into_inner());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .provenance
+            .read()
+            .unwrap()
+            .into_inner()
+    );
 }
 
 /// Test adding git dependencies with credentials
@@ -749,14 +750,15 @@ preview = ['pixi-build']
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .modify()
-        .unwrap()
-        .manifest()
-        .document
-        .to_string());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .modify()
+            .unwrap()
+            .manifest()
+            .document
+            .to_string()
+    );
 }
 
 /// Test adding a git dependency with a specific commit
@@ -799,14 +801,15 @@ preview = ['pixi-build']"#,
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .workspace
-        .provenance
-        .read()
-        .unwrap()
-        .into_inner());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .provenance
+            .read()
+            .unwrap()
+            .into_inner()
+    );
 }
 
 /// Test adding a git dependency with a specific tag
@@ -852,14 +855,15 @@ preview = ['pixi-build']"#,
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .workspace
-        .provenance
-        .read()
-        .unwrap()
-        .into_inner());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .provenance
+            .read()
+            .unwrap()
+            .into_inner()
+    );
 }
 
 /// Test adding a git dependency using ssh url
@@ -883,14 +887,15 @@ preview = ['pixi-build']"#,
         .unwrap();
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .workspace
-        .provenance
-        .read()
-        .unwrap()
-        .into_inner());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .provenance
+            .read()
+            .unwrap()
+            .into_inner()
+    );
 }
 
 /// Test adding a git dependency using ssh url

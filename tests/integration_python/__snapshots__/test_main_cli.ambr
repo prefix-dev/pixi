@@ -1,0 +1,33 @@
+# serializer version: 1
+# name: test_pixi_task_list_json
+  list([
+    dict({
+      'environment': 'default',
+      'features': list([
+        dict({
+          'name': 'default',
+          'tasks': list([
+            dict({
+              'args': list([
+                dict({
+                  'default': 'World',
+                  'name': 'name',
+                }),
+              ]),
+              'clean_env': False,
+              'cmd': "echo 'Hello {{name | title}}'",
+              'cwd': None,
+              'depends_on': list([
+              ]),
+              'description': None,
+              'env': None,
+              'inputs': None,
+              'name': 'test-task',
+              'outputs': None,
+            }),
+          ]),
+        }),
+      ]),
+    }),
+  ])
+# ---

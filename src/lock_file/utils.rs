@@ -6,8 +6,8 @@ use rattler_lock::{LockFile, LockFileBuilder, LockedPackageRef};
 use tokio::sync::Semaphore;
 
 use crate::{
-    workspace::{grouped_environment::GroupedEnvironment, Environment},
     Workspace,
+    workspace::{Environment, grouped_environment::GroupedEnvironment},
 };
 
 /// Wraps a semaphore to limit the number of concurrent IO operations. The

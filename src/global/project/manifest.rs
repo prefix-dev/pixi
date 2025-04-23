@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::{toml::TomlDocument, PrioritizedChannel};
+use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
 use pixi_spec::PixiSpec;
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
@@ -19,8 +19,8 @@ use toml_edit::{DocumentMut, Item};
 use toml_span::{DeserError, Value};
 
 use super::{
-    parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
     EnvironmentName, ExposedName,
+    parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
 };
 use crate::global::project::ParsedEnvironment;
 
@@ -828,14 +828,16 @@ mod tests {
         assert!(actual_value.is_none());
 
         // Check parsed
-        assert!(!manifest
-            .parsed
-            .envs
-            .get(&env_name)
-            .unwrap()
-            .exposed
-            .iter()
-            .any(|map| map.exposed_name() == &exposed_name));
+        assert!(
+            !manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .exposed
+                .iter()
+                .any(|map| map.exposed_name() == &exposed_name)
+        );
     }
 
     #[test]
@@ -1170,10 +1172,12 @@ dependencies = { "python" = "*", pytest = "*"}
         manifest.remove_dependency(&env_name, &match_spec).unwrap();
 
         // Check document
-        assert!(!manifest
-            .document
-            .to_string()
-            .contains(match_spec.name.clone().unwrap().as_normalized()));
+        assert!(
+            !manifest
+                .document
+                .to_string()
+                .contains(match_spec.name.clone().unwrap().as_normalized())
+        );
 
         // Check parsed
         let actual_value = manifest
