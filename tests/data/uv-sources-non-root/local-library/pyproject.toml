@@ -1,19 +1,15 @@
 [project]
-name = "local-library"
-version = "0.1.0"
+authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
+dependencies = ["local-library2"]
 description = "Add your description here"
+name = "local-library"
 readme = "README.md"
-authors = [
-    { name = "Tim de Jager", email = "tim@prefix.dev" }
-]
 requires-python = ">=3.11"
-dependencies = [
-    "local-library2",
-]
+version = "0.1.0"
 
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [tool.uv.sources]
-local-library2 = {path = "../local-library2", editable = true}
+local-library2 = { path = "../local-library2", editable = true }
