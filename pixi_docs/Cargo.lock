@@ -4273,7 +4273,6 @@ dependencies = [
  "pixi_toml",
  "pixi_utils",
  "pixi_uv_conversions",
- "priority-queue",
  "pypi_mapping",
  "pypi_modifiers",
  "rattler",
