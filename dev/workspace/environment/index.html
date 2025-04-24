@@ -2689,7 +2689,7 @@ If you want to learn more about the solving process, you can read these:</p>
 </ul>
 <p>Pixi solves both the <code>conda</code> and <code>PyPI</code> dependencies, where the <code>PyPI</code> dependencies use the conda packages as a base, so you can be sure that the packages are compatible with each other.
 These solvers are split between the <a href="https://github.com/conda/rattler"><code>rattler</code></a> and <a href="https://github.com/astral-sh/uv"><code>uv</code></a> library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: <a href="https://github.com/mamba-org/resolvo"><code>resolvo</code></a>.
-<code>resolve</code> is able to solve multiple ecosystem like <code>conda</code> and <code>PyPI</code>. It implements the lazy solving process for <code>PyPI</code> packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
+<code>resolvo</code> is able to solve multiple ecosystem like <code>conda</code> and <code>PyPI</code>. It implements the lazy solving process for <code>PyPI</code> packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
 It also supports the <code>conda</code> way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.</p>
 <p>For the <code>[pypi-dependencies]</code>, <code>uv</code> implements <code>sdist</code> building to retrieve the metadata of the packages, and <code>wheel</code> building to install the packages.
 For this building step, <code>pixi</code> requires to first install <code>python</code> in the (conda)<code>[dependencies]</code> section of the <code>pixi.toml</code> file.
