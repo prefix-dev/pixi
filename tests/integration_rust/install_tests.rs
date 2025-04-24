@@ -1,26 +1,26 @@
+use crate::common::{LockFileExt, PixiControl};
 use crate::common::{
     builders::{
-        string_from_iter, HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig,
+        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
     },
     package_database::{Package, PackageDatabase},
 };
-use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
 use pixi::lock_file::{ReinstallPackages, UpdateMode};
+use pixi::{UpdateLockFileOptions, Workspace};
 use pixi::{
     build::BuildContext,
     cli::{
-        run::{self, Args},
         LockFileUsageConfig,
+        run::{self, Args},
     },
     lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
 };
 use pixi::{cli::cli_config::LockFileUpdateConfig, environment::LockFileUsage};
 use pixi::{
     cli::cli_config::WorkspaceConfig,
-    workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
+    workspace::{HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
-use pixi::{UpdateLockFileOptions, Workspace};
 use pixi_build_frontend::ToolContext;
 use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
 use pixi_consts::consts;
@@ -35,7 +35,7 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_python::PythonEnvironment;
@@ -70,12 +70,13 @@ async fn install_run_python() {
     assert!(result.stderr.is_empty());
 
     // Test for existence of environment file
-    assert!(pixi
-        .default_env_path()
-        .unwrap()
-        .join("conda-meta")
-        .join(consts::ENVIRONMENT_FILE_NAME)
-        .exists())
+    assert!(
+        pixi.default_env_path()
+            .unwrap()
+            .join("conda-meta")
+            .join(consts::ENVIRONMENT_FILE_NAME)
+            .exists()
+    )
 }
 
 /// This is a test to check that creating incremental lock files works.
@@ -207,7 +208,10 @@ async fn install_locked_with_config() {
         .await
         .unwrap();
 
-    assert!(pixi.install().with_locked().await.is_err(), "should error when installing with locked but there is a mismatch in the dependencies and the lockfile.");
+    assert!(
+        pixi.install().with_locked().await.is_err(),
+        "should error when installing with locked but there is a mismatch in the dependencies and the lockfile."
+    );
 
     // Check if it didn't accidentally update the lockfile
     let lock = pixi.lock_file().await.unwrap();
@@ -644,7 +648,7 @@ setup(
         r#"
     [project]
     name = "no-build-isolation"
-    channels = ["conda-forge"]
+    channels = ["https://prefix.dev/conda-forge"]
     platforms = ["{platform}"]
 
     [pypi-options]
@@ -675,8 +679,7 @@ setup(
         .default_environment()
         .pypi_options()
         .no_build_isolation
-        .unwrap()
-        .contains(&"my-pkg".to_string());
+        .contains(&"my-pkg".parse().unwrap());
 
     assert!(has_pkg, "my-pkg is not in no-build-isolation list");
     pixi.install().await.expect("cannot install project");
@@ -689,9 +692,10 @@ async fn test_setuptools_override_failure() {
     let manifest = format!(
         r#"
         [project]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
         name = "pixi-source-problem"
         platforms = ["{platform}"]
+        exclude-newer = "2024-08-29"
 
         [dependencies]
         pip = ">=24.0,<25"
@@ -705,7 +709,7 @@ async fn test_setuptools_override_failure() {
 
         # The transitive dependencies of viser were causing issues
         [pypi-dependencies]
-        viser = "==0.2.23"
+        viser = "==0.2.7"
         "#,
         platform = Platform::current()
     );
@@ -820,12 +824,13 @@ async fn pypi_prefix_is_not_created_when_whl() {
     assert!(!default_env_prefix.exists());
 }
 
-/// This test checks that the override of a conda package is correctly done per platform.
-/// There have been issues in the past that the wrong repodata was used for the override.
-/// What this test does is recreate this situation by adding a conda package that is only
-/// available on linux and then adding a PyPI dependency on the same package for both linux
-/// and osxarm64.
-/// This should result in the PyPI package being overridden on linux and not on osxarm64.
+/// This test checks that the override of a conda package is correctly done per
+/// platform. There have been issues in the past that the wrong repodata was
+/// used for the override. What this test does is recreate this situation by
+/// adding a conda package that is only available on linux and then adding a
+/// PyPI dependency on the same package for both linux and osxarm64.
+/// This should result in the PyPI package being overridden on linux and not on
+/// osxarm64.
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
@@ -891,7 +896,7 @@ async fn test_multiple_prefix_update() {
             r#"
     [project]
     name = "test-channel-change"
-    channels = ["conda-forge"]
+    channels = ["https://prefix.dev/conda-forge"]
     platforms = ["{platform}"]
     "#,
             platform = current_platform
@@ -1000,7 +1005,8 @@ async fn test_multiple_prefix_update() {
 
         let first_modified_date = first_modified.get_or_insert(prefix_metadata.modified().unwrap());
 
-        // verify that the prefix was updated only once, meaning that we instantiated prefix only once
+        // verify that the prefix was updated only once, meaning that we instantiated
+        // prefix only once
         assert_eq!(*first_modified_date, prefix_metadata.modified().unwrap());
     }
 }
@@ -1047,7 +1053,7 @@ async fn install_s3() {
         r#"
     [project]
     name = "s3-test"
-    channels = ["s3://rattler-s3-testing/channel", "conda-forge"]
+    channels = ["s3://rattler-s3-testing/channel", "https://prefix.dev/conda-forge"]
     platforms = ["{platform}"]
 
     [project.s3-options.rattler-s3-testing]
@@ -1075,10 +1081,112 @@ async fn install_s3() {
     .await;
 
     // Test for existence of conda-meta/my-webserver-0.1.0-pyh4616a5c_0.json file
-    assert!(pixi
-        .default_env_path()
-        .unwrap()
-        .join("conda-meta")
-        .join("my-webserver-0.1.0-pyh4616a5c_0.json")
-        .exists());
+    assert!(
+        pixi.default_env_path()
+            .unwrap()
+            .join("conda-meta")
+            .join("my-webserver-0.1.0-pyh4616a5c_0.json")
+            .exists()
+    );
+}
+
+#[tokio::test]
+async fn test_exclude_newer() {
+    let mut package_database = PackageDatabase::default();
+
+    // Create a channel with two packages with different timestamps
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    // Create a project that includes the package `foo` with a version specifier
+    // without an exclude-newer.
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-channel-change"
+    channels = ["{channel_a}"]
+    platforms = ["{platform}"]
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel_a = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    // Create the lock-file
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+
+    // Update the manifest with the exclude-never field
+    pixi.update_manifest(&format!(
+        r#"
+    [project]
+    name = "test-channel-change"
+    channels = ["{channel_a}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel_a = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    // Relock and check that an older version of the package is selected
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==1"
+    ));
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_exclude_newer_pypi() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-channel-change"
+    channels = ["https://prefix.dev/conda-forge"]
+    platforms = ["{platform}"]
+    exclude-newer = "2020-12-02"
+
+    [dependencies]
+    python = "*"
+
+    [pypi-dependencies]
+    boltons = "*"
+    "#,
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    // Create the lock-file
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pep508_requirement(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "boltons ==20.2.1".parse().unwrap()
+    ));
 }

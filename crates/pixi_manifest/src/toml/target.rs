@@ -3,15 +3,15 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use pixi_spec::PixiSpec;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
+    Activation, KnownPreviewFeature, PyPiRequirement, SpecType, TargetSelector, Task, TaskName,
+    TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
     pypi::PyPiPackageName,
     toml::{preview::TomlPreview, task::TomlTask},
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, KnownPreviewFeature, PyPiRequirement, SpecType, TargetSelector, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceTarget,
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 #[derive(Debug, Default)]

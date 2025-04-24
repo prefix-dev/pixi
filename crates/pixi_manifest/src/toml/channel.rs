@@ -5,7 +5,7 @@ use pixi_toml::TomlFromStr;
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::{Serialize, Serializer};
 use toml_span::de_helpers::expected;
-use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, ErrorKind, Value};
+use toml_span::{DeserError, ErrorKind, Value, de_helpers::TableHelper, value::ValueInner};
 
 /// Layout of a prioritized channel in a toml file.
 ///

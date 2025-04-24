@@ -6,6 +6,7 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
+mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -25,7 +26,6 @@ pub mod toml;
 pub mod utils;
 mod warning;
 mod workspace;
-
 pub use activation::Activation;
 pub use build_system::BuildBackend;
 pub use build_system::PackageBuild;
@@ -54,7 +54,7 @@ use rattler_conda_types::Platform;
 pub use s3::S3Options;
 pub use spec_type::SpecType;
 pub use system_requirements::{
-    LibCFamilyAndVersion, LibCSystemRequirement, SystemRequirements, GLIBC_FAMILY, MUSL_FAMILY,
+    GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, MUSL_FAMILY, SystemRequirements,
 };
 pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};

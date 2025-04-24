@@ -1,6 +1,5 @@
 [package]
 description = "A crate that provides the best memory allocator for different platforms"
-edition = "2021"
 name = "pixi_allocator"
 version = "0.1.0"
 

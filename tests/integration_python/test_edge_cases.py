@@ -214,6 +214,10 @@ def test_unused_strict_system_requirements(
     )
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="Post-link script uses linux commands for file tasks, fails on windows. Package needs manual fixing.",
+)
 def test_post_link_scripts(
     pixi: Path,
     tmp_pixi_workspace: Path,

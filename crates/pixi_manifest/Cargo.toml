@@ -9,6 +9,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+chrono = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
@@ -38,15 +39,17 @@ pyproject-toml = { workspace = true }
 
 # Rattler crates
 rattler_conda_types = { workspace = true }
+rattler_solve = { workspace = true, default-features = false }
 rattler_virtual_packages = { workspace = true }
 
 # These rattler crates are optionally used in the build system
 rattler_lock = { workspace = true, optional = true }
-rattler_solve = { workspace = true, optional = true }
 
-# TODO: Remove these dependencies
+
 console = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
+minijinja = { workspace = true, features = ["builtins"] }
+once_cell.workspace = true
 
 [dev-dependencies]
 assert_matches = { workspace = true }

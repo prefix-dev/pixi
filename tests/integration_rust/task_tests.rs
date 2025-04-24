@@ -4,7 +4,10 @@ use pixi::{
     cli::{cli_config::WorkspaceConfig, run::Args},
     task::TaskName,
 };
-use pixi_manifest::{task::CmdArgs, FeatureName, Task};
+use pixi_manifest::{
+    FeatureName, Task,
+    task::{CmdArgs, TemplateString},
+};
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;
@@ -25,7 +28,7 @@ pub async fn add_remove_task() {
     let project = pixi.workspace().unwrap();
     let tasks = project.default_environment().tasks(None).unwrap();
     let task = tasks.get(&<TaskName>::from("test")).unwrap();
-    assert!(matches!(task, Task::Plain(s) if s == "echo hello"));
+    assert!(matches!(task, Task::Plain(s) if *s == TemplateString::from("echo hello")));
 
     // Remove the task
     pixi.tasks()
@@ -70,10 +73,13 @@ pub async fn add_command_types() {
     assert!(matches!(task2, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
     assert!(matches!(task2, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
 
-    assert_eq!(task.as_single_command().as_deref(), Some("echo hello"));
     assert_eq!(
-        task2.as_single_command().as_deref(),
-        Some("\"echo hello\" \"echo bonjour\"")
+        task.as_single_command(None).unwrap().unwrap().to_string(),
+        "echo hello"
+    );
+    assert_eq!(
+        task2.as_single_command(None).unwrap().unwrap().to_string(),
+        "\"echo hello\" \"echo bonjour\""
     );
 
     // Create an alias
@@ -154,7 +160,7 @@ pub async fn add_remove_target_specific_task() {
         .unwrap()
         .get(&<TaskName>::from("test"))
         .unwrap();
-    assert!(matches!(task, Task::Plain(s) if s == "echo only_on_windows"));
+    assert!(matches!(task, Task::Plain(s) if *s == TemplateString::from("echo only_on_windows")));
 
     // Simple task
     pixi.tasks()
@@ -219,8 +225,8 @@ async fn test_cwd() {
         .await
         .unwrap();
 
-    assert!(pixi
-        .run(Args {
+    assert!(
+        pixi.run(Args {
             task: vec!["unknown-cwd".to_string()],
             workspace_config: WorkspaceConfig {
                 manifest_path: None
@@ -228,7 +234,8 @@ async fn test_cwd() {
             ..Default::default()
         })
         .await
-        .is_err());
+        .is_err()
+    );
 }
 
 #[tokio::test]
@@ -262,12 +269,17 @@ async fn test_task_with_env() {
     assert_eq!(result.stdout, "From a world with spaces\n");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_clean_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 
-    std::env::set_var("HELLO", "world from env");
+    // SAFETY: `set_var` is only unsafe in a multi-threaded context
+    // We enforce that this test runs on the current thread
+    unsafe {
+        std::env::set_var("HELLO", "world from env");
+    }
+
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::default())
         .with_commands(["echo Hello is: $HELLO"])

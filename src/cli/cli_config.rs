@@ -1,9 +1,9 @@
+use crate::DependencyType;
+use crate::Workspace;
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
 use crate::lock_file::UpdateMode;
 use crate::workspace::DiscoveryStart;
-use crate::DependencyType;
-use crate::Workspace;
 use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
@@ -12,8 +12,8 @@ use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
+use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::GitReference;
 use rattler_conda_types::ChannelConfig;
@@ -101,10 +101,9 @@ impl ChannelsConfig {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct LockFileUpdateConfig {
     /// Don't update lockfile, implies the no-install as well.
-    #[clap(long)]
+    #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
     /// Lock file usage from the CLI
@@ -126,14 +125,13 @@ impl LockFileUpdateConfig {
 
 /// Configuration for how to update the prefix
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct PrefixUpdateConfig {
     /// Don't modify the environment, only modify the lock-file.
-    #[arg(long)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 
     /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub revalidate: bool,
 }
 
@@ -410,7 +408,7 @@ fn build_vcs_requirement(
 mod tests {
     use url::Url;
 
-    use crate::cli::cli_config::{build_vcs_requirement, GitRev};
+    use crate::cli::cli_config::{GitRev, build_vcs_requirement};
 
     #[test]
     fn test_build_vcs_requirement_with_all_fields() {

@@ -84,7 +84,7 @@ impl Prefix {
                     .iter()
                     .filter(|relative_path| self.is_executable(relative_path))
                     .filter_map(|path| {
-                        path.iter().last().and_then(OsStr::to_str).map(|name| {
+                        path.iter().next_back().and_then(OsStr::to_str).map(|name| {
                             Executable::new(
                                 strip_executable_extension(name.to_string()),
                                 path.clone(),

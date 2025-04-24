@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::{
     io::{BufReader, Lines},
     process::ChildStderr,
-    sync::{mpsc, oneshot, Mutex},
+    sync::{Mutex, mpsc, oneshot},
 };
 
 /// Stderr stream that captures the stderr output of the backend

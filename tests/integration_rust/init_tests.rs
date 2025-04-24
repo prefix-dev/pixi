@@ -79,17 +79,20 @@ async fn init_from_existing_pyproject_toml() {
         .unwrap();
 
     // Check if the new manifest still contains all the same data as before
-    assert!(pixi
-        .manifest_contents()
-        .unwrap()
-        .contains(pyproject_toml_contents));
+    assert!(
+        pixi.manifest_contents()
+            .unwrap()
+            .contains(pyproject_toml_contents)
+    );
 
     // Check if the new manifest is readable by pixi and contains the default values
     let workspace = pixi.workspace().unwrap();
-    assert!(workspace
-        .default_environment()
-        .platforms()
-        .contains(&Platform::current()));
+    assert!(
+        workspace
+            .default_environment()
+            .platforms()
+            .contains(&Platform::current())
+    );
 }
 
 // TODO: enable and fix this test when we fix the global config loading

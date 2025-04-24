@@ -5,7 +5,7 @@ expression: project_model
 {
   "version": "1",
   "data": {
-    "name": "python_bindings",
+    "name": "cpp_math",
     "version": "0.1.0",
     "description": null,
     "authors": null,

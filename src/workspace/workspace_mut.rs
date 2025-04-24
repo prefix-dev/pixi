@@ -12,9 +12,9 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_config::PinningStrategy;
 use pixi_manifest::{
-    pypi::PyPiPackageName, toml::TomlDocument, utils::WithSourceCode, DependencyOverwriteBehavior,
-    FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError, ManifestDocument, ManifestKind,
-    PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest, WorkspaceManifestMut,
+    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
+    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
+    WorkspaceManifestMut, pypi::PyPiPackageName, toml::TomlDocument, utils::WithSourceCode,
 };
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
@@ -22,15 +22,15 @@ use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
 
 use crate::{
+    Workspace,
     cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
     diff::LockFileDiff,
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
-        grouped_environment::GroupedEnvironment, MatchSpecs, PypiDeps, SourceSpecs, UpdateDeps,
-        NON_SEMVER_PACKAGES,
+        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
+        grouped_environment::GroupedEnvironment,
     },
-    Workspace,
 };
 
 struct OriginalContent {
@@ -98,7 +98,7 @@ impl WorkspaceMut {
                     ),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -133,7 +133,7 @@ impl WorkspaceMut {
                     source: NamedSource::new(manifest_path.to_string_lossy(), Arc::from(contents)),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 

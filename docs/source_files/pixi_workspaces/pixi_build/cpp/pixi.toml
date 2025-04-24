@@ -7,14 +7,14 @@ platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 preview = ["pixi-build"] # (1)!
 
 [dependencies] # (2)!
+cpp_math = { path = "." }
 python = "3.12.*"
-python_bindings = { path = "." }
 
 [tasks]
-start = "python -c 'import python_bindings as b; print(b.add(1, 2))'" # (3)!
+start = "python -c 'import cpp_math as b; print(b.add(1, 2))'" # (3)!
 
 [package] # (4)!
-name = "python_bindings"
+name = "cpp_math"
 version = "0.1.0"
 
 [package.build]

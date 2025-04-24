@@ -6,8 +6,8 @@ use rattler_lock::{LockFile, LockFileBuilder, LockedPackageRef};
 use tokio::sync::Semaphore;
 
 use crate::{
-    workspace::{grouped_environment::GroupedEnvironment, Environment},
     Workspace,
+    workspace::{Environment, grouped_environment::GroupedEnvironment},
 };
 
 /// Wraps a semaphore to limit the number of concurrent IO operations. The
@@ -47,6 +47,7 @@ pub fn filter_lock_file<
 
         // Copy the channels
         builder.set_channels(environment_name, environment.channels().to_vec());
+        builder.set_options(environment_name, environment.solve_options().clone());
 
         // Copy the indexes
         let indexes = environment.pypi_indexes().cloned().unwrap_or_else(|| {

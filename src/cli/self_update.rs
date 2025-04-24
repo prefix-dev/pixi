@@ -6,8 +6,8 @@ use tar::Archive;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use reqwest::redirect::Policy;
 use reqwest::Client;
+use reqwest::redirect::Policy;
 
 use tempfile::{NamedTempFile, TempDir};
 use url::Url;
@@ -81,7 +81,7 @@ async fn latest_version() -> miette::Result<Version> {
                         .ok_or_else(|| {
                             miette::miette!("Could not get segments from Location header")
                         })?
-                        .last()
+                        .next_back()
                         .ok_or_else(|| {
                             miette::miette!("Could not get version from Location header")
                         })?

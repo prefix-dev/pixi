@@ -2,13 +2,15 @@ use std::{collections::HashMap, fmt::Display, hash::Hash, str::FromStr};
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
-use miette::{miette, Context, IntoDiagnostic, SourceCode};
+use miette::{Context, IntoDiagnostic, SourceCode, miette};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
 use toml_edit::Value;
 
 use crate::{
-    consts,
+    DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
+    PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
+    TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -20,9 +22,6 @@ use crate::{
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
     utils::WithSourceCode,
     workspace::Workspace,
-    DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
-    PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
-    TomlError, WorkspaceTarget,
 };
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
@@ -791,17 +790,17 @@ mod tests {
 
     use super::*;
     use crate::{
+        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
+        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
         manifests::document::ManifestDocument,
         pypi::PyPiPackageName,
         pyproject::PyProjectManifest,
         to_options,
         toml::{FromTomlStr, TomlDocument},
         utils::{
-            test_utils::{expect_parse_failure, format_parse_error},
             WithSourceCode,
+            test_utils::{expect_parse_failure, format_parse_error},
         },
-        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
     };
 
     const PROJECT_BOILERPLATE: &str = r#"
@@ -904,17 +903,19 @@ start = "python -m flask run --port=5050"
             )
             .unwrap();
 
-        assert!(manifest
-            .workspace
-            .default_feature_mut()
-            .targets
-            .for_opt_target(None)
-            .unwrap()
-            .pypi_dependencies
-            .as_ref()
-            .unwrap()
-            .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
-            .is_some());
+        assert!(
+            manifest
+                .workspace
+                .default_feature_mut()
+                .targets
+                .for_opt_target(None)
+                .unwrap()
+                .pypi_dependencies
+                .as_ref()
+                .unwrap()
+                .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
+                .is_some()
+        );
 
         // Add numpy to feature in pyproject
         let requirement = pep508_rs::Requirement::from_str("pytest>=3.12").unwrap();
@@ -928,18 +929,20 @@ start = "python -m flask run --port=5050"
                 &None,
             )
             .unwrap();
-        assert!(manifest
-            .workspace
-            .feature(&FeatureName::from("test"))
-            .unwrap()
-            .targets
-            .for_opt_target(None)
-            .unwrap()
-            .pypi_dependencies
-            .as_ref()
-            .unwrap()
-            .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
-            .is_some());
+        assert!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("test"))
+                .unwrap()
+                .targets
+                .for_opt_target(None)
+                .unwrap()
+                .pypi_dependencies
+                .as_ref()
+                .unwrap()
+                .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
+                .is_some()
+        );
 
         assert_snapshot!(manifest.document.to_string());
     }
@@ -955,17 +958,19 @@ start = "python -m flask run --port=5050"
             .remove_pypi_dependency(&name, &[], &FeatureName::DEFAULT)
             .unwrap();
 
-        assert!(manifest
-            .workspace
-            .default_feature_mut()
-            .targets
-            .for_opt_target(None)
-            .unwrap()
-            .pypi_dependencies
-            .as_ref()
-            .unwrap()
-            .get(&name)
-            .is_none());
+        assert!(
+            manifest
+                .workspace
+                .default_feature_mut()
+                .targets
+                .for_opt_target(None)
+                .unwrap()
+                .pypi_dependencies
+                .as_ref()
+                .unwrap()
+                .get(&name)
+                .is_none()
+        );
 
         assert_snapshot!(manifest.document.to_string());
     }
@@ -1207,23 +1212,28 @@ start = "python -m flask run --port=5050"
 
         let manifest = parse_pixi_toml(&contents).manifest;
 
-        assert_snapshot!(manifest
-            .default_feature()
-            .targets
-            .iter()
-            .flat_map(|(target, selector)| {
-                let selector_name =
-                    selector.map_or_else(|| String::from("default"), ToString::to_string);
-                target.tasks.iter().filter_map(move |(name, task)| {
-                    Some(format!(
-                        "{}/{} = {}",
-                        &selector_name,
-                        name.as_str(),
-                        task.as_single_command()?
-                    ))
+        assert_snapshot!(
+            manifest
+                .default_feature()
+                .targets
+                .iter()
+                .flat_map(|(target, selector)| {
+                    let selector_name =
+                        selector.map_or_else(|| String::from("default"), ToString::to_string);
+                    target.tasks.iter().map(move |(name, task)| {
+                        format!(
+                            "{}/{} = {:?}",
+                            &selector_name,
+                            name.as_str(),
+                            task.as_single_command(None)
+                                .ok()
+                                .flatten()
+                                .map(|c| c.to_string())
+                        )
+                    })
                 })
-            })
-            .join("\n"));
+                .join("\n")
+        );
     }
 
     #[test]
@@ -1238,16 +1248,22 @@ start = "python -m flask run --port=5050"
         );
 
         let manifest = parse_pixi_toml(&contents).manifest;
-        assert_snapshot!(manifest
-            .default_feature()
-            .targets
-            .default()
-            .pypi_dependencies
-            .clone()
-            .into_iter()
-            .flat_map(|d| d.into_iter())
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), toml_edit::Value::from(spec)))
-            .join("\n"));
+        assert_snapshot!(
+            manifest
+                .default_feature()
+                .targets
+                .default()
+                .pypi_dependencies
+                .clone()
+                .into_iter()
+                .flat_map(|d| d.into_iter())
+                .map(|(name, spec)| format!(
+                    "{} = {}",
+                    name.as_source(),
+                    toml_edit::Value::from(spec)
+                ))
+                .join("\n")
+        );
     }
 
     #[test]
@@ -1462,18 +1478,20 @@ start = "python -m flask run --port=5050"
 
         // Initially the dependency should exist
         for platform in to_options(platforms) {
-            assert!(manifest
-                .workspace
-                .feature_mut(feature_name)
-                .unwrap()
-                .targets
-                .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
-                .unwrap()
-                .dependencies
-                .get(&kind)
-                .unwrap()
-                .get(name)
-                .is_some());
+            assert!(
+                manifest
+                    .workspace
+                    .feature_mut(feature_name)
+                    .unwrap()
+                    .targets
+                    .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                    .unwrap()
+                    .dependencies
+                    .get(&kind)
+                    .unwrap()
+                    .get(name)
+                    .is_some()
+            );
         }
 
         // Remove the dependency from the manifest
@@ -1488,18 +1506,20 @@ start = "python -m flask run --port=5050"
 
         // The dependency should no longer exist
         for platform in to_options(platforms) {
-            assert!(manifest
-                .workspace
-                .feature_mut(feature_name)
-                .unwrap()
-                .targets
-                .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
-                .unwrap()
-                .dependencies
-                .get(&kind)
-                .unwrap()
-                .get(name)
-                .is_none());
+            assert!(
+                manifest
+                    .workspace
+                    .feature_mut(feature_name)
+                    .unwrap()
+                    .targets
+                    .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                    .unwrap()
+                    .dependencies
+                    .get(&kind)
+                    .unwrap()
+                    .get(name)
+                    .is_none()
+            );
         }
 
         // Write the toml to string and verify the content
@@ -1587,31 +1607,35 @@ start = "python -m flask run --port=5050"
             .unwrap();
 
         // The dependency should be removed from the default feature
-        assert!(manifest
-            .workspace
-            .default_feature()
-            .targets
-            .default()
-            .run_dependencies()
-            .map(|d| d.is_empty())
-            .unwrap_or(true));
+        assert!(
+            manifest
+                .workspace
+                .default_feature()
+                .targets
+                .default()
+                .run_dependencies()
+                .map(|d| d.is_empty())
+                .unwrap_or(true)
+        );
 
         // Should still contain the fooz dependency for the different platforms
         for (platform, kind) in [
             (Platform::Linux64, SpecType::Build),
             (Platform::Win64, SpecType::Run),
         ] {
-            assert!(manifest
-                .workspace
-                .default_feature()
-                .targets
-                .for_target(&TargetSelector::Platform(platform))
-                .unwrap()
-                .dependencies
-                .get(&kind)
-                .into_iter()
-                .flat_map(|x| x.keys())
-                .any(|x| x.as_normalized() == "fooz"));
+            assert!(
+                manifest
+                    .workspace
+                    .default_feature()
+                    .targets
+                    .for_target(&TargetSelector::Platform(platform))
+                    .unwrap()
+                    .dependencies
+                    .get(&kind)
+                    .into_iter()
+                    .flat_map(|x| x.keys())
+                    .any(|x| x.as_normalized() == "fooz")
+            );
         }
     }
 
@@ -1628,18 +1652,20 @@ start = "python -m flask run --port=5050"
 
         // Initially the dependency should exist
         for platform in to_options(platforms) {
-            assert!(manifest
-                .workspace
-                .feature_mut(feature_name)
-                .unwrap()
-                .targets
-                .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
-                .unwrap()
-                .pypi_dependencies
-                .as_ref()
-                .unwrap()
-                .get(&package_name)
-                .is_some());
+            assert!(
+                manifest
+                    .workspace
+                    .feature_mut(feature_name)
+                    .unwrap()
+                    .targets
+                    .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                    .unwrap()
+                    .pypi_dependencies
+                    .as_ref()
+                    .unwrap()
+                    .get(&package_name)
+                    .is_some()
+            );
         }
 
         // Remove the dependency from the manifest
@@ -1649,18 +1675,20 @@ start = "python -m flask run --port=5050"
 
         // The dependency should no longer exist
         for platform in to_options(platforms) {
-            assert!(manifest
-                .workspace
-                .feature_mut(feature_name)
-                .unwrap()
-                .targets
-                .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
-                .unwrap()
-                .pypi_dependencies
-                .as_ref()
-                .unwrap()
-                .get(&package_name)
-                .is_none());
+            assert!(
+                manifest
+                    .workspace
+                    .feature_mut(feature_name)
+                    .unwrap()
+                    .targets
+                    .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                    .unwrap()
+                    .pypi_dependencies
+                    .as_ref()
+                    .unwrap()
+                    .get(&package_name)
+                    .is_none()
+            );
         }
 
         // Write the toml to string and verify the content
@@ -1940,12 +1968,14 @@ feature_target_dep = "*"
         );
 
         // Test removing non-existing platforms
-        assert!(manifest
-            .remove_platforms(
-                vec![Platform::Linux64, Platform::Osx64],
-                &FeatureName::from("test"),
-            )
-            .is_err());
+        assert!(
+            manifest
+                .remove_platforms(
+                    vec![Platform::Linux64, Platform::Osx64],
+                    &FeatureName::from("test"),
+                )
+                .is_err()
+        );
     }
 
     #[test]
@@ -2088,12 +2118,14 @@ platforms = ["linux-64", "win-64"]
             .add_channels([custom_channel.clone()], &FeatureName::DEFAULT, false)
             .unwrap();
 
-        assert!(manifest
-            .workspace
-            .workspace
-            .channels
-            .iter()
-            .any(|c| c.channel == custom_channel.channel));
+        assert!(
+            manifest
+                .workspace
+                .workspace
+                .channels
+                .iter()
+                .any(|c| c.channel == custom_channel.channel)
+        );
 
         // Test adding priority
         let prioritized_channel1 = PrioritizedChannel {
@@ -2104,12 +2136,14 @@ platforms = ["linux-64", "win-64"]
             .add_channels([prioritized_channel1.clone()], &FeatureName::DEFAULT, false)
             .unwrap();
 
-        assert!(manifest
-            .workspace
-            .workspace
-            .channels
-            .iter()
-            .any(|c| c.channel == prioritized_channel1.channel && c.priority == Some(12i32)));
+        assert!(
+            manifest
+                .workspace
+                .workspace
+                .channels
+                .iter()
+                .any(|c| c.channel == prioritized_channel1.channel && c.priority == Some(12i32))
+        );
 
         let prioritized_channel2 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized2")),
@@ -2119,12 +2153,14 @@ platforms = ["linux-64", "win-64"]
             .add_channels([prioritized_channel2.clone()], &FeatureName::DEFAULT, false)
             .unwrap();
 
-        assert!(manifest
-            .workspace
-            .workspace
-            .channels
-            .iter()
-            .any(|c| c.channel == prioritized_channel2.channel && c.priority == Some(-12i32)));
+        assert!(
+            manifest
+                .workspace
+                .workspace
+                .channels
+                .iter()
+                .any(|c| c.channel == prioritized_channel2.channel && c.priority == Some(-12i32))
+        );
 
         assert_snapshot!(manifest.document.to_string());
     }
@@ -2189,15 +2225,17 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(feature_channels, IndexSet::new());
 
         // Test failing to remove a channel that does not exist
-        assert!(manifest
-            .remove_channels(
-                [PrioritizedChannel {
-                    channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
-                    priority: None,
-                }],
-                &FeatureName::DEFAULT,
-            )
-            .is_err());
+        assert!(
+            manifest
+                .remove_channels(
+                    [PrioritizedChannel {
+                        channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
+                        priority: None,
+                    }],
+                    &FeatureName::DEFAULT,
+                )
+                .is_err()
+        );
     }
 
     #[test]
@@ -2399,7 +2437,8 @@ platforms = ["linux-64", "win-64"]
                 .tasks
                 .get(&"warmup".into())
                 .unwrap()
-                .as_single_command()
+                .as_single_command(None)
+                .unwrap()
                 .unwrap(),
             "python warmup.py"
         );
@@ -2445,7 +2484,7 @@ test = "test initial"
         manifest
             .add_task(
                 "default".into(),
-                Task::Plain("echo default".to_string()),
+                Task::Plain("echo default".into()),
                 None,
                 &FeatureName::DEFAULT,
             )
@@ -2453,7 +2492,7 @@ test = "test initial"
         manifest
             .add_task(
                 "target_linux".into(),
-                Task::Plain("echo target_linux".to_string()),
+                Task::Plain("echo target_linux".into()),
                 Some(Platform::Linux64),
                 &FeatureName::DEFAULT,
             )
@@ -2461,7 +2500,7 @@ test = "test initial"
         manifest
             .add_task(
                 "feature_test".into(),
-                Task::Plain("echo feature_test".to_string()),
+                Task::Plain("echo feature_test".into()),
                 None,
                 &FeatureName::from("test"),
             )
@@ -2469,7 +2508,7 @@ test = "test initial"
         manifest
             .add_task(
                 "feature_test_target_linux".into(),
-                Task::Plain("echo feature_test_target_linux".to_string()),
+                Task::Plain("echo feature_test_target_linux".into()),
                 Some(Platform::Linux64),
                 &FeatureName::from("test"),
             )

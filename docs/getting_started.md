@@ -24,7 +24,7 @@ Luckily, Pixi is able to manage multiple environments!
 Environments are composed of features, so let's create a `py312` and `py313` features each with `python` set to a different version.
 Then we will add those features to environments of the same name.
 
-```toml title="pixi.toml" hl_lines="12-20"
+```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/introduction/multi_env/pixi.toml"
 ```
 
@@ -34,15 +34,22 @@ First, it automatically creates both a feature and environment called `default`.
 Second, it adds the `default` feature to each environment unless you explicitly opt-out.
 That means you can read the manifest as if it were declared like this:
 
-```toml hl_lines="6 9 19 20 21"
+!!! warning
+
+    This written out for demonstration purposes.
+    Don't spell "default" out like this in your own manifest, Pixi will do it for you behind the scenes.
+
+```toml
 [workspace]
 channels = ["conda-forge"]
 name = "hello-world"
 platforms = ["linux-64", "osx-arm64", "win-64"]
 
+# [tasks] belong to the default feature
 [feature.default.tasks]
 start = 'python hello.py'
 
+# [dependencies] belong to the default feature
 [feature.default.dependencies]
 cowpy = "1.1.*"
 
@@ -53,7 +60,9 @@ python = "3.12.*"
 python = "3.13.*"
 
 [environments]
+# Pixi automatically creates a default environment that consists only of the default feature
 default = ["default"]
+# Unless you opt-out with `no-default-feature`, every environment contains the default feature
 py312 = ["default", "py312"]
 py313 = ["default", "py313"]
 ```
