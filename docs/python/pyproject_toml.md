@@ -292,7 +292,7 @@ Concretly what this looks like in the `pyproject.toml`:
 a = { path = "../a" }
 ```
 
-Then the `pyproject.toml` for `a` may contain a `[tool.uv.sources]` section.
+Then the `pyproject.toml` for `a` should contain a `[tool.uv.sources]` section.
 
 ```toml
 [project]
