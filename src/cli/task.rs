@@ -102,7 +102,7 @@ pub struct AddArgs {
     pub clean_env: bool,
 
     /// The arguments to pass to the task
-    #[arg(long, num_args = 1..)]
+    #[arg(long = "arg", action = clap::ArgAction::Append)]
     pub args: Option<Vec<TaskArg>>,
 }
 
@@ -135,7 +135,7 @@ pub struct AliasArgs {
     pub description: Option<String>,
 
     /// The arguments to pass to the task
-    #[arg(long, num_args = 1..)]
+    #[arg(long = "arg", action = clap::ArgAction::Append)]
     pub args: Option<Vec<TaskArg>>,
 }
 

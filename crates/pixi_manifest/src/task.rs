@@ -659,28 +659,84 @@ impl From<Task> for Item {
                 Item::Value(Value::InlineTable(table))
             }
             Task::Alias(alias) => {
-                let mut array = Array::new();
-                for dep in alias.depends_on.iter() {
+                if alias.args.is_some() {
                     let mut table = Table::new().into_inline_table();
 
-                    table.insert("task", dep.task_name.to_string().into());
-
-                    if let Some(args) = &dep.args {
-                        table.insert(
-                            "args",
-                            Value::Array(Array::from_iter(
-                                args.iter().map(|arg| Value::from(arg.source().to_string())),
-                            )),
-                        );
+                    if let Some(args_vec) = &alias.args {
+                        let mut args = Vec::new();
+                        for arg in args_vec {
+                            if let Some(default) = &arg.default {
+                                let mut arg_table = Table::new().into_inline_table();
+                                arg_table.insert("arg", arg.name.as_str().into());
+                                arg_table.insert("default", default.into());
+                                args.push(Value::InlineTable(arg_table));
+                            } else {
+                                args.push(Value::String(toml_edit::Formatted::new(
+                                    arg.name.as_str().to_string(),
+                                )));
+                            }
+                        }
+                        table.insert("args", Value::Array(Array::from_iter(args)));
                     }
 
-                    if let Some(env) = &dep.environment {
-                        table.insert("environment", env.to_string().into());
+                    let mut deps = Vec::new();
+                    for dep in alias.depends_on.iter() {
+                        let mut dep_table = Table::new().into_inline_table();
+                        dep_table.insert("task", dep.task_name.to_string().into());
+
+                        if let Some(args) = &dep.args {
+                            dep_table.insert(
+                                "args",
+                                Value::Array(Array::from_iter(
+                                    args.iter().map(|arg| Value::from(arg.source().to_string())),
+                                )),
+                            );
+                        }
+
+                        if let Some(env) = &dep.environment {
+                            dep_table.insert("environment", env.to_string().into());
+                        }
+
+                        deps.push(Value::InlineTable(dep_table));
+                    }
+                    table.insert("depends-on", Value::Array(Array::from_iter(deps)));
+
+                    if let Some(description) = &alias.description {
+                        table.insert("description", description.into());
                     }
 
-                    array.push(Value::InlineTable(table));
+                    Item::Value(Value::InlineTable(table))
+                } else {
+                    let mut array = Array::new();
+                    for dep in alias.depends_on.iter() {
+                        let mut table = Table::new().into_inline_table();
+                        table.insert("task", dep.task_name.to_string().into());
+
+                        if let Some(args) = &dep.args {
+                            table.insert(
+                                "args",
+                                Value::Array(Array::from_iter(
+                                    args.iter().map(|arg| Value::from(arg.source().to_string())),
+                                )),
+                            );
+                        }
+
+                        if let Some(env) = &dep.environment {
+                            table.insert("environment", env.to_string().into());
+                        }
+
+                        array.push(Value::InlineTable(table));
+                    }
+
+                    if let Some(description) = &alias.description {
+                        let mut table = Table::new().into_inline_table();
+                        table.insert("depends-on", Value::Array(array));
+                        table.insert("description", description.into());
+                        Item::Value(Value::InlineTable(table))
+                    } else {
+                        Item::Value(Value::Array(array))
+                    }
                 }
-                Item::Value(Value::Array(array))
             }
             _ => Item::None,
         }
