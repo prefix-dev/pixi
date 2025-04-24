@@ -1128,6 +1128,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#development-dependencies-with-tooluvsources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development dependencies with [tool.uv.sources]
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Development dependencies with [tool.uv.sources]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-is-this-useful" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why is this useful?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2507,6 +2540,39 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#development-dependencies-with-tooluvsources" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development dependencies with [tool.uv.sources]
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Development dependencies with [tool.uv.sources]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-is-this-useful" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why is this useful?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2746,6 +2812,43 @@ The advantages of <code>hatchling</code> over <code>setuptools</code> are outlin
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">build-backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;hatchling.build&quot;</span>
 </span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">requires</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;hatchling&quot;</span><span class="p">]</span>
 </span></code></pre></div>
+<h2 id="development-dependencies-with-tooluvsources">Development dependencies with <code>[tool.uv.sources]</code><a class="headerlink" href="#development-dependencies-with-tooluvsources" title="Permanent link">#</a></h2>
+<p>Because pixi is using <code>uv</code> for building its <code>pypi-dependencies</code>, one can use the <code>tool.uv.sources</code> section to specify sources for any pypi-dependencies referenced from the main pixi manifest.</p>
+<h3 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h3>
+<p>When you are setting up a monorepo of some sort and you want to be able for source dependencies to reference each other, you need to use the <code>[tool.uv.sources]</code> section to specify the sources for those dependencies. This is because <code>uv</code> handles both the resolution of PyPI dependencies and the building of any source dependencies.</p>
+<h3 id="example_1">Example<a class="headerlink" href="#example_1" title="Permanent link">#</a></h3>
+<p>Given a source tree:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>.
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>├── main_project
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>│   └── pyproject.toml (references a)
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>├── a
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>│   └── pyproject.toml (has a dependency on b)
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>└── b
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>    └── pyproject.toml
+</span></code></pre></div>
+<p>Concretly what this looks like in the <code>pyproject.toml</code>:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[tool.pixi.pypi-dependencies]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;../a&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>Then the <code>pyproject.toml</code> for <code>a</code> should contain a <code>[tool.uv.sources]</code> section.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[project]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;a&quot;</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># other fields</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;flask&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;b&quot;</span><span class="p">]</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="k">[tool.uv.sources]</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="c1"># Override the default source for flask with main git branch</span>
+</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="n">flask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;github.com/pallets/flask&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">branch</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;main&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># Reference to b</span>
+</span><span id="__span-14-10"><a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="n">b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;../b&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>More information about what is allowed in this sections is available in the <a href="https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-sources">uv docs</a></p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The main <code>pixi.toml</code> or <code>pyproject.toml</code> is parsed directly by pixi and not processed by <code>uv</code>.
+This means that you <strong>cannot</strong> use the <code>[tool.uv.sources]</code> section in the main <code>pixi.toml</code> or <code>pyproject.toml</code>.
+This is a limitation we are aware of, feel free to open an issue if you would like support for <a href="https://github.com/prefix-dev/pixi/issues/new/choose">this</a>.</p>
+</div>
 
 
 
