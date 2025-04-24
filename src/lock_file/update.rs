@@ -488,7 +488,7 @@ impl<'p> LockFileDerivedData<'p> {
             env_variables,
             self.workspace.root(),
             environment.best_platform(),
-            non_isolated_packages,
+            &non_isolated_packages,
             &no_build,
         )
         .await

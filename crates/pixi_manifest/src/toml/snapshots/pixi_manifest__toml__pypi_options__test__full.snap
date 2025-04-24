@@ -74,10 +74,12 @@ PypiOptions {
             ),
         ],
     ),
-    no_build_isolation: Some(
-        [
-            "sigma",
-        ],
+    no_build_isolation: Packages(
+        {
+            PackageName(
+                "sigma",
+            ),
+        },
     ),
     index_strategy: Some(
         FirstIndex,

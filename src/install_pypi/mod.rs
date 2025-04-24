@@ -9,12 +9,12 @@ use conda_pypi_clobber::PypiCondaClobberRegistry;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
-use pixi_manifest::SystemRequirements;
+use pixi_manifest::{SystemRequirements, pypi::pypi_options::NoBuildIsolation};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    isolated_names_to_packages, locked_indexes_to_index_locations, names_to_build_isolation,
-    no_build_to_build_options,
+    BuildIsolation, locked_indexes_to_index_locations, no_build_to_build_options,
 };
+use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstalls, PyPIRemovals};
 use pypi_modifiers::{
     Tags,
     pypi_tags::{get_pypi_tags, is_python_record},
@@ -41,8 +41,6 @@ use crate::{
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 
-use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstalls, PyPIRemovals};
-
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
 pub(crate) mod install_wheel;
@@ -62,7 +60,7 @@ pub struct PyPIPrefixUpdater<'a> {
     flat_index: FlatIndex,
     config_settings: ConfigSettings,
     venv: PythonEnvironment,
-    non_isolated_packages: Option<Vec<uv_pep508::PackageName>>,
+    build_isolation: BuildIsolation,
     environment_variables: HashMap<String, String>,
 }
 
@@ -79,7 +77,7 @@ impl<'a> PyPIPrefixUpdater<'a> {
         pypi_indexes: Option<&PypiIndexes>,
         environment_variables: &HashMap<String, String>,
         platform: Platform,
-        non_isolated_packages: Option<Vec<String>>,
+        non_isolated_packages: &NoBuildIsolation,
         no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
     ) -> miette::Result<Self> {
         // Determine the current environment markers.
@@ -142,10 +140,7 @@ impl<'a> PyPIPrefixUpdater<'a> {
         let venv = PythonEnvironment::from_interpreter(interpreter.clone()); // Clone interpreter for venv
 
         // Determine isolated packages based on input, converting names.
-        // Clone the input `non_isolated_packages` to potentially store or use locally.
-        let owned_non_isolated_packages = non_isolated_packages.clone();
-        let uv_non_isolated_packages =
-            isolated_names_to_packages(owned_non_isolated_packages.as_deref()).into_diagnostic()?;
+        let build_isolation = non_isolated_packages.clone().try_into().into_diagnostic()?;
 
         Ok(Self {
             lock_file_dir: lock_file_dir.to_path_buf(),
@@ -158,7 +153,7 @@ impl<'a> PyPIPrefixUpdater<'a> {
             flat_index,
             config_settings,
             venv,
-            non_isolated_packages: uv_non_isolated_packages, // Store the calculated build isolation
+            build_isolation,
             environment_variables: environment_variables.clone(),
         })
     }
@@ -166,9 +161,6 @@ impl<'a> PyPIPrefixUpdater<'a> {
     /// Installs and/or removes python distributions.
     pub async fn update(&self, python_packages: &[CombinedPypiPackageData]) -> miette::Result<()> {
         let start = std::time::Instant::now();
-        // Determine if we need to build any packages in isolation
-        let build_isolation =
-            names_to_build_isolation(self.non_isolated_packages.as_deref(), &self.venv);
 
         let dep_metadata = DependencyMetadata::default();
         let build_dispatch = BuildDispatch::new(
@@ -182,7 +174,7 @@ impl<'a> PyPIPrefixUpdater<'a> {
             SharedState::default(),
             IndexStrategy::default(),
             &self.config_settings,
-            build_isolation,
+            self.build_isolation.to_uv(&self.venv),
             LinkMode::default(),
             &self.build_options,
             &self.uv_context.hash_strategy,
@@ -283,8 +275,8 @@ impl<'a> PyPIPrefixUpdater<'a> {
         let mut install_stale = vec![];
         let mut install_missing = vec![];
 
-        // Filter out the re-installs, mostly these are less interesting than the actual re-install reasons
-        // do show the installs
+        // Filter out the re-installs, mostly these are less interesting than the actual
+        // re-install reasons do show the installs
         for (dist, reason) in local.iter() {
             match reason {
                 InstallReason::InstallStaleLocal => install_stale.push(dist.name().to_string()),
@@ -461,7 +453,8 @@ impl<'a> PyPIPrefixUpdater<'a> {
         }
 
         // Install the resolved distributions.
-        // At this point we have all the wheels we need to install available to link locally
+        // At this point we have all the wheels we need to install available to link
+        // locally
         let local_dists = local.iter().map(|(d, _)| d.clone());
         let all_dists = remote_dists
             .into_iter()
