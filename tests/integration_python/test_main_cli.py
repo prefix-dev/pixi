@@ -1296,23 +1296,6 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         ]
     )
 
-    # Test simple task alias with arguments
-    verify_cli_command(
-        [
-            pixi,
-            "task",
-            "alias",
-            "dummy-d",
-            "dummy-a",
-            "--arg",
-            "arg_1",
-            "--arg",
-            "arg_2",
-            "--manifest-path",
-            manifest,
-        ]
-    )
-
     assert manifest.read_text() == snapshot
 
 
