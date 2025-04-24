@@ -265,3 +265,32 @@ The advantages of `hatchling` over `setuptools` are outlined on its [website](ht
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 ```
+
+## Development dependencies with `[tool.uv.sources]`
+Because pixi is using `uv` for building its `pypi-dependencies`, one can use the `tool.uv.sources` section to specify sources for any pypi-dependencies referenced from the main pixi manifest.
+
+So, basically if you have a `pyproject.toml` with a local dependency:
+
+```toml
+[pypi-dependencies]
+local = { path = "../local_project" }
+```
+
+Then the `pyproject.toml` for `local_project` may contain a `[tool.uv.sources]` section.
+
+```toml
+[project]
+# other fields
+dependencies = ["flask"]
+
+[tool.uv.sources]
+# Override the default source for flask with main branch
+flask = { git = "github.com/pallets/flask", branch = "main" }
+```
+
+More information is available in the [uv docs](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-sources)
+
+!!! note
+    The main `pixi.toml` or `pyproject.toml` is parsed directly by pixi and not processed by `uv`.
+    This means that you **cannot** use the `[tool.uv.sources]` section in the main `pixi.toml` or `pyproject.toml`.
+    This is a limitation we are aware of, feel free to open an issue if you would like support for [this](https://github.com/prefix-dev/pixi/issues/new/choose).
