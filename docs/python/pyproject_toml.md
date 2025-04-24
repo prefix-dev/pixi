@@ -272,7 +272,7 @@ Because pixi is using `uv` for building its `pypi-dependencies`, one can use the
 So, basically if you have a `pyproject.toml` with a local dependency:
 
 ```toml
-[pypi-dependencies]
+[tool.pixi.pypi-dependencies]
 local = { path = "../local_project" }
 ```
 
