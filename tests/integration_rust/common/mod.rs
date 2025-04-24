@@ -32,7 +32,7 @@ use pixi::{
     },
 };
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeatureName, task::TaskArg};
+use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
@@ -670,12 +670,7 @@ impl TasksControl<'_> {
     }
 
     /// Alias one or multiple tasks
-    pub fn alias(
-        &self,
-        name: TaskName,
-        platform: Option<Platform>,
-        args: Option<Vec<TaskArg>>,
-    ) -> TaskAliasBuilder {
+    pub fn alias(&self, name: TaskName, platform: Option<Platform>) -> TaskAliasBuilder {
         TaskAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {
@@ -683,7 +678,6 @@ impl TasksControl<'_> {
                 alias: name,
                 depends_on: vec![],
                 description: None,
-                args,
             },
         }
     }

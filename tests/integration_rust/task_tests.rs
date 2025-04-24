@@ -84,7 +84,7 @@ pub async fn add_command_types() {
 
     // Create an alias
     pixi.tasks()
-        .alias("testing".into(), None, None)
+        .alias("testing".into(), None)
         .with_depends_on(vec!["test".into(), "test3".into()])
         .execute()
         .await

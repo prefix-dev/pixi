@@ -133,10 +133,6 @@ pub struct AliasArgs {
     /// The description of the alias task
     #[arg(long)]
     pub description: Option<String>,
-
-    /// The arguments to pass to the task
-    #[arg(long = "arg", action = clap::ArgAction::Append)]
-    pub args: Option<Vec<TaskArg>>,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -232,7 +228,7 @@ impl From<AliasArgs> for Task {
         Self::Alias(Alias {
             depends_on: value.depends_on,
             description: value.description,
-            args: value.args,
+            args: None,
         })
     }
 }
