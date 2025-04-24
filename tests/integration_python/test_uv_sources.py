@@ -20,7 +20,7 @@ def test_install_with_uv_sources(
     # Check if dist-info is available for local-library2
     #
     if sys.platform.startswith("win"):
-        python_dir = "python"
+        python_dir = ""
     else:
         python_dir = "python3.13"
 
