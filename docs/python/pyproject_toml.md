@@ -269,26 +269,45 @@ requires = ["hatchling"]
 ## Development dependencies with `[tool.uv.sources]`
 Because pixi is using `uv` for building its `pypi-dependencies`, one can use the `tool.uv.sources` section to specify sources for any pypi-dependencies referenced from the main pixi manifest.
 
-So, basically if you have a `pyproject.toml` with a local dependency:
+### Why is this useful?
+When you are setting up a monorepo of some sort and you want to be able for source dependencies to reference each other, you need to use the `[tool.uv.sources]` section to specify the sources for those dependencies. This is because `uv` handles both the resolution of PyPI dependencies and the building of any source dependencies.
+
+### Example
+Given a source tree:
+
+```
+.
+├── main_project
+│   └── pyproject.toml (references a)
+├── a
+│   └── pyproject.toml (has a dependency on b)
+└── b
+    └── pyproject.toml
+```
+
+Concretly what this looks like in the `pyproject.toml`:
 
 ```toml
 [tool.pixi.pypi-dependencies]
-local = { path = "../local_project" }
+a = { path = "../a" }
 ```
 
-Then the `pyproject.toml` for `local_project` may contain a `[tool.uv.sources]` section.
+Then the `pyproject.toml` for `a` may contain a `[tool.uv.sources]` section.
 
 ```toml
 [project]
+name = "a"
 # other fields
-dependencies = ["flask"]
+dependencies = ["flask", "b"]
 
 [tool.uv.sources]
-# Override the default source for flask with main branch
+# Override the default source for flask with main git branch
 flask = { git = "github.com/pallets/flask", branch = "main" }
+# Reference to b
+b = { path = "../b" }
 ```
 
-More information is available in the [uv docs](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-sources)
+More information about what is allowed in this sections is available in the [uv docs](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-sources)
 
 !!! note
     The main `pixi.toml` or `pyproject.toml` is parsed directly by pixi and not processed by `uv`.

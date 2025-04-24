@@ -16,7 +16,6 @@ def test_install_with_uv_sources(
         [pixi, "install", "--manifest-path", tmp_pixi_workspace],
         expected_exit_code=ExitCode.SUCCESS,
     )
-    # import pdb; pdb.set_trace()
     # Check if dist-info is available for local-library2
     assert (
         tmp_pixi_workspace
