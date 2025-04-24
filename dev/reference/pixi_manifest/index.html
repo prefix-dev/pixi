@@ -2261,6 +2261,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#exclude-newer-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      exclude-newer (optional)
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2943,6 +2952,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#exclude-newer-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      exclude-newer (optional)
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3414,6 +3432,17 @@ upgrading to <code>pixi 0.40.0</code>:</p>
 <p>This option should be used to improve the reproducibility of building the workspace. A complicated
 requirement spec may be an obstacle to setup the building environment.</p>
 </div>
+<h3 id="exclude-newer-optional"><code>exclude-newer</code> (optional)<a class="headerlink" href="#exclude-newer-optional" title="Permanent link">#</a></h3>
+<p>When specified this will exclude any package from consideration that is newer than the specified date.
+This is useful to reproduce installations regardless of new package releases.</p>
+<p>The date may be specified in the following formats:</p>
+<ul>
+<li>As an <a href="https://www.rfc-editor.org/rfc/rfc3339.html">RFC 3339</a> timestamp (e.g. <code>2023-10-01T00:00:00Z</code>)</li>
+<li>As a date in the format <code>YYYY-MM-DD</code> (e.g. <code>2023-10-01</code>) in the systems time zone.</li>
+</ul>
+<p>Both PyPi and conda packages are considered.</p>
+<p>!! note Note that for Pypi package indexes the package index must support the <code>upload-time</code> field as specified in <a href="https://peps.python.org/pep-0700/"><code>PEP 700</code></a>.
+If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides <code>upload-time</code> for all packages.</p>
 <h2 id="the-tasks-table">The <code>tasks</code> table<a class="headerlink" href="#the-tasks-table" title="Permanent link">#</a></h2>
 <p>Tasks are a way to automate certain custom commands in your workspace.
 For example, a <code>lint</code> or <code>format</code> step.
