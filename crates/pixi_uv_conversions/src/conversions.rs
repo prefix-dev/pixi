@@ -33,7 +33,7 @@ pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, Inv
     let uv_no_build = match no_build {
         NoBuild::None => uv_configuration::NoBuild::None,
         NoBuild::All => uv_configuration::NoBuild::All,
-        NoBuild::Packages(ref vec) => uv_configuration::NoBuild::Packages(
+        NoBuild::Packages(vec) => uv_configuration::NoBuild::Packages(
             vec.iter()
                 .map(|s| PackageName::from_str(s.as_ref()))
                 .collect::<Result<Vec<_>, _>>()?,

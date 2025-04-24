@@ -1,5 +1,5 @@
+use crate::{Workspace, workspace::Environment};
 use crate::{task::EnvironmentHash, workspace::HasWorkspaceRef};
-use crate::{workspace::Environment, Workspace};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -140,9 +140,17 @@ pub(crate) fn get_activator<'p>(
     for script in additional_activation_scripts.iter() {
         let extension = script.extension().unwrap_or_default();
         if platform.is_windows() && extension != "bat" {
-            tracing::warn!("The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.bat'.", script.display(), platform);
+            tracing::warn!(
+                "The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.bat'.",
+                script.display(),
+                platform
+            );
         } else if !platform.is_windows() && extension != "sh" && extension != "bash" {
-            tracing::warn!("The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.sh' or '.bash'.", script.display(), platform);
+            tracing::warn!(
+                "The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.sh' or '.bash'.",
+                script.display(),
+                platform
+            );
         }
     }
 
@@ -302,13 +310,13 @@ pub async fn run_activation(
                     status,
                 } => {
                     return Err(miette::miette!(format!(
-                            "Failed to run activation script for {:?}. Status: {}. Stdout: {}. Stderr: {}. Script: {}",
-                            environment.name(), // Make sure `environment` is accessible here
-                            status,
-                            stdout,
-                            stderr,
-                            script,
-                        )));
+                        "Failed to run activation script for {:?}. Status: {}. Stdout: {}. Stderr: {}. Script: {}",
+                        environment.name(), // Make sure `environment` is accessible here
+                        status,
+                        stdout,
+                        stderr,
+                        script,
+                    )));
                 }
                 _ => {
                     // Handle other activation errors
@@ -636,10 +644,12 @@ mod tests {
         .await
         .unwrap();
         assert!(project.activation_env_cache_folder().exists());
-        assert!(project
-            .activation_env_cache_folder()
-            .join(project.default_environment().activation_cache_name())
-            .exists());
+        assert!(
+            project
+                .activation_env_cache_folder()
+                .join(project.default_environment().activation_cache_name())
+                .exists()
+        );
 
         // Verify that the cache is used, by overwriting the cache and checking if that persisted
         let cache_file = project.default_environment().activation_cache_file_path();

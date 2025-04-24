@@ -41,7 +41,6 @@ When you want to show your users and contributors that they can use Pixi in your
   - [slim-trees](https://github.com/quantco/slim-trees): Pickle your ML models more efficiently for deployment 🚀
   - [sqlcompyre](https://github.com/quantco/sqlcompyre): Compare SQL tables and databases
   - [metalearners](https://github.com/quantco/metalearners): MetaLearners for CATE estimation
-  - [ndonnx](https://github.com/quantco/ndonnx): ONNX-backed array library that is compliant with the Array API standard
   - [tabulardelta](https://github.com/quantco/tabulardelta): Simplify table comparisons
   - [pydiverse.pipedag](https://github.com/pydiverse/pydiverse.pipedag): A library for data pipeline orchestration optimizing high development iteration speed
   - [pydiverse.transform](https://github.com/pydiverse/pydiverse.transform): Pipe based dataframe manipulation library that can also transform data on SQL databases

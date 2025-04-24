@@ -21,12 +21,12 @@ use std::{collections::HashMap, path::Path};
 use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
 use crate::{
     activation::CurrentEnvVarBehavior,
-    workspace::{get_activated_environment_variables, Environment, EnvironmentVars},
+    workspace::{Environment, EnvironmentVars, get_activated_environment_variables},
 };
 use async_once_cell::OnceCell as AsyncCell;
 use once_cell::sync::OnceCell;
-use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_manifest::EnvironmentName;
+use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::BuildIsolation;
 use tokio::runtime::Handle;
@@ -208,7 +208,9 @@ pub struct LazyBuildDispatchDependencies {
 
 #[derive(Debug, thiserror::Error)]
 enum LazyBuildDispatchError {
-    #[error("installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set")]
+    #[error(
+        "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
+    )]
     InstallationRequiredButDisallowed,
     #[error("failed to initialize build dispatch: '{0}'")]
     InitializationError(String),

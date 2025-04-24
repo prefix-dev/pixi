@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.45.0",
+    None => "0.46.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -71,8 +71,10 @@ pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
             .map(|s| NamedChannelOrUrl::from_str(s).expect("unable to parse default channel"))
             .collect(),
         None => {
-            vec![NamedChannelOrUrl::from_str("conda-forge")
-                .expect("unable to parse default channel")]
+            vec![
+                NamedChannelOrUrl::from_str("conda-forge")
+                    .expect("unable to parse default channel"),
+            ]
         }
     });
 

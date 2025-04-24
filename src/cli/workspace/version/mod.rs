@@ -2,7 +2,7 @@ pub mod bump;
 pub mod get;
 pub mod set;
 
-use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
+use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig};
 use clap::Parser;
 use rattler_conda_types::VersionBumpType;
 

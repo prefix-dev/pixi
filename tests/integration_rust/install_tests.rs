@@ -1,26 +1,26 @@
+use crate::common::{LockFileExt, PixiControl};
 use crate::common::{
     builders::{
-        string_from_iter, HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig,
+        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
     },
     package_database::{Package, PackageDatabase},
 };
-use crate::common::{LockFileExt, PixiControl};
 use fs_err::tokio as tokio_fs;
 use pixi::lock_file::{ReinstallPackages, UpdateMode};
+use pixi::{UpdateLockFileOptions, Workspace};
 use pixi::{
     build::BuildContext,
     cli::{
-        run::{self, Args},
         LockFileUsageConfig,
+        run::{self, Args},
     },
     lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
 };
 use pixi::{cli::cli_config::LockFileUpdateConfig, environment::LockFileUsage};
 use pixi::{
     cli::cli_config::WorkspaceConfig,
-    workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
+    workspace::{HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
-use pixi::{UpdateLockFileOptions, Workspace};
 use pixi_build_frontend::ToolContext;
 use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
 use pixi_consts::consts;
@@ -35,7 +35,7 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_python::PythonEnvironment;
@@ -70,12 +70,13 @@ async fn install_run_python() {
     assert!(result.stderr.is_empty());
 
     // Test for existence of environment file
-    assert!(pixi
-        .default_env_path()
-        .unwrap()
-        .join("conda-meta")
-        .join(consts::ENVIRONMENT_FILE_NAME)
-        .exists())
+    assert!(
+        pixi.default_env_path()
+            .unwrap()
+            .join("conda-meta")
+            .join(consts::ENVIRONMENT_FILE_NAME)
+            .exists()
+    )
 }
 
 /// This is a test to check that creating incremental lock files works.
@@ -207,7 +208,10 @@ async fn install_locked_with_config() {
         .await
         .unwrap();
 
-    assert!(pixi.install().with_locked().await.is_err(), "should error when installing with locked but there is a mismatch in the dependencies and the lockfile.");
+    assert!(
+        pixi.install().with_locked().await.is_err(),
+        "should error when installing with locked but there is a mismatch in the dependencies and the lockfile."
+    );
 
     // Check if it didn't accidentally update the lockfile
     let lock = pixi.lock_file().await.unwrap();
@@ -1074,10 +1078,11 @@ async fn install_s3() {
     .await;
 
     // Test for existence of conda-meta/my-webserver-0.1.0-pyh4616a5c_0.json file
-    assert!(pixi
-        .default_env_path()
-        .unwrap()
-        .join("conda-meta")
-        .join("my-webserver-0.1.0-pyh4616a5c_0.json")
-        .exists());
+    assert!(
+        pixi.default_env_path()
+            .unwrap()
+            .join("conda-meta")
+            .join("my-webserver-0.1.0-pyh4616a5c_0.json")
+            .exists()
+    );
 }

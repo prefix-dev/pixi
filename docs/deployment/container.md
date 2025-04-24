@@ -17,6 +17,10 @@ There are different tags for different base images available:
 !!!tip "All tags"
     For all tags, take a look at the [build script](https://github.com/prefix-dev/pixi-docker/blob/main/.github/workflows/build.yml).
 
+!!!tip "Best practices for docker with pixi"
+    [@pavelzw](https://github.com/pavelzw) wrote a blog post about [shipping conda environments to production using pixi](https://tech.quantco.com/blog/pixi-production).
+    If you want to know more about best practices using docker with pixi, feel free to check out their blog post.
+
 ### Example Usage
 
 The following example uses the Pixi docker image as a base image for a multi-stage build.

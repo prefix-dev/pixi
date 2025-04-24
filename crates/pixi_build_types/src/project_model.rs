@@ -20,10 +20,10 @@ use std::path::PathBuf;
 
 use indexmap::IndexMap;
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
-use rattler_digest::{serde::SerializableHash, Md5, Md5Hash, Sha256, Sha256Hash};
+use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use serde_with::serde_as;
 use url::Url;
 
 /// Enum containing all versions of the project model.

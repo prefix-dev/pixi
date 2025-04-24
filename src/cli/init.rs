@@ -9,11 +9,11 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
-use minijinja::{context, Environment};
-use pixi_config::{get_default_author, Config};
+use minijinja::{Environment, context};
+use pixi_config::{Config, get_default_author};
 use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
+    DependencyOverwriteBehavior, FeatureName, SpecType, pyproject::PyProjectManifest,
 };
 use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;

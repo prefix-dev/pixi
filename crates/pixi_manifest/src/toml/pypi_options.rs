@@ -2,9 +2,9 @@ use indexmap::IndexSet;
 use pixi_toml::{TomlEnum, TomlFromStr, TomlWith};
 use std::{collections::HashSet, path::PathBuf, str::FromStr};
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, ErrorKind, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 use url::Url;
 

@@ -9,15 +9,15 @@ use conda_pypi_clobber::PypiCondaClobberRegistry;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
-use pixi_manifest::{pypi::pypi_options::NoBuildIsolation, SystemRequirements};
+use pixi_manifest::{SystemRequirements, pypi::pypi_options::NoBuildIsolation};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    locked_indexes_to_index_locations, no_build_to_build_options, BuildIsolation,
+    BuildIsolation, locked_indexes_to_index_locations, no_build_to_build_options,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstalls, PyPIRemovals};
 use pypi_modifiers::{
-    pypi_tags::{get_pypi_tags, is_python_record},
     Tags,
+    pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_conda_types::Platform;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
@@ -498,7 +498,9 @@ impl<'a> PyPIPrefixUpdater<'a> {
                 .map(|name| name.to_string())
                 .join(", ");
             // BREAK(0.20.1): change this into a warning in a future release
-            tracing::info!("These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: {packages}")
+            tracing::info!(
+                "These pypi-packages were re-installed because they were previously installed by a different installer but are currently managed by pixi: {packages}"
+            )
         }
 
         let options = UvReporterOptions::new()

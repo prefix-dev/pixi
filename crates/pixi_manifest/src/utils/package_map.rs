@@ -5,12 +5,12 @@ use itertools::Itertools;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 use serde::{
-    de::{DeserializeSeed, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize,
+    de::{DeserializeSeed, MapAccess, Visitor},
 };
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Span, Value};
+use toml_span::{DeserError, Span, Value, de_helpers::expected, value::ValueInner};
 
-use crate::{error::GenericError, utils::PixiSpanned, TomlError};
+use crate::{TomlError, error::GenericError, utils::PixiSpanned};
 
 #[derive(Clone, Default, Debug, Serialize)]
 pub struct UniquePackageMap {
@@ -117,12 +117,10 @@ impl<'de> DeserializeSeed<'de> for PackageMap<'_> {
     {
         let package_name = Self::Value::deserialize(deserializer)?;
         match self.0.get_key_value(&package_name.value) {
-            Some((package_name, _)) => {
-                Err(serde::de::Error::custom(
-                    format!(
-                        "duplicate dependency: {} (please avoid using capitalized names for the dependencies)", package_name.as_source())
-                ))
-            }
+            Some((package_name, _)) => Err(serde::de::Error::custom(format!(
+                "duplicate dependency: {} (please avoid using capitalized names for the dependencies)",
+                package_name.as_source()
+            ))),
             None => Ok(package_name),
         }
     }
