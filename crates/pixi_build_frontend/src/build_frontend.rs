@@ -5,10 +5,9 @@ use miette::Diagnostic;
 use rattler_conda_types::ChannelConfig;
 
 use crate::{
-    protocol,
+    SetupRequest, ToolContext, protocol,
     protocol_builder::{EnabledProtocols, ProtocolBuilder},
     protocols::JsonRPCBuildProtocol,
-    SetupRequest, ToolContext,
 };
 
 /// The frontend for building packages.

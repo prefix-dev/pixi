@@ -6,8 +6,8 @@ use tar::Archive;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use reqwest::redirect::Policy;
 use reqwest::Client;
+use reqwest::redirect::Policy;
 
 use tempfile::{NamedTempFile, TempDir};
 use url::Url;

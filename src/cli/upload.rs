@@ -9,7 +9,7 @@ use indicatif::HumanBytes;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use reqwest::StatusCode;
 
-use rattler_digest::{compute_file_digest, Sha256};
+use rattler_digest::{Sha256, compute_file_digest};
 use rattler_networking::AuthenticationMiddleware;
 use thiserror::Error;
 use tokio::fs::File;

@@ -142,6 +142,9 @@ compilers = ">=1.6.0"
 make = ">=4.3,<5"
 mold = ">=2.33.0,<3.0"
 
+[feature.build.target.win-64.dependencies]
+vs2017_win-64 = ">=19.16.27033"
+
 [feature.build.activation]
 env.CARGO_TARGET_DIR = "target/pixi"
 
@@ -196,7 +199,7 @@ build-trampoline = "python trampoline/build-trampoline.py"
 # Feature to build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.39.0,<0.40"
+rattler-build = ">=0.40,<0.41"
 
 [feature.recipes.tasks.build-backends]
 cmd = "rattler-build build --recipe-dir empty --output-dir ."

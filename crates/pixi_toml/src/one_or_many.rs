@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use toml_span::{value::ValueInner, DeserError, Value};
+use toml_span::{DeserError, Value, value::ValueInner};
 
 use crate::DeserializeAs;
 

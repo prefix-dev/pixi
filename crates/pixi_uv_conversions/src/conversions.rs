@@ -1,24 +1,24 @@
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-use pixi_git::sha::GitSha as PixiGitSha;
-use pixi_git::url::RepositoryUrl;
-use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
-use pixi_manifest::pypi::pypi_options::{IndexStrategy, NoBuild, PypiOptions};
+use miette::IntoDiagnostic;
+use pep440_rs::VersionSpecifiers;
+use pixi_git::{
+    git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha, url::RepositoryUrl,
+};
+use pixi_manifest::pypi::pypi_options::{
+    FindLinksUrlOrPath, IndexStrategy, NoBuild, NoBuildIsolation, PypiOptions,
+};
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
-
-use pixi_git::git::GitReference as PixiGitReference;
-
-use pep440_rs::VersionSpecifiers;
 use uv_configuration::BuildOptions;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 
-use crate::VersionError;
-
-use miette::IntoDiagnostic;
+use crate::{ConversionError, VersionError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -33,7 +33,7 @@ pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, Inv
     let uv_no_build = match no_build {
         NoBuild::None => uv_configuration::NoBuild::None,
         NoBuild::All => uv_configuration::NoBuild::All,
-        NoBuild::Packages(ref vec) => uv_configuration::NoBuild::Packages(
+        NoBuild::Packages(vec) => uv_configuration::NoBuild::Packages(
             vec.iter()
                 .map(|s| PackageName::from_str(s.as_ref()))
                 .collect::<Result<Vec<_>, _>>()?,
@@ -159,38 +159,55 @@ pub fn locked_indexes_to_index_locations(
     Ok(IndexLocations::new(indexes, flat_index, no_index))
 }
 
-fn packages_to_build_isolation<'a>(
-    names: Option<&'a [PackageName]>,
-    python_environment: &'a PythonEnvironment,
-) -> uv_types::BuildIsolation<'a> {
-    if let Some(package_names) = names {
-        uv_types::BuildIsolation::SharedPackage(python_environment, package_names)
-    } else {
-        uv_types::BuildIsolation::default()
+pub enum BuildIsolation {
+    /// No build isolation
+    Isolated,
+    /// Build isolation with a shared environment
+    Shared,
+    /// Build isolation with a shared environment and a list of package names
+    SharedPackage(Vec<PackageName>),
+}
+
+impl BuildIsolation {
+    pub fn to_uv<'a>(&'a self, python_env: &'a PythonEnvironment) -> uv_types::BuildIsolation<'a> {
+        match self {
+            BuildIsolation::Isolated => uv_types::BuildIsolation::Isolated,
+            BuildIsolation::Shared => uv_types::BuildIsolation::Shared(python_env),
+            BuildIsolation::SharedPackage(packages) => {
+                uv_types::BuildIsolation::SharedPackage(python_env, packages)
+            }
+        }
+    }
+
+    pub fn to_uv_with<'a, F: FnOnce() -> &'a PythonEnvironment>(
+        &'a self,
+        get_env: F,
+    ) -> uv_types::BuildIsolation<'a> {
+        match self {
+            BuildIsolation::Isolated => uv_types::BuildIsolation::Isolated,
+            BuildIsolation::Shared => uv_types::BuildIsolation::Shared(get_env()),
+            BuildIsolation::SharedPackage(packages) => {
+                uv_types::BuildIsolation::SharedPackage(get_env(), packages)
+            }
+        }
     }
 }
 
-/// Convert optional list of strings to package names
-pub fn isolated_names_to_packages(
-    names: Option<&[String]>,
-) -> Result<Option<Vec<PackageName>>, InvalidNameError> {
-    if let Some(names) = names {
-        let names = names
-            .iter()
-            .map(|n| n.parse())
-            .collect::<Result<Vec<PackageName>, _>>()?;
-        Ok(Some(names))
-    } else {
-        Ok(None)
-    }
-}
+impl TryFrom<NoBuildIsolation> for BuildIsolation {
+    type Error = ConversionError;
 
-/// Convert optional list of package names to build isolation
-pub fn names_to_build_isolation<'a>(
-    names: Option<&'a [PackageName]>,
-    env: &'a PythonEnvironment,
-) -> uv_types::BuildIsolation<'a> {
-    packages_to_build_isolation(names, env)
+    fn try_from(no_build: NoBuildIsolation) -> Result<Self, Self::Error> {
+        Ok(match no_build {
+            NoBuildIsolation::All => BuildIsolation::Shared,
+            NoBuildIsolation::Packages(packages) if packages.is_empty() => BuildIsolation::Isolated,
+            NoBuildIsolation::Packages(packages) => BuildIsolation::SharedPackage(
+                packages
+                    .into_iter()
+                    .map(|pkg| to_uv_normalize(&pkg))
+                    .collect::<Result<_, _>>()?,
+            ),
+        })
+    }
 }
 
 /// Convert pixi `IndexStrategy` to `uv_types::IndexStrategy`
@@ -424,4 +441,18 @@ pub fn to_uv_trusted_host(
     trusted_host: &str,
 ) -> Result<uv_configuration::TrustedHost, crate::ConversionError> {
     Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
+}
+
+/// Converts a date to a `uv_resolver::ExcludeNewer`
+pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_resolver::ExcludeNewer {
+    let seconds_since_epoch = exclude_newer.timestamp();
+    let nanoseconds = exclude_newer.timestamp_subsec_nanos();
+    let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
+        if seconds_since_epoch < 0 {
+            jiff::Timestamp::MIN
+        } else {
+            jiff::Timestamp::MAX
+        },
+    );
+    uv_resolver::ExcludeNewer::from(timestamp)
 }

@@ -5,15 +5,15 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
 use pixi_manifest::{
-    pypi::{pypi_options::FindLinksUrlOrPath, PyPiPackageName, VersionOrStar},
     FeaturesExt, PyPiRequirement,
+    pypi::{PyPiPackageName, VersionOrStar, pypi_options::FindLinksUrlOrPath},
 };
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
 };
 
-use crate::{cli::cli_config::WorkspaceConfig, workspace::Environment, WorkspaceLocator};
+use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, workspace::Environment};
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -98,7 +98,7 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
                 url = url,
             );
 
-            if let Some(ref subdirectory) = subdirectory {
+            if let Some(subdirectory) = subdirectory {
                 url_string.push_str(&format!("#subdirectory=={subdirectory}"));
             }
 

@@ -11,25 +11,25 @@ use std::{
     str::FromStr,
 };
 
-use builders::SearchBuilder;
+use builders::{LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
+    UpdateLockFileOptions, Workspace,
     cli::{
-        add,
+        LockFileUsageConfig, add,
         cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
-        remove, run, search,
+        lock, remove, run, search,
         task::{self, AddArgs, AliasArgs},
-        update, workspace, LockFileUsageConfig,
+        update, workspace,
     },
     lock_file::{ReinstallPackages, UpdateMode},
     task::{
-        get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-        TaskGraphError, TaskName,
+        ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
+        TaskGraphError, TaskName, get_task_env,
     },
-    UpdateLockFileOptions, Workspace,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -598,6 +598,20 @@ impl PixiControl {
             .update_lock_file(UpdateLockFileOptions::default())
             .await?
             .lock_file)
+    }
+
+    /// Returns an [`LockBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn lock(&self) -> LockBuilder {
+        LockBuilder {
+            args: lock::Args {
+                workspace_config: WorkspaceConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                check: false,
+                json: false,
+            },
+        }
     }
 
     pub fn tasks(&self) -> TasksControl {

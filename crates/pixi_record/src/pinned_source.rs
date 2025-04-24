@@ -7,9 +7,9 @@ use std::{
 
 use miette::IntoDiagnostic;
 use pixi_git::{
-    sha::GitSha,
-    url::{redact_credentials, RepositoryUrl},
     GitUrl,
+    sha::GitSha,
+    url::{RepositoryUrl, redact_credentials},
 };
 use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
@@ -496,7 +496,9 @@ pub enum SourceMismatchError {
         requested: Url,
     },
 
-    #[error("the locked {hash} of url '{url}' ({locked}) does not match the requested {hash} ({requested})")]
+    #[error(
+        "the locked {hash} of url '{url}' ({locked}) does not match the requested {hash} ({requested})"
+    )]
     /// The locked hash of the url does not match the requested hash.
     UrlHashMismatch {
         /// The hash
@@ -509,7 +511,9 @@ pub enum SourceMismatchError {
         requested: String,
     },
 
-    #[error("the locked git rev '{locked}' for '{git}' does not match the requested git rev '{requested}'")]
+    #[error(
+        "the locked git rev '{locked}' for '{git}' does not match the requested git rev '{requested}'"
+    )]
     /// The locked git rev does not match the requested git rev.
     GitRevMismatch {
         /// The git url.
@@ -520,7 +524,9 @@ pub enum SourceMismatchError {
         requested: String,
     },
 
-    #[error("the locked git subdirectory '{locked:?}' for '{git}' does not match the requested git subdirectory '{requested:?}'")]
+    #[error(
+        "the locked git subdirectory '{locked:?}' for '{git}' does not match the requested git subdirectory '{requested:?}'"
+    )]
     /// The locked git rev does not match the requested git rev.
     GitSubdirectoryMismatch {
         /// The git url.

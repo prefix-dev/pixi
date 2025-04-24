@@ -9,24 +9,24 @@ use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
 use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact};
+use pyproject_toml::{self, Contact, pep735_resolve::Pep735Error};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use thiserror::Error;
 use toml_span::Spanned;
 
 use super::{
-    error::{RequirementConversionError, TomlError},
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
+    error::{RequirementConversionError, TomlError},
 };
 use crate::{
+    FeatureName, ManifestKind, Warning,
     error::{DependencyError, GenericError},
     manifests::PackageManifest,
     toml::{
-        pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
         ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
         TomlManifest,
+        pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
     },
-    FeatureName, ManifestKind, Warning,
 };
 
 #[derive(Debug)]

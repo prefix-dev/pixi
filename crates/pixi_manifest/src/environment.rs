@@ -13,7 +13,9 @@ use thiserror::Error;
 use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
 
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes")]
+#[error(
+    "Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers and dashes"
+)]
 pub struct ParseEnvironmentNameError {
     /// The string that was attempted to be parsed.
     pub attempted_parse: String,

@@ -561,7 +561,7 @@ impl From<PathSourceSpec> for rattler_lock::source::PathSourceLocation {
 mod test {
     use rattler_conda_types::ChannelConfig;
     use serde::Serialize;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use url::Url;
 
     use crate::PixiSpec;

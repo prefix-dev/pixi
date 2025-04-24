@@ -8,7 +8,7 @@ members = ["crates/*"]
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
-edition = "2021"
+edition = "2024"
 homepage = "https://github.com/prefix-dev/pixi"
 license = "BSD-3-Clause"
 readme = "README.md"
@@ -52,6 +52,7 @@ indicatif = "0.17.11"
 insta = "1.42.1"
 is_executable = "1.0.4"
 itertools = "0.14.0"
+jiff = "0.2.8"
 jsonrpsee = "=0.24.2"
 libc = { version = "0.2.170", default-features = false }
 memchr = "2.7.4"
@@ -120,11 +121,12 @@ rattler_conda_types = { version = "0.32.0", default-features = false, features =
   "rayon",
 ] }
 rattler_digest = { version = "1.1.0", default-features = false }
-rattler_lock = { version = "0.23.0", default-features = false }
+rattler_lock = { version = "0.23.2", default-features = false }
 rattler_menuinst = { version = "0.2.6", default-features = false }
 rattler_networking = { version = "0.22.11", default-features = false, features = [
   "google-cloud-auth",
 ] }
+rattler_package_streaming = { version = "0.22.36", default-features = false }
 rattler_repodata_gateway = { version = "0.22.4", default-features = false }
 rattler_shell = { version = "0.22.25", default-features = false }
 rattler_solve = { version = "1.4.3", default-features = false }
@@ -182,7 +184,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.45.0"
+version = "0.46.0"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -249,7 +251,7 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
-priority-queue = ">=2.1.2,<2.2.1" # need by uv, avoid update edition to 2024
+pathdiff = { workspace = true }
 rstest = { workspace = true }
 uv-build-frontend = { workspace = true }
 uv-distribution-filename = { workspace = true }
@@ -287,10 +289,7 @@ pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
-pixi_manifest = { workspace = true, features = [
-  "rattler_lock",
-  "rattler_solve",
-] }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
@@ -419,6 +418,19 @@ allow-dirty = ["msi", "ci"]
 # Whether to sign macOS executables
 macos-sign = true
 
+[workspace.metadata.dist.github-custom-runners]
+# macOS targets
+aarch64-apple-darwin = "macos-latest"
+x86_64-apple-darwin = "macos-latest"
+
+# Windows targets
+aarch64-pc-windows-msvc = "windows_x64_2025_large"
+x86_64-pc-windows-msvc = "windows_x64_2025_large"
+
+# Linux targets
+aarch64-unknown-linux-musl = "8core_ubuntu_latest_runner"
+x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
+
 [workspace.metadata.dist.dependencies.apt]
 gcc-aarch64-linux-gnu = { version = '*', targets = [
   "aarch64-unknown-linux-gnu",
@@ -428,6 +440,3 @@ gcc-aarch64-linux-gnu = { version = '*', targets = [
 # Package config for `dist`
 [package.metadata.dist]
 features = ["self_update", "performance"]
-
-[package.metadata.cargo-machete]
-ignored = ["priority-queue"] # need by uv, avoid update edition to 2024

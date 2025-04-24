@@ -1,6 +1,6 @@
 use crate::BinarySpec;
 use itertools::Either;
-use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
+use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::serde_as;
 use url::Url;

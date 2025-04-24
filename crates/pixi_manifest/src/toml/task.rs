@@ -2,16 +2,22 @@ use std::str::FromStr;
 
 use pixi_toml::{TomlFromStr, TomlIndexMap};
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, ErrorKind, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 
 use crate::{
-    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg},
-    warning::Deprecation,
     EnvironmentName, Task, TaskName, WithWarnings,
+    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg, TemplateString},
+    warning::Deprecation,
 };
+
+impl<'de> toml_span::Deserialize<'de> for TemplateString {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        Ok(TemplateString::new(value.take_string(None)?.into_owned()))
+    }
+}
 
 impl<'de> toml_span::Deserialize<'de> for TaskArg {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {

@@ -31,9 +31,9 @@ use pep508_rs::Requirement;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    pypi::PyPiPackageName, AssociateProvenance, EnvironmentName, Environments,
-    ExplicitManifestError, HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests,
-    PackageManifest, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
+    HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
+    SpecType, WithProvenance, WithWarnings, WorkspaceManifest, pypi::PyPiPackageName,
 };
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
@@ -50,7 +50,7 @@ pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
     lock_file::filter_lock_file,
 };
@@ -584,7 +584,7 @@ impl Workspace {
                                     Err(err) => {
                                         return Err(err).into_diagnostic().context(format!(
                                             "Could not convert {mapping_location} to URL"
-                                        ))
+                                        ));
                                     }
                                 }
                             } else {
@@ -1077,21 +1077,27 @@ mod tests {
         )
         .unwrap();
 
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
-            .unwrap());
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
     }
 
     #[test]

@@ -1,13 +1,13 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use crate::{
-    cli::cli_config::WorkspaceConfig,
-    diff::{LockFileDiff, LockFileJsonDiff},
-    WorkspaceLocator,
+    Workspace,
+    lock_file::{UpdateContext, filter_lock_file},
 };
 use crate::{
-    lock_file::{filter_lock_file, UpdateContext},
-    Workspace,
+    WorkspaceLocator,
+    cli::cli_config::WorkspaceConfig,
+    diff::{LockFileDiff, LockFileJsonDiff},
 };
 use clap::Parser;
 use fancy_display::FancyDisplay;
