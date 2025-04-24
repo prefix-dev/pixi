@@ -52,6 +52,7 @@ indicatif = "0.17.11"
 insta = "1.42.1"
 is_executable = "1.0.4"
 itertools = "0.14.0"
+jiff = "0.2.8"
 jsonrpsee = "=0.24.2"
 libc = { version = "0.2.170", default-features = false }
 memchr = "2.7.4"
@@ -120,7 +121,7 @@ rattler_conda_types = { version = "0.32.0", default-features = false, features =
   "rayon",
 ] }
 rattler_digest = { version = "1.1.0", default-features = false }
-rattler_lock = { version = "0.23.0", default-features = false }
+rattler_lock = { version = "0.23.2", default-features = false }
 rattler_menuinst = { version = "0.2.6", default-features = false }
 rattler_networking = { version = "0.22.11", default-features = false, features = [
   "google-cloud-auth",
@@ -288,10 +289,7 @@ pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
-pixi_manifest = { workspace = true, features = [
-  "rattler_lock",
-  "rattler_solve",
-] }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
