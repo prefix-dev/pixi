@@ -238,6 +238,22 @@ requires-pixi = ">=0.40,<1.0"
     This option should be used to improve the reproducibility of building the workspace. A complicated
     requirement spec may be an obstacle to setup the building environment.
 
+
+### `exclude-newer` (optional)
+
+When specified this will exclude any package from consideration that is newer than the specified date.
+This is useful to reproduce installations regardless of new package releases.
+
+The date may be specified in the following formats:
+
+* As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
+* As a date in the format `YYYY-MM-DD` (e.g. `2023-10-01`) in the systems time zone.
+
+Both PyPi and conda packages are considered.
+
+!! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your workspace.

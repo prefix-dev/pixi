@@ -711,7 +711,7 @@ async fn test_disabled_mapping() {
         r#"
     [project]
     name = "test-channel-change"
-    channels = ["conda-forge"]
+    channels = ["https://prefix.dev/conda-forge"]
     platforms = ["linux-64"]
     conda-pypi-map = { }
     "#,

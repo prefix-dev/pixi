@@ -4643,6 +4643,7 @@ name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "chrono",
  "console",
  "dunce",
  "fancy_display",
@@ -4788,7 +4789,9 @@ dependencies = [
 name = "pixi_uv_conversions"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "dunce",
+ "jiff",
  "miette 7.5.0",
  "pep440_rs",
  "pep508_rs",
@@ -4809,6 +4812,7 @@ dependencies = [
  "uv-pep508",
  "uv-pypi-types",
  "uv-python",
+ "uv-resolver",
  "uv-types",
 ]
 

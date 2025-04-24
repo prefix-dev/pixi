@@ -6,6 +6,7 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
+mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -25,7 +26,6 @@ pub mod toml;
 pub mod utils;
 mod warning;
 mod workspace;
-
 pub use activation::Activation;
 pub use build_system::BuildBackend;
 pub use build_system::PackageBuild;
