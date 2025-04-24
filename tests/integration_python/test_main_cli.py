@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import shutil
+from syrupy.assertion import SnapshotAssertion
 
 from .common import (
     cwd,
@@ -1003,9 +1004,17 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     dot_pixi = tmp_pixi_workspace / ".pixi"
     shutil.rmtree(dot_pixi)
 
-    # Run pixi lock to recreate the lock file
+    # Run pixi lock to recreate the lock file and validate the return code with --check is 1
     verify_cli_command(
-        [pixi, "lock", "--manifest-path", manifest_path], stderr_contains=["+", "dummy-a"]
+        [pixi, "lock", "--manifest-path", manifest_path, "--check"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains=["+", "dummy-a"],
+    )
+
+    # Run pixi lock again to validate that the return code with --check is 0
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest_path, "--check"],
+        expected_exit_code=ExitCode.SUCCESS,
     )
 
     # Read the recreated lock file content
@@ -1212,3 +1221,95 @@ def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
     verify_cli_command([pixi, "info", "--manifest-path", manifest], stdout_contains="foo, bar")
+
+
+def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        foo = "echo foo"
+
+        [target.unix.tasks]
+        bar = "echo bar"
+
+        [target.win.tasks]
+        bar = "echo bar"
+        """
+    manifest.write_text(toml)
+    verify_cli_command(
+        [pixi, "task", "list", "--manifest-path", manifest], stderr_contains=["foo", "bar"]
+    )
+
+
+def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+        """
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "task", "alias", "dummy-a", "dummy-b", "dummy-c", "--manifest-path", manifest]
+    )
+    # Test platform-specific task alias
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "alias",
+            "--platform",
+            "linux-64",
+            "linux-alias",
+            "dummy-b",
+            "dummy-c",
+            "--manifest-path",
+            manifest,
+        ]
+    )
+
+    with open(manifest, "rb") as f:
+        manifest_content = tomllib.load(f)
+
+    assert "target" in manifest_content
+    assert "linux-64" in manifest_content["target"]
+    assert "tasks" in manifest_content["target"]["linux-64"]
+    assert "linux-alias" in manifest_content["target"]["linux-64"]["tasks"]
+    assert manifest_content["target"]["linux-64"]["tasks"]["linux-alias"] == [
+        {"task": "dummy-b"},
+        {"task": "dummy-c"},
+    ]
+
+    assert "dummy-a" in manifest_content["tasks"]
+    assert manifest_content["tasks"]["dummy-a"] == [{"task": "dummy-b"}, {"task": "dummy-c"}]
+
+
+def test_pixi_task_list_json(
+    pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        test-task = { cmd = "echo 'Hello {{name | title}}'", args = [{arg = "name", default = "World"}] }
+        """
+    manifest.write_text(toml)
+
+    result = verify_cli_command(
+        [pixi, "task", "list", "--json", "--manifest-path", manifest], ExitCode.SUCCESS
+    )
+
+    task_data = json.loads(result.stdout)
+
+    assert task_data == snapshot

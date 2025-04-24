@@ -13,7 +13,7 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
 ## Create a Pixi workspace
 
 ```shell
-pixi init my_ros2_project -c robostack-staging -c conda-forge
+pixi init my_ros2_project -c robostack-humble -c conda-forge
 cd my_ros2_project
 ```
 
@@ -34,7 +34,7 @@ name = "my_ros2_project"
 version = "0.1.0"
 description = "Add a short description here"
 authors = ["User Name <user.name@email.url>"]
-channels = ["robostack-staging", "conda-forge"]
+channels = ["robostack-humble", "conda-forge"]
 # Your project can support multiple platforms, the current platform will be automatically added.
 platforms = ["linux-64"]
 
@@ -225,6 +225,9 @@ Let's inspire the community together!
 Currently, we don't support `rosdep` in a Pixi environment, so you'll have to add the packages using `pixi add`.
 `rosdep` will call `conda install` which isn't supported in a Pixi environment.
 
+### Where can I find more documentation on the `robostack-*` channels?
+
+You can find more documentation on RoboStack channels in the [RoboStack documentation](https://robostack.github.io/).
 
 ### Community examples
 

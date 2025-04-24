@@ -1,7 +1,7 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
 
-use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
+use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig};
 use fancy_display::FancyDisplay;
 use pixi_manifest::FeaturesExt;
 

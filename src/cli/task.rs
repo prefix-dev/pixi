@@ -11,8 +11,8 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::{
-    task::{quote, Alias, CmdArgs, Execute, Task, TaskName},
     EnvironmentName, FeatureName,
+    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
 };
 use rattler_conda_types::Platform;
 use serde::Serialize;
@@ -20,9 +20,9 @@ use serde_with::serde_as;
 
 use crate::workspace::virtual_packages::verify_current_platform_can_run_environment;
 use crate::{
+    Workspace, WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     workspace::{Environment, WorkspaceMut},
-    Workspace, WorkspaceLocator,
 };
 
 #[derive(Parser, Debug)]
@@ -73,7 +73,7 @@ pub struct AddArgs {
     /// Depends on these other commands.
     #[clap(long)]
     #[clap(num_args = 1..)]
-    pub depends_on: Option<Vec<TaskName>>,
+    pub depends_on: Option<Vec<Dependency>>,
 
     /// The platform for which the task should be added.
     #[arg(long, short)]
@@ -100,6 +100,10 @@ pub struct AddArgs {
     /// environment to run the task.
     #[arg(long)]
     pub clean_env: bool,
+
+    /// The arguments to pass to the task
+    #[arg(long, num_args = 1..)]
+    pub args: Option<Vec<TaskArg>>,
 }
 
 /// Parse a single key-value pair
@@ -120,7 +124,7 @@ pub struct AliasArgs {
 
     /// Depends on these tasks to execute
     #[clap(required = true, num_args = 1..)]
-    pub depends_on: Vec<TaskName>,
+    pub depends_on: Vec<Dependency>,
 
     /// The platform for which the alias should be added
     #[arg(long, short)]
@@ -188,7 +192,7 @@ impl From<AddArgs> for Task {
             && value.env.is_empty()
             && description.is_none()
         {
-            Self::Plain(cmd_args)
+            Self::Plain(cmd_args.into())
         } else {
             let clean_env = value.clean_env;
             let cwd = value.cwd;
@@ -201,9 +205,10 @@ impl From<AddArgs> for Task {
                 }
                 Some(env)
             };
+            let args = value.args;
 
-            Self::Execute(Execute {
-                cmd: CmdArgs::Single(cmd_args),
+            Self::Execute(Box::new(Execute {
+                cmd: CmdArgs::Single(cmd_args.into()),
                 depends_on,
                 inputs: None,
                 outputs: None,
@@ -211,7 +216,8 @@ impl From<AddArgs> for Task {
                 env,
                 description,
                 clean_env,
-            })
+                args,
+            }))
         }
     }
 }
@@ -356,11 +362,10 @@ async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> 
         .map(|(env, task_names)| {
             let task_map = task_names
                 .into_iter()
-                .map(|task_name| {
-                    let task = env
-                        .task(&task_name, None)
-                        .expect("task should be available here");
-                    (task_name, task)
+                .flat_map(|task_name| {
+                    env.task(&task_name, Some(env.best_platform()))
+                        .ok()
+                        .map(|task| (task_name, task))
                 })
                 .collect();
             (env, task_map)
@@ -378,7 +383,7 @@ async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Res
         name.clone(),
         task.clone(),
         args.platform,
-        &FeatureName::Default,
+        &FeatureName::DEFAULT,
     )?;
     workspace.save().await.into_diagnostic()?;
     eprintln!(
@@ -394,7 +399,7 @@ async fn remove_tasks(mut workspace: WorkspaceMut, args: RemoveArgs) -> miette::
     let mut to_remove = Vec::new();
     let feature = args
         .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
+        .map_or_else(FeatureName::default, FeatureName::from);
     for name in args.names.iter() {
         if let Some(platform) = args.platform {
             if !workspace
@@ -458,7 +463,7 @@ async fn add_task(mut workspace: WorkspaceMut, args: AddArgs) -> miette::Result<
     let task: Task = args.clone().into();
     let feature = args
         .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
+        .map_or_else(FeatureName::default, FeatureName::from);
     workspace
         .manifest()
         .add_task(name.clone(), task.clone(), args.platform, &feature)?;
@@ -544,7 +549,8 @@ impl From<(&FeatureName, &HashMap<&TaskName, &Task>)> for SerializableFeature {
 pub struct TaskInfo {
     cmd: Option<String>,
     description: Option<String>,
-    depends_on: Vec<TaskName>,
+    depends_on: Vec<Dependency>,
+    args: Option<Vec<TaskArg>>,
     cwd: Option<PathBuf>,
     env: Option<IndexMap<String, String>>,
     clean_env: bool,
@@ -555,18 +561,28 @@ pub struct TaskInfo {
 impl From<&Task> for TaskInfo {
     fn from(task: &Task) -> Self {
         TaskInfo {
-            cmd: task.as_single_command().map(|cmd| cmd.to_string()),
+            cmd: task
+                .as_single_command_no_render()
+                .ok()
+                .and_then(|cmd| cmd.map(|c| c.to_string())),
             description: task.description().map(|desc| desc.to_string()),
             depends_on: task.depends_on().to_vec(),
+            args: task.args().map(|args| args.to_vec()),
             cwd: task.working_directory().map(PathBuf::from),
             env: task.env().cloned(),
             clean_env: task.clean_env(),
-            inputs: task
-                .inputs()
-                .map(|inputs| inputs.iter().map(String::from).collect()),
-            outputs: task
-                .outputs()
-                .map(|outputs| outputs.iter().map(String::from).collect()),
+            inputs: task.inputs().map(|inputs| {
+                inputs
+                    .iter()
+                    .map(|input| input.source().to_string())
+                    .collect()
+            }),
+            outputs: task.outputs().map(|outputs| {
+                outputs
+                    .iter()
+                    .map(|output| output.source().to_string())
+                    .collect()
+            }),
         }
     }
 }

@@ -4,11 +4,11 @@
 ## About
 Get the workspace name
 
---8<-- "docs/reference/cli/pixi/workspace/name/get_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/name/get_extender:description"
 
 ## Usage
 ```
 pixi workspace name get
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/name/get_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/name/get_extender:example"

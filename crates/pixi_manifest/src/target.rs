@@ -1,17 +1,17 @@
 use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
-use indexmap::{map::Entry, IndexMap};
+use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
 use crate::{
+    DependencyOverwriteBehavior, PyPiRequirement, SpecType,
     activation::Activation,
     pypi::PyPiPackageName,
     task::{Task, TaskName},
     utils::PixiSpanned,
-    DependencyOverwriteBehavior, PyPiRequirement, SpecType,
 };
 
 /// A workspace target describes the dependencies, activations and task
@@ -159,7 +159,7 @@ impl WorkspaceTarget {
         if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
                 DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
-                    return Ok(false)
+                    return Ok(false);
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {
@@ -340,7 +340,7 @@ impl PackageTarget {
         if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
                 DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
-                    return Ok(false)
+                    return Ok(false);
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {

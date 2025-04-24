@@ -4,7 +4,7 @@
 ## About
 Runs task in the pixi environment
 
---8<-- "docs/reference/cli/pixi/run_extender.md:description"
+--8<-- "docs/reference/cli/pixi/run_extender:description"
 
 ## Usage
 ```
@@ -15,6 +15,18 @@ pixi run [OPTIONS] [TASK]...
 - <a id="arg-<TASK>" href="#arg-<TASK>">`<TASK>`</a>
 :  The pixi task or a task shell command you want to run in the workspace's environment, which can be an executable in the environment's PATH
 <br>May be provided more than once.
+
+## Options
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to run the task in
+- <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
+:  Use a clean environment to run the task
+- <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
+:  Don't run the dependencies of the task ('depends-on' field in the task definition)
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Run the task in dry-run mode (only print the command that would run)
+- <a id="arg---help" href="#arg---help">`--help`</a>
+:
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -30,9 +42,8 @@ pixi run [OPTIONS] [TASK]...
 :  Max concurrent network requests, default is `50`
 - <a id="arg---force-activate" href="#arg---force-activate">`--force-activate`</a>
 :  Do not use the environment activation cache. (default: true except in experimental mode)
-- <a id="arg---no-completion" href="#arg---no-completion">`--no-completion <NO_COMPLETION>`</a>
+- <a id="arg---no-completions" href="#arg---no-completions">`--no-completions`</a>
 :  Do not source the autocompletion scripts from the environment
-<br>**options**: `true`, `false`
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
@@ -47,16 +58,6 @@ pixi run [OPTIONS] [TASK]...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to run the task in
-- <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
-:  Use a clean environment to run the task
-- <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
-:  Don't run the dependencies of the task ('depends-on' field in the task definition)
-- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Run the task in dry-run mode (only print the command that would run)
-- <a id="arg---help" href="#arg---help">`--help`</a>
-:
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
@@ -70,4 +71,4 @@ This command is used to run tasks in the pixi environment. It will activate the 
 `pixi run` will also update the lockfile and install the environment if it is required.
 
 
---8<-- "docs/reference/cli/pixi/run_extender.md:example"
+--8<-- "docs/reference/cli/pixi/run_extender:example"

@@ -1,14 +1,15 @@
 # shellcheck shell=bash
 pixi() {
-    local first_arg="$1"
-    local cmd="$PIXI_EXE $*"
+    local first_arg="${1-}"
 
-    eval "$cmd"
+    "${PIXI_EXE-}" "$@" || return $?
 
-    case "$first_arg" in
-        add|a|remove|rm|install|i)
-            eval "$($PIXI_EXE shell-hook --change-ps1 false)"
-            hash -r
-            ;;
-    esac
+    case "${first_arg-}" in
+    add | a | remove | rm | install | i)
+        eval "$("$PIXI_EXE" shell-hook --change-ps1 false)"
+        hash -r
+        ;;
+    esac || :
+
+    return 0
 }

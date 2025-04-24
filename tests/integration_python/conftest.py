@@ -50,6 +50,22 @@ def test_data() -> Path:
 
 
 @pytest.fixture
+def pypi_data(test_data: Path) -> Path:
+    """
+    Returns the pixi pypi test data
+    """
+    return test_data.joinpath("pypi")
+
+
+@pytest.fixture
+def pixi_tomls(test_data: Path) -> Path:
+    """
+    Returns the pixi pypi test data
+    """
+    return test_data.joinpath("pixi_tomls")
+
+
+@pytest.fixture
 def mock_projects(test_data: Path) -> Path:
     return test_data.joinpath("mock-projects")
 
@@ -94,5 +110,21 @@ def shortcuts_channel_1(channels: Path) -> str:
     return channels.joinpath("shortcuts_channel_1").as_uri()
 
 
+@pytest.fixture
+def post_link_script_channel(channels: Path) -> str:
+    return channels.joinpath("post_link_script_channel").as_uri()
+
+
+@pytest.fixture
+def deno_channel(channels: Path) -> str:
+    return channels.joinpath("deno_channel").as_uri()
+
+
+@pytest.fixture
+def completions_channel_1(channels: Path) -> str:
+    return channels.joinpath("completions_channel_1").as_uri()
+
+
+@pytest.fixture
 def doc_pixi_workspaces() -> Path:
     return Path(__file__).parents[2].joinpath("docs", "source_files", "pixi_workspaces")

@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_config/src/lib.rs
+assertion_line: 2213
 expression: debug
 ---
 Config {
@@ -133,10 +134,19 @@ Config {
         solves: 1,
         downloads: 50,
     },
+    run_post_link_scripts: None,
     proxy_config: ProxyConfig {
         https: None,
         http: None,
         non_proxy_hosts: [],
+    },
+    build: BuildConfig {
+        package_format: Some(
+            PackageFormatAndCompression {
+                archive_type: Conda,
+                compression_level: Highest,
+            },
+        ),
     },
     change_ps1: None,
     force_activate: None,

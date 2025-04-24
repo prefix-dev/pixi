@@ -1,0 +1,35 @@
+[project]
+authors = ["Parsa <parsa@prefix.dev>"]
+channels = ["conda-forge"]
+description = "Example demonstrating task arguments in pixi"
+name = "simple-calculator"
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+version = "0.1.0"
+
+[dependencies]
+python = ">=3.10"
+
+[tasks.greeting]
+args = [
+  { arg = "name", default = "User" },
+  { arg = "project", default = "Pixi" },
+]
+cmd = "echo Hello, {{ name }}! Welcome to {{ project }}"
+
+[tasks.calculate]
+args = ["operation", "number1", "number2"]
+cmd = "python -c \"from calculator import {{ operation }}; print({{ operation }}({{ number1 }}, {{ number2 }}))\""
+
+[tasks.run-pipeline]
+cmd = "echo Pipeline completed"
+depends-on = [
+  { task = "greeting", args = [
+    "Developer",
+    "Task Arguments Example",
+  ] },
+  { task = "calculate", args = [
+    "sum",
+    "5",
+    "10",
+  ] },
+]

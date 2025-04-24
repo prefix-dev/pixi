@@ -7,7 +7,7 @@ use tokio::sync::Semaphore;
 use url::Url;
 
 use crate::{
-    is_conda_forge_record, CacheMetrics, CompressedMapping, DerivePurls, MappingError, PurlSource,
+    CacheMetrics, CompressedMapping, DerivePurls, MappingError, PurlSource, is_conda_forge_record,
 };
 
 const COMPRESSED_MAPPING: &str =

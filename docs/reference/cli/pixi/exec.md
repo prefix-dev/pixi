@@ -4,7 +4,7 @@
 ## About
 Run a command and install it in a temporary environment
 
---8<-- "docs/reference/cli/pixi/exec_extender.md:description"
+--8<-- "docs/reference/cli/pixi/exec_extender:description"
 
 ## Usage
 ```
@@ -50,4 +50,4 @@ Run a command and install it in a temporary environment.
 Remove the temporary environments with `pixi clean cache --exec`.
 
 
---8<-- "docs/reference/cli/pixi/exec_extender.md:example"
+--8<-- "docs/reference/cli/pixi/exec_extender:example"

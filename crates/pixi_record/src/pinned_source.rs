@@ -6,10 +6,12 @@ use std::{
 };
 
 use miette::IntoDiagnostic;
-use pixi_git::url::{redact_credentials, RepositoryUrl};
-use pixi_git::{sha::GitSha, GitUrl};
+use pixi_git::{
+    GitUrl,
+    sha::GitSha,
+    url::{RepositoryUrl, redact_credentials},
+};
 use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
-
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
 use thiserror::Error;
@@ -234,7 +236,8 @@ impl PinnedGitCheckout {
 /// Similar with [`GitUrl`] but with a resolved commit field.
 #[derive(Debug, Clone)]
 pub struct PinnedGitSpec {
-    /// The URL of the repository without the revision and subdirectory fragment.
+    /// The URL of the repository without the revision and subdirectory
+    /// fragment.
     pub git: Url,
     /// The resolved git checkout.
     pub source: PinnedGitCheckout,
@@ -307,7 +310,9 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
     }
 }
 
-/// A pinned version of a path based source dependency.
+/// A pinned version of a path based source dependency. Different from a
+/// `PathSpec` this path is always either absolute or relative to the project
+/// root.
 #[derive(Debug, Clone)]
 pub struct PinnedPathSpec {
     /// The path of the source.
@@ -382,8 +387,8 @@ impl LockedGitUrl {
     }
 
     /// Returns true if the given URL is a locked git URL.
-    /// This is used to differentiate between a regular Url and a [`LockedGitUrl`]
-    /// that starts with `git+`.
+    /// This is used to differentiate between a regular Url and a
+    /// [`LockedGitUrl`] that starts with `git+`.
     pub fn is_locked_git_url(locked_url: &Url) -> bool {
         locked_url.scheme().starts_with("git+")
     }
@@ -491,7 +496,9 @@ pub enum SourceMismatchError {
         requested: Url,
     },
 
-    #[error("the locked {hash} of url '{url}' ({locked}) does not match the requested {hash} ({requested})")]
+    #[error(
+        "the locked {hash} of url '{url}' ({locked}) does not match the requested {hash} ({requested})"
+    )]
     /// The locked hash of the url does not match the requested hash.
     UrlHashMismatch {
         /// The hash
@@ -504,7 +511,9 @@ pub enum SourceMismatchError {
         requested: String,
     },
 
-    #[error("the locked git rev '{locked}' for '{git}' does not match the requested git rev '{requested}'")]
+    #[error(
+        "the locked git rev '{locked}' for '{git}' does not match the requested git rev '{requested}'"
+    )]
     /// The locked git rev does not match the requested git rev.
     GitRevMismatch {
         /// The git url.
@@ -515,7 +524,9 @@ pub enum SourceMismatchError {
         requested: String,
     },
 
-    #[error("the locked git subdirectory '{locked:?}' for '{git}' does not match the requested git subdirectory '{requested:?}'")]
+    #[error(
+        "the locked git subdirectory '{locked:?}' for '{git}' does not match the requested git subdirectory '{requested:?}'"
+    )]
     /// The locked git rev does not match the requested git rev.
     GitSubdirectoryMismatch {
         /// The git url.
@@ -638,7 +649,7 @@ impl Display for PinnedSourceSpec {
         match self {
             PinnedSourceSpec::Path(spec) => write!(f, "{}", spec.path),
             PinnedSourceSpec::Url(spec) => write!(f, "{}", spec.url),
-            PinnedSourceSpec::Git(spec) => write!(f, "{}", spec.git),
+            PinnedSourceSpec::Git(spec) => write!(f, "{}@{}", spec.git, spec.source.commit),
         }
     }
 }
@@ -658,6 +669,42 @@ impl Display for PinnedPathSpec {
 impl Display for PinnedGitSpec {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}@{}", self.git, self.source.commit)
+    }
+}
+
+impl From<PinnedSourceSpec> for SourceSpec {
+    fn from(value: PinnedSourceSpec) -> Self {
+        match value {
+            PinnedSourceSpec::Url(url) => SourceSpec::Url(url.into()),
+            PinnedSourceSpec::Git(git) => SourceSpec::Git(git.into()),
+            PinnedSourceSpec::Path(path) => SourceSpec::Path(path.into()),
+        }
+    }
+}
+
+impl From<PinnedPathSpec> for PathSourceSpec {
+    fn from(value: PinnedPathSpec) -> Self {
+        Self { path: value.path }
+    }
+}
+
+impl From<PinnedUrlSpec> for UrlSourceSpec {
+    fn from(value: PinnedUrlSpec) -> Self {
+        Self {
+            url: value.url,
+            sha256: Some(value.sha256),
+            md5: value.md5,
+        }
+    }
+}
+
+impl From<PinnedGitSpec> for GitSpec {
+    fn from(value: PinnedGitSpec) -> Self {
+        Self {
+            git: value.git,
+            subdirectory: value.source.subdirectory,
+            rev: Some(value.source.reference),
+        }
     }
 }
 

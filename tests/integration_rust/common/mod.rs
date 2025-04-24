@@ -5,6 +5,7 @@ pub mod client;
 pub mod package_database;
 
 use std::{
+    ffi::OsString,
     path::{Path, PathBuf},
     process::Output,
     str::FromStr,
@@ -14,21 +15,21 @@ use builders::SearchBuilder;
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
+    UpdateLockFileOptions, Workspace,
     cli::{
-        add,
+        LockFileUsageConfig, add,
         cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
         remove, run, search,
         task::{self, AddArgs, AliasArgs},
-        update, workspace, LockFileUsageConfig,
+        update, workspace,
     },
     lock_file::{ReinstallPackages, UpdateMode},
     task::{
-        get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-        TaskGraphError, TaskName,
+        ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
+        TaskGraphError, TaskName, get_task_env,
     },
-    UpdateLockFileOptions, Workspace,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -527,7 +528,12 @@ impl PixiControl {
                 Some(task_env) => task_env,
             };
 
-            let output = task.execute_with_pipes(task_env, None).await?;
+            let task_env = task_env
+                .iter()
+                .map(|(k, v)| (OsString::from(k), OsString::from(v)))
+                .collect();
+
+            let output = task.execute_with_pipes(&task_env, None).await?;
             result.stdout.push_str(&output.stdout);
             result.stderr.push_str(&output.stderr);
             result.exit_code = output.exit_code;
@@ -612,7 +618,6 @@ impl TasksControl<'_> {
         platform: Option<Platform>,
         feature_name: FeatureName,
     ) -> TaskAddBuilder {
-        let feature = feature_name.name().map(|s| s.to_string());
         TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
@@ -620,11 +625,12 @@ impl TasksControl<'_> {
                 commands: vec![],
                 depends_on: None,
                 platform,
-                feature,
+                feature: feature_name.non_default().map(str::to_owned),
                 cwd: None,
                 env: Default::default(),
                 description: None,
                 clean_env: false,
+                args: None,
             },
         }
     }

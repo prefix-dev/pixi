@@ -6,17 +6,17 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
-use pixi_manifest::{toml::TomlPlatform, utils::package_map::UniquePackageMap, PrioritizedChannel};
+use pixi_manifest::{PrioritizedChannel, toml::TomlPlatform, utils::package_map::UniquePackageMap};
 use pixi_spec::PixiSpec;
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
-use serde::{ser::SerializeMap, Serialize, Serializer};
+use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_with::serde_derive::Deserialize;
 use thiserror::Error;
-use toml_span::{de_helpers::TableHelper, DeserError, Deserialize, Value};
+use toml_span::{DeserError, Deserialize, Value, de_helpers::TableHelper};
 
-use super::{environment::EnvironmentName, ExposedData};
-use crate::global::{project::manifest::TomlMapping, Mapping};
+use super::{ExposedData, environment::EnvironmentName};
+use crate::global::{Mapping, project::manifest::TomlMapping};
 
 pub const GLOBAL_MANIFEST_VERSION: i64 = 1;
 
@@ -41,10 +41,12 @@ pub enum ManifestParsingError {
     Error(#[from] toml_edit::TomlError),
     #[error(transparent)]
     TomlError(#[from] toml_span::Error),
-    #[error("The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest"
+    #[error(
+        "The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest"
     )]
     VersionTooLow(i64, #[source] toml_span::Error),
-    #[error("The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version"
+    #[error(
+        "The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version"
     )]
     VersionTooHigh(i64, #[source] toml_span::Error),
 }
@@ -387,6 +389,12 @@ impl<'de> toml_span::Deserialize<'de> for ExposedName {
     }
 }
 
+impl AsRef<str> for ExposedName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Represents an error that occurs when parsing an binary exposed name.
 ///
 /// This error is returned when a string fails to be parsed as an environment
@@ -408,13 +416,15 @@ mod tests {
             "[envs.ipython.invalid]",
             r#"[envs."python;3".dependencies]"#,
         ];
-        assert_snapshot!(examples
-            .into_iter()
-            .map(|example| ParsedManifest::from_toml_str(example)
-                .unwrap_err()
-                .to_string())
-            .collect::<Vec<_>>()
-            .join("\n"))
+        assert_snapshot!(
+            examples
+                .into_iter()
+                .map(|example| ParsedManifest::from_toml_str(example)
+                    .unwrap_err()
+                    .to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     }
 
     #[test]
@@ -487,10 +497,12 @@ mod tests {
 
         assert!(manifest.is_err());
         // Replace back the executable name with "pixi" to satisfy the snapshot
-        assert_snapshot!(manifest
-            .unwrap_err()
-            .to_string()
-            .replace(pixi_utils::executable_name(), "pixi"));
+        assert_snapshot!(
+            manifest
+                .unwrap_err()
+                .to_string()
+                .replace(pixi_utils::executable_name(), "pixi")
+        );
     }
 
     #[test]

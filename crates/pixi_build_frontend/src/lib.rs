@@ -6,8 +6,8 @@ mod protocols;
 
 use std::fmt::{Debug, Formatter};
 
-pub use protocols::builders::{pixi_protocol, rattler_build_protocol};
 pub use protocols::JsonRPCBuildProtocol;
+pub use protocols::builders::{pixi_protocol, rattler_build_protocol};
 
 mod protocol_builder;
 mod reporters;

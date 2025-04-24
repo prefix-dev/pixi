@@ -7,8 +7,8 @@
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    package::ArchiveType, ChannelInfo, PackageName, PackageRecord, Platform, RepoData,
-    VersionWithSource,
+    ChannelInfo, PackageName, PackageRecord, Platform, RepoData, VersionWithSource,
+    package::ArchiveType,
 };
 use std::{collections::HashSet, path::Path};
 use tempfile::TempDir;
@@ -63,7 +63,7 @@ impl PackageDatabase {
 
             let repodata = RepoData {
                 info: Some(ChannelInfo {
-                    subdir: platform.to_string(),
+                    subdir: Some(platform.to_string()),
                     base_url: None,
                 }),
                 packages: self

@@ -10,11 +10,10 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{
-        self,
-        common::{contains_menuinst_document, NotChangedReason},
+        self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+        common::{NotChangedReason, contains_menuinst_document},
         list::list_all_global_environments,
         project::ExposedType,
-        EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -244,6 +243,9 @@ async fn setup_environment(
     state_changes |= project
         .expose_executables_from_environment(env_name)
         .await?;
+
+    // Sync completions
+    state_changes |= project.sync_completions(env_name).await?;
 
     project.manifest.save().await?;
     Ok(state_changes)

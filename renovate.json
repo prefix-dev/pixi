@@ -1,0 +1,62 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":maintainLockFilesMonthly"],
+  "schedule": ["on tuesday"],
+  "enabledManagers": ["github-actions", "pixi", "cargo"],
+  "commitMessagePrefix": "chore(ci):",
+  "ignorePaths": ["**/examples/**", "**/docs/**", "**/tests/**"],
+  "packageRules": [
+    {
+      "groupName": "GitHub Actions",
+      "matchManagers": ["github-actions"]
+    },
+    {
+      "description": "We run multiple macOS runner versions on purpose since 13 runs on x86_64",
+      "matchPackageNames": "macos",
+      "matchManagers": ["github-actions"],
+      "enabled": false
+    },
+    {
+      "description": "Rust >=1.85 is needed to update the cargo-machete action",
+      "matchPackageNames": "bnjbvr/cargo-machete",
+      "matchManagers": ["github-actions"],
+      "enabled": false
+    },
+    {
+      "groupName": "Pixi",
+      "matchManagers": ["pixi"]
+    },
+    {
+      "groupName": "Pixi-Lock",
+      "matchManagers": ["pixi"],
+      "matchUpdateTypes": ["lockFileMaintenance"]
+    },
+    {
+      "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
+      "matchPackageNames": "rust",
+      "matchManagers": ["pixi"],
+      "enabled": false
+    },
+    {
+      "groupName": "Cargo",
+      "matchManagers": ["cargo"]
+    },
+    {
+      "groupName": "Cargo-Lock",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["lockFileMaintenance"]
+    },
+    {
+      "description": "We want a separate PR for rattler crates",
+      "matchPackageNames": ["rattler*", "file_url"],
+      "matchManagers": ["cargo"],
+      "separateMajorMinor": false
+    },
+    {
+      "description": "Rust >=1.85 is needed to update deno_task_shell",
+      "matchPackageNames": "deno_task_shell",
+      "matchManagers": ["cargo"],
+      "enabled": false
+    }
+  ]
+}

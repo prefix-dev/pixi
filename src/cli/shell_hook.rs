@@ -12,13 +12,13 @@ use serde::Serialize;
 use serde_json;
 
 use crate::{
-    activation::{get_activator, CurrentEnvVarBehavior},
+    UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    activation::{CurrentEnvVarBehavior, get_activator},
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
     lock_file::ReinstallPackages,
     prompt,
-    workspace::{get_activated_environment_variables, Environment, HasWorkspaceRef},
-    UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    workspace::{Environment, HasWorkspaceRef, get_activated_environment_variables},
 };
 
 use super::cli_config::LockFileUpdateConfig;
@@ -109,7 +109,7 @@ async fn generate_activation_script(
     let hook = prompt::shell_hook(&shell).unwrap_or_default().to_owned();
 
     if project.config().change_ps1() {
-        let prompt_name = prompt::prompt_name(project.name(), environment.name());
+        let prompt_name = prompt::prompt_name(project.display_name(), environment.name());
         let shell_prompt = prompt::shell_prompt(&shell, prompt_name.as_str());
         Ok([script, hook, shell_prompt].join("\n"))
     } else {
@@ -145,9 +145,9 @@ async fn generate_environment_json(
 /// Prints the activation script to the stdout.
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
-        .prompt_config
-        .merge_config(args.activation_config.into())
-        .merge_config(args.config.clone().into());
+        .activation_config
+        .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
+
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?

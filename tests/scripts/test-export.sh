@@ -50,7 +50,7 @@ rm test-env-custom-registry.yml
 cd ../..
 
 echo "Export an environment.yml with pip find links"
-cd  examples/pypi-find-links
+cd examples/pypi-find-links
 pixi project export conda-environment | tee test-env-find-links.yml
 echo "Creating the pip find links test environment with micromamba"
 micromamba create -y -f test-env-find-links.yml -n export-test-find-links

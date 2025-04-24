@@ -20,14 +20,14 @@ use std::path::PathBuf;
 
 use indexmap::IndexMap;
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
-use rattler_digest::{serde::SerializableHash, Md5, Sha256};
+use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use serde_with::DisplayFromStr;
+use serde_with::serde_as;
 use url::Url;
 
 /// Enum containing all versions of the project model.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "version", content = "data")]
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
@@ -66,7 +66,7 @@ impl VersionedProjectModel {
 /// The source package name of a package. Not normalized per se.
 pub type SourcePackageName = String;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectModelV1 {
     /// The name of the project
@@ -112,7 +112,7 @@ impl From<ProjectModelV1> for VersionedProjectModel {
 
 /// Represents a target selector. Currently we only support explicit platform
 /// selection.
-#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum TargetSelectorV1 {
     // Platform specific configuration
@@ -125,7 +125,7 @@ pub enum TargetSelectorV1 {
 }
 
 /// A collect of targets including a default target.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetsV1 {
     pub default_target: Option<TargetV1>,
@@ -135,7 +135,7 @@ pub struct TargetsV1 {
     pub targets: Option<HashMap<TargetSelectorV1, TargetV1>>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
@@ -148,7 +148,7 @@ pub struct TargetV1 {
     pub run_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PackageSpecV1 {
     /// This is a binary dependency
@@ -157,7 +157,7 @@ pub enum PackageSpecV1 {
     Source(SourcePackageSpecV1),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SourcePackageSpecV1 {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
@@ -175,17 +175,20 @@ pub enum SourcePackageSpecV1 {
     Path(PathSpecV1),
 }
 
-#[derive(Serialize, Deserialize)]
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UrlSpecV1 {
     /// The URL of the package
     pub url: Url,
 
     /// The md5 hash of the package
-    pub md5: Option<SerializableHash<Md5>>,
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
+    pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the package
-    pub sha256: Option<SerializableHash<Sha256>>,
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
+    pub sha256: Option<Sha256Hash>,
 }
 
 impl std::fmt::Debug for UrlSpecV1 {
@@ -194,17 +197,17 @@ impl std::fmt::Debug for UrlSpecV1 {
 
         debug_struct.field("url", &self.url);
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5.0));
+            debug_struct.field("md5", &format!("{:x}", md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256.0));
+            debug_struct.field("sha256", &format!("{:x}", sha256));
         }
         debug_struct.finish()
     }
 }
 
 /// A specification of a package from a git repository.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GitSpecV1 {
     /// The git url of the package which can contain git+ prefixes.
@@ -218,7 +221,7 @@ pub struct GitSpecV1 {
 }
 
 /// A specification of a package from a git repository.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PathSpecV1 {
     /// The path to the package
@@ -226,7 +229,7 @@ pub struct PathSpecV1 {
 }
 
 /// A reference to a specific commit in a git repository.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GitReferenceV1 {
     /// The HEAD commit of a branch.
@@ -244,7 +247,7 @@ pub enum GitReferenceV1 {
 
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct BinaryPackageSpecV1 {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)

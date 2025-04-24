@@ -9,14 +9,14 @@ use std::{
 };
 
 use reqwest_middleware::ClientWithMiddleware;
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 use crate::{
+    GitError, GitUrl, Reporter,
     credentials::GIT_STORE,
     git::GitRemote,
     sha::{GitOid, GitSha},
     url::RepositoryUrl,
-    GitError, GitUrl, Reporter,
 };
 
 /// A remote Git source that can be checked out locally.
@@ -77,7 +77,11 @@ impl GitSource {
             // If we have a locked revision, and we have a preexisting database
             // which has that revision, then no update needs to happen.
             (Some(rev), Some(db)) if db.contains(rev.into()) => {
-                debug!("Using existing Git source `{}`", self.git.repository);
+                tracing::debug!(
+                    "Using existing Git source `{}` pointed at `{}`",
+                    self.git.repository,
+                    rev
+                );
                 (db, rev, None)
             }
 
@@ -86,7 +90,7 @@ impl GitSource {
             // situation that we have a locked revision but the database
             // doesn't have it.
             (locked_rev, db) => {
-                debug!("Updating Git source `{}`", self.git.repository);
+                tracing::debug!("Updating Git source `{}`", self.git.repository);
 
                 // Report the checkout operation to the reporter.
                 let task = self.reporter.as_ref().map(|reporter| {
@@ -118,7 +122,11 @@ impl GitSource {
             .join(&ident)
             .join(short_id.as_str());
 
-        debug!(" I will copy from {:?} to {:?}", actual_rev, checkout_path);
+        tracing::debug!(
+            "Copying git revision {:?} to path {:?}",
+            actual_rev,
+            checkout_path
+        );
         db.copy_to(actual_rev.into(), &checkout_path)?;
 
         // Report the checkout operation to the reporter.
@@ -128,7 +136,7 @@ impl GitSource {
             }
         }
 
-        debug!("Finished fetching Git source `{}`", self.git.repository);
+        tracing::debug!("Finished fetching Git source `{}`", self.git.repository);
 
         Ok(Fetch {
             git: self.git.with_precise(actual_rev),

@@ -31,9 +31,9 @@ use pep508_rs::Requirement;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    pypi::PyPiPackageName, AssociateProvenance, EnvironmentName, Environments,
-    ExplicitManifestError, HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests,
-    PackageManifest, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
+    HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
+    SpecType, WithProvenance, WithWarnings, WorkspaceManifest, pypi::PyPiPackageName,
 };
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
@@ -50,7 +50,7 @@ pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
     lock_file::filter_lock_file,
 };
@@ -128,6 +128,11 @@ pub struct Workspace {
     /// Root folder of the workspace
     root: PathBuf,
 
+    /// The name of the workspace based on the location of the workspace.
+    /// This is used to determine the name of the workspace when no name is
+    /// specified.
+    manifest_location_name: Option<String>,
+
     /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
@@ -195,6 +200,9 @@ impl Workspace {
             .expect("manifest path should always have a parent")
             .to_owned();
 
+        // Determine the name of the workspace based on the location of the manifest.
+        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
+
         let s3_options = manifest.workspace.value.workspace.s3_options.clone();
         let s3_config = s3_options
             .unwrap_or_default()
@@ -214,6 +222,7 @@ impl Workspace {
         let config = Config::load(&root);
         Self {
             root,
+            manifest_location_name,
             client: Default::default(),
             workspace: manifest.workspace,
             package: manifest.package,
@@ -269,9 +278,22 @@ impl Workspace {
         WorkspaceMut::new(self)
     }
 
-    /// Returns the name of the workspace
-    pub fn name(&self) -> &str {
-        &self.workspace.value.workspace.name
+    /// Returns the display name of the workspace. This name should be used to
+    /// provide context to a user.
+    ///
+    /// This is the name of the workspace as defined in the manifest, or if no
+    /// name is specified the name of the root directory of the workspace.
+    ///
+    /// If the name of the root directory could not be determined, "workspace"
+    /// is used as a fallback.
+    pub fn display_name(&self) -> &str {
+        self.workspace
+            .value
+            .workspace
+            .name
+            .as_deref()
+            .or(self.manifest_location_name.as_deref())
+            .unwrap_or("workspace")
     }
 
     /// Returns the root directory of the workspace
@@ -290,7 +312,7 @@ impl Workspace {
         if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
-                self.name(),
+                self.display_name(),
                 xxh3_64(self.root.to_string_lossy().as_bytes())
             )))
         } else {
@@ -562,7 +584,7 @@ impl Workspace {
                                     Err(err) => {
                                         return Err(err).into_diagnostic().context(format!(
                                             "Could not convert {mapping_location} to URL"
-                                        ))
+                                        ));
                                     }
                                 }
                             } else {
@@ -834,6 +856,57 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_workspace_name_when_specified() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "foo");
+    }
+
+    #[test]
+    fn test_workspace_name_when_unspecified() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir
+                .path()
+                .join("foobar")
+                .join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "foobar");
+    }
+
+    #[test]
+    fn test_workspace_name_when_undefined() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let workspace = Workspace::from_str(
+            &Path::new("/").join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "workspace");
+    }
+
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
@@ -1004,21 +1077,27 @@ mod tests {
         )
         .unwrap();
 
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Osx64), &FeatureName::Default)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Win64), &FeatureName::Default)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Linux64), &FeatureName::Default)
-            .unwrap());
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
     }
 
     #[test]

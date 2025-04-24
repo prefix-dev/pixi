@@ -4,7 +4,7 @@
 ## About
 Get the workspace description
 
---8<-- "docs/reference/cli/pixi/workspace/description/get_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/description/get_extender:description"
 
 ## Usage
 ```
@@ -17,4 +17,4 @@ Get the workspace description.
 Example: `pixi workspace description get`
 
 
---8<-- "docs/reference/cli/pixi/workspace/description/get_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/description/get_extender:example"

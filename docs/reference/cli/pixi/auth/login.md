@@ -4,7 +4,7 @@
 ## About
 Store authentication information for a given host
 
---8<-- "docs/reference/cli/pixi/auth/login_extender.md:description"
+--8<-- "docs/reference/cli/pixi/auth/login_extender:description"
 
 ## Usage
 ```
@@ -32,4 +32,4 @@ pixi auth login [OPTIONS] <HOST>
 - <a id="arg---s3-session-token" href="#arg---s3-session-token">`--s3-session-token <S3_SESSION_TOKEN>`</a>
 :  The S3 session token
 
---8<-- "docs/reference/cli/pixi/auth/login_extender.md:example"
+--8<-- "docs/reference/cli/pixi/auth/login_extender:example"

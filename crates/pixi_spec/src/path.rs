@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use itertools::Either;
-use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
+use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
 use crate::{BinarySpec, SpecConversionError};

@@ -9,11 +9,11 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
-use minijinja::{context, Environment};
-use pixi_config::{get_default_author, Config};
+use minijinja::{Environment, context};
+use pixi_config::{Config, get_default_author};
 use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
+    DependencyOverwriteBehavior, FeatureName, SpecType, pyproject::PyProjectManifest,
 };
 use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;
@@ -392,7 +392,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
                 eprintln!(
-                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace3]' section.",
+                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.",
                     console::style(console::Emoji("🤔 ", "")).blue(),
                 );
                 return Ok(());

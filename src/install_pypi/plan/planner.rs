@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{reasons, validation::NeedsReinstallError};
+use super::{models::PyPIRemovals, reasons, validation::NeedsReinstallError};
 use pixi_consts::consts;
 use pixi_uv_conversions::to_uv_version;
 use rattler_lock::PypiPackageData;
@@ -11,14 +11,14 @@ use std::collections::HashSet;
 use uv_cache::Cache;
 use uv_distribution_types::{CachedDist, Dist, Name};
 
-use crate::install_pypi::conversions::{convert_to_dist, ConvertToUvDistError};
+use crate::install_pypi::conversions::{ConvertToUvDistError, convert_to_dist};
 
 use super::{
+    InstallReason, NeedReinstall, PyPIInstalls,
     models::ValidateCurrentInstall,
     providers::{CachedDistProvider, InstalledDistProvider},
     reasons::OperationToReason,
     validation::need_reinstall,
-    InstallReason, NeedReinstall, PyPIInstallPlan,
 };
 
 /// Struct that handles the planning of the installation
@@ -105,20 +105,53 @@ impl InstallPlanner {
         Ok(())
     }
 
+    /// Plan for any packages that need removal
+    pub fn plan_removals<'a, Installed: InstalledDistProvider<'a>>(
+        &self,
+        site_packages: &'a Installed,
+        required_pkgs: &'a HashMap<uv_normalize::PackageName, &PypiPackageData>,
+    ) -> Result<PyPIRemovals, InstallPlannerError> {
+        let mut extraneous = vec![];
+
+        // Walk over all installed packages and check if they are required
+        for dist in site_packages.iter() {
+            let pkg = required_pkgs.get(dist.name());
+            let installer = dist
+                .installer()
+                .map_or(String::new(), |f| f.unwrap_or_default());
+
+            match pkg {
+                // Apparently we need this packages
+                Some(_) => {}
+                // Ignore packages not managed by pixi
+                None if installer != consts::PIXI_UV_INSTALLER => {
+                    continue;
+                }
+                // Uninstall unneeded packages
+                None => {
+                    extraneous.push(dist.clone());
+                }
+            }
+        }
+
+        Ok(PyPIRemovals { extraneous })
+    }
+
     /// Figure out what we can link from the cache locally
     /// and what we need to download from the registry.
-    /// Also determine what we need to remove.
     ///
     /// All the 'a lifetimes are to to make sure that the names provided to the CachedDistProvider
     /// are valid for the lifetime of the CachedDistProvider and what is passed to the method
-    pub fn plan<'a, Installed: InstalledDistProvider<'a>, Cached: CachedDistProvider<'a> + 'a>(
+    pub fn plan_install<
+        'a,
+        Installed: InstalledDistProvider<'a>,
+        Cached: CachedDistProvider<'a> + 'a,
+    >(
         &self,
         site_packages: &'a Installed,
         mut dist_cache: Cached,
         required_pkgs: &'a HashMap<uv_normalize::PackageName, &PypiPackageData>,
-    ) -> Result<PyPIInstallPlan, InstallPlannerError> {
-        // Packages to be removed
-        let mut extraneous = vec![];
+    ) -> Result<PyPIInstalls, InstallPlannerError> {
         // Packages to be installed directly from the cache
         let mut local = vec![];
         // Try to install from the registry or direct url or w/e
@@ -141,62 +174,47 @@ impl InstallPlanner {
                 // Empty string if no installer or any other error
                 .map_or(String::new(), |f| f.unwrap_or_default());
 
-            match pkg {
-                Some(required_pkg) => {
-                    // Add to the list of previously installed packages
-                    prev_installed_packages.insert(dist.name());
-                    // Check if we need this package installed but it is not currently installed by us
-                    if installer != consts::PIXI_UV_INSTALLER {
-                        // We are managing the package but something else has installed a version
-                        // let's re-install to make sure that we have the **correct** version
-                        reinstalls.push((
-                            dist.clone(),
-                            NeedReinstall::InstallerMismatch {
-                                previous_installer: installer.clone(),
-                            },
-                        ));
-                    } else {
-                        // Check if we need to reinstall
-                        match need_reinstall(dist, required_pkg, &self.lock_file_dir)? {
-                            ValidateCurrentInstall::Keep => {
-                                //
-                                if self.uv_cache.must_revalidate_package(dist.name()) {
-                                    reinstalls.push((
-                                        dist.clone(),
-                                        NeedReinstall::ReinstallationRequested,
-                                    ));
-                                } else {
-                                    // No need to reinstall
-                                    continue;
-                                }
-                            }
-                            ValidateCurrentInstall::Reinstall(reason) => {
-                                reinstalls.push((dist.clone(), reason));
+            if let Some(required_pkg) = pkg {
+                // Add to the list of previously installed packages
+                prev_installed_packages.insert(dist.name());
+                // Check if we need this package installed but it is not currently installed by us
+                if installer != consts::PIXI_UV_INSTALLER {
+                    // We are managing the package but something else has installed a version
+                    // let's re-install to make sure that we have the **correct** version
+                    reinstalls.push((
+                        dist.clone(),
+                        NeedReinstall::InstallerMismatch {
+                            previous_installer: installer.clone(),
+                        },
+                    ));
+                } else {
+                    // Check if we need to reinstall
+                    match need_reinstall(dist, required_pkg, &self.lock_file_dir)? {
+                        ValidateCurrentInstall::Keep => {
+                            //
+                            if self.uv_cache.must_revalidate_package(dist.name()) {
+                                reinstalls
+                                    .push((dist.clone(), NeedReinstall::ReinstallationRequested));
+                            } else {
+                                // No need to reinstall
+                                continue;
                             }
                         }
+                        ValidateCurrentInstall::Reinstall(reason) => {
+                            reinstalls.push((dist.clone(), reason));
+                        }
                     }
-                    // Okay so we need to re-install the package
-                    // let's see if we need the remote or local version
-                    self.decide_installation_source(
-                        dist.name(),
-                        required_pkg,
-                        &mut local,
-                        &mut remote,
-                        &mut dist_cache,
-                        reasons::Reinstall,
-                    )?;
                 }
-                // Second case we are not managing the package
-                None if installer != consts::PIXI_UV_INSTALLER => {
-                    // Ignore packages that we are not managed by us
-                    continue;
-                }
-                // Third case we *are* managing the package but it is no longer required
-                None => {
-                    // Add to the extraneous list
-                    // as we do manage it but have no need for it
-                    extraneous.push(dist.clone());
-                }
+                // Okay so we need to re-install the package
+                // let's see if we need the remote or local version
+                self.decide_installation_source(
+                    dist.name(),
+                    required_pkg,
+                    &mut local,
+                    &mut remote,
+                    &mut dist_cache,
+                    reasons::Reinstall,
+                )?;
             }
         }
 
@@ -217,11 +235,10 @@ impl InstallPlanner {
             )?;
         }
 
-        Ok(PyPIInstallPlan {
+        Ok(PyPIInstalls {
             local,
             remote,
             reinstalls,
-            extraneous,
         })
     }
 }

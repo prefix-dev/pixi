@@ -4,7 +4,7 @@
 ## About
 List workspace's packages
 
---8<-- "docs/reference/cli/pixi/list_extender.md:description"
+--8<-- "docs/reference/cli/pixi/list_extender:description"
 
 ## Usage
 ```
@@ -28,6 +28,8 @@ pixi list [OPTIONS] [REGEX]
 <br>**options**: `size`, `name`, `kind`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to list packages for. Defaults to the default environment
+- <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
+:  Only list packages that are explicitly defined in the workspace
 
 ## Update Options
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
@@ -38,8 +40,6 @@ pixi list [OPTIONS] [REGEX]
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
-:  Only list packages that are explicitly defined in the workspace
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
@@ -51,4 +51,4 @@ List workspace's packages.
 Highlighted packages are explicit dependencies.
 
 
---8<-- "docs/reference/cli/pixi/list_extender.md:example"
+--8<-- "docs/reference/cli/pixi/list_extender:example"

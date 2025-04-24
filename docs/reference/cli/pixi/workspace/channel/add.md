@@ -4,7 +4,7 @@
 ## About
 Adds a channel to the manifest and updates the lockfile
 
---8<-- "docs/reference/cli/pixi/workspace/channel/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/channel/add_extender:description"
 
 ## Usage
 ```
@@ -22,6 +22,8 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 :  Specify the channel priority
 - <a id="arg---prepend" href="#arg---prepend">`--prepend`</a>
 :  Add the channel(s) to the beginning of the channels list, making them the highest priority
+- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
+:  The name of the feature to modify
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -49,11 +51,9 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
-:  The name of the feature to modify
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/workspace/channel/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/channel/add_extender:example"

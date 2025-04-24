@@ -8,8 +8,8 @@ platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 
 [dependencies]
-python_bindings = { path = "packages/python_bindings" }
-rich_example = { path = "." }
+cpp_math = { path = "packages/cpp_math" }
+python_rich = { path = "." }
 # --8<-- [end:workspace]
 
 
@@ -17,7 +17,7 @@ rich_example = { path = "." }
 start = "rich-example-main"
 
 [package]
-name = "rich_example"
+name = "python_rich"
 version = "0.1.0"
 
 [package.build]

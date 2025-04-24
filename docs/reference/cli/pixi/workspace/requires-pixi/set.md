@@ -4,7 +4,7 @@
 ## About
 Set the pixi minimum version requirement
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi/set_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi/set_extender:description"
 
 ## Usage
 ```
@@ -22,4 +22,4 @@ Set the pixi minimum version requirement.
 Example: `pixi workspace pixi-minimum set 0.42`
 
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi/set_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi/set_extender:example"

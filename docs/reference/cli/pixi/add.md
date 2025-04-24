@@ -4,7 +4,7 @@
 ## About
 Adds dependencies to the workspace
 
---8<-- "docs/reference/cli/pixi/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/add_extender:description"
 
 ## Usage
 ```
@@ -26,6 +26,8 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the dependency should be modified
 <br>**default**: `default`
+- <a id="arg---editable" href="#arg---editable">`--editable`</a>
+:  Whether the pypi requirement should be editable
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -65,8 +67,6 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---editable" href="#arg---editable">`--editable`</a>
-:  Whether the pypi requirement should be editable
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
@@ -132,4 +132,4 @@ the minor version by default:
 Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
 
 
---8<-- "docs/reference/cli/pixi/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/add_extender:example"

@@ -1,8 +1,8 @@
 pub mod get;
 pub mod set;
 
-use crate::cli::cli_config::WorkspaceConfig;
 use crate::WorkspaceLocator;
+use crate::cli::cli_config::WorkspaceConfig;
 use clap::Parser;
 
 /// Commands to manage workspace name.

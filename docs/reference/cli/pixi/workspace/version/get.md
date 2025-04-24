@@ -4,11 +4,11 @@
 ## About
 Get the workspace version
 
---8<-- "docs/reference/cli/pixi/workspace/version/get_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/version/get_extender:description"
 
 ## Usage
 ```
 pixi workspace version get
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/version/get_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/version/get_extender:example"

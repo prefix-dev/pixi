@@ -5,7 +5,7 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
-    procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
+    ChannelConfiguration, PlatformAndVirtualPackages, procedures::conda_build::CondaBuildParams,
 };
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
@@ -14,11 +14,11 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use typed_path::Utf8TypedPath;
 
 use crate::{
+    WorkspaceLocator,
     build::{BuildContext, SourceCheckout, WorkDirKey},
     cli::cli_config::WorkspaceConfig,
     repodata::Repodata,
-    utils::{move_file, MoveError},
-    WorkspaceLocator,
+    utils::{MoveError, move_file},
 };
 
 #[derive(Parser, Debug)]
@@ -178,7 +178,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         (Some(tmp), work_dir)
     };
 
-    let progress = ProgressReporter::new(workspace.name());
+    let progress = ProgressReporter::new(workspace.display_name());
 
     // Build platform virtual packages
     let build_platform_virtual_packages: Vec<GenericVirtualPackage> = workspace
@@ -273,7 +273,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             package.output_file.display(),
                             dest.display()
                         )
-                    })
+                    });
                 }
             }
         }

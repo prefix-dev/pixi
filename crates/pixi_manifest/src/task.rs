@@ -1,15 +1,21 @@
 use std::{
     borrow::Cow,
+    collections::HashMap,
     convert::Infallible,
     fmt::{Display, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
 };
 
+use crate::workspace::JINJA_ENV;
 use indexmap::IndexMap;
 use itertools::Itertools;
+use miette::{Diagnostic, SourceSpan};
 use serde::Serialize;
+use thiserror::Error;
 use toml_edit::{Array, Item, Table, Value};
+
+use crate::EnvironmentName;
 
 /// Represents a task name
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -37,10 +43,45 @@ impl From<String> for TaskName {
         TaskName(name)
     }
 }
-impl From<TaskName> for String {
-    fn from(task_name: TaskName) -> Self {
-        task_name.0 // Assuming TaskName is a tuple struct with the first
-                    // element as String
+
+/// A task dependency with optional args
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct Dependency {
+    pub task_name: TaskName,
+    pub args: Option<Vec<String>>,
+    pub environment: Option<EnvironmentName>,
+}
+
+impl Dependency {
+    pub fn new(s: &str, args: Option<Vec<String>>, environment: Option<EnvironmentName>) -> Self {
+        Dependency {
+            task_name: TaskName(s.to_string()),
+            args,
+            environment,
+        }
+    }
+
+    pub fn new_without_env(s: &str, args: Option<Vec<String>>) -> Self {
+        Dependency {
+            task_name: TaskName(s.to_string()),
+            args,
+            environment: None,
+        }
+    }
+}
+
+impl From<&str> for Dependency {
+    fn from(s: &str) -> Self {
+        Dependency::new_without_env(s, None)
+    }
+}
+
+impl std::fmt::Display for Dependency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.args {
+            Some(args) if !args.is_empty() => write!(f, "{} with args", self.task_name),
+            _ => write!(f, "{}", self.task_name),
+        }
     }
 }
 
@@ -55,15 +96,15 @@ impl FromStr for TaskName {
 /// Represents different types of scripts
 #[derive(Debug, Clone)]
 pub enum Task {
-    Plain(String),
-    Execute(Execute),
+    Plain(TemplateString),
+    Execute(Box<Execute>),
     Alias(Alias),
     Custom(Custom),
 }
 
 impl Task {
     /// Returns the names of the task that this task depends on
-    pub fn depends_on(&self) -> &[TaskName] {
+    pub fn depends_on(&self) -> &[Dependency] {
         match self {
             Task::Plain(_) | Task::Custom(_) => &[],
             Task::Execute(cmd) => &cmd.depends_on,
@@ -71,27 +112,11 @@ impl Task {
         }
     }
 
-    /// If this task is a plain task, returns the task string
-    pub fn as_plain(&self) -> Option<&String> {
-        match self {
-            Task::Plain(str) => Some(str),
-            _ => None,
-        }
-    }
-
     /// If this command is an execute command, returns the `Execute` task.
-    pub fn as_execute(&self) -> Option<&Execute> {
+    pub fn as_execute(&self) -> Result<&Execute, miette::Report> {
         match self {
-            Task::Execute(execute) => Some(execute),
-            _ => None,
-        }
-    }
-
-    /// If this command is an alias, returns the `Alias` task.
-    pub fn as_alias(&self) -> Option<&Alias> {
-        match self {
-            Task::Alias(alias) => Some(alias),
-            _ => None,
+            Task::Execute(execute) => Ok(execute),
+            _ => Err(miette::miette!("Task is not an execute task")),
         }
     }
 
@@ -114,15 +139,29 @@ impl Task {
     }
 
     /// Returns the command to execute as a single string.
-    pub fn as_single_command(&self) -> Option<Cow<str>> {
+    pub fn as_single_command(
+        &self,
+        args_values: Option<&ArgValues>,
+    ) -> Result<Option<Cow<str>>, TemplateStringError> {
         match self {
-            Task::Plain(str) => Some(Cow::Borrowed(str)),
-            Task::Custom(custom) => Some(custom.cmd.as_single()),
-            Task::Execute(exe) => Some(exe.cmd.as_single()),
-            Task::Alias(_) => None,
+            Task::Plain(str) => match str.render(args_values) {
+                Ok(rendered) => Ok(Some(Cow::Owned(rendered))),
+                Err(e) => Err(e),
+            },
+            Task::Custom(custom) => custom.cmd.as_single(args_values),
+            Task::Execute(exe) => exe.cmd.as_single(args_values),
+            Task::Alias(_) => Ok(None),
         }
     }
 
+    pub fn as_single_command_no_render(&self) -> Result<Option<Cow<str>>, TemplateStringError> {
+        match self {
+            Task::Plain(str) => Ok(Some(Cow::Owned(str.source().to_string()))),
+            Task::Custom(custom) => custom.cmd.as_single_no_render(),
+            Task::Execute(exe) => exe.cmd.as_single_no_render(),
+            Task::Alias(_) => Ok(None),
+        }
+    }
     /// Returns the environment variables for the task to run in.
     pub fn env(&self) -> Option<&IndexMap<String, String>> {
         match self {
@@ -171,7 +210,7 @@ impl Task {
     }
 
     /// Returns the inputs of the task.
-    pub fn inputs(&self) -> Option<&[String]> {
+    pub fn inputs(&self) -> Option<&[TemplateString]> {
         match self {
             Task::Execute(exe) => exe.inputs.as_deref(),
             _ => None,
@@ -179,9 +218,17 @@ impl Task {
     }
 
     /// Returns the outputs of the task.
-    pub fn outputs(&self) -> Option<&[String]> {
+    pub fn outputs(&self) -> Option<&[TemplateString]> {
         match self {
             Task::Execute(exe) => exe.outputs.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Returns the arguments of the task.
+    pub fn args(&self) -> Option<&[TaskArg]> {
+        match self {
+            Task::Execute(exe) => exe.args.as_deref(),
             _ => None,
         }
     }
@@ -197,14 +244,14 @@ pub struct Execute {
 
     /// A list of glob patterns that should be watched for changes before this
     /// command is run
-    pub inputs: Option<Vec<String>>,
+    pub inputs: Option<Vec<TemplateString>>,
 
     /// A list of glob patterns that are generated by this command
-    pub outputs: Option<Vec<String>>,
+    pub outputs: Option<Vec<TemplateString>>,
 
     /// A list of commands that should be run before this one
     // BREAK: Make the remove the alias and force kebab-case
-    pub depends_on: Vec<TaskName>,
+    pub depends_on: Vec<Dependency>,
 
     /// The working directory for the command relative to the root of the
     /// project.
@@ -218,11 +265,57 @@ pub struct Execute {
 
     /// Isolate the task from the running machine
     pub clean_env: bool,
+
+    /// The arguments to pass to the task
+    pub args: Option<Vec<TaskArg>>,
 }
 
 impl From<Execute> for Task {
     fn from(value: Execute) -> Self {
-        Task::Execute(value)
+        Task::Execute(Box::new(value))
+    }
+}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize)]
+pub struct ArgName(String);
+
+impl FromStr for ArgName {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.contains('-') {
+            Err(format!(
+                "'{s}' is not a valid argument name since it contains the character '-'"
+            ))
+        } else {
+            Ok(ArgName(s.to_string()))
+        }
+    }
+}
+
+impl ArgName {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Serialize)]
+pub struct TaskArg {
+    /// The name of the argument
+    pub name: ArgName,
+
+    /// The default value of the argument
+    pub default: Option<String>,
+}
+
+impl std::str::FromStr for TaskArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(TaskArg {
+            name: ArgName::from_str(s)?,
+            default: None,
+        })
     }
 }
 
@@ -245,38 +338,159 @@ impl From<Custom> for Task {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum CmdArgs {
-    Single(String),
-    Multiple(Vec<String>),
+#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
+pub struct TypedArg {
+    pub name: String,
+    pub value: String,
 }
 
-impl From<Vec<String>> for CmdArgs {
-    fn from(value: Vec<String>) -> Self {
+/// A string that contains placeholders to be rendered using the `minijinja` templating engine.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TemplateString(String);
+
+impl From<&str> for TemplateString {
+    fn from(value: &str) -> Self {
+        TemplateString(value.to_string())
+    }
+}
+
+impl From<String> for TemplateString {
+    fn from(value: String) -> Self {
+        TemplateString(value)
+    }
+}
+
+impl TemplateString {
+    pub fn new(value: String) -> Self {
+        TemplateString(value)
+    }
+
+    pub fn render(&self, args: Option<&ArgValues>) -> Result<String, TemplateStringError> {
+        let context = if let Some(ArgValues::TypedArgs(args)) = args {
+            let args_map: HashMap<&str, &str> = args
+                .iter()
+                .map(|arg| (arg.name.as_str(), arg.value.as_str()))
+                .collect();
+            minijinja::Value::from_serialize(&args_map)
+        } else {
+            minijinja::Value::default()
+        };
+
+        JINJA_ENV
+            .render_str(&self.0, context)
+            .map_err(|e| TemplateStringError {
+                src: self.0.clone(),
+                err_span: e.range().unwrap_or_default().into(),
+            })
+    }
+
+    pub fn source(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Represents the arguments to pass to a task
+#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
+pub enum ArgValues {
+    FreeFormArgs(Vec<String>),
+    TypedArgs(Vec<TypedArg>),
+}
+
+impl ArgValues {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ArgValues::FreeFormArgs(args) => args.is_empty(),
+            ArgValues::TypedArgs(args) => args.is_empty(),
+        }
+    }
+}
+
+impl Default for ArgValues {
+    fn default() -> Self {
+        Self::FreeFormArgs(Vec::new())
+    }
+}
+
+#[derive(Debug, Diagnostic, Error, Clone)]
+#[error("failed to replace argument placeholders")]
+pub struct TemplateStringError {
+    #[source_code]
+    src: String,
+    #[label = "this part can't be replaced"]
+    err_span: SourceSpan,
+}
+
+impl TemplateStringError {
+    pub fn get_source(&self) -> &str {
+        &self.src
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum CmdArgs {
+    Single(TemplateString),
+    Multiple(Vec<TemplateString>),
+}
+
+impl From<Vec<TemplateString>> for CmdArgs {
+    fn from(value: Vec<TemplateString>) -> Self {
         CmdArgs::Multiple(value)
     }
 }
 
-impl From<String> for CmdArgs {
-    fn from(value: String) -> Self {
+impl From<TemplateString> for CmdArgs {
+    fn from(value: TemplateString) -> Self {
         CmdArgs::Single(value)
     }
 }
 
 impl CmdArgs {
     /// Returns a single string representation of the command arguments.
-    pub fn as_single(&self) -> Cow<str> {
+    pub fn as_single(
+        &self,
+        args_values: Option<&ArgValues>,
+    ) -> Result<Option<Cow<str>>, TemplateStringError> {
         match self {
-            CmdArgs::Single(cmd) => Cow::Borrowed(cmd),
-            CmdArgs::Multiple(args) => Cow::Owned(args.iter().map(|arg| quote(arg)).join(" ")),
+            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.render(args_values)?))),
+            CmdArgs::Multiple(args) => {
+                let mut rendered_args = Vec::new();
+                for arg in args {
+                    let rendered = arg.render(args_values)?;
+                    rendered_args.push(quote(&rendered).to_string());
+                }
+                Ok(Some(Cow::Owned(rendered_args.join(" "))))
+            }
         }
     }
 
     /// Returns a single string representation of the command arguments.
-    pub fn into_single(self) -> String {
+    pub fn into_single(
+        self,
+        args_values: Option<&ArgValues>,
+    ) -> Result<Option<String>, TemplateStringError> {
         match self {
-            CmdArgs::Single(cmd) => cmd,
-            CmdArgs::Multiple(args) => args.iter().map(|arg| quote(arg)).join(" "),
+            CmdArgs::Single(cmd) => cmd.render(args_values).map(Some),
+            CmdArgs::Multiple(args) => {
+                let rendered_args = args
+                    .iter()
+                    .map(|arg| {
+                        Ok(match arg.render(args_values) {
+                            Ok(rendered) => quote(&rendered).to_string(),
+                            Err(e) => return Err(e),
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(Some(rendered_args.join(" ")))
+            }
+        }
+    }
+
+    pub fn as_single_no_render(&self) -> Result<Option<Cow<str>>, TemplateStringError> {
+        match self {
+            CmdArgs::Single(cmd) => Ok(Some(Cow::Owned(cmd.source().to_string()))),
+            CmdArgs::Multiple(args) => Ok(Some(Cow::Owned(
+                args.iter().map(|arg| arg.source().to_string()).join(" "),
+            ))),
         }
     }
 }
@@ -284,7 +498,7 @@ impl CmdArgs {
 #[derive(Debug, Clone)]
 pub struct Alias {
     /// A list of commands that should be run before this one
-    pub depends_on: Vec<TaskName>,
+    pub depends_on: Vec<Dependency>,
 
     /// A description of the task.
     pub description: Option<String>,
@@ -294,11 +508,13 @@ impl Display for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Task::Plain(cmd) => {
-                write!(f, "{}", cmd)?;
+                write!(f, "{}", cmd.source())?;
             }
-            Task::Execute(cmd) => match &cmd.cmd {
-                CmdArgs::Single(cmd) => write!(f, "{}", cmd)?,
-                CmdArgs::Multiple(mult) => write!(f, "{}", mult.join(" "))?,
+            Task::Execute(execute) => match &execute.cmd {
+                CmdArgs::Single(cmd) => write!(f, "{}", cmd.source())?,
+                CmdArgs::Multiple(mult) => {
+                    write!(f, "{}", mult.iter().map(|arg| arg.source()).join(" "))?
+                }
             },
             _ => {}
         };
@@ -306,7 +522,7 @@ impl Display for Task {
         let depends_on = self.depends_on();
         if !depends_on.is_empty() {
             if depends_on.len() == 1 {
-                write!(f, ", depends-on = '{}'", depends_on.iter().format(","))?;
+                write!(f, ", depends-on = '{}'", depends_on[0])?;
             } else {
                 write!(f, ", depends-on = [{}]", depends_on.iter().format(","))?;
             }
@@ -352,53 +568,75 @@ pub fn quote(in_str: &str) -> Cow<str> {
 impl From<Task> for Item {
     fn from(value: Task) -> Self {
         match value {
-            Task::Plain(str) => Item::Value(str.into()),
+            Task::Plain(str) => Item::Value(str.source().into()),
             Task::Execute(process) => {
                 let mut table = Table::new().into_inline_table();
-                match process.cmd {
+                match &process.cmd {
                     CmdArgs::Single(cmd_str) => {
-                        table.insert("cmd", cmd_str.into());
+                        table.insert("cmd", cmd_str.source().into());
                     }
                     CmdArgs::Multiple(cmd_strs) => {
-                        table.insert("cmd", Value::Array(Array::from_iter(cmd_strs)));
+                        table.insert(
+                            "cmd",
+                            Value::Array(Array::from_iter(cmd_strs.iter().map(|arg| arg.source()))),
+                        );
                     }
                 }
                 if !process.depends_on.is_empty() {
                     table.insert(
                         "depends-on",
-                        Value::Array(Array::from_iter(
-                            process
-                                .depends_on
-                                .into_iter()
-                                .map(String::from)
-                                .map(Value::from),
-                        )),
+                        Value::Array(Array::from_iter(process.depends_on.iter().map(|dep| {
+                            match &dep.args {
+                                Some(args) if !args.is_empty() => {
+                                    let mut table = Table::new().into_inline_table();
+                                    table.insert("task", dep.task_name.to_string().into());
+                                    table.insert(
+                                        "args",
+                                        Value::Array(Array::from_iter(
+                                            args.iter().map(|arg| Value::from(arg.clone())),
+                                        )),
+                                    );
+                                    Value::InlineTable(table)
+                                }
+                                _ => Value::from(dep.task_name.to_string()),
+                            }
+                        }))),
                     );
                 }
-                if let Some(cwd) = process.cwd {
+                if let Some(cwd) = &process.cwd {
                     table.insert("cwd", cwd.to_string_lossy().to_string().into());
                 }
-                if let Some(env) = process.env {
+                if let Some(env) = &process.env {
                     table.insert("env", Value::InlineTable(env.into_iter().collect()));
                 }
-                if let Some(description) = process.description {
+                if let Some(description) = &process.description {
                     table.insert("description", description.into());
                 }
                 Item::Value(Value::InlineTable(table))
             }
             Task::Alias(alias) => {
-                let mut table = Table::new().into_inline_table();
-                table.insert(
-                    "depends-on",
-                    Value::Array(Array::from_iter(
-                        alias
-                            .depends_on
-                            .into_iter()
-                            .map(String::from)
-                            .map(Value::from),
-                    )),
-                );
-                Item::Value(Value::InlineTable(table))
+                let mut array = Array::new();
+                for dep in alias.depends_on.iter() {
+                    let mut table = Table::new().into_inline_table();
+
+                    table.insert("task", dep.task_name.to_string().into());
+
+                    if let Some(args) = &dep.args {
+                        table.insert(
+                            "args",
+                            Value::Array(Array::from_iter(
+                                args.iter().map(|arg| Value::from(arg.clone())),
+                            )),
+                        );
+                    }
+
+                    if let Some(env) = &dep.environment {
+                        table.insert("environment", env.to_string().into());
+                    }
+
+                    array.push(Value::InlineTable(table));
+                }
+                Item::Value(Value::Array(array))
             }
             _ => Item::None,
         }

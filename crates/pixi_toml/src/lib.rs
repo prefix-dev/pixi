@@ -24,7 +24,7 @@ pub use hash_map::TomlHashMap;
 pub use index_map::TomlIndexMap;
 pub use index_set::TomlIndexSet;
 pub use one_or_many::OneOrMany;
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::expected, value::ValueInner};
 pub use variant::TomlEnum;
 pub use with::TomlWith;
 

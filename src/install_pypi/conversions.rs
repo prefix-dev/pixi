@@ -5,7 +5,7 @@ use std::sync::Arc;
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
-    to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
+    ConversionError, to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers,
 };
 use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
 use url::Url;
@@ -132,7 +132,7 @@ pub fn convert_to_dist(
             let filename_raw = url
                 .path_segments()
                 .expect("url should have path segments")
-                .last()
+                .next_back()
                 .expect("url should have at least one path segment");
 
             // Decode the filename to avoid issues with the HTTP coding like `%2B` to `+`

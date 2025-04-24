@@ -12,7 +12,7 @@ use pixi_spec::{GitReference, GitSpec};
 use pixi_toml::{TomlFromStr, TomlWith};
 use serde::Serialize;
 use thiserror::Error;
-use toml_span::{de_helpers::TableHelper, DeserError, Value};
+use toml_span::{DeserError, Value, de_helpers::TableHelper};
 use url::Url;
 
 use pixi_git::GitUrl;
@@ -59,15 +59,21 @@ fn version_requirement_error<T: Into<String>>(input: T) -> Option<impl Display> 
         || input.starts_with('\\')
         || input.starts_with("~/")
     {
-        return Some(format!("it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{{ path = \"{input}\" }}'"));
+        return Some(format!(
+            "it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{{ path = \"{input}\" }}'"
+        ));
     }
 
     if input.contains("git") {
-        return Some(format!("it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{{ git = \"{input}\" }}'"));
+        return Some(format!(
+            "it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{{ git = \"{input}\" }}'"
+        ));
     }
 
     if input.contains("://") {
-        return Some(format!("it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{input}\" }}'"));
+        return Some(format!(
+            "it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{input}\" }}'"
+        ));
     }
 
     None
@@ -502,28 +508,28 @@ impl TryFrom<pep508_rs::Requirement> for PyPiRequirement {
                                     prefix: prefix.to_string(),
                                     url: u.to_url(),
                                     message: "Bazaar is not supported",
-                                })
+                                });
                             }
                             "hg" => {
                                 return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
                                     prefix: prefix.to_string(),
                                     url: u.to_url(),
                                     message: "Bazaar is not supported",
-                                })
+                                });
                             }
                             "svn" => {
                                 return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
                                     prefix: prefix.to_string(),
                                     url: u.to_url(),
                                     message: "Bazaar is not supported",
-                                })
+                                });
                             }
                             _ => {
                                 return Err(Pep508ToPyPiRequirementError::UnsupportedUrlPrefix {
                                     prefix: prefix.to_string(),
                                     url: u.to_url(),
                                     message: "Unknown scheme",
-                                })
+                                });
                             }
                         }
                     } else if Path::new(url.path())
@@ -651,11 +657,11 @@ mod tests {
     use insta::assert_snapshot;
     use pep508_rs::Requirement;
     use pixi_toml::TomlIndexMap;
-    use serde_json::{json, Value};
-    use toml_span::{value::ValueInner, Deserialize};
+    use serde_json::{Value, json};
+    use toml_span::{Deserialize, value::ValueInner};
 
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error, TomlError};
+    use crate::{TomlError, toml::FromTomlStr, utils::test_utils::format_parse_error};
 
     #[test]
     fn test_pypi_to_string() {
@@ -1157,18 +1163,20 @@ mod tests {
             snapshot.push(Snapshot { input, result });
         }
 
-        insta::assert_snapshot!(snapshot
-            .into_iter()
-            .map(|Snapshot { input, result }| format!(
-                "input: {input}\nresult: {} ",
-                result
-                    .as_object()
-                    .unwrap()
-                    .get("error")
-                    .unwrap()
-                    .as_str()
-                    .unwrap()
-            ))
-            .join("\n"));
+        insta::assert_snapshot!(
+            snapshot
+                .into_iter()
+                .map(|Snapshot { input, result }| format!(
+                    "input: {input}\nresult: {} ",
+                    result
+                        .as_object()
+                        .unwrap()
+                        .get("error")
+                        .unwrap()
+                        .as_str()
+                        .unwrap()
+                ))
+                .join("\n")
+        );
     }
 }

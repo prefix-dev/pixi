@@ -4,7 +4,7 @@
 ## About
 Uninstalls environments from the global environment.
 
---8<-- "docs/reference/cli/pixi/global/uninstall_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/uninstall_extender:description"
 
 ## Usage
 ```
@@ -36,4 +36,4 @@ Uninstalls environments from the global environment.
 Example: `pixi global uninstall pixi-pack rattler-build`
 
 
---8<-- "docs/reference/cli/pixi/global/uninstall_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/uninstall_extender:example"

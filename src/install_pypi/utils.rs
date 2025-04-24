@@ -25,6 +25,7 @@ pub fn is_direct_url(url_scheme: &str) -> bool {
         || url_scheme == "git+http"
         || url_scheme == "git+https"
         || url_scheme == "git+ssh"
+        || url_scheme == "git+file"
         || url_scheme.starts_with("direct")
 }
 

@@ -34,13 +34,12 @@ use std::{
 
 use futures::FutureExt;
 use pixi::{
+    DependencyType,
     cli::{
         add, cli_config::DependencyConfig, init, install, remove, search, task, update, workspace,
     },
-    task::TaskName,
-    DependencyType,
 };
-use pixi_manifest::{EnvironmentName, FeatureName, SpecType};
+use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
@@ -97,10 +96,9 @@ impl IntoFuture for InitBuilder {
         init::execute(init::Args {
             channels: if !self.no_fast_prefix {
                 self.args.channels.or_else(|| {
-                    Some(vec![NamedChannelOrUrl::from_str(
-                        "https://prefix.dev/conda-forge",
-                    )
-                    .unwrap()])
+                    Some(vec![
+                        NamedChannelOrUrl::from_str("https://prefix.dev/conda-forge").unwrap(),
+                    ])
                 })
             } else {
                 self.args.channels
@@ -210,7 +208,7 @@ impl AddBuilder {
     }
 
     pub fn with_feature(mut self, feature: impl ToString) -> Self {
-        self.args.dependency_config.feature = FeatureName::Named(feature.to_string());
+        self.args.dependency_config.feature = FeatureName::from(feature.to_string());
         self
     }
 
@@ -324,7 +322,7 @@ impl TaskAddBuilder {
     }
 
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+    pub fn with_depends_on(mut self, depends: Vec<Dependency>) -> Self {
         self.args.depends_on = Some(depends);
         self
     }
@@ -360,7 +358,7 @@ pub struct TaskAliasBuilder {
 
 impl TaskAliasBuilder {
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+    pub fn with_depends_on(mut self, depends: Vec<Dependency>) -> Self {
         self.args.depends_on = depends;
         self
     }

@@ -8,13 +8,22 @@ use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{preview::Preview, PrioritizedChannel, S3Options, Targets};
+use crate::{PrioritizedChannel, S3Options, Targets, preview::Preview};
+use minijinja::{AutoEscape, Environment, UndefinedBehavior};
+use once_cell::sync::Lazy;
+
+pub static JINJA_ENV: Lazy<Environment<'static>> = Lazy::new(|| {
+    let mut env = Environment::new();
+    env.set_undefined_behavior(UndefinedBehavior::Strict);
+    env.set_auto_escape_callback(|_| AutoEscape::None);
+    env
+});
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct Workspace {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>,
 
     /// The version of the project
     pub version: Option<Version>,

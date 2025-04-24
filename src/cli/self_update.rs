@@ -83,7 +83,7 @@ async fn latest_version() -> miette::Result<Version> {
                         .ok_or_else(|| {
                             miette::miette!("Could not get segments from Location header")
                         })?
-                        .last()
+                        .next_back()
                         .ok_or_else(|| {
                             miette::miette!("Could not get version from Location header")
                         })?

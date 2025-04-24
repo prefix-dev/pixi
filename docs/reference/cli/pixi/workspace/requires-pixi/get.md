@@ -4,11 +4,11 @@
 ## About
 Get the pixi minimum version requirement
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi/get_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi/get_extender:description"
 
 ## Usage
 ```
 pixi workspace requires-pixi get
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/requires-pixi/get_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/requires-pixi/get_extender:example"

@@ -128,17 +128,22 @@ nav:
       - Pytorch Installation: python/pytorch.md
   - Global Tools:
       - Introduction: global_tools/introduction.md
+      - Manifest: global_tools/manifest.md
+      - Concepts: global_tools/concepts.md
+      - Examples: global_tools/examples.md
   - Integration:
       - Editor:
-          - JupyterLab: integration/editor/jupyterlab.md
-          - PyCharm: integration/editor/pycharm.md
+          - VSCode: integration/editor/vscode.md
+          - Jetbrains: integration/editor/jetbrains.md
+          - Zed: integration/editor/zed.md
           - RStudio: integration/editor/r_studio.md
-          - VSCode Devcontainer: integration/editor/devcontainer.md
+          - JupyterLab: integration/editor/jupyterlab.md
       - Continuous Integration:
           - GitHub Actions: integration/ci/github_actions.md
           - Lockfile Updates: integration/ci/updates_github_actions.md
       - Third Party:
           - Pixi Diff: integration/third_party/pixi_diff.md
+          - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
   - Switching from:
       - Poetry: switching_from/poetry.md
@@ -157,6 +162,7 @@ nav:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
       - CLI: reference/cli/pixi.md
+      - Environment Variables: reference/environment_variables.md
   - Misc:
       - Changelog: CHANGELOG.md
       - Pixi Vision: misc/vision.md
@@ -168,6 +174,15 @@ hooks:
   - schema/docs_hooks.py
   - install/docs_hooks.py
   - docs/docs_hooks.py
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+not_in_nav: |
+  reference/cli/
 
 plugins:
   - redirects:
@@ -185,9 +200,9 @@ plugins:
         "features/global_tools.md": "global_tools/introduction.md"
         "features/pytorch.md": "python/pytorch.md"
         "ide_integration/jupyterlab.md": "integration/editor/jupyterlab.md"
-        "ide_integration/pycharm.md": "integration/editor/pycharm.md"
+        "ide_integration/pycharm.md": "integration/editor/jetbrains.md"
         "ide_integration/r_studio.md": "integration/editor/r_studio.md"
-        "ide_integration/devcontainer.md": "integration/editor/devcontainer.md"
+        "ide_integration/devcontainer.md": "integration/editor/vscode.md"
         "advanced/authentication.md": "deployment/authentication.md"
         "advanced/channel_priority.md": "advanced/channel_logic.md"
         "advanced/github_actions.md": "integration/ci/github_actions.md"
@@ -202,6 +217,8 @@ plugins:
         "packaging.md": "misc/packaging.md"
         "Community.md": "misc/Community.md"
         "FAQ.md": "misc/FAQ.md"
+        "integration/editor/devcontainer.md": "integration/editor/vscode.md"
+        "integration/editor/pycharm.md": "integration/editor/jetbrains.md"
 
   - search
   - social

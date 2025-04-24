@@ -71,7 +71,9 @@ impl FromStr for EnvironmentName {
 ///
 /// This error is returned when a string fails to be parsed as an environment name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes and underscores")]
+#[error(
+    "Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes and underscores"
+)]
 pub struct ParseEnvironmentNameError {
     /// The string that was attempted to be parsed.
     pub attempted_parse: String,

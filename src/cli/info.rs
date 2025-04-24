@@ -14,15 +14,14 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
 use toml_edit::ser::to_string;
 
 use crate::{
-    global,
+    WorkspaceLocator, global,
     global::{BinDir, EnvRoot},
     task::TaskName,
-    WorkspaceLocator,
 };
 use fancy_display::FancyDisplay;
 
@@ -391,7 +390,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let project_info = workspace.clone().map(|p| WorkspaceInfo {
-        name: p.name().to_string(),
+        name: p.display_name().to_string(),
         manifest_path: p.workspace.provenance.path.clone(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,

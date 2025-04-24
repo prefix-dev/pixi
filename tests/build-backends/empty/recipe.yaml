@@ -1,0 +1,6 @@
+package:
+  name: empty-backend
+  version: 0.1.0
+
+build:
+  noarch: generic

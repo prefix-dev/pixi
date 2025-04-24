@@ -4,7 +4,7 @@
 ## About
 Solve environment and update the lock file without installing the environments
 
---8<-- "docs/reference/cli/pixi/lock_extender.md:description"
+--8<-- "docs/reference/cli/pixi/lock_extender:description"
 
 ## Usage
 ```
@@ -14,9 +14,11 @@ pixi lock [OPTIONS]
 ## Options
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
+- <a id="arg---check" href="#arg---check">`--check`</a>
+:  Check if any changes have been made to the lock file. If yes, exit with a non-zero code
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/lock_extender.md:example"
+--8<-- "docs/reference/cli/pixi/lock_extender:example"

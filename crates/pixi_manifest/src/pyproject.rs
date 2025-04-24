@@ -9,24 +9,24 @@ use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
 use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact};
+use pyproject_toml::{self, Contact, pep735_resolve::Pep735Error};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use thiserror::Error;
 use toml_span::Spanned;
 
 use super::{
-    error::{RequirementConversionError, TomlError},
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
+    error::{RequirementConversionError, TomlError},
 };
 use crate::{
+    FeatureName, ManifestKind, Warning,
     error::{DependencyError, GenericError},
     manifests::PackageManifest,
     toml::{
-        pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
         ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
         TomlManifest,
+        pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
     },
-    FeatureName, Warning,
 };
 
 #[derive(Debug)]
@@ -63,7 +63,7 @@ impl PyProjectManifest {
     pub fn ensure_pixi(self) -> Result<Self, TomlError> {
         // Make sure the `[tool.pixi]` table exist
         if !self.has_pixi_table() {
-            return Err(TomlError::NoPixiTable);
+            return Err(TomlError::NoPixiTable(ManifestKind::Pyproject, None));
         }
 
         // Make sure a 'name' is defined
@@ -322,8 +322,8 @@ impl PyProjectManifest {
             .iter()
             .map(|(name, _)| {
                 (
-                    FeatureName::Named(name.clone()),
-                    Feature::new(FeatureName::Named(name.clone())),
+                    FeatureName::from(name.clone()),
+                    Feature::new(FeatureName::from(name.clone())),
                 )
             })
             .collect();
@@ -392,10 +392,13 @@ impl PyProjectManifest {
 
         // For each group of optional dependency or dependency group, add pypi
         // dependencies, filtering out self-references in optional dependencies
-        let project_name =
-            pep508_rs::PackageName::new(workspace_manifest.workspace.name.clone()).ok();
+        let project_name = workspace_manifest
+            .workspace
+            .name
+            .clone()
+            .and_then(|name| pep508_rs::PackageName::new(name).ok());
         for (group, reqs) in pypi_dependency_groups {
-            let feature_name = FeatureName::Named(group.to_string());
+            let feature_name = FeatureName::from(group.to_string());
             let target = workspace_manifest
                 .features
                 .entry(feature_name.clone())

@@ -4,12 +4,19 @@
 ## About
 Install an environment, both updating the lockfile and installing the environment
 
---8<-- "docs/reference/cli/pixi/install_extender.md:description"
+--8<-- "docs/reference/cli/pixi/install_extender:description"
 
 ## Usage
 ```
 pixi install [OPTIONS]
 ```
+
+## Options
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to install
+<br>May be provided more than once.
+- <a id="arg---all" href="#arg---all">`--all (-a)`</a>
+:  Install all environments
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -31,11 +38,6 @@ pixi install [OPTIONS]
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to install
-<br>May be provided more than once.
-- <a id="arg---all" href="#arg---all">`--all (-a)`</a>
-:  Install all environments
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
@@ -55,4 +57,4 @@ Running `pixi install` is not required before running other commands like `pixi 
 You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
 
 
---8<-- "docs/reference/cli/pixi/install_extender.md:example"
+--8<-- "docs/reference/cli/pixi/install_extender:example"

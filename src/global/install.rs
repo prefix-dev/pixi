@@ -1,8 +1,8 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     global::{
-        trampoline::{Configuration, Trampoline},
         BinDir, StateChange,
+        trampoline::{Configuration, Trampoline},
     },
     prefix::Executable,
     prefix::Prefix,
@@ -14,7 +14,8 @@ use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use std::{env, ops::Not, path::PathBuf, str::FromStr};
+use rattler_shell::activation::prefix_path_entries;
+use std::{env, path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
 
@@ -107,7 +108,7 @@ pub(crate) async fn create_executable_trampolines(
         .remove("PATH")
         .unwrap_or_else(|| path_current.clone());
 
-    let path_diff = path_diff(&path_current, &path_after_activation)?;
+    let path_diff = path_diff(&path_current, &path_after_activation, prefix)?;
 
     for ScriptExecMapping {
         global_script_path,
@@ -196,15 +197,17 @@ pub(crate) async fn create_executable_trampolines(
 }
 
 /// Compute the difference between two PATH variables (the entries split by `;` or `:`)
-fn path_diff(path_before: &str, path_after: &str) -> miette::Result<String> {
+fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Result<String> {
     // Split paths into vectors using platform-specific delimiter
     let paths_before: Vec<PathBuf> = std::env::split_paths(&path_before).collect();
     let paths_after: Vec<PathBuf> = std::env::split_paths(path_after).collect();
 
+    let prefix_path_entries = prefix_path_entries(prefix.root(), &Platform::current());
+
     // Calculate the PATH diff
     let path_diff = paths_after
         .iter()
-        .filter(|p| paths_before.contains(p).not());
+        .filter(|p| !paths_before.contains(p) || prefix_path_entries.contains(p));
 
     env::join_paths(path_diff)
         .map(|p| p.to_string_lossy().to_string())
@@ -404,11 +407,10 @@ mod tests {
         ripgrep_specs: IndexSet<MatchSpec>,
         ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
-        assert!(!local_environment_matches_spec(
-            ripgrep_bat_records.clone(),
-            &ripgrep_specs,
-            None
-        ), "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone.");
+        assert!(
+            !local_environment_matches_spec(ripgrep_bat_records.clone(), &ripgrep_specs, None),
+            "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
+        );
 
         assert!(
             local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, None),

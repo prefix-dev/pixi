@@ -2,9 +2,8 @@ use uv_distribution_types::{CachedDist, Dist, InstalledDist};
 
 use super::InstallReason;
 
-/// Derived from uv [`uv_installer::Plan`]
 #[derive(Debug)]
-pub struct PyPIInstallPlan {
+pub struct PyPIInstalls {
     /// The distributions that are not already installed in the current
     /// environment, but are available in the local cache.
     pub local: Vec<(CachedDist, InstallReason)>,
@@ -19,9 +18,11 @@ pub struct PyPIInstallPlan {
     /// but will be re-installed (including upgraded) to satisfy the
     /// requirements.
     pub reinstalls: Vec<(InstalledDist, NeedReinstall)>,
+}
 
-    /// Any distributions that are already installed in the current environment,
-    /// and are _not_ necessary to satisfy the requirements.
+#[derive(Debug)]
+pub struct PyPIRemovals {
+    /// Extraneous packages that need to be removed
     pub extraneous: Vec<InstalledDist>,
 }
 
@@ -159,15 +160,15 @@ impl std::fmt::Display for NeedReinstall {
             ),
             NeedReinstall::UnableToConvertLockedPath { path } => {
                 write!(f, "Unable to convert locked path to url: {}", path)
-            },
-            NeedReinstall::SourceMismatch{locked_location, installed_location} => write!(
+            }
+            NeedReinstall::SourceMismatch {
+                locked_location,
+                installed_location,
+            } => write!(
                 f,
                 "Installed from registry from '{installed_location}' but locked to a non-registry location from '{locked_location}'",
             ),
-            NeedReinstall::ReinstallationRequested => write!(
-                f,
-                "Reinstallation was requested",
-            ),
+            NeedReinstall::ReinstallationRequested => write!(f, "Reinstallation was requested",),
         }
     }
 }
