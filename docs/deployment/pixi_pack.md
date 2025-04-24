@@ -108,6 +108,24 @@ You can also pack PyPi wheel packages into your environment.
 If you happen to use source distributions, you can ignore them by using the `--ignore-pypi-non-wheel` flag.
 This will skip the bundling of PyPi packages that are source distributions.
 
+### Mirror and S3 middleware
+
+You can use mirror middleware by creating a configuration file as described in the [pixi documentation](../reference/pixi_configuration.md#mirror-configuration) and referencing it using `--config`.
+
+```toml
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = ["https://my.artifactory/conda-forge"]
+```
+
+If you are using [S3 in pixi](./s3.md), you can also add the appropriate S3 config in your config file and reference it.
+
+```toml
+[s3-options.my-s3-bucket]
+endpoint-url = "https://s3.eu-central-1.amazonaws.com"
+region = "eu-central-1"
+force-path-style = false
+```
+
 ### Cache Downloaded Packages
 
 You can cache downloaded packages to speed up subsequent pack operations by using the `--use-cache` flag:
