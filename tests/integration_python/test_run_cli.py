@@ -343,7 +343,7 @@ def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     help_short = verify_cli_command(
         [pixi, "run", "-h"],
-        stdout_contains="pixi run",
+        stdout_contains=["Usage: pixi", " run"],  # Windows uses .exe so we need to check for both
     ).stdout
 
     assert len(help_long.splitlines()) > len(help_short.splitlines())

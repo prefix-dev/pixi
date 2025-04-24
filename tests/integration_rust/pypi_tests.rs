@@ -237,13 +237,15 @@ async fn pin_torch() {
     // So the check is as follows:
     // 1. The PyPI index is the main index-url, so normally torch would be taken from there.
     // 2. We manually check if it is taken from the whl/cu124 index instead.
-    assert!(lock_file
-        .get_pypi_package_url("default", Platform::Linux64, "torch")
-        .unwrap()
-        .as_url()
-        .unwrap()
-        .path()
-        .contains("/whl/cu124"));
+    assert!(
+        lock_file
+            .get_pypi_package_url("default", Platform::Linux64, "torch")
+            .unwrap()
+            .as_url()
+            .unwrap()
+            .path()
+            .contains("/whl/cu124")
+    );
 }
 
 #[tokio::test]

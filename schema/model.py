@@ -581,10 +581,10 @@ class PyPIOptions(StrictBaseModel):
         description="Paths to directory containing",
         examples=[["https://pypi.org/simple"]],
     )
-    no_build_isolation: list[PyPIPackageName] = Field(
+    no_build_isolation: bool | list[PyPIPackageName] | None = Field(
         None,
         description="Packages that should NOT be isolated during the build process",
-        examples=[["numpy"]],
+        examples=[["numpy"], True],
     )
     index_strategy: (
         Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None

@@ -12,12 +12,12 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
-use pixi_manifest::{pypi::pypi_options::NoBuild, FeaturesExt};
+use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
 use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{
-    as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement, to_normalize,
-    to_uv_specifiers, to_uv_version, AsPep508Error,
+    AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
+    to_normalize, to_uv_specifiers, to_uv_version,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
@@ -37,12 +37,12 @@ use uv_pypi_types::{ParsedUrlError, RequirementSource};
 use uv_resolver::RequiresPython;
 
 use super::{
-    package_identifier::ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName,
+    PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
 };
 use crate::{
     build::SourceAnchor,
     lock_file::records_by_name::HasNameVersion,
-    workspace::{grouped_environment::GroupedEnvironment, Environment},
+    workspace::{Environment, grouped_environment::GroupedEnvironment},
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -192,9 +192,10 @@ impl Display for SourceTreeHashMismatch {
         match (computed_hash, locked_hash) {
             (None, None) => write!(f, "could not compute a source tree hash"),
             (Some(computed), None) => {
-                write!(f,
-                       "the computed source tree hash is '{}', but the lock-file does not contain a hash",
-                       computed
+                write!(
+                    f,
+                    "the computed source tree hash is '{}', but the lock-file does not contain a hash",
+                    computed
                 )
             }
             (Some(computed), Some(locked)) => write!(
@@ -264,7 +265,8 @@ pub enum PlatformUnsat {
     )]
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
-    #[error("'{0}' requires python version {1} but the python interpreter in the lock-file has version {2}"
+    #[error(
+        "'{0}' requires python version {1} but the python interpreter in the lock-file has version {2}"
     )]
     PythonVersionMismatch(
         pep508_rs::PackageName,
@@ -290,7 +292,8 @@ pub enum PlatformUnsat {
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
 
-    #[error("the editable package '{0}' was expected to be a directory but is a url, which cannot be editable: '{1}'"
+    #[error(
+        "the editable package '{0}' was expected to be a directory but is a url, which cannot be editable: '{1}'"
     )]
     EditablePackageIsUrl(uv_normalize::PackageName, String),
 
@@ -583,7 +586,7 @@ fn verify_pypi_no_build(
                     Check::All => {
                         return Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
                             package.name.to_string(),
-                        ))
+                        ));
                     }
                     Check::Packages(ref hash_set) => {
                         if hash_set.contains(&package.name) {
@@ -694,7 +697,7 @@ pub async fn verify_platform_satisfiability(
         Err(duplicate) => {
             return Err(Box::new(PlatformUnsat::DuplicateEntry(
                 duplicate.package_record().name.as_source().to_string(),
-            )))
+            )));
         }
     };
 
@@ -705,7 +708,7 @@ pub async fn verify_platform_satisfiability(
         Err(duplicate) => {
             return Err(Box::new(PlatformUnsat::DuplicateEntry(
                 duplicate.0.name.to_string(),
-            )))
+            )));
         }
     };
 
@@ -1771,19 +1774,11 @@ impl Display for EditablePackagesMismatch {
         }
 
         fn is_are(count: usize) -> &'static str {
-            if count == 1 {
-                "is"
-            } else {
-                "are"
-            }
+            if count == 1 { "is" } else { "are" }
         }
 
         fn it_they(count: usize) -> &'static str {
-            if count == 1 {
-                "it"
-            } else {
-                "they"
-            }
+            if count == 1 { "it" } else { "they" }
         }
     }
 }

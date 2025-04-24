@@ -1,23 +1,25 @@
-use std::{
-    fs::File,
-    io::Write,
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
+use crate::common::{LockFileExt, PixiControl};
+use crate::common::{
+    builders::{
+        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
+    },
+    package_database::{Package, PackageDatabase},
 };
-
 use fs_err::tokio as tokio_fs;
+use pixi::lock_file::{ReinstallPackages, UpdateMode};
+use pixi::{UpdateLockFileOptions, Workspace};
 use pixi::{
     build::BuildContext,
     cli::{
-        cli_config::{LockFileUpdateConfig, WorkspaceConfig},
-        run::{self, Args},
         LockFileUsageConfig,
+        run::{self, Args},
     },
-    environment::LockFileUsage,
-    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit, ReinstallPackages, UpdateMode},
-    workspace::{grouped_environment::GroupedEnvironment, HasWorkspaceRef},
-    UpdateLockFileOptions, Workspace,
+    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
+};
+use pixi::{cli::cli_config::LockFileUpdateConfig, environment::LockFileUsage};
+use pixi::{
+    cli::cli_config::WorkspaceConfig,
+    workspace::{HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 use pixi_build_frontend::ToolContext;
 use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
@@ -26,18 +28,17 @@ use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
-use tempfile::{tempdir, TempDir};
+use std::{
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
+use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_python::PythonEnvironment;
-
-use crate::common::{
-    builders::{
-        string_from_iter, HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig,
-    },
-    package_database::{Package, PackageDatabase},
-    LockFileExt, PixiControl,
-};
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
@@ -69,12 +70,13 @@ async fn install_run_python() {
     assert!(result.stderr.is_empty());
 
     // Test for existence of environment file
-    assert!(pixi
-        .default_env_path()
-        .unwrap()
-        .join("conda-meta")
-        .join(consts::ENVIRONMENT_FILE_NAME)
-        .exists())
+    assert!(
+        pixi.default_env_path()
+            .unwrap()
+            .join("conda-meta")
+            .join(consts::ENVIRONMENT_FILE_NAME)
+            .exists()
+    )
 }
 
 /// This is a test to check that creating incremental lock files works.
@@ -206,7 +208,10 @@ async fn install_locked_with_config() {
         .await
         .unwrap();
 
-    assert!(pixi.install().with_locked().await.is_err(), "should error when installing with locked but there is a mismatch in the dependencies and the lockfile.");
+    assert!(
+        pixi.install().with_locked().await.is_err(),
+        "should error when installing with locked but there is a mismatch in the dependencies and the lockfile."
+    );
 
     // Check if it didn't accidentally update the lockfile
     let lock = pixi.lock_file().await.unwrap();
@@ -674,8 +679,7 @@ setup(
         .default_environment()
         .pypi_options()
         .no_build_isolation
-        .unwrap()
-        .contains(&"my-pkg".to_string());
+        .contains(&"my-pkg".parse().unwrap());
 
     assert!(has_pkg, "my-pkg is not in no-build-isolation list");
     pixi.install().await.expect("cannot install project");
@@ -1071,12 +1075,13 @@ async fn install_s3() {
     .await;
 
     // Test for existence of conda-meta/my-webserver-0.1.0-pyh4616a5c_0.json file
-    assert!(pixi
-        .default_env_path()
-        .unwrap()
-        .join("conda-meta")
-        .join("my-webserver-0.1.0-pyh4616a5c_0.json")
-        .exists());
+    assert!(
+        pixi.default_env_path()
+            .unwrap()
+            .join("conda-meta")
+            .join("my-webserver-0.1.0-pyh4616a5c_0.json")
+            .exists()
+    );
 }
 
 #[tokio::test]

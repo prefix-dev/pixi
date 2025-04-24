@@ -5,9 +5,9 @@ use futures::{SinkExt, StreamExt};
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest, ToolContext};
 use pixi_manifest::{
-    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
     BuildBackend, KnownPreviewFeature, Package, PackageBuild, PackageManifest, Preview, Workspace,
     WorkspaceManifest,
+    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
 };
 use pixi_spec::BinarySpec;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};

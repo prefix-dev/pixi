@@ -4,9 +4,9 @@ use std::{
 };
 
 use crate::{
+    WorkspaceLocator,
     cli::cli_config::{LockFileUpdateConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
-    WorkspaceLocator,
 };
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
@@ -118,10 +118,10 @@ fn render_env_platform(
             }
             LockedPackageRef::Conda(CondaPackageData::Source(_)) => {
                 miette::bail!(
-                        "Conda source packages are not supported in a conda explicit spec. \
+                    "Conda source packages are not supported in a conda explicit spec. \
                         Specify `--ignore-source-errors` to ignore this error and create \
                         a spec file containing only the binary conda dependencies from the lockfile."
-                    );
+                );
             }
             LockedPackageRef::Pypi(pypi, _) => {
                 if ignore_pypi_errors {

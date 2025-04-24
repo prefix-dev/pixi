@@ -8,8 +8,8 @@ use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    package::ArchiveType, ChannelInfo, PackageName, PackageRecord, Platform, RepoData,
-    VersionWithSource,
+    ChannelInfo, PackageName, PackageRecord, Platform, RepoData, VersionWithSource,
+    package::ArchiveType,
 };
 use std::{collections::HashSet, path::Path};
 use tempfile::TempDir;

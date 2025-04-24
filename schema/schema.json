@@ -1319,15 +1319,23 @@
         "no-build-isolation": {
           "title": "No-Build-Isolation",
           "description": "Packages that should NOT be isolated during the build process",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ],
           "examples": [
             [
               "numpy"
-            ]
+            ],
+            true
           ]
         }
       }

@@ -2,8 +2,10 @@ use std::path::Path;
 
 use miette::IntoDiagnostic;
 
+use crate::{install_pypi::PyPIPrefixUpdater, lock_file::UvResolutionContext, prefix::Prefix};
 use fancy_display::FancyDisplay;
 use pixi_consts::consts;
+use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_manifest::{EnvironmentName, SystemRequirements};
 use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
@@ -11,8 +13,6 @@ use rattler_conda_types::Platform;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use std::collections::HashMap;
 use uv_distribution_types::{InstalledDist, Name};
-
-use crate::{install_pypi::PyPIPrefixUpdater, lock_file::UvResolutionContext, prefix::Prefix};
 
 use super::PythonStatus;
 
@@ -81,7 +81,7 @@ pub async fn update_prefix_pypi(
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
     platform: Platform,
-    non_isolated_packages: Option<Vec<String>>,
+    non_isolated_packages: &NoBuildIsolation,
     no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
 ) -> miette::Result<()> {
     // If we have changed interpreter, we need to uninstall all site-packages from
