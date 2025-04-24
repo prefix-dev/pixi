@@ -700,6 +700,12 @@ async fn test_setuptools_override_failure() {
         [dependencies]
         pip = ">=24.0,<25"
         python = "<3.13"
+        # we need to pin them because xalas start to fail with newer versions
+        ninja = "*"
+        cmake = "<4"
+
+        [pypi-options]
+        no-build-isolation = ["xatlas"]
 
         # The transitive dependencies of viser were causing issues
         [pypi-dependencies]
