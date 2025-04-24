@@ -1304,8 +1304,10 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
             "alias",
             "dummy-d",
             "dummy-a",
-            "--args",
+            "--arg",
             "arg_1",
+            "--arg",
+            "arg_2",
             "--manifest-path",
             manifest,
         ]

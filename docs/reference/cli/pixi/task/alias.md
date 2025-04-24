@@ -25,7 +25,7 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 :  The platform for which the alias should be added
 - <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
 :  The description of the alias task
-- <a id="arg---args" href="#arg---args">`--args <ARGS>`</a>
+- <a id="arg---arg" href="#arg---arg">`--arg <ARGS>`</a>
 :  The arguments to pass to the task
 <br>May be provided more than once.
 

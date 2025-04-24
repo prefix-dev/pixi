@@ -9,7 +9,7 @@
   
   [tasks]
   dummy-a = [{ task = "dummy-b" }, { task = "dummy-c" }]
-  dummy-d = [{ task = "dummy-a" }]
+  dummy-d = { args = ["arg_1", "arg_2"], depends-on = [{ task = "dummy-a" }] }
   
   [target.linux-64.tasks]
   linux-alias = [{ task = "dummy-b" }, { task = "dummy-c" }]
