@@ -29,6 +29,85 @@
   
   '''
 # ---
+# name: test_info_output_extended
+  dict({
+    'auth_dir': str,
+    'cache_dir': str,
+    'cache_size': str,
+    'config_locations': list,
+    'environments_info': list([
+      dict({
+        'channels': list([
+          'conda-forge',
+        ]),
+        'dependencies': list([
+        ]),
+        'environment_size': str,
+        'features': list([
+          'default',
+        ]),
+        'name': 'default',
+        'platforms': list,
+        'prefix': str,
+        'pypi_dependencies': list([
+        ]),
+        'solve_group': None,
+        'system_requirements': dict({
+          'archspec': None,
+          'cuda': None,
+          'libc': None,
+          'linux': None,
+          'macos': None,
+        }),
+        'tasks': list([
+        ]),
+      }),
+      dict({
+        'channels': list([
+          'conda-forge',
+        ]),
+        'dependencies': list([
+          'python',
+        ]),
+        'environment_size': str,
+        'features': list([
+          'py312',
+          'default',
+        ]),
+        'name': 'py312',
+        'platforms': list,
+        'prefix': str,
+        'pypi_dependencies': list([
+        ]),
+        'solve_group': None,
+        'system_requirements': dict({
+          'archspec': None,
+          'cuda': None,
+          'libc': None,
+          'linux': None,
+          'macos': None,
+        }),
+        'tasks': list([
+        ]),
+      }),
+    ]),
+    'global_info': dict({
+      'bin_dir': str,
+      'env_dir': str,
+      'manifest': str,
+    }),
+    'platform': str,
+    'project_info': dict({
+      'last_updated': str,
+      'manifest_path': str,
+      'name': 'test',
+      'pixi_folder_size': str,
+      'version': None,
+    }),
+    'version': str,
+    'virtual_packages': list,
+  })
+# ---
 # name: test_pixi_task_list_json
   list([
     dict({

@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 import platform
 from syrupy.assertion import SnapshotAssertion
+from syrupy.matchers import path_type
 
 from .common import (
     cwd,
@@ -1352,3 +1353,56 @@ def test_pixi_task_list_json(
     task_data = json.loads(result.stdout)
 
     assert task_data == snapshot
+
+
+def test_info_output_extended(
+    pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [feature.py312.dependencies]
+        python = "~=3.12.0"
+
+        [environments]
+        py312 = ["py312"]
+    """
+    manifest.write_text(toml)
+
+    verify_cli_command([pixi, "install", "--manifest-path", manifest, "--all"])
+
+    result = verify_cli_command(
+        [pixi, "info", "--manifest-path", manifest, "--extended", "--json"], ExitCode.SUCCESS
+    )
+    info_data = json.loads(result.stdout)
+
+    # Stub out path, size and other dynamic data from snapshot
+    path_matcher = path_type(
+        {
+            "auth_dir": (str,),
+            "cache_dir": (str,),
+            "cache_size": (str,),
+            "config_locations": (list,),
+            "environments_info.0.prefix": (str,),
+            "environments_info.0.environment_size": (str,),
+            "environments_info.0.platforms": (list,),
+            "environments_info.1.prefix": (str,),
+            "environments_info.1.environment_size": (str,),
+            "environments_info.1.platforms": (list,),
+            "global_info.bin_dir": (str,),
+            "global_info.env_dir": (str,),
+            "global_info.manifest": (str,),
+            "platform": (str,),
+            "project_info.manifest_path": (str,),
+            "project_info.pixi_folder_size": (str,),
+            "project_info.last_updated": (str,),
+            "version": (str,),
+            "virtual_packages": (list,),
+        }
+    )
+
+    assert info_data == snapshot(matcher=path_matcher)
