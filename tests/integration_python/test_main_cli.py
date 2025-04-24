@@ -1299,6 +1299,37 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
     assert manifest.read_text() == snapshot
 
 
+def test_pixi_add_task(pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--arg",
+            "name",
+            "--manifest-path",
+            manifest,
+            "test",
+            "echo 'Hello {{name | title}}'",
+        ]
+    )
+
+    verify_cli_command(
+        [pixi, "task", "add", "--depends-on", "test", "--manifest-path", manifest, "test-alias", ""]
+    )
+
+    assert manifest.read_text() == snapshot
+
+
 def test_pixi_task_list_json(
     pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
 ) -> None:

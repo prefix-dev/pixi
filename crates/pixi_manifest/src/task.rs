@@ -625,6 +625,24 @@ impl From<Task> for Item {
                         );
                     }
                 }
+
+                if let Some(args) = &process.args {
+                    let mut args_array = Array::new();
+                    for arg in args {
+                        if let Some(default) = &arg.default {
+                            let mut arg_table = Table::new().into_inline_table();
+                            arg_table.insert("arg", arg.name.as_str().into());
+                            arg_table.insert("default", default.into());
+                            args_array.push(Value::InlineTable(arg_table));
+                        } else {
+                            args_array.push(Value::String(toml_edit::Formatted::new(
+                                arg.name.as_str().to_string(),
+                            )));
+                        }
+                    }
+                    table.insert("args", Value::Array(args_array));
+                }
+
                 if !process.depends_on.is_empty() {
                     table.insert(
                         "depends-on",

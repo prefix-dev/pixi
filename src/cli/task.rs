@@ -197,6 +197,7 @@ impl From<AddArgs> for Task {
             && value.cwd.is_none()
             && value.env.is_empty()
             && description.is_none()
+            && value.args.is_none()
         {
             Self::Plain(cmd_args.into())
         } else {
