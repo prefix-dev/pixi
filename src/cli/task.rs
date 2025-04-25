@@ -17,7 +17,6 @@ use pixi_manifest::{
 use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
-use tracing::warn;
 
 use crate::workspace::virtual_packages::verify_current_platform_can_run_environment;
 use crate::{
@@ -166,28 +165,23 @@ impl From<AddArgs> for Task {
         let description = value.description;
 
         // Convert the arguments into a single string representation
-        let cmd_args = if value.commands.len() == 1 {
-            value
-                .commands
-                .into_iter()
-                .next()
-                .expect("we just checked that the length is 1")
-        } else {
-            // Simply concatenate all arguments
-            value
-                .commands
-                .into_iter()
-                .map(|arg| quote(&arg).into_owned())
-                .join(" ")
-        };
+        let cmd_args = value
+            .commands
+            .iter()
+            .exactly_one()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|_| {
+                // Simply concatenate all arguments
+                value
+                    .commands
+                    .iter()
+                    .map(|arg| quote(arg).into_owned())
+                    .join(" ")
+            });
 
         // Depending on whether the task has a command, and depends_on or not we create
         // a plain or complex, or alias command.
         if cmd_args.trim().is_empty() && !depends_on.is_empty() {
-            warn!(
-                "It is recommended to specify the arguments for alias `{}` directly in the toml manifest",
-                value.name
-            );
             Self::Alias(Alias {
                 depends_on,
                 description,
