@@ -112,14 +112,14 @@ This will skip the bundling of PyPi packages that are source distributions.
 
 You can use mirror middleware by creating a configuration file as described in the [pixi documentation](../reference/pixi_configuration.md#mirror-configuration) and referencing it using `--config`.
 
-```toml
+```toml title="config.toml"
 [mirrors]
 "https://conda.anaconda.org/conda-forge" = ["https://my.artifactory/conda-forge"]
 ```
 
 If you are using [S3 in pixi](./s3.md), you can also add the appropriate S3 config in your config file and reference it.
 
-```toml
+```toml title="config.toml"
 [s3-options.my-s3-bucket]
 endpoint-url = "https://s3.eu-central-1.amazonaws.com"
 region = "eu-central-1"
