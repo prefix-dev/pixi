@@ -148,7 +148,7 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> DependencyMap<N, D> {
 }
 
 impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::NamelessMatchSpec> {
-    /// Converts this instance into an iterator of [`MatchSpec`]s.
+    /// Converts this instance into an iterator of [`rattler_conda_types::MatchSpec`]s.
     pub fn into_match_specs(
         self,
     ) -> impl DoubleEndedIterator<Item = rattler_conda_types::MatchSpec> {
