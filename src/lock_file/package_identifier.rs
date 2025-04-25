@@ -175,6 +175,6 @@ pub enum ConversionError {
     Version(String),
     // #[error("'{0}' is not a valid python extra")]
     // Extra(String),
-    #[error("Failed to convert to pypi package name")]
+    #[error(transparent)]
     NameConversion(#[from] PixiConversionError),
 }

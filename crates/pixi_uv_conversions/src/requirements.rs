@@ -11,9 +11,7 @@ use uv_distribution_filename::DistExtension;
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
-use uv_pypi_types::{
-    ParsedPathUrl, ParsedUrl, ParsedUrlError, RequirementSource, VerbatimParsedUrl,
-};
+use uv_pypi_types::{ParsedPathUrl, ParsedUrl, RequirementSource, VerbatimParsedUrl};
 
 use crate::{ConversionError, into_uv_git_reference, to_uv_marker_tree, to_uv_version_specifiers};
 
@@ -236,14 +234,13 @@ pub fn pep508_requirement_to_uv_requirement(
                 // it is actually a path
                 let url = match url_or_path {
                     UrlOrPath::Path(path) => {
-                        let ext = DistExtension::from_path(Path::new(path.as_str()))
-                            .map_err(|e| {
-                                ParsedUrlError::MissingExtensionPath(
+                        let ext =
+                            DistExtension::from_path(Path::new(path.as_str())).map_err(|e| {
+                                ConversionError::ExpectedArchiveButFoundPath(
                                     PathBuf::from_str(path.as_str()).expect("not a path"),
                                     e,
                                 )
-                            })
-                            .expect("cannot get extension");
+                            })?;
                         let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
                             path.as_str().into(),
                             ext,

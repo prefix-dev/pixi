@@ -378,7 +378,7 @@ pub enum PlatformUnsat {
         locked_path: String,
     },
 
-    #[error("failed to convert between pep508 and uv types {0}")]
+    #[error("failed to convert between pep508 and uv types: {0}")]
     UvTypesConversionError(#[from] ConversionError),
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
