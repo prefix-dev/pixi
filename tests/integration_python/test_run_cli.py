@@ -1223,3 +1223,25 @@ def test_template_in_inputs_outputs(pixi: Path, tmp_pixi_workspace: Path) -> Non
         [pixi, "run", "--manifest-path", manifest_path, "process-file", "file2"],
         stderr_contains="cache hit",
     )
+
+
+def test_argument_forwarding_in_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that argument forwarding in dependencies works as expected."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "task1": {"cmd": "echo {{ dependent }}", "args": [{"arg": "dependent"}]},
+        "task2": {
+            "args": [{"arg": "main"}],
+            "depends-on": [{"task": "task1", "args": ["{{ main }}"]}],
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "task2", "arg1"],
+        stdout_contains="arg1",
+    )

@@ -1266,19 +1266,21 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
-        [workspace]
-        name = "test"
-        channels = []
-        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
-        """
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+"""
     manifest.write_text(toml)
 
+    # Test simple task alias
     verify_cli_command(
         [pixi, "task", "alias", "dummy-a", "dummy-b", "dummy-c", "--manifest-path", manifest]
     )
+
     # Test platform-specific task alias
     verify_cli_command(
         [
@@ -1295,20 +1297,38 @@ def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ]
     )
 
-    with open(manifest, "rb") as f:
-        manifest_content = tomllib.load(f)
+    assert manifest.read_text() == snapshot
 
-    assert "target" in manifest_content
-    assert "linux-64" in manifest_content["target"]
-    assert "tasks" in manifest_content["target"]["linux-64"]
-    assert "linux-alias" in manifest_content["target"]["linux-64"]["tasks"]
-    assert manifest_content["target"]["linux-64"]["tasks"]["linux-alias"] == [
-        {"task": "dummy-b"},
-        {"task": "dummy-c"},
-    ]
 
-    assert "dummy-a" in manifest_content["tasks"]
-    assert manifest_content["tasks"]["dummy-a"] == [{"task": "dummy-b"}, {"task": "dummy-c"}]
+def test_pixi_add_task(pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--arg",
+            "name",
+            "--manifest-path",
+            manifest,
+            "test",
+            "echo 'Hello {{name | title}}'",
+        ]
+    )
+
+    verify_cli_command(
+        [pixi, "task", "add", "--depends-on", "test", "--manifest-path", manifest, "test-alias", ""]
+    )
+
+    assert manifest.read_text() == snapshot
 
 
 def test_pixi_task_list_json(

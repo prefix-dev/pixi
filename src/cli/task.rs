@@ -102,7 +102,7 @@ pub struct AddArgs {
     pub clean_env: bool,
 
     /// The arguments to pass to the task
-    #[arg(long, num_args = 1..)]
+    #[arg(long = "arg", action = clap::ArgAction::Append)]
     pub args: Option<Vec<TaskArg>>,
 }
 
@@ -165,20 +165,19 @@ impl From<AddArgs> for Task {
         let description = value.description;
 
         // Convert the arguments into a single string representation
-        let cmd_args = if value.commands.len() == 1 {
-            value
-                .commands
-                .into_iter()
-                .next()
-                .expect("we just checked that the length is 1")
-        } else {
-            // Simply concatenate all arguments
-            value
-                .commands
-                .into_iter()
-                .map(|arg| quote(&arg).into_owned())
-                .join(" ")
-        };
+        let cmd_args = value
+            .commands
+            .iter()
+            .exactly_one()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|_| {
+                // Simply concatenate all arguments
+                value
+                    .commands
+                    .iter()
+                    .map(|arg| quote(arg).into_owned())
+                    .join(" ")
+            });
 
         // Depending on whether the task has a command, and depends_on or not we create
         // a plain or complex, or alias command.
@@ -186,11 +185,13 @@ impl From<AddArgs> for Task {
             Self::Alias(Alias {
                 depends_on,
                 description,
+                args: value.args,
             })
         } else if depends_on.is_empty()
             && value.cwd.is_none()
             && value.env.is_empty()
             && description.is_none()
+            && value.args.is_none()
         {
             Self::Plain(cmd_args.into())
         } else {
@@ -227,6 +228,7 @@ impl From<AliasArgs> for Task {
         Self::Alias(Alias {
             depends_on: value.depends_on,
             description: value.description,
+            args: None,
         })
     }
 }

@@ -48,12 +48,16 @@ impl From<String> for TaskName {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Dependency {
     pub task_name: TaskName,
-    pub args: Option<Vec<String>>,
+    pub args: Option<Vec<TemplateString>>,
     pub environment: Option<EnvironmentName>,
 }
 
 impl Dependency {
-    pub fn new(s: &str, args: Option<Vec<String>>, environment: Option<EnvironmentName>) -> Self {
+    pub fn new(
+        s: &str,
+        args: Option<Vec<TemplateString>>,
+        environment: Option<EnvironmentName>,
+    ) -> Self {
         Dependency {
             task_name: TaskName(s.to_string()),
             args,
@@ -61,11 +65,26 @@ impl Dependency {
         }
     }
 
-    pub fn new_without_env(s: &str, args: Option<Vec<String>>) -> Self {
+    pub fn new_without_env(s: &str, args: Option<Vec<TemplateString>>) -> Self {
         Dependency {
             task_name: TaskName(s.to_string()),
             args,
             environment: None,
+        }
+    }
+    pub fn render_args(
+        &self,
+        args: Option<&ArgValues>,
+    ) -> Result<Option<Vec<String>>, TemplateStringError> {
+        match &self.args {
+            Some(task_args) => {
+                let mut result = Vec::new();
+                for arg in task_args {
+                    result.push(arg.render(args)?);
+                }
+                Ok(Some(result))
+            }
+            None => Ok(None),
         }
     }
 }
@@ -90,6 +109,26 @@ impl FromStr for TaskName {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(TaskName(s.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct TypedDependency {
+    pub task_name: TaskName,
+    pub args: Option<Vec<String>>,
+    pub environment: Option<EnvironmentName>,
+}
+
+impl TypedDependency {
+    pub fn from_dependency(
+        dependency: &Dependency,
+        args: Option<&ArgValues>,
+    ) -> Result<Self, TemplateStringError> {
+        Ok(TypedDependency {
+            task_name: dependency.task_name.clone(),
+            args: dependency.render_args(args)?,
+            environment: dependency.environment.clone(),
+        })
     }
 }
 
@@ -229,6 +268,7 @@ impl Task {
     pub fn args(&self) -> Option<&[TaskArg]> {
         match self {
             Task::Execute(exe) => exe.args.as_deref(),
+            Task::Alias(alias) => alias.args.as_deref(),
             _ => None,
         }
     }
@@ -345,7 +385,7 @@ pub struct TypedArg {
 }
 
 /// A string that contains placeholders to be rendered using the `minijinja` templating engine.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Hash)]
 pub struct TemplateString(String);
 
 impl From<&str> for TemplateString {
@@ -502,6 +542,9 @@ pub struct Alias {
 
     /// A description of the task.
     pub description: Option<String>,
+
+    /// A list of arguments to pass to the task.
+    pub args: Option<Vec<TaskArg>>,
 }
 
 impl Display for Task {
@@ -582,6 +625,24 @@ impl From<Task> for Item {
                         );
                     }
                 }
+
+                if let Some(args) = &process.args {
+                    let mut args_array = Array::new();
+                    for arg in args {
+                        if let Some(default) = &arg.default {
+                            let mut arg_table = Table::new().into_inline_table();
+                            arg_table.insert("arg", arg.name.as_str().into());
+                            arg_table.insert("default", default.into());
+                            args_array.push(Value::InlineTable(arg_table));
+                        } else {
+                            args_array.push(Value::String(toml_edit::Formatted::new(
+                                arg.name.as_str().to_string(),
+                            )));
+                        }
+                    }
+                    table.insert("args", Value::Array(args_array));
+                }
+
                 if !process.depends_on.is_empty() {
                     table.insert(
                         "depends-on",
@@ -593,7 +654,8 @@ impl From<Task> for Item {
                                     table.insert(
                                         "args",
                                         Value::Array(Array::from_iter(
-                                            args.iter().map(|arg| Value::from(arg.clone())),
+                                            args.iter()
+                                                .map(|arg| Value::from(arg.source().to_string())),
                                         )),
                                     );
                                     Value::InlineTable(table)
@@ -615,28 +677,84 @@ impl From<Task> for Item {
                 Item::Value(Value::InlineTable(table))
             }
             Task::Alias(alias) => {
-                let mut array = Array::new();
-                for dep in alias.depends_on.iter() {
+                if alias.args.is_some() {
                     let mut table = Table::new().into_inline_table();
 
-                    table.insert("task", dep.task_name.to_string().into());
-
-                    if let Some(args) = &dep.args {
-                        table.insert(
-                            "args",
-                            Value::Array(Array::from_iter(
-                                args.iter().map(|arg| Value::from(arg.clone())),
-                            )),
-                        );
+                    if let Some(args_vec) = &alias.args {
+                        let mut args = Vec::new();
+                        for arg in args_vec {
+                            if let Some(default) = &arg.default {
+                                let mut arg_table = Table::new().into_inline_table();
+                                arg_table.insert("arg", arg.name.as_str().into());
+                                arg_table.insert("default", default.into());
+                                args.push(Value::InlineTable(arg_table));
+                            } else {
+                                args.push(Value::String(toml_edit::Formatted::new(
+                                    arg.name.as_str().to_string(),
+                                )));
+                            }
+                        }
+                        table.insert("args", Value::Array(Array::from_iter(args)));
                     }
 
-                    if let Some(env) = &dep.environment {
-                        table.insert("environment", env.to_string().into());
+                    let mut deps = Vec::new();
+                    for dep in alias.depends_on.iter() {
+                        let mut dep_table = Table::new().into_inline_table();
+                        dep_table.insert("task", dep.task_name.to_string().into());
+
+                        if let Some(args) = &dep.args {
+                            dep_table.insert(
+                                "args",
+                                Value::Array(Array::from_iter(
+                                    args.iter().map(|arg| Value::from(arg.source().to_string())),
+                                )),
+                            );
+                        }
+
+                        if let Some(env) = &dep.environment {
+                            dep_table.insert("environment", env.to_string().into());
+                        }
+
+                        deps.push(Value::InlineTable(dep_table));
+                    }
+                    table.insert("depends-on", Value::Array(Array::from_iter(deps)));
+
+                    if let Some(description) = &alias.description {
+                        table.insert("description", description.into());
                     }
 
-                    array.push(Value::InlineTable(table));
+                    Item::Value(Value::InlineTable(table))
+                } else {
+                    let mut array = Array::new();
+                    for dep in alias.depends_on.iter() {
+                        let mut table = Table::new().into_inline_table();
+                        table.insert("task", dep.task_name.to_string().into());
+
+                        if let Some(args) = &dep.args {
+                            table.insert(
+                                "args",
+                                Value::Array(Array::from_iter(
+                                    args.iter().map(|arg| Value::from(arg.source().to_string())),
+                                )),
+                            );
+                        }
+
+                        if let Some(env) = &dep.environment {
+                            table.insert("environment", env.to_string().into());
+                        }
+
+                        array.push(Value::InlineTable(table));
+                    }
+
+                    if let Some(description) = &alias.description {
+                        let mut table = Table::new().into_inline_table();
+                        table.insert("depends-on", Value::Array(array));
+                        table.insert("description", description.into());
+                        Item::Value(Value::InlineTable(table))
+                    } else {
+                        Item::Value(Value::Array(array))
+                    }
                 }
-                Item::Value(Value::Array(array))
             }
             _ => Item::None,
         }
