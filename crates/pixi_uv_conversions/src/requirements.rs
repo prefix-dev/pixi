@@ -1,4 +1,4 @@
-use pixi_manifest::{PyPiRequirement, pypi::VersionOrStar};
+use pixi_pypi_spec::{PixiPypiSpec, VersionOrStar};
 use pixi_spec::{GitReference, GitSpec};
 use rattler_lock::UrlOrPath;
 use std::{
@@ -88,13 +88,13 @@ pub enum AsPep508Error {
 /// Convert into a [`uv_pypi_types::Requirement`], which is an uv extended
 /// requirement type
 pub fn as_uv_req(
-    req: &PyPiRequirement,
+    req: &PixiPypiSpec,
     name: &str,
     project_root: &Path,
 ) -> Result<uv_pypi_types::Requirement, AsPep508Error> {
     let name = PackageName::from_str(name)?;
     let source = match req {
-        PyPiRequirement::Version { version, index, .. } => {
+        PixiPypiSpec::Version { version, index, .. } => {
             // TODO: implement index later
             RequirementSource::Registry {
                 specifier: manifest_version_to_version_specifiers(version)?,
@@ -102,7 +102,7 @@ pub fn as_uv_req(
                 conflict: None,
             }
         }
-        PyPiRequirement::Git {
+        PixiPypiSpec::Git {
             url:
                 GitSpec {
                     git,
@@ -151,7 +151,7 @@ pub fn as_uv_req(
                 })?,
             ),
         },
-        PyPiRequirement::Path {
+        PixiPypiSpec::Path {
             path,
             editable,
             extras: _,
@@ -191,7 +191,7 @@ pub fn as_uv_req(
                 }
             }
         }
-        PyPiRequirement::Url {
+        PixiPypiSpec::Url {
             url, subdirectory, ..
         } => RequirementSource::Url {
             subdirectory: subdirectory.as_ref().map(|sub| PathBuf::from(sub.as_str())),
@@ -199,7 +199,7 @@ pub fn as_uv_req(
             url: VerbatimUrl::from_url(url.clone()),
             ext: DistExtension::from_path(url.path())?,
         },
-        PyPiRequirement::RawVersion(version) => RequirementSource::Registry {
+        PixiPypiSpec::RawVersion(version) => RequirementSource::Registry {
             specifier: manifest_version_to_version_specifiers(version)?,
             index: None,
             conflict: None,
@@ -296,7 +296,7 @@ mod tests {
 
     #[test]
     fn test_git_url() {
-        let pypi_req = PyPiRequirement::Git {
+        let pypi_req = PixiPypiSpec::Git {
             url: GitSpec {
                 git: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
                 rev: Some(GitReference::Rev(
@@ -320,7 +320,7 @@ mod tests {
         assert_eq!(uv_req.source, expected_uv_req);
 
         // With git+ prefix
-        let pypi_req = PyPiRequirement::Git {
+        let pypi_req = PixiPypiSpec::Git {
             url: GitSpec {
                 git: Url::parse("git+https://github.com/user/test.git").unwrap(),
                 rev: Some(GitReference::Rev(

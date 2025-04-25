@@ -1,0 +1,16 @@
+[package]
+name = "pixi_spec_containers"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+
+[dependencies]
+indexmap = { workspace = true }
+itertools = { workspace = true }
+
+rattler_conda_types = { workspace = true }
+

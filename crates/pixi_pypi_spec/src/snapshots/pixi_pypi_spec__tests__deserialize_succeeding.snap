@@ -1,7 +1,6 @@
 ---
-source: crates/pixi_manifest/src/pypi/pypi_requirement.rs
+source: crates/pixi_pypi_spec/src/lib.rs
 expression: snapshot
-snapshot_kind: text
 ---
 - input: "pkg = \"==1.2.3\""
   result: "==1.2.3"

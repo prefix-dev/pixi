@@ -1,0 +1,30 @@
+[package]
+name = "pixi_pypi_spec"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+
+[dependencies]
+itertools = { workspace = true }
+serde = {workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+url = { workspace = true }
+toml_edit = { workspace = true }
+toml-span = { workspace = true }
+tracing = { workspace = true }
+serde_json = { workspace = true }
+pep508_rs = { workspace = true }
+pep440_rs = { workspace = true }
+
+pixi_spec = { workspace = true }
+pixi_toml = { workspace = true }
+pixi_git = { workspace = true }
+
+[dev-dependencies]
+rstest = { workspace = true }
+insta = { workspace = true, features = ["yaml"] }
+pixi_test_utils = { workspace = true }

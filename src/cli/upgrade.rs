@@ -1,16 +1,5 @@
 use std::cmp::Ordering;
 
-use clap::Parser;
-use fancy_display::FancyDisplay;
-use indexmap::IndexMap;
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, MietteDiagnostic};
-use pep508_rs::{MarkerTree, Requirement};
-use pixi_config::ConfigCli;
-use pixi_manifest::{FeatureName, PyPiRequirement, SpecType};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, StringMatcher};
-
 use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
 use crate::{
     WorkspaceLocator,
@@ -18,6 +7,17 @@ use crate::{
     diff::LockFileJsonDiff,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
+use clap::Parser;
+use fancy_display::FancyDisplay;
+use indexmap::IndexMap;
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic, MietteDiagnostic};
+use pep508_rs::{MarkerTree, Requirement};
+use pixi_config::ConfigCli;
+use pixi_manifest::{FeatureName, SpecType};
+use pixi_pypi_spec::PixiPypiSpec;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{MatchSpec, StringMatcher};
 
 /// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
 ///
@@ -262,7 +262,7 @@ fn parse_specs(
         })
         // Only upgrade version specs
         .filter_map(|(name, req)| match req {
-            PyPiRequirement::Version { extras, .. } => Some((
+            PixiPypiSpec::Version { extras, .. } => Some((
                 name.clone(),
                 Requirement {
                     name: name.as_normalized().clone(),
@@ -273,7 +273,7 @@ fn parse_specs(
                     version_or_url: None,
                 },
             )),
-            PyPiRequirement::RawVersion(_) => Some((
+            PixiPypiSpec::RawVersion(_) => Some((
                 name.clone(),
                 Requirement {
                     name: name.as_normalized().clone(),

@@ -19,9 +19,10 @@ pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
-pixi_git = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_toml = { workspace = true }
+pixi_spec_containers = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 serde-value = { workspace = true }
@@ -60,3 +61,4 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 rstest = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
 tempfile = { workspace = true }
+pixi_test_utils = { workspace = true }

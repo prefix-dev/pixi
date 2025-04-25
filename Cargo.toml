@@ -47,6 +47,7 @@ http = "1.2.0"
 http-cache-reqwest = "0.15.1"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
+id-arena = "2.2.1"
 indexmap = "2.7.1"
 indicatif = "0.17.11"
 insta = "1.42.1"
@@ -65,6 +66,7 @@ pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
 pep508_rs = "0.9.2"
 percent-encoding = "2.3.1"
+petgraph = "0.8.1"
 pyproject-toml = "0.13.4"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
@@ -163,6 +165,7 @@ pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
+pixi_spec_containers = { path = "crates/pixi_spec_containers" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
 pixi_manifest = { path = "crates/pixi_manifest" }
@@ -172,6 +175,8 @@ pixi_spec = { path = "crates/pixi_spec" }
 pixi_toml = { path = "crates/pixi_toml" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
+pixi_test_utils = { path = "crates/pixi_test_utils" }
+pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 
@@ -293,6 +298,7 @@ pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 pixi_toml = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }

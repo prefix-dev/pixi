@@ -245,7 +245,8 @@ impl<'de> toml_span::Deserialize<'de> for TaskName {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use pixi_test_utils::format_parse_error;
 
     #[test]
     fn test_depends_on_deprecation() {

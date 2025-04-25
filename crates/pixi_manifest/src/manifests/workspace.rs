@@ -1,12 +1,5 @@
 use std::{collections::HashMap, fmt::Display, hash::Hash, str::FromStr};
 
-use indexmap::{Equivalent, IndexMap, IndexSet};
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, SourceCode, miette};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
-use toml_edit::Value;
-
 use crate::{
     DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
@@ -16,13 +9,19 @@ use crate::{
     error::{DependencyError, UnknownFeature},
     feature::{Feature, FeatureName},
     manifests::document::ManifestDocument,
-    pypi::PyPiPackageName,
     solve_group::SolveGroups,
     to_options,
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
     utils::WithSourceCode,
     workspace::Workspace,
 };
+use indexmap::{Equivalent, IndexMap, IndexSet};
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic, SourceCode, miette};
+use pixi_pypi_spec::PypiPackageName;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
+use toml_edit::Value;
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
 /// describes the part related to the workspace only.
@@ -517,7 +516,7 @@ impl WorkspaceManifestMut<'_> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn remove_pypi_dependency(
         &mut self,
-        dep: &PyPiPackageName,
+        dep: &PypiPackageName,
         platforms: &[Platform],
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
@@ -775,11 +774,22 @@ fn handle_missing_target(
 mod tests {
     use std::str::FromStr;
 
+    use super::*;
+    use crate::{
+        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
+        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
+        manifests::document::ManifestDocument,
+        pyproject::PyProjectManifest,
+        to_options,
+        toml::{FromTomlStr, TomlDocument},
+        utils::{WithSourceCode, test_utils::expect_parse_failure},
+    };
     use indexmap::{IndexMap, IndexSet};
     use insta::{assert_debug_snapshot, assert_snapshot, assert_yaml_snapshot};
     use itertools::Itertools;
     use miette::NarratableReportHandler;
     use pixi_spec::PixiSpec;
+    use pixi_test_utils::format_parse_error;
     use rattler_conda_types::{
         MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
@@ -787,21 +797,6 @@ mod tests {
     };
     use rstest::rstest;
     use toml_edit::DocumentMut;
-
-    use super::*;
-    use crate::{
-        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
-        manifests::document::ManifestDocument,
-        pypi::PyPiPackageName,
-        pyproject::PyProjectManifest,
-        to_options,
-        toml::{FromTomlStr, TomlDocument},
-        utils::{
-            WithSourceCode,
-            test_utils::{expect_parse_failure, format_parse_error},
-        },
-    };
 
     const PROJECT_BOILERPLATE: &str = r#"
 [project]
@@ -913,7 +908,7 @@ start = "python -m flask run --port=5050"
                 .pypi_dependencies
                 .as_ref()
                 .unwrap()
-                .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
+                .get(&PypiPackageName::from_normalized(requirement.name.clone()))
                 .is_some()
         );
 
@@ -940,7 +935,7 @@ start = "python -m flask run --port=5050"
                 .pypi_dependencies
                 .as_ref()
                 .unwrap()
-                .get(&PyPiPackageName::from_normalized(requirement.name.clone()))
+                .get(&PypiPackageName::from_normalized(requirement.name.clone()))
                 .is_some()
         );
 
@@ -953,7 +948,7 @@ start = "python -m flask run --port=5050"
         let mut manifest = manifest.editable();
 
         // Remove flask from pyproject
-        let name = PyPiPackageName::from_str("flask").unwrap();
+        let name = PypiPackageName::from_str("flask").unwrap();
         manifest
             .remove_pypi_dependency(&name, &[], &FeatureName::DEFAULT)
             .unwrap();
@@ -1648,7 +1643,7 @@ start = "python -m flask run --port=5050"
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        let package_name = PyPiPackageName::from_str(name).unwrap();
+        let package_name = PypiPackageName::from_str(name).unwrap();
 
         // Initially the dependency should exist
         for platform in to_options(platforms) {
@@ -2360,7 +2355,7 @@ platforms = ["linux-64", "win-64"]
                 .pypi_dependencies
                 .as_ref()
                 .unwrap()
-                .get(&PyPiPackageName::from_str("torch").expect("torch should be a valid name"))
+                .get(&PypiPackageName::from_str("torch").expect("torch should be a valid name"))
                 .expect("pypi requirement should be available")
                 .clone()
                 .to_string(),

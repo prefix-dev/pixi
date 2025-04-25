@@ -21,6 +21,7 @@ pixi_git = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 rattler_lock = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
