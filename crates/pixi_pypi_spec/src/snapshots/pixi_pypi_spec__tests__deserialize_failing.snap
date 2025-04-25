@@ -1,5 +1,5 @@
 ---
-source: crates/pixi_manifest/src/pypi/pypi_requirement.rs
+source: crates/pixi_pypi_spec/src/lib.rs
 expression: "snapshot.into_iter().map(|Snapshot { input, result }|\nformat!(\"input: {input}\\nresult: {} \",\nresult.as_object().unwrap().get(\"error\").unwrap().as_str().unwrap())).join(\"\\n\")"
 ---
 input: pkg = { ver = "1.2.3" }

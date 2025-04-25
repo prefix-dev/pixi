@@ -4268,6 +4268,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
+ "pixi_pypi_spec",
  "pixi_record",
  "pixi_spec",
  "pixi_toml",
@@ -4506,8 +4507,9 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
- "pixi_git",
+ "pixi_pypi_spec",
  "pixi_spec",
+ "pixi_spec_containers",
  "pixi_toml",
  "pyproject-toml",
  "rattler_conda_types",
@@ -4542,6 +4544,25 @@ dependencies = [
  "libc",
  "nix",
  "signal-hook",
+]
+
+[[package]]
+name = "pixi_pypi_spec"
+version = "0.1.0"
+dependencies = [
+ "itertools 0.14.0",
+ "pep440_rs",
+ "pep508_rs",
+ "pixi_git",
+ "pixi_spec",
+ "pixi_toml",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "toml-span",
+ "toml_edit",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -4585,6 +4606,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_spec_containers"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.9.0",
+ "itertools 0.14.0",
+ "rattler_conda_types",
+]
+
+[[package]]
 name = "pixi_toml"
 version = "0.1.0"
 dependencies = [
@@ -4592,6 +4622,8 @@ dependencies = [
  "hex",
  "indexmap 2.9.0",
  "itertools 0.14.0",
+ "miette 7.5.0",
+ "strsim",
  "strum",
  "toml-span",
 ]
@@ -4636,6 +4668,7 @@ dependencies = [
  "pep508_rs",
  "pixi_git",
  "pixi_manifest",
+ "pixi_pypi_spec",
  "pixi_record",
  "pixi_spec",
  "rattler_lock",

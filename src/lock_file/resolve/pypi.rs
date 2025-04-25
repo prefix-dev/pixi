@@ -14,9 +14,8 @@ use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pixi_manifest::{
-    EnvironmentName, PyPiRequirement, SystemRequirements, pypi::pypi_options::PypiOptions,
-};
+use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
+use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
@@ -192,7 +191,7 @@ fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageNam
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
-    dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PyPiRequirement>>,
+    dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>>,
     system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[PypiRecord],

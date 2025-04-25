@@ -247,12 +247,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
 mod test {
     use std::path::Path;
 
-    use insta::assert_snapshot;
-
     use crate::{
         toml::{FromTomlStr, TomlWorkspace, manifest::ExternalWorkspaceProperties},
-        utils::test_utils::{expect_parse_failure, format_parse_error},
+        utils::test_utils::expect_parse_failure,
     };
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     #[test]
     fn test_invalid_license() {

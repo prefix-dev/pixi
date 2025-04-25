@@ -1,5 +1,10 @@
+use crate::{
+    SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel, consts,
+    pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Either;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use serde::{Deserialize, Serialize};
@@ -10,15 +15,6 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     str::FromStr,
-};
-
-use crate::{
-    PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
-    channel::PrioritizedChannel,
-    consts,
-    pypi::{PyPiPackageName, pypi_options::PypiOptions},
-    target::Targets,
-    workspace::ChannelPriority,
 };
 
 /// The name of a feature. This is either a string or default for the default
@@ -309,7 +305,7 @@ impl Feature {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PyPiPackageName, PyPiRequirement>>> {
+    ) -> Option<Cow<'_, IndexMap<PypiPackageName, PixiPypiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.

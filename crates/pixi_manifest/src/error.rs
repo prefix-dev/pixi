@@ -4,14 +4,14 @@ use std::{
     ops::Range,
 };
 
+use crate::{KnownPreviewFeature, ManifestKind, WorkspaceManifest};
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
+use pixi_pypi_spec::Pep508ToPyPiRequirementError;
+use pixi_toml::TomlDiagnostic;
 use rattler_conda_types::{InvalidPackageNameError, version_spec::ParseVersionSpecError};
 use thiserror::Error;
 use toml_span::{DeserError, Error};
-
-use super::pypi::pypi_requirement::Pep508ToPyPiRequirementError;
-use crate::{KnownPreviewFeature, ManifestKind, WorkspaceManifest};
 
 #[derive(Error, Debug, Clone, Diagnostic)]
 pub enum DependencyError {
@@ -96,7 +96,7 @@ impl GenericError {
 #[derive(Error, Debug)]
 pub enum TomlError {
     Error(toml_edit::TomlError),
-    TomlError(toml_span::Error),
+    TomlError(TomlDiagnostic),
     NoPixiTable(ManifestKind, Option<String>),
     MissingField(Cow<'static, str>, Option<Range<usize>>),
     Generic(GenericError),
@@ -118,7 +118,7 @@ pub enum TomlError {
 
 impl From<toml_span::Error> for TomlError {
     fn from(value: Error) -> Self {
-        TomlError::TomlError(value)
+        TomlError::TomlError(TomlDiagnostic(value))
     }
 }
 
@@ -132,27 +132,7 @@ impl Display for TomlError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TomlError::Error(err) => write!(f, "{}", err.message()),
-            TomlError::TomlError(err) => match &err.kind {
-                toml_span::ErrorKind::UnexpectedKeys { expected, .. } => {
-                    write!(
-                        f,
-                        "Unexpected keys, expected only {}",
-                        expected
-                            .iter()
-                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
-                    )
-                }
-                toml_span::ErrorKind::UnexpectedValue { expected, .. } => {
-                    write!(
-                        f,
-                        "Expected one of {}",
-                        expected
-                            .iter()
-                            .format_with(", ", |key, f| f(&format_args!("'{}'", key)))
-                    )
-                }
-                _ => write!(f, "{}", err),
-            },
+            TomlError::TomlError(err) => write!(f, "{}", err),
             TomlError::NoPixiTable(manifest_kind, detail) => {
                 let filename = match manifest_kind {
                     ManifestKind::Pyproject => "pyproject.toml",
@@ -195,7 +175,7 @@ impl From<toml_edit::TomlError> for TomlError {
 impl From<DeserError> for TomlError {
     fn from(mut value: DeserError) -> Self {
         // TODO: Now we only take the first error, but we could make this smarter
-        TomlError::TomlError(value.errors.remove(0))
+        value.errors.remove(0).into()
     }
 }
 
@@ -253,32 +233,7 @@ impl Diagnostic for TomlError {
                     None
                 }
             }
-            TomlError::TomlError(toml_span::Error { kind, span, .. }) => match kind {
-                toml_span::ErrorKind::UnexpectedKeys { keys, .. } => {
-                    let mut labels = Vec::new();
-                    for (key, span) in keys {
-                        labels.push(LabeledSpan::new_with_span(
-                            Some(format!("'{key}' was not expected here")),
-                            SourceSpan::new(span.start.into(), span.end - span.start),
-                        ));
-                    }
-                    return Some(Box::new(labels.into_iter()));
-                }
-                toml_span::ErrorKind::DuplicateKey { first, .. } => {
-                    let labels = vec![
-                        LabeledSpan::new_primary_with_span(
-                            Some("duplicate defined here".to_string()),
-                            SourceSpan::new(span.start.into(), span.end - span.start),
-                        ),
-                        LabeledSpan::new_with_span(
-                            Some("first defined here".to_string()),
-                            SourceSpan::new(first.start.into(), first.end - first.start),
-                        ),
-                    ];
-                    return Some(Box::new(labels.into_iter()));
-                }
-                _ => Some(SourceSpan::new(span.start.into(), span.end - span.start)),
-            },
+            TomlError::TomlError(err) => return err.labels(),
             TomlError::NoPixiTable(_, _) => Some(SourceSpan::new(SourceOffset::from(0), 1)),
             TomlError::MissingField(_, span) => span.clone().map(SourceSpan::from),
             TomlError::FeatureNotEnabled(err) => return err.labels(),
@@ -289,10 +244,6 @@ impl Diagnostic for TomlError {
         // This is here to make it easier to add more match arms in the future.
         #[allow(clippy::match_single_binding)]
         let message = match self {
-            TomlError::TomlError(toml_span::Error {
-                kind: toml_span::ErrorKind::Deprecated { new, .. },
-                ..
-            }) => Some(format!("replace this with '{}'", new)),
             TomlError::Generic(GenericError { span_label, .. }) => {
                 span_label.clone().map(Cow::into_owned)
             }
@@ -319,43 +270,7 @@ impl Diagnostic for TomlError {
             TomlError::NoPixiTable(ManifestKind::Pyproject, _) => Some(Box::new(
                 "Check your manifest for a [tool.pixi.*] table. See https://pixi.sh/latest/python/pyproject_toml for more information.",
             )),
-            TomlError::TomlError(toml_span::Error { kind, .. }) => match kind {
-                toml_span::ErrorKind::UnexpectedValue { expected, value } => {
-                    if let Some(value) = value {
-                        if let Some((_, similar)) = expected
-                            .iter()
-                            .filter_map(|expected| {
-                                let distance = strsim::jaro(expected, value);
-                                (distance > 0.6).then_some((distance, expected))
-                            })
-                            .max_by(|(a, _), (b, _)| {
-                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                            })
-                        {
-                            return Some(Box::new(format!("Did you mean '{similar}'?")));
-                        }
-                    }
-                    None
-                }
-                toml_span::ErrorKind::UnexpectedKeys { expected, keys } => {
-                    if let Ok((single, _)) = keys.iter().exactly_one() {
-                        if let Some((_, similar)) = expected
-                            .iter()
-                            .filter_map(|expected| {
-                                let distance = strsim::jaro(expected, single);
-                                (distance > 0.6).then_some((distance, expected))
-                            })
-                            .max_by(|(a, _), (b, _)| {
-                                a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                            })
-                        {
-                            return Some(Box::new(format!("Did you mean '{similar}'?")));
-                        }
-                    }
-                    None
-                }
-                _ => None,
-            },
+            TomlError::TomlError(err) => err.help(),
             TomlError::FeatureNotEnabled(err) => err.help(),
             TomlError::InvalidNonPackageDependencies(err) => err.help(),
             TomlError::Generic(GenericError { help, .. }) => help
