@@ -163,18 +163,18 @@ pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
-pixi_spec_containers = { path = "crates/pixi_spec_containers" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
+pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_record = { path = "crates/pixi_record" }
 pixi_spec = { path = "crates/pixi_spec" }
+pixi_spec_containers = { path = "crates/pixi_spec_containers" }
+pixi_test_utils = { path = "crates/pixi_test_utils" }
 pixi_toml = { path = "crates/pixi_toml" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
-pixi_test_utils = { path = "crates/pixi_test_utils" }
-pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 
@@ -294,9 +294,9 @@ pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
-pixi_pypi_spec = { workspace = true }
 pixi_toml = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
