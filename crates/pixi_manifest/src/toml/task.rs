@@ -63,7 +63,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                         ValueInner::Table(table) => {
                             let mut th = TableHelper::from((table, item.span));
                             let name = th.required::<String>("task")?;
-                            let args = th.optional::<Vec<String>>("args");
+                            let args = th.optional::<Vec<TemplateString>>("args");
                             let environment = th
                                 .optional::<TomlFromStr<EnvironmentName>>("environment")
                                 .map(TomlFromStr::into_inner);
@@ -76,6 +76,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 return Ok(Task::Alias(Alias {
                     depends_on: deps,
                     description: None,
+                    args: None,
                 })
                 .into());
             }
@@ -100,7 +101,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
-                                    let args = th.optional::<Vec<String>>("args");
+                                    let args = th.optional::<Vec<TemplateString>>("args");
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
@@ -137,7 +138,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
-                                    let args = th.optional::<Vec<String>>("args");
+                                    let args = th.optional::<Vec<TemplateString>>("args");
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
@@ -203,11 +204,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
         } else {
             let depends_on = depends_on(&mut th).unwrap_or_default();
             let description = th.optional("description");
+            let args = th.optional::<Vec<TaskArg>>("args");
             th.finalize(None)?;
 
             Task::Alias(Alias {
                 depends_on,
                 description,
+                args,
             })
         };
 
