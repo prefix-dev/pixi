@@ -255,7 +255,7 @@ impl PyPIPrefixUpdater {
                 "Removing metadata for duplicate package: {}",
                 duplicate.name()
             );
-            std::fs::remove_dir_all(duplicate.install_path())?;
+            fs_err::remove_dir_all(duplicate.install_path())?;
         }
         Ok(())
     }
@@ -360,22 +360,22 @@ impl PyPIPrefixUpdater {
         }
 
         // Log installation details for debugging
-        self.log_installation_details(&local, &remote, &reinstalls, &extraneous, &duplicates);
+        self.log_installation_details(local, remote, reinstalls, extraneous, duplicates);
 
         // Download, build, and unzip any missing distributions.
         let remote_dists = if remote.is_empty() {
             Vec::new()
         } else {
-            self.prepare_remote_distributions(&remote).await?
+            self.prepare_remote_distributions(remote).await?
         };
 
         // Remove any duplicate metadata for packages that are now owned by conda
-        self.remove_duplicate_metadata(&duplicates)
+        self.remove_duplicate_metadata(duplicates)
             .into_diagnostic()
             .wrap_err("while removing duplicate metadata")?;
 
         // Remove any unnecessary packages.
-        self.remove_packages(&extraneous, &reinstalls).await?;
+        self.remove_packages(extraneous, reinstalls).await?;
 
         // Install the resolved distributions.
         // At this point we have all the wheels we need to install available to link locally
@@ -385,7 +385,7 @@ impl PyPIPrefixUpdater {
             .chain(local_dists)
             .collect::<Vec<_>>();
 
-        self.check_and_warn_about_conflicts(&all_dists, &reinstalls)
+        self.check_and_warn_about_conflicts(&all_dists, reinstalls)
             .await?;
 
         self.install_distributions(all_dists).await?;
