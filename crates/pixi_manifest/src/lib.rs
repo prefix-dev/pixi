@@ -6,6 +6,7 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
+mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -25,12 +26,11 @@ pub mod toml;
 pub mod utils;
 mod warning;
 mod workspace;
-
 pub use activation::Activation;
 pub use build_system::BuildBackend;
 pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
-pub use dependencies::{CondaDependencies, Dependencies, PyPiDependencies};
+pub use dependencies::{CondaDependencies, PyPiDependencies};
 pub use discovery::{
     DiscoveryStart, ExplicitManifestError, LoadManifestsError, Manifests, WorkspaceDiscoverer,
     WorkspaceDiscoveryError,
@@ -49,7 +49,6 @@ pub use manifests::{
 use miette::Diagnostic;
 pub use package::Package;
 pub use preview::{KnownPreviewFeature, Preview};
-pub use pypi::pypi_requirement::PyPiRequirement;
 use rattler_conda_types::Platform;
 pub use s3::S3Options;
 pub use spec_type::SpecType;

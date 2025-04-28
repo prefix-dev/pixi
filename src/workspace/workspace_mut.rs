@@ -5,22 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use indexmap::IndexMap;
-use itertools::Itertools;
-use miette::{IntoDiagnostic, NamedSource};
-use pep440_rs::VersionSpecifiers;
-use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_config::PinningStrategy;
-use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
-    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
-    WorkspaceManifestMut, pypi::PyPiPackageName, toml::TomlDocument, utils::WithSourceCode,
-};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
-use rattler_lock::LockFile;
-use toml_edit::DocumentMut;
-
 use crate::{
     Workspace,
     cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
@@ -32,6 +16,22 @@ use crate::{
         grouped_environment::GroupedEnvironment,
     },
 };
+use indexmap::IndexMap;
+use itertools::Itertools;
+use miette::{IntoDiagnostic, NamedSource};
+use pep440_rs::VersionSpecifiers;
+use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
+use pixi_config::PinningStrategy;
+use pixi_manifest::{
+    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
+    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
+    WorkspaceManifestMut, toml::TomlDocument, utils::WithSourceCode,
+};
+use pixi_pypi_spec::PypiPackageName;
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_lock::LockFile;
+use toml_edit::DocumentMut;
 
 struct OriginalContent {
     manifest: WorkspaceManifest,
@@ -515,7 +515,7 @@ impl WorkspaceMut {
         &mut self,
         updated_lock_file: &LockFile,
         pypi_specs_to_add_constraints_for: IndexMap<
-            PyPiPackageName,
+            PypiPackageName,
             (Requirement, Option<PypiDependencyLocation>),
         >,
         affect_environment_and_platforms: Vec<(String, Platform)>,

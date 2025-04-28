@@ -1,0 +1,12 @@
+[project]
+authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
+dependencies = []
+description = "Add your description here"
+name = "local-library2"
+readme = "README.md"
+requires-python = ">=3.11"
+version = "0.1.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]

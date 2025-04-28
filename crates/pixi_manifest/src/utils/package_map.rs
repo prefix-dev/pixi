@@ -194,10 +194,10 @@ impl<'de> toml_span::Deserialize<'de> for UniquePackageMap {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     #[test]
     pub fn test_duplicate_package_name() {

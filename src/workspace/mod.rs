@@ -19,6 +19,11 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
+    diff::LockFileDiff,
+    lock_file::filter_lock_file,
+};
 use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
@@ -33,8 +38,9 @@ use pixi_consts::consts;
 use pixi_manifest::{
     AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
-    SpecType, WithProvenance, WithWarnings, WorkspaceManifest, pypi::PyPiPackageName,
+    SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
+use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -48,12 +54,6 @@ use tokio::sync::Semaphore;
 use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
-
-use crate::{
-    activation::{CurrentEnvVarBehavior, initialize_env_variables},
-    diff::LockFileDiff,
-    lock_file::filter_lock_file,
-};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -179,7 +179,7 @@ impl Debug for Workspace {
 }
 
 pub type PypiDeps = indexmap::IndexMap<
-    PyPiPackageName,
+    PypiPackageName,
     (Requirement, Option<pixi_manifest::PypiDependencyLocation>),
 >;
 

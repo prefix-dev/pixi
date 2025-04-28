@@ -3,7 +3,9 @@
 
 use std::error::Error;
 use std::fmt::{Debug, Display};
+use std::path::PathBuf;
 use thiserror::Error;
+use uv_distribution_filename::ExtensionError;
 use uv_pep440::VersionSpecifierBuildError;
 
 #[derive(Debug)]
@@ -139,4 +141,7 @@ pub enum ConversionError {
 
     #[error(transparent)]
     TrustedHostError(#[from] uv_configuration::TrustedHostError),
+
+    #[error("expected an archive but found path")]
+    ExpectedArchiveButFoundPath(PathBuf, #[source] ExtensionError),
 }

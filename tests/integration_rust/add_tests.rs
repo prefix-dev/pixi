@@ -2,10 +2,8 @@ use std::str::FromStr;
 
 use pixi::{DependencyType, Workspace, cli::cli_config::GitRev};
 use pixi_consts::consts;
-use pixi_manifest::{
-    FeaturesExt, PyPiRequirement, SpecType,
-    pypi::{PyPiPackageName, VersionOrStar},
-};
+use pixi_manifest::{FeaturesExt, SpecType};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
 use url::Url;
@@ -283,7 +281,7 @@ async fn add_pypi_functionality() {
         .pypi_dependencies(None)
         .into_specs()
         .for_each(|(name, spec)| {
-            if name == PyPiPackageName::from_str("pytest").unwrap() {
+            if name == PypiPackageName::from_str("pytest").unwrap() {
                 assert_eq!(
                     spec.extras(),
                     &[pep508_rs::ExtraName::from_str("dev").unwrap()]
@@ -391,7 +389,7 @@ async fn add_pypi_extra_functionality() {
         .pypi_dependencies(None)
         .into_specs()
         .for_each(|(name, spec)| {
-            if name == PyPiPackageName::from_str("black").unwrap() {
+            if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(
                     spec.extras(),
                     &[pep508_rs::ExtraName::from_str("cli").unwrap()]
@@ -413,7 +411,7 @@ async fn add_pypi_extra_functionality() {
         .pypi_dependencies(None)
         .into_specs()
         .for_each(|(name, spec)| {
-            if name == PyPiPackageName::from_str("black").unwrap() {
+            if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(spec.extras(), &[]);
             }
         });
@@ -432,10 +430,10 @@ async fn add_pypi_extra_functionality() {
         .pypi_dependencies(None)
         .into_specs()
         .for_each(|(name, spec)| {
-            if name == PyPiPackageName::from_str("black").unwrap() {
+            if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(
                     spec,
-                    PyPiRequirement::Version {
+                    PixiPypiSpec::Version {
                         version: VersionOrStar::from_str("==24.8.0").unwrap(),
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
                         index: None

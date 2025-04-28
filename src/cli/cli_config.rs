@@ -13,7 +13,6 @@ use pep508_rs::Requirement;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
-use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::GitReference;
 use rattler_conda_types::ChannelConfig;
@@ -23,6 +22,7 @@ use std::path::PathBuf;
 use url::Url;
 
 use pixi_git::GIT_URL_QUERY_REV_TYPE;
+use pixi_pypi_spec::PypiPackageName;
 
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
@@ -332,14 +332,14 @@ impl DependencyConfig {
     pub fn vcs_pep508_requirements(
         &self,
         project: &Workspace,
-    ) -> Option<miette::Result<IndexMap<PyPiPackageName, Requirement>>> {
+    ) -> Option<miette::Result<IndexMap<PypiPackageName, Requirement>>> {
         match &self.git {
             Some(git) => {
                 // pep 508 requirements with direct reference
                 // should be in this format
                 // name @ url@rev#subdirectory=subdir
                 // we need to construct it
-                let pep_reqs: miette::Result<IndexMap<PyPiPackageName, Requirement>> = self
+                let pep_reqs: miette::Result<IndexMap<PypiPackageName, Requirement>> = self
                     .specs
                     .iter()
                     .map(|package_name| {
@@ -351,7 +351,7 @@ impl DependencyConfig {
                         );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
-                        let name = PyPiPackageName::from_normalized(dep.clone().name);
+                        let name = PypiPackageName::from_normalized(dep.clone().name);
 
                         Ok((name, dep))
                     })

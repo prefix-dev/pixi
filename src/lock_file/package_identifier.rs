@@ -5,14 +5,14 @@ use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 
-use pixi_manifest::pypi::PyPiPackageName;
+use pixi_pypi_spec::PypiPackageName;
 use uv_normalize::{ExtraName, InvalidNameError};
 
 /// Defines information about a Pypi package extracted from either a python
 /// package or from a conda package. That can be used for comparison in both
 #[derive(Debug)]
 pub struct PypiPackageIdentifier {
-    pub name: PyPiPackageName,
+    pub name: PypiPackageName,
     pub version: pep440_rs::Version,
     pub extras: HashSet<ExtraName>,
 }
@@ -78,7 +78,7 @@ impl PypiPackageIdentifier {
                 let pep_name = to_normalize(&name)?;
 
                 result.push(PypiPackageIdentifier {
-                    name: PyPiPackageName::from_normalized(pep_name),
+                    name: PypiPackageName::from_normalized(pep_name),
                     version,
                     // TODO: We can't really tell which python extras are enabled in a conda
                     // package.
@@ -125,7 +125,7 @@ impl PypiPackageIdentifier {
         let pep_name = to_normalize(&name)?;
 
         Ok(Self {
-            name: PyPiPackageName::from_normalized(pep_name),
+            name: PypiPackageName::from_normalized(pep_name),
             version,
             extras,
         })
@@ -175,6 +175,6 @@ pub enum ConversionError {
     Version(String),
     // #[error("'{0}' is not a valid python extra")]
     // Extra(String),
-    #[error("Failed to convert to pypi package name")]
+    #[error(transparent)]
     NameConversion(#[from] PixiConversionError),
 }
