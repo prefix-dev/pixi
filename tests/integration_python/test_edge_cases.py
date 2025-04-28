@@ -383,15 +383,25 @@ def test_installation_pypi_conda_mismatch(
     # First conda
     shutil.copyfile(pixi_mix, dest_toml)
     verify_cli_command([pixi, "install", "-v"], cwd=tmp_pixi_workspace)
+    assert (site_packages / "foobar-0.1.0.dist-info").exists(), (
+        "[conda] foobar-0.1.0.dist-info does not exist"
+    )
+    assert (site_packages / "foobar").exists(), "foobar package does not exist"
 
     # Then pypi
     shutil.copyfile(pixi_wheel_only, dest_toml)
     verify_cli_command([pixi, "install", "-v"], cwd=tmp_pixi_workspace)
+    assert not (site_packages / "foobar-0.1.0.dist-info").exists(), (
+        "[conda] foobar-0.1.0.dist-info should not exist"
+    )
+    assert (site_packages / "foobar-0.1.1.dist-info").exists(), (
+        "[pypi] foobar-0.1.1.dist-info does not exist"
+    )
+    assert (site_packages / "foobar").exists(), "foobar package does not exist"
 
     # Then conda again
     shutil.copyfile(pixi_mix, dest_toml)
     verify_cli_command([pixi, "install", "-vv"], cwd=tmp_pixi_workspace)
-
     assert (site_packages / "foobar").exists(), "foobar package does not exist"
     assert not (site_packages / "foobar-0.1.1.dist-info").exists(), (
         "duplicate foobar-0.1.1-dist-info not removed, while it should have been"
