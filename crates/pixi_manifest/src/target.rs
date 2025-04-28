@@ -1,18 +1,18 @@
 use std::{borrow::Cow, collections::HashMap, str::FromStr};
 
-use indexmap::{map::Entry, IndexMap};
+use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
 use crate::{
+    DependencyOverwriteBehavior, SpecType,
     activation::Activation,
-    pypi::PyPiPackageName,
     task::{Task, TaskName},
     utils::PixiSpanned,
-    DependencyOverwriteBehavior, PyPiRequirement, SpecType,
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
 /// A workspace target describes the dependencies, activations and task
 /// available to a specific feature, in a specific environment, and optionally
@@ -27,7 +27,7 @@ pub struct WorkspaceTarget {
     pub dependencies: HashMap<SpecType, IndexMap<PackageName, PixiSpec>>,
 
     /// Specific python dependencies
-    pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
+    pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -159,7 +159,7 @@ impl WorkspaceTarget {
         if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
                 DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
-                    return Ok(false)
+                    return Ok(false);
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {
@@ -177,12 +177,12 @@ impl WorkspaceTarget {
         let current_requirement = self
             .pypi_dependencies
             .as_ref()
-            .and_then(|deps| deps.get(&PyPiPackageName::from_normalized(requirement.name.clone())));
+            .and_then(|deps| deps.get(&PypiPackageName::from_normalized(requirement.name.clone())));
 
         match (current_requirement, exact) {
             (Some(r), true) => {
                 // TODO: would be nice to compare pep508 == PyPiRequirement directly
-                *r == PyPiRequirement::try_from(requirement.clone())
+                *r == PixiPypiSpec::try_from(requirement.clone())
                     .expect("could not convert pep508 requirement")
             }
             (Some(r), false) => {
@@ -200,8 +200,8 @@ impl WorkspaceTarget {
     /// it will Err if the dependency is not found
     pub fn remove_pypi_dependency(
         &mut self,
-        dep_name: &PyPiPackageName,
-    ) -> Result<(PyPiPackageName, PyPiRequirement), DependencyError> {
+        dep_name: &PypiPackageName,
+    ) -> Result<(PypiPackageName, PixiPypiSpec), DependencyError> {
         let Some(pypi_dependencies) = self.pypi_dependencies.as_mut() else {
             return Err(DependencyError::NoPyPiDependencies);
         };
@@ -213,7 +213,7 @@ impl WorkspaceTarget {
     /// Adds a pypi dependency to a target
     ///
     /// This will overwrite any existing dependency of the same name
-    pub fn add_pypi_dependency(&mut self, name: PyPiPackageName, requirement: PyPiRequirement) {
+    pub fn add_pypi_dependency(&mut self, name: PypiPackageName, requirement: PixiPypiSpec) {
         tracing::info!(
             "Adding pypi dependency: {} {}",
             name.as_normalized(),
@@ -250,8 +250,8 @@ impl WorkspaceTarget {
         }
 
         // Convert to an internal representation
-        let name = PyPiPackageName::from_normalized(requirement.name.clone());
-        let mut requirement = PyPiRequirement::try_from(requirement.clone()).map_err(Box::new)?;
+        let name = PypiPackageName::from_normalized(requirement.name.clone());
+        let mut requirement = PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
         if let Some(editable) = editable {
             requirement.set_editable(editable);
         }
@@ -340,7 +340,7 @@ impl PackageTarget {
         if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
                 DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
-                    return Ok(false)
+                    return Ok(false);
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {

@@ -7,6 +7,7 @@
 //! one type into another. This makes it possible to efficiently implement
 //! deserializers for types from external crates.
 
+mod diagnostic;
 mod digest;
 mod from_str;
 mod hash_map;
@@ -18,13 +19,14 @@ mod with;
 
 use std::str::FromStr;
 
+pub use diagnostic::TomlDiagnostic;
 pub use digest::TomlDigest;
 pub use from_str::TomlFromStr;
 pub use hash_map::TomlHashMap;
 pub use index_map::TomlIndexMap;
 pub use index_set::TomlIndexSet;
 pub use one_or_many::OneOrMany;
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::expected, value::ValueInner};
 pub use variant::TomlEnum;
 pub use with::TomlWith;
 

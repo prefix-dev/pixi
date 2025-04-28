@@ -5,7 +5,7 @@ use pixi_toml::TomlFromStr;
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::{Serialize, Serializer};
 use toml_span::de_helpers::expected;
-use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, ErrorKind, Value};
+use toml_span::{DeserError, ErrorKind, Value, de_helpers::TableHelper, value::ValueInner};
 
 /// Layout of a prioritized channel in a toml file.
 ///
@@ -102,11 +102,11 @@ impl<'de> toml_span::Deserialize<'de> for PrioritizedChannel {
 
 #[cfg(test)]
 mod test {
-    use insta::{assert_debug_snapshot, assert_snapshot};
-    use toml_span::Value;
-
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use insta::{assert_debug_snapshot, assert_snapshot};
+    use pixi_test_utils::format_parse_error;
+    use toml_span::Value;
 
     #[allow(dead_code)]
     #[derive(Debug)]

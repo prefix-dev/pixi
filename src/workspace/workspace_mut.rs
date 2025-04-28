@@ -5,6 +5,17 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    Workspace,
+    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
+    diff::LockFileDiff,
+    environment::LockFileUsage,
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
+    workspace::{
+        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
+        grouped_environment::GroupedEnvironment,
+    },
+};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
@@ -12,26 +23,15 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_config::PinningStrategy;
 use pixi_manifest::{
-    pypi::PyPiPackageName, toml::TomlDocument, utils::WithSourceCode, DependencyOverwriteBehavior,
-    FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError, ManifestDocument, ManifestKind,
-    PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest, WorkspaceManifestMut,
+    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
+    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
+    WorkspaceManifestMut, toml::TomlDocument, utils::WithSourceCode,
 };
+use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
-
-use crate::{
-    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
-    diff::LockFileDiff,
-    environment::LockFileUsage,
-    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
-    workspace::{
-        grouped_environment::GroupedEnvironment, MatchSpecs, PypiDeps, SourceSpecs, UpdateDeps,
-        NON_SEMVER_PACKAGES,
-    },
-    Workspace,
-};
 
 struct OriginalContent {
     manifest: WorkspaceManifest,
@@ -98,7 +98,7 @@ impl WorkspaceMut {
                     ),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -133,7 +133,7 @@ impl WorkspaceMut {
                     source: NamedSource::new(manifest_path.to_string_lossy(), Arc::from(contents)),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -515,7 +515,7 @@ impl WorkspaceMut {
         &mut self,
         updated_lock_file: &LockFile,
         pypi_specs_to_add_constraints_for: IndexMap<
-            PyPiPackageName,
+            PypiPackageName,
             (Requirement, Option<PypiDependencyLocation>),
         >,
         affect_environment_and_platforms: Vec<(String, Platform)>,

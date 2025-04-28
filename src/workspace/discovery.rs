@@ -4,8 +4,8 @@ use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{
-    utils::WithSourceCode, ExplicitManifestError, LoadManifestsError, Manifests, TomlError,
-    WarningWithSource, WithWarnings, WorkspaceDiscoveryError,
+    ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
+    WithWarnings, WorkspaceDiscoveryError, utils::WithSourceCode,
 };
 use thiserror::Error;
 
@@ -150,14 +150,14 @@ impl WorkspaceLocator {
         {
             Ok(manifests) => manifests,
             Err(WorkspaceDiscoveryError::Toml(err)) => {
-                return Err(WorkspaceLocatorError::Toml(err))
+                return Err(WorkspaceLocatorError::Toml(err));
             }
             Err(WorkspaceDiscoveryError::Io(err)) => return Err(WorkspaceLocatorError::Io(err)),
             Err(WorkspaceDiscoveryError::ExplicitManifestError(err)) => {
-                return Err(WorkspaceLocatorError::ExplicitManifestError(err))
+                return Err(WorkspaceLocatorError::ExplicitManifestError(err));
             }
             Err(WorkspaceDiscoveryError::Canonicalize(source, path)) => {
-                return Err(WorkspaceLocatorError::Canonicalize { path, source })
+                return Err(WorkspaceLocatorError::Canonicalize { path, source });
             }
         };
 
@@ -226,10 +226,10 @@ impl WorkspaceLocator {
             if let Some(env_manifest_path) = env_manifest_path {
                 if &env_manifest_path != discovered_manifest_path && in_shell && emit_warnings {
                     tracing::warn!(
-                            "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
-                            discovered_manifest_path.display(),
-                            env_manifest_path.display(),
-                        );
+                        "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                        discovered_manifest_path.display(),
+                        env_manifest_path.display(),
+                    );
                 }
             }
         // Else, if we didn't find a workspace manifest, but we there is an
@@ -242,7 +242,7 @@ impl WorkspaceLocator {
                 Err(LoadManifestsError::ProvenanceError(err)) => {
                     return Err(WorkspaceLocatorError::ExplicitManifestError(
                         ExplicitManifestError::InvalidManifest(err),
-                    ))
+                    ));
                 }
             }
         }

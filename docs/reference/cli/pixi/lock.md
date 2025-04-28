@@ -14,6 +14,8 @@ pixi lock [OPTIONS]
 ## Options
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
+- <a id="arg---check" href="#arg---check">`--check`</a>
+:  Check if any changes have been made to the lock file. If yes, exit with a non-zero code
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

@@ -2,9 +2,9 @@ use std::{ops::Range, str::FromStr};
 
 use itertools::Itertools;
 use miette::LabeledSpan;
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::expected, value::ValueInner};
 
-use crate::{error::GenericError, KnownPreviewFeature, Preview, WithWarnings};
+use crate::{KnownPreviewFeature, Preview, WithWarnings, error::GenericError};
 
 #[derive(Debug, Clone, PartialEq)]
 /// The preview features of the project
@@ -131,15 +131,12 @@ pub enum KnownOrUnknownPreviewFeature {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::toml::{FromTomlStr, preview::KnownOrUnknownPreviewFeature::Unknown};
     use assert_matches::assert_matches;
     use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
     use toml_span::de_helpers::TableHelper;
-
-    use super::*;
-    use crate::{
-        toml::{preview::KnownOrUnknownPreviewFeature::Unknown, FromTomlStr},
-        utils::test_utils::format_parse_error,
-    };
 
     /// Fake table to test the `Preview` enum
     #[derive(Debug)]

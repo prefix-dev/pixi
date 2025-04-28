@@ -4,32 +4,32 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use indexmap::IndexMap;
-use miette::LabeledSpan;
-use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{Platform, Version};
-use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
-    DeserError, Spanned, Value,
-};
-use url::Url;
-
 use crate::{
+    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
+    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
+    TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
+    pypi::pypi_options::PypiOptions,
     toml::{
-        create_unsupported_selector_warning, environment::TomlEnvironmentList, task::TomlTask,
         ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
-        TomlWorkspace,
+        TomlWorkspace, create_unsupported_selector_warning, environment::TomlEnvironmentList,
+        task::TomlTask,
     },
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, PyPiRequirement, SolveGroups, SystemRequirements, TargetSelector, Targets,
-    Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
+use indexmap::IndexMap;
+use miette::LabeledSpan;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
+use rattler_conda_types::{Platform, Version};
+use toml_span::{
+    DeserError, Spanned, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
+};
+use url::Url;
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
 /// manifest without any validation logic applied.
@@ -43,7 +43,7 @@ pub struct TomlManifest {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub pypi_dependencies: Option<PixiSpanned<IndexMap<PyPiPackageName, PyPiRequirement>>>,
+    pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<PixiSpanned<Activation>>,
@@ -575,13 +575,10 @@ pub struct ExternalWorkspaceProperties {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-
     use super::*;
-    use crate::{
-        toml::FromTomlStr,
-        utils::test_utils::{expect_parse_warnings, format_parse_error},
-    };
+    use crate::{toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.

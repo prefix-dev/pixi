@@ -1,7 +1,7 @@
 use std::{
     cmp::PartialEq,
     collections::{HashMap, HashSet},
-    future::{ready, Future},
+    future::{Future, ready},
     iter,
     path::PathBuf,
     str::FromStr,
@@ -11,7 +11,7 @@ use std::{
 
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
-use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -22,8 +22,8 @@ use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_uv_conversions::{
-    to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name, to_uv_normalize,
-    ConversionError,
+    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
+    to_uv_normalize,
 };
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -40,35 +40,33 @@ use uv_configuration::RAYON_INITIALIZE;
 use uv_normalize::ExtraName;
 
 use super::{
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit, CondaPrefixUpdater,
-    PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
+    Workspace,
     activation::CurrentEnvVarBehavior,
     build::{
-        source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
         BuildContext, BuildEnvironment, GlobHashCache, SourceCheckoutReporter,
+        source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
     },
     environment::{
-        self, read_environment_file, write_environment_file, CondaPrefixUpdated,
-        CondaPrefixUpdaterBuilder, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
-        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        self, CondaPrefixUpdated, CondaPrefixUpdaterBuilder, EnvironmentFile, LockFileUsage,
+        LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
+        PythonStatus, read_environment_file, write_environment_file,
     },
     lock_file::{
-        self,
+        self, PypiRecord,
         records_by_name::HasNameVersion,
         reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
         virtual_packages::validate_system_meets_environment_requirements,
-        PypiRecord,
     },
     prefix::Prefix,
     repodata::Repodata,
     workspace::{
-        get_activated_environment_variables,
+        Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-        Environment, EnvironmentVars, HasWorkspaceRef,
     },
-    Workspace,
 };
 
 impl Workspace {
@@ -359,7 +357,9 @@ impl<'p> LockFileDerivedData<'p> {
                         .any(|dep| dep.as_path().map(|p| p.is_dir()).unwrap_or_default())
                 });
             if contains_conda_source_pkgs || contains_pypi_source_pkgs {
-                tracing::debug!("Lock file contains source packages: ignore lock file hash and update the prefix");
+                tracing::debug!(
+                    "Lock file contains source packages: ignore lock file hash and update the prefix"
+                );
             } else {
                 tracing::info!(
                     "Environment '{}' is up-to-date with lock file hash",
@@ -488,7 +488,7 @@ impl<'p> LockFileDerivedData<'p> {
             env_variables,
             self.workspace.root(),
             environment.best_platform(),
-            non_isolated_packages,
+            &non_isolated_packages,
             &no_build,
         )
         .await
@@ -682,7 +682,7 @@ impl<'p> UpdateContext<'p> {
         &self,
         group: &GroupedEnvironment<'p>,
         platform: Platform,
-    ) -> Option<impl Future<Output = Arc<PixiRecordsByName>>> {
+    ) -> Option<impl Future<Output = Arc<PixiRecordsByName>> + use<>> {
         // Check if there is a pending operation for this group and platform
         if let Some(pending_records) = self
             .grouped_solved_repodata_records
@@ -710,7 +710,7 @@ impl<'p> UpdateContext<'p> {
         &self,
         group: &GroupedEnvironment<'p>,
         platform: Platform,
-    ) -> Option<impl Future<Output = Arc<PypiRecordsByName>>> {
+    ) -> Option<impl Future<Output = Arc<PypiRecordsByName>> + use<>> {
         // Check if there is a pending operation for this group and platform
         if let Some(pending_records) = self
             .grouped_solved_pypi_records
@@ -1168,7 +1168,11 @@ impl<'p> UpdateContext<'p> {
             // Turn the platforms into an IndexSet, so we have a little control over the
             // order in which we solve the platforms. We want to solve the current
             // platform first, so we can start instantiating prefixes if we have to.
-            let mut ordered_platforms = platforms.iter().copied().collect::<IndexSet<_>>();
+            let mut ordered_platforms = environment
+                .platforms()
+                .intersection(platforms)
+                .copied()
+                .collect::<IndexSet<_>>();
             if let Some(current_platform_index) =
                 ordered_platforms.get_index_of(&environment.best_platform())
             {
@@ -1232,11 +1236,18 @@ impl<'p> UpdateContext<'p> {
 
         // Spawn tasks to update the pypi packages.
         let mut uv_context = None;
-        for (environment, platform) in self
-            .outdated_envs
-            .pypi
-            .iter()
-            .flat_map(|(env, platforms)| platforms.iter().map(move |p| (env, *p)))
+        for (environment, platform) in
+            self.outdated_envs
+                .pypi
+                .iter()
+                .flat_map(|(env, outdated_platforms)| {
+                    let platforms_to_update = env
+                        .platforms()
+                        .intersection(outdated_platforms)
+                        .cloned()
+                        .collect_vec();
+                    iter::once(env).cartesian_product(platforms_to_update)
+                })
         {
             let group = GroupedEnvironment::from(environment.clone());
 
@@ -1322,9 +1333,17 @@ impl<'p> UpdateContext<'p> {
 
         // Iterate over all outdated environments and their platforms and extract the
         // corresponding records from them.
-        for (environment, platform) in all_outdated_envs.iter().flat_map(|(env, platforms)| {
-            iter::once(env.clone()).cartesian_product(platforms.iter().cloned())
-        }) {
+        for (environment, platform) in
+            all_outdated_envs
+                .iter()
+                .flat_map(|(env, outdated_platforms)| {
+                    let platforms_to_update = outdated_platforms
+                        .intersection(&env.platforms())
+                        .cloned()
+                        .collect_vec();
+                    iter::once(env.clone()).cartesian_product(platforms_to_update)
+                })
+        {
             let grouped_environment = GroupedEnvironment::from(environment.clone());
 
             // Get futures that will resolve when the conda and pypi records become
@@ -1542,6 +1561,18 @@ impl<'p> UpdateContext<'p> {
                 .into_diagnostic()?;
 
             builder.set_channels(&environment_name, channels);
+            builder.set_options(
+                &environment_name,
+                rattler_lock::SolveOptions {
+                    strategy: grouped_env.solve_strategy(),
+                    channel_priority: grouped_env
+                        .channel_priority()
+                        .unwrap_or_default()
+                        .unwrap_or_default()
+                        .into(),
+                    exclude_newer: grouped_env.exclude_newer(),
+                },
+            );
 
             let mut has_pypi_records = false;
             for platform in environment.platforms() {
@@ -1596,10 +1627,14 @@ fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette
 
     // Construct a diagnostic that explains that the current platform is not
     // supported.
-    let mut diag = MietteDiagnostic::new(format!("Unable to solve pypi dependencies for the {} {} because no compatible python interpreter can be installed for the current platform", grouped_environment.name().fancy_display(), match &grouped_environment {
-        GroupedEnvironment::Group(_) => "solve group",
-        GroupedEnvironment::Environment(_) => "environment"
-    }));
+    let mut diag = MietteDiagnostic::new(format!(
+        "Unable to solve pypi dependencies for the {} {} because no compatible python interpreter can be installed for the current platform",
+        grouped_environment.name().fancy_display(),
+        match &grouped_environment {
+            GroupedEnvironment::Group(_) => "solve group",
+            GroupedEnvironment::Environment(_) => "environment",
+        }
+    ));
 
     diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
 
@@ -1651,6 +1686,10 @@ async fn spawn_solve_conda_environment_task(
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
+
+    // Get solve options
+    let exclude_newer = group.exclude_newer();
+    let solve_strategy = group.solve_strategy();
 
     // Get the environment name
     let group_name = group.name();
@@ -1823,6 +1862,8 @@ async fn spawn_solve_conda_environment_task(
                 available_packages,
                 collected_source_metadata.source_repodata,
                 channel_priority,
+                exclude_newer,
+                solve_strategy,
             )
             .await
             .with_context(|| {
@@ -2078,6 +2119,8 @@ async fn spawn_solve_pypi_task<'p>(
         ));
     }
 
+    let exclude_newer = grouped_environment.exclude_newer();
+
     // Get the system requirements for this environment
     let system_requirements = grouped_environment.system_requirements();
 
@@ -2127,6 +2170,7 @@ async fn spawn_solve_pypi_task<'p>(
             project_variables,
             environment,
             disallow_install_conda_prefix,
+            exclude_newer,
         )
         .await
         .with_context(|| {

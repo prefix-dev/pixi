@@ -8,16 +8,16 @@ use std::sync::Arc;
 use pixi_utils::AsyncPrefixGuard;
 use tracing::debug;
 
-use dashmap::mapref::one::Ref;
 use dashmap::DashMap;
+use dashmap::mapref::one::Ref;
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
+    GitError, GitUrl, Reporter,
     git::GitReference,
     sha::GitSha,
-    source::{cache_digest, Fetch, GitSource},
+    source::{Fetch, GitSource, cache_digest},
     url::RepositoryUrl,
-    GitError, GitUrl, Reporter,
 };
 
 #[derive(Debug, thiserror::Error)]

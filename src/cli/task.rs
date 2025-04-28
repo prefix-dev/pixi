@@ -11,8 +11,8 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::{
-    task::{quote, Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName},
     EnvironmentName, FeatureName,
+    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
 };
 use rattler_conda_types::Platform;
 use serde::Serialize;
@@ -20,9 +20,9 @@ use serde_with::serde_as;
 
 use crate::workspace::virtual_packages::verify_current_platform_can_run_environment;
 use crate::{
+    Workspace, WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     workspace::{Environment, WorkspaceMut},
-    Workspace, WorkspaceLocator,
 };
 
 #[derive(Parser, Debug)]
@@ -102,7 +102,7 @@ pub struct AddArgs {
     pub clean_env: bool,
 
     /// The arguments to pass to the task
-    #[arg(long, num_args = 1..)]
+    #[arg(long = "arg", action = clap::ArgAction::Append)]
     pub args: Option<Vec<TaskArg>>,
 }
 
@@ -165,20 +165,19 @@ impl From<AddArgs> for Task {
         let description = value.description;
 
         // Convert the arguments into a single string representation
-        let cmd_args = if value.commands.len() == 1 {
-            value
-                .commands
-                .into_iter()
-                .next()
-                .expect("we just checked that the length is 1")
-        } else {
-            // Simply concatenate all arguments
-            value
-                .commands
-                .into_iter()
-                .map(|arg| quote(&arg).into_owned())
-                .join(" ")
-        };
+        let cmd_args = value
+            .commands
+            .iter()
+            .exactly_one()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|_| {
+                // Simply concatenate all arguments
+                value
+                    .commands
+                    .iter()
+                    .map(|arg| quote(arg).into_owned())
+                    .join(" ")
+            });
 
         // Depending on whether the task has a command, and depends_on or not we create
         // a plain or complex, or alias command.
@@ -186,13 +185,15 @@ impl From<AddArgs> for Task {
             Self::Alias(Alias {
                 depends_on,
                 description,
+                args: value.args,
             })
         } else if depends_on.is_empty()
             && value.cwd.is_none()
             && value.env.is_empty()
             && description.is_none()
+            && value.args.is_none()
         {
-            Self::Plain(cmd_args)
+            Self::Plain(cmd_args.into())
         } else {
             let clean_env = value.clean_env;
             let cwd = value.cwd;
@@ -208,7 +209,7 @@ impl From<AddArgs> for Task {
             let args = value.args;
 
             Self::Execute(Box::new(Execute {
-                cmd: CmdArgs::Single(cmd_args),
+                cmd: CmdArgs::Single(cmd_args.into()),
                 depends_on,
                 inputs: None,
                 outputs: None,
@@ -216,7 +217,7 @@ impl From<AddArgs> for Task {
                 env,
                 description,
                 clean_env,
-                args: args.map(|args| args.into_iter().map(|arg| (arg, None)).collect()),
+                args,
             }))
         }
     }
@@ -227,6 +228,7 @@ impl From<AliasArgs> for Task {
         Self::Alias(Alias {
             depends_on: value.depends_on,
             description: value.description,
+            args: None,
         })
     }
 }
@@ -550,6 +552,7 @@ pub struct TaskInfo {
     cmd: Option<String>,
     description: Option<String>,
     depends_on: Vec<Dependency>,
+    args: Option<Vec<TaskArg>>,
     cwd: Option<PathBuf>,
     env: Option<IndexMap<String, String>>,
     clean_env: bool,
@@ -560,18 +563,28 @@ pub struct TaskInfo {
 impl From<&Task> for TaskInfo {
     fn from(task: &Task) -> Self {
         TaskInfo {
-            cmd: task.as_single_command().map(|cmd| cmd.to_string()),
+            cmd: task
+                .as_single_command_no_render()
+                .ok()
+                .and_then(|cmd| cmd.map(|c| c.to_string())),
             description: task.description().map(|desc| desc.to_string()),
             depends_on: task.depends_on().to_vec(),
+            args: task.args().map(|args| args.to_vec()),
             cwd: task.working_directory().map(PathBuf::from),
             env: task.env().cloned(),
             clean_env: task.clean_env(),
-            inputs: task
-                .inputs()
-                .map(|inputs| inputs.iter().map(String::from).collect()),
-            outputs: task
-                .outputs()
-                .map(|outputs| outputs.iter().map(String::from).collect()),
+            inputs: task.inputs().map(|inputs| {
+                inputs
+                    .iter()
+                    .map(|input| input.source().to_string())
+                    .collect()
+            }),
+            outputs: task.outputs().map(|outputs| {
+                outputs
+                    .iter()
+                    .map(|output| output.source().to_string())
+                    .collect()
+            }),
         }
     }
 }

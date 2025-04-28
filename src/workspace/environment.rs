@@ -12,13 +12,13 @@ use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
     HasWorkspaceManifest, SystemRequirements, Task, TaskName, WorkspaceManifest,
 };
-use rattler_conda_types::{Arch, Platform};
+use rattler_conda_types::{Arch, ChannelConfig, Platform};
 
 use super::{
-    errors::{UnknownTask, UnsupportedPlatformError},
     SolveGroup,
+    errors::{UnknownTask, UnsupportedPlatformError},
 };
-use crate::{workspace::HasWorkspaceRef, Workspace};
+use crate::{Workspace, workspace::HasWorkspaceRef};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -318,6 +318,11 @@ impl<'p> Environment<'p> {
 
         Ok(())
     }
+
+    /// Returns the channel configuration for this grouped environment
+    pub fn channel_config(&self) -> ChannelConfig {
+        self.workspace().channel_config()
+    }
 }
 
 impl<'p> HasWorkspaceRef<'p> for Environment<'p> {
@@ -433,7 +438,8 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), None)
             .unwrap()
-            .as_single_command()
+            .as_single_command(None)
+            .unwrap()
             .unwrap();
 
         assert_eq!(task, "echo default");
@@ -442,15 +448,18 @@ mod tests {
             .default_environment()
             .task(&"foo".into(), Some(Platform::Linux64))
             .unwrap()
-            .as_single_command()
+            .as_single_command(None)
+            .unwrap()
             .unwrap();
 
         assert_eq!(task_osx, "echo linux");
 
-        assert!(manifest
-            .default_environment()
-            .tasks(Some(Platform::Osx64))
-            .is_err())
+        assert!(
+            manifest
+                .default_environment()
+                .tasks(Some(Platform::Osx64))
+                .is_err()
+        )
     }
     #[test]
     fn test_filtered_tasks() {
@@ -883,8 +892,9 @@ mod tests {
         )
         .unwrap();
         let env = manifest.default_environment();
-        assert!(env
-            .validate_platform_support(Some(Platform::EmscriptenWasm32))
-            .is_ok());
+        assert!(
+            env.validate_platform_support(Some(Platform::EmscriptenWasm32))
+                .is_ok()
+        );
     }
 }

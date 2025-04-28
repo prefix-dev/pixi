@@ -2,7 +2,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_manifest::EnvironmentName;
-use pypi_modifiers::pypi_tags::{get_tags_from_machine, is_python_record, PyPITagError};
+use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageRecord};
 use rattler_conda_types::{ParseMatchSpecError, Platform};
@@ -66,7 +66,10 @@ impl VirtualPackageNotFoundError {
         let msg = format!(
             "Virtual package '{}' does not match any of the available virtual packages on your machine: [{}]",
             required_package,
-            system_virtual_packages.iter().map(|vpkg| vpkg.to_string()).join(", "),
+            system_virtual_packages
+                .iter()
+                .map(|vpkg| vpkg.to_string())
+                .join(", "),
         );
         VirtualPackageNotFoundError { msg, help }
     }
@@ -325,9 +328,11 @@ mod test {
         let virtual_matchspecs =
             get_required_virtual_packages_from_conda_records(&conda_records).unwrap();
 
-        assert!(virtual_matchspecs
-            .iter()
-            .contains(&MatchSpec::from_str("__cuda >=12", Lenient).unwrap()));
+        assert!(
+            virtual_matchspecs
+                .iter()
+                .contains(&MatchSpec::from_str("__cuda >=12", Lenient).unwrap())
+        );
     }
 
     #[test]

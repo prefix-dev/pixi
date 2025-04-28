@@ -4,7 +4,7 @@
   "schedule": ["on tuesday"],
   "enabledManagers": ["github-actions", "pixi", "cargo"],
   "commitMessagePrefix": "chore(ci):",
-  "ignorePaths": ["examples/**", "docs/**", "tests/**"],
+  "ignorePaths": ["**/examples/**", "**/docs/**", "**/tests/**"],
   "packageRules": [
     {
       "groupName": "GitHub Actions",
@@ -48,7 +48,7 @@
     },
     {
       "description": "We want a separate PR for rattler crates",
-      "matchPackageNames": "/(rattler|file_url)/",
+      "matchPackageNames": ["rattler*", "file_url"],
       "matchManagers": ["cargo"],
       "separateMajorMinor": false
     },

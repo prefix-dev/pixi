@@ -1,8 +1,8 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     global::{
-        trampoline::{Configuration, Trampoline},
         BinDir, StateChange,
+        trampoline::{Configuration, Trampoline},
     },
     prefix::Executable,
     prefix::Prefix,
@@ -407,11 +407,10 @@ mod tests {
         ripgrep_specs: IndexSet<MatchSpec>,
         ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
-        assert!(!local_environment_matches_spec(
-            ripgrep_bat_records.clone(),
-            &ripgrep_specs,
-            None
-        ), "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone.");
+        assert!(
+            !local_environment_matches_spec(ripgrep_bat_records.clone(), &ripgrep_specs, None),
+            "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
+        );
 
         assert!(
             local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, None),

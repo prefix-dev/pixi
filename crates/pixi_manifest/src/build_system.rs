@@ -5,7 +5,7 @@ use pixi_spec::BinarySpec;
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::toml::FromTomlStr;
-use crate::{toml::TomlPackageBuild, TomlError};
+use crate::{TomlError, toml::TomlPackageBuild};
 
 /// A build section in the pixi manifest.
 /// that defines what backend is used to build the project.

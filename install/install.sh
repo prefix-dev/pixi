@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.45.0
+# Version: v0.46.0
 
 __wrap__() {
     VERSION="${PIXI_VERSION:-latest}"
@@ -10,7 +10,7 @@ __wrap__() {
     esac
     BIN_DIR="$PIXI_HOME/bin"
 
-    REPO="prefix-dev/pixi"
+    REPOURL="${PIXI_REPOURL:-https://github.com/prefix-dev/pixi}"
     PLATFORM="$(uname -s)"
     ARCH="${PIXI_ARCH:-$(uname -m)}"
     IS_MSYS=false
@@ -38,14 +38,10 @@ __wrap__() {
     fi
 
     if [ "$VERSION" = "latest" ]; then
-        DOWNLOAD_URL="https://github.com/${REPO}/releases/latest/download/${BINARY}${EXTENSION-}"
+        DOWNLOAD_URL="${REPOURL%/}/releases/latest/download/${BINARY}${EXTENSION-}"
     else
         # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
-        case "$VERSION" in
-        v*) ;;
-        *) VERSION="v$VERSION" ;;
-        esac
-        DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}${EXTENSION-}"
+        DOWNLOAD_URL="${REPOURL%/}/releases/download/v${VERSION#v}/${BINARY}${EXTENSION-}"
     fi
 
     printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"
