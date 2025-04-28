@@ -568,7 +568,7 @@ impl PyPIPrefixUpdater {
             self.venv.interpreter(),
             &self.index_locations,
             &self.flat_index,
-            &dependency_metadata,
+            dependency_metadata,
             SharedState::default(),
             IndexStrategy::default(),
             &self.config_settings,
