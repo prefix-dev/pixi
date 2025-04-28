@@ -2,14 +2,11 @@
 ![Starship with Pixi support](../../assets/starship-dark.png#only-dark)
 
 [Starship](https://starship.rs) is a cross-platform and cross-shell prompt for developers, similar to oh-my-zsh, but with a focus on performance and simplicity.
-In [starship/starship #6335](https://github.com/starship/starship/pull/6335), Pixi support is being added.
-This pull request has not been merged at the time of writing.
-That's why [@pavelzw](https://github.com/pavelzw) created a conda package for his fork in [prefix.dev/yolo-forge](https://prefix.dev/channels/yolo-forge).
-The packages are being built in GitHub Actions in the [pavelzw/yolo-forge GitHub repository](https://github.com/pavelzw/yolo-forge) using `rattler-build`.
+It also has full Pixi support.
 You can install it using the following command:
 
 ```bash
-pixi global install -c https://prefix.dev/yolo-forge -c conda-forge starship-fork-pavelzw
+pixi global install starship
 ```
 
 !!!tip ""
