@@ -376,6 +376,10 @@ def test_installation_pypi_conda_mismatch(
         tmp_pixi_workspace / "foobar-0.1.1-py3-none-any.whl",
     )
 
+    site_packages = (
+        tmp_pixi_workspace / ".pixi" / "envs" / "default" / "lib" / "python3.13" / "site-packages"
+    )
+
     # First conda
     shutil.copyfile(pixi_mix, dest_toml)
     verify_cli_command([pixi, "install", "-v"], cwd=tmp_pixi_workspace)
@@ -388,10 +392,10 @@ def test_installation_pypi_conda_mismatch(
     shutil.copyfile(pixi_mix, dest_toml)
     verify_cli_command([pixi, "install", "-vv"], cwd=tmp_pixi_workspace)
 
-    site_packages = (
-        tmp_pixi_workspace / ".pixi" / "envs" / "default" / "lib" / "python3.13" / "site-packages"
-    )
     assert (site_packages / "foobar").exists(), "foobar package does not exist"
+    assert not (site_packages / "foobar-0.1.1.dist-info").exists(), (
+        "duplicate foobar-0.1.1-dist-info not removed, while it should have been"
+    )
     # Recall that the conda package contains files `a.py` and `b.py`
     assert (site_packages / "foobar" / "a.py").exists(), "a.py does not exist"
     # Previously, this file was erroneously removed
