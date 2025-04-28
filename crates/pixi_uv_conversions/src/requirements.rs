@@ -191,12 +191,20 @@ pub fn as_uv_req(
         }
         PixiPypiSpec::Url {
             url, subdirectory, ..
-        } => RequirementSource::Url {
-            subdirectory: subdirectory.as_ref().map(|sub| PathBuf::from(sub.as_str())),
-            location: url.clone(),
-            url: VerbatimUrl::from_url(url.clone()),
-            ext: DistExtension::from_path(url.path())?,
-        },
+        } => {
+            // We will clone the original URL and strip it's SHA256 fragment,
+            // So that we can normalize the URL for comparison.
+            let mut location_url = url.clone();
+            location_url.set_fragment(None);
+            let verbatim_url = VerbatimUrl::from_url(url.clone());
+
+            RequirementSource::Url {
+                subdirectory: subdirectory.as_ref().map(|sub| PathBuf::from(sub.as_str())),
+                location: location_url,
+                url: verbatim_url,
+                ext: DistExtension::from_path(url.path())?,
+            }
+        }
         PixiPypiSpec::RawVersion(version) => RequirementSource::Registry {
             specifier: manifest_version_to_version_specifiers(version)?,
             index: None,
