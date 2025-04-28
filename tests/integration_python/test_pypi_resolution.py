@@ -1,10 +1,8 @@
-import os
 import subprocess
 
 import pytest
 from pathlib import Path
 
-from .common import exec_extension
 
 PYPROJECT_CONTENT = """
 [project]
@@ -26,6 +24,7 @@ test = { path = ".", editable = true }
 allow-direct-references = true
 """
 
+
 def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
     pyproject_path.write_text(PYPROJECT_CONTENT)
@@ -35,12 +34,8 @@ def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path)
     (src_dir / "__init__.py").touch()
 
     try:
-        result = subprocess.run(
-            [pixi, "install"],
-            cwd=tmp_pixi_workspace,
-            check=True,
-            capture_output=True,
-            text=True
+        subprocess.run(
+            [pixi, "install"], cwd=tmp_pixi_workspace, check=True, capture_output=True, text=True
         )
     except subprocess.CalledProcessError as e:
         pytest.fail(f"failed to solve the pypi requirements {e}", pytrace=False)
