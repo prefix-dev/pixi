@@ -285,6 +285,9 @@ pub async fn run_activation(
 
                 // Prepending environment paths so they get found first.
                 path_modification_behavior,
+
+                // Current environment variables
+                current_env: HashMap::new(),
             },
             None,
         )

@@ -83,6 +83,9 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
+    // Read current environment variables
+    let current_env = std::env::vars().collect::<HashMap<String, String>>();
+
     let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
 
     let path = std::env::var("PATH")
@@ -97,6 +100,7 @@ async fn generate_activation_script(
             conda_prefix,
             path,
             path_modification_behavior: PathModificationBehavior::default(),
+            current_env,
         })
         .into_diagnostic()?;
 
