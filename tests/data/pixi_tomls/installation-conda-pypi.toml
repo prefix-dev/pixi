@@ -8,7 +8,7 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-foobar = { path = "./foobar/foobar-0.1.0-pyhbf21a9e_0.conda" }
+foobar = { path = "./foobar-0.1.0-pyhbf21a9e_0.conda" }
 python = "3.13.*"
 
 [pypi-dependencies]
