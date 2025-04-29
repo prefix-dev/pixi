@@ -324,7 +324,7 @@ class TaskArgs(StrictBaseModel):
     """The arguments of a task."""
 
     arg: NonEmptyStr
-    default: NonEmptyStr | None = Field(None, description="The default value of the argument")
+    default: str | None = Field(None, description="The default value of the argument")
 
 
 class DependsOn(StrictBaseModel):
