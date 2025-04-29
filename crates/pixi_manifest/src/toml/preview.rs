@@ -131,15 +131,12 @@ pub enum KnownOrUnknownPreviewFeature {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::toml::{FromTomlStr, preview::KnownOrUnknownPreviewFeature::Unknown};
     use assert_matches::assert_matches;
     use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
     use toml_span::de_helpers::TableHelper;
-
-    use super::*;
-    use crate::{
-        toml::{FromTomlStr, preview::KnownOrUnknownPreviewFeature::Unknown},
-        utils::test_utils::format_parse_error,
-    };
 
     /// Fake table to test the `Preview` enum
     #[derive(Debug)]

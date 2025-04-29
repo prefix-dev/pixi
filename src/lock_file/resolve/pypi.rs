@@ -9,18 +9,19 @@ use std::{
     sync::Arc,
 };
 
+use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
-use pixi_manifest::{
-    EnvironmentName, PyPiRequirement, SystemRequirements, pypi::pypi_options::PypiOptions,
-};
+use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
+use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
-    no_build_to_build_options, pypi_options_to_index_locations, to_index_strategy, to_normalize,
-    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
+    no_build_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
+    to_index_strategy, to_normalize, to_requirements, to_uv_normalize, to_uv_version,
+    to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -190,7 +191,7 @@ fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageNam
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
-    dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PyPiRequirement>>,
+    dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>>,
     system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[PypiRecord],
@@ -202,6 +203,7 @@ pub async fn resolve_pypi(
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment_name: Environment<'_>,
     disallow_install_conda_prefix: bool,
+    exclude_newer: Option<DateTime<Utc>>,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -350,6 +352,7 @@ pub async fn resolve_pypi(
     let options = Options {
         index_strategy,
         build_options: build_options.clone(),
+        exclude_newer: exclude_newer.map(to_exclude_newer),
         ..Options::default()
     };
 

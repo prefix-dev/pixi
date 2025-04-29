@@ -10,7 +10,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_manifest::{
     EnvironmentName, Task, TaskName,
-    task::{ArgValues, CmdArgs, Custom, Dependency, TaskArg, TypedArg},
+    task::{ArgValues, CmdArgs, Custom, TaskArg, TemplateStringError, TypedArg, TypedDependency},
 };
 use thiserror::Error;
 
@@ -30,8 +30,8 @@ use crate::{
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Ord, Hash)]
 pub struct TaskId(usize);
 
-/// A dependency is a task name and a list of arguments.
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
+/// A dependency is a task name and a list of arguments along with the environment to run the task in.
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub struct GraphDependency(TaskId, Option<Vec<String>>, Option<EnvironmentName>);
 
 impl GraphDependency {
@@ -294,10 +294,14 @@ impl<'p> TaskGraph<'p> {
         root: TaskNode<'p>,
         root_args: Option<Vec<String>>,
     ) -> Result<Self, TaskGraphError> {
-        let mut task_name_with_args_to_node: HashMap<Dependency, TaskId> =
+        let mut task_name_with_args_to_node: HashMap<TypedDependency, TaskId> =
             HashMap::from_iter(root.name.clone().into_iter().map(|name| {
                 (
-                    Dependency::new_without_env(&name.to_string(), root_args.clone()),
+                    TypedDependency {
+                        task_name: name,
+                        args: root_args.clone(),
+                        environment: None,
+                    },
                     TaskId(0),
                 )
             }));
@@ -306,15 +310,16 @@ impl<'p> TaskGraph<'p> {
         // Iterate over all the nodes in the graph and add them to the graph.
         let mut next_node_to_visit = 0;
         while next_node_to_visit < nodes.len() {
-            let dependencies =
-                Vec::from_iter(nodes[next_node_to_visit].task.depends_on().iter().cloned());
+            let node = &nodes[next_node_to_visit];
+            let dependencies = Vec::from_iter(node.task.depends_on().iter().cloned());
 
             // Collect all dependency data before modifying nodes
-            let mut deps_to_process = Vec::new();
+            let mut deps_to_process: Vec<(TypedDependency, Environment<'p>, &Task)> = Vec::new();
 
             // Iterate over all the dependencies of the node and add them to the graph.
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
+                let dependency = TypedDependency::from_dependency(&dependency, node.args.as_ref())?;
                 // Check if we visited this node before already.
                 if let Some(&task_id) = task_name_with_args_to_node.get(&dependency) {
                     node_dependencies.push(GraphDependency(
@@ -324,9 +329,6 @@ impl<'p> TaskGraph<'p> {
                     ));
                     continue;
                 }
-
-                // Find the task in the project
-                let node = &nodes[next_node_to_visit];
 
                 // Clone what we need before modifying nodes
                 let node_name = node
@@ -484,6 +486,10 @@ pub enum TaskGraphError {
 
     #[error("no value provided for argument '{0}' for task '{1}'")]
     MissingArgument(String, String),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TemplateStringError(#[from] TemplateStringError),
 }
 
 #[cfg(test)]

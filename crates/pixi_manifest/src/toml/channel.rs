@@ -102,11 +102,11 @@ impl<'de> toml_span::Deserialize<'de> for PrioritizedChannel {
 
 #[cfg(test)]
 mod test {
-    use insta::{assert_debug_snapshot, assert_snapshot};
-    use toml_span::Value;
-
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use insta::{assert_debug_snapshot, assert_snapshot};
+    use pixi_test_utils::format_parse_error;
+    use toml_span::Value;
 
     #[allow(dead_code)]
     #[derive(Debug)]

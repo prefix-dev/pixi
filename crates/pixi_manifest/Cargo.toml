@@ -9,6 +9,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+chrono = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
@@ -18,8 +19,9 @@ pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_consts = { workspace = true }
-pixi_git = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_spec_containers = { workspace = true }
 pixi_toml = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
@@ -38,11 +40,11 @@ pyproject-toml = { workspace = true }
 
 # Rattler crates
 rattler_conda_types = { workspace = true }
+rattler_solve = { workspace = true, default-features = false }
 rattler_virtual_packages = { workspace = true }
 
 # These rattler crates are optionally used in the build system
 rattler_lock = { workspace = true, optional = true }
-rattler_solve = { workspace = true, optional = true }
 
 
 console = { workspace = true }
@@ -56,6 +58,7 @@ fancy_display = { workspace = true }
 glob = "0.3.2"
 insta = { workspace = true, features = ["yaml"] }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
+pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
 tempfile = { workspace = true }

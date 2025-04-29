@@ -4268,12 +4268,12 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
+ "pixi_pypi_spec",
  "pixi_record",
  "pixi_spec",
  "pixi_toml",
  "pixi_utils",
  "pixi_uv_conversions",
- "priority-queue",
  "pypi_mapping",
  "pypi_modifiers",
  "rattler",
@@ -4493,6 +4493,7 @@ dependencies = [
 name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "console",
  "dunce",
  "fancy_display",
@@ -4506,8 +4507,9 @@ dependencies = [
  "pep440_rs",
  "pep508_rs",
  "pixi_consts",
- "pixi_git",
+ "pixi_pypi_spec",
  "pixi_spec",
+ "pixi_spec_containers",
  "pixi_toml",
  "pyproject-toml",
  "rattler_conda_types",
@@ -4542,6 +4544,25 @@ dependencies = [
  "libc",
  "nix",
  "signal-hook",
+]
+
+[[package]]
+name = "pixi_pypi_spec"
+version = "0.1.0"
+dependencies = [
+ "itertools 0.14.0",
+ "pep440_rs",
+ "pep508_rs",
+ "pixi_git",
+ "pixi_spec",
+ "pixi_toml",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "toml-span",
+ "toml_edit",
+ "tracing",
+ "url",
 ]
 
 [[package]]
@@ -4585,6 +4606,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_spec_containers"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.9.0",
+ "itertools 0.14.0",
+ "rattler_conda_types",
+]
+
+[[package]]
 name = "pixi_toml"
 version = "0.1.0"
 dependencies = [
@@ -4592,6 +4622,8 @@ dependencies = [
  "hex",
  "indexmap 2.9.0",
  "itertools 0.14.0",
+ "miette 7.5.0",
+ "strsim",
  "strum",
  "toml-span",
 ]
@@ -4628,12 +4660,15 @@ dependencies = [
 name = "pixi_uv_conversions"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "dunce",
+ "jiff",
  "miette 7.5.0",
  "pep440_rs",
  "pep508_rs",
  "pixi_git",
  "pixi_manifest",
+ "pixi_pypi_spec",
  "pixi_record",
  "pixi_spec",
  "rattler_lock",
@@ -4649,6 +4684,7 @@ dependencies = [
  "uv-pep508",
  "uv-pypi-types",
  "uv-python",
+ "uv-resolver",
  "uv-types",
 ]
 
@@ -5203,9 +5239,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.23.0"
+version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bb2959e08e67510a5884b3ee7579b17fe3899e09558a97e26376d5fb9be6172"
+checksum = "c847b4006d0f46a711e203e21a2f58af0b6d38e20f9756b01184081e1e10e4de"
 dependencies = [
  "chrono",
  "file_url",
@@ -5216,6 +5252,7 @@ dependencies = [
  "pep508_rs",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_solve",
  "serde",
  "serde-value",
  "serde_repr",
@@ -5429,13 +5466,12 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.4.4"
+version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a30429aac0c50d5b9f7f97f3d08dbefa7561a52d5439d7f0d95921011daf3240"
+checksum = "2b632fe7366b6b17e5ba96b14af992258aca04e2d36cf467a19f7980fa2298d7"
 dependencies = [
  "chrono",
  "futures",
- "indexmap 2.9.0",
  "itertools 0.14.0",
  "rattler_conda_types",
  "rattler_digest",
@@ -5444,7 +5480,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.12",
  "tracing",
- "url",
 ]
 
 [[package]]
@@ -5704,9 +5739,9 @@ dependencies = [
 
 [[package]]
 name = "resolvo"
-version = "0.8.6"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5314eb4b865d39acd1b3cd05eb91b87031bb49fd1278a1bdf8d6680f1389ec29"
+checksum = "996e40b356864ad72942a9ef6815df7f219b7b42ccc791906d3e0a17df5d66ab"
 dependencies = [
  "ahash",
  "bitvec",

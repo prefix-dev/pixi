@@ -1,19 +1,16 @@
 use std::path::PathBuf;
 
+use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, workspace::Environment};
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
-use pixi_manifest::{
-    FeaturesExt, PyPiRequirement,
-    pypi::{PyPiPackageName, VersionOrStar, pypi_options::FindLinksUrlOrPath},
-};
+use pixi_manifest::{FeaturesExt, pypi::pypi_options::FindLinksUrlOrPath};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
 };
-
-use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, workspace::Environment};
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -44,9 +41,9 @@ fn format_pip_extras(extras: &[ExtraName]) -> String {
     )
 }
 
-fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) -> String {
+fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> String {
     match requirement {
-        PyPiRequirement::Git {
+        PixiPypiSpec::Git {
             url: git_url,
             extras,
         } => {
@@ -67,7 +64,7 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
 
             git_string
         }
-        PyPiRequirement::Path {
+        PixiPypiSpec::Path {
             path,
             editable,
             extras,
@@ -86,7 +83,7 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
                 )
             }
         }
-        PyPiRequirement::Url {
+        PixiPypiSpec::Url {
             url,
             subdirectory,
             extras,
@@ -104,7 +101,7 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
 
             url_string
         }
-        PyPiRequirement::Version {
+        PixiPypiSpec::Version {
             version, extras, ..
         } => {
             format!(
@@ -114,7 +111,7 @@ fn format_pip_dependency(name: &PyPiPackageName, requirement: &PyPiRequirement) 
                 version = version
             )
         }
-        PyPiRequirement::RawVersion(version) => match version {
+        PixiPypiSpec::RawVersion(version) => match version {
             VersionOrStar::Version(_) => format!(
                 "{name}{version}",
                 name = name.as_normalized(),
