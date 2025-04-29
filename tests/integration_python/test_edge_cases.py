@@ -423,7 +423,8 @@ def test_installation_pypi_conda_mismatch(
     assert (site_packages / "foobar" / "b.py").exists(), "b.py does not exist"
 
 
-PYPROJECT_CONTENT = """
+def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
+    pyproject_content = """
 [project]
 version = "0.1.0"
 name = "test"
@@ -436,25 +437,31 @@ dependencies = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.pixi.workspace]
+platforms = ["linux-64", "osx-arm64", "win-64"] 
+channels = ["https://prefix.dev/conda-forge"]
+
 [tool.pixi.pypi-dependencies]
 test = { path = ".", editable = true }
 
 [tool.hatch.metadata]
 allow-direct-references = true
 """
-
-
-def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(PYPROJECT_CONTENT)
+    pyproject_path.write_text(pyproject_content)
 
     src_dir = tmp_pixi_workspace / "src" / "test"
     src_dir.mkdir(parents=True, exist_ok=True)
     (src_dir / "__init__.py").touch()
 
     try:
-        subprocess.run(
-            [pixi, "install"], cwd=tmp_pixi_workspace, check=True, capture_output=True, text=True
+        result = subprocess.run(
+            [pixi, "install", "-v"],
+            cwd=tmp_pixi_workspace, 
+            capture_output=True,
+            text=True,
+            check=False
         )
-    except subprocess.CalledProcessError as e:
-        pytest.fail(f"failed to solve the pypi requirements {e}", pytrace=False)
+        result.check_returncode()
+    except subprocess.CalledProcessError:
+        pytest.fail("Failed to solve the pypi requirements. pytrace=False")
