@@ -466,6 +466,7 @@ allow-direct-references = true
     except subprocess.CalledProcessError:
         pytest.fail("Failed to solve the pypi requirements. pytrace=False")
 
+
 def test_pypi_external_source_incorrect_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
     """Test installing an external source with pyproject.toml with an incorrect hash"""
     pyproject_content = """
