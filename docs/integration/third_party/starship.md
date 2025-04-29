@@ -36,5 +36,5 @@ symbol = "📦 "
 As starship already displays a custom message when a pixi environment is active, you can disable pixi's custom PS1:
 
 ```plaintext
-pixi config set change-ps1 false
+pixi config set shell.change-ps1 "false"
 ```
