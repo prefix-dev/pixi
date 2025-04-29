@@ -438,7 +438,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"] 
+platforms = ["linux-64", "osx-arm64", "win-64"]
 channels = ["https://prefix.dev/conda-forge"]
 
 [tool.pixi.pypi-dependencies]
@@ -457,10 +457,10 @@ allow-direct-references = true
     try:
         result = subprocess.run(
             [pixi, "install", "-v"],
-            cwd=tmp_pixi_workspace, 
+            cwd=tmp_pixi_workspace,
             capture_output=True,
             text=True,
-            check=False
+            check=False,
         )
         result.check_returncode()
     except subprocess.CalledProcessError:
