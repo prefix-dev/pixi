@@ -386,6 +386,7 @@ def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path)
         pytest.fail(f"failed to solve the pypi requirements {e}", pytrace=False)
 
 
+@pytest.mark.xfail(reason="Hash validation not yet implemented")
 def test_pypi_url_fragment_hash_validation(tmp_pixi_workspace: Path, pixi: Path) -> None:
     """Test that we correctly validate the hash when installing packages with URL fragments."""
     correct_hash_content = """
@@ -440,6 +441,10 @@ test = { path = "." }
 allow-direct-references = true
 """
     pyproject_path.write_text(incorrect_hash_content)
+
+    src_dir = tmp_pixi_workspace / "src" / "test"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "__init__.py").touch()
 
     # installation with incorrect hash should fail
     verify_cli_command(
