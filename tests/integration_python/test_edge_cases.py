@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import subprocess
 import pytest
 import platform
 import sys
@@ -420,3 +421,47 @@ def test_installation_pypi_conda_mismatch(
     assert (site_packages / "foobar" / "a.py").exists(), "a.py does not exist"
     # Previously, this file was erroneously removed
     assert (site_packages / "foobar" / "b.py").exists(), "b.py does not exist"
+
+
+def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
+    pyproject_content = """
+[project]
+version = "0.1.0"
+name = "test"
+requires-python = "== 3.12"
+dependencies = [
+    "jinja2 @ https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl#sha256=85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pixi.workspace]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+channels = ["https://prefix.dev/conda-forge"]
+
+[tool.pixi.pypi-dependencies]
+test = { path = ".", editable = true }
+
+[tool.hatch.metadata]
+allow-direct-references = true
+"""
+    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
+    pyproject_path.write_text(pyproject_content)
+
+    src_dir = tmp_pixi_workspace / "src" / "test"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "__init__.py").touch()
+
+    try:
+        result = subprocess.run(
+            [pixi, "install", "-v"],
+            cwd=tmp_pixi_workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        result.check_returncode()
+    except subprocess.CalledProcessError:
+        pytest.fail("Failed to solve the pypi requirements. pytrace=False")
