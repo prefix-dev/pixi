@@ -465,3 +465,43 @@ allow-direct-references = true
         result.check_returncode()
     except subprocess.CalledProcessError:
         pytest.fail("Failed to solve the pypi requirements. pytrace=False")
+
+def test_pypi_external_source_incorrect_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
+    """Test installing an external source with pyproject.toml with an incorrect hash"""
+    pyproject_content = """
+[project]
+version = "0.1.0"
+name = "test"
+requires-python = "== 3.12"
+dependencies = [
+    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=incorrect_hash_value_that_will_cause_installation_to_fail"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pixi.workspace]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+channels = ["https://prefix.dev/conda-forge"]
+
+[tool.pixi.pypi-dependencies]
+test = { path = ".", editable = true }
+
+[tool.hatch.metadata]
+allow-direct-references = true
+"""
+    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
+    pyproject_path.write_text(pyproject_content)
+
+    src_dir = tmp_pixi_workspace / "src" / "test"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "__init__.py").touch()
+
+    # use verify_cli_command to check that the installation fails with the expected error
+    verify_cli_command(
+        [pixi, "install", "-v"],
+        cwd=tmp_pixi_workspace,
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains=["Hash verification failed"],
+    )
