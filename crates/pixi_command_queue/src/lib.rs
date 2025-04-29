@@ -1,10 +1,14 @@
+mod command_queue;
 mod conda;
-mod dispatcher;
 mod reporter;
+mod source_checkout;
+mod source_metadata;
 
-pub use reporter::{CondaSolveReporter, Reporter, SolveId};
+pub use command_queue::{CommandQueue, CommandQueueError};
 pub use conda::{CondaEnvironmentSpec, SolveCondaEnvironmentError};
-pub use dispatcher::{CommandQueueError, CommandQueue};
+pub use reporter::{CondaSolveReporter, Reporter, SolveId};
+pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
+pub use source_metadata::SourceMetadataSpec;
 
 #[cfg(test)]
 mod test {
@@ -15,7 +19,7 @@ mod test {
     use rattler_conda_types::ChannelUrl;
     use url::Url;
 
-    use crate::{CondaEnvironmentSpec, CommandQueue, SolveCondaEnvironmentError};
+    use crate::{CommandQueue, CondaEnvironmentSpec};
 
     fn local_channel(name: &str) -> ChannelUrl {
         Url::from_directory_path(

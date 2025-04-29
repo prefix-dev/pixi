@@ -15,7 +15,7 @@ use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
 use thiserror::Error;
 use tokio::task::JoinError;
 
-use crate::{CommandQueueError, dispatcher::CommandQueue};
+use crate::{CommandQueue, CommandQueueError};
 
 /// Contains all information that describes the input of a conda environment.
 #[derive(Debug, Clone)]
@@ -70,7 +70,7 @@ impl Default for CondaEnvironmentSpec {
 }
 
 impl CondaEnvironmentSpec {
-    /// Solves this environment using the given dispatcher.
+    /// Solves this environment using the given command_queue.
     pub async fn solve(
         self,
         dispatcher: CommandQueue,
@@ -81,11 +81,8 @@ impl CondaEnvironmentSpec {
             self.requirements,
         );
 
-        // TODO: Implement the source specs
-        assert!(
-            source_specs.is_empty(),
-            "source specs are not yet supported"
-        );
+        // Iterate over all source specs and get their metadata.
+        for source in source_specs.iter_specs() {}
 
         // Query the gateway for conda repodata.
         let fetch_repodata_start = Instant::now();

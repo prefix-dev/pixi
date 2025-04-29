@@ -1,25 +1,29 @@
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    sync::Arc,
+};
 
 use futures::{FutureExt, StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
+use pixi_git::{GitError, GitUrl, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
     CommandQueue, CommandQueueChannel, CommandQueueContext, CommandQueueData, ForegroundMessage,
-    SolveCondaEnvironmentId, SolveCondaEnvironmentTask,
+    GitCheckoutTask, SolveCondaEnvironmentId, SolveCondaEnvironmentTask,
 };
 use crate::{CommandQueueError, Reporter, SolveCondaEnvironmentError, reporter};
 
-/// Runs the dispatcher background task
+/// Runs the command_queue background task
 pub(super) struct CommandQueueProcessor {
     /// The receiver for messages from a [`CommandQueue]`.
     receiver: mpsc::UnboundedReceiver<ForegroundMessage>,
 
     /// A weak reference to the sender. This is used to allow constructing new
     /// [`Dispatchers`] without keeping the channel alive if there are no
-    /// dispatchers alive. This is important because the dispatcher background
-    /// task is only stopped once all senders (and thus dispatchers) have been
-    /// dropped.
+    /// dispatchers alive. This is important because the command_queue
+    /// background task is only stopped once all senders (and thus
+    /// dispatchers) have been dropped.
     sender: mpsc::WeakUnboundedSender<ForegroundMessage>,
 
     /// Data associated with dispatchers.
@@ -27,6 +31,10 @@ pub(super) struct CommandQueueProcessor {
 
     /// Conda environments that are currently being solved.
     conda_environments: slotmap::SlotMap<SolveCondaEnvironmentId, PendingCondaEnvironment>,
+
+    /// Git checkouts in the process of being checked out, or already checked
+    /// out.
+    git_checkouts: HashMap<GitUrl, PendingGitCheckout>,
 
     /// Keeps track of all pending futures. We poll them manually instead of
     /// spawning them so they can be `!Send` and because they are dropped when
@@ -37,16 +45,32 @@ pub(super) struct CommandQueueProcessor {
     reporter: Option<Box<dyn Reporter>>,
 }
 
-/// A result of a task that was executed by the dispatcher background task.
+/// A result of a task that was executed by the command_queue background task.
 enum TaskResult {
     SolveCondaEnvironment(
         SolveCondaEnvironmentId,
         Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>>,
     ),
+    GitCheckedOut(GitUrl, Result<Fetch, GitError>),
+}
+
+/// An either pending or already checked out git repository.
+enum PendingGitCheckout {
+    /// The checkout is still ongoing.
+    Pending(
+        Option<reporter::GitCheckoutId>,
+        Vec<oneshot::Sender<Result<Fetch, GitError>>>,
+    ),
+
+    /// The repository was checked out and the result is available.
+    CheckedOut(Fetch),
+
+    /// A previous attempt failed
+    Errored,
 }
 
 /// Information about a pending conda environment solve. This is used by the
-/// background task to keep track of which dispatcher is awaiting the result.
+/// background task to keep track of which command_queue is awaiting the result.
 struct PendingCondaEnvironment {
     tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
     reporter_id: Option<reporter::SolveId>,
@@ -67,6 +91,7 @@ impl CommandQueueProcessor {
                 receiver: rx,
                 sender: weak_tx,
                 conda_environments: slotmap::SlotMap::default(),
+                git_checkouts: HashMap::default(),
                 pending_futures: FuturesUnordered::new(),
                 inner,
                 reporter,
@@ -76,8 +101,8 @@ impl CommandQueueProcessor {
         tx
     }
 
-    /// The main loop of the dispatcher background task. This function will run
-    /// until all dispatchers have been dropped.
+    /// The main loop of the command_queue background task. This function will
+    /// run until all dispatchers have been dropped.
     async fn run(mut self) {
         tracing::debug!("Dispatch background task has started");
         loop {
@@ -90,7 +115,7 @@ impl CommandQueueProcessor {
                 }
                 else => {
                     // If all the senders are dropped, the receiver will be closed. When this
-                    // happens, we can stop the dispatcher. All remaining tasks will be dropped
+                    // happens, we can stop the command_queue. All remaining tasks will be dropped
                     // as `self.pending_futures` is dropped.
                     break
                 },
@@ -105,14 +130,16 @@ impl CommandQueueProcessor {
             TaskResult::SolveCondaEnvironment(id, result) => {
                 self.on_solve_environment_result(id, result)
             }
+            TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, result),
         }
     }
 
-    /// Called when a message was received from either the dispatcher or another
-    /// task.
+    /// Called when a message was received from either the command_queue or
+    /// another task.
     fn on_message(&mut self, message: ForegroundMessage) {
         match message {
             ForegroundMessage::SolveCondaEnvironment(task) => self.on_solve_environment(task),
+            ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
         }
     }
 
@@ -189,5 +216,84 @@ impl CommandQueueProcessor {
 
         // We can silently ignore the result if the task was cancelled.
         let _ = env.tx.send(result);
+    }
+
+    /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
+    fn on_checkout_git(&mut self, task: GitCheckoutTask) {
+        match self.git_checkouts.entry(task.url.clone()) {
+            Entry::Occupied(mut existing_checkout) => match existing_checkout.get_mut() {
+                PendingGitCheckout::Pending(_, pending) => pending.push(task.tx),
+                PendingGitCheckout::CheckedOut(fetch) => {
+                    let _ = task.tx.send(Ok(fetch.clone()));
+                }
+                PendingGitCheckout::Errored => {
+                    // Drop the sender, this will cause a cancellation on the other side.
+                    drop(task.tx);
+                }
+            },
+            Entry::Vacant(entry) => {
+                // Notify the reporter that a new checkout has been queued.
+                let reporter_id = self.reporter.as_mut().map(|reporter| {
+                    reporter.on_git_checkout_queued(&RepositoryReference::from(&task.url))
+                });
+
+                entry.insert(PendingGitCheckout::Pending(reporter_id, vec![task.tx]));
+
+                // Notify the reporter that the solve has started.
+                if let Some((reporter, id)) = self.reporter.as_mut().zip(reporter_id) {
+                    reporter.on_git_checkout_start(id)
+                }
+
+                let resolver = self.inner.git_resolver.clone();
+                let client = self.inner.client.clone();
+                let cache_dir = self.inner.cache_dir.clone();
+                self.pending_futures.push(
+                    async move {
+                        let fetch = resolver
+                            .fetch(task.url.clone(), client.clone(), cache_dir.clone(), None)
+                            .await;
+                        TaskResult::GitCheckedOut(task.url, fetch)
+                    }
+                    .boxed_local(),
+                );
+            }
+        }
+    }
+
+    /// Called when a git checkout task has completed.
+    fn on_git_checked_out(&mut self, url: GitUrl, result: Result<Fetch, GitError>) {
+        let Some(PendingGitCheckout::Pending(reporter_id, pending)) =
+            self.git_checkouts.get_mut(&url)
+        else {
+            unreachable!("cannot get a result for a git checkout that is not pending");
+        };
+
+        // Notify the reporter that the git checkout has finished.
+        if let Some((reporter, id)) = self.reporter.as_mut().zip(*reporter_id) {
+            reporter.on_git_checkout_finished(id)
+        }
+
+        match result {
+            Ok(fetch) => {
+                for tx in pending.drain(..) {
+                    let _ = tx.send(Ok(fetch.clone()));
+                }
+
+                self.git_checkouts
+                    .insert(url, PendingGitCheckout::CheckedOut(fetch));
+            }
+            Err(mut err) => {
+                // Only send the error to the first channel, drop the rest, which cancels them.
+                for tx in pending.drain(..) {
+                    match tx.send(Err(err)) {
+                        Ok(_) => return,
+                        Err(Err(failed_to_send)) => err = failed_to_send,
+                        Err(Ok(_)) => unreachable!(),
+                    }
+                }
+
+                self.git_checkouts.insert(url, PendingGitCheckout::Errored);
+            }
+        }
     }
 }

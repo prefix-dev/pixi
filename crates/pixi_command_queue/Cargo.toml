@@ -17,6 +17,9 @@ slotmap = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
+dirs = { workspace = true }
+typed-path = { workspace = true }
+reqwest-middleware = { workspace = true }
 
 rattler_conda_types = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
@@ -25,6 +28,7 @@ rattler_solve = { workspace = true, features = ["resolvo"] }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
+pixi_git = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }

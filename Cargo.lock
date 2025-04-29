@@ -4563,19 +4563,23 @@ name = "pixi_command_queue"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dirs",
  "futures",
  "itertools 0.14.0",
  "miette 7.5.0",
+ "pixi_git",
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
  "rattler_conda_types",
  "rattler_repodata_gateway",
  "rattler_solve",
+ "reqwest-middleware",
  "slotmap",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
+ "typed-path",
  "url",
 ]
 

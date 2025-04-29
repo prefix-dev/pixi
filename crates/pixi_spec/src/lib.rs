@@ -11,6 +11,7 @@
 mod detailed;
 mod git;
 mod path;
+mod source_anchor;
 mod toml;
 mod url;
 
@@ -23,6 +24,7 @@ pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
+pub use source_anchor::SourceAnchor;
 use thiserror::Error;
 pub use toml::{TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};

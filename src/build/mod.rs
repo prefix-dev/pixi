@@ -43,6 +43,7 @@ use rattler_conda_types::{
 use rattler_digest::Sha256;
 use reporters::SourceReporter;
 pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
+pub use source_anchor::SourceAnchor;
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -57,8 +58,6 @@ use crate::{
         SourceMetadataInput,
     },
 };
-
-pub use source_anchor::SourceAnchor;
 
 /// A list of globs that should be ignored when calculating any input hash.
 /// These are typically used for build artifacts that should not be included in
@@ -440,9 +439,9 @@ impl BuildContext {
                 let source_checkout = SourceCheckout {
                     path,
                     pinned: PinnedSourceSpec::Git(PinnedGitSpec {
-                        git: fetched.git().repository().clone(),
+                        git: fetched.repository().url.clone().into_url(),
                         source: PinnedGitCheckout {
-                            commit: fetched.git().precise().expect("should be precies"),
+                            commit: fetched.commit(),
                             reference: git_spec
                                 .rev
                                 .clone()
@@ -547,7 +546,7 @@ impl BuildContext {
         let resolver = self
             .git
             .fetch(
-                &git_url,
+                git_url,
                 self.tool_context.clone().client.clone(),
                 self.cache_dir.clone().join(CACHED_GIT_DIR),
                 reporter,
@@ -573,7 +572,7 @@ impl BuildContext {
         let resolver = self
             .git
             .fetch(
-                &git_url,
+                git_url,
                 self.tool_context.clone().client.clone(),
                 self.cache_dir.clone().join(CACHED_GIT_DIR),
                 reporter,
