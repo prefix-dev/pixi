@@ -1,4 +1,4 @@
-use background::DispatcherBackgroundTask;
+use processor::CommandQueueProcessor;
 use pixi_record::PixiRecord;
 use rattler_repodata_gateway::Gateway;
 use std::sync::Arc;
@@ -6,38 +6,39 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{CondaEnvironmentSpec, SolveCondaEnvironmentError};
+use crate::reporter::Reporter;
 
-mod background;
+mod processor;
 
 /// The dispatcher is responsible for synchronizing requests between different
 /// conda environments.
-pub struct Dispatcher {
-    channel: DispatchChannel,
-    context: Option<DispatcherContext>,
-    inner: Arc<DispatchInner>,
+pub struct CommandQueue {
+    channel: CommandQueueChannel,
+    context: Option<CommandQueueContext>,
+    data: Arc<CommandQueueData>,
 }
 
-struct DispatchInner {
+struct CommandQueueData {
     /// The gateway to use to query conda repodata.
-    gateway: rattler_repodata_gateway::Gateway,
+    gateway: Gateway,
 }
 
 /// A channel through which to send any messages to the dispatcher. Some
 /// dispatchers are constructed by the dispatcher itself. To avoid a
 /// cyclic dependency, these "sub"-dispatchers use a weak reference to the
 /// sender.
-enum DispatchChannel {
-    Strong(mpsc::UnboundedSender<DispatchMessage>),
-    Weak(mpsc::WeakUnboundedSender<DispatchMessage>),
+enum CommandQueueChannel {
+    Strong(mpsc::UnboundedSender<ForegroundMessage>),
+    Weak(mpsc::WeakUnboundedSender<ForegroundMessage>),
 }
 
-impl DispatchChannel {
+impl CommandQueueChannel {
     /// Returns an owned channel that can be used to send messages to the
     /// background task, or `None` if the background task has been dropped.
-    pub fn sender(&self) -> Option<mpsc::UnboundedSender<DispatchMessage>> {
+    pub fn sender(&self) -> Option<mpsc::UnboundedSender<ForegroundMessage>> {
         match self {
-            DispatchChannel::Strong(sender) => Some(sender.clone()),
-            DispatchChannel::Weak(sender) => sender.upgrade(),
+            CommandQueueChannel::Strong(sender) => Some(sender.clone()),
+            CommandQueueChannel::Weak(sender) => sender.upgrade(),
         }
     }
 }
@@ -45,7 +46,7 @@ impl DispatchChannel {
 /// The context in which this particular dispatcher is running. This is used to
 /// track dependencies.
 #[derive(Debug, Copy, Clone)]
-enum DispatcherContext {
+enum CommandQueueContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
 }
 
@@ -56,7 +57,7 @@ slotmap::new_key_type! {
 
 /// Wraps an error that might have occurred during the processing of a task.
 #[derive(Debug, Clone, Error)]
-pub enum DispatchError<E> {
+pub enum CommandQueueError<E> {
     Cancelled,
 
     #[error(transparent)]
@@ -64,7 +65,7 @@ pub enum DispatchError<E> {
 }
 
 /// A message send to the dispatch task.
-enum DispatchMessage {
+enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
 }
 
@@ -72,77 +73,87 @@ enum DispatchMessage {
 /// conda environment.
 struct SolveCondaEnvironmentTask {
     env: CondaEnvironmentSpec,
-    context: Option<DispatcherContext>,
+    context: Option<CommandQueueContext>,
     tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
 }
 
-impl Default for Dispatcher {
+impl Default for CommandQueue {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Dispatcher {
+impl CommandQueue {
     /// Constructs a new default constructed instance.
     pub fn new() -> Self {
         Self::builder().finish()
     }
 
     /// Constructs a new builder for the dispatcher.
-    pub fn builder() -> DispatchBuilder {
-        DispatchBuilder::default()
+    pub fn builder() -> CommandQueueBuilder {
+        CommandQueueBuilder::default()
     }
 
     /// Returns the gateway used to query conda repodata.
     pub fn gateway(&self) -> &Gateway {
-        &self.inner.gateway
+        &self.data.gateway
     }
 
     /// Solves a particular requirement.
     pub async fn solve_conda_environment(
         &self,
         env: CondaEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, DispatchError<SolveCondaEnvironmentError>> {
+    ) -> Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>> {
         let Some(sender) = self.channel.sender() else {
             // If this fails, it means the dispatcher was dropped and the task is
             // immediately canceled.
-            return Err(DispatchError::Cancelled);
+            return Err(CommandQueueError::Cancelled);
         };
 
         let (tx, rx) = oneshot::channel();
         sender
-            .send(DispatchMessage::SolveCondaEnvironment(
+            .send(ForegroundMessage::SolveCondaEnvironment(
                 SolveCondaEnvironmentTask {
                     env,
                     context: self.context,
                     tx,
                 },
             ))
-            .map_err(|_| DispatchError::Cancelled)?;
+            .map_err(|_| CommandQueueError::Cancelled)?;
         match rx.await {
             Ok(Ok(result)) => Ok(result),
-            Ok(Err(err)) => Err(DispatchError::Failed(err)),
-            Err(_) => Err(DispatchError::Cancelled),
+            Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
+            Err(_) => Err(CommandQueueError::Cancelled),
         }
     }
 }
 
 #[derive(Default)]
-pub struct DispatchBuilder {
-    gateway: Option<rattler_repodata_gateway::Gateway>,
+pub struct CommandQueueBuilder {
+    gateway: Option<Gateway>,
+    reporter: Option<Box<dyn Reporter>>,
 }
 
-impl DispatchBuilder {
-    pub fn finish(self) -> Dispatcher {
+impl CommandQueueBuilder {
+    /// Sets the reporter used by the [`CommandQueue`] to report progress.
+    pub fn with_reporter<F: Reporter + 'static>(self, reporter: F) -> Self {
+        Self {
+            reporter: Some(Box::new(reporter)),
+            ..self
+        }
+    }
+
+    /// Finish building the [`CommandQueue`] and return it.
+    pub fn finish(self) -> CommandQueue {
         let gateway = self.gateway.unwrap_or_default();
 
-        let inner = Arc::new(DispatchInner { gateway });
+        let data = Arc::new(CommandQueueData { gateway });
 
-        let sender = DispatcherBackgroundTask::spawn(inner.clone());
-        Dispatcher {
-            channel: DispatchChannel::Strong(sender),
+        let sender = CommandQueueProcessor::spawn(data.clone(), self.reporter);
+        CommandQueue {
+            channel: CommandQueueChannel::Strong(sender),
             context: None,
-            inner,
+            data,
         }
     }
 }

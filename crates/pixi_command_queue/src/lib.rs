@@ -2,8 +2,9 @@ mod conda;
 mod dispatcher;
 mod reporter;
 
+pub use reporter::{CondaSolveReporter, Reporter, SolveId};
 pub use conda::{CondaEnvironmentSpec, SolveCondaEnvironmentError};
-pub use dispatcher::{DispatchError, Dispatcher};
+pub use dispatcher::{CommandQueueError, CommandQueue};
 
 #[cfg(test)]
 mod test {
@@ -14,7 +15,7 @@ mod test {
     use rattler_conda_types::ChannelUrl;
     use url::Url;
 
-    use crate::{CondaEnvironmentSpec, Dispatcher, SolveCondaEnvironmentError};
+    use crate::{CondaEnvironmentSpec, CommandQueue, SolveCondaEnvironmentError};
 
     fn local_channel(name: &str) -> ChannelUrl {
         Url::from_directory_path(
@@ -27,7 +28,7 @@ mod test {
 
     #[tokio::test]
     pub async fn simple_test() {
-        let dispatcher = Dispatcher::default();
+        let dispatcher = CommandQueue::default();
 
         let result = dispatcher
             .solve_conda_environment(CondaEnvironmentSpec {

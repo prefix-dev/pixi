@@ -5,25 +5,25 @@ use pixi_record::PixiRecord;
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
-    DispatchChannel, DispatchInner, DispatchMessage, Dispatcher, DispatcherContext,
+    CommandQueue, CommandQueueChannel, CommandQueueContext, CommandQueueData, ForegroundMessage,
     SolveCondaEnvironmentId, SolveCondaEnvironmentTask,
 };
-use crate::{DispatchError, SolveCondaEnvironmentError};
+use crate::{CommandQueueError, Reporter, SolveCondaEnvironmentError, reporter};
 
 /// Runs the dispatcher background task
-pub(super) struct DispatcherBackgroundTask {
-    /// The receiver for messages from a [`Dispatcher]`.
-    receiver: mpsc::UnboundedReceiver<DispatchMessage>,
+pub(super) struct CommandQueueProcessor {
+    /// The receiver for messages from a [`CommandQueue]`.
+    receiver: mpsc::UnboundedReceiver<ForegroundMessage>,
 
     /// A weak reference to the sender. This is used to allow constructing new
     /// [`Dispatchers`] without keeping the channel alive if there are no
     /// dispatchers alive. This is important because the dispatcher background
     /// task is only stopped once all senders (and thus dispatchers) have been
     /// dropped.
-    sender: mpsc::WeakUnboundedSender<DispatchMessage>,
+    sender: mpsc::WeakUnboundedSender<ForegroundMessage>,
 
     /// Data associated with dispatchers.
-    inner: Arc<DispatchInner>,
+    inner: Arc<CommandQueueData>,
 
     /// Conda environments that are currently being solved.
     conda_environments: slotmap::SlotMap<SolveCondaEnvironmentId, PendingCondaEnvironment>,
@@ -31,14 +31,17 @@ pub(super) struct DispatcherBackgroundTask {
     /// Keeps track of all pending futures. We poll them manually instead of
     /// spawning them so they can be `!Send` and because they are dropped when
     /// this instance is dropped.
-    pending_futures: FuturesUnordered<LocalBoxFuture<'static, DispatchResult>>,
+    pending_futures: FuturesUnordered<LocalBoxFuture<'static, TaskResult>>,
+
+    /// The reporter to use for reporting progress
+    reporter: Option<Box<dyn Reporter>>,
 }
 
 /// A result of a task that was executed by the dispatcher background task.
-enum DispatchResult {
+enum TaskResult {
     SolveCondaEnvironment(
         SolveCondaEnvironmentId,
-        Result<Vec<PixiRecord>, DispatchError<SolveCondaEnvironmentError>>,
+        Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>>,
     ),
 }
 
@@ -46,12 +49,16 @@ enum DispatchResult {
 /// background task to keep track of which dispatcher is awaiting the result.
 struct PendingCondaEnvironment {
     tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
+    reporter_id: Option<reporter::SolveId>,
 }
 
-impl DispatcherBackgroundTask {
+impl CommandQueueProcessor {
     /// Spawns a new background task that will handle the orchestration of all
     /// the dispatchers.
-    pub fn spawn(inner: Arc<DispatchInner>) -> mpsc::UnboundedSender<DispatchMessage> {
+    pub fn spawn(
+        inner: Arc<CommandQueueData>,
+        reporter: Option<Box<dyn Reporter>>,
+    ) -> mpsc::UnboundedSender<ForegroundMessage> {
         let (tx, rx) = mpsc::unbounded_channel();
         let weak_tx = tx.downgrade();
         tokio::task::spawn_blocking(move || {
@@ -62,6 +69,7 @@ impl DispatcherBackgroundTask {
                 conda_environments: slotmap::SlotMap::default(),
                 pending_futures: FuturesUnordered::new(),
                 inner,
+                reporter,
             };
             rt.block_on(task.run());
         });
@@ -92,9 +100,9 @@ impl DispatcherBackgroundTask {
     }
 
     /// Called when the result of a task was received.
-    fn on_result(&mut self, result: DispatchResult) {
+    fn on_result(&mut self, result: TaskResult) {
         match result {
-            DispatchResult::SolveCondaEnvironment(id, result) => {
+            TaskResult::SolveCondaEnvironment(id, result) => {
                 self.on_solve_environment_result(id, result)
             }
         }
@@ -102,58 +110,80 @@ impl DispatcherBackgroundTask {
 
     /// Called when a message was received from either the dispatcher or another
     /// task.
-    fn on_message(&mut self, message: DispatchMessage) {
+    fn on_message(&mut self, message: ForegroundMessage) {
         match message {
-            DispatchMessage::SolveCondaEnvironment(task) => self.on_solve_environment(task),
+            ForegroundMessage::SolveCondaEnvironment(task) => self.on_solve_environment(task),
         }
     }
 
-    /// Called when a [`DispatchMessage::SolveCondaEnvironment`] task was
+    /// Constructs a new [`CommandQueue`] that can be used for tasks constructed
+    /// by the processor itself.
+    fn create_task_command_queue(&self, context: CommandQueueContext) -> CommandQueue {
+        CommandQueue {
+            channel: CommandQueueChannel::Weak(self.sender.clone()),
+            context: Some(context),
+            data: self.inner.clone(),
+        }
+    }
+
+    /// Called when a [`ForegroundMessage::SolveCondaEnvironment`] task was
     /// received.
     fn on_solve_environment(&mut self, task: SolveCondaEnvironmentTask) {
-        let pending_env_id = self
-            .conda_environments
-            .insert(PendingCondaEnvironment { tx: task.tx });
+        // Notify the reporter that a new solve has been queued.
+        let reporter_id = self
+            .reporter
+            .as_mut()
+            .map(|reporter| reporter.on_solve_queued(&task.env));
 
-        // Construct a dispatcher for this task. This is used to track the tasks
-        // executed as part of it.
-        let dispatcher = Dispatcher {
-            channel: DispatchChannel::Weak(self.sender.clone()),
-            context: Some(DispatcherContext::SolveCondaEnvironment(pending_env_id)),
-            inner: self.inner.clone(),
-        };
+        // Store information about the pending environment.
+        let pending_env_id = self.conda_environments.insert(PendingCondaEnvironment {
+            tx: task.tx,
+            reporter_id,
+        });
+
+        // Notify the reporter that the solve has started.
+        if let Some((reporter, id)) = self.reporter.as_mut().zip(reporter_id) {
+            reporter.on_solve_start(id)
+        }
 
         // Add the task to the list of pending futures.
+        let dispatcher = self
+            .create_task_command_queue(CommandQueueContext::SolveCondaEnvironment(pending_env_id));
         self.pending_futures.push(
             task.env
                 .solve(dispatcher)
-                .map(move |result| DispatchResult::SolveCondaEnvironment(pending_env_id, result))
+                .map(move |result| TaskResult::SolveCondaEnvironment(pending_env_id, result))
                 .boxed_local(),
         );
     }
 
-    /// Called when a [`DispatchResult::SolveCondaEnvironment`] task was
+    /// Called when a [`TaskResult::SolveCondaEnvironment`] task was
     /// received.
     ///
     /// This function will relay the result of the task back to the
-    /// [`Dispatcher`] that issues it.
+    /// [`CommandQueue`] that issues it.
     fn on_solve_environment_result(
         &mut self,
         id: SolveCondaEnvironmentId,
-        result: Result<Vec<PixiRecord>, DispatchError<SolveCondaEnvironmentError>>,
+        result: Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>>,
     ) {
         let env = self
             .conda_environments
             .remove(id)
             .expect("got a result for a conda environment that was not pending");
 
+        // Notify the reporter that the solve finished.
+        if let Some((reporter, id)) = self.reporter.as_mut().zip(env.reporter_id) {
+            reporter.on_solve_start(id)
+        }
+
         let result = match result {
-            Err(DispatchError::Cancelled) => {
+            Err(CommandQueueError::Cancelled) => {
                 // If the job was canceled, we can just drop the sending end
                 // which will also cause a cancel on the receiving end.
                 return;
             }
-            Err(DispatchError::Failed(err)) => Err(err),
+            Err(CommandQueueError::Failed(err)) => Err(err),
             Ok(result) => Ok(result),
         };
 

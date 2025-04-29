@@ -15,7 +15,7 @@ use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
 use thiserror::Error;
 use tokio::task::JoinError;
 
-use crate::{DispatchError, dispatcher::Dispatcher};
+use crate::{CommandQueueError, dispatcher::CommandQueue};
 
 /// Contains all information that describes the input of a conda environment.
 #[derive(Debug, Clone)]
@@ -73,8 +73,8 @@ impl CondaEnvironmentSpec {
     /// Solves this environment using the given dispatcher.
     pub async fn solve(
         self,
-        dispatcher: Dispatcher,
-    ) -> Result<Vec<PixiRecord>, DispatchError<SolveCondaEnvironmentError>> {
+        dispatcher: CommandQueue,
+    ) -> Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>> {
         // Split the requirements into source and binary requirements.
         let (source_specs, binary_specs) = Self::split_into_source_and_binary_requirements(
             &self.channel_config,
@@ -136,10 +136,10 @@ impl CondaEnvironmentSpec {
 
         // Error out if the background task failed or was canceled.
         let solver_result = match solve_result.map_err(JoinError::try_into_panic) {
-            Err(Err(_)) => return Err(DispatchError::Cancelled),
+            Err(Err(_)) => return Err(CommandQueueError::Cancelled),
             Err(Ok(panic)) => std::panic::resume_unwind(panic),
             Ok(Err(err)) => {
-                return Err(DispatchError::Failed(err.into()));
+                return Err(CommandQueueError::Failed(err.into()));
             }
             Ok(Ok(result)) => result,
         };
