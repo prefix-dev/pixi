@@ -2369,15 +2369,12 @@
 <p><img alt="Starship with Pixi support" src="../../../assets/starship-light.png#only-light" />
 <img alt="Starship with Pixi support" src="../../../assets/starship-dark.png#only-dark" /></p>
 <p><a href="https://starship.rs">Starship</a> is a cross-platform and cross-shell prompt for developers, similar to oh-my-zsh, but with a focus on performance and simplicity.
-In <a href="https://github.com/starship/starship/pull/6335">starship/starship #6335</a>, Pixi support is being added.
-This pull request has not been merged at the time of writing.
-That's why <a href="https://github.com/pavelzw">@pavelzw</a> created a conda package for his fork in <a href="https://prefix.dev/channels/yolo-forge">prefix.dev/yolo-forge</a>.
-The packages are being built in GitHub Actions in the <a href="https://github.com/pavelzw/yolo-forge">pavelzw/yolo-forge GitHub repository</a> using <code>rattler-build</code>.
+It also has full Pixi support.
 You can install it using the following command:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>https://prefix.dev/yolo-forge<span class="w"> </span>-c<span class="w"> </span>conda-forge<span class="w"> </span>starship-fork-pavelzw
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>starship
 </span></code></pre></div>
 <div class="admonition tip">
-<p>For information about how to configure and set up starship, see the <a href="https://starship.rs">official documentation</a>.</p>
+<p>For information about how to configure and set up starship, see the <a href="https://starship.rs/config/#pixi">official documentation</a>.</p>
 </div>
 <p>In order for starship to always find the right python executable, you can adjust its configuration file.</p>
 <div class="language-toml highlight"><span class="filename">~/.config/starship.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[python]</span>
@@ -2389,6 +2386,13 @@ You can install it using the following command:</p>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="c1"># fall back to pixi&#39;s python if it&#39;s available</span>
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="s2">&quot;.pixi/envs/default/bin/python&quot;</span><span class="p">,</span>
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>By default, starship uses 🧚🏻 as pixi's symbol. You can adjust it as follows if you want a different symbol</p>
+<div class="language-toml highlight"><span class="filename">~/.config/starship.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[pixi]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">symbol</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;📦 &quot;</span>
+</span></code></pre></div>
+<p>As starship already displays a custom message when a pixi environment is active, you can disable pixi's custom PS1:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi config set shell.change-ps1 &quot;false&quot;
 </span></code></pre></div>
 
 
