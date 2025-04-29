@@ -1698,8 +1698,7 @@
         "default": {
           "title": "Default",
           "description": "The default value of the argument",
-          "type": "string",
-          "minLength": 1
+          "type": "string"
         }
       }
     },
