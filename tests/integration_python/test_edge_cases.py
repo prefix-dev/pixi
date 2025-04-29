@@ -2,6 +2,7 @@ from pathlib import Path
 import shutil
 import pytest
 import platform
+import sys
 from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode
 
 
@@ -376,9 +377,18 @@ def test_installation_pypi_conda_mismatch(
         tmp_pixi_workspace / "foobar-0.1.1-py3-none-any.whl",
     )
 
-    site_packages = (
-        tmp_pixi_workspace / ".pixi" / "envs" / "default" / "lib" / "python3.13" / "site-packages"
-    )
+    if not sys.platform.startswith("win"):
+        site_packages = (
+            tmp_pixi_workspace
+            / ".pixi"
+            / "envs"
+            / "default"
+            / "lib"
+            / "python3.13"
+            / "site-packages"
+        )
+    else:
+        site_packages = tmp_pixi_workspace / ".pixi" / "envs" / "default" / "Lib" / "site-packages"
 
     # First conda
     shutil.copyfile(pixi_mix, dest_toml)
