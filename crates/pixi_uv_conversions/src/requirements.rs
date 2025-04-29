@@ -358,4 +358,34 @@ mod tests {
         };
         assert_eq!(uv_req.source, expected_uv_req);
     }
+
+    #[test]
+    fn test_url_with_hash() {
+        let url_with_hash =
+            Url::parse("https://example.com/package.tar.gz#sha256=abc123def456").unwrap();
+        let pypi_req = PixiPypiSpec::Url {
+            url: url_with_hash.clone(),
+            subdirectory: None,
+            extras: vec![],
+        };
+
+        let uv_req = as_uv_req(&pypi_req, "test-package", Path::new("")).unwrap();
+
+        if let RequirementSource::Url {
+            location,
+            url: verbatim_url,
+            ..
+        } = uv_req.source
+        {
+            // We will check that the location URL (used for comparison) has the fragment stripped
+            assert!(!location.to_string().contains("sha256=abc123def456"));
+            assert_eq!(location.fragment(), None);
+
+            // But the verbatim URL should still preserve the hash (which is used for verification)
+            assert!(verbatim_url.as_str().contains("sha256=abc123def456"));
+            assert_eq!(url_with_hash.fragment(), Some("sha256=abc123def456"));
+        } else {
+            panic!("Expected RequirementSource::Url");
+        }
+    }
 }
