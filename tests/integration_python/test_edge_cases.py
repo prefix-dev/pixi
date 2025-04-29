@@ -478,19 +478,9 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=incorrect_hash_value_that_will_cause_installation_to_fail"
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [tool.pixi.workspace]
 platforms = ["linux-64", "osx-arm64", "win-64"]
 channels = ["https://prefix.dev/conda-forge"]
-
-[tool.pixi.pypi-dependencies]
-test = { path = ".", editable = true }
-
-[tool.hatch.metadata]
-allow-direct-references = true
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
     pyproject_path.write_text(pyproject_content)
