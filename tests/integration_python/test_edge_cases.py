@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+import subprocess
 import pytest
 import platform
 from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode
@@ -346,3 +347,39 @@ def test_build_git_source_deps(
         stdout_contains="John Doe Jr.",
         cwd=minimal_workspace,
     )
+
+PYPROJECT_CONTENT = """
+[project]
+version = "0.1.0"
+name = "test"
+requires-python = "== 3.12"
+dependencies = [
+    "jinja2 @ https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pixi.pypi-dependencies]
+test = { path = ".", editable = true }
+
+[tool.hatch.metadata]
+allow-direct-references = true
+"""
+
+
+def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
+    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
+    pyproject_path.write_text(PYPROJECT_CONTENT)
+
+    src_dir = tmp_pixi_workspace / "src" / "test"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "__init__.py").touch()
+
+    try:
+        subprocess.run(
+            [pixi, "install"], cwd=tmp_pixi_workspace, check=True, capture_output=True, text=True
+        )
+    except subprocess.CalledProcessError as e:
+        pytest.fail(f"failed to solve the pypi requirements {e}", pytrace=False)
