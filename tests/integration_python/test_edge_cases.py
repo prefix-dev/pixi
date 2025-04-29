@@ -348,6 +348,7 @@ def test_build_git_source_deps(
         cwd=minimal_workspace,
     )
 
+
 PYPROJECT_CONTENT = """
 [project]
 version = "0.1.0"
