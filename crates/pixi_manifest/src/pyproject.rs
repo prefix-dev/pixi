@@ -225,6 +225,13 @@ impl PyProjectManifest {
             .is_some_and(TomlManifest::has_workspace)
     }
 
+    /// Returns true if the pyproject.toml file also contains a pixi workspace.
+    pub fn has_pixi_package(&self) -> bool {
+        self.tool()
+            .and_then(|t| t.pixi.as_ref())
+            .is_some_and(TomlManifest::has_package)
+    }
+
     /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
     /// If the manifest also contains a package section that will be converted
