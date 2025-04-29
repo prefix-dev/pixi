@@ -36,6 +36,14 @@ impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> IntoIterator for DependencyMap<
     }
 }
 
+impl<N: Hash + Eq + Clone, D: Hash + Eq + Clone> Extend<(N, D)> for DependencyMap<N, D> {
+    fn extend<T: IntoIterator<Item = (N, D)>>(&mut self, iter: T) {
+        for (name, spec) in iter {
+            self.insert(name, spec);
+        }
+    }
+}
+
 impl<'a, M, N: Hash + Eq + Clone + 'a, D: Hash + Eq + Clone + 'a> From<M> for DependencyMap<N, D>
 where
     M: IntoIterator<Item = Cow<'a, IndexMap<N, D>>>,
@@ -155,6 +163,17 @@ impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::Namele
         self.map.into_iter().flat_map(|(name, specs)| {
             specs.into_iter().map(move |spec| {
                 rattler_conda_types::MatchSpec::from_nameless(spec, Some(name.clone()))
+            })
+        })
+    }
+
+    /// Returns an iterator over [`rattler_conda_types::MatchSpec`]s.
+    pub fn iter_match_specs(
+        &self,
+    ) -> impl DoubleEndedIterator<Item = rattler_conda_types::MatchSpec> {
+        self.map.iter().flat_map(|(name, specs)| {
+            specs.into_iter().map(move |spec| {
+                rattler_conda_types::MatchSpec::from_nameless(spec.clone(), Some(name.clone()))
             })
         })
     }

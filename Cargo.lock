@@ -4640,6 +4640,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_graph"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "futures",
+ "itertools 0.14.0",
+ "miette 7.5.0",
+ "pixi_record",
+ "pixi_spec",
+ "pixi_spec_containers",
+ "rattler_conda_types",
+ "rattler_repodata_gateway",
+ "rattler_solve",
+ "slotmap",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
@@ -6765,6 +6786,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f92a496fb766b417c996b9c5e57daf2f7ad3b0bebe1ccfca4856390e3d3bb67"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "slotmap"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbff4acf519f630b3a3ddcfaea6c06b42174d9a44bc70c620e9ed1649d58b82a"
+dependencies = [
+ "version_check",
 ]
 
 [[package]]
