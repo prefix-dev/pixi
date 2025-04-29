@@ -155,10 +155,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-
     use super::*;
-    use crate::utils::test_utils::format_parse_error;
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)

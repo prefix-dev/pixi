@@ -68,11 +68,11 @@ impl<'de> toml_span::Deserialize<'de> for LibCSystemRequirement {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-    use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
-
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
+    use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
 
     #[test]
     fn system_requirements_works() {

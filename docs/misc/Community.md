@@ -63,3 +63,4 @@ Masked versions of Python array API standard compatible arrays.
 - [Bodo](https://github.com/bodo-ai/bodo):  High-Performance Python Compute Engine for Data and AI.
 - [metrology-apis](https://github.com/quantity-dev/metrology-apis): Standardised Metrology APIs in Python.
 - [xsf](https://github.com/scipy/xsf): Special function implementations.
+- [pyfixest](https://github.com/py-econometrics/pyfixest):  Fast High-Dimensional Fixed Effects Regression in Python following fixest-syntax.

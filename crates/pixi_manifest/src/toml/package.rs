@@ -248,10 +248,10 @@ impl TomlPackage {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     #[must_use]
     fn expect_parse_failure(pixi_toml: &str) -> String {

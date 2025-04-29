@@ -16,7 +16,7 @@ use dialoguer::theme::ColorfulTheme;
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
-use pixi_manifest::{FeaturesExt, PyPiRequirement};
+use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
 use pixi_spec::{GitSpec, PixiSpec};
 use rattler_conda_types::Platform;
@@ -33,6 +33,7 @@ use crate::{
 };
 
 pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
+use pixi_pypi_spec::PixiPypiSpec;
 pub use pypi_prefix::update_prefix_pypi;
 pub use python_status::PythonStatus;
 
@@ -280,7 +281,7 @@ pub fn extract_git_requirements_from_project(project: &Workspace) -> Vec<GitSpec
 
             for (_, pypi_spec) in pypi_dependencies {
                 for spec in pypi_spec {
-                    if let PyPiRequirement::Git { url, .. } = spec {
+                    if let PixiPypiSpec::Git { url, .. } = spec {
                         requirements.push(url);
                     }
                 }

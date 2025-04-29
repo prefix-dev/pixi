@@ -544,10 +544,9 @@ impl WorkspaceDiscoverer {
 mod test {
     use std::{fmt::Write, path::Path};
 
-    use rstest::*;
-
     use super::*;
-    use crate::utils::test_utils::format_diagnostic;
+    use pixi_test_utils::format_diagnostic;
+    use rstest::*;
 
     #[rstest]
     #[case::root("")]
