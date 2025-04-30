@@ -46,10 +46,13 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@main
         with:
-          environments: schema
+          environments: schema docs
 
       - name: Generate schema
         run: pixi run to-md
+      
+      - name: Build mkdocs
+        run: pixi r docs
 
   build-docs:
     if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')
