@@ -33,6 +33,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  generate-schema:
+    if: github.repository == 'prefix-dev/pixi' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' && !startsWith(github.event.inputs.tag, 'v'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          # fetch everything so we can checkout the tag
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          environments: schema
+
+      - name: Generate schema
+        run: pixi run to-md
+
   build-docs:
     if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
