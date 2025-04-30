@@ -3,7 +3,7 @@ use uv_distribution_types::{CachedDist, Dist, InstalledDist};
 use super::InstallReason;
 
 #[derive(Debug)]
-pub struct PyPIInstalls {
+pub struct PyPIInstallationPlan {
     /// The distributions that are not already installed in the current
     /// environment, but are available in the local cache.
     pub local: Vec<(CachedDist, InstallReason)>,
@@ -18,12 +18,14 @@ pub struct PyPIInstalls {
     /// but will be re-installed (including upgraded) to satisfy the
     /// requirements.
     pub reinstalls: Vec<(InstalledDist, NeedReinstall)>,
-}
 
-#[derive(Debug)]
-pub struct PyPIRemovals {
     /// Extraneous packages that need to be removed
     pub extraneous: Vec<InstalledDist>,
+
+    /// Duplicates are packages that are extraneous but have different versions
+    /// among PyPI and conda requirements, we only want to remove the metadata
+    /// for these
+    pub duplicates: Vec<InstalledDist>,
 }
 
 /// Represents the different reasons why a package needs to be reinstalled

@@ -41,7 +41,7 @@ mod reasons;
 mod validation;
 
 pub(crate) use models::NeedReinstall;
-pub use models::{PyPIInstalls, PyPIRemovals};
+pub use models::PyPIInstallationPlan;
 pub use planner::InstallPlanner;
 pub use reasons::InstallReason;
 
