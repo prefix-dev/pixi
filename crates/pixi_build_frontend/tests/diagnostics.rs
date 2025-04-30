@@ -33,7 +33,7 @@ fn test_data_dir() -> PathBuf {
         .parent()
         .and_then(Path::parent)
         .unwrap();
-    root_dir.join("tests")
+    root_dir.join("tests").join("data")
 }
 
 fn build_backends_dir() -> PathBuf {
