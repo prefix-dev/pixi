@@ -46,7 +46,7 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@main
         with:
-          environments: schema docs
+          environments: schema
 
       - name: Generate schema
         run: pixi run to-md
