@@ -54,6 +54,12 @@ jobs:
       - name: Build mkdocs
         run: pixi r docs
 
+      - name: Deploy site to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site
+
   build-docs:
     if: github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
