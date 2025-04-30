@@ -107,7 +107,7 @@ The JSON should follow the following format:
             "password": "your_password"
         }
     },
-    "conda.anaconda.org": {
+    "anaconda.org": {
         "CondaToken": "your_token"
     },
     "s3://my-bucket": {
