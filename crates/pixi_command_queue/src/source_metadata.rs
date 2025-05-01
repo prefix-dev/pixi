@@ -20,6 +20,12 @@ impl SourceMetadataSpec {
             .await
             .map_err(|err| err.map(SourceMetadataError::SourceCheckoutError))?;
 
+        // TODO: Discover the protocol to use for this particular source
+
+        // TODO: Setup the backend based on the discovered protocol
+
+        // TODO: Query the backend for the metadata.
+
         Ok(())
     }
 }

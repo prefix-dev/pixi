@@ -1,14 +1,11 @@
 use std::{path::PathBuf, time::Instant};
 
 use chrono::{DateTime, Utc};
-use itertools::{Either, Itertools};
 use miette::Diagnostic;
-use pixi_record::PixiRecord;
-use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, NamelessMatchSpec,
-    Platform, RepoDataRecord,
+    Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, NamelessMatchSpec, Platform,
+    RepoDataRecord,
 };
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
@@ -21,14 +18,14 @@ use crate::{CommandQueue, CommandQueueError};
 #[derive(Debug, Clone)]
 pub struct CondaEnvironmentSpec {
     /// The requirements of the environment
-    pub requirements: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
+    pub requirements: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// Additional constraints of the environment
     pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// The records of the packages that are currently already installed. These
     /// are used as hints to reduce the difference between individual solves.
-    pub installed: Vec<PixiRecord>,
+    pub installed: Vec<RepoDataRecord>,
 
     /// The platform to solve for
     pub platform: Platform,
@@ -74,16 +71,7 @@ impl CondaEnvironmentSpec {
     pub async fn solve(
         self,
         dispatcher: CommandQueue,
-    ) -> Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>> {
-        // Split the requirements into source and binary requirements.
-        let (source_specs, binary_specs) = Self::split_into_source_and_binary_requirements(
-            &self.channel_config,
-            self.requirements,
-        );
-
-        // Iterate over all source specs and get their metadata.
-        for source in source_specs.iter_specs() {}
-
+    ) -> Result<Vec<RepoDataRecord>, CommandQueueError<SolveCondaEnvironmentError>> {
         // Query the gateway for conda repodata.
         let fetch_repodata_start = Instant::now();
         let available_records = dispatcher
@@ -91,7 +79,7 @@ impl CondaEnvironmentSpec {
             .query(
                 self.channels.into_iter().map(Channel::from_url),
                 [self.platform, Platform::NoArch],
-                binary_specs.iter_match_specs(),
+                self.requirements.iter_match_specs(),
             )
             .recursive(true)
             .await
@@ -103,23 +91,13 @@ impl CondaEnvironmentSpec {
             fetch_repodata_start.elapsed()
         );
 
-        // Filter all installed packages
-        let locked_packages = self
-            .installed
-            .into_iter()
-            // Only lock binary records
-            .filter_map(|record| record.into_binary())
-            // Filter any record we want as a source record
-            .filter(|record| !source_specs.contains_key(&record.package_record.name))
-            .collect();
-
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
             // Construct a task to solve the environment.
             let task = rattler_solve::SolverTask {
-                specs: binary_specs.into_match_specs().collect(),
-                locked_packages,
+                specs: self.requirements.into_match_specs().collect(),
+                locked_packages: self.installed,
                 virtual_packages: self.virtual_packages,
                 channel_priority: self.channel_priority,
                 exclude_newer: self.exclude_newer,
@@ -141,37 +119,7 @@ impl CondaEnvironmentSpec {
             Ok(Ok(result)) => result,
         };
 
-        // Convert the result back into the pixi records.
-        Ok(solver_result
-            .records
-            .into_iter()
-            .map(PixiRecord::Binary)
-            .collect())
-    }
-
-    /// Split the set of requirements into source and binary requirements.
-    ///
-    /// This method doesn't take `self` so we can move ownership of
-    /// [`Self::requirements`] without also taking a mutable reference to
-    /// `self`.
-    fn split_into_source_and_binary_requirements(
-        channel_config: &ChannelConfig,
-        specs: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
-    ) -> (
-        DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
-        DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
-    ) {
-        specs.into_specs().partition_map(|(name, constraint)| {
-            match constraint.into_source_or_binary() {
-                Either::Left(source) => Either::Left((name, source)),
-                Either::Right(binary) => {
-                    let spec = binary
-                        .try_into_nameless_match_spec(&channel_config)
-                        .expect("failed to convert channel from spec");
-                    Either::Right((name, spec))
-                }
-            }
-        })
+        Ok(solver_result.records)
     }
 }
 

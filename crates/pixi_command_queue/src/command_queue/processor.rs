@@ -6,13 +6,17 @@ use std::{
 use futures::{FutureExt, StreamExt, future::LocalBoxFuture, stream::FuturesUnordered};
 use pixi_git::{GitError, GitUrl, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
+use rattler_conda_types::RepoDataRecord;
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
-    CommandQueue, CommandQueueChannel, CommandQueueContext, CommandQueueData, ForegroundMessage,
-    GitCheckoutTask, SolveCondaEnvironmentId, SolveCondaEnvironmentTask,
+    CommandQueue, CommandQueueChannel, CommandQueueContext, CommandQueueData,
+    CommandQueueErrorResultExt, ForegroundMessage, GitCheckoutTask, SolveCondaEnvironmentId,
+    SolveCondaEnvironmentTask, SolvePixiEnvironmentId, SolvePixiEnvironmentTask,
 };
-use crate::{CommandQueueError, Reporter, SolveCondaEnvironmentError, reporter};
+use crate::{
+    CommandQueueError, Reporter, SolveCondaEnvironmentError, SolvePixiEnvironmentError, reporter,
+};
 
 /// Runs the command_queue background task
 pub(super) struct CommandQueueProcessor {
@@ -32,6 +36,9 @@ pub(super) struct CommandQueueProcessor {
     /// Conda environments that are currently being solved.
     conda_environments: slotmap::SlotMap<SolveCondaEnvironmentId, PendingCondaEnvironment>,
 
+    /// Pixi environments that are currently being solved.
+    pixi_environments: slotmap::SlotMap<SolvePixiEnvironmentId, PendingPixiEnvironment>,
+
     /// Git checkouts in the process of being checked out, or already checked
     /// out.
     git_checkouts: HashMap<GitUrl, PendingGitCheckout>,
@@ -49,7 +56,11 @@ pub(super) struct CommandQueueProcessor {
 enum TaskResult {
     SolveCondaEnvironment(
         SolveCondaEnvironmentId,
-        Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>>,
+        Result<Vec<RepoDataRecord>, CommandQueueError<SolveCondaEnvironmentError>>,
+    ),
+    SolvePixiEnvironment(
+        SolvePixiEnvironmentId,
+        Result<Vec<PixiRecord>, CommandQueueError<SolvePixiEnvironmentError>>,
     ),
     GitCheckedOut(GitUrl, Result<Fetch, GitError>),
 }
@@ -72,8 +83,14 @@ enum PendingGitCheckout {
 /// Information about a pending conda environment solve. This is used by the
 /// background task to keep track of which command_queue is awaiting the result.
 struct PendingCondaEnvironment {
-    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
+    tx: oneshot::Sender<Result<Vec<RepoDataRecord>, SolveCondaEnvironmentError>>,
     reporter_id: Option<reporter::SolveId>,
+}
+
+/// Information about a pending pixi environment solve. This is used by the
+/// background task to keep track of which command_queue is awaiting the result.
+struct PendingPixiEnvironment {
+    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
 }
 
 impl CommandQueueProcessor {
@@ -91,6 +108,7 @@ impl CommandQueueProcessor {
                 receiver: rx,
                 sender: weak_tx,
                 conda_environments: slotmap::SlotMap::default(),
+                pixi_environments: slotmap::SlotMap::default(),
                 git_checkouts: HashMap::default(),
                 pending_futures: FuturesUnordered::new(),
                 inner,
@@ -128,7 +146,10 @@ impl CommandQueueProcessor {
     fn on_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::SolveCondaEnvironment(id, result) => {
-                self.on_solve_environment_result(id, result)
+                self.on_solve_conda_environment_result(id, result)
+            }
+            TaskResult::SolvePixiEnvironment(id, result) => {
+                self.on_solve_pixi_environment_result(id, result)
             }
             TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, result),
         }
@@ -138,7 +159,8 @@ impl CommandQueueProcessor {
     /// another task.
     fn on_message(&mut self, message: ForegroundMessage) {
         match message {
-            ForegroundMessage::SolveCondaEnvironment(task) => self.on_solve_environment(task),
+            ForegroundMessage::SolveCondaEnvironment(task) => self.on_solve_conda_environment(task),
+            ForegroundMessage::SolvePixiEnvironment(task) => self.on_solve_pixi_environment(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
         }
     }
@@ -155,7 +177,7 @@ impl CommandQueueProcessor {
 
     /// Called when a [`ForegroundMessage::SolveCondaEnvironment`] task was
     /// received.
-    fn on_solve_environment(&mut self, task: SolveCondaEnvironmentTask) {
+    fn on_solve_conda_environment(&mut self, task: SolveCondaEnvironmentTask) {
         // Notify the reporter that a new solve has been queued.
         let reporter_id = self
             .reporter
@@ -189,10 +211,10 @@ impl CommandQueueProcessor {
     ///
     /// This function will relay the result of the task back to the
     /// [`CommandQueue`] that issues it.
-    fn on_solve_environment_result(
+    fn on_solve_conda_environment_result(
         &mut self,
         id: SolveCondaEnvironmentId,
-        result: Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>>,
+        result: Result<Vec<RepoDataRecord>, CommandQueueError<SolveCondaEnvironmentError>>,
     ) {
         let env = self
             .conda_environments
@@ -204,14 +226,54 @@ impl CommandQueueProcessor {
             reporter.on_solve_start(id)
         }
 
-        let result = match result {
-            Err(CommandQueueError::Cancelled) => {
-                // If the job was canceled, we can just drop the sending end
-                // which will also cause a cancel on the receiving end.
-                return;
-            }
-            Err(CommandQueueError::Failed(err)) => Err(err),
-            Ok(result) => Ok(result),
+        let Some(result) = result.into_ok_or_failed() else {
+            // If the job was canceled, we can just drop the sending end
+            // which will also cause a cancel on the receiving end.
+            return;
+        };
+
+        // We can silently ignore the result if the task was cancelled.
+        let _ = env.tx.send(result);
+    }
+
+    /// Called when a [`ForegroundMessage::SolvePixiEnvironmentTask`] task was
+    /// received.
+    fn on_solve_pixi_environment(&mut self, task: SolvePixiEnvironmentTask) {
+        // Store information about the pending environment.
+        let pending_env_id = self
+            .pixi_environments
+            .insert(PendingPixiEnvironment { tx: task.tx });
+
+        // Add the task to the list of pending futures.
+        let dispatcher = self
+            .create_task_command_queue(CommandQueueContext::SolvePixiEnvironment(pending_env_id));
+        self.pending_futures.push(
+            task.env
+                .solve(dispatcher)
+                .map(move |result| TaskResult::SolvePixiEnvironment(pending_env_id, result))
+                .boxed_local(),
+        );
+    }
+
+    /// Called when a [`TaskResult::SolvePixiEnvironment`] task was
+    /// received.
+    ///
+    /// This function will relay the result of the task back to the
+    /// [`CommandQueue`] that issues it.
+    fn on_solve_pixi_environment_result(
+        &mut self,
+        id: SolvePixiEnvironmentId,
+        result: Result<Vec<PixiRecord>, CommandQueueError<SolvePixiEnvironmentError>>,
+    ) {
+        let env = self
+            .pixi_environments
+            .remove(id)
+            .expect("got a result for a conda environment that was not pending");
+
+        let Some(result) = result.into_ok_or_failed() else {
+            // If the job was canceled, we can just drop the sending end
+            // which will also cause a cancel on the receiving end.
+            return;
         };
 
         // We can silently ignore the result if the task was cancelled.

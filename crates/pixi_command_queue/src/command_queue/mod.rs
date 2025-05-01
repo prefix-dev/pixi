@@ -8,6 +8,7 @@ use pixi_git::resolver::GitResolver;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
 use processor::CommandQueueProcessor;
+use rattler_conda_types::RepoDataRecord;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
@@ -15,8 +16,9 @@ use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
 use crate::{
-    CondaEnvironmentSpec, InvalidPathError, SolveCondaEnvironmentError, SourceCheckout,
-    SourceCheckoutError, SourceMetadataSpec, reporter::Reporter,
+    CondaEnvironmentSpec, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentError,
+    SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
+    reporter::Reporter,
 };
 
 mod git;
@@ -72,11 +74,15 @@ impl CommandQueueChannel {
 #[derive(Debug, Copy, Clone)]
 enum CommandQueueContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
+    SolvePixiEnvironment(SolvePixiEnvironmentId),
 }
 
 slotmap::new_key_type! {
     /// An id that unique identifies a conda environment that is being solved.
     struct SolveCondaEnvironmentId;
+
+    /// An id that unique identifies a conda environment that is being solved.
+    struct SolvePixiEnvironmentId;
 }
 
 /// Wraps an error that might have occurred during the processing of a task.
@@ -95,12 +101,49 @@ impl<E> CommandQueueError<E> {
             CommandQueueError::Failed(err) => CommandQueueError::Failed(map(err)),
         }
     }
+
+    pub fn into_failed(self) -> Option<E> {
+        match self {
+            CommandQueueError::Cancelled => None,
+            CommandQueueError::Failed(err) => Some(err),
+        }
+    }
+}
+
+/// Convenience trait to make working with `CommandQueueError` type easier.
+pub(crate) trait CommandQueueErrorResultExt<T, E> {
+    fn map_err_with<U, F: FnOnce(E) -> U>(self, fun: F) -> Result<T, CommandQueueError<U>>;
+
+    fn into_ok_or_failed(self) -> Option<Result<T, E>>;
+}
+
+impl<T, E> CommandQueueErrorResultExt<T, E> for Result<T, CommandQueueError<E>> {
+    fn map_err_with<U, F: FnOnce(E) -> U>(self, fun: F) -> Result<T, CommandQueueError<U>> {
+        self.map_err(|err| err.map(fun))
+    }
+
+    fn into_ok_or_failed(self) -> Option<Result<T, E>> {
+        match self {
+            Ok(ok) => Some(Ok(ok)),
+            Err(CommandQueueError::Cancelled) => None,
+            Err(CommandQueueError::Failed(err)) => Some(Err(err)),
+        }
+    }
 }
 
 /// A message send to the dispatch task.
 enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
+    SolvePixiEnvironment(SolvePixiEnvironmentTask),
     GitCheckout(GitCheckoutTask),
+}
+
+/// A message that is send to the background task to start solving a particular
+/// pixi environment.
+struct SolvePixiEnvironmentTask {
+    env: PixiEnvironmentSpec,
+    context: Option<CommandQueueContext>,
+    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
 }
 
 /// A message that is send to the background task to start solving a particular
@@ -108,7 +151,7 @@ enum ForegroundMessage {
 struct SolveCondaEnvironmentTask {
     env: CondaEnvironmentSpec,
     context: Option<CommandQueueContext>,
-    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
+    tx: oneshot::Sender<Result<Vec<RepoDataRecord>, SolveCondaEnvironmentError>>,
 }
 
 /// A message that is send to the background task to requesting the metadata for
@@ -147,11 +190,39 @@ impl CommandQueue {
         &self.data.gateway
     }
 
-    /// Solves a particular requirement.
+    /// Solves a particular pixi environment.
+    pub async fn solve_pixi_environment(
+        &self,
+        env: PixiEnvironmentSpec,
+    ) -> Result<Vec<PixiRecord>, CommandQueueError<SolvePixiEnvironmentError>> {
+        let Some(sender) = self.channel.sender() else {
+            // If this fails, it means the command_queue was dropped and the task is
+            // immediately canceled.
+            return Err(CommandQueueError::Cancelled);
+        };
+
+        let (tx, rx) = oneshot::channel();
+        sender
+            .send(ForegroundMessage::SolvePixiEnvironment(
+                SolvePixiEnvironmentTask {
+                    env,
+                    context: self.context,
+                    tx,
+                },
+            ))
+            .map_err(|_| CommandQueueError::Cancelled)?;
+        match rx.await {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
+            Err(_) => Err(CommandQueueError::Cancelled),
+        }
+    }
+
+    /// Solves a particular conda environment.
     pub async fn solve_conda_environment(
         &self,
         env: CondaEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, CommandQueueError<SolveCondaEnvironmentError>> {
+    ) -> Result<Vec<RepoDataRecord>, CommandQueueError<SolveCondaEnvironmentError>> {
         let Some(sender) = self.channel.sender() else {
             // If this fails, it means the command_queue was dropped and the task is
             // immediately canceled.
