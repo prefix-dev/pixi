@@ -1,6 +1,6 @@
 use pixi_git::resolver::RepositoryReference;
 
-use crate::{CondaEnvironmentSpec, PixiEnvironmentSpec};
+use crate::{CondaEnvironmentSpec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SolveId(pub usize);

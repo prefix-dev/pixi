@@ -4503,6 +4503,7 @@ dependencies = [
  "itertools 0.14.0",
  "jsonrpsee",
  "miette 7.5.0",
+ "pathdiff",
  "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
@@ -4510,6 +4511,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_spec",
+ "pixi_spec_containers",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",
@@ -4562,25 +4564,31 @@ dependencies = [
 name = "pixi_command_queue"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "dirs",
  "futures",
  "itertools 0.14.0",
  "miette 7.5.0",
+ "pixi_build_frontend",
  "pixi_git",
+ "pixi_glob",
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
  "rattler_conda_types",
  "rattler_repodata_gateway",
  "rattler_solve",
+ "rattler_virtual_packages",
  "reqwest-middleware",
  "slotmap",
+ "strsim",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
  "typed-path",
  "url",
+ "xxhash-rust",
 ]
 
 [[package]]

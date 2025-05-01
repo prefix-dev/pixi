@@ -12,11 +12,11 @@ use tokio::sync::{mpsc, oneshot};
 use super::{
     CommandQueue, CommandQueueChannel, CommandQueueContext, CommandQueueData,
     CommandQueueErrorResultExt, ForegroundMessage, GitCheckoutTask, SolveCondaEnvironmentId,
-    SolveCondaEnvironmentTask, SolvePixiEnvironmentId, SolvePixiEnvironmentTask,
+    SolveCondaEnvironmentTask, SolvePixiEnvironmentId, SolvePixiEnvironmentTask, SourceMetadataId,
 };
-use crate::{
-    CommandQueueError, Reporter, SolveCondaEnvironmentError, SolvePixiEnvironmentError, reporter,
-};
+use crate::{CommandQueueError, Reporter, SolveCondaEnvironmentError, SolvePixiEnvironmentError, reporter, source_metadata::{SourceMetadata, SourceMetadataError}, SourceMetadataSpec};
+
+mod source_metadata;
 
 /// Runs the command_queue background task
 pub(super) struct CommandQueueProcessor {
@@ -38,6 +38,10 @@ pub(super) struct CommandQueueProcessor {
 
     /// Pixi environments that are currently being solved.
     pixi_environments: slotmap::SlotMap<SolvePixiEnvironmentId, PendingPixiEnvironment>,
+
+    /// A mapping of source metadata to the metadata id that
+    source_metadata: HashMap<SourceMetadataId, PendingSourceMetadata>,
+    source_metadata_ids: HashMap<SourceMetadataSpec, SourceMetadataId>,
 
     /// Git checkouts in the process of being checked out, or already checked
     /// out.
@@ -61,6 +65,10 @@ enum TaskResult {
     SolvePixiEnvironment(
         SolvePixiEnvironmentId,
         Result<Vec<PixiRecord>, CommandQueueError<SolvePixiEnvironmentError>>,
+    ),
+    SourceMetadata(
+        SourceMetadataId,
+        Result<SourceMetadata, CommandQueueError<SourceMetadataError>>,
     ),
     GitCheckedOut(GitUrl, Result<Fetch, GitError>),
 }
@@ -93,6 +101,13 @@ struct PendingPixiEnvironment {
     tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
 }
 
+/// Information about a request for metadata of a particular source spec.
+enum PendingSourceMetadata {
+    Pending(Vec<oneshot::Sender<Result<SourceMetadata, SourceMetadataError>>>),
+    Result(SourceMetadata),
+    Errored,
+}
+
 impl CommandQueueProcessor {
     /// Spawns a new background task that will handle the orchestration of all
     /// the dispatchers.
@@ -109,6 +124,7 @@ impl CommandQueueProcessor {
                 sender: weak_tx,
                 conda_environments: slotmap::SlotMap::default(),
                 pixi_environments: slotmap::SlotMap::default(),
+                source_metadatas: slotmap::SlotMap::default(),
                 git_checkouts: HashMap::default(),
                 pending_futures: FuturesUnordered::new(),
                 inner,
@@ -142,6 +158,17 @@ impl CommandQueueProcessor {
         tracing::debug!("Dispatch background task has finished");
     }
 
+    /// Called when a message was received from either the command_queue or
+    /// another task.
+    fn on_message(&mut self, message: ForegroundMessage) {
+        match message {
+            ForegroundMessage::SolveCondaEnvironment(task) => self.on_solve_conda_environment(task),
+            ForegroundMessage::SolvePixiEnvironment(task) => self.on_solve_pixi_environment(task),
+            ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
+            ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
+        }
+    }
+
     /// Called when the result of a task was received.
     fn on_result(&mut self, result: TaskResult) {
         match result {
@@ -151,17 +178,8 @@ impl CommandQueueProcessor {
             TaskResult::SolvePixiEnvironment(id, result) => {
                 self.on_solve_pixi_environment_result(id, result)
             }
+            TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, result),
             TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, result),
-        }
-    }
-
-    /// Called when a message was received from either the command_queue or
-    /// another task.
-    fn on_message(&mut self, message: ForegroundMessage) {
-        match message {
-            ForegroundMessage::SolveCondaEnvironment(task) => self.on_solve_conda_environment(task),
-            ForegroundMessage::SolvePixiEnvironment(task) => self.on_solve_pixi_environment(task),
-            ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
         }
     }
 
@@ -308,11 +326,11 @@ impl CommandQueueProcessor {
 
                 let resolver = self.inner.git_resolver.clone();
                 let client = self.inner.client.clone();
-                let cache_dir = self.inner.cache_dir.clone();
+                let cache_dir = self.inner.cache_dirs.root().clone();
                 self.pending_futures.push(
                     async move {
                         let fetch = resolver
-                            .fetch(task.url.clone(), client.clone(), cache_dir.clone(), None)
+                            .fetch(task.url.clone(), client, cache_dir, None)
                             .await;
                         TaskResult::GitCheckedOut(task.url, fetch)
                     }

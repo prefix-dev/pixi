@@ -1,6 +1,5 @@
 mod cache;
 mod reporters;
-mod source_anchor;
 pub mod source_metadata_collector;
 
 use std::{
@@ -43,7 +42,6 @@ use rattler_conda_types::{
 use rattler_digest::Sha256;
 use reporters::SourceReporter;
 pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
-pub use source_anchor::SourceAnchor;
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};

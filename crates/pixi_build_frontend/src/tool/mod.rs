@@ -24,7 +24,7 @@ pub struct SystemTool {
 
 impl SystemTool {
     /// Construct a new instance from a command.
-    pub(crate) fn new(command: impl Into<String>) -> Self {
+    pub fn new(command: impl Into<String>) -> Self {
         Self {
             command: command.into(),
         }

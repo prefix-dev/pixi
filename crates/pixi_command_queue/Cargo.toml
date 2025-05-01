@@ -9,26 +9,32 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+base64 = { workspace = true }
 chrono = { workspace = true }
+dirs = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
+reqwest-middleware = { workspace = true }
 slotmap = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
-dirs = { workspace = true }
 typed-path = { workspace = true }
-reqwest-middleware = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
+strsim = { workspace = true }
 
 rattler_conda_types = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_solve = { workspace = true, features = ["resolvo"] }
+rattler_virtual_packages = { workspace = true }
 
+pixi_build_frontend = { workspace = true }
+pixi_git = { workspace = true }
+pixi_glob = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
-pixi_git = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }

@@ -6,24 +6,34 @@ mod protocols;
 
 use std::fmt::{Debug, Formatter};
 
-pub use protocols::JsonRPCBuildProtocol;
-pub use protocols::builders::{pixi_protocol, rattler_build_protocol};
+pub use protocols::{
+    JsonRPCBuildProtocol,
+    builders::{pixi_protocol, rattler_build_protocol},
+};
 
+mod backend_spec;
+mod discovery;
 mod protocol_builder;
 mod reporters;
 pub mod tool;
+mod backend;
+pub mod error;
+
+pub use pixi_build_types as types;
 
 use std::path::PathBuf;
 
+pub use backend_override::BackendOverride;
+pub use backend_spec::{BackendSpec, JsonRpcBackendSpec, EnvironmentSpec, CommandSpec, SystemCommandSpec};
+pub use backend::{Backend, json_rpc};
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
-pub use reporters::{CondaBuildReporter, CondaMetadataReporter};
-pub use reporters::{NoopCondaBuildReporter, NoopCondaMetadataReporter};
+pub use discovery::{DiscoveredBackend, DiscoveryError, EnabledProtocols, BackendInitializationParams};
+pub use reporters::{
+    CondaBuildReporter, CondaMetadataReporter, NoopCondaBuildReporter, NoopCondaMetadataReporter,
+};
 use tokio::io::{AsyncRead, AsyncWrite};
 pub use tool::{IsolatedToolSpec, SystemToolSpec, ToolContext, ToolSpec};
 use url::Url;
-
-pub use backend_override::BackendOverride;
-pub use protocol_builder::EnabledProtocols;
 
 /// A backend communication protocol that can run in the same process.
 pub struct InProcessBackend {

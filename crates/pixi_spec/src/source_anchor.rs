@@ -13,6 +13,12 @@ pub enum SourceAnchor {
     Source(SourceSpec),
 }
 
+impl From<SourceSpec> for SourceAnchor {
+    fn from(value: SourceSpec) -> Self {
+        SourceAnchor::Source(value)   
+    }
+}
+
 impl SourceAnchor {
     /// Resolve a source spec relative to this anchor.
     pub fn resolve(&self, spec: SourceSpec) -> SourceSpec {

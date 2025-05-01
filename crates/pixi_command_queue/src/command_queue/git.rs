@@ -11,7 +11,7 @@ use crate::{
 /// A task that is send to the background to checkout a git repository.
 pub(super) struct GitCheckoutTask {
     pub url: GitUrl,
-    pub context: Option<CommandQueueContext>,
+    pub _context: Option<CommandQueueContext>,
     pub tx: oneshot::Sender<Result<Fetch, GitError>>,
 }
 
@@ -79,7 +79,7 @@ impl CommandQueue {
         sender
             .send(ForegroundMessage::GitCheckout(GitCheckoutTask {
                 url: git_url,
-                context: self.context,
+                _context: self.context,
                 tx,
             }))
             .map_err(|_| CommandQueueError::Cancelled)?;

@@ -4,6 +4,8 @@ mod pixi;
 mod reporter;
 mod source_checkout;
 mod source_metadata;
+mod cache_dirs;
+mod build;
 
 pub use command_queue::{CommandQueue, CommandQueueError};
 pub use conda::{CondaEnvironmentSpec, SolveCondaEnvironmentError};

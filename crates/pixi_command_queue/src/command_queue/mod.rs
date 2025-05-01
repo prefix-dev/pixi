@@ -4,7 +4,9 @@ use std::{
 };
 
 use git::GitCheckoutTask;
+use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
+use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
 use processor::CommandQueueProcessor;
@@ -18,14 +20,18 @@ use typed_path::Utf8TypedPath;
 use crate::{
     CondaEnvironmentSpec, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentError,
     SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
+    cache_dirs::CacheDirs,
     reporter::Reporter,
+    source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
 mod git;
+mod instantiate_backend;
 mod processor;
 
 /// The command_queue is responsible for synchronizing requests between
 /// different conda environments.
+#[derive(Clone)]
 pub struct CommandQueue {
     channel: CommandQueueChannel,
     context: Option<CommandQueueContext>,
@@ -43,16 +49,23 @@ struct CommandQueueData {
     root_dir: PathBuf,
 
     /// The location to store caches
-    cache_dir: PathBuf,
+    cache_dirs: CacheDirs,
 
     /// The reqwest client to use for network requests
     client: ClientWithMiddleware,
+
+    /// Backend overrides
+    build_backend_overrides: BackendOverride,
+
+    /// A cache for hashes
+    glob_hash_cache: GlobHashCache,
 }
 
 /// A channel through which to send any messages to the command_queue. Some
 /// dispatchers are constructed by the command_queue itself. To avoid a
 /// cyclic dependency, these "sub"-dispatchers use a weak reference to the
 /// sender.
+#[derive(Clone)]
 enum CommandQueueChannel {
     Strong(mpsc::UnboundedSender<ForegroundMessage>),
     Weak(mpsc::WeakUnboundedSender<ForegroundMessage>),
@@ -75,15 +88,21 @@ impl CommandQueueChannel {
 enum CommandQueueContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
+    SourceMetadata(SourceMetadataId),
 }
 
 slotmap::new_key_type! {
-    /// An id that unique identifies a conda environment that is being solved.
+    /// An id that uniquely identifies a conda environment that is being solved.
     struct SolveCondaEnvironmentId;
 
-    /// An id that unique identifies a conda environment that is being solved.
+    /// An id that uniquely identifies a conda environment that is being solved.
     struct SolvePixiEnvironmentId;
 }
+
+
+/// An id that uniquely identifies a source metadata request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+struct SourceMetadataId(usize);
 
 /// Wraps an error that might have occurred during the processing of a task.
 #[derive(Debug, Clone, Error)]
@@ -135,6 +154,7 @@ impl<T, E> CommandQueueErrorResultExt<T, E> for Result<T, CommandQueueError<E>> 
 enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
     SolvePixiEnvironment(SolvePixiEnvironmentTask),
+    SourceMetadata(SourceMetadataTask),
     GitCheckout(GitCheckoutTask),
 }
 
@@ -159,13 +179,7 @@ struct SolveCondaEnvironmentTask {
 struct SourceMetadataTask {
     spec: SourceMetadataSpec,
     context: Option<CommandQueueContext>,
-    tx: oneshot::Sender<Result<(), ()>>,
-}
-
-struct PinAndCheckoutSourceTask {
-    spec: SourceSpec,
-    context: Option<CommandQueueContext>,
-    tx: oneshot::Sender<Result<SourceCheckout, SourceCheckoutError>>,
+    tx: oneshot::Sender<Result<SourceMetadata, SourceMetadataError>>,
 }
 
 impl Default for CommandQueue {
@@ -188,6 +202,47 @@ impl CommandQueue {
     /// Returns the gateway used to query conda repodata.
     pub fn gateway(&self) -> &Gateway {
         &self.data.gateway
+    }
+
+    /// Returns any build backend overrides
+    pub fn build_backend_overrides(&self) -> &BackendOverride {
+        &self.data.build_backend_overrides
+    }
+
+    /// Returns the cache directories used by the command queue.
+    pub fn cache_dirs(&self) -> &CacheDirs {
+        &self.data.cache_dirs
+    }
+
+    /// Returns the glob hash cache.
+    pub fn glob_hash_cache(&self) -> &GlobHashCache {
+        &self.data.glob_hash_cache
+    }
+
+    /// Returns the metadata of the source spec.
+    pub async fn source_metadata(
+        &self,
+        spec: SourceMetadataSpec,
+    ) -> Result<SourceMetadata, CommandQueueError<SourceMetadataError>> {
+        let Some(sender) = self.channel.sender() else {
+            // If this fails, it means the command_queue was dropped and the task is
+            // immediately canceled.
+            return Err(CommandQueueError::Cancelled);
+        };
+
+        let (tx, rx) = oneshot::channel();
+        sender
+            .send(ForegroundMessage::SourceMetadata(SourceMetadataTask {
+                spec,
+                context: self.context,
+                tx,
+            }))
+            .map_err(|_| CommandQueueError::Cancelled)?;
+        match rx.await {
+            Ok(Ok(result)) => Ok(result),
+            Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
+            Err(_) => Err(CommandQueueError::Cancelled),
+        }
     }
 
     /// Solves a particular pixi environment.
@@ -332,14 +387,15 @@ pub struct CommandQueueBuilder {
     reporter: Option<Box<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
     client: Option<ClientWithMiddleware>,
-    cache_dir: Option<PathBuf>,
+    cache_dirs: Option<CacheDirs>,
+    build_backend_overrides: BackendOverride,
 }
 
 impl CommandQueueBuilder {
     /// The cache directory to use
-    pub fn with_cache_dir(self, cache_dir: PathBuf) -> Self {
+    pub fn with_cache_dirs(self, cache_dirs: CacheDirs) -> Self {
         Self {
-            cache_dir: Some(cache_dir),
+            cache_dirs: Some(cache_dirs),
             ..self
         }
     }
@@ -377,18 +433,28 @@ impl CommandQueueBuilder {
         }
     }
 
+    /// Apply overrides to particular backends.
+    pub fn with_backend_overrides(self, overrides: BackendOverride) -> Self {
+        Self {
+            build_backend_overrides: overrides,
+            ..self
+        }
+    }
+
     /// Finish building the [`CommandQueue`] and return it.
     pub fn finish(self) -> CommandQueue {
         let root_dir = self
             .root_dir
             .or(std::env::current_dir().ok())
             .unwrap_or_default();
-        let cache_dir = self.cache_dir.unwrap_or_else(|| root_dir.join(".cache"));
+        let cache_dirs = self
+            .cache_dirs
+            .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache")));
         let client = self.client.unwrap_or_default();
         let gateway = self.gateway.unwrap_or_else(|| {
             Gateway::builder()
                 .with_client(client.clone())
-                .with_cache_dir(cache_dir.clone())
+                .with_cache_dir(cache_dirs.root().clone())
                 .finish()
         });
 
@@ -398,8 +464,10 @@ impl CommandQueueBuilder {
             gateway,
             root_dir,
             git_resolver,
-            cache_dir,
+            cache_dirs,
             client,
+            build_backend_overrides: self.build_backend_overrides,
+            glob_hash_cache: GlobHashCache::default(),
         });
 
         let sender = CommandQueueProcessor::spawn(data.clone(), self.reporter);

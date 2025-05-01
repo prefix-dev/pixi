@@ -8,6 +8,7 @@ use jsonrpsee::types::ErrorObject;
 use miette::{Diagnostic, LabeledSpan, NamedSource, Severity, SourceCode};
 use serde::{Deserialize, Deserializer};
 
+/// An JSON-RPC error that is returned from the backend.
 #[derive(Debug, Default)]
 pub struct BackendError {
     code: Option<String>,
