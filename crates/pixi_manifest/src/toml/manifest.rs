@@ -70,6 +70,11 @@ impl TomlManifest {
         self.workspace.is_some()
     }
 
+    /// Returns true if the manifest contains a package.
+    pub fn has_package(&self) -> bool {
+        self.package.is_some()
+    }
+
     /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
     /// If the manifest also contains a package section that will be converted
