@@ -4,10 +4,8 @@ use futures::FutureExt;
 
 use super::{CommandQueueProcessor, PendingSourceMetadata, TaskResult};
 use crate::{
-    CommandQueueError,
-    command_queue::{
-        CommandQueueContext, CommandQueueErrorResultExt, SourceMetadataId, SourceMetadataTask,
-    },
+    CommandQueueError, CommandQueueErrorResultExt,
+    command_queue::{CommandQueueContext, SourceMetadataId, SourceMetadataTask},
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
 

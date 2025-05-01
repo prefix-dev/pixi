@@ -1,16 +1,16 @@
+use std::sync::Arc;
+
 use futures::{StreamExt, stream::FuturesUnordered};
 use miette::Diagnostic;
 use pixi_build_frontend::EnabledProtocols;
 use pixi_record::{PinnedSourceSpec, SourceRecord};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
-use std::sync::Arc;
 use thiserror::Error;
 
 use crate::{
-    CommandQueue, CommandQueueError, SourceMetadataSpec,
-    build::BuildEnvironment,
-    command_queue::CommandQueueErrorResultExt,
+    BuildEnvironment, CommandQueue, CommandQueueError, CommandQueueErrorResultExt,
+    SourceMetadataSpec,
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
 

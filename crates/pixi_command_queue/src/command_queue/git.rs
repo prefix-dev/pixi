@@ -3,8 +3,9 @@ use pixi_record::{PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec};
 use pixi_spec::GitSpec;
 use tokio::sync::oneshot;
 
+use crate::command_queue::error::CommandQueueError;
 use crate::{
-    CommandQueue, CommandQueueError, SourceCheckout, SourceCheckoutError,
+    CommandQueue, SourceCheckout, SourceCheckoutError,
     command_queue::{CommandQueueContext, ForegroundMessage},
 };
 

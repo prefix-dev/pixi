@@ -14,9 +14,8 @@ use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
 use thiserror::Error;
 
 use crate::{
-    CommandQueue, CommandQueueError, SourceCheckout, SourceCheckoutError,
-    build::{BuildEnvironment, WorkDirKey},
-    command_queue::CommandQueueErrorResultExt,
+    BuildEnvironment, CommandQueue, CommandQueueError, CommandQueueErrorResultExt, SourceCheckout,
+    SourceCheckoutError, build::WorkDirKey,
 };
 
 /// Represents a request for source metadata.

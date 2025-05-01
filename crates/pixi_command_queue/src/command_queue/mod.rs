@@ -1,8 +1,11 @@
+//! Defines the [`CommandQueue`] and a builder to construct it.
+
 use std::{
     path::{Component, Path, PathBuf},
     sync::Arc,
 };
 
+pub use error::{CommandQueueError, CommandQueueErrorResultExt};
 pub(crate) use git::GitCheckoutTask;
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
@@ -11,7 +14,6 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
-use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
@@ -25,6 +27,7 @@ use crate::{
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
+mod error;
 mod git;
 mod instantiate_backend;
 
@@ -104,52 +107,6 @@ slotmap::new_key_type! {
 /// An id that uniquely identifies a source metadata request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceMetadataId(pub usize);
-
-/// Wraps an error that might have occurred during the processing of a task.
-#[derive(Debug, Clone, Error)]
-pub enum CommandQueueError<E> {
-    Cancelled,
-
-    #[error(transparent)]
-    Failed(#[from] E),
-}
-
-impl<E> CommandQueueError<E> {
-    pub fn map<U, F: FnOnce(E) -> U>(self, map: F) -> CommandQueueError<U> {
-        match self {
-            CommandQueueError::Cancelled => CommandQueueError::Cancelled,
-            CommandQueueError::Failed(err) => CommandQueueError::Failed(map(err)),
-        }
-    }
-
-    pub fn into_failed(self) -> Option<E> {
-        match self {
-            CommandQueueError::Cancelled => None,
-            CommandQueueError::Failed(err) => Some(err),
-        }
-    }
-}
-
-/// Convenience trait to make working with `CommandQueueError` type easier.
-pub(crate) trait CommandQueueErrorResultExt<T, E> {
-    fn map_err_with<U, F: FnOnce(E) -> U>(self, fun: F) -> Result<T, CommandQueueError<U>>;
-
-    fn into_ok_or_failed(self) -> Option<Result<T, E>>;
-}
-
-impl<T, E> CommandQueueErrorResultExt<T, E> for Result<T, CommandQueueError<E>> {
-    fn map_err_with<U, F: FnOnce(E) -> U>(self, fun: F) -> Result<T, CommandQueueError<U>> {
-        self.map_err(|err| err.map(fun))
-    }
-
-    fn into_ok_or_failed(self) -> Option<Result<T, E>> {
-        match self {
-            Ok(ok) => Some(Ok(ok)),
-            Err(CommandQueueError::Cancelled) => None,
-            Err(CommandQueueError::Failed(err)) => Some(Err(err)),
-        }
-    }
-}
 
 /// A message send to the dispatch task.
 pub(crate) enum ForegroundMessage {

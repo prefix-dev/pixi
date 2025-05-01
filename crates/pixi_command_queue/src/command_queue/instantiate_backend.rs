@@ -4,7 +4,8 @@ use pixi_build_frontend::{
     tool::{SystemTool, Tool},
 };
 
-use crate::{CommandQueue, CommandQueueError};
+use crate::CommandQueue;
+use crate::command_queue::error::CommandQueueError;
 
 impl CommandQueue {
     /// Instantiate a build backend

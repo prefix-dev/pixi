@@ -192,7 +192,7 @@ impl SolveCondaEnvironmentSpec {
         match solve_result.map_err(JoinError::try_into_panic) {
             Err(Err(_)) => Err(CommandQueueError::Cancelled),
             Err(Ok(panic)) => std::panic::resume_unwind(panic),
-            Ok(Err(err)) => Err(CommandQueueError::Failed(err.into())),
+            Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
             Ok(Ok(result)) => Ok(result),
         }
     }

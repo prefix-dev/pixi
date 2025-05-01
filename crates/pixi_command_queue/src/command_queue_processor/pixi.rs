@@ -3,16 +3,13 @@ use pixi_record::PixiRecord;
 
 use super::{CommandQueueProcessor, PendingPixiEnvironment, TaskResult};
 use crate::{
-    CommandQueueError, PixiSolveReporter, SolvePixiEnvironmentError,
-    command_queue::{
-        CommandQueueContext, CommandQueueErrorResultExt, SolvePixiEnvironmentId,
-        SolvePixiEnvironmentTask,
-    },
+    CommandQueueError, CommandQueueErrorResultExt, PixiSolveReporter, SolvePixiEnvironmentError,
+    command_queue::{CommandQueueContext, SolvePixiEnvironmentId, SolvePixiEnvironmentTask},
 };
 
 impl CommandQueueProcessor {
-    /// Called when a [`super::ForegroundMessage::SolvePixiEnvironmentTask`] task was
-    /// received.
+    /// Called when a [`super::ForegroundMessage::SolvePixiEnvironmentTask`]
+    /// task was received.
     pub(crate) fn on_solve_pixi_environment(&mut self, task: SolvePixiEnvironmentTask) {
         // Notify the reporter that a new solve has been queued.
         let reporter_id = self

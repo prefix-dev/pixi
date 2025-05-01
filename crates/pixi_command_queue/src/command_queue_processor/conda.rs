@@ -3,10 +3,8 @@ use pixi_record::PixiRecord;
 
 use super::{CommandQueueProcessor, PendingSolveCondaEnvironment, TaskResult};
 use crate::{
-    CommandQueueError, CondaSolveReporter,
-    command_queue::{
-        CommandQueueErrorResultExt, SolveCondaEnvironmentId, SolveCondaEnvironmentTask,
-    },
+    CommandQueueError, CommandQueueErrorResultExt, CondaSolveReporter,
+    command_queue::{SolveCondaEnvironmentId, SolveCondaEnvironmentTask},
 };
 
 impl CommandQueueProcessor {

@@ -14,9 +14,9 @@ use pixi_git::{GitError, GitUrl, source::Fetch};
 use pixi_record::PixiRecord;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::command_queue::CommandQueueError;
 use crate::{
-    CommandQueueError, Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceMetadataSpec,
+    Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceMetadataSpec,
     command_queue::{
         CommandQueue, CommandQueueChannel, CommandQueueContext, CommandQueueData,
         ForegroundMessage, SolveCondaEnvironmentId, SolvePixiEnvironmentId, SourceMetadataId,

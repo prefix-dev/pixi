@@ -15,9 +15,8 @@ use rattler_solve::{ChannelPriority, SolveStrategy};
 use thiserror::Error;
 
 use crate::{
-    CommandQueue, CommandQueueError, SolveCondaEnvironmentSpec,
-    build::BuildEnvironment,
-    command_queue::CommandQueueErrorResultExt,
+    BuildEnvironment, CommandQueue, CommandQueueError, CommandQueueErrorResultExt,
+    SolveCondaEnvironmentSpec,
     pixi::source_metadata_collector::{
         CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
     },

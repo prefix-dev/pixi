@@ -1,3 +1,5 @@
+//! See [`WorkDirKey`] for more information.
+
 use std::{
     ffi::OsStr,
     hash::{Hash, Hasher},
@@ -10,7 +12,7 @@ use xxhash_rust::xxh3::Xxh3;
 use crate::SourceCheckout;
 
 /// A key to uniquely identify a work directory. If there is a source build with
-/// the same key they will share the same working directory.
+/// the same key, they will share the same working directory.
 pub(crate) struct WorkDirKey {
     /// The location of the source
     pub source: SourceCheckout,
