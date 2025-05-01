@@ -57,7 +57,7 @@ impl SourceMetadataSpec {
         let source = command_queue
             .pin_and_checkout(self.source_spec.clone())
             .await
-            .map_err_with(SourceMetadataError::SourceCheckoutError)?;
+            .map_err_with(SourceMetadataError::SourceCheckout)?;
 
         // Discover information about the build backend from the source code.
         let discovered_backend = DiscoveredBackend::discover(
@@ -65,7 +65,7 @@ impl SourceMetadataSpec {
             &self.channel_config,
             &self.enabled_protocols,
         )
-        .map_err(SourceMetadataError::DiscoveryError)?;
+        .map_err(SourceMetadataError::Discovery)?;
 
         // Instantiate the backend with the discovered backend information.
         let backend = command_queue
@@ -74,7 +74,7 @@ impl SourceMetadataSpec {
                 discovered_backend.init_params,
             )
             .await
-            .map_err_with(SourceMetadataError::InitializeError)?;
+            .map_err_with(SourceMetadataError::Initialize)?;
 
         // Query the backend for metadata.
         let metadata = backend
@@ -102,7 +102,7 @@ impl SourceMetadataSpec {
                 ),
             })
             .await
-            .map_err(SourceMetadataError::CommunicationError)?;
+            .map_err(SourceMetadataError::Communication)?;
 
         // Compute the input globs for the mutable source checkouts.
         let input_hash = Self::compute_input_hash(command_queue, &source, &metadata).await?;
@@ -136,7 +136,7 @@ impl SourceMetadataSpec {
                     globs: input_globs.clone(),
                 })
                 .await
-                .map_err(SourceMetadataError::GlobHashError)?;
+                .map_err(SourceMetadataError::GlobHash)?;
 
             Some(InputHash {
                 hash: input_hash.hash,
@@ -245,20 +245,20 @@ pub fn from_pixi_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::Sourc
 #[derive(Debug, Error, Diagnostic)]
 pub enum SourceMetadataError {
     #[error(transparent)]
-    SourceCheckoutError(#[from] SourceCheckoutError),
+    SourceCheckout(#[from] SourceCheckoutError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    DiscoveryError(#[from] pixi_build_frontend::DiscoveryError),
+    Discovery(#[from] pixi_build_frontend::DiscoveryError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InitializeError(#[from] pixi_build_frontend::json_rpc::InitializeError),
+    Initialize(#[from] pixi_build_frontend::json_rpc::InitializeError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CommunicationError(#[from] pixi_build_frontend::json_rpc::CommunicationError),
+    Communication(#[from] pixi_build_frontend::json_rpc::CommunicationError),
 
     #[error("could not compute hash of input files")]
-    GlobHashError(#[from] pixi_glob::GlobHashError),
+    GlobHash(#[from] pixi_glob::GlobHashError),
 }

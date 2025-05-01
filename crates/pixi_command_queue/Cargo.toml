@@ -17,12 +17,13 @@ itertools = { workspace = true }
 miette = { workspace = true }
 reqwest-middleware = { workspace = true }
 slotmap = { workspace = true }
+strsim = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 typed-path = { workspace = true }
+url = { workspace = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
-strsim = { workspace = true }
 
 rattler_conda_types = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
@@ -38,4 +39,3 @@ pixi_spec_containers = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }
-url = { workspace = true }

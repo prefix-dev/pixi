@@ -4,7 +4,10 @@ use std::{path::PathBuf, sync::Arc};
 use miette::Diagnostic;
 use rattler_conda_types::ChannelConfig;
 
-use crate::{SetupRequest, ToolContext, protocol, protocol_builder::{ProtocolBuilder}, protocols::JsonRPCBuildProtocol, EnabledProtocols};
+use crate::{
+    EnabledProtocols, SetupRequest, ToolContext, protocol, protocol_builder::ProtocolBuilder,
+    protocols::JsonRPCBuildProtocol,
+};
 
 /// The frontend for building packages.
 pub struct BuildFrontend {

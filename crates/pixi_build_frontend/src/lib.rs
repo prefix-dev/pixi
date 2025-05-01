@@ -11,23 +11,27 @@ pub use protocols::{
     builders::{pixi_protocol, rattler_build_protocol},
 };
 
+mod backend;
 mod backend_spec;
 mod discovery;
+pub mod error;
 mod protocol_builder;
 mod reporters;
 pub mod tool;
-mod backend;
-pub mod error;
 
 pub use pixi_build_types as types;
 
 use std::path::PathBuf;
 
-pub use backend_override::BackendOverride;
-pub use backend_spec::{BackendSpec, JsonRpcBackendSpec, EnvironmentSpec, CommandSpec, SystemCommandSpec};
 pub use backend::{Backend, json_rpc};
+pub use backend_override::BackendOverride;
+pub use backend_spec::{
+    BackendSpec, CommandSpec, EnvironmentSpec, JsonRpcBackendSpec, SystemCommandSpec,
+};
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
-pub use discovery::{DiscoveredBackend, DiscoveryError, EnabledProtocols, BackendInitializationParams};
+pub use discovery::{
+    BackendInitializationParams, DiscoveredBackend, DiscoveryError, EnabledProtocols,
+};
 pub use reporters::{
     CondaBuildReporter, CondaMetadataReporter, NoopCondaBuildReporter, NoopCondaMetadataReporter,
 };

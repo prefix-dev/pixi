@@ -1,21 +1,20 @@
-use std::collections::hash_map::Entry;
+use std::{collections::hash_map::Entry, sync::Arc};
 
 use futures::FutureExt;
-use pixi_git::resolver::RepositoryReference;
 
+use super::{CommandQueueProcessor, PendingSourceMetadata, TaskResult};
 use crate::{
     CommandQueueError,
     command_queue::{
         CommandQueueContext, CommandQueueErrorResultExt, SourceMetadataId, SourceMetadataTask,
-        processor::{CommandQueueProcessor, PendingGitCheckout, PendingSourceMetadata, TaskResult},
     },
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
 impl CommandQueueProcessor {
-    /// Called when a `ForegroundMessage::SourceMetadataTask` task was
+    /// Called when a [`super::ForegroundMessage::SourceMetadataTask`] task was
     /// received.
-    pub fn on_source_metadata(&mut self, task: SourceMetadataTask) {
+    pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
         // Lookup the id of the source metadata to avoid deduplication.
         let source_metadata_id = {
             match self.source_metadata_ids.get(&task.spec) {
@@ -51,10 +50,7 @@ impl CommandQueueProcessor {
                     task.spec
                         .request(dispatcher)
                         .map(move |result| {
-                            crate::command_queue::processor::TaskResult::SourceMetadata(
-                                source_metadata_id,
-                                result,
-                            )
+                            TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
                         })
                         .boxed_local(),
                 );
@@ -62,15 +58,15 @@ impl CommandQueueProcessor {
         }
     }
 
-    /// Called when a `TaskResult::SourceMetadata` task was
+    /// Called when a [`super::TaskResult::SourceMetadata`] task was
     /// received.
     ///
     /// This function will relay the result of the task back to the
-    /// [`CommandQueue`] that issues it.
-    pub fn on_source_metadata_result(
+    /// [`super::CommandQueue`] that issues it.
+    pub(crate) fn on_source_metadata_result(
         &mut self,
         id: SourceMetadataId,
-        result: Result<SourceMetadata, CommandQueueError<SourceMetadataError>>,
+        result: Result<Arc<SourceMetadata>, CommandQueueError<SourceMetadataError>>,
     ) {
         let Some(PendingSourceMetadata::Pending(pending)) = self.source_metadata.get_mut(&id)
         else {

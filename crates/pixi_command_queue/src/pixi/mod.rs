@@ -3,7 +3,6 @@ mod source_metadata_collector;
 use std::{path::PathBuf, time::Instant};
 
 use chrono::{DateTime, Utc};
-use futures::{TryFutureExt, TryStreamExt, stream::FuturesUnordered};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_frontend::EnabledProtocols;
@@ -16,19 +15,25 @@ use rattler_solve::{ChannelPriority, SolveStrategy};
 use thiserror::Error;
 
 use crate::{
-    CommandQueue, CommandQueueError, CondaEnvironmentSpec, SourceMetadataSpec,
+    CommandQueue, CommandQueueError, SolveCondaEnvironmentSpec,
     build::BuildEnvironment,
     command_queue::CommandQueueErrorResultExt,
-    conda::SolveCondaEnvironmentError,
     pixi::source_metadata_collector::{
         CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
     },
-    source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
 /// Contains all information that describes the input of a pixi environment.
-/// This is very similar to a [`CondaEnvironmentSpec`], but also supports
-/// building certain dependencies from source.
+///
+/// Information about binary packages is requested as part of solving this
+/// instance.
+///
+/// When solving a pixi environment, source records are checked out and their
+/// metadata is queried. This may involve a recursive pattern of solving if the
+/// sources require additional environments to be set up.
+///
+/// If all the input information is already available and no recursion is
+/// desired, use [`SolveCondaEnvironmentSpec`] instead.
 #[derive(Debug, Clone)]
 pub struct PixiEnvironmentSpec {
     /// The requirements of the environment
@@ -112,12 +117,15 @@ impl PixiEnvironmentSpec {
         .await
         .map_err_with(SolvePixiEnvironmentError::from)?;
 
-        // Query the gateway for conda repodata.
+        // Query the gateway for conda repodata. This fetches the repodata for both the
+        // direct dependencies of the environment and the direct dependencies of
+        // all (recursively) discovered source dependencies. This ensures that all
+        // repodata required to solve the environment is loaded.
         let fetch_repodata_start = Instant::now();
-        let available_records = command_queue
+        let binary_repodata = command_queue
             .gateway()
             .query(
-                self.channels.into_iter().map(Channel::from_url),
+                self.channels.iter().cloned().map(Channel::from_url),
                 [self.build_environment.host_platform, Platform::NoArch],
                 binary_specs
                     .iter_match_specs()
@@ -125,31 +133,23 @@ impl PixiEnvironmentSpec {
             )
             .recursive(true)
             .await
-            .map_err(SolveCondaEnvironmentError::QueryError)
-            .map_err(SolvePixiEnvironmentError::SolveCondaEnvironmentError)?;
-
-        let total_records = available_records.iter().map(RepoData::len).sum::<usize>();
+            .map_err(SolvePixiEnvironmentError::QueryError)?;
+        let total_records = binary_repodata.iter().map(RepoData::len).sum::<usize>();
         tracing::info!(
             "fetched {total_records} records in {:?}",
             fetch_repodata_start.elapsed()
         );
 
-        // Filter all installed packages
-        let installed = self
-            .installed
-            .into_iter()
-            // Only lock binary records
-            .filter_map(|record| record.into_binary())
-            // Filter any record we want as a source record
-            .filter(|record| !source_specs.contains_key(&record.package_record.name))
-            .collect();
-
-        // Solve the conda environment
-        let solver_result = command_queue
-            .solve_conda_environment(CondaEnvironmentSpec {
-                requirements: binary_specs,
+        // Construct a solver specification from the collected metadata and solve the
+        // environment.
+        command_queue
+            .solve_conda_environment(SolveCondaEnvironmentSpec {
+                source_specs,
+                binary_specs,
                 constraints: self.constraints,
-                installed,
+                source_repodata,
+                binary_repodata,
+                installed: self.installed,
                 platform: self.build_environment.host_platform,
                 channels: self.channels,
                 virtual_packages: self.build_environment.host_virtual_packages,
@@ -159,10 +159,7 @@ impl PixiEnvironmentSpec {
                 channel_config: self.channel_config,
             })
             .await
-            .map_err_with(SolvePixiEnvironmentError::from)?;
-
-        // Convert the result back into the pixi records.
-        Ok(solver_result.into_iter().map(PixiRecord::Binary).collect())
+            .map_err_with(SolvePixiEnvironmentError::SolveError)
     }
 
     /// Split the set of requirements into source and binary requirements.
@@ -182,7 +179,7 @@ impl PixiEnvironmentSpec {
                 Either::Left(source) => Either::Left((name, source)),
                 Either::Right(binary) => {
                     let spec = binary
-                        .try_into_nameless_match_spec(&channel_config)
+                        .try_into_nameless_match_spec(channel_config)
                         .expect("failed to convert channel from spec");
                     Either::Right((name, spec))
                 }
@@ -191,11 +188,14 @@ impl PixiEnvironmentSpec {
     }
 }
 
+/// An error that might be returned when solving a pixi environment.
 #[derive(Debug, Error, Diagnostic)]
 pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
-    #[diagnostic(transparent)]
-    SolveCondaEnvironmentError(#[from] SolveCondaEnvironmentError),
+    QueryError(#[from] rattler_repodata_gateway::GatewayError),
+
+    #[error("failed to solve the environment")]
+    SolveError(#[from] rattler_solve::SolveError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]

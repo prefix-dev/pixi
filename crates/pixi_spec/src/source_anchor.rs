@@ -15,7 +15,7 @@ pub enum SourceAnchor {
 
 impl From<SourceSpec> for SourceAnchor {
     fn from(value: SourceSpec) -> Self {
-        SourceAnchor::Source(value)   
+        SourceAnchor::Source(value)
     }
 }
 

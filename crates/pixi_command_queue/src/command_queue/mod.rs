@@ -3,14 +3,12 @@ use std::{
     sync::Arc,
 };
 
-use git::GitCheckoutTask;
+pub(crate) use git::GitCheckoutTask;
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
-use processor::CommandQueueProcessor;
-use rattler_conda_types::RepoDataRecord;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use thiserror::Error;
@@ -18,47 +16,51 @@ use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
 use crate::{
-    CondaEnvironmentSpec, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentError,
+    Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
     SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
     cache_dirs::CacheDirs,
+    command_queue_processor::CommandQueueProcessor,
+    limits::{Limits, ResolvedLimits},
     reporter::Reporter,
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
 mod git;
 mod instantiate_backend;
-mod processor;
 
 /// The command_queue is responsible for synchronizing requests between
 /// different conda environments.
 #[derive(Clone)]
 pub struct CommandQueue {
-    channel: CommandQueueChannel,
-    context: Option<CommandQueueContext>,
-    data: Arc<CommandQueueData>,
+    pub(crate) channel: CommandQueueChannel,
+    pub(crate) context: Option<CommandQueueContext>,
+    pub(crate) data: Arc<CommandQueueData>,
 }
 
-struct CommandQueueData {
+pub(crate) struct CommandQueueData {
     /// The gateway to use to query conda repodata.
-    gateway: Gateway,
+    pub gateway: Gateway,
 
     /// The resolver of git repositories
-    git_resolver: GitResolver,
+    pub git_resolver: GitResolver,
 
     /// The base directory to use if relative paths are discovered.
-    root_dir: PathBuf,
+    pub root_dir: PathBuf,
 
     /// The location to store caches
-    cache_dirs: CacheDirs,
+    pub cache_dirs: CacheDirs,
 
     /// The reqwest client to use for network requests
-    client: ClientWithMiddleware,
+    pub client: ClientWithMiddleware,
 
     /// Backend overrides
-    build_backend_overrides: BackendOverride,
+    pub build_backend_overrides: BackendOverride,
 
     /// A cache for hashes
-    glob_hash_cache: GlobHashCache,
+    pub glob_hash_cache: GlobHashCache,
+
+    /// Returns the limits to which the command queue should adhere.
+    pub limits: ResolvedLimits,
 }
 
 /// A channel through which to send any messages to the command_queue. Some
@@ -66,7 +68,7 @@ struct CommandQueueData {
 /// cyclic dependency, these "sub"-dispatchers use a weak reference to the
 /// sender.
 #[derive(Clone)]
-enum CommandQueueChannel {
+pub(crate) enum CommandQueueChannel {
     Strong(mpsc::UnboundedSender<ForegroundMessage>),
     Weak(mpsc::WeakUnboundedSender<ForegroundMessage>),
 }
@@ -85,7 +87,7 @@ impl CommandQueueChannel {
 /// The context in which this particular command_queue is running. This is used
 /// to track dependencies.
 #[derive(Debug, Copy, Clone)]
-enum CommandQueueContext {
+pub(crate) enum CommandQueueContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
     SourceMetadata(SourceMetadataId),
@@ -93,16 +95,15 @@ enum CommandQueueContext {
 
 slotmap::new_key_type! {
     /// An id that uniquely identifies a conda environment that is being solved.
-    struct SolveCondaEnvironmentId;
+    pub(crate) struct SolveCondaEnvironmentId;
 
     /// An id that uniquely identifies a conda environment that is being solved.
-    struct SolvePixiEnvironmentId;
+    pub(crate) struct SolvePixiEnvironmentId;
 }
-
 
 /// An id that uniquely identifies a source metadata request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-struct SourceMetadataId(usize);
+pub(crate) struct SourceMetadataId(pub usize);
 
 /// Wraps an error that might have occurred during the processing of a task.
 #[derive(Debug, Clone, Error)]
@@ -151,7 +152,7 @@ impl<T, E> CommandQueueErrorResultExt<T, E> for Result<T, CommandQueueError<E>> 
 }
 
 /// A message send to the dispatch task.
-enum ForegroundMessage {
+pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
     SolvePixiEnvironment(SolvePixiEnvironmentTask),
     SourceMetadata(SourceMetadataTask),
@@ -160,26 +161,26 @@ enum ForegroundMessage {
 
 /// A message that is send to the background task to start solving a particular
 /// pixi environment.
-struct SolvePixiEnvironmentTask {
-    env: PixiEnvironmentSpec,
-    context: Option<CommandQueueContext>,
-    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
+pub(crate) struct SolvePixiEnvironmentTask {
+    pub env: PixiEnvironmentSpec,
+    pub context: Option<CommandQueueContext>,
+    pub tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
 }
 
 /// A message that is send to the background task to start solving a particular
 /// conda environment.
-struct SolveCondaEnvironmentTask {
-    env: CondaEnvironmentSpec,
-    context: Option<CommandQueueContext>,
-    tx: oneshot::Sender<Result<Vec<RepoDataRecord>, SolveCondaEnvironmentError>>,
+pub(crate) struct SolveCondaEnvironmentTask {
+    pub env: SolveCondaEnvironmentSpec,
+    pub context: Option<CommandQueueContext>,
+    pub tx: oneshot::Sender<Result<Vec<PixiRecord>, rattler_solve::SolveError>>,
 }
 
 /// A message that is send to the background task to requesting the metadata for
 /// a particular source spec.
-struct SourceMetadataTask {
-    spec: SourceMetadataSpec,
-    context: Option<CommandQueueContext>,
-    tx: oneshot::Sender<Result<SourceMetadata, SourceMetadataError>>,
+pub(crate) struct SourceMetadataTask {
+    pub spec: SourceMetadataSpec,
+    pub context: Option<CommandQueueContext>,
+    pub tx: oneshot::Sender<Result<Arc<SourceMetadata>, SourceMetadataError>>,
 }
 
 impl Default for CommandQueue {
@@ -223,7 +224,7 @@ impl CommandQueue {
     pub async fn source_metadata(
         &self,
         spec: SourceMetadataSpec,
-    ) -> Result<SourceMetadata, CommandQueueError<SourceMetadataError>> {
+    ) -> Result<Arc<SourceMetadata>, CommandQueueError<SourceMetadataError>> {
         let Some(sender) = self.channel.sender() else {
             // If this fails, it means the command_queue was dropped and the task is
             // immediately canceled.
@@ -276,8 +277,8 @@ impl CommandQueue {
     /// Solves a particular conda environment.
     pub async fn solve_conda_environment(
         &self,
-        env: CondaEnvironmentSpec,
-    ) -> Result<Vec<RepoDataRecord>, CommandQueueError<SolveCondaEnvironmentError>> {
+        env: SolveCondaEnvironmentSpec,
+    ) -> Result<Vec<PixiRecord>, CommandQueueError<rattler_solve::SolveError>> {
         let Some(sender) = self.channel.sender() else {
             // If this fails, it means the command_queue was dropped and the task is
             // immediately canceled.
@@ -389,6 +390,8 @@ pub struct CommandQueueBuilder {
     client: Option<ClientWithMiddleware>,
     cache_dirs: Option<CacheDirs>,
     build_backend_overrides: BackendOverride,
+    limits: Limits,
+    executor: Executor,
 }
 
 impl CommandQueueBuilder {
@@ -441,6 +444,16 @@ impl CommandQueueBuilder {
         }
     }
 
+    /// Set the limits to which this instance should adhere.
+    pub fn with_limits(self, limits: Limits) -> Self {
+        Self { limits, ..self }
+    }
+
+    /// Sets the executor to use for the command queue.
+    pub fn executor(self, executor: Executor) -> Self {
+        Self { executor, ..self }
+    }
+
     /// Finish building the [`CommandQueue`] and return it.
     pub fn finish(self) -> CommandQueue {
         let root_dir = self
@@ -468,9 +481,10 @@ impl CommandQueueBuilder {
             client,
             build_backend_overrides: self.build_backend_overrides,
             glob_hash_cache: GlobHashCache::default(),
+            limits: ResolvedLimits::from(self.limits),
         });
 
-        let sender = CommandQueueProcessor::spawn(data.clone(), self.reporter);
+        let sender = CommandQueueProcessor::spawn(data.clone(), self.reporter, self.executor);
         CommandQueue {
             channel: CommandQueueChannel::Strong(sender),
             context: None,

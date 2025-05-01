@@ -1,16 +1,23 @@
+mod build;
+mod cache_dirs;
 mod command_queue;
+mod command_queue_processor;
 mod conda;
+mod executor;
+mod limits;
 mod pixi;
 mod reporter;
 mod source_checkout;
 mod source_metadata;
-mod cache_dirs;
-mod build;
 
 pub use command_queue::{CommandQueue, CommandQueueError};
-pub use conda::{CondaEnvironmentSpec, SolveCondaEnvironmentError};
+pub use conda::SolveCondaEnvironmentSpec;
+pub use executor::Executor;
 pub use pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
-pub use reporter::{CondaSolveReporter, Reporter, SolveId};
+pub use reporter::{
+    CondaSolveId, CondaSolveReporter, GitCheckoutId, GitCheckoutReporter, PixiSolveId,
+    PixiSolveReporter, Reporter,
+};
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::SourceMetadataSpec;
 
@@ -23,7 +30,7 @@ mod test {
     use rattler_conda_types::ChannelUrl;
     use url::Url;
 
-    use crate::{CommandQueue, PixiEnvironmentSpec};
+    use crate::{CommandQueue, Executor, PixiEnvironmentSpec};
 
     fn local_channel(name: &str) -> ChannelUrl {
         Url::from_directory_path(
@@ -36,7 +43,9 @@ mod test {
 
     #[tokio::test]
     pub async fn simple_test() {
-        let dispatcher = CommandQueue::default();
+        let dispatcher = CommandQueue::builder()
+            .executor(Executor::Deterministic)
+            .finish();
 
         let result = dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {

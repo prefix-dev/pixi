@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// A task that is send to the background to checkout a git repository.
-pub(super) struct GitCheckoutTask {
+pub(crate) struct GitCheckoutTask {
     pub url: GitUrl,
     pub _context: Option<CommandQueueContext>,
     pub tx: oneshot::Sender<Result<Fetch, GitError>>,
@@ -86,7 +86,7 @@ impl CommandQueue {
 
         match rx.await {
             Ok(Ok(result)) => Ok(result),
-            Ok(Err(err)) => Err(CommandQueueError::Failed(err.into())),
+            Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
             Err(_) => Err(CommandQueueError::Cancelled),
         }
     }

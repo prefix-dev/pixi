@@ -4,6 +4,7 @@ use pixi_build_frontend::EnabledProtocols;
 use pixi_record::{PinnedSourceSpec, SourceRecord};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
+use std::sync::Arc;
 use thiserror::Error;
 
 use crate::{
@@ -27,7 +28,7 @@ pub struct SourceMetadataCollector {
 pub struct CollectedSourceMetadata {
     /// Information about all queried source packages. This can be used as
     /// repodata.
-    pub source_repodata: Vec<SourceMetadata>,
+    pub source_repodata: Vec<Arc<SourceMetadata>>,
 
     /// A list of transitive dependencies of all collected source records.
     pub transitive_dependencies: Vec<MatchSpec>,
@@ -122,7 +123,7 @@ impl SourceMetadataCollector {
         &self,
         name: rattler_conda_types::PackageName,
         spec: SourceSpec,
-    ) -> Result<SourceMetadata, CommandQueueError<CollectSourceMetadataError>> {
+    ) -> Result<Arc<SourceMetadata>, CommandQueueError<CollectSourceMetadataError>> {
         // Extract information for the particular source spec.
         let source_metadata = self
             .command_queue
@@ -149,8 +150,11 @@ impl SourceMetadataCollector {
             return Err(CommandQueueError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
                     name: name.as_source().to_string(),
-                    pinned_source: Box::new(source_metadata.source.pinned),
-                    help: Self::create_metadata_not_found_help(name, source_metadata.records),
+                    pinned_source: Box::new(source_metadata.source.pinned.clone()),
+                    help: Self::create_metadata_not_found_help(
+                        name,
+                        source_metadata.records.clone(),
+                    ),
                 },
             ));
         }

@@ -10,7 +10,7 @@ use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PrioritizedChannel, WithProvenance, WorkspaceDiscoverer,
     WorkspaceDiscoveryError,
 };
-use pixi_spec::{SpecConversionError};
+use pixi_spec::SpecConversionError;
 use rattler_conda_types::{ChannelConfig, ParseChannelError};
 use thiserror::Error;
 
@@ -158,7 +158,7 @@ impl DiscoveredBackend {
                 manifest_path: recipe_relative_path.to_path_buf(),
                 project_model: None,
                 configuration: None,
-            }
+            },
         })
     }
 
@@ -194,7 +194,7 @@ impl DiscoveredBackend {
 
         // Construct the project model from the manifest
         let project_model = to_project_model_v1(&package_manifest, channel_config)
-            .map_err(|e| DiscoveryError::SpecConversionError(e))?;
+            .map_err(DiscoveryError::SpecConversionError)?;
 
         // If we get here the tool is not overridden, so we use the isolated variant
         let build_system = package_manifest.build;
@@ -241,8 +241,9 @@ impl DiscoveredBackend {
                 }),
             }),
             init_params: BackendInitializationParams {
-                manifest_path: pathdiff::diff_paths(provenance.path, &source_dir)
-                    .expect("must be able to construct a path to go from source dir to manifest path"),
+                manifest_path: pathdiff::diff_paths(provenance.path, &source_dir).expect(
+                    "must be able to construct a path to go from source dir to manifest path",
+                ),
                 source_dir,
                 project_model: Some(project_model),
                 configuration: build_system.configuration.map(|config| {
@@ -250,7 +251,7 @@ impl DiscoveredBackend {
                         .deserialize_into()
                         .expect("Configuration dictionary should be serializable to JSON")
                 }),
-            }
+            },
         }))
     }
 
