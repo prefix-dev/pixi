@@ -10,6 +10,9 @@ pub struct CacheDirs {
 
     /// Working directories for build backends.
     work_dirs: Option<PathBuf>,
+
+    /// The cache directory for packages.
+    packages: Option<PathBuf>,
 }
 
 impl CacheDirs {
@@ -19,6 +22,7 @@ impl CacheDirs {
             root,
             build_backends: None,
             work_dirs: None,
+            packages: None,
         }
     }
 
@@ -39,5 +43,12 @@ impl CacheDirs {
         self.work_dirs
             .clone()
             .unwrap_or_else(|| self.root.join("work-v1"))
+    }
+
+    /// Returns the location to store packages
+    pub fn packages(&self) -> PathBuf {
+        self.packages
+            .clone()
+            .unwrap_or_else(|| self.root.join("pkgs"))
     }
 }

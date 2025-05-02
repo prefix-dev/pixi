@@ -13,7 +13,7 @@ use pixi_manifest::{
 use pixi_spec::SpecConversionError;
 use rattler_conda_types::{ChannelConfig, ParseChannelError};
 use thiserror::Error;
-
+use pixi_spec_containers::DependencyMap;
 use crate::{
     BackendSpec,
     backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
@@ -23,6 +23,7 @@ const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
 
 /// Describes a backend discovered for a given source location.
+#[derive(Debug)]
 pub struct DiscoveredBackend {
     /// The specification of the backend. This is used to instantiate the build
     /// backend.
@@ -33,6 +34,7 @@ pub struct DiscoveredBackend {
 }
 
 /// The parameters used to initialize a build backend
+#[derive(Debug)]
 pub struct BackendInitializationParams {
     /// The directory that contains the source code.
     pub source_dir: PathBuf,
@@ -198,9 +200,17 @@ impl DiscoveredBackend {
 
         // If we get here the tool is not overridden, so we use the isolated variant
         let build_system = package_manifest.build;
-        let requirements = [(build_system.backend.name.clone(), build_system.backend.spec)]
+        let requirement = (
+            build_system.backend.name.clone(),
+            build_system
+                .backend
+                .spec
+                .try_into_nameless_match_spec(channel_config)
+                .map_err(DiscoveryError::SpecConversionError)?,
+        );
+        let additional_requirements = build_system
+            .additional_dependencies
             .into_iter()
-            .chain(build_system.additional_dependencies.into_iter())
             .map(|(name, spec)| Ok((name, spec.try_into_nameless_match_spec(channel_config)?)))
             .collect::<Result<_, SpecConversionError>>()
             .map_err(DiscoveryError::SpecConversionError)?;
@@ -235,9 +245,11 @@ impl DiscoveredBackend {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec {
                 name: build_system.backend.name.as_normalized().to_string(),
                 command: CommandSpec::EnvironmentSpec(EnvironmentSpec {
-                    requirements,
+                    requirement,
+                    additional_requirements,
                     channels,
-                    ..EnvironmentSpec::default()
+                    constraints: DependencyMap::default(),
+                    command: None,
                 }),
             }),
             init_params: BackendInitializationParams {

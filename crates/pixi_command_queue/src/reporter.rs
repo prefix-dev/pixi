@@ -1,6 +1,26 @@
 use pixi_git::resolver::RepositoryReference;
 
+use crate::install_pixi::InstallPixiEnvironmentSpec;
 use crate::{PixiEnvironmentSpec, SolveCondaEnvironmentSpec};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PixiInstallId(pub usize);
+
+pub trait PixiInstallReporter {
+    /// Called when the [`CommandQueue`] learns of a new pixi environment to
+    /// install.
+    ///
+    /// This function should return an identifier which is used to identify this
+    /// particular installation. Other functions in this trait will use this identifier
+    /// to link the events to the particular solve.
+    fn on_install_queued(&mut self, env: &InstallPixiEnvironmentSpec) -> PixiInstallId;
+
+    /// Called when solving of the specified environment has started.
+    fn on_install_start(&mut self, solve_id: PixiInstallId);
+
+    /// Called when solving of the specified environment has finished.
+    fn on_install_finished(&mut self, solve_id: PixiInstallId);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PixiSolveId(pub usize);
@@ -65,4 +85,4 @@ pub trait GitCheckoutReporter {
 /// A trait that is used to report the progress of the [`CommandQueue`].
 ///
 /// The reporter has to be `Send` but does not require `Sync`.
-pub trait Reporter: CondaSolveReporter + PixiSolveReporter + GitCheckoutReporter + Send {}
+pub trait Reporter: CondaSolveReporter + PixiSolveReporter + PixiInstallReporter + GitCheckoutReporter + Send {}

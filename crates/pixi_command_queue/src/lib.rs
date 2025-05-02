@@ -21,23 +21,28 @@ mod build;
 mod cache_dirs;
 mod command_queue;
 mod command_queue_processor;
-mod conda;
 mod executor;
+mod install_pixi;
+mod instantiate_tool_env;
 mod limits;
-mod pixi;
 mod reporter;
+mod solve_conda;
+mod solve_pixi;
 mod source_checkout;
 mod source_metadata;
 
 pub use build::BuildEnvironment;
-pub use command_queue::{CommandQueue, CommandQueueError, CommandQueueErrorResultExt};
-pub use conda::SolveCondaEnvironmentSpec;
-pub use executor::Executor;
-pub use pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
-pub use reporter::{
-    CondaSolveId, CondaSolveReporter, GitCheckoutId, GitCheckoutReporter, PixiSolveId,
-    PixiSolveReporter, Reporter,
+pub use command_queue::{
+    CommandQueue, CommandQueueError, CommandQueueErrorResultExt, InstantiateBackendError,
+    InstantiateBackendSpec,
 };
+pub use executor::Executor;
+pub use reporter::{
+    CondaSolveId, CondaSolveReporter, GitCheckoutId, GitCheckoutReporter, PixiInstallReporter,
+    PixiSolveId, PixiSolveReporter, Reporter,
+};
+pub use solve_conda::SolveCondaEnvironmentSpec;
+pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::SourceMetadataSpec;
 
@@ -47,10 +52,10 @@ mod test {
 
     use pixi_spec::PixiSpec;
     use pixi_spec_containers::DependencyMap;
-    use rattler_conda_types::ChannelUrl;
+    use rattler_conda_types::{ChannelUrl, Platform};
     use url::Url;
 
-    use crate::{CommandQueue, Executor, PixiEnvironmentSpec};
+    use crate::{BuildEnvironment, CommandQueue, Executor, PixiEnvironmentSpec};
 
     fn local_channel(name: &str) -> ChannelUrl {
         Url::from_directory_path(
@@ -63,9 +68,7 @@ mod test {
 
     #[tokio::test]
     pub async fn simple_test() {
-        let dispatcher = CommandQueue::builder()
-            .executor(Executor::Serial)
-            .finish();
+        let dispatcher = CommandQueue::builder().executor(Executor::Serial).finish();
 
         let result = dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
@@ -74,6 +77,7 @@ mod test {
                     PixiSpec::default(),
                 )]),
                 channels: vec![local_channel("dummy_channel_1")],
+                build_environment: BuildEnvironment::simple_cross(Platform::Linux64).unwrap(),
                 ..PixiEnvironmentSpec::default()
             })
             .await

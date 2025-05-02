@@ -56,7 +56,7 @@ pub struct IsolatedTool {
 
 impl IsolatedTool {
     /// Construct a new instance from a command and prefix.
-    pub(crate) fn new(
+    pub fn new(
         command: impl Into<String>,
         prefix: impl Into<PathBuf>,
         activation: HashMap<String, String>,

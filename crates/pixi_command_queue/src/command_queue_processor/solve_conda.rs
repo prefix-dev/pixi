@@ -15,7 +15,7 @@ impl CommandQueueProcessor {
         let reporter_id = self
             .reporter
             .as_mut()
-            .map(|reporter| CondaSolveReporter::on_solve_queued(reporter.as_mut(), &task.env));
+            .map(|reporter| CondaSolveReporter::on_solve_queued(reporter.as_mut(), &task.spec));
 
         // Store information about the pending environment.
         let environment_id = self.conda_solves.insert(PendingSolveCondaEnvironment {
@@ -25,7 +25,7 @@ impl CommandQueueProcessor {
 
         // Add the environment to the list of pending environments.
         self.pending_conda_solves
-            .push_back((environment_id, task.env));
+            .push_back((environment_id, task.spec));
 
         // Queue up as many solves as possible.
         self.start_next_conda_environment_solves();

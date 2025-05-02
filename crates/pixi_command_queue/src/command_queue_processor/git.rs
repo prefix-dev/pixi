@@ -9,7 +9,7 @@ use crate::command_queue::GitCheckoutTask;
 impl CommandQueueProcessor {
     /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
     pub(crate) fn on_checkout_git(&mut self, task: GitCheckoutTask) {
-        match self.git_checkouts.entry(task.url.clone()) {
+        match self.git_checkouts.entry(task.spec.clone()) {
             Entry::Occupied(mut existing_checkout) => match existing_checkout.get_mut() {
                 PendingGitCheckout::Pending(_, pending) => pending.push(task.tx),
                 PendingGitCheckout::CheckedOut(fetch) => {
@@ -23,7 +23,7 @@ impl CommandQueueProcessor {
             Entry::Vacant(entry) => {
                 // Notify the reporter that a new checkout has been queued.
                 let reporter_id = self.reporter.as_mut().map(|reporter| {
-                    reporter.on_checkout_queued(&RepositoryReference::from(&task.url))
+                    reporter.on_checkout_queued(&RepositoryReference::from(&task.spec))
                 });
 
                 entry.insert(PendingGitCheckout::Pending(reporter_id, vec![task.tx]));
@@ -34,14 +34,14 @@ impl CommandQueueProcessor {
                 }
 
                 let resolver = self.inner.git_resolver.clone();
-                let client = self.inner.client.clone();
+                let client = self.inner.download_client.clone();
                 let cache_dir = self.inner.cache_dirs.root().clone();
                 self.pending_futures.push(
                     async move {
                         let fetch = resolver
-                            .fetch(task.url.clone(), client, cache_dir, None)
+                            .fetch(task.spec.clone(), client, cache_dir, None)
                             .await;
-                        TaskResult::GitCheckedOut(task.url, fetch)
+                        TaskResult::GitCheckedOut(task.spec, fetch)
                     }
                     .boxed_local(),
                 );

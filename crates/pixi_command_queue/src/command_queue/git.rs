@@ -1,19 +1,15 @@
 use pixi_git::{GitError, GitUrl, git::GitReference, source::Fetch};
 use pixi_record::{PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec};
 use pixi_spec::GitSpec;
-use tokio::sync::oneshot;
 
-use crate::command_queue::error::CommandQueueError;
-use crate::{
-    CommandQueue, SourceCheckout, SourceCheckoutError,
-    command_queue::{CommandQueueContext, ForegroundMessage},
-};
+use super::{Task, TaskSpec};
+use crate::{CommandQueue, CommandQueueError, SourceCheckout, SourceCheckoutError};
 
 /// A task that is send to the background to checkout a git repository.
-pub(crate) struct GitCheckoutTask {
-    pub url: GitUrl,
-    pub _context: Option<CommandQueueContext>,
-    pub tx: oneshot::Sender<Result<Fetch, GitError>>,
+pub(crate) type GitCheckoutTask = Task<GitUrl>;
+impl TaskSpec for GitUrl {
+    type Output = Fetch;
+    type Error = GitError;
 }
 
 impl CommandQueue {
@@ -69,26 +65,6 @@ impl CommandQueue {
         &self,
         git_url: GitUrl,
     ) -> Result<Fetch, CommandQueueError<GitError>> {
-        let Some(sender) = self.channel.sender() else {
-            // If this fails, it means the command_queue was dropped and the task is
-            // immediately canceled.
-            return Err(CommandQueueError::Cancelled);
-        };
-
-        // Send the task to the background and await the result.
-        let (tx, rx) = oneshot::channel();
-        sender
-            .send(ForegroundMessage::GitCheckout(GitCheckoutTask {
-                url: git_url,
-                _context: self.context,
-                tx,
-            }))
-            .map_err(|_| CommandQueueError::Cancelled)?;
-
-        match rx.await {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
-            Err(_) => Err(CommandQueueError::Cancelled),
-        }
+        self.execute_task(git_url).await
     }
 }

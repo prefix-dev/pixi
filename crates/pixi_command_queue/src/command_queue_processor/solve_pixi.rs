@@ -15,10 +15,10 @@ impl CommandQueueProcessor {
         let reporter_id = self
             .reporter
             .as_mut()
-            .map(|reporter| PixiSolveReporter::on_solve_queued(reporter.as_mut(), &task.env));
+            .map(|reporter| PixiSolveReporter::on_solve_queued(reporter.as_mut(), &task.spec));
 
         // Store information about the pending environment.
-        let pending_env_id = self.pixi_environments.insert(PendingPixiEnvironment {
+        let pending_env_id = self.solve_pixi_environments.insert(PendingPixiEnvironment {
             tx: task.tx,
             reporter_id,
         });
@@ -32,7 +32,7 @@ impl CommandQueueProcessor {
         let dispatcher = self
             .create_task_command_queue(CommandQueueContext::SolvePixiEnvironment(pending_env_id));
         self.pending_futures.push(
-            task.env
+            task.spec
                 .solve(dispatcher)
                 .map(move |result| TaskResult::SolvePixiEnvironment(pending_env_id, result))
                 .boxed_local(),
@@ -50,7 +50,7 @@ impl CommandQueueProcessor {
         result: Result<Vec<PixiRecord>, CommandQueueError<SolvePixiEnvironmentError>>,
     ) {
         let env = self
-            .pixi_environments
+            .solve_pixi_environments
             .remove(id)
             .expect("got a result for a conda environment that was not pending");
 

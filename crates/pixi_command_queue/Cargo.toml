@@ -11,6 +11,7 @@ version = "0.1.0"
 [dependencies]
 base64 = { workspace = true }
 chrono = { workspace = true }
+derive_more = { workspace = true, features = ["from"] }
 dirs = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -29,6 +30,8 @@ rattler_conda_types = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_solve = { workspace = true, features = ["resolvo"] }
 rattler_virtual_packages = { workspace = true }
+rattler = { workspace = true }
+rattler_shell = { workspace = true }
 
 pixi_build_frontend = { workspace = true }
 pixi_git = { workspace = true }
@@ -36,6 +39,7 @@ pixi_glob = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
+pixi_utils = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }

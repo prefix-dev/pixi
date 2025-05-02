@@ -5,6 +5,7 @@ use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec}
 use url::Url;
 
 /// Describes how a backend should be instantiated.
+#[derive(Debug)]
 pub enum BackendSpec {
     /// Describes a backend that uses JSON-RPC to communicate with a backend.
     JsonRpc(JsonRpcBackendSpec),
@@ -12,6 +13,7 @@ pub enum BackendSpec {
 }
 
 /// Describes a backend that uses JSON-RPC to communicate with an executable.
+#[derive(Debug)]
 pub struct JsonRpcBackendSpec {
     /// The name of the backend
     pub name: String,
@@ -22,6 +24,7 @@ pub struct JsonRpcBackendSpec {
 
 /// Describes a command that should be run by calling an executable in a certain
 /// environment.
+#[derive(Debug)]
 pub enum CommandSpec {
     EnvironmentSpec(EnvironmentSpec),
     System(SystemCommandSpec),
@@ -29,7 +32,7 @@ pub enum CommandSpec {
 
 /// Describes a command that should be run by calling an executable on the
 /// system.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SystemCommandSpec {
     /// The command to run. If this is `None` the command should be inferred
     /// from the name of the backend.
@@ -38,10 +41,13 @@ pub struct SystemCommandSpec {
 
 /// Describes a conda environment that should be set up in which the backend is
 /// run.
-#[derive(Default)]
+#[derive(Debug)]
 pub struct EnvironmentSpec {
+    /// The main requirement
+    pub requirement: (rattler_conda_types::PackageName, NamelessMatchSpec),
+
     /// The requirements for the environment.
-    pub requirements: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// Additional constraints to apply to the environment
     pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
@@ -67,12 +73,14 @@ impl JsonRpcBackendSpec {
         Self {
             name: DEFAULT_BUILD_TOOL.to_string(),
             command: CommandSpec::EnvironmentSpec(EnvironmentSpec {
-                requirements: DependencyMap::from_iter([(
+                requirement: (
                     DEFAULT_BUILD_TOOL.parse().unwrap(),
                     NamelessMatchSpec::default(),
-                )]),
+                ),
+                additional_requirements: Default::default(),
+                constraints: Default::default(),
                 channels: vec![conda_forge_channel, backends_channel],
-                ..EnvironmentSpec::default()
+                command: None,
             }),
         }
     }

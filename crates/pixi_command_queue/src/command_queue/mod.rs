@@ -1,22 +1,28 @@
 //! Defines the [`CommandQueue`] and a builder to construct it.
 
-use std::{
-    path::{Component, Path, PathBuf},
-    sync::Arc,
-};
-
 pub use error::{CommandQueueError, CommandQueueErrorResultExt};
 pub(crate) use git::GitCheckoutTask;
+pub use instantiate_backend::{InstantiateBackendError, InstantiateBackendSpec};
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::prefix::Prefix;
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
+use std::{
+    path::{Component, Path, PathBuf},
+    sync::Arc,
+};
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
+use crate::install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec};
+use crate::instantiate_tool_env::{
+    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
+};
 use crate::{
     Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
     SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
@@ -54,7 +60,7 @@ pub(crate) struct CommandQueueData {
     pub cache_dirs: CacheDirs,
 
     /// The reqwest client to use for network requests
-    pub client: ClientWithMiddleware,
+    pub download_client: ClientWithMiddleware,
 
     /// Backend overrides
     pub build_backend_overrides: BackendOverride,
@@ -64,6 +70,9 @@ pub(crate) struct CommandQueueData {
 
     /// Returns the limits to which the command queue should adhere.
     pub limits: ResolvedLimits,
+
+    /// The package cache used to store packages.
+    pub package_cache: PackageCache,
 }
 
 /// A channel through which to send any messages to the command_queue. Some
@@ -89,11 +98,13 @@ impl CommandQueueChannel {
 
 /// The context in which this particular command_queue is running. This is used
 /// to track dependencies.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, derive_more::From)]
 pub(crate) enum CommandQueueContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
     SourceMetadata(SourceMetadataId),
+    InstallPixiEnvironment(InstallPixiEnvironmentId),
+    InstantiateToolEnv(InstantiatedToolEnvId),
 }
 
 slotmap::new_key_type! {
@@ -102,42 +113,67 @@ slotmap::new_key_type! {
 
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolvePixiEnvironmentId;
+
+    /// An id that uniquely identifies an installation of an environment.
+    pub(crate) struct InstallPixiEnvironmentId;
 }
 
 /// An id that uniquely identifies a source metadata request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceMetadataId(pub usize);
 
+/// An id that uniquely identifies a tool environment.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct InstantiatedToolEnvId(pub usize);
+
 /// A message send to the dispatch task.
+#[derive(derive_more::From)]
 pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
     SolvePixiEnvironment(SolvePixiEnvironmentTask),
     SourceMetadata(SourceMetadataTask),
     GitCheckout(GitCheckoutTask),
+    InstallPixiEnvironment(InstallPixiEnvironmentTask),
+    InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
 }
 
 /// A message that is send to the background task to start solving a particular
 /// pixi environment.
-pub(crate) struct SolvePixiEnvironmentTask {
-    pub env: PixiEnvironmentSpec,
-    pub context: Option<CommandQueueContext>,
-    pub tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
+pub(crate) type SolvePixiEnvironmentTask = Task<PixiEnvironmentSpec>;
+impl TaskSpec for PixiEnvironmentSpec {
+    type Output = Vec<PixiRecord>;
+    type Error = SolvePixiEnvironmentError;
+}
+
+/// A message that is send to the background task to install a particular
+/// pixi environment.
+pub(crate) type InstallPixiEnvironmentTask = Task<InstallPixiEnvironmentSpec>;
+impl TaskSpec for InstallPixiEnvironmentSpec {
+    type Output = ();
+    type Error = InstallPixiEnvironmentError;
 }
 
 /// A message that is send to the background task to start solving a particular
 /// conda environment.
-pub(crate) struct SolveCondaEnvironmentTask {
-    pub env: SolveCondaEnvironmentSpec,
-    pub context: Option<CommandQueueContext>,
-    pub tx: oneshot::Sender<Result<Vec<PixiRecord>, rattler_solve::SolveError>>,
+pub(crate) type SolveCondaEnvironmentTask = Task<SolveCondaEnvironmentSpec>;
+impl TaskSpec for SolveCondaEnvironmentSpec {
+    type Output = Vec<PixiRecord>;
+    type Error = rattler_solve::SolveError;
 }
 
 /// A message that is send to the background task to requesting the metadata for
 /// a particular source spec.
-pub(crate) struct SourceMetadataTask {
-    pub spec: SourceMetadataSpec,
-    pub context: Option<CommandQueueContext>,
-    pub tx: oneshot::Sender<Result<Arc<SourceMetadata>, SourceMetadataError>>,
+pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
+
+impl TaskSpec for SourceMetadataSpec {
+    type Output = Arc<SourceMetadata>;
+    type Error = SourceMetadataError;
+}
+
+/// Instantiates a tool environment.
+impl TaskSpec for InstantiateToolEnvironmentSpec {
+    type Output = Prefix;
+    type Error = InstantiateToolEnvironmentError;
 }
 
 impl Default for CommandQueue {
@@ -177,11 +213,24 @@ impl CommandQueue {
         &self.data.glob_hash_cache
     }
 
-    /// Returns the metadata of the source spec.
-    pub async fn source_metadata(
+    /// Returns the download client used by the command queue
+    pub fn download_client(&self) -> &ClientWithMiddleware {
+        &self.data.download_client
+    }
+
+    /// Returns the package cache used by the command queue.
+    pub fn package_cache(&self) -> &PackageCache {
+        &self.data.package_cache
+    }
+
+    /// Sends a task to the command queue and waits for the result.
+    async fn execute_task<T: TaskSpec>(
         &self,
-        spec: SourceMetadataSpec,
-    ) -> Result<Arc<SourceMetadata>, CommandQueueError<SourceMetadataError>> {
+        spec: T,
+    ) -> Result<T::Output, CommandQueueError<T::Error>>
+    where
+        ForegroundMessage: From<Task<T>>,
+    {
         let Some(sender) = self.channel.sender() else {
             // If this fails, it means the command_queue was dropped and the task is
             // immediately canceled.
@@ -190,73 +239,58 @@ impl CommandQueue {
 
         let (tx, rx) = oneshot::channel();
         sender
-            .send(ForegroundMessage::SourceMetadata(SourceMetadataTask {
+            .send(ForegroundMessage::from(Task {
                 spec,
                 context: self.context,
                 tx,
             }))
             .map_err(|_| CommandQueueError::Cancelled)?;
+
         match rx.await {
             Ok(Ok(result)) => Ok(result),
             Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
             Err(_) => Err(CommandQueueError::Cancelled),
         }
+    }
+
+    /// Returns the metadata of the source spec.
+    pub async fn source_metadata(
+        &self,
+        spec: SourceMetadataSpec,
+    ) -> Result<Arc<SourceMetadata>, CommandQueueError<SourceMetadataError>> {
+        self.execute_task(spec).await
     }
 
     /// Solves a particular pixi environment.
     pub async fn solve_pixi_environment(
         &self,
-        env: PixiEnvironmentSpec,
+        spec: PixiEnvironmentSpec,
     ) -> Result<Vec<PixiRecord>, CommandQueueError<SolvePixiEnvironmentError>> {
-        let Some(sender) = self.channel.sender() else {
-            // If this fails, it means the command_queue was dropped and the task is
-            // immediately canceled.
-            return Err(CommandQueueError::Cancelled);
-        };
+        self.execute_task(spec).await
+    }
 
-        let (tx, rx) = oneshot::channel();
-        sender
-            .send(ForegroundMessage::SolvePixiEnvironment(
-                SolvePixiEnvironmentTask {
-                    env,
-                    context: self.context,
-                    tx,
-                },
-            ))
-            .map_err(|_| CommandQueueError::Cancelled)?;
-        match rx.await {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
-            Err(_) => Err(CommandQueueError::Cancelled),
-        }
+    /// Install a pixi environment.
+    pub async fn install_pixi_environment(
+        &self,
+        spec: InstallPixiEnvironmentSpec,
+    ) -> Result<(), CommandQueueError<InstallPixiEnvironmentError>> {
+        self.execute_task(spec).await
     }
 
     /// Solves a particular conda environment.
     pub async fn solve_conda_environment(
         &self,
-        env: SolveCondaEnvironmentSpec,
+        spec: SolveCondaEnvironmentSpec,
     ) -> Result<Vec<PixiRecord>, CommandQueueError<rattler_solve::SolveError>> {
-        let Some(sender) = self.channel.sender() else {
-            // If this fails, it means the command_queue was dropped and the task is
-            // immediately canceled.
-            return Err(CommandQueueError::Cancelled);
-        };
+        self.execute_task(spec).await
+    }
 
-        let (tx, rx) = oneshot::channel();
-        sender
-            .send(ForegroundMessage::SolveCondaEnvironment(
-                SolveCondaEnvironmentTask {
-                    env,
-                    context: self.context,
-                    tx,
-                },
-            ))
-            .map_err(|_| CommandQueueError::Cancelled)?;
-        match rx.await {
-            Ok(Ok(result)) => Ok(result),
-            Ok(Err(err)) => Err(CommandQueueError::Failed(err)),
-            Err(_) => Err(CommandQueueError::Cancelled),
-        }
+    /// Instantiates an environment for a tool based on the given spec. Reuses the environment if possible.
+    pub async fn instantiate_tool_environment(
+        &self,
+        spec: InstantiateToolEnvironmentSpec,
+    ) -> Result<Prefix, CommandQueueError<InstantiateToolEnvironmentError>> {
+        self.execute_task(spec).await
     }
 
     /// Checks out a particular source based on a source spec.
@@ -344,7 +378,7 @@ pub struct CommandQueueBuilder {
     root_dir: Option<PathBuf>,
     reporter: Option<Box<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
-    client: Option<ClientWithMiddleware>,
+    download_client: Option<ClientWithMiddleware>,
     cache_dirs: Option<CacheDirs>,
     build_backend_overrides: BackendOverride,
     limits: Limits,
@@ -369,9 +403,9 @@ impl CommandQueueBuilder {
     }
 
     /// Sets the reqwest client to use for network fetches.
-    pub fn with_client(self, client: ClientWithMiddleware) -> Self {
+    pub fn with_download_client(self, client: ClientWithMiddleware) -> Self {
         Self {
-            client: Some(client),
+            download_client: Some(client),
             ..self
         }
     }
@@ -420,11 +454,13 @@ impl CommandQueueBuilder {
         let cache_dirs = self
             .cache_dirs
             .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache")));
-        let client = self.client.unwrap_or_default();
+        let download_client = self.download_client.unwrap_or_default();
+        let package_cache = PackageCache::new(cache_dirs.packages());
         let gateway = self.gateway.unwrap_or_else(|| {
             Gateway::builder()
-                .with_client(client.clone())
+                .with_client(download_client.clone())
                 .with_cache_dir(cache_dirs.root().clone())
+                .with_package_cache(package_cache.clone())
                 .finish()
         });
 
@@ -435,10 +471,11 @@ impl CommandQueueBuilder {
             root_dir,
             git_resolver,
             cache_dirs,
-            client,
+            download_client,
             build_backend_overrides: self.build_backend_overrides,
             glob_hash_cache: GlobHashCache::default(),
             limits: ResolvedLimits::from(self.limits),
+            package_cache,
         });
 
         let sender = CommandQueueProcessor::spawn(data.clone(), self.reporter, self.executor);
@@ -448,4 +485,16 @@ impl CommandQueueBuilder {
             data,
         }
     }
+}
+
+/// Defines the inputs and outputs of a certain foreground task specification.
+pub(crate) trait TaskSpec {
+    type Output;
+    type Error;
+}
+
+pub(crate) struct Task<S: TaskSpec> {
+    pub spec: S,
+    pub context: Option<CommandQueueContext>,
+    pub tx: oneshot::Sender<Result<S::Output, S::Error>>,
 }

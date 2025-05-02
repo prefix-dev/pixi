@@ -14,8 +14,9 @@ use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
 use thiserror::Error;
 
 use crate::{
-    BuildEnvironment, CommandQueue, CommandQueueError, CommandQueueErrorResultExt, SourceCheckout,
-    SourceCheckoutError, build::WorkDirKey,
+    BuildEnvironment, CommandQueue, CommandQueueError, CommandQueueErrorResultExt,
+    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
+    build::WorkDirKey,
 };
 
 /// Represents a request for source metadata.
@@ -68,10 +69,18 @@ impl SourceMetadataSpec {
 
         // Instantiate the backend with the discovered backend information.
         let backend = command_queue
-            .instantiate_backend(
-                discovered_backend.backend_spec,
-                discovered_backend.init_params,
-            )
+            .instantiate_backend(InstantiateBackendSpec {
+                backend_spec: discovered_backend.backend_spec,
+                init_params: discovered_backend.init_params,
+                channel_config: self.channel_config.clone(),
+                build_environment: BuildEnvironment {
+                    host_platform: self.build_environment.build_platform.clone(),
+                    host_virtual_packages: self.build_environment.build_virtual_packages.clone(),
+                    build_platform: self.build_environment.build_platform.clone(),
+                    build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
+                },
+                enabled_protocols: self.enabled_protocols
+            })
             .await
             .map_err_with(SourceMetadataError::Initialize)?;
 
@@ -252,7 +261,7 @@ pub enum SourceMetadataError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Initialize(#[from] pixi_build_frontend::json_rpc::InitializeError),
+    Initialize(#[from] InstantiateBackendError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]

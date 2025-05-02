@@ -1,0 +1,68 @@
+use super::{CommandQueueProcessor, PendingDeduplicatingTask, TaskResult};
+use crate::command_queue::{InstantiatedToolEnvId, Task};
+use crate::instantiate_tool_env::{
+    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
+};
+use crate::{CommandQueueError, command_queue::CommandQueueContext};
+use futures::FutureExt;
+use rattler_conda_types::prefix::Prefix;
+use std::collections::hash_map::Entry;
+
+impl CommandQueueProcessor {
+    /// Called when a [`super::ForegroundMessage::InstallPixiEnvironment`]
+    /// task was received.
+    pub(crate) fn on_instantiate_tool_environment(
+        &mut self,
+        task: Task<InstantiateToolEnvironmentSpec>,
+    ) {
+        let cache_key = task.spec.cache_key();
+        let new_id = self.instantiated_tool_cache_keys.len();
+        let id = *self
+            .instantiated_tool_cache_keys
+            .entry(cache_key)
+            .or_insert_with(|| InstantiatedToolEnvId(new_id));
+
+        match self.instantiated_tool_envs.entry(id) {
+            Entry::Occupied(mut entry) => match entry.get_mut() {
+                PendingDeduplicatingTask::Pending(pending) => {
+                    pending.push(task.tx);
+                }
+                PendingDeduplicatingTask::Result(result) => {
+                    let _ = task.tx.send(Ok(result.clone()));
+                }
+                PendingDeduplicatingTask::Errored => {
+                    // Drop the sender, this will cause a cancellation on the other side.
+                    drop(task.tx);
+                }
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(PendingDeduplicatingTask::Pending(vec![task.tx]));
+
+                let command_queue =
+                    self.create_task_command_queue(CommandQueueContext::InstantiateToolEnv(id));
+                self.pending_futures.push(
+                    task.spec
+                        .instantiate(command_queue)
+                        .map(move |result| TaskResult::InstantiateToolEnv(id, result))
+                        .boxed_local(),
+                )
+            }
+        }
+    }
+
+    /// Called when a [`TaskResult::InstallPixiEnvironment`] task was
+    /// received.
+    ///
+    /// This function will relay the result of the task back to the
+    /// [`CommandQueue`] that issues it.
+    pub(crate) fn on_instantiate_tool_environment_result(
+        &mut self,
+        id: InstantiatedToolEnvId,
+        result: Result<Prefix, CommandQueueError<InstantiateToolEnvironmentError>>,
+    ) {
+        self.instantiated_tool_envs
+            .get_mut(&id)
+            .expect("cannot find instantiated tool env")
+            .on_pending_result(result);
+    }
+}

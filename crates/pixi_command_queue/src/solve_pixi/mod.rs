@@ -17,7 +17,7 @@ use thiserror::Error;
 use crate::{
     BuildEnvironment, CommandQueue, CommandQueueError, CommandQueueErrorResultExt,
     SolveCondaEnvironmentSpec,
-    pixi::source_metadata_collector::{
+    solve_pixi::source_metadata_collector::{
         CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
     },
 };
@@ -70,8 +70,8 @@ pub struct PixiEnvironmentSpec {
 impl Default for PixiEnvironmentSpec {
     fn default() -> Self {
         Self {
-            requirements: Default::default(),
-            constraints: Default::default(),
+            requirements: DependencyMap::default(),
+            constraints: DependencyMap::default(),
             installed: Vec::new(),
             build_environment: BuildEnvironment::default(),
             channels: vec![],

@@ -12,11 +12,19 @@ use std::{
 use futures::{StreamExt, future::LocalBoxFuture};
 use pixi_git::{GitError, GitUrl, source::Fetch};
 use pixi_record::PixiRecord;
+use rattler_conda_types::prefix::Prefix;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::command_queue::CommandQueueError;
+use crate::command_queue::{
+    CommandQueueError, InstallPixiEnvironmentId, InstantiatedToolEnvId, TaskSpec,
+};
+use crate::install_pixi::InstallPixiEnvironmentError;
+use crate::instantiate_tool_env::{
+    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
+};
 use crate::{
-    Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceMetadataSpec,
+    CommandQueueErrorResultExt, Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
+    SourceMetadataSpec,
     command_queue::{
         CommandQueue, CommandQueueChannel, CommandQueueContext, CommandQueueData,
         ForegroundMessage, SolveCondaEnvironmentId, SolvePixiEnvironmentId, SourceMetadataId,
@@ -26,9 +34,11 @@ use crate::{
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
-mod conda;
 mod git;
-mod pixi;
+mod install_pixi;
+mod instantiate_tool_env;
+mod solve_conda;
+mod solve_pixi;
 mod source_metadata;
 
 /// Runs the command_queue background task
@@ -54,11 +64,20 @@ pub(crate) struct CommandQueueProcessor {
     pending_conda_solves: VecDeque<(SolveCondaEnvironmentId, SolveCondaEnvironmentSpec)>,
 
     /// Pixi environments that are currently being solved.
-    pixi_environments: slotmap::SlotMap<SolvePixiEnvironmentId, PendingPixiEnvironment>,
+    solve_pixi_environments: slotmap::SlotMap<SolvePixiEnvironmentId, PendingPixiEnvironment>,
+
+    /// Pixi environments that are currently being solved.
+    install_pixi_environment:
+        slotmap::SlotMap<InstallPixiEnvironmentId, PendingInstallPixiEnvironment>,
 
     /// A mapping of source metadata to the metadata id that
     source_metadata: HashMap<SourceMetadataId, PendingSourceMetadata>,
     source_metadata_ids: HashMap<SourceMetadataSpec, SourceMetadataId>,
+
+    /// A mapping of instantiated tool environments
+    instantiated_tool_envs:
+        HashMap<InstantiatedToolEnvId, PendingDeduplicatingTask<InstantiateToolEnvironmentSpec>>,
+    instantiated_tool_cache_keys: HashMap<String, InstantiatedToolEnvId>,
 
     /// Git checkouts in the process of being checked out, or already checked
     /// out.
@@ -88,6 +107,14 @@ enum TaskResult {
         Result<Arc<SourceMetadata>, CommandQueueError<SourceMetadataError>>,
     ),
     GitCheckedOut(GitUrl, Result<Fetch, GitError>),
+    InstallPixiEnvironment(
+        InstallPixiEnvironmentId,
+        Result<(), CommandQueueError<InstallPixiEnvironmentError>>,
+    ),
+    InstantiateToolEnv(
+        InstantiatedToolEnvId,
+        Result<Prefix, CommandQueueError<InstantiateToolEnvironmentError>>,
+    ),
 }
 
 /// An either pending or already checked out git repository.
@@ -117,6 +144,61 @@ struct PendingSolveCondaEnvironment {
 struct PendingPixiEnvironment {
     tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
     reporter_id: Option<reporter::PixiSolveId>,
+}
+
+/// Information about a pending pixi environment installation. This is used by the
+/// background task to keep track of which command_queue is awaiting the result.
+struct PendingInstallPixiEnvironment {
+    tx: oneshot::Sender<Result<(), InstallPixiEnvironmentError>>,
+    reporter_id: Option<reporter::PixiInstallId>,
+}
+
+/// Describes information a pending task that is being deduplicated. Multiple
+/// tasks can come in which are deduplicated, every task is returned the result
+/// when available.
+enum PendingDeduplicatingTask<T: TaskSpec> {
+    Pending(Vec<oneshot::Sender<Result<T::Output, T::Error>>>),
+    Result(T::Output),
+    Errored,
+}
+
+impl<T: TaskSpec> PendingDeduplicatingTask<T>
+where
+    T::Output: Clone,
+{
+    /// The result was received and all pending tasks can be notified.
+    pub fn on_pending_result(&mut self, result: Result<T::Output, CommandQueueError<T::Error>>) {
+        let Self::Pending(pending) = self else {
+            unreachable!("cannot get a result for a task that is not pending");
+        };
+
+        let Some(result) = result.into_ok_or_failed() else {
+            *self = Self::Errored;
+            return;
+        };
+
+        match result {
+            Ok(output) => {
+                for tx in pending.drain(..) {
+                    let _ = tx.send(Ok(output.clone()));
+                }
+
+                *self = Self::Result(output);
+            }
+            Err(mut err) => {
+                // Only send the error to the first channel, drop the rest, which cancels them.
+                for tx in pending.drain(..) {
+                    match tx.send(Err(err)) {
+                        Ok(_) => return,
+                        Err(Err(failed_to_send)) => err = failed_to_send,
+                        Err(Ok(_)) => unreachable!(),
+                    }
+                }
+
+                *self = Self::Errored;
+            }
+        }
+    }
 }
 
 /// Information about a request for metadata of a particular source spec.
@@ -149,9 +231,12 @@ impl CommandQueueProcessor {
                 sender: weak_tx,
                 conda_solves: slotmap::SlotMap::default(),
                 pending_conda_solves: VecDeque::new(),
-                pixi_environments: slotmap::SlotMap::default(),
+                solve_pixi_environments: slotmap::SlotMap::default(),
+                install_pixi_environment: slotmap::SlotMap::default(),
                 source_metadata: HashMap::default(),
                 source_metadata_ids: HashMap::default(),
+                instantiated_tool_envs: HashMap::default(),
+                instantiated_tool_cache_keys: HashMap::default(),
                 git_checkouts: HashMap::default(),
                 pending_futures: ExecutorFutures::new(executor),
                 inner,
@@ -191,6 +276,12 @@ impl CommandQueueProcessor {
         match message {
             ForegroundMessage::SolveCondaEnvironment(task) => self.on_solve_conda_environment(task),
             ForegroundMessage::SolvePixiEnvironment(task) => self.on_solve_pixi_environment(task),
+            ForegroundMessage::InstallPixiEnvironment(task) => {
+                self.on_install_pixi_environment(task)
+            }
+            ForegroundMessage::InstantiateToolEnvironment(task) => {
+                self.on_instantiate_tool_environment(task)
+            }
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
         }
@@ -205,8 +296,14 @@ impl CommandQueueProcessor {
             TaskResult::SolvePixiEnvironment(id, result) => {
                 self.on_solve_pixi_environment_result(id, result)
             }
+            TaskResult::InstallPixiEnvironment(id, result) => {
+                self.on_install_pixi_environment_result(id, result)
+            }
             TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, result),
             TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, result),
+            TaskResult::InstantiateToolEnv(id, result) => {
+                self.on_instantiate_tool_environment_result(id, result)
+            }
         }
     }
 
