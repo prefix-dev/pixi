@@ -174,7 +174,7 @@ impl BuildContext {
         tool_context: Arc<ToolContext>,
     ) -> Result<Self, std::io::Error> {
         let cache_dirs = CacheDirs::new(cache_dir.clone());
-
+        let root_dir = channel_config.root_dir.clone();
         Ok(Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
@@ -183,7 +183,10 @@ impl BuildContext {
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
             variant_config,
-            command_queue: CommandQueue::builder().with_cache_dirs(cache_dirs).finish(),
+            command_queue: CommandQueue::builder()
+                .with_cache_dirs(cache_dirs)
+                .with_root_dir(root_dir)
+                .finish(),
         })
     }
 
