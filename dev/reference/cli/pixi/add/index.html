@@ -2653,6 +2653,8 @@ add it to the native pyproject <code>project.dependencies</code> array or to the
   array</li>
 <li><code>pixi add --pypi boto3 --feature aws</code> will add <code>boto3</code> to the
   <code>dependency-groups.aws</code> array</li>
+<li><code>pixi add --pypi --editable 'boto3 @ file://absolute/path/to/boto3'</code> will add
+  the local editable <code>boto3</code> to the <code>pypi-dependencies</code> array</li>
 </ul>
 <p>Note that if <code>--platform</code> or <code>--editable</code> are specified, the pypi dependency
 will be added to the <code>tool.pixi.pypi-dependencies</code> table instead as native
