@@ -1,5 +1,7 @@
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Either;
+use serde::ser::{SerializeMap, SerializeSeq};
+use serde::{Serialize, Serializer};
 use std::{borrow::Cow, hash::Hash, iter::FromIterator};
 
 /// Holds a list of dependencies where for each package name there can be
@@ -176,5 +178,37 @@ impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::Namele
                 rattler_conda_types::MatchSpec::from_nameless(spec.clone(), Some(name.clone()))
             })
         })
+    }
+}
+
+impl<N: Hash + Eq + Clone + Serialize, D: Hash + Eq + Clone + Serialize> Serialize
+    for DependencyMap<N, D>
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        struct Entry<'a, N, D> {
+            name: &'a N,
+            dep: &'a D,
+        }
+
+        impl<N: Serialize, D: Serialize> Serialize for Entry<'_, N, D> {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_key(self.name)?;
+                map.serialize_value(self.dep)?;
+                map.end()
+            }
+        }
+
+        let mut seq = serializer.serialize_seq(None)?;
+        for (name, dep) in self.iter_specs() {
+            seq.serialize_element(&Entry { name, dep })?;
+        }
+        seq.end()
     }
 }

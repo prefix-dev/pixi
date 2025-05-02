@@ -7,10 +7,6 @@ use std::sync::Arc;
 use pixi_utils::AsyncPrefixGuard;
 use tracing::debug;
 
-use dashmap::DashMap;
-use dashmap::mapref::one::Ref;
-use reqwest_middleware::ClientWithMiddleware;
-
 use crate::{
     GitError, GitUrl, Reporter,
     git::GitReference,
@@ -18,6 +14,10 @@ use crate::{
     source::{Fetch, GitSource, cache_digest},
     url::RepositoryUrl,
 };
+use dashmap::DashMap;
+use dashmap::mapref::one::Ref;
+use reqwest_middleware::ClientWithMiddleware;
+use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GitResolverError {
@@ -159,11 +159,12 @@ pub struct ResolvedRepositoryReference {
     pub sha: GitSha,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct RepositoryReference {
     /// The URL of the Git repository, with any query parameters and fragments removed.
     pub url: RepositoryUrl,
     /// The reference to the commit to use, which could be a branch, tag, or revision.
+    #[serde(skip_serializing_if = "GitReference::is_default")]
     pub reference: GitReference,
 }
 

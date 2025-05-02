@@ -39,7 +39,7 @@ pub struct SourceMetadataSpec {
 }
 
 /// The metadata of a source checkout.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceMetadata {
     /// The source checkout that the manifest was extracted from.
     pub source: SourceCheckout,

@@ -3,8 +3,8 @@
 /// This module expose types that represent Git object IDs (OIDs) and SHAs, and some
 /// utility functions to convert to them from strings.
 use core::str;
+use serde::{Serialize, Serializer};
 use std::{fmt::Display, str::FromStr};
-
 use thiserror::Error;
 
 /// Unique identity of any Git object (commit, tree, blob, tag).
@@ -94,6 +94,15 @@ impl FromStr for GitSha {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Ok(Self(GitOid::from_str(value)?))
+    }
+}
+
+impl Serialize for GitSha {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }
 

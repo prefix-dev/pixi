@@ -3,7 +3,8 @@ use pixi_git::resolver::RepositoryReference;
 use crate::install_pixi::InstallPixiEnvironmentSpec;
 use crate::{PixiEnvironmentSpec, SolveCondaEnvironmentSpec};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct PixiInstallId(pub usize);
 
 pub trait PixiInstallReporter {
@@ -22,7 +23,8 @@ pub trait PixiInstallReporter {
     fn on_install_finished(&mut self, solve_id: PixiInstallId);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct PixiSolveId(pub usize);
 
 pub trait PixiSolveReporter {
@@ -45,7 +47,8 @@ pub trait PixiSolveReporter {
     fn on_solve_finished(&mut self, solve_id: PixiSolveId);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct CondaSolveId(pub usize);
 
 pub trait CondaSolveReporter {
@@ -68,7 +71,8 @@ pub trait CondaSolveReporter {
     fn on_solve_finished(&mut self, solve_id: CondaSolveId);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct GitCheckoutId(pub usize);
 
 pub trait GitCheckoutReporter {
@@ -85,7 +89,6 @@ pub trait GitCheckoutReporter {
 /// A trait that is used to report the progress of the [`CommandQueue`].
 ///
 /// The reporter has to be `Send` but does not require `Sync`.
-
 pub trait Reporter: Send {
     fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter>;
     fn as_conda_solve_reporter(&mut self) -> Option<&mut dyn CondaSolveReporter>;

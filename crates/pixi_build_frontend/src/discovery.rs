@@ -50,7 +50,8 @@ pub struct BackendInitializationParams {
 }
 
 /// Configuration to enable or disable certain protocols discovery.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct EnabledProtocols {
     /// Enable the rattler-build protocol.
     pub enable_rattler_build: bool,

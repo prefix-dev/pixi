@@ -321,7 +321,8 @@ impl PixiSpec {
 ///
 /// This type only represents source packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[serde(untagged)]
 pub enum SourceSpec {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL.

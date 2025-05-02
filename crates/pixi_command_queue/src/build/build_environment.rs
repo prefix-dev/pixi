@@ -2,9 +2,10 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackageOverrides, VirtualPackages,
 };
+use serde::Serialize;
 
 /// Contains information about the build and host environments.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct BuildEnvironment {
     pub host_platform: Platform,
     pub host_virtual_packages: Vec<GenericVirtualPackage>,

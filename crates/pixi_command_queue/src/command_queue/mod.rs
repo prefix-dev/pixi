@@ -464,7 +464,7 @@ impl CommandQueueBuilder {
     }
 
     /// Sets the executor to use for the command queue.
-    pub fn executor(self, executor: Executor) -> Self {
+    pub fn with_executor(self, executor: Executor) -> Self {
         Self { executor, ..self }
     }
 

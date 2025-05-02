@@ -12,6 +12,7 @@ use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec, Platform};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy};
+use serde::Serialize;
 use thiserror::Error;
 
 use crate::{
@@ -33,16 +34,20 @@ use crate::{
 ///
 /// If all the input information is already available and no recursion is
 /// desired, use [`SolveCondaEnvironmentSpec`] instead.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct PixiEnvironmentSpec {
     /// The requirements of the environment
+    #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub requirements: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 
     /// Additional constraints of the environment
+    #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// The records of the packages that are currently already installed. These
     /// are used as hints to reduce the difference between individual solves.
+    #[serde(skip)]
     pub installed: Vec<PixiRecord>,
 
     /// The environment that we are solving for
@@ -58,6 +63,7 @@ pub struct PixiEnvironmentSpec {
     pub channel_priority: ChannelPriority,
 
     /// Exclude any packages after the first cut-off date.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_newer: Option<DateTime<Utc>>,
 
     /// The channel configuration to use for this environment.

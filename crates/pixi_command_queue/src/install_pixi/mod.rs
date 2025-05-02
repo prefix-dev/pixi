@@ -8,20 +8,26 @@ use rattler_conda_types::{Platform, PrefixRecord};
 use std::collections::HashSet;
 use thiserror::Error;
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct InstallPixiEnvironmentSpec {
     /// The specification of the environment to install.
+    #[serde(skip)]
     pub records: Vec<PixiRecord>,
 
     /// The location to create the prefix at.
+    #[serde(skip)]
     pub prefix: Prefix,
 
     /// If already known, the installed packages
+    #[serde(skip)]
     pub installed: Option<Vec<PrefixRecord>>,
 
     /// The platform for which the environment is installed.
     pub platform: Platform,
 
     /// Packages to force reinstalling.
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
     pub force_reinstall: HashSet<rattler_conda_types::PackageName>,
 }
 

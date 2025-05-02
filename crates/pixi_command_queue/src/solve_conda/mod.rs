@@ -24,25 +24,32 @@ use crate::{CommandQueueError, SourceCheckout, source_metadata::SourceMetadata};
 /// Unlike [`super::PixiEnvironmentSpec`], solving a `SolveCondaEnvironmentSpec`
 /// instance does not require any recursive calls since all information is
 /// already available in the specification.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct SolveCondaEnvironmentSpec {
     /// Requirements on source packages.
+    #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub source_specs: DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
 
     /// Requirements on binary packages.
+    #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub binary_specs: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// Additional constraints of the environment
+    #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// Available source repodata records.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub source_repodata: Vec<Arc<SourceMetadata>>,
 
     /// Available Binary repodata records.
+    #[serde(skip)]
     pub binary_repodata: Vec<RepoData>,
 
     /// The records of the packages that are currently already installed. These
     /// are used as hints to reduce the difference between individual solves.
+    #[serde(skip)]
     pub installed: Vec<PixiRecord>,
 
     /// The platform to solve for
@@ -61,6 +68,7 @@ pub struct SolveCondaEnvironmentSpec {
     pub channel_priority: ChannelPriority,
 
     /// Exclude any packages after the first cut-off date.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_newer: Option<DateTime<Utc>>,
 
     /// The channel configuration to use for this environment.

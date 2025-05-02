@@ -6,7 +6,7 @@ use thiserror::Error;
 /// Location of the source code for a package. This will be used as the input
 /// for the build process. Archives are unpacked, git clones are checked out,
 /// etc.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceCheckout {
     /// The path to where the source is located locally on disk.
     pub path: PathBuf,

@@ -21,6 +21,7 @@ mod build;
 mod cache_dirs;
 mod command_queue;
 mod command_queue_processor;
+mod event_reporter;
 mod executor;
 mod install_pixi;
 mod instantiate_tool_env;
@@ -49,13 +50,14 @@ pub use source_metadata::SourceMetadataSpec;
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
-
-    use pixi_spec::PixiSpec;
+    use pixi_spec::GitSpec;
     use pixi_spec_containers::DependencyMap;
     use rattler_conda_types::{ChannelUrl, Platform};
+    use std::path::Path;
+    use std::str::FromStr;
     use url::Url;
 
+    use crate::event_reporter::EventReporter;
     use crate::{BuildEnvironment, CommandQueue, Executor, PixiEnvironmentSpec};
 
     fn local_channel(name: &str) -> ChannelUrl {
@@ -69,16 +71,34 @@ mod test {
 
     #[tokio::test]
     pub async fn simple_test() {
-        let dispatcher = CommandQueue::builder().executor(Executor::Serial).finish();
+        let (reporter, events) = EventReporter::new();
+        let dispatcher = CommandQueue::builder()
+            .with_reporter(reporter)
+            .with_executor(Executor::Serial)
+            .finish();
 
         let result = dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 requirements: DependencyMap::from_iter([(
-                    "dummy-c".parse().unwrap(),
-                    PixiSpec::default(),
+                    "boost-check".parse().unwrap(),
+                    GitSpec {
+                        git: "https://github.com/wolfv/pixi-build-examples.git"
+                            .parse()
+                            .unwrap(),
+                        rev: None,
+                        subdirectory: Some(String::from("boost-check")),
+                    }
+                    .into(),
                 )]),
-                channels: vec![local_channel("dummy_channel_1")],
-                build_environment: BuildEnvironment::simple_cross(Platform::Linux64).unwrap(),
+                channels: vec![
+                    Url::from_str("https://prefix.dev/conda-forge")
+                        .unwrap()
+                        .into(),
+                ],
+                build_environment: BuildEnvironment {
+                    build_platform: Platform::Win64,
+                    ..BuildEnvironment::simple_cross(Platform::Win64).unwrap()
+                },
                 ..PixiEnvironmentSpec::default()
             })
             .await
@@ -86,5 +106,6 @@ mod test {
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].package_record().name.as_source(), "dummy-c");
+        insta::assert_debug_snapshot!(&events.lock().unwrap());
     }
 }

@@ -25,6 +25,8 @@ tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 
 rattler_conda_types = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
@@ -43,3 +45,4 @@ pixi_utils = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }
+insta = { workspace = true, features = ["ron"] }
