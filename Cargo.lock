@@ -4420,6 +4420,7 @@ dependencies = [
  "pixi_allocator",
  "pixi_build_frontend",
  "pixi_build_types",
+ "pixi_command_queue",
  "pixi_config",
  "pixi_consts",
  "pixi_default_versions",

@@ -15,11 +15,12 @@ use typed_path::Utf8TypedPath;
 
 use crate::{
     WorkspaceLocator,
-    build::{BuildContext, SourceCheckout, WorkDirKey},
+    build::{BuildContext, WorkDirKey},
     cli::cli_config::WorkspaceConfig,
     repodata::Repodata,
     utils::{MoveError, move_file},
 };
+use pixi_command_queue::SourceCheckout;
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]

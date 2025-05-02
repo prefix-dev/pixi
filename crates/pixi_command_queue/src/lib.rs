@@ -32,6 +32,7 @@ mod source_checkout;
 mod source_metadata;
 
 pub use build::BuildEnvironment;
+pub use cache_dirs::CacheDirs;
 pub use command_queue::{
     CommandQueue, CommandQueueError, CommandQueueErrorResultExt, InstantiateBackendError,
     InstantiateBackendSpec,

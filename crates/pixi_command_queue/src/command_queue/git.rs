@@ -24,6 +24,7 @@ impl CommandQueue {
             .map(|rev| rev.into())
             .unwrap_or(GitReference::DefaultBranch);
 
+        dbg!(&git_spec.git);
         let git_url = GitUrl::try_from(git_spec.git)
             .map_err(GitError::from)
             .map_err(SourceCheckoutError::GitError)?
@@ -66,5 +67,34 @@ impl CommandQueue {
         git_url: GitUrl,
     ) -> Result<Fetch, CommandQueueError<GitError>> {
         self.execute_task(git_url).await
+    }
+
+    /// Checkout a pinned git repository.
+    pub async fn checkout_pinned_git(
+        &self,
+        git_spec: PinnedGitSpec,
+    ) -> Result<SourceCheckout, CommandQueueError<SourceCheckoutError>> {
+        let git_url = GitUrl::from_commit(
+            git_spec.git.clone(),
+            git_spec.source.reference.clone().into(),
+            git_spec.source.commit,
+        );
+        // Fetch the git url in the background
+        let fetch = self
+            .checkout_git_url(git_url)
+            .await
+            .map_err(|err| err.map(SourceCheckoutError::from))?;
+
+        // Include any subdirectory
+        let path = if let Some(subdir) = git_spec.source.subdirectory.as_ref() {
+            fetch.path().join(subdir)
+        } else {
+            fetch.into_path()
+        };
+
+        Ok(SourceCheckout {
+            path,
+            pinned: PinnedSourceSpec::Git(git_spec),
+        })
     }
 }

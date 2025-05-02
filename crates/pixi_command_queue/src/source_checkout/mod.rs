@@ -1,6 +1,6 @@
 use pixi_git::GitError;
 use pixi_record::PinnedSourceSpec;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 /// Location of the source code for a package. This will be used as the input
@@ -13,6 +13,15 @@ pub struct SourceCheckout {
 
     /// The exact source specification
     pub pinned: PinnedSourceSpec,
+}
+
+impl SourceCheckout {
+    pub fn new(path: impl AsRef<Path>, pinned: PinnedSourceSpec) -> Self {
+        Self {
+            path: path.as_ref().to_owned(),
+            pinned,
+        }
+    }
 }
 
 #[derive(Debug, Error)]

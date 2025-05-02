@@ -49,6 +49,10 @@ use url::Url;
 use uv_configuration::RAYON_INITIALIZE;
 use xxhash_rust::xxh3::Xxh3;
 
+use pixi_command_queue::{
+    CacheDirs, CommandQueue, CommandQueueError, SourceCheckout, SourceCheckoutError,
+};
+
 use crate::{
     Workspace,
     build::cache::{
@@ -69,13 +73,10 @@ pub struct BuildContext {
     glob_hash_cache: GlobHashCache,
     source_metadata_cache: SourceMetadataCache,
     build_cache: BuildCache,
-    cache_dir: PathBuf,
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
     variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
-
-    /// The resolved Git references.
-    git: GitResolver,
+    command_queue: CommandQueue,
 }
 
 #[derive(Clone)]
@@ -130,28 +131,31 @@ pub enum BuildError {
 
     #[error(transparent)]
     GitFetch(#[from] GitError),
+
+    #[error(transparent)]
+    SourceCheckoutError(#[from] CommandQueueError<SourceCheckoutError>),
 }
 
-/// Location of the source code for a package. This will be used as the input
-/// for the build process. Archives are unpacked, git clones are checked out,
-/// etc.
-#[derive(Debug, Clone)]
-pub struct SourceCheckout {
-    /// The path to where the source is located locally on disk.
-    pub path: PathBuf,
+// /// Location of the source code for a package. This will be used as the input
+// /// for the build process. Archives are unpacked, git clones are checked out,
+// /// etc.
+// #[derive(Debug, Clone)]
+// pub struct SourceCheckout {
+//     /// The path to where the source is located locally on disk.
+//     pub path: PathBuf,
 
-    /// The exact source specification
-    pub pinned: PinnedSourceSpec,
-}
+//     /// The exact source specification
+//     pub pinned: PinnedSourceSpec,
+// }
 
-impl SourceCheckout {
-    /// Create a new source checkout from a pinned source specification.
-    pub fn new(path: PathBuf, pinned: PinnedSourceSpec) -> Self {
-        Self { path, pinned }
-    }
-}
+// impl SourceCheckout {
+//     /// Create a new source checkout from a pinned source specification.
+//     pub fn new(path: PathBuf, pinned: PinnedSourceSpec) -> Self {
+//         Self { path, pinned }
+//     }
+// }
 
-/// The metadata of a source checkout.
+// /// The metadata of a source checkout.
 #[derive(Debug)]
 pub struct SourceMetadata {
     /// The source checkout that the manifest was extracted from.
@@ -169,16 +173,17 @@ impl BuildContext {
         variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
         tool_context: Arc<ToolContext>,
     ) -> Result<Self, std::io::Error> {
+        let cache_dirs = CacheDirs::new(cache_dir.clone());
+
         Ok(Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
             source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
             build_cache: BuildCache::new(cache_dir.clone()),
-            cache_dir,
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
             variant_config,
-            git: GitResolver::default(),
+            command_queue: CommandQueue::builder().with_cache_dirs(cache_dirs).finish(),
         })
     }
 
@@ -237,7 +242,11 @@ impl BuildContext {
         source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
-        let source = self.fetch_source(source_spec, source_reporter).await?;
+        // let source = self.fetch_source(source_spec, source_reporter).await?;
+        let source = self
+            .command_queue
+            .pin_and_checkout(source_spec.clone())
+            .await?;
         let records = self
             .extract_records(
                 &source,
@@ -266,12 +275,10 @@ impl BuildContext {
         build_id: usize,
         rebuild: bool,
     ) -> Result<RepoDataRecord, BuildError> {
-        let source_checkout = SourceCheckout {
-            path: self
-                .fetch_pinned_source(&source_spec.source, source_reporter)
-                .await?,
-            pinned: source_spec.source.clone(),
-        };
+        let source_checkout = self
+            .command_queue
+            .checkout_pinned_source(source_spec.source.clone())
+            .await?;
 
         let channels_urls: Vec<Url> = channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
 
@@ -413,173 +420,173 @@ impl BuildContext {
     ///
     /// TODO(baszalmstra): Ideally we would cache the result of this on disk
     /// somewhere.
-    pub async fn fetch_source(
-        &self,
-        source_spec: &SourceSpec,
-        source_reporter: Option<Arc<dyn SourceReporter>>,
-    ) -> Result<SourceCheckout, BuildError> {
-        match source_spec {
-            SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
-            SourceSpec::Git(git_spec) => {
-                let fetched = self
-                    .resolve_git(
-                        git_spec.clone(),
-                        source_reporter.map(|sr| sr.as_git_reporter()),
-                    )
-                    .await?;
-                //TODO: will be removed when manifest will be merged in pixi-build-backend
-                let path = if let Some(subdir) = git_spec.subdirectory.as_ref() {
-                    fetched.clone().into_path().join(subdir)
-                } else {
-                    fetched.clone().into_path()
-                };
+    // pub async fn fetch_source(
+    //     &self,
+    //     source_spec: &SourceSpec,
+    //     source_reporter: Option<Arc<dyn SourceReporter>>,
+    // ) -> Result<SourceCheckout, BuildError> {
+    //     match source_spec {
+    //         SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
+    //         SourceSpec::Git(git_spec) => {
+    //             let fetched = self
+    //                 .resolve_git(
+    //                     git_spec.clone(),
+    //                     source_reporter.map(|sr| sr.as_git_reporter()),
+    //                 )
+    //                 .await?;
+    //             //TODO: will be removed when manifest will be merged in pixi-build-backend
+    //             let path = if let Some(subdir) = git_spec.subdirectory.as_ref() {
+    //                 fetched.clone().into_path().join(subdir)
+    //             } else {
+    //                 fetched.clone().into_path()
+    //             };
 
-                let source_checkout = SourceCheckout {
-                    path,
-                    pinned: PinnedSourceSpec::Git(PinnedGitSpec {
-                        git: fetched.repository().url.clone().into_url(),
-                        source: PinnedGitCheckout {
-                            commit: fetched.commit(),
-                            reference: git_spec
-                                .rev
-                                .clone()
-                                .unwrap_or(pixi_spec::GitReference::DefaultBranch),
-                            subdirectory: git_spec.subdirectory.clone(),
-                        },
-                    }),
-                };
-                Ok(source_checkout)
-            }
-            SourceSpec::Path(path) => {
-                let source_path = self
-                    .resolve_path(path.path.to_path())
-                    .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err))?;
-                Ok(SourceCheckout {
-                    path: source_path,
-                    pinned: PinnedPathSpec {
-                        path: path.path.clone(),
-                    }
-                    .into(),
-                })
-            }
-        }
-    }
+    //             let source_checkout = SourceCheckout {
+    //                 path,
+    //                 pinned: PinnedSourceSpec::Git(PinnedGitSpec {
+    //                     git: fetched.repository().url.clone().into_url(),
+    //                     source: PinnedGitCheckout {
+    //                         commit: fetched.commit(),
+    //                         reference: git_spec
+    //                             .rev
+    //                             .clone()
+    //                             .unwrap_or(pixi_spec::GitReference::DefaultBranch),
+    //                         subdirectory: git_spec.subdirectory.clone(),
+    //                     },
+    //                 }),
+    //             };
+    //             Ok(source_checkout)
+    //         }
+    //         SourceSpec::Path(path) => {
+    //             let source_path = self
+    //                 .resolve_path(path.path.to_path())
+    //                 .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err))?;
+    //             Ok(SourceCheckout {
+    //                 path: source_path,
+    //                 pinned: PinnedPathSpec {
+    //                     path: path.path.clone(),
+    //                 }
+    //                 .into(),
+    //             })
+    //         }
+    //     }
+    // }
 
     /// Acquires the source from the given source specification.
     ///
     /// TODO(baszalmstra): Ideally we would cache the result of this on disk
     /// somewhere.
-    pub async fn fetch_pinned_source(
-        &self,
-        source_spec: &PinnedSourceSpec,
-        source_reporter: Option<Arc<dyn SourceReporter>>,
-    ) -> Result<PathBuf, BuildError> {
-        match source_spec {
-            PinnedSourceSpec::Url(_) => {
-                unimplemented!("fetching URL sources is not yet implemented")
-            }
-            PinnedSourceSpec::Git(pinned_git_spec) => {
-                let fetched = self
-                    .resolve_precise_git(
-                        pinned_git_spec.clone(),
-                        source_reporter.map(|sr| sr.as_git_reporter()),
-                    )
-                    .await
-                    .map_err(|err| {
-                        BuildError::ResolveGitSource(pinned_git_spec.git.clone(), err)
-                    })?;
-                let path = if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
-                    fetched.into_path().join(subdir)
-                } else {
-                    fetched.into_path()
-                };
-                Ok(path)
-            }
-            PinnedSourceSpec::Path(path) => self
-                .resolve_path(path.path.to_path())
-                .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err)),
-        }
-    }
+    // pub async fn fetch_pinned_source(
+    //     &self,
+    //     source_spec: &PinnedSourceSpec,
+    //     source_reporter: Option<Arc<dyn SourceReporter>>,
+    // ) -> Result<PathBuf, BuildError> {
+    //     match source_spec {
+    //         PinnedSourceSpec::Url(_) => {
+    //             unimplemented!("fetching URL sources is not yet implemented")
+    //         }
+    //         PinnedSourceSpec::Git(pinned_git_spec) => {
+    //             let fetched = self
+    //                 .resolve_precise_git(
+    //                     pinned_git_spec.clone(),
+    //                     source_reporter.map(|sr| sr.as_git_reporter()),
+    //                 )
+    //                 .await
+    //                 .map_err(|err| {
+    //                     BuildError::ResolveGitSource(pinned_git_spec.git.clone(), err)
+    //                 })?;
+    //             let path = if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
+    //                 fetched.into_path().join(subdir)
+    //             } else {
+    //                 fetched.into_path()
+    //             };
+    //             Ok(path)
+    //         }
+    //         PinnedSourceSpec::Path(path) => self
+    //             .resolve_path(path.path.to_path())
+    //             .map_err(|err| BuildError::ResolvePathSource(path.path.clone(), err)),
+    //     }
+    // }
 
     /// Resolves the source path to a full path.
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    fn resolve_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, std::io::Error> {
-        if path_spec.is_absolute() {
-            Ok(Path::new(path_spec.as_str()).to_path_buf())
-        } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
-            let home_dir = dirs::home_dir().ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "could not determine home directory",
-                )
-            })?;
-            debug_assert!(home_dir.is_absolute());
-            normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
-        } else {
-            let root_dir = self.channel_config.root_dir.as_path();
-            let native_path = Path::new(path_spec.as_str());
-            debug_assert!(root_dir.is_absolute());
-            normalize_absolute_path(&root_dir.join(native_path))
-        }
-    }
+    // fn resolve_path(&self, path_spec: Utf8TypedPath) -> Result<PathBuf, std::io::Error> {
+    //     if path_spec.is_absolute() {
+    //         Ok(Path::new(path_spec.as_str()).to_path_buf())
+    //     } else if let Ok(user_path) = path_spec.strip_prefix("~/") {
+    //         let home_dir = dirs::home_dir().ok_or_else(|| {
+    //             std::io::Error::new(
+    //                 std::io::ErrorKind::InvalidData,
+    //                 "could not determine home directory",
+    //             )
+    //         })?;
+    //         debug_assert!(home_dir.is_absolute());
+    //         normalize_absolute_path(&home_dir.join(Path::new(user_path.as_str())))
+    //     } else {
+    //         let root_dir = self.channel_config.root_dir.as_path();
+    //         let native_path = Path::new(path_spec.as_str());
+    //         debug_assert!(root_dir.is_absolute());
+    //         normalize_absolute_path(&root_dir.join(native_path))
+    //     }
+    // }
+
+    // /// Resolves the source path to a full path.
+    // ///
+    // /// This function does not check if the path exists and also does not follow
+    // /// symlinks.
+    // async fn resolve_git(
+    //     &self,
+    //     git: GitSpec,
+    //     reporter: Option<Arc<dyn Reporter>>,
+    // ) -> Result<Fetch, GitError> {
+    //     let git_reference = git
+    //         .rev
+    //         .map(|rev| rev.into())
+    //         .unwrap_or(GitReference::DefaultBranch);
+
+    //     let git_url = GitUrl::try_from(git.git)?.with_reference(git_reference);
+
+    //     let resolver = self
+    //         .git
+    //         .fetch(
+    //             git_url,
+    //             self.tool_context.clone().client.clone(),
+    //             self.cache_dir.clone().join(CACHED_GIT_DIR),
+    //             reporter,
+    //         )
+    //         .await?;
+
+    //     Ok(resolver)
+    // }
 
     /// Resolves the source path to a full path.
     ///
     /// This function does not check if the path exists and also does not follow
     /// symlinks.
-    async fn resolve_git(
-        &self,
-        git: GitSpec,
-        reporter: Option<Arc<dyn Reporter>>,
-    ) -> Result<Fetch, GitError> {
-        let git_reference = git
-            .rev
-            .map(|rev| rev.into())
-            .unwrap_or(GitReference::DefaultBranch);
+    // async fn resolve_precise_git(
+    //     &self,
+    //     git: PinnedGitSpec,
+    //     reporter: Option<Arc<dyn Reporter>>,
+    // ) -> miette::Result<Fetch> {
+    //     let git_reference = git.source.reference.into();
 
-        let git_url = GitUrl::try_from(git.git)?.with_reference(git_reference);
+    //     let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
 
-        let resolver = self
-            .git
-            .fetch(
-                git_url,
-                self.tool_context.clone().client.clone(),
-                self.cache_dir.clone().join(CACHED_GIT_DIR),
-                reporter,
-            )
-            .await?;
+    //     let resolver = self
+    //         .git
+    //         .fetch(
+    //             git_url,
+    //             self.tool_context.clone().client.clone(),
+    //             self.cache_dir.clone().join(CACHED_GIT_DIR),
+    //             reporter,
+    //         )
+    //         .await
+    //         .into_diagnostic()?;
 
-        Ok(resolver)
-    }
-
-    /// Resolves the source path to a full path.
-    ///
-    /// This function does not check if the path exists and also does not follow
-    /// symlinks.
-    async fn resolve_precise_git(
-        &self,
-        git: PinnedGitSpec,
-        reporter: Option<Arc<dyn Reporter>>,
-    ) -> miette::Result<Fetch> {
-        let git_reference = git.source.reference.into();
-
-        let git_url = GitUrl::from_commit(git.git, git_reference, git.source.commit);
-
-        let resolver = self
-            .git
-            .fetch(
-                git_url,
-                self.tool_context.clone().client.clone(),
-                self.cache_dir.clone().join(CACHED_GIT_DIR),
-                reporter,
-            )
-            .await
-            .into_diagnostic()?;
-
-        Ok(resolver)
-    }
+    //     Ok(resolver)
+    // }
 
     /// Extracts the metadata from a package whose source is located at the
     /// given path.

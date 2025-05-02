@@ -313,6 +313,29 @@ impl CommandQueue {
             SourceSpec::Git(git_spec) => self.pin_and_checkout_git(git_spec).await,
         }
     }
+
+    /// Checkout pinned source record
+    pub async fn checkout_pinned_source(
+        &self,
+        pinned_spec: PinnedSourceSpec,
+    ) -> Result<SourceCheckout, CommandQueueError<SourceCheckoutError>> {
+        match pinned_spec {
+            PinnedSourceSpec::Path(ref path) => {
+                let source_path = self
+                    .data
+                    .resolve_typed_path(path.path.to_path())
+                    .map_err(SourceCheckoutError::from)?;
+                Ok(SourceCheckout {
+                    path: source_path,
+                    pinned: pinned_spec,
+                })
+            }
+            PinnedSourceSpec::Git(git_spec) => self.checkout_pinned_git(git_spec).await,
+            PinnedSourceSpec::Url(_) => {
+                unimplemented!("fetching URL sources is not yet implemented")
+            }
+        }
+    }
 }
 
 impl CommandQueueData {
