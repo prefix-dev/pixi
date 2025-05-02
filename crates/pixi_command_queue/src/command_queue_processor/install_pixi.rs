@@ -4,8 +4,7 @@ use super::{CommandQueueProcessor, PendingInstallPixiEnvironment, TaskResult};
 use crate::command_queue::{InstallPixiEnvironmentId, InstallPixiEnvironmentTask};
 use crate::install_pixi::InstallPixiEnvironmentError;
 use crate::{
-    CommandQueueError, CommandQueueErrorResultExt, Reporter,
-    command_queue::CommandQueueContext,
+    CommandQueueError, CommandQueueErrorResultExt, Reporter, command_queue::CommandQueueContext,
 };
 
 impl CommandQueueProcessor {
@@ -64,7 +63,12 @@ impl CommandQueueProcessor {
             .expect("got a result for a conda environment install that was not pending");
 
         // Notify the reporter that the solve finished.
-        if let Some((reporter, id)) = self.reporter.as_deref_mut().and_then(Reporter::as_pixi_install_reporter).zip(env.reporter_id) {
+        if let Some((reporter, id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_pixi_install_reporter)
+            .zip(env.reporter_id)
+        {
             reporter.on_install_finished(id)
         }
 

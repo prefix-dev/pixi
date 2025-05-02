@@ -301,7 +301,6 @@ pub async fn update_prefix_conda(
         });
 
     let mut progress_reporter = None;
-    let mut source_reporter = None;
     let source_pb = global_multi_progress().add(ProgressBar::hidden());
 
     let source_records_length = source_records.len();
@@ -318,14 +317,6 @@ pub async fn update_prefix_conda(
                 })
                 .clone();
 
-            let source_reporter = source_reporter
-                .get_or_insert_with(|| {
-                    Arc::new(SourceCheckoutReporter::new(
-                        source_pb.clone(),
-                        global_multi_progress(),
-                    ))
-                })
-                .clone();
             let build_id = progress_reporter.associate(record.package_record.name.as_source());
             let build_context = &build_context;
             let channels = &channels;
@@ -344,7 +335,6 @@ pub async fn update_prefix_conda(
                         virtual_packages.clone(),
                         virtual_packages.clone(),
                         progress_reporter.clone(),
-                        Some(source_reporter),
                         build_id,
                         rebuild,
                     )

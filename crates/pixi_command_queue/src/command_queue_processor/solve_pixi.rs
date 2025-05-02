@@ -3,8 +3,7 @@ use pixi_record::PixiRecord;
 
 use super::{CommandQueueProcessor, PendingPixiEnvironment, TaskResult};
 use crate::{
-    CommandQueueError, CommandQueueErrorResultExt, Reporter,
-    SolvePixiEnvironmentError,
+    CommandQueueError, CommandQueueErrorResultExt, Reporter, SolvePixiEnvironmentError,
     command_queue::{CommandQueueContext, SolvePixiEnvironmentId, SolvePixiEnvironmentTask},
 };
 

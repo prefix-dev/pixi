@@ -273,7 +273,6 @@ impl BuildContext {
         host_virtual_packages: Vec<GenericVirtualPackage>,
         build_virtual_packages: Vec<GenericVirtualPackage>,
         build_reporter: Arc<dyn BuildReporter>,
-        source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
         rebuild: bool,
     ) -> Result<RepoDataRecord, BuildError> {

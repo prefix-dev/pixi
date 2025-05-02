@@ -87,7 +87,9 @@ pub struct SourceCheckoutReporter {
     /// The multi-progress bar. Usually, this is the global multi-progress bar.
     multi_progress: MultiProgress,
     /// The state of the progress bars for each source checkout.
-    progress_state: Arc<Mutex<ProgressState>>,
+    progress_state: ProgressState,
+    /// Refernences to the repository info
+    repository_references: HashMap<GitCheckoutId, RepositoryReference>,
 }
 
 impl SourceCheckoutReporter {
@@ -97,6 +99,7 @@ impl SourceCheckoutReporter {
             original_progress,
             multi_progress,
             progress_state: Default::default(),
+            repository_references: Default::default(),
         }
     }
 
@@ -107,36 +110,51 @@ impl SourceCheckoutReporter {
     }
 }
 
+impl SourceCheckoutReporter {
+    pub fn get_repo_reference(&self, id: GitCheckoutId) -> &RepositoryReference {
+        self.repository_references
+            .get(&id)
+            .expect("the progress bar needs to be inserted for this checkout")
+    }
+}
+
 impl pixi_command_queue::GitCheckoutReporter for SourceCheckoutReporter {
     /// Called when a git checkout was queued on the [`CommandQueue`].
-    fn on_checkout_queued(&mut self, env: &RepositoryReference) -> GitCheckoutId {}
+    fn on_checkout_queued(&mut self, env: &RepositoryReference) -> GitCheckoutId {
+        let id = self.progress_state.id();
+        let checkout_id = GitCheckoutId(id);
+        self.repository_references.insert(checkout_id, env.clone());
+        checkout_id
+    }
 
     fn on_checkout_start(&mut self, checkout_id: GitCheckoutId) {
-        let mut state = self.progress_state.lock();
-        let id = state.id();
-
         let pb = self
             .multi_progress
             .insert_before(&self.original_progress, ProgressBar::hidden());
+        let repo = self.get_repo_reference(checkout_id);
         pb.set_style(SourceCheckoutReporter::spinner_style());
-        // pb.set_style(pixi_progress::default_progress_style());
         pb.set_prefix("fetching git dependencies");
-        pb.set_message(format!("checking out {}@{}", url, rev));
+        pb.set_message(format!(
+            "checking out {}@{}",
+            repo.url.as_url(),
+            repo.reference
+        ));
         pb.enable_steady_tick(Duration::from_millis(100));
-
-        state.bars.insert(id, pb);
-
-        id
+        self.progress_state.bars.insert(checkout_id.0, pb);
     }
 
     fn on_checkout_finished(&mut self, checkout_id: GitCheckoutId) {
-        let mut state = self.progress_state.lock();
-        let removed_pb = state
+        let removed_pb = self
+            .progress_state
             .bars
-            .remove(&index)
+            .remove(&checkout_id.0)
             .expect("the progress bar needs to be inserted for this checkout");
-
-        removed_pb.finish_with_message(format!("checkout complete {}@{}", url, rev));
+        let repo = self.get_repo_reference(checkout_id);
+        removed_pb.finish_with_message(format!(
+            "checkout complete {}@{}",
+            repo.url.as_url(),
+            repo.reference
+        ));
         removed_pb.finish_and_clear();
     }
 }

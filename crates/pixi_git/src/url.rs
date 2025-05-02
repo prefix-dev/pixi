@@ -136,6 +136,10 @@ impl RepositoryUrl {
     pub fn into_url(self) -> Url {
         self.into()
     }
+
+    pub fn as_url(&self) -> &Url {
+        &self.0
+    }
 }
 
 /// Remove the credentials from a URL, allowing the generic `git` username (without a password)
