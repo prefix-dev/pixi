@@ -3,6 +3,8 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use indicatif::{MultiProgress, ProgressBar};
 use parking_lot::Mutex;
 use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter};
+use pixi_command_queue::GitCheckoutId;
+use pixi_git::resolver::RepositoryReference;
 
 pub trait BuildMetadataReporter: CondaMetadataReporter {
     /// Reporters that the metadata has been cached.
@@ -105,8 +107,11 @@ impl SourceCheckoutReporter {
     }
 }
 
-impl pixi_git::Reporter for SourceCheckoutReporter {
-    fn on_checkout_start(&self, url: &url::Url, rev: &str) -> usize {
+impl pixi_command_queue::GitCheckoutReporter for SourceCheckoutReporter {
+    /// Called when a git checkout was queued on the [`CommandQueue`].
+    fn on_checkout_queued(&mut self, env: &RepositoryReference) -> GitCheckoutId {}
+
+    fn on_checkout_start(&mut self, checkout_id: GitCheckoutId) {
         let mut state = self.progress_state.lock();
         let id = state.id();
 
@@ -124,7 +129,7 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
         id
     }
 
-    fn on_checkout_complete(&self, url: &url::Url, rev: &str, index: usize) {
+    fn on_checkout_finished(&mut self, checkout_id: GitCheckoutId) {
         let mut state = self.progress_state.lock();
         let removed_pb = state
             .bars
@@ -133,12 +138,5 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
 
         removed_pb.finish_with_message(format!("checkout complete {}@{}", url, rev));
         removed_pb.finish_and_clear();
-    }
-}
-
-impl SourceReporter for SourceCheckoutReporter {
-    /// Cast upwards
-    fn as_git_reporter(self: Arc<Self>) -> Arc<dyn pixi_git::Reporter> {
-        self
     }
 }

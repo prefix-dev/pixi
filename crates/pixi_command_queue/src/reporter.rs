@@ -85,7 +85,10 @@ pub trait GitCheckoutReporter {
 /// A trait that is used to report the progress of the [`CommandQueue`].
 ///
 /// The reporter has to be `Send` but does not require `Sync`.
-pub trait Reporter:
-    CondaSolveReporter + PixiSolveReporter + PixiInstallReporter + GitCheckoutReporter + Send
-{
+
+pub trait Reporter: Send {
+    fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter>;
+    fn as_conda_solve_reporter(&mut self) -> Option<&mut dyn CondaSolveReporter>;
+    fn as_pixi_solve_reporter(&mut self) -> Option<&mut dyn PixiSolveReporter>;
+    fn as_pixi_install_reporter(&mut self) -> Option<&mut dyn PixiInstallReporter>;
 }

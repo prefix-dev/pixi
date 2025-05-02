@@ -242,7 +242,6 @@ impl BuildContext {
         channels: &[ChannelUrl],
         build_env: BuildEnvironment,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
-        source_reporter: Option<Arc<dyn SourceReporter>>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
         // let source = self.fetch_source(source_spec, source_reporter).await?;

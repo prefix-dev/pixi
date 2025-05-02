@@ -1786,10 +1786,6 @@ async fn spawn_solve_conda_environment_task(
                     &pb.pb,
                     source_specs.len() as u64,
                 ));
-                let source_reporter = Arc::new(SourceCheckoutReporter::new(
-                    root_pb.clone(),
-                    global_multi_progress(),
-                ));
                 SourceMetadataCollector::new(
                     build_context.clone(),
                     channel_urls.clone(),
@@ -1800,7 +1796,6 @@ async fn spawn_solve_conda_environment_task(
                         host_virtual_packages: virtual_packages.clone(),
                     },
                     metadata_reporter,
-                    Some(source_reporter),
                 )
                 .collect(source_specs)
                 .await?

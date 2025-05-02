@@ -19,7 +19,6 @@ pub struct SourceMetadataCollector {
     channel_urls: Vec<ChannelUrl>,
     build_env: BuildEnvironment,
     metadata_reporter: Arc<dyn BuildMetadataReporter>,
-    source_checkout_reporter: Option<Arc<dyn SourceReporter>>,
 }
 
 #[derive(Default)]
@@ -57,14 +56,12 @@ impl SourceMetadataCollector {
         channel_urls: Vec<ChannelUrl>,
         build_env: BuildEnvironment,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
-        source_checkout_reporter: Option<Arc<dyn SourceReporter>>,
     ) -> Self {
         Self {
             build_context,
             channel_urls,
             build_env,
             metadata_reporter,
-            source_checkout_reporter,
         }
     }
 
@@ -134,7 +131,6 @@ impl SourceMetadataCollector {
                 &self.channel_urls,
                 self.build_env.clone(),
                 self.metadata_reporter.clone(),
-                self.source_checkout_reporter.clone(),
                 build_id,
             )
             .await
