@@ -64,7 +64,7 @@ mod test {
     #[tokio::test]
     pub async fn simple_test() {
         let dispatcher = CommandQueue::builder()
-            .executor(Executor::Deterministic)
+            .executor(Executor::Serial)
             .finish();
 
         let result = dispatcher

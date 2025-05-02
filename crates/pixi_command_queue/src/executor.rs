@@ -8,7 +8,7 @@ use futures::{Stream, stream::FuturesUnordered};
 /// Defines the executor to use in the command queue background task.
 ///
 /// By default, the command queue will use [`Self::Concurrent`] which will
-/// run all futures concurrently. However, the [`Self::Deterministic`] executor
+/// run all futures concurrently. However, the [`Self::Serial`] executor
 /// can be used to run futures in a deterministic order. This is useful for
 /// testing and debugging purposes.
 #[derive(Debug, Clone, Copy, Default)]
@@ -18,26 +18,26 @@ pub enum Executor {
     Concurrent,
     /// Deterministically polls futures in LIFO order. This is useful for
     /// testing purposes.
-    Deterministic,
+    Serial,
 }
 
 pub(crate) enum ExecutorFutures<Fut> {
     Concurrent(FuturesUnordered<Fut>),
-    Deterministic(Vec<Fut>),
+    Serial(Vec<Fut>),
 }
 
 impl<Fut> ExecutorFutures<Fut> {
     pub fn new(executor: Executor) -> Self {
         match executor {
             Executor::Concurrent => Self::Concurrent(FuturesUnordered::new()),
-            Executor::Deterministic => Self::Deterministic(Vec::new()),
+            Executor::Serial => Self::Serial(Vec::new()),
         }
     }
 
     pub fn push(&mut self, fut: Fut) {
         match self {
             ExecutorFutures::Concurrent(futures) => futures.push(fut),
-            ExecutorFutures::Deterministic(futures) => futures.push(fut),
+            ExecutorFutures::Serial(futures) => futures.push(fut),
         }
     }
 }
@@ -52,7 +52,7 @@ where
         let this = self.get_mut();
         match this {
             ExecutorFutures::Concurrent(futures) => Pin::new(futures).poll_next(cx),
-            ExecutorFutures::Deterministic(futures) => {
+            ExecutorFutures::Serial(futures) => {
                 if let Some(mut fut) = futures.last_mut() {
                     match Pin::new(&mut fut).poll(cx) {
                         Poll::Ready(result) => {
@@ -71,7 +71,7 @@ where
     fn size_hint(&self) -> (usize, Option<usize>) {
         match self {
             ExecutorFutures::Concurrent(futures) => futures.size_hint(),
-            ExecutorFutures::Deterministic(futures) => (futures.len(), Some(futures.len())),
+            ExecutorFutures::Serial(futures) => (futures.len(), Some(futures.len())),
         }
     }
 }
