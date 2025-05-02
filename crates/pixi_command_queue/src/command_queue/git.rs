@@ -37,7 +37,7 @@ impl CommandQueue {
 
         // Determine the pinned spec from the fetch
         let pinned = PinnedGitSpec {
-            git: fetch.repository().url.clone().into_url(),
+            git: fetch.input().repository().clone(),
             source: PinnedGitCheckout {
                 commit: fetch.commit(),
                 subdirectory: git_spec.subdirectory.clone(),
