@@ -145,7 +145,6 @@ impl GitSource {
                 url: canonical,
                 reference: self.git.reference.clone(),
             },
-            url: self.git.clone(),
             commit: actual_rev,
             path: checkout_path,
         })
@@ -157,9 +156,6 @@ pub struct Fetch {
     /// The [`RepositoryReference`] reference that was fetched.
     repository: RepositoryReference,
 
-    /// The original input git url
-    url: GitUrl,
-
     /// The precise git checkout
     commit: GitSha,
 
@@ -170,10 +166,6 @@ pub struct Fetch {
 impl Fetch {
     pub fn repository(&self) -> &RepositoryReference {
         &self.repository
-    }
-
-    pub fn input(&self) -> &GitUrl {
-        &self.url
     }
 
     pub fn commit(&self) -> GitSha {
