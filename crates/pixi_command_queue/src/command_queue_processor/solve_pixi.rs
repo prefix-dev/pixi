@@ -3,7 +3,8 @@ use pixi_record::PixiRecord;
 
 use super::{CommandQueueProcessor, PendingPixiEnvironment, TaskResult};
 use crate::{
-    CommandQueueError, CommandQueueErrorResultExt, PixiSolveReporter, SolvePixiEnvironmentError,
+    CommandQueueError, CommandQueueErrorResultExt, Reporter,
+    SolvePixiEnvironmentError,
     command_queue::{CommandQueueContext, SolvePixiEnvironmentId, SolvePixiEnvironmentTask},
 };
 
@@ -14,8 +15,9 @@ impl CommandQueueProcessor {
         // Notify the reporter that a new solve has been queued.
         let reporter_id = self
             .reporter
-            .as_mut()
-            .map(|reporter| PixiSolveReporter::on_solve_queued(reporter.as_mut(), &task.spec));
+            .as_deref_mut()
+            .and_then(Reporter::as_pixi_solve_reporter)
+            .map(|reporter| reporter.on_solve_queued(&task.spec));
 
         // Store information about the pending environment.
         let pending_env_id = self.solve_pixi_environments.insert(PendingPixiEnvironment {
@@ -24,8 +26,13 @@ impl CommandQueueProcessor {
         });
 
         // Notify the reporter that the solve has started.
-        if let Some((reporter, id)) = self.reporter.as_mut().zip(reporter_id) {
-            PixiSolveReporter::on_solve_start(reporter.as_mut(), id)
+        if let Some((reporter, id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_pixi_solve_reporter)
+            .zip(reporter_id)
+        {
+            reporter.on_solve_start(id)
         }
 
         // Add the task to the list of pending futures.
@@ -55,8 +62,13 @@ impl CommandQueueProcessor {
             .expect("got a result for a conda environment that was not pending");
 
         // Notify the reporter that the solve finished.
-        if let Some((reporter, id)) = self.reporter.as_mut().zip(env.reporter_id) {
-            PixiSolveReporter::on_solve_finished(reporter.as_mut(), id)
+        if let Some((reporter, id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_pixi_solve_reporter)
+            .zip(env.reporter_id)
+        {
+            reporter.on_solve_finished(id)
         }
 
         let Some(result) = result.into_ok_or_failed() else {

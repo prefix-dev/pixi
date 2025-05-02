@@ -4,7 +4,7 @@ use super::{CommandQueueProcessor, PendingInstallPixiEnvironment, TaskResult};
 use crate::command_queue::{InstallPixiEnvironmentId, InstallPixiEnvironmentTask};
 use crate::install_pixi::InstallPixiEnvironmentError;
 use crate::{
-    CommandQueueError, CommandQueueErrorResultExt, PixiInstallReporter,
+    CommandQueueError, CommandQueueErrorResultExt, Reporter,
     command_queue::CommandQueueContext,
 };
 
@@ -15,8 +15,9 @@ impl CommandQueueProcessor {
         // Notify the reporter that a new solve has been queued.
         let reporter_id = self
             .reporter
-            .as_mut()
-            .map(|reporter| PixiInstallReporter::on_install_queued(reporter.as_mut(), &task.spec));
+            .as_deref_mut()
+            .and_then(Reporter::as_pixi_install_reporter)
+            .map(|reporter| reporter.on_install_queued(&task.spec));
 
         // Store information about the pending environment.
         let pending_env_id = self
@@ -27,8 +28,13 @@ impl CommandQueueProcessor {
             });
 
         // Notify the reporter that the solve has started.
-        if let Some((reporter, id)) = self.reporter.as_mut().zip(reporter_id) {
-            PixiInstallReporter::on_install_start(reporter.as_mut(), id)
+        if let Some((reporter, id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_pixi_install_reporter)
+            .zip(reporter_id)
+        {
+            reporter.on_install_start(id)
         }
 
         // Add the task to the list of pending futures.
@@ -58,8 +64,8 @@ impl CommandQueueProcessor {
             .expect("got a result for a conda environment install that was not pending");
 
         // Notify the reporter that the solve finished.
-        if let Some((reporter, id)) = self.reporter.as_mut().zip(env.reporter_id) {
-            PixiInstallReporter::on_install_finished(reporter.as_mut(), id)
+        if let Some((reporter, id)) = self.reporter.as_deref_mut().and_then(Reporter::as_pixi_install_reporter).zip(env.reporter_id) {
+            reporter.on_install_finished(id)
         }
 
         let Some(result) = result.into_ok_or_failed() else {

@@ -5,6 +5,7 @@ use pixi_git::{GitError, GitUrl, resolver::RepositoryReference, source::Fetch};
 
 use super::{CommandQueueProcessor, PendingGitCheckout, TaskResult};
 use crate::command_queue::GitCheckoutTask;
+use crate::Reporter;
 
 impl CommandQueueProcessor {
     /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
@@ -22,14 +23,14 @@ impl CommandQueueProcessor {
             },
             Entry::Vacant(entry) => {
                 // Notify the reporter that a new checkout has been queued.
-                let reporter_id = self.reporter.as_mut().map(|reporter| {
+                let reporter_id = self.reporter.as_deref_mut().and_then(Reporter::as_git_reporter).map(|reporter| {
                     reporter.on_checkout_queued(&RepositoryReference::from(&task.spec))
                 });
 
                 entry.insert(PendingGitCheckout::Pending(reporter_id, vec![task.tx]));
 
                 // Notify the reporter that the solve has started.
-                if let Some((reporter, id)) = self.reporter.as_mut().zip(reporter_id) {
+                if let Some((reporter, id)) = self.reporter.as_deref_mut().and_then(Reporter::as_git_reporter).zip(reporter_id) {
                     reporter.on_checkout_start(id)
                 }
 
@@ -58,7 +59,7 @@ impl CommandQueueProcessor {
         };
 
         // Notify the reporter that the git checkout has finished.
-        if let Some((reporter, id)) = self.reporter.as_mut().zip(*reporter_id) {
+        if let Some((reporter, id)) = self.reporter.as_deref_mut().and_then(Reporter::as_git_reporter).zip(*reporter_id) {
             reporter.on_checkout_finished(id)
         }
 
