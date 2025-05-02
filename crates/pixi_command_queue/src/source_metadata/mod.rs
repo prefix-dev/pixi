@@ -79,7 +79,7 @@ impl SourceMetadataSpec {
                     build_platform: self.build_environment.build_platform.clone(),
                     build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
                 },
-                enabled_protocols: self.enabled_protocols
+                enabled_protocols: self.enabled_protocols,
             })
             .await
             .map_err_with(SourceMetadataError::Initialize)?;

@@ -3,6 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::{
+    BackendSpec,
+    backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
+};
 use miette::Diagnostic;
 use pixi_build_type_conversions::to_project_model_v1;
 use pixi_build_types::ProjectModelV1;
@@ -11,13 +15,9 @@ use pixi_manifest::{
     WorkspaceDiscoveryError,
 };
 use pixi_spec::SpecConversionError;
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{ChannelConfig, ParseChannelError};
 use thiserror::Error;
-use pixi_spec_containers::DependencyMap;
-use crate::{
-    BackendSpec,
-    backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
-};
 
 const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];

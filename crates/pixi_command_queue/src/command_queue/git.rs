@@ -24,7 +24,6 @@ impl CommandQueue {
             .map(|rev| rev.into())
             .unwrap_or(GitReference::DefaultBranch);
 
-        dbg!(&git_spec.git);
         let git_url = GitUrl::try_from(git_spec.git)
             .map_err(GitError::from)
             .map_err(SourceCheckoutError::GitError)?
