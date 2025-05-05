@@ -70,7 +70,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
 
                             deps.push(Dependency::new(&name, args, environment));
                         }
-                        _ => return Err(expected("table", item.take(), item.span).into()),
+                        value => return Err(expected("table", value, item.span).into()),
                     }
                 }
                 return Ok(Task::Alias(Alias {
