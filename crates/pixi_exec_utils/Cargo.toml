@@ -23,3 +23,6 @@ panic = "abort"
 # Automatically strip symbols from the binary.
 debug = false
 strip = true
+
+[dev-dependencies]
+rstest = { workspace = true }
